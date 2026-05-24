@@ -47,6 +47,7 @@ export function GroupedMarketTable({
 
   const labelActive = isEn ? "Active" : "活跃";
   const labelWatch = isEn ? "Watch" : "观察";
+  const showHeaders = groups.length > 1;
 
   return (
     <div className="overflow-auto h-full">
@@ -65,36 +66,35 @@ export function GroupedMarketTable({
           </tr>
         </thead>
         <tbody>
-          {groups.map((group) => {
+          {groups.flatMap((group) => {
             const isExpanded = !collapsed.has(group.key);
-            const label = isEn ? group.labelEn : group.labelZh;
+            const rows = showHeaders && !isExpanded ? [] : group.rows;
             return (
               <Fragment key={group.key}>
-                {/* Group header row */}
-                <tr className="border-b border-slate-200 bg-[#eef2f6]">
-                  <td colSpan={9} className="p-0">
-                    <button
-                      type="button"
-                      onClick={() => toggleGroup(group.key)}
-                      className="flex w-full items-center gap-2 px-3 py-1 text-left hover:bg-[#e2e8f0] transition-colors"
-                    >
-                      <span className="grid h-4 w-4 place-items-center text-slate-400">
-                        {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                      </span>
-                      <span className="text-[11px] font-black uppercase tracking-wide text-slate-600">
-                        {label}
-                      </span>
-                      <span className="text-[10px] text-slate-400">
-                        {group.rows.length} · {labelActive} {group.activeCount} · {labelWatch} {group.watchCount}
-                        {group.localTimeRange ? ` · LT ${group.localTimeRange}` : ""}
-                        {group.hotCity ? ` · Hot: ${group.hotCity}` : ""}
-                      </span>
-                    </button>
-                  </td>
-                </tr>
-                {/* Data rows */}
-                {isExpanded &&
-                  group.rows.map((row) => {
+                {showHeaders && (
+                  <tr className="border-b border-slate-200 bg-[#eef2f6]">
+                    <td colSpan={9} className="p-0">
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(group.key)}
+                        className="flex w-full items-center gap-2 px-3 py-1 text-left hover:bg-[#e2e8f0] transition-colors"
+                      >
+                        <span className="grid h-4 w-4 place-items-center text-slate-400">
+                          {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                        </span>
+                        <span className="text-[11px] font-black uppercase tracking-wide text-slate-600">
+                          {isEn ? group.labelEn : group.labelZh}
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          {group.rows.length} · {labelActive} {group.activeCount} · {labelWatch} {group.watchCount}
+                          {group.localTimeRange ? ` · LT ${group.localTimeRange}` : ""}
+                          {group.hotCity ? ` · Hot: ${group.hotCity}` : ""}
+                        </span>
+                      </button>
+                    </td>
+                  </tr>
+                )}
+                {rows.map((row) => {
                     const signal = getSignalState(row);
                     const gapColor = GAP_COLOR_MAP[getGapColor(row)];
                     return (
