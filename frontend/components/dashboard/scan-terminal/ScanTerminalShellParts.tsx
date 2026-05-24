@@ -1,13 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import Link from "next/link";
-import type { Dispatch, SetStateAction } from "react";
-import { LogIn, UserRound } from "lucide-react";
 import { LoadingSignal } from "@/components/dashboard/scan-terminal/LoadingSignal";
-import type { Locale } from "@/lib/i18n";
-
-export type ScanTerminalContentView = "city-list" | "analysis";
 
 type ThemeMode = "dark" | "light";
 
@@ -29,12 +23,12 @@ export function ScanTerminalLoadingScreen({
           <div className="scan-topbar">
             <div className="scan-topbar-title">
               <strong>
-                {isEn ? "AI Weather Decision Terminal" : "AI 天气交易决策台"}
+                {isEn ? "PolyWeather Terminal" : "PolyWeather 交易决策台"}
               </strong>
               <span>
                 {isEn
-                  ? "Loading paid decision cards, city evidence, and market signals"
-                  : "正在加载付费决策卡、城市证据和市场信号"}
+                  ? "Loading decision cards, city evidence, and market signals"
+                  : "正在加载决策卡、城市证据和市场信号"}
               </span>
             </div>
             <div className="scan-topbar-actions">
@@ -54,84 +48,6 @@ export function ScanTerminalLoadingScreen({
             />
           </div>
         </main>
-      </div>
-    </div>
-  );
-}
-
-export function ScanTerminalTopBar({
-  accountHref,
-  isAuthenticated,
-  isEn,
-  isPro,
-  locale,
-  onOpenScanPaywall,
-  setThemeMode,
-  themeMode,
-  toggleLocale,
-  userLocalTime,
-}: {
-  accountHref: string;
-  isAuthenticated: boolean;
-  isEn: boolean;
-  isPro: boolean;
-  locale: Locale;
-  onOpenScanPaywall: () => void;
-  setThemeMode: Dispatch<SetStateAction<ThemeMode>>;
-  themeMode: ThemeMode;
-  toggleLocale: () => void;
-  userLocalTime: string;
-}) {
-  return (
-    <div className="scan-topbar">
-      <div className="scan-topbar-title">
-        <strong>
-          {isEn ? "AI Weather Decision Terminal" : "AI 天气交易决策台"}
-        </strong>
-        <span>
-          {isEn
-            ? "Paid workspace for city evidence, model signals, and weather-market decisions"
-            : "面向付费用户的城市证据、模型信号与天气市场决策工作区"}
-        </span>
-      </div>
-      <div className="scan-topbar-actions">
-        <button
-          type="button"
-          className="scan-locale-switch"
-          aria-label={isEn ? "Switch to Chinese" : "切换到英文"}
-          title={isEn ? "Switch to Chinese" : "切换到英文"}
-          onClick={toggleLocale}
-        >
-          <span className={clsx(locale === "zh-CN" && "active")}>中文</span>
-          <span className={clsx(locale === "en-US" && "active")}>EN</span>
-        </button>
-        <span className="scan-topbar-time">{userLocalTime}</span>
-        {isPro ? null : isAuthenticated ? (
-          <button
-            type="button"
-            className="scan-primary-button"
-            onClick={onOpenScanPaywall}
-          >
-            <UserRound size={14} />
-            {isEn ? "Upgrade Pro" : "升级 Pro"}
-          </button>
-        ) : (
-          <Link href={accountHref} className="scan-primary-button">
-            <LogIn size={14} />
-            {isEn ? "Sign in" : "登录"}
-          </Link>
-        )}
-
-        {isAuthenticated ? (
-          <Link
-            href={accountHref}
-            className="scan-account-button"
-            aria-label={isEn ? "Account" : "账户"}
-            title={isEn ? "Account" : "账户"}
-          >
-            <UserRound size={15} />
-          </Link>
-        ) : null}
       </div>
     </div>
   );

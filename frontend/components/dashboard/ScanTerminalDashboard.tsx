@@ -169,7 +169,7 @@ const TERM = {
     zh: "你需要开通有效订阅才能访问决策台。",
   },
   backToProduct: { en: "Back to product overview", zh: "返回产品介绍页" },
-  dashboard: { en: "Weather Market Dashboard", zh: "天气市场数据仪表盘" },
+  dashboard: { en: "PolyWeather Terminal", zh: "PolyWeather 交易决策台" },
   refresh: { en: "Refresh", zh: "刷新" },
   switchLang: { en: "Switch to Chinese", zh: "切换到英文" },
   globalWeatherFactors: { en: "Global Weather Factors", zh: "全球天气因子" },
