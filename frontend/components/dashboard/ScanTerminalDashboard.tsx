@@ -190,7 +190,7 @@ function KoyfinRowsTable({
             <span className="block h-3 w-3 rounded-[2px] border border-slate-300 bg-white" />
           </th>
           <th className="px-1.5 py-1 text-left font-black">
-            {isEn ? "Weather Contract" : "天气合约"}
+            {isEn ? "City" : "城市"}
           </th>
           <th className="px-1.5 py-1 text-right font-black">
             {isEn ? "Price" : "价格"}
@@ -334,9 +334,7 @@ function CityGroupedTable({
       <table className="w-full min-w-[780px] border-collapse text-[11px]">
         <thead>
           <tr className="border-b border-slate-200 bg-[#f3f5f7] text-[9px] uppercase tracking-wide text-slate-500">
-            <th className="w-5 px-2 py-1.5 text-left font-black">
-              <span className="block h-3 w-3 rounded-[2px] border border-slate-300 bg-white" />
-            </th>
+            <th className="w-6 px-2 py-1.5 text-left font-black" />
             <th className="px-1.5 py-1.5 text-left font-black">
               {isEn ? "City / Best Signal" : "城市 / 最佳信号"}
             </th>
@@ -396,8 +394,8 @@ function CityGroupedTable({
                     key={row.id}
                     className="border-b border-slate-50 bg-slate-50/30 text-slate-500"
                   >
-                    <td className="px-2 py-1" />
-                    <td className="px-1.5 py-1 pl-5">
+                    <td className="px-2 py-1 pl-2" />
+                    <td className="px-1.5 py-1 pl-3">
                       <span className="text-[10px]">{row.target_label || "--"}</span>
                     </td>
                     <td className={clsx("px-1.5 py-1 text-right font-mono text-[10px] font-bold", edgeClass(row.edge_percent))}>
