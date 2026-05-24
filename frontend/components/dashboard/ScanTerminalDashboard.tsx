@@ -495,7 +495,8 @@ function PolyWeatherTerminal({
   const watchRows = rows
     .filter((row) => decisionLabel(row) === "Watch" || !row.tradable)
     .slice(0, 8);
-  const selectedLabel = selectedRow ? getSignalLabel(getSignalState(selectedRow), isEn) : "";
+  const selectedSignal = selectedRow ? getSignalState(selectedRow) : "data" as const;
+  const selectedLabel = selectedRow ? getSignalLabel(selectedSignal, isEn) : "";
   const continentGroups = useMemo(
     () => buildContinentGroups(rows, isEn),
     [rows, isEn]
@@ -725,7 +726,10 @@ function PolyWeatherTerminal({
                       <span
                         className={clsx(
                           "rounded border px-2 py-1 text-xs font-black",
-                          decisionClass(selectedLabel),
+                          selectedSignal === "active" ? "border-emerald-200 bg-emerald-50 text-emerald-700" :
+                          selectedSignal === "watch" ? "border-amber-200 bg-amber-50 text-amber-700" :
+                          selectedSignal === "closed" ? "border-slate-200 bg-slate-50 text-slate-500" :
+                          "border-red-200 bg-red-50 text-red-700",
                         )}
                       >
                         {selectedLabel}
