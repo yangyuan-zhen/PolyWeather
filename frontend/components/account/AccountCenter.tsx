@@ -2105,27 +2105,25 @@ export function AccountCenter() {
 
   if (loading && !refreshing) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-[#0b0f1a]">
+      <div className="flex h-screen w-full items-center justify-center bg-[#f4f7fb]">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-12 w-12 animate-spin text-blue-500" />
-          <p className="text-slate-400 font-medium">{copy.loadingAccount}</p>
+          <p className="font-medium text-slate-500">{copy.loadingAccount}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen w-full bg-[#0b0f1a] text-slate-200 p-4 md:p-8 font-sans relative overflow-hidden flex flex-col items-center">
-      {/* Aurora Shadows */}
-      <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[140px] pointer-events-none"></div>
-      <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-purple-600/10 rounded-full blur-[140px] pointer-events-none"></div>
+    <div className="relative flex min-h-screen w-full flex-col items-center overflow-hidden bg-[#f4f7fb] p-4 font-sans text-slate-900 md:p-8">
+      <div className="absolute inset-x-0 top-0 h-20 border-b border-slate-200 bg-white"></div>
 
       {/* Header */}
       <header className="w-full max-w-6xl flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 z-20">
         <div className="flex items-center gap-4">
           <Link
             href="/"
-            className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-slate-400 hover:text-white transition-all active:scale-90 group"
+            className="group rounded-lg border border-slate-200 bg-white p-2 text-slate-500 shadow-sm transition-all hover:border-slate-300 hover:text-slate-950 active:scale-95"
             title={copy.backHome}
             aria-label={copy.backHome}
           >
@@ -2135,7 +2133,7 @@ export function AccountCenter() {
             />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-950">
               {copy.accountCenter}
             </h1>
           </div>
@@ -2144,7 +2142,7 @@ export function AccountCenter() {
           {!showOverlay && canOpenCheckoutOverlay && (
             <button
               onClick={() => setShowOverlay(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 text-yellow-500 rounded-xl text-sm transition-all animate-pulse"
+              className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700 transition-all hover:bg-amber-100"
             >
               <Crown size={16} />{" "}
               {showExpiringSoon || showExpiredReminder
@@ -2155,7 +2153,7 @@ export function AccountCenter() {
           <button
             type="button"
             onClick={() => void onRefresh()}
-            className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm transition-all disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:text-slate-950 disabled:opacity-50"
             disabled={refreshing}
           >
             {refreshing ? (
@@ -2168,14 +2166,14 @@ export function AccountCenter() {
           {isAuthenticated ? (
             <button
               onClick={() => void onSignOut()}
-              className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 rounded-xl text-sm transition-all"
+              className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition-all hover:bg-red-100"
             >
               <LogOut size={16} /> {copy.signOut}
             </button>
           ) : (
             <Link
               href="/auth/login?next=%2Faccount"
-              className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 rounded-xl text-sm transition-all"
+              className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition-all hover:bg-blue-100"
             >
               <LogIn size={16} /> {copy.signIn}
             </Link>
@@ -2185,23 +2183,23 @@ export function AccountCenter() {
 
       <main className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-6 z-10 relative">
         {(showExpiringSoon || showExpiredReminder) && (
-          <div className="lg:col-span-12 rounded-[2rem] border border-amber-400/30 bg-amber-500/10 px-6 py-5 shadow-xl">
+          <div className="lg:col-span-12 rounded-2xl border border-amber-300 bg-amber-50 px-6 py-5 shadow-sm">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <div className="flex items-center gap-2 text-sm font-bold text-amber-300">
+                <div className="flex items-center gap-2 text-sm font-bold text-amber-700">
                   <Crown size={16} />
                   <span>{subscriptionStatusTitle}</span>
                 </div>
-                <p className="mt-1 text-sm text-amber-50/90">
+                <p className="mt-1 text-sm text-amber-900">
                   {subscriptionStatusBody}
                 </p>
                 {subscriptionStatusMeta ? (
-                  <p className="mt-1 text-xs text-amber-200/80">
+                  <p className="mt-1 text-xs text-amber-700">
                     {subscriptionStatusMeta}
                   </p>
                 ) : null}
                 {billing.canRedeem ? (
-                  <p className="mt-2 text-xs text-emerald-200/90">
+                    <p className="mt-2 text-xs text-emerald-700">
                     当前可用 {billing.pointsUsed} 积分抵扣 $
                     {billing.discountAmount.toFixed(2)}， 续费时会自动生效。
                   </p>
@@ -2210,7 +2208,7 @@ export function AccountCenter() {
               <button
                 type="button"
                 onClick={() => setShowOverlay(true)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300/35 bg-amber-300/12 px-4 py-2 text-sm font-bold text-amber-100 transition-all hover:bg-amber-300/20"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-bold text-amber-800 transition-all hover:bg-amber-100"
               >
                 <Crown size={16} />
                 {showExpiredReminder ? copy.renewNow : copy.upgradePro}
@@ -2220,39 +2218,39 @@ export function AccountCenter() {
         )}
 
         {/* User Card */}
-        <div className="lg:col-span-8 bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 shadow-2xl flex flex-col md:flex-row items-center gap-8">
+        <div className="flex flex-col items-center gap-8 rounded-2xl border border-slate-200 bg-white p-8 shadow-sm lg:col-span-8 md:flex-row">
           <div className="relative">
-            <div className="w-24 h-24 rounded-3xl bg-gradient-to-tr from-blue-600 to-indigo-400 flex items-center justify-center text-3xl font-bold text-white shadow-xl shadow-blue-500/30">
+            <div className="flex h-24 w-24 items-center justify-center rounded-xl border border-blue-200 bg-blue-600 text-3xl font-bold text-white shadow-sm">
               {initials}
             </div>
             <div
-              className={`absolute -bottom-2 -right-2 p-1.5 rounded-xl border-4 border-[#0b0f1a] ${isSubscribed ? "bg-yellow-500 text-black" : "bg-slate-700 text-slate-400"}`}
+              className={`absolute -bottom-2 -right-2 rounded-lg border-4 border-white p-1.5 ${isSubscribed ? "bg-amber-400 text-slate-950" : "bg-slate-100 text-slate-400"}`}
             >
               <Crown size={16} fill="currentColor" />
             </div>
           </div>
           <div className="flex-grow text-center md:text-left">
             <div className="flex items-center justify-center md:justify-start gap-3 mb-1">
-              <h2 className="text-3xl font-bold text-white">{displayName}</h2>
+              <h2 className="text-3xl font-bold text-slate-950">{displayName}</h2>
               <span
-                className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tighter border ${isSubscribed ? "bg-blue-500/20 border-blue-500/40 text-blue-400" : "bg-slate-700/50 border-white/10 text-slate-500"}`}
+                className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${isSubscribed ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-slate-50 text-slate-500"}`}
               >
                 {isSubscribed
                   ? copy.proMember
                   : copy.freeTier}
               </span>
             </div>
-            <p className="text-slate-500 font-mono text-sm mb-4">
+            <p className="mb-4 font-mono text-sm text-slate-500">
               {email || copy.guestUser}
             </p>
             <div className="flex flex-wrap justify-center md:justify-start gap-4">
-              <div className="flex items-center gap-1.5 text-slate-400 text-xs">
+              <div className="flex items-center gap-1.5 text-xs text-slate-500">
                 <Hash size={14} />{" "}
                 <span className="font-mono">
                   {userId ? `${userId.substring(0, 12)}...` : "--"}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 text-slate-400 text-xs">
+              <div className="flex items-center gap-1.5 text-xs text-slate-500">
                 <Clock size={14} />{" "}
                 <span>
                   {copy.joinedAt}: {joinedAt}
@@ -2261,29 +2259,29 @@ export function AccountCenter() {
             </div>
           </div>
           <div className="flex flex-col gap-3">
-            <div className="px-6 py-4 bg-black/40 rounded-2xl border border-white/5 text-center min-w-[140px]">
-              <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">
+            <div className="min-w-[140px] rounded-xl border border-slate-200 bg-slate-50 px-6 py-4 text-center">
+              <p className="mb-1 text-[10px] uppercase text-slate-500">
                 {copy.totalPoints}
               </p>
-              <p className="text-xl font-bold text-white flex items-center justify-center gap-2">
+              <p className="flex items-center justify-center gap-2 text-xl font-bold text-slate-950">
                 <Coins size={16} className="text-yellow-500" />{" "}
                 {totalPoints.toLocaleString()}
               </p>
             </div>
-            <div className="px-6 py-4 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 text-center min-w-[140px]">
-              <p className="text-[10px] text-emerald-300 uppercase tracking-widest mb-1 font-bold">
+            <div className="min-w-[140px] rounded-xl border border-emerald-200 bg-emerald-50 px-6 py-4 text-center">
+              <p className="mb-1 text-[10px] font-bold uppercase text-emerald-700">
                 {copy.weeklyPoints}
               </p>
-              <p className="text-xl font-bold text-white flex items-center justify-center gap-2">
+              <p className="flex items-center justify-center gap-2 text-xl font-bold text-slate-950">
                 <TrendingUp size={16} className="text-emerald-400" />{" "}
                 {weeklyPoints.toLocaleString()}
               </p>
             </div>
-            <div className="px-6 py-4 bg-blue-500/10 rounded-2xl border border-blue-500/20 text-center min-w-[140px]">
-              <p className="text-[10px] text-blue-400 uppercase tracking-widest mb-1 font-bold">
+            <div className="min-w-[140px] rounded-xl border border-blue-200 bg-blue-50 px-6 py-4 text-center">
+              <p className="mb-1 text-[10px] font-bold uppercase text-blue-700">
                 {copy.weeklyRank}
               </p>
-              <p className="text-xl font-bold text-white flex items-center justify-center gap-2">
+              <p className="flex items-center justify-center gap-2 text-xl font-bold text-slate-950">
                 <Trophy size={16} className="text-amber-400" />{" "}
                 {weeklyRank === "--" ? weeklyRank : `#${weeklyRank}`}
               </p>
@@ -2293,36 +2291,36 @@ export function AccountCenter() {
 
         {/* Weekly Ranking Motivation */}
         {showSecondarySections ? (
-          <div className="lg:col-span-4 bg-gradient-to-br from-indigo-600/20 to-purple-600/20 border border-indigo-500/30 rounded-[2.5rem] p-6 flex flex-col justify-between shadow-xl">
+          <div className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-4">
             <div>
-              <h3 className="text-lg font-bold flex items-center gap-2 text-white mb-6">
-                <Sparkles size={20} className="text-yellow-400" />{" "}
+              <h3 className="mb-6 flex items-center gap-2 text-lg font-bold text-slate-950">
+                <Sparkles size={20} className="text-amber-500" />{" "}
                 {copy.weeklyRewards}
               </h3>
               <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
+                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <span className="text-sm flex items-center gap-2">
                     <div className="w-5 h-5 bg-yellow-500 rounded text-black font-bold text-[10px] flex items-center justify-center">
                       1
                     </div>{" "}
                     Top 1
                   </span>
-                  <span className="text-xs font-bold text-yellow-500">
+                  <span className="text-xs font-bold text-amber-600">
                     +200 积分 & 7天Pro
                   </span>
                 </div>
-                <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
+                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <span className="text-sm flex items-center gap-2">
                     <div className="w-5 h-5 bg-slate-300 rounded text-black font-bold text-[10px] flex items-center justify-center">
                       2
                     </div>{" "}
                     Top 2-3
                   </span>
-                  <span className="text-xs font-bold text-slate-300">
+                  <span className="text-xs font-bold text-slate-600">
                     +100 积分
                   </span>
                 </div>
-                <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
+                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <span className="text-sm flex items-center gap-2">
                     <div className="w-5 h-5 bg-orange-800 rounded text-white font-bold text-[10px] flex items-center justify-center">
                       4
@@ -2335,7 +2333,7 @@ export function AccountCenter() {
                 </div>
               </div>
             </div>
-            <div className="mt-6 flex items-start gap-2 p-3 bg-black/20 rounded-xl">
+            <div className="mt-6 flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
               <Info size={14} className="text-slate-500 mt-0.5 shrink-0" />
               <p className="text-[10px] text-slate-500 leading-normal italic">
                 积分规则：群内有效发言（自动防刷检测）+
@@ -2344,12 +2342,12 @@ export function AccountCenter() {
             </div>
           </div>
         ) : (
-          <div className="lg:col-span-4 rounded-[2.5rem] border border-white/10 bg-white/5 p-6">
-            <div className="h-6 w-40 animate-pulse rounded bg-slate-800/80" />
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 lg:col-span-4">
+            <div className="h-6 w-40 animate-pulse rounded bg-slate-200" />
             <div className="mt-4 space-y-2">
-              <div className="h-12 animate-pulse rounded-xl bg-slate-800/60" />
-              <div className="h-12 animate-pulse rounded-xl bg-slate-800/60" />
-              <div className="h-12 animate-pulse rounded-xl bg-slate-800/60" />
+              <div className="h-12 animate-pulse rounded-xl bg-slate-100" />
+              <div className="h-12 animate-pulse rounded-xl bg-slate-100" />
+              <div className="h-12 animate-pulse rounded-xl bg-slate-100" />
             </div>
           </div>
         )}
@@ -2359,8 +2357,8 @@ export function AccountCenter() {
           <div
             className={`grid grid-cols-1 md:grid-cols-2 gap-6 transition-all duration-700 ${canOpenCheckoutOverlay && showOverlay ? "blur-md grayscale-[0.3] opacity-30 select-none pointer-events-none" : ""}`}
           >
-            <section className="bg-white/5 border border-white/10 rounded-[2rem] p-6 space-y-3">
-              <h3 className="text-sm font-bold text-blue-400 uppercase tracking-widest mb-4">
+            <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h3 className="mb-4 text-sm font-bold uppercase text-blue-700">
                 {copy.membershipDetails}
               </h3>
               <InfoRow
@@ -2392,8 +2390,8 @@ export function AccountCenter() {
                 isPrimary={isSubscribed}
               />
             </section>
-            <section className="bg-white/5 border border-white/10 rounded-[2rem] p-6 space-y-3">
-              <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-widest mb-4">
+            <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h3 className="mb-4 text-sm font-bold uppercase text-indigo-700">
                 {copy.identityStatus}
               </h3>
               <InfoRow
@@ -2418,7 +2416,7 @@ export function AccountCenter() {
                 value={backend?.authenticated ? copy.passed : copy.restricted}
               />
               {queuedExtensionSummary ? (
-                <p className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-3 text-xs text-cyan-100">
+                <p className="rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-xs text-cyan-800">
                   {queuedExtensionSummary}
                 </p>
               ) : null}
@@ -2464,16 +2462,16 @@ export function AccountCenter() {
         {showSecondarySections ? (
           <div className="lg:col-span-12 grid grid-cols-1 md:flex gap-6">
             {canAccessPaidTelegramGroup && (
-              <section className="flex-1 bg-white/5 border border-white/10 rounded-[2rem] p-8 relative overflow-hidden group">
+              <section className="group relative flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
               <Bot
                 size={140}
-                className="absolute -right-8 -bottom-8 text-white/5 -rotate-12 group-hover:rotate-0 transition-transform duration-1000"
+                className="absolute -right-8 -bottom-8 -rotate-12 text-slate-100 transition-transform duration-1000 group-hover:rotate-0"
               />
               <div className="relative z-10">
-                <h3 className="text-lg font-bold mb-2 flex items-center gap-2 text-blue-400">
+                <h3 className="mb-2 flex items-center gap-2 text-lg font-bold text-blue-700">
                   <Bot size={22} /> {copy.telegramBind}
                 </h3>
-                <p className="text-slate-400 text-sm mb-6">
+                <p className="mb-6 text-sm text-slate-500">
                   {copy.telegramHint}
                 </p>
 
@@ -2485,7 +2483,7 @@ export function AccountCenter() {
                       href={TELEGRAM_TOPICS_GROUP_URL}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/20"
+                      className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
                     >
                       {copy.telegramTopicsGroupLink}
                       <ExternalLink size={12} />
@@ -2496,7 +2494,7 @@ export function AccountCenter() {
                       href={TELEGRAM_GROUP_URL}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-blue-400/30 bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-200 hover:bg-blue-500/20"
+                      className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100"
                     >
                       {copy.telegramGroupLink}
                       <ExternalLink size={12} />
@@ -2504,13 +2502,13 @@ export function AccountCenter() {
                   ) : null}
                 </div>
                 <div className="flex gap-2">
-                  <code className="flex-grow bg-black/40 border border-white/10 p-4 rounded-xl font-mono text-xs text-blue-300 overflow-hidden text-ellipsis whitespace-nowrap">
+                  <code className="flex-grow overflow-hidden text-ellipsis whitespace-nowrap rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-xs text-blue-700">
                     {bindCommand}
                   </code>
                   <button
                     onClick={() => void openTelegramBotBindLink()}
                     disabled={telegramBindOpening || !isAuthenticated}
-                    className="px-4 py-3 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all shadow-lg text-white text-xs font-bold"
+                    className="rounded-xl border border-cyan-700 bg-cyan-600 px-4 py-3 text-xs font-bold text-white shadow-sm transition-all hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50"
                     title={copy.telegramBotBindLink}
                     aria-label={copy.telegramBotBindLink}
                   >
@@ -2518,7 +2516,7 @@ export function AccountCenter() {
                   </button>
                   <button
                     onClick={() => handleCopy(bindCommand)}
-                    className="p-4 bg-blue-600 hover:bg-blue-500 rounded-xl transition-all shadow-lg text-white"
+                    className="rounded-xl border border-blue-700 bg-blue-600 p-4 text-white shadow-sm transition-all hover:bg-blue-700"
                     title={copy.copyCommand}
                     aria-label={copy.copyCommand}
                   >
@@ -2528,7 +2526,7 @@ export function AccountCenter() {
                 <p className="mt-2 text-[11px] leading-5 text-slate-400">
                   {copy.telegramFallbackHint}
                 </p>
-                <div className="mt-5 rounded-2xl border border-amber-400/25 bg-amber-500/8 px-4 py-3 text-xs leading-6 text-amber-100/90">
+                <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-6 text-amber-800">
                   {copy.paymentManualSupport}
                 </div>
               </div>
@@ -2536,27 +2534,27 @@ export function AccountCenter() {
             )}
 
             {/* Payment Details / Wallet Management */}
-            <section className={`bg-white/5 border border-white/10 rounded-[2rem] p-8 flex flex-col justify-between ${
+            <section className={`flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-8 shadow-sm ${
               canAccessPaidTelegramGroup ? "w-full md:w-96" : "w-full"
             }`}>
               <div>
-                <h3 className="text-blue-400 text-sm font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
+                <h3 className="mb-6 flex items-center gap-2 text-sm font-bold uppercase text-blue-700">
                   <Wallet size={18} /> {copy.paymentMgmt}
                 </h3>
                 {paymentError ? (
-                  <div className="mb-4 rounded-xl border border-red-400/40 bg-red-500/10 px-3 py-2 text-[11px] text-red-200">
+                  <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700">
                     {paymentError}
                   </div>
                 ) : null}
                 {!paymentError && paymentInfo ? (
-                  <div className="mb-4 rounded-xl border border-cyan-400/35 bg-cyan-500/10 px-3 py-2 text-[11px] text-cyan-200">
+                  <div className="mb-4 rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-[11px] text-cyan-800">
                     {paymentInfo}
                     {telegramBindUrl ? (
                       <a
                         href={telegramBindUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="block mt-1 underline text-cyan-400 hover:text-cyan-300 break-all"
+                        className="mt-1 block break-all text-cyan-700 underline hover:text-cyan-900"
                       >
                         {telegramBindUrl}
                       </a>
@@ -2564,7 +2562,7 @@ export function AccountCenter() {
                   </div>
                 ) : null}
                 {!paymentHostAllowed ? (
-                  <div className="mb-4 rounded-xl border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
+                  <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
                     {copy.paymentHostBlocked.replace(
                       "{host}",
                       allowedPaymentHosts[0] || "polyweather-pro.vercel.app",
@@ -2604,7 +2602,7 @@ export function AccountCenter() {
                 </div>
                 {availableTokenList.length > 0 && (
                   <div className="mb-5">
-                    <p className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">
+                    <p className="mb-2 text-[11px] uppercase text-slate-500">
                       {copy.paymentToken}
                     </p>
                     <div className="grid grid-cols-2 gap-2">
@@ -2622,8 +2620,8 @@ export function AccountCenter() {
                             disabled={paymentBusy}
                             className={`rounded-xl border px-3 py-2 text-left transition-all ${
                               active
-                                ? "bg-blue-500/15 border-blue-500/40 text-white"
-                                : "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10"
+                                ? "border-blue-300 bg-blue-50 text-blue-900"
+                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                             }`}
                           >
                             <div className="text-xs font-bold">
@@ -2640,18 +2638,18 @@ export function AccountCenter() {
                 )}
 
                 {/* 支付方式选择 Tabs */}
-                <div className="mt-6 border-t border-white/10 pt-6">
-                  <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-3 font-semibold">
+                <div className="mt-6 border-t border-slate-200 pt-6">
+                  <p className="mb-3 text-[10px] font-semibold uppercase text-slate-500">
                     {copy.paymentMethodLabel}
                   </p>
-                  <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-black/40 border border-white/5 mb-5">
+                  <div className="mb-5 grid grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-slate-100 p-1">
                     <button
                       type="button"
                       onClick={() => setPaymentMethodTab("wallet")}
                       className={`py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                         paymentMethodTab === "wallet"
-                          ? "bg-blue-600/95 text-white shadow-lg"
-                          : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                          ? "bg-white text-blue-700 shadow-sm"
+                          : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
                       }`}
                     >
                       <Wallet size={12} />
@@ -2662,8 +2660,8 @@ export function AccountCenter() {
                       onClick={() => setPaymentMethodTab("manual")}
                       className={`py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
                         paymentMethodTab === "manual"
-                          ? "bg-emerald-600/95 text-white shadow-lg"
-                          : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                          ? "bg-white text-emerald-700 shadow-sm"
+                          : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
                       }`}
                     >
                       <ExternalLink size={12} />
@@ -2676,7 +2674,7 @@ export function AccountCenter() {
                       <p className="text-[11px] leading-relaxed text-slate-400">
                         {copy.paymentWalletDesc}
                       </p>
-                      <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-100">
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-relaxed text-amber-800">
                         {copy.paymentGasWarning}
                       </div>
                       
@@ -2687,8 +2685,8 @@ export function AccountCenter() {
                               key={w.address}
                               className={`p-3 rounded-xl border transition-all ${
                                 selectedWallet === w.address
-                                  ? "bg-blue-500/10 border-blue-500/30 text-white"
-                                  : "bg-white/5 border-white/5 text-slate-400"
+                                  ? "border-blue-300 bg-blue-50 text-blue-900"
+                                  : "border-slate-200 bg-white text-slate-600"
                               }`}
                             >
                               <div className="flex items-center justify-between mb-1">
@@ -2707,7 +2705,7 @@ export function AccountCenter() {
                                   type="button"
                                   onClick={() => void handleUnbindWallet(w.address)}
                                   disabled={paymentBusy}
-                                  className="inline-flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[10px] font-semibold text-red-300 transition-all hover:bg-red-500/20 disabled:opacity-50"
+                                  className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-700 transition-all hover:bg-red-100 disabled:opacity-50"
                                 >
                                   <Minus size={12} />
                                   {copy.unbind}
@@ -2717,7 +2715,7 @@ export function AccountCenter() {
                           ))}
                         </div>
                       ) : (
-                        <div className="p-4 rounded-xl border border-white/5 bg-white/5 text-center">
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
                           <p className="text-xs text-slate-400 italic">
                             {copy.noWallet}
                           </p>
@@ -2727,7 +2725,7 @@ export function AccountCenter() {
                       <div className="grid grid-cols-1 gap-2 pt-2">
                         {injectedProviderOptions.length > 1 && (
                           <label className="mb-2 block">
-                            <span className="mb-2 block text-[11px] uppercase tracking-widest text-slate-500">
+                            <span className="mb-2 block text-[11px] uppercase text-slate-500">
                               {copy.walletExtensionDetected}
                             </span>
                             <select
@@ -2736,13 +2734,13 @@ export function AccountCenter() {
                                 setSelectedInjectedProviderKey(event.target.value)
                               }
                               disabled={paymentBusy}
-                              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-xs text-slate-200 outline-none transition-all hover:bg-white/10 disabled:opacity-60"
+                              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-xs text-slate-900 outline-none transition-all hover:bg-slate-50 disabled:opacity-60"
                             >
                               {injectedProviderOptions.map((option) => (
                                 <option
                                   key={option.key}
                                   value={option.key}
-                                  className="bg-slate-900 text-slate-200"
+                                  className="bg-white text-slate-900"
                                 >
                                   {option.label}
                                 </option>
@@ -2756,7 +2754,7 @@ export function AccountCenter() {
                             void connectAndBindWallet("auto");
                           }}
                           disabled={paymentBusy || !isAuthenticated}
-                          className="w-full py-3 border border-white/10 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-slate-300 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                          className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white py-3 text-xs font-bold text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-60"
                         >
                           <PlusIcon className="w-4 h-4" /> {copy.bindExt}
                         </button>
@@ -2768,7 +2766,7 @@ export function AccountCenter() {
                           disabled={
                             paymentBusy || !isAuthenticated || !walletConnectEnabled
                           }
-                          className="w-full py-3 border border-cyan-400/30 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-xl text-xs font-bold text-cyan-300 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                          className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 py-3 text-xs font-bold text-cyan-700 transition-all hover:bg-cyan-100 disabled:opacity-60"
                         >
                           <CreditCard className="w-4 h-4" /> {copy.bindQr}
                         </button>
@@ -2788,13 +2786,13 @@ export function AccountCenter() {
                         {copy.paymentManualDesc}
                       </p>
                       
-                      <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/8 p-4">
+                      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                         <div className="flex flex-col gap-3">
                           <div>
-                            <p className="text-xs font-bold text-emerald-200">
+                            <p className="text-xs font-bold text-emerald-800">
                               {copy.paymentManualTitle}
                             </p>
-                            <p className="mt-1 text-[11px] leading-relaxed text-emerald-100/75">
+                            <p className="mt-1 text-[11px] leading-relaxed text-emerald-700">
                               {copy.paymentManualHint}
                             </p>
                           </div>
@@ -2802,18 +2800,18 @@ export function AccountCenter() {
                             type="button"
                             onClick={() => void createManualPaymentIntent()}
                             disabled={paymentBusy || !isAuthenticated}
-                            className="w-full rounded-xl border border-emerald-400/35 bg-emerald-500/15 py-2.5 text-xs font-bold text-emerald-100 transition-all hover:bg-emerald-500/25 disabled:opacity-50"
+                            className="w-full rounded-xl border border-emerald-700 bg-emerald-600 py-2.5 text-xs font-bold text-white transition-all hover:bg-emerald-700 disabled:opacity-50"
                           >
                             {copy.paymentManualCreate}
                           </button>
                         </div>
                         {manualPayment ? (
-                          <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-black/25 p-3">
+                          <div className="mt-4 space-y-3 rounded-xl border border-emerald-200 bg-white p-3">
                             <div>
                               <p className="text-[10px] uppercase tracking-widest text-slate-500">
                                 {copy.paymentAmount}
                               </p>
-                              <p className="font-mono text-sm font-bold text-white">
+                              <p className="font-mono text-sm font-bold text-slate-950">
                                 {manualPayment.amount_usdc}{" "}
                                 {manualPayment.token_symbol || selectedTokenLabel}
                               </p>
@@ -2823,7 +2821,7 @@ export function AccountCenter() {
                                 {copy.paymentReceiverLabel}
                               </p>
                               <div className="mt-1 flex gap-2">
-                                <code className="min-w-0 flex-1 break-all whitespace-normal rounded-lg bg-black/40 px-2 py-2 font-mono text-[11px] text-blue-200">
+                                <code className="min-w-0 flex-1 break-all whitespace-normal rounded-lg border border-blue-200 bg-blue-50 px-2 py-2 font-mono text-[11px] text-blue-800">
                                   {manualPayment.receiver_address}
                                 </code>
                                 <button
@@ -2831,7 +2829,7 @@ export function AccountCenter() {
                                   onClick={() =>
                                     handleCopy(manualPayment.receiver_address)
                                   }
-                                  className="rounded-lg bg-blue-600 px-2 text-xs font-bold text-white transition-colors hover:bg-blue-500"
+                                  className="rounded-lg border border-blue-700 bg-blue-600 px-2 text-xs font-bold text-white transition-colors hover:bg-blue-700"
                                 >
                                   {copy.paymentCopyAddress}
                                 </button>
@@ -2853,19 +2851,19 @@ export function AccountCenter() {
                                   );
                                 }}
                                 placeholder="0x..."
-                                className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 font-mono text-xs text-slate-100 outline-none focus:border-emerald-400/50"
+                                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-mono text-xs text-slate-950 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
                               />
                               {txValidation.loading ? (
                                 <p className="mt-1 text-[10px] text-slate-500">
                                   验证中...
                                 </p>
                               ) : txValidation.checked && txValidation.valid ? (
-                                <p className="mt-1 text-[10px] text-emerald-400">
+                                <p className="mt-1 text-[10px] text-emerald-700">
                                   收款地址和金额匹配
                                 </p>
                               ) : txValidation.checked &&
                                 txValidation.valid === false ? (
-                                <p className="mt-1 text-[10px] text-red-400">
+                                <p className="mt-1 text-[10px] text-red-700">
                                   {txValidation.reason ===
                                   "tx_not_mined"
                                     ? "交易未上链，请等待"
@@ -2890,7 +2888,7 @@ export function AccountCenter() {
                                 paymentBusy ||
                                 (txValidation.checked && !txValidation.valid)
                               }
-                              className="w-full rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition-all hover:bg-emerald-500 disabled:opacity-50"
+                              className="w-full rounded-xl border border-emerald-700 bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition-all hover:bg-emerald-700 disabled:opacity-50"
                             >
                               {copy.paymentManualSubmit}
                             </button>
@@ -2905,8 +2903,8 @@ export function AccountCenter() {
           </div>
         ) : (
           <div className="lg:col-span-12 grid grid-cols-1 gap-6 md:grid-cols-3">
-            <div className="md:col-span-2 h-48 animate-pulse rounded-[2rem] border border-white/10 bg-white/5" />
-            <div className="h-48 animate-pulse rounded-[2rem] border border-white/10 bg-white/5" />
+            <div className="h-48 animate-pulse rounded-2xl border border-slate-200 bg-white md:col-span-2" />
+            <div className="h-48 animate-pulse rounded-2xl border border-slate-200 bg-white" />
           </div>
         )}
       </main>

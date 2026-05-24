@@ -520,3 +520,23 @@
 
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── City Jumpbar Light Mode Overrides ── */
+:global(html.light) .root :global(.scan-ai-city-jumpbar) {
+  background: #ffffff;
+  border-color: #d8e0ec;
+  box-shadow: var(--shadow-elevation-1);
+}
+
+:global(html.light) .root :global(.scan-ai-city-jumpbar button) {
+  background: var(--color-bg-input);
+  border-color: var(--color-border-default);
+  color: var(--color-text-secondary);
+}
+
+:global(html.light) .root :global(.scan-ai-city-jumpbar button:hover) {
+  background: #e2e8f0;
+  border-color: var(--color-border-hover);
+  color: var(--color-text-primary);
+}
+

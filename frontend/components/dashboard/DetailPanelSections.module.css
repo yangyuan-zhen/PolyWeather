@@ -1062,3 +1062,33 @@
 
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Model Forecast Light Mode Overrides ── */
+:global(html.light) .root :global(.model-group) {
+  background: #f8fafc;
+  border-left-color: var(--color-border-default);
+}
+
+:global(html.light) .root :global(.model-bar-track) {
+  background: var(--color-bg-input);
+}
+
+:global(html.light) .root :global(.model-bar-value) {
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(15, 23, 42, 0.4);
+}
+
+:global(html.light) .root :global(.model-name strong) {
+  color: var(--color-text-primary);
+}
+
+:global(html.light) .root :global(.model-name span) {
+  color: var(--color-text-muted);
+}
+
+:global(html.light) .root :global(.model-stack-summary span) {
+  background: #ffffff;
+  border-color: var(--color-border-default);
+  color: var(--color-text-secondary);
+}
+

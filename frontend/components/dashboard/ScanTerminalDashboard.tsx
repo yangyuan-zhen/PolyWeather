@@ -117,6 +117,15 @@ function ScanTerminalScreen() {
     }
   }, [terminalData?.generated_at]);
 
+  useEffect(() => {
+    if (activeView === "map") {
+      const timer = setTimeout(() => {
+        window.dispatchEvent(new Event("resize"));
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [activeView]);
+
   const scanTerminalRootClassName = clsx(
     styles.root,
     scanRootClass,

@@ -16,7 +16,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 6px 0 18px;
-  border-bottom: 1px solid rgba(118, 146, 188, 0.1);
+  border-bottom: 1px solid var(--color-border-default);
 }
 
 .root :global(.scan-topbar-title) {
@@ -30,12 +30,12 @@
   margin: 0;
   font-size: 28px;
   line-height: 1.08;
-  letter-spacing: -0.04em;
-  color: #f3f8ff;
+  letter-spacing: 0;
+  color: var(--color-text-primary);
 }
 
 .root :global(.scan-topbar-title span) {
-  color: #8fa4c3;
+  color: var(--color-text-secondary);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -46,17 +46,17 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 12px;
-  color: #b4c8e2;
+  color: var(--color-text-secondary);
   font-size: 14px;
 }
 
 .root :global(.scan-locale-switch) {
   height: 36px;
   padding: 3px;
-  border-radius: 12px;
-  border: 1px solid rgba(99, 132, 180, 0.18);
-  background: rgba(8, 19, 34, 0.9);
-  color: #a8bdd8;
+  border-radius: 10px;
+  border: 1px solid var(--color-border-default);
+  background: #e2e8f0;
+  color: var(--color-text-secondary);
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -69,20 +69,20 @@
   min-width: 34px;
   height: 28px;
   padding: 0 8px;
-  border-radius: 8px;
+  border-radius: 7px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
 .root :global(.scan-locale-switch span.active) {
-  color: #eef7ff;
-  background: rgba(63, 140, 255, 0.16);
-  box-shadow: inset 0 0 0 1px rgba(63, 140, 255, 0.22);
+  color: var(--color-text-primary);
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
 .root :global(.scan-topbar-time) {
-  color: #b4c8e2;
+  color: var(--color-text-secondary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -92,12 +92,11 @@
   gap: 16px;
   align-items: center;
   margin: -4px 0 6px;
-  border: 1px solid rgba(77, 163, 255, 0.2);
-  border-radius: 18px;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
   background:
-    radial-gradient(circle at top left, rgba(77, 163, 255, 0.18), transparent 36%),
-    linear-gradient(135deg, rgba(18, 33, 58, 0.96), rgba(15, 23, 42, 0.92));
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.2);
+    linear-gradient(90deg, rgba(239, 246, 255, 0.98), rgba(255, 255, 255, 0.98));
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
   padding: 16px 18px;
 }
 
@@ -106,7 +105,7 @@
 }
 
 .root :global(.scan-upgrade-announcement-copy span) {
-  color: #86efac;
+  color: #047857;
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.04em;
@@ -116,14 +115,14 @@
 .root :global(.scan-upgrade-announcement-copy strong) {
   display: block;
   margin-top: 5px;
-  color: #f3f8ff;
+  color: var(--color-text-primary);
   font-size: 18px;
   line-height: 1.25;
 }
 
 .root :global(.scan-upgrade-announcement-copy p) {
   margin: 6px 0 0;
-  color: #b4c8e2;
+  color: var(--color-text-secondary);
   font-size: 13px;
   line-height: 1.55;
 }
@@ -139,10 +138,10 @@
 }
 
 .root :global(.scan-upgrade-announcement li) {
-  border: 1px solid rgba(77, 163, 255, 0.22);
+  border: 1px solid #bfdbfe;
   border-radius: 999px;
-  background: rgba(77, 163, 255, 0.1);
-  color: #d7e5f7;
+  background: #eff6ff;
+  color: #1d4ed8;
   font-size: 12px;
   font-weight: 800;
   padding: 7px 10px;
@@ -158,16 +157,16 @@
   place-items: center;
   border: none;
   border-radius: 8px;
-  background: rgba(148, 163, 184, 0.1);
-  color: #94a3b8;
+  background: #f1f5f9;
+  color: #64748b;
   font-size: 14px;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 
 .root :global(.scan-announcement-dismiss:hover) {
-  background: rgba(148, 163, 184, 0.22);
-  color: #e2e8f0;
+  background: #e2e8f0;
+  color: #0f172a;
 }
 
 .root :global(.scan-upgrade-announcement) {
@@ -176,14 +175,13 @@
 
 .root :global(.scan-ghost-button),
 .root :global(.scan-cta-ghost),
-.root :global(.scan-theme-button),
 .root :global(.scan-detail-action-button),
 .root :global(.scan-detail-icon-button),
 .root :global(.scan-view-all-button) {
-  border: 1px solid rgba(99, 132, 180, 0.18);
-  background: rgba(8, 19, 34, 0.9);
-  color: #d7e5f7;
-  border-radius: 12px;
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-raised);
+  color: var(--color-text-primary);
+  border-radius: 10px;
 }
 
 .root :global(.scan-ghost-button),
@@ -202,13 +200,13 @@
   min-height: 42px;
   padding: 11px 16px;
   border: 1px solid rgba(77, 163, 255, 0.42);
-  border-radius: 12px;
+  border-radius: 10px;
   background: linear-gradient(180deg, var(--color-accent-primary), #3B82F6);
   color: #FFFFFF;
   font-size: 14px;
   font-weight: 900;
   text-decoration: none;
-  box-shadow: 0 10px 24px rgba(59, 130, 246, 0.22);
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18);
   cursor: pointer;
 }
 
@@ -227,18 +225,18 @@
   gap: 8px;
   min-height: 42px;
   padding: 11px 14px;
-  border: 1px solid rgba(77, 163, 255, 0.3);
-  border-radius: 12px;
-  background: linear-gradient(180deg, rgba(77, 163, 255, 0.18), rgba(59, 130, 246, 0.12));
-  color: #CFE6FF;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1d4ed8;
   font-size: 13px;
   font-weight: 900;
   cursor: pointer;
 }
 
 .root :global(.scan-ai-button:hover:not(:disabled)) {
-  border-color: rgba(111, 183, 255, 0.5);
-  background: linear-gradient(180deg, rgba(77, 163, 255, 0.26), rgba(59, 130, 246, 0.18));
+  border-color: #93c5fd;
+  background: #dbeafe;
 }
 
 .root :global(.scan-ai-button:disabled) {
@@ -247,9 +245,9 @@
 }
 
 .root :global(.scan-cta-ghost) {
-  color: var(--color-accent-secondary);
-  border-color: rgba(23, 217, 139, 0.3);
-  background: rgba(23, 217, 139, 0.12);
+  color: #047857;
+  border-color: #a7f3d0;
+  background: #ecfdf5;
 }
 
 .root :global(.scan-account-button) {
@@ -258,26 +256,19 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #d7e5f7;
+  color: var(--color-text-primary);
   text-decoration: none;
-  border: 1px solid rgba(99, 132, 180, 0.18);
-  background: rgba(8, 19, 34, 0.9);
-  border-radius: 12px;
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-raised);
+  border-radius: 10px;
 }
 
 .root :global(.scan-account-button:hover) {
-  border-color: rgba(63, 140, 255, 0.28);
-  background: rgba(12, 26, 44, 0.96);
+  border-color: #94a3b8;
+  background: #f8fafc;
 }
 
-.root :global(.scan-theme-button) {
-  width: 36px;
-  height: 36px;
-  display: inline-grid;
-  place-items: center;
-  color: #d7e5f7;
-  cursor: pointer;
-}
+
 
 .root :global(.scan-ghost-button .spin) {
   animation: spin 1s linear infinite;

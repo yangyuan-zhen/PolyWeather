@@ -13,17 +13,17 @@ export const InfoRow = ({
   value,
   isPrimary = false,
 }: InfoRowProps) => (
-  <div className="flex min-w-0 flex-col gap-3 p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all group sm:flex-row sm:items-center sm:justify-between">
+  <div className="flex min-w-0 flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 transition-all hover:border-slate-300 hover:bg-slate-50 group sm:flex-row sm:items-center sm:justify-between">
     <div className="flex min-w-0 items-center gap-3">
-      <div className="shrink-0 p-2 bg-slate-800 rounded-lg text-slate-400 group-hover:text-blue-400 transition-colors">
+      <div className="shrink-0 rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-500 transition-colors group-hover:text-blue-600">
         {Icon && <Icon size={18} />}
       </div>
-      <span className="min-w-0 text-slate-400 text-sm font-medium leading-5">
+      <span className="min-w-0 text-sm font-medium leading-5 text-slate-500">
         {label}
       </span>
     </div>
     <span
-      className={`min-w-0 break-all text-left text-sm font-semibold font-mono sm:text-right ${isPrimary ? "text-blue-400" : "text-slate-200"}`}
+      className={`min-w-0 break-all text-left font-mono text-sm font-semibold sm:text-right ${isPrimary ? "text-blue-700" : "text-slate-900"}`}
     >
       {value}
     </span>

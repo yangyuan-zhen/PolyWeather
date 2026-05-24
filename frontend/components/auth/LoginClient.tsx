@@ -217,53 +217,52 @@ export function LoginClient({ nextPath }: LoginClientProps) {
   const isLogin = mode === "login";
 
   return (
-    <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#0f172a] font-sans">
-      <div className="absolute left-[-10%] top-[-10%] h-[40vw] w-[40vw] animate-pulse rounded-full bg-blue-600/20 blur-[120px]" />
-      <div className="absolute bottom-[-10%] right-[-10%] h-[30vw] w-[30vw] rounded-full bg-indigo-500/20 blur-[100px]" />
+    <div className="relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden bg-[#f4f7fb] px-4 py-8 font-sans text-slate-900">
+      <div className="absolute inset-x-0 top-0 h-24 border-b border-slate-200 bg-white" />
 
-      <div className="relative mx-4 w-full max-w-[420px] rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur-xl">
+      <div className="relative w-full max-w-[420px] rounded-2xl border border-slate-200 bg-white p-8 shadow-[0_24px_70px_rgba(15,23,42,0.12)]">
         <Link
           href="/"
-          className="group absolute left-6 top-6 rounded-full border border-white/10 bg-white/5 p-2 text-slate-400 transition-all hover:bg-white/10 hover:text-white active:scale-90"
+          className="group absolute left-6 top-6 rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-500 transition-all hover:border-slate-300 hover:bg-white hover:text-slate-900 active:scale-95"
           title={copy.backHome}
           aria-label={copy.backHome}
         >
           <ChevronLeft className="h-5 w-5 transition-transform group-hover:-translate-x-0.5" />
         </Link>
         <div className="mb-8 flex flex-col items-center">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-500 to-indigo-400 shadow-lg shadow-blue-500/20">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-xl border border-blue-200 bg-blue-600 shadow-sm">
             <Cloud className="h-10 w-10 text-white" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">PolyWeather</h1>
-          <p className="mt-2 text-sm text-slate-400">{copy.subtitle}</p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-950">PolyWeather</h1>
+          <p className="mt-2 text-center text-sm text-slate-500">{copy.subtitle}</p>
         </div>
 
         <button
           type="button"
           onClick={() => void onGoogleSignIn()}
           disabled={loading}
-          className="mb-6 flex w-full items-center justify-center rounded-xl bg-white px-4 py-3.5 font-semibold text-slate-900 shadow-lg transition-all duration-200 hover:bg-slate-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+          className="mb-6 flex w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-3.5 font-semibold text-slate-900 shadow-sm transition-all duration-200 hover:border-slate-400 hover:bg-slate-50 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70"
         >
           <Chrome className="mr-3 h-5 w-5" />
           {copy.googleOneClick}
         </button>
 
         <div className="my-6 flex items-center">
-          <div className="h-[1px] flex-grow bg-white/10" />
-          <span className="px-4 text-xs font-medium uppercase tracking-widest text-slate-500">
+          <div className="h-px flex-grow bg-slate-200" />
+          <span className="px-4 text-xs font-semibold uppercase text-slate-500">
             {copy.orEmail}
           </span>
-          <div className="h-[1px] flex-grow bg-white/10" />
+          <div className="h-px flex-grow bg-slate-200" />
         </div>
 
-        <div className="mb-6 flex rounded-xl bg-black/20 p-1">
+        <div className="mb-6 flex rounded-lg border border-slate-200 bg-slate-100 p-1">
           <button
             type="button"
             onClick={() => setMode("login")}
             className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all ${
               isLogin
-                ? "bg-blue-600 text-white shadow-md"
-                : "text-slate-400 hover:text-slate-200"
+                ? "bg-white text-slate-950 shadow-sm"
+                : "text-slate-500 hover:text-slate-900"
             }`}
           >
             {copy.login}
@@ -273,8 +272,8 @@ export function LoginClient({ nextPath }: LoginClientProps) {
             onClick={() => setMode("signup")}
             className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all ${
               !isLogin
-                ? "bg-blue-600 text-white shadow-md"
-                : "text-slate-400 hover:text-slate-200"
+                ? "bg-white text-slate-950 shadow-sm"
+                : "text-slate-500 hover:text-slate-900"
             }`}
           >
             {copy.signup}
@@ -290,7 +289,7 @@ export function LoginClient({ nextPath }: LoginClientProps) {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="you@example.com"
-              className="w-full rounded-xl border border-white/10 bg-white/5 py-3.5 pl-12 pr-4 text-white placeholder:text-slate-600 transition-all focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              className="w-full rounded-lg border border-slate-300 bg-white py-3.5 pl-12 pr-4 text-slate-950 placeholder:text-slate-400 transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             />
           </div>
           <div className="relative">
@@ -306,7 +305,7 @@ export function LoginClient({ nextPath }: LoginClientProps) {
                   ? copy.passwordLoginPlaceholder
                   : copy.passwordSignupPlaceholder
               }
-              className="w-full rounded-xl border border-white/10 bg-white/5 py-3.5 pl-12 pr-4 text-white placeholder:text-slate-600 transition-all focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              className="w-full rounded-lg border border-slate-300 bg-white py-3.5 pl-12 pr-4 text-slate-950 placeholder:text-slate-400 transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             />
           </div>
 
@@ -316,7 +315,7 @@ export function LoginClient({ nextPath }: LoginClientProps) {
                 type="button"
                 onClick={() => void onResetPassword()}
                 disabled={loading}
-                className="text-xs text-slate-500 underline-offset-2 transition-all hover:text-blue-400 hover:underline disabled:opacity-50"
+                className="text-xs text-slate-500 underline-offset-2 transition-all hover:text-blue-600 hover:underline disabled:opacity-50"
               >
                 {copy.reset}
               </button>
@@ -326,15 +325,15 @@ export function LoginClient({ nextPath }: LoginClientProps) {
           <button
             type="submit"
             disabled={loading}
-            className="group mt-8 flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-3.5 font-bold text-white shadow-xl shadow-blue-600/20 transition-all hover:from-blue-500 hover:to-indigo-500 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+            className="group mt-8 flex w-full items-center justify-center rounded-lg border border-blue-700 bg-blue-600 py-3.5 font-bold text-white shadow-sm transition-all hover:bg-blue-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isLogin ? copy.loginSubmit : copy.signupSubmit}
             <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
           </button>
         </form>
 
-        {errorText ? <p className="mt-4 text-sm text-rose-300">{errorText}</p> : null}
-        {infoText ? <p className="mt-4 text-sm text-emerald-300">{infoText}</p> : null}
+        {errorText ? <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{errorText}</p> : null}
+        {infoText ? <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{infoText}</p> : null}
         {errorText && isLogin && errorText.includes("Invalid login") ? (
           <p className="mt-1 text-xs text-slate-500">{copy.loginFailedHint}</p>
         ) : null}
@@ -353,7 +352,7 @@ export function LoginClient({ nextPath }: LoginClientProps) {
         ) : null}
       </div>
 
-      <div className="absolute bottom-8 flex items-center gap-4 text-sm text-slate-600">
+      <div className="relative mt-6 flex items-center gap-4 text-sm font-medium text-slate-500">
         <span className="flex items-center">
           <Sun className="mr-1 h-4 w-4" /> {copy.realtime}
         </span>

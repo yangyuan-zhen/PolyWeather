@@ -624,10 +624,6 @@
     height: 38px;
   }
 
-  .root :global(.scan-theme-button) {
-    width: 38px;
-    height: 38px;
-  }
 }
 
 /* ── Mobile City Picker ── */

@@ -64,47 +64,47 @@ export function SubscriptionHelpClient() {
   }), [isEn]);
 
   return (
-    <main className="min-h-screen bg-[#070d1d] px-4 py-10 text-slate-100">
+    <main className="min-h-screen bg-[#f4f7fb] px-4 py-10 text-slate-900">
       <div className="mx-auto w-full max-w-4xl">
         <Link
           href="/account"
-          className="mb-5 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 transition hover:bg-white/10"
+          className="mb-5 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-slate-300 hover:text-slate-950"
         >
           <ArrowLeft size={15} />
           {copy.back}
         </Link>
 
-        <section className="rounded-3xl border border-blue-400/20 bg-gradient-to-b from-[#162541] to-[#0e1730] p-6 md:p-8">
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
           <div className="mb-5 flex items-center gap-3">
-            <ShieldCheck className="text-cyan-300" size={22} />
+            <ShieldCheck className="text-blue-700" size={22} />
             <h1 className="text-2xl font-bold md:text-3xl">{copy.title}</h1>
           </div>
-          <p className="text-sm text-slate-300 md:text-base">{copy.description}</p>
+          <p className="text-sm text-slate-600 md:text-base">{copy.description}</p>
 
           <div className="mt-6 grid gap-3 md:grid-cols-3">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="mb-2 flex items-center gap-2 text-cyan-300">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-2 flex items-center gap-2 text-blue-700">
                 <CreditCard size={16} />
                 <span className="text-sm font-semibold">{copy.priceLabel}</span>
               </div>
               <p className="text-xl font-bold">{copy.priceText}</p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="mb-2 flex items-center gap-2 text-emerald-300">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-2 flex items-center gap-2 text-emerald-700">
                 <Coins size={16} />
                 <span className="text-sm font-semibold">{copy.discountLabel}</span>
               </div>
               <p className="text-xl font-bold">{copy.discountText}</p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="mb-2 flex items-center gap-2 text-violet-300">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-2 flex items-center gap-2 text-indigo-700">
                 <MessageSquare size={16} />
                 <span className="text-sm font-semibold">{copy.communityLabel}</span>
               </div>
               <Link
                 href={TELEGRAM_GROUP_URL}
                 target="_blank"
-                className="inline-flex min-h-9 items-center text-sm font-semibold text-blue-300 underline decoration-blue-500/50 underline-offset-4"
+                className="inline-flex min-h-9 items-center text-sm font-semibold text-blue-700 underline decoration-blue-500/50 underline-offset-4"
               >
                 {copy.communityLink}
               </Link>
@@ -112,19 +112,19 @@ export function SubscriptionHelpClient() {
           </div>
         </section>
 
-        <section className="mt-6 rounded-3xl border border-white/10 bg-[#0f162a]/80 p-6 md:p-8">
+        <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
           <h2 className="mb-4 text-lg font-bold">{copy.faqTitle}</h2>
           <div className="space-y-4">
             {FAQ_ITEMS.map((item) => (
               <article
                 key={item.q_en}
-                className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+                className="rounded-xl border border-slate-200 bg-slate-50 p-4"
               >
-                <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-blue-300">
+                <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-blue-700">
                   <CheckCircle2 size={14} />
                   {isEn ? item.q_en : item.q_zh}
                 </h3>
-                <p className="text-sm leading-6 text-slate-300">
+                <p className="text-sm leading-6 text-slate-600">
                   {isEn ? item.a_en : item.a_zh}
                 </p>
               </article>

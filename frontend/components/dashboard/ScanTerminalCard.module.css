@@ -1337,3 +1337,60 @@
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── AI prediction dual-card light mode ── */
+:global(html.light) .root :global(.scan-ai-prediction-card) {
+  background: var(--color-bg-raised);
+  border-color: var(--color-border-default);
+}
+
+:global(html.light) .root :global(.scan-ai-prediction-card.ai) {
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.08), var(--color-bg-raised));
+  border-color: rgba(37, 99, 235, 0.22);
+}
+
+:global(html.light) .root :global(.scan-ai-prediction-card.deb) {
+  background: var(--color-bg-raised);
+  border-color: var(--color-border-default);
+}
+
+:global(html.light) .root :global(.scan-ai-prediction-card small) {
+  color: var(--color-text-muted);
+}
+
+:global(html.light) .root :global(.scan-ai-prediction-card strong) {
+  color: var(--color-text-primary);
+}
+
+:global(html.light) .root :global(.scan-ai-prediction-card.ai strong) {
+  color: var(--color-accent-primary);
+}
+
+:global(html.light) .root :global(.scan-ai-prediction-card em) {
+  color: var(--color-text-muted);
+}
+
+:global(html.light) .root :global(.scan-ai-prediction-card.ai.pending) {
+  background: rgba(37, 99, 235, 0.04);
+  border-color: rgba(37, 99, 235, 0.12);
+}
+
+:global(html.light) .root :global(.scan-ai-prediction-card.ai.pending strong) {
+  color: var(--color-text-disabled);
+}
+
+:global(html.light) .root :global(.scan-ai-confidence) {
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--color-accent-primary);
+}
+
+:global(html.light) .root :global(.scan-ai-confidence.high) {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+:global(html.light) .root :global(.scan-ai-confidence.medium) {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+
