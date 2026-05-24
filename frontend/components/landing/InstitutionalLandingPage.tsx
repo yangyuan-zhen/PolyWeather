@@ -163,14 +163,28 @@ function InstitutionalLandingScreen() {
               <span className={`px-2 py-1 rounded-md transition-colors ${!isEn ? "bg-blue-50 text-blue-700 font-bold" : "hover:text-slate-800"}`}>中文</span>
               <span className={`px-2 py-1 rounded-md transition-colors ${isEn ? "bg-blue-50 text-blue-700 font-bold" : "hover:text-slate-800"}`}>EN</span>
             </button>
-            {authChecked && isAuthenticated ? (
-              <Link
-                href="/terminal"
-                className="inline-flex items-center gap-2 rounded-lg border border-blue-700 bg-blue-600 px-3 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
-              >
-                {isEn ? "Enter Product" : "进入产品"}
-                <ArrowRight size={15} />
-              </Link>
+            {!authChecked ? (
+              <div className="h-9 w-24 animate-pulse rounded-lg bg-slate-100" />
+            ) : isAuthenticated ? (
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/terminal"
+                  className="inline-flex items-center gap-2 rounded-lg border border-blue-700 bg-blue-600 px-3 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
+                >
+                  {isEn ? "Enter Product" : "进入产品"}
+                  <ArrowRight size={15} />
+                </Link>
+                <Link
+                  href="/account"
+                  className="grid h-9 w-9 place-items-center rounded-full bg-slate-200 text-slate-900 border border-slate-300 hover:bg-slate-300 transition-colors"
+                  title={isEn ? "Account Settings" : "账户设置"}
+                >
+                  <svg className="h-5 w-5 text-slate-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                </Link>
+              </div>
             ) : (
               <>
                 <Link
@@ -215,7 +229,7 @@ function InstitutionalLandingScreen() {
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
-                href="/terminal"
+                href={authChecked && isAuthenticated ? "/terminal" : "/auth/login?next=%2Fterminal"}
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-blue-700 bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
               >
                 {isEn ? "Enter product" : "进入产品决策台"}
