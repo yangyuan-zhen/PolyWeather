@@ -99,6 +99,66 @@ function edgeClass(value: unknown) {
   return n > 0 ? "text-emerald-700" : "text-red-600";
 }
 
+const TERM = {
+  cityContract: { en: "City / Contract", zh: "城市 / 合约" },
+  live: { en: "Live", zh: "实测" },
+  deb: { en: "DEB", zh: "DEB" },
+  mkt: { en: "Mkt", zh: "市场" },
+  edge: { en: "Edge", zh: "优势" },
+  liq: { en: "Liq", zh: "流动性" },
+  signal: { en: "Signal", zh: "信号" },
+  searchPlaceholder: { en: "Search city, contract, station, or signal", zh: "搜索城市、合约、站点或信号" },
+  weatherContracts: { en: "Weather Contracts", zh: "天气合约" },
+  approvedSignals: { en: "Approved Signals", zh: "已确认信号" },
+  selectedContractMonitor: { en: "Selected Contract Monitor", zh: "选中合约监控" },
+  probabilityDistribution: { en: "Probability Distribution", zh: "概率分布" },
+  marketList: { en: "Market List", zh: "市场列表" },
+  watchlist: { en: "Watchlist", zh: "观察列表" },
+  rows: { en: "Rows", zh: "行数" },
+  avgEdge: { en: "Avg Edge", zh: "平均优势" },
+  liquidity: { en: "Liquidity", zh: "流动性" },
+  intradayPerformance: { en: "Intraday Performance", zh: "日内表现" },
+  spread: { en: "Spread", zh: "价差" },
+  model: { en: "Model", zh: "模型" },
+  noData: { en: "No data", zh: "无数据" },
+  noDistributionData: { en: "No distribution data", zh: "无分布数据" },
+  selectContract: {
+    en: "Select a weather contract to inspect model edge, market price, and live evidence.",
+    zh: "选择天气合约以查看模型优势、市场价格和实况证据。",
+  },
+  signInToContinue: { en: "Sign in to continue", zh: "请先登录" },
+  signInHint: {
+    en: "The terminal is only available to registered users. Please sign in or create an account.",
+    zh: "决策台仅对注册用户开放。请登录或创建账号。",
+  },
+  logIn: { en: "Log in", zh: "登录" },
+  createAccount: { en: "Create an account", zh: "注册账号" },
+  learnAbout: { en: "Learn about PolyWeather", zh: "了解 PolyWeather" },
+  proAccessRequired: { en: "Pro Access Required", zh: "需要付费订阅" },
+  proDesc: {
+    en: "The PolyWeather terminal is a paid product. Subscribe to unlock real-time weather-market intelligence.",
+    zh: "PolyWeather 决策台为付费产品。订阅以解锁实时天气市场情报。",
+  },
+  subscriptionTerms: {
+    en: "Billed monthly. Cancel anytime. Payment via USDC on Polygon.",
+    zh: "按月计费，随时可取消。通过 Polygon 链 USDC 支付。",
+  },
+  month: { en: "/ month", zh: "/ 月" },
+  subscribeNow: { en: "Subscribe Now — $10/mo", zh: "立即订阅 — $10/月" },
+  subscribePrompt: {
+    en: "You need an active subscription to access the terminal.",
+    zh: "你需要开通有效订阅才能访问决策台。",
+  },
+  backToProduct: { en: "Back to product overview", zh: "返回产品介绍页" },
+  dashboard: { en: "Weather Market Dashboard", zh: "天气市场数据仪表盘" },
+  refresh: { en: "Refresh", zh: "刷新" },
+  switchLang: { en: "Switch to Chinese", zh: "切换到英文" },
+} as const;
+
+function t(key: keyof typeof TERM, isEn: boolean) {
+  return isEn ? TERM[key].en : TERM[key].zh;
+}
+
 function decisionLabel(row?: ScanOpportunityRow | null) {
   const raw =
     row?.ai_decision ||
@@ -128,14 +188,16 @@ function decisionClass(label: string) {
 function SparkArea({
   color = "#2563eb",
   data,
+  isEn = true,
 }: {
   color?: string;
   data: { v: number }[];
+  isEn?: boolean;
 }) {
   if (!data.length) {
     return (
       <div className="flex h-full items-center justify-center text-xs text-slate-400">
-        No data
+        {t("noData", isEn)}
       </div>
     );
   }
@@ -164,13 +226,15 @@ function SparkArea({
 
 function ProbabilityDistributionChart({
   points,
+  isEn = true,
 }: {
   points?: ScanOpportunityRow["distribution_preview"];
+  isEn?: boolean;
 }) {
   if (!points?.length) {
     return (
       <div className="flex h-full items-center justify-center text-xs text-slate-400">
-        No distribution data
+        {t("noDistributionData", isEn)}
       </div>
     );
   }
@@ -206,8 +270,8 @@ function ProbabilityDistributionChart({
             `${Number(value).toFixed(1)}%`
           }
         />
-        <Bar dataKey="model" fill="#2563eb" radius={[2, 2, 0, 0]} name="Model" />
-        <Bar dataKey="market" fill="#059669" radius={[2, 2, 0, 0]} name="Market" />
+        <Bar dataKey="model" fill="#2563eb" radius={[2, 2, 0, 0]} name={t("model", isEn)} />
+        <Bar dataKey="market" fill="#059669" radius={[2, 2, 0, 0]} name={t("mkt", isEn)} />
       </ReBarChart>
     </ResponsiveContainer>
   );
@@ -246,23 +310,25 @@ function MarketTable({
   onSelect,
   rows,
   selectedId,
+  isEn = true,
 }: {
   onSelect: (row: ScanOpportunityRow) => void;
   rows: ScanOpportunityRow[];
   selectedId?: string | null;
+  isEn?: boolean;
 }) {
   return (
     <div className="overflow-auto">
       <table className="w-full min-w-[720px] border-collapse text-[13px]">
         <thead>
           <tr className="border-b border-slate-200 bg-[#f5f7fa] text-left text-[11px] uppercase text-slate-500">
-            <th className="px-3 py-2 font-black">City / Contract</th>
-            <th className="px-2 py-2 text-right font-black">Live</th>
-            <th className="px-2 py-2 text-right font-black">DEB</th>
-            <th className="px-2 py-2 text-right font-black">Mkt</th>
-            <th className="px-2 py-2 text-right font-black">Edge</th>
-            <th className="px-2 py-2 text-right font-black">Liq</th>
-            <th className="px-3 py-2 font-black">Signal</th>
+            <th className="px-3 py-2 font-black">{t("cityContract", isEn)}</th>
+            <th className="px-2 py-2 text-right font-black">{t("live", isEn)}</th>
+            <th className="px-2 py-2 text-right font-black">{t("deb", isEn)}</th>
+            <th className="px-2 py-2 text-right font-black">{t("mkt", isEn)}</th>
+            <th className="px-2 py-2 text-right font-black">{t("edge", isEn)}</th>
+            <th className="px-2 py-2 text-right font-black">{t("liq", isEn)}</th>
+            <th className="px-3 py-2 font-black">{t("signal", isEn)}</th>
           </tr>
         </thead>
         <tbody>
@@ -395,7 +461,7 @@ function KoyfinWeatherTerminal({
             <div className="flex h-10 min-w-[320px] items-center gap-3 rounded border border-slate-600 bg-[#29323d] px-3 text-slate-300">
               <Search size={19} />
               <span className="truncate text-sm font-semibold">
-                Search city, contract, station, or signal
+                {t("searchPlaceholder", isEn)}
               </span>
               <kbd className="ml-auto rounded border border-slate-500 px-2 py-0.5 text-xs">
                 /
@@ -403,7 +469,7 @@ function KoyfinWeatherTerminal({
             </div>
             <div className="hidden items-center gap-2 text-xs font-bold uppercase text-slate-400 lg:flex">
               <Activity size={15} />
-              {isEn ? "Weather Market Dashboard" : "天气市场数据仪表盘"}
+              {t("dashboard", isEn)}
             </div>
           </div>
           <div className="flex items-center gap-3 text-sm text-slate-300">
@@ -411,8 +477,8 @@ function KoyfinWeatherTerminal({
             {/* Language toggle — matches landing page style */}
             <button
               type="button"
-              aria-label={isEn ? "Switch to Chinese" : "切换到英文"}
-              title={isEn ? "Switch to Chinese" : "切换到英文"}
+              aria-label={t("switchLang", isEn)}
+              title={t("switchLang", isEn)}
               onClick={toggleLocale}
               className="inline-flex h-9 items-center gap-0.5 rounded border border-slate-600 bg-[#29323d] p-1 text-xs font-bold text-slate-400 hover:border-slate-400"
             >
@@ -444,7 +510,7 @@ function KoyfinWeatherTerminal({
               className="inline-flex h-9 items-center gap-2 rounded border border-slate-600 bg-[#29323d] px-3 font-bold hover:bg-[#323c49] disabled:opacity-60"
             >
               <RefreshCw size={15} className={refreshing ? "animate-spin" : ""} />
-              {isEn ? "Refresh" : "刷新"}
+              {t("refresh", isEn)}
             </button>
             <Link
               href="/account"
@@ -458,17 +524,17 @@ function KoyfinWeatherTerminal({
         <main className="min-h-0 flex-1 overflow-auto p-2">
           <div className="grid min-h-full grid-cols-1 gap-2 xl:grid-cols-[1.12fr_1.6fr_1.1fr]">
             <div className="grid min-h-0 gap-2">
-              <Panel title="Weather Contracts">
+              <Panel title={t("weatherContracts", isEn)}>
                 <div className="grid grid-cols-3 border-b border-slate-200 text-center">
                   <div className="p-3">
                     <div className="text-[11px] font-black uppercase text-slate-500">
-                      Rows
+                      {t("rows", isEn)}
                     </div>
                     <div className="font-mono text-xl font-black">{rows.length}</div>
                   </div>
                   <div className="border-x border-slate-200 p-3">
                     <div className="text-[11px] font-black uppercase text-slate-500">
-                      Avg Edge
+                      {t("avgEdge", isEn)}
                     </div>
                     <div className={clsx("font-mono text-xl font-black", edgeClass(avgEdge))}>
                       {pct(avgEdge)}
@@ -476,7 +542,7 @@ function KoyfinWeatherTerminal({
                   </div>
                   <div className="p-3">
                     <div className="text-[11px] font-black uppercase text-slate-500">
-                      Liquidity
+                      {t("liquidity", isEn)}
                     </div>
                     <div className="font-mono text-xl font-black">
                       {money(totalLiquidity)}
@@ -487,10 +553,11 @@ function KoyfinWeatherTerminal({
                   rows={topRows}
                   selectedId={selectedRow?.id}
                   onSelect={setSelectedRow}
+                  isEn={isEn}
                 />
               </Panel>
 
-              <Panel title="Approved Signals">
+              <Panel title={t("approvedSignals", isEn)}>
                 <div className="divide-y divide-slate-100">
                   {(approveRows.length ? approveRows : topRows.slice(0, 5)).map((row) => (
                     <button
@@ -515,7 +582,7 @@ function KoyfinWeatherTerminal({
             </div>
 
             <div className="grid min-h-0 grid-rows-[auto_auto_1fr] gap-2">
-              <Panel title="Selected Contract Monitor">
+              <Panel title={t("selectedContractMonitor", isEn)}>
                 <div className="grid gap-4 p-4 lg:grid-cols-[1fr_220px]">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -535,16 +602,16 @@ function KoyfinWeatherTerminal({
                       {selectedRow?.ai_city_thesis_en ||
                         selectedRow?.ai_reason_en ||
                         selectedRow?.market_question ||
-                        "Select a weather contract to inspect model edge, market price, and live evidence."}
+                        t("selectContract", isEn)}
                     </p>
                     <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
                       {[
-                        ["Live", temp(selectedRow?.current_max_so_far ?? selectedRow?.current_temp, selectedRow?.temp_symbol)],
-                        ["DEB", temp(selectedRow?.deb_prediction, selectedRow?.temp_symbol)],
-                        ["Model", pct(selectedRow?.model_probability ?? selectedRow?.model_event_probability)],
-                        ["Market", pct(selectedRow?.market_probability ?? selectedRow?.market_event_probability)],
+                        [t("live", isEn), temp(selectedRow?.current_max_so_far ?? selectedRow?.current_temp, selectedRow?.temp_symbol)],
+                        [t("deb", isEn), temp(selectedRow?.deb_prediction, selectedRow?.temp_symbol)],
+                        [t("model", isEn), pct(selectedRow?.model_probability ?? selectedRow?.model_event_probability)],
+                        [t("mkt", isEn), pct(selectedRow?.market_probability ?? selectedRow?.market_event_probability)],
                       ].map(([label, value]) => (
-                        <div key={label} className="rounded border border-slate-200 bg-slate-50 p-3">
+                        <div key={String(label)} className="rounded border border-slate-200 bg-slate-50 p-3">
                           <div className="text-[11px] font-black uppercase text-slate-500">
                             {label}
                           </div>
@@ -555,10 +622,11 @@ function KoyfinWeatherTerminal({
                   </div>
                   <div className="rounded border border-slate-200 bg-[#f7f9fb] p-3">
                     <div className="mb-2 text-xs font-black uppercase text-slate-500">
-                      Intraday Performance
+                      {t("intradayPerformance", isEn)}
                     </div>
                     <div className="h-20">
                       <SparkArea
+                        isEn={isEn}
                         color={
                           Number(selectedRow?.edge_percent || 0) >= 0
                             ? "#059669"
@@ -576,19 +644,20 @@ function KoyfinWeatherTerminal({
                     </div>
                     <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                       <span className="rounded bg-white p-2">
-                        Edge <b className={edgeClass(selectedRow?.edge_percent)}>{pct(selectedRow?.edge_percent)}</b>
+                        {t("edge", isEn)} <b className={edgeClass(selectedRow?.edge_percent)}>{pct(selectedRow?.edge_percent)}</b>
                       </span>
                       <span className="rounded bg-white p-2">
-                        Spread <b>{pct(selectedRow?.spread)}</b>
+                        {t("spread", isEn)} <b>{pct(selectedRow?.spread)}</b>
                       </span>
                     </div>
                   </div>
                 </div>
               </Panel>
 
-              <Panel title="Probability Distribution">
+              <Panel title={t("probabilityDistribution", isEn)}>
                 <div className="h-48 p-2">
                   <ProbabilityDistributionChart
+                    isEn={isEn}
                     points={
                       selectedRow?.distribution_preview ??
                       selectedRow?.distribution_full
@@ -597,17 +666,18 @@ function KoyfinWeatherTerminal({
                 </div>
               </Panel>
 
-              <Panel title="Market List">
+              <Panel title={t("marketList", isEn)}>
                 <MarketTable
                   rows={rows.slice(0, 24)}
                   selectedId={selectedRow?.id}
                   onSelect={setSelectedRow}
+                  isEn={isEn}
                 />
               </Panel>
             </div>
 
             <div className="grid min-h-0 gap-2">
-              <Panel title="Watchlist">
+              <Panel title={t("watchlist", isEn)}>
                 <div className="divide-y divide-slate-100">
                   {(watchRows.length ? watchRows : topRows.slice(0, 8)).map((row) => (
                     <button
@@ -701,7 +771,7 @@ function SubscriptionGate({ isEn }: { isEn: boolean }) {
         <div className="mb-6 flex items-center justify-center">
           <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold uppercase tracking-wider text-amber-700">
             <LockKeyhole size={12} />
-            {isEn ? "Pro Access Required" : "需要付费订阅"}
+            {t("proAccessRequired", isEn)}
           </span>
         </div>
 
@@ -726,7 +796,7 @@ function SubscriptionGate({ isEn }: { isEn: boolean }) {
             <div className="mb-6 flex items-baseline gap-1">
               <span className="text-4xl font-black text-slate-900">$10</span>
               <span className="text-base text-slate-500">
-                {isEn ? "/ month" : "/ 月"}
+                {t("month", isEn)}
               </span>
             </div>
 
@@ -750,7 +820,7 @@ function SubscriptionGate({ isEn }: { isEn: boolean }) {
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3.5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700"
             >
               <CreditCard size={16} />
-              {isEn ? "Subscribe Now — $10/mo" : "立即订阅 — $10/月"}
+              {t("subscribeNow", isEn)}
             </Link>
 
             <p className="mt-4 text-center text-[11px] text-slate-400">
@@ -767,7 +837,7 @@ function SubscriptionGate({ isEn }: { isEn: boolean }) {
             href="/"
             className="text-xs text-slate-500 hover:text-slate-800 transition-colors"
           >
-            ← {isEn ? "Back to product overview" : "返回产品介绍页"}
+            ← {t("backToProduct", isEn)}
           </Link>
         </div>
       </div>
@@ -801,7 +871,7 @@ function UnauthenticatedGate({
               <LogIn size={24} />
             </div>
             <h1 className="text-xl font-black text-slate-900">
-              {isEn ? "Sign in to continue" : "请先登录"}
+              {t("signInToContinue", isEn)}
             </h1>
             <p className="mt-2 text-sm text-slate-500">
               {isEn
