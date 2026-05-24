@@ -1,8 +1,10 @@
+import { useState } from "react";
 import Link from "next/link";
 import {
   Activity,
   ArrowRight,
   BarChart3,
+  Check,
   CheckCircle2,
   CloudSun,
   Gauge,
@@ -12,8 +14,9 @@ import {
   ShieldCheck,
   TrendingUp,
 } from "lucide-react";
+import { I18nProvider, useI18n } from "@/hooks/useI18n";
 
-const marketRows = [
+const RAW_MARKET_ROWS_EN = [
   ["New York", "91.8°F", "+2.4", "High", "Long Yes"],
   ["Austin", "103.1°F", "+1.1", "Medium", "Wait"],
   ["Seoul", "83.4°F", "-0.7", "Low", "No Trade"],
@@ -21,7 +24,15 @@ const marketRows = [
   ["London", "72.6°F", "-0.2", "Low", "Observe"],
 ];
 
-const coverage = [
+const RAW_MARKET_ROWS_ZH = [
+  ["纽约", "91.8°F", "+2.4", "高", "买入多头"],
+  ["奥斯汀", "103.1°F", "+1.1", "中", "观望"],
+  ["首尔", "83.4°F", "-0.7", "低", "无交易"],
+  ["东京", "88.2°F", "+1.8", "高", "买入多头"],
+  ["伦敦", "72.6°F", "-0.2", "低", "观察"],
+];
+
+const COVERAGE_EN = [
   "Live airport observations",
   "DEB blend forecast",
   "Market-implied temperature",
@@ -30,25 +41,96 @@ const coverage = [
   "Paid Telegram alerts",
 ];
 
-const platformCards = [
-  {
-    icon: Radar,
-    title: "Live Evidence",
-    body: "Airport observations and official station data are structured for settlement-aware decisions.",
-  },
-  {
-    icon: Gauge,
-    title: "Decision Workflow",
-    body: "City cards combine model forecast, current deviation, risk, and target contract context.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Paid Access",
-    body: "The product workspace is locked until the user has an active subscription.",
-  },
+const COVERAGE_ZH = [
+  "机场实况观测数据",
+  "DEB 智能融合预报",
+  "市场隐含温度定价",
+  "日内分段结算窗口",
+  "AI 气象证据链解读",
+  "付费电报实时通知",
 ];
 
-export function InstitutionalLandingPage() {
+const FREE_FEATURES_EN = [
+  "Basic temperature dashboards",
+  "Delayed METAR observations (1 hour)",
+  "Limited city watchlists",
+  "Standard model stacked probability chart",
+];
+
+const FREE_FEATURES_ZH = [
+  "基础温度气象看板",
+  "延迟的 METAR 机场实测 (1小时)",
+  "有限的城市自选列表",
+  "基础模型概率堆栈图",
+];
+
+const PRO_FEATURES_EN = [
+  "Everything in Free",
+  "Real-time METAR observations & alerts",
+  "DEB blend forecast model",
+  "Market-implied temperature pricing",
+  "Intraday settlement windows & risk metrics",
+  "Paid Telegram alerts & Webhook API",
+  "24/7 priority professional support",
+];
+
+const PRO_FEATURES_ZH = [
+  "包含所有免费版功能",
+  "实时 METAR 机场实测与预警",
+  "DEB 智能融合预测模型",
+  "市场隐含温度定价与估值",
+  "日内结算窗口与风险度量指标",
+  "付费电报群通知与 API 接口推送",
+  "7×24小时专业技术与客服支持",
+];
+
+function InstitutionalLandingScreen() {
+  const { locale, toggleLocale } = useI18n();
+  const isEn = locale === "en-US";
+  const [billingCycle, setBillingCycle] = useState<"annual" | "monthly">("monthly");
+
+  const marketRows = isEn ? RAW_MARKET_ROWS_EN : RAW_MARKET_ROWS_ZH;
+  const coverage = isEn ? COVERAGE_EN : COVERAGE_ZH;
+  const platformCards = isEn
+    ? [
+        {
+          icon: Radar,
+          title: "Live Evidence",
+          body: "Airport observations and official station data are structured for settlement-aware decisions.",
+        },
+        {
+          icon: Gauge,
+          title: "Decision Workflow",
+          body: "City cards combine model forecast, current deviation, risk, and target contract context.",
+        },
+        {
+          icon: ShieldCheck,
+          title: "Paid Access",
+          body: "The product workspace is locked until the user has an active subscription.",
+        },
+      ]
+    : [
+        {
+          icon: Radar,
+          title: "实况证据",
+          body: "针对机场 METAR 与官方站点数据进行结构化整理，专为结算博弈与交割设计。",
+        },
+        {
+          icon: Gauge,
+          title: "决策工作流",
+          body: "城市决策卡片融合了气象预报、实况偏差、历史风险系数及目标合约盘口。",
+        },
+        {
+          icon: ShieldCheck,
+          title: "付费准入",
+          body: "除公开介绍和账户管理外，气象交易决策台仅向付费活跃订阅用户开放。",
+        },
+      ];
+
+  const modelLabels = isEn
+    ? ["DEB Blend", "Live METAR", "Market Implied"]
+    : ["DEB 融合预测", "METAR 机场实测", "市场隐含价格"];
+
   return (
     <div className="min-h-screen bg-[#f4f7fb] text-slate-950">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
@@ -61,27 +143,35 @@ export function InstitutionalLandingPage() {
           </Link>
           <nav className="hidden items-center gap-7 text-sm font-semibold text-slate-600 md:flex">
             <a href="#platform" className="hover:text-slate-950">
-              Platform
+              {isEn ? "Platform" : "平台简介"}
             </a>
             <a href="#coverage" className="hover:text-slate-950">
-              Data Coverage
+              {isEn ? "Data Coverage" : "数据覆盖"}
             </a>
             <a href="#pricing" className="hover:text-slate-950">
-              Pricing
+              {isEn ? "Pricing" : "价格说明"}
             </a>
           </nav>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-300 bg-white p-1 text-xs font-bold text-slate-500 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
+              onClick={toggleLocale}
+            >
+              <span className={`px-2 py-1 rounded-md transition-colors ${!isEn ? "bg-blue-50 text-blue-700 font-bold" : "hover:text-slate-800"}`}>中文</span>
+              <span className={`px-2 py-1 rounded-md transition-colors ${isEn ? "bg-blue-50 text-blue-700 font-bold" : "hover:text-slate-800"}`}>EN</span>
+            </button>
             <Link
               href="/auth/login?next=%2Fterminal"
               className="hidden rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-400 hover:text-slate-950 sm:inline-flex"
             >
-              Log in
+              {isEn ? "Log in" : "登录"}
             </Link>
             <Link
               href="/terminal"
               className="inline-flex items-center gap-2 rounded-lg border border-blue-700 bg-blue-600 px-3 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
             >
-              Enter Product
+              {isEn ? "Enter Product" : "进入产品"}
               <ArrowRight size={15} />
             </Link>
           </div>
@@ -93,34 +183,35 @@ export function InstitutionalLandingPage() {
           <div>
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold uppercase text-blue-700">
               <LockKeyhole size={13} />
-              Paid professional terminal
+              {isEn ? "Paid professional terminal" : "付费专业交易终端"}
             </div>
             <h1 className="max-w-2xl text-4xl font-black leading-[1.05] tracking-normal text-slate-950 sm:text-5xl lg:text-6xl">
-              Institutional weather market intelligence for paid users.
+              {isEn ? "Institutional weather market intelligence for paid users." : "面向付费用户的机构级天气交易决策台"}
             </h1>
             <p className="mt-5 max-w-xl text-base leading-8 text-slate-600 sm:text-lg">
-              PolyWeather turns live METAR observations, DEB forecast blends,
-              model probabilities, and market settlement logic into one
-              professional decision workspace.
+              {isEn
+                ? "PolyWeather turns live METAR observations, DEB forecast blends, model probabilities, and market settlement logic into one professional decision workspace."
+                : "PolyWeather 将 METAR 机场实测、DEB 智能融合预报、模型概率及市场结算逻辑整合于一体，打造气象风险管理专业决策环境。"}
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
                 href="/terminal"
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-blue-700 bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
               >
-                Enter product
+                {isEn ? "Enter product" : "进入产品决策台"}
                 <ArrowRight size={16} />
               </Link>
               <Link
                 href="/account"
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-800 shadow-sm transition hover:border-slate-400 hover:text-slate-950"
               >
-                Subscribe / Manage account
+                {isEn ? "Subscribe / Manage account" : "订阅服务 / 管理账户"}
               </Link>
             </div>
             <p className="mt-4 text-xs font-medium text-slate-500">
-              No free product access. Subscription is required before the
-              terminal opens.
+              {isEn
+                ? "No free product access. Subscription is required before the terminal opens."
+                : "无免费公开产品通道。在使用决策台前必须先登录并开通订阅。"}
             </p>
           </div>
 
@@ -128,19 +219,19 @@ export function InstitutionalLandingPage() {
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
               <div className="flex items-center gap-2 text-sm font-bold">
                 <BarChart3 size={16} className="text-blue-700" />
-                Weather Markets Dashboard
+                {isEn ? "Weather Markets Dashboard" : "天气市场交易面板"}
               </div>
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
                 <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                Live
+                {isEn ? "Live" : "实时数据"}
               </div>
             </div>
             <div className="grid gap-3 p-3 lg:grid-cols-[1fr_0.85fr]">
               <div className="rounded-xl border border-slate-200">
                 <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2">
-                  <strong className="text-sm">Temperature Contracts</strong>
+                  <strong className="text-sm">{isEn ? "Temperature Contracts" : "温度天气合约"}</strong>
                   <span className="text-xs font-semibold text-slate-500">
-                    Price / Edge / Signal
+                    {isEn ? "Price / Edge / Signal" : "价格 / 偏差 / 信号"}
                   </span>
                 </div>
                 <div className="divide-y divide-slate-100">
@@ -173,36 +264,35 @@ export function InstitutionalLandingPage() {
               <div className="space-y-3">
                 <div className="rounded-xl border border-slate-200 p-4">
                   <div className="mb-3 flex items-center justify-between">
-                    <strong className="text-sm">Model Stack</strong>
+                    <strong className="text-sm">{isEn ? "Model Stack" : "模型堆栈"}</strong>
                     <LineChart size={16} className="text-blue-700" />
                   </div>
                   <div className="space-y-3">
-                    {["DEB Blend", "Live METAR", "Market Implied"].map(
-                      (label, index) => (
-                        <div key={label}>
-                          <div className="mb-1 flex justify-between text-xs font-semibold text-slate-500">
-                            <span>{label}</span>
-                            <span>{[82, 67, 74][index]}%</span>
-                          </div>
-                          <div className="h-2 rounded-full bg-slate-100">
-                            <div
-                              className="h-2 rounded-full bg-blue-600"
-                              style={{ width: `${[82, 67, 74][index]}%` }}
-                            />
-                          </div>
+                    {modelLabels.map((label, index) => (
+                      <div key={label}>
+                        <div className="mb-1 flex justify-between text-xs font-semibold text-slate-500">
+                          <span>{label}</span>
+                          <span>{[82, 67, 74][index]}%</span>
                         </div>
-                      ),
-                    )}
+                        <div className="h-2 rounded-full bg-slate-100">
+                          <div
+                            className="h-2 rounded-full bg-blue-600"
+                            style={{ width: `${[82, 67, 74][index]}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
                   <div className="mb-2 flex items-center gap-2 text-sm font-bold text-emerald-800">
                     <TrendingUp size={16} />
-                    Current Signal
+                    {isEn ? "Current Signal" : "当前交易信号"}
                   </div>
                   <p className="text-sm leading-6 text-emerald-900">
-                    New York high-temperature market shows a positive
-                    observation deviation with confirmed airport evidence.
+                    {isEn
+                      ? "New York high-temperature market shows a positive observation deviation with confirmed airport evidence."
+                      : "纽约高温合约市场出现显著的正向观测偏差，机场天气实况已验证确认。"}
                   </p>
                 </div>
               </div>
@@ -229,15 +319,16 @@ export function InstitutionalLandingPage() {
           <div className="mb-7 flex flex-col justify-between gap-3 md:flex-row md:items-end">
             <div>
               <p className="text-xs font-bold uppercase text-blue-700">
-                Data Coverage
+                {isEn ? "Data Coverage" : "数据覆盖范围"}
               </p>
               <h2 className="mt-2 text-3xl font-black">
-                Everything weather-market users need in one place.
+                {isEn ? "Everything weather-market users need in one place." : "天气市场交易者所需的一切，在此集结。"}
               </h2>
             </div>
             <p className="max-w-xl text-sm leading-6 text-slate-600">
-              Built for repeat professional use: dense tables, clear status
-              chips, restrained color, and fast entry into paid workflows.
+              {isEn
+                ? "Built for repeat professional use: dense tables, clear status chips, restrained color, and fast entry into paid workflows."
+                : "专为高频专业决策设计：高数据密度、直观的状态徽标、严谨的数据呈现，助您快速进入分析流。"}
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -253,31 +344,157 @@ export function InstitutionalLandingPage() {
           </div>
         </section>
 
-        <section id="pricing" className="bg-slate-950 text-white">
-          <div className="mx-auto flex max-w-7xl flex-col justify-between gap-6 px-4 py-12 sm:px-6 md:flex-row md:items-center lg:px-8">
-            <div>
-              <p className="text-xs font-bold uppercase text-blue-300">
-                Subscription Required
-              </p>
-              <h2 className="mt-2 text-3xl font-black">
-                Product access starts after payment.
-              </h2>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-                Users can read the landing page and account/payment guide
-                publicly, but the decision terminal opens only for active paid
-                accounts.
-              </p>
+        <section id="pricing" className="border-t border-slate-200 bg-white py-20">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
+            {/* Header */}
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">
+              {isEn ? "PRICING" : "价格方案"}
+            </p>
+            <h2 className="mt-3 text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
+              {isEn ? "We keep it simple" : "简单清晰的定价"}
+            </h2>
+            <p className="mx-auto mt-4 max-w-2xl text-base text-slate-500">
+              {isEn
+                ? "The industry's leading tools at a price to suit everyone."
+                : "领先的气象数据服务，以合适的价格满足不同交易需求。"}
+            </p>
+
+            {/* Toggle */}
+            <div className="mt-10 flex justify-center">
+              <div className="relative flex rounded-full bg-slate-100 p-0.5 border border-slate-200">
+                <button
+                  type="button"
+                  className={`rounded-full px-6 py-2 text-xs font-bold transition-all duration-200 ${
+                    billingCycle === "annual"
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                  onClick={() => setBillingCycle("annual")}
+                >
+                  {isEn ? "Annual" : "按年支付"}
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-full px-6 py-2 text-xs font-bold transition-all duration-200 ${
+                    billingCycle === "monthly"
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                  onClick={() => setBillingCycle("monthly")}
+                >
+                  {isEn ? "Monthly" : "按月支付"}
+                </button>
+              </div>
             </div>
-            <Link
-              href="/account"
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-white/20 bg-white px-5 py-3 text-sm font-bold text-slate-950 transition hover:bg-blue-50"
-            >
-              <Activity size={16} />
-              Subscribe now
-            </Link>
+
+            {/* Pricing Cards */}
+            <div className="mx-auto mt-16 grid max-w-4xl gap-8 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
+              {/* Free Plan */}
+              <div className="flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-8 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md text-left">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xl font-bold text-slate-900">
+                      {isEn ? "Free" : "免费版"}
+                    </h3>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500 min-h-10 leading-relaxed">
+                    {isEn
+                      ? "The ultimate beginner package — basic weather information to get started."
+                      : "适合初学者的基础气象信息与看板服务，快速体验平台。"}
+                  </p>
+                  <div className="mt-6 flex items-baseline">
+                    <span className="text-5xl font-black tracking-tight text-slate-900">$0</span>
+                    <span className="ml-1 text-sm font-semibold text-slate-500">/ {isEn ? "month" : "月"}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {isEn ? "Free forever" : "永久免费"}
+                  </p>
+
+                  <div className="mt-8 border-t border-slate-100 pt-6">
+                    <ul className="space-y-4">
+                      {(isEn ? FREE_FEATURES_EN : FREE_FEATURES_ZH).map((feature) => (
+                        <li key={feature} className="flex items-start gap-3">
+                          <Check size={16} className="mt-0.5 shrink-0 text-slate-400" />
+                          <span className="text-sm text-slate-600 font-medium leading-normal">{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="mt-8">
+                  <Link
+                    href="/terminal"
+                    className="block w-full rounded-xl border border-slate-300 bg-white py-3 text-center text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
+                  >
+                    {isEn ? "Get Started" : "开始使用"}
+                  </Link>
+                </div>
+              </div>
+
+              {/* Pro Plan */}
+              <div className="relative flex flex-col justify-between rounded-3xl border-2 border-blue-600 bg-white p-8 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md text-left">
+                {/* Popular Badge */}
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 rounded-full bg-blue-600 px-4 py-1 text-xs font-bold uppercase tracking-wider text-white shadow-sm">
+                  {isEn ? "Recommended" : "推荐方案"}
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xl font-bold text-slate-900">
+                      {isEn ? "Pro" : "专业版"}
+                    </h3>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500 min-h-10 leading-relaxed">
+                    {isEn
+                      ? "For active traders and institutions who need real-time, settlement-ready intelligence."
+                      : "为活跃交易员和机构提供实时、结算级气象交易数据与决策支持。"}
+                  </p>
+                  <div className="mt-6 flex items-baseline">
+                    <span className="text-5xl font-black tracking-tight text-slate-900">
+                      {billingCycle === "annual" ? "$8" : "$10"}
+                    </span>
+                    <span className="ml-1 text-sm font-semibold text-slate-500">/ {isEn ? "month" : "月"}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {billingCycle === "annual"
+                      ? (isEn ? "Billed annually ($96/year)" : "按年计费 (共 $96/年)")
+                      : (isEn ? "Billed monthly" : "按月计费")}
+                  </p>
+
+                  <div className="mt-8 border-t border-slate-100 pt-6">
+                    <ul className="space-y-4">
+                      {(isEn ? PRO_FEATURES_EN : PRO_FEATURES_ZH).map((feature) => (
+                        <li key={feature} className="flex items-start gap-3">
+                          <Check size={16} className="mt-0.5 shrink-0 text-blue-600" />
+                          <span className="text-sm text-slate-700 font-semibold leading-normal">{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="mt-8">
+                  <Link
+                    href="/account"
+                    className="block w-full rounded-xl bg-slate-950 py-3 text-center text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                  >
+                    {isEn ? "Subscribe Now" : "立即付费订阅"}
+                  </Link>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
       </main>
     </div>
+  );
+}
+
+export function InstitutionalLandingPage() {
+  return (
+    <I18nProvider>
+      <InstitutionalLandingScreen />
+    </I18nProvider>
   );
 }
