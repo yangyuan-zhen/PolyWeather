@@ -174,9 +174,18 @@
 
   body {
     font-family: var(--font-data);
+    font-size: 15px;
     background: var(--color-bg-base);
     color: var(--color-text-primary);
   }
+
+  /* Global font-size bump for data-dense terminal panels */
+  .text-\[9px\] { font-size: 10px; }
+  .text-\[10px\] { font-size: 11px; }
+  .text-\[11px\] { font-size: 12px; }
+  .text-xs { font-size: 0.8rem; line-height: 1.35rem; }
+  .text-sm { font-size: 0.9rem; line-height: 1.45rem; }
+  table { font-size: inherit; }
 }
 
 /* ══════════════════════════════════════════════════════════════
