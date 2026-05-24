@@ -43,10 +43,13 @@ type RunwayObsPayload = {
   } | null> | null;
 };
 
-const DAILY_CHART_HOURS = Array.from(
-  { length: 24 },
-  (_, index) => `${String(index).padStart(2, "0")}:00`,
-);
+// Semi-hourly buckets for the 24-hour day — gives the chart enough resolution
+// without making the x-axis unreadable when showing a 12 hour window.
+const HALF_HOUR_SLOTS = Array.from({ length: 48 }, (_, i) => {
+  const h = Math.floor(i / 2);
+  const m = i % 2 === 0 ? "00" : "30";
+  return `${String(h).padStart(2, "0")}:${m}`;
+});
 
 const VISIBLE_WINDOW_HOURS = 12;
 
@@ -64,17 +67,22 @@ function normalizeObs(points?: ObsPoint[] | null, limit = 88) {
     }));
 }
 
-function parseHourOfDay(value?: string | null) {
+function parseTimeSlot(value?: string | null) {
   const raw = String(value || "").trim();
   if (!raw) return null;
+  // Try ISO / full date first
   const parsed = new Date(raw);
   if (!Number.isNaN(parsed.getTime())) {
-    return parsed.getHours();
+    const h = parsed.getHours();
+    const m = parsed.getMinutes();
+    return h * 2 + (m >= 30 ? 1 : 0);
   }
-  const match = raw.match(/(?:^|\D)([01]?\d|2[0-3])[:：][0-5]\d/);
-  if (match?.[1] !== undefined) {
-    const hour = Number(match[1]);
-    return Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : null;
+  // Parse "HH:MM" or "HH：MM" or "HH:MM:SS"
+  const match = raw.match(/(?:^|\D)([01]?\d|2[0-3])[:：]([0-5]\d)/);
+  if (match?.[1] !== undefined && match?.[2] !== undefined) {
+    const h = Number(match[1]);
+    const m = Number(match[2]);
+    if (h >= 0 && h < 24) return h * 2 + (m >= 30 ? 1 : 0);
   }
   return null;
 }
@@ -109,9 +117,9 @@ function buildModelCurves(row: ScanOpportunityRow | null, length: number, hourly
     );
     const values = Array.from({ length }, (): number | null => null);
     hourly.times.forEach((t, i) => {
-      const h = parseHourOfDay(t);
-      if (h !== null && h >= 0 && h < length && i < hourly.temps.length) {
-        values[h] = validNumber(debPath.debTemps[i]);
+      const slot = parseTimeSlot(t);
+      if (slot !== null && slot >= 0 && slot < length && i < hourly.temps.length) {
+        values[slot] = validNumber(debPath.debTemps[i]);
       }
     });
     if (values.some((v) => v !== null)) {
@@ -190,15 +198,15 @@ function extractRunwayPointSeries(row: ScanOpportunityRow | null, length: number
 function buildEvidenceChart(row: ScanOpportunityRow | null, hourly: HourlyForecast) {
   const settlement = normalizeObs(row?.settlement_today_obs || row?.metar_context?.settlement_today_obs);
   const metar = normalizeObs(row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs);
-  const labels = DAILY_CHART_HOURS;
+  const labels = HALF_HOUR_SLOTS;
   const length = labels.length;
 
   const align = (points: Array<{ label: string; value: number }>) => {
     if (!points.length) return Array.from({ length }, (): number | null => null);
     const values = Array.from({ length }, (): number | null => null);
     points.forEach((point, index) => {
-      const hour = parseHourOfDay(point.label);
-      const bucket = hour ?? Math.min(index, length - 1);
+      const slot = parseTimeSlot(point.label);
+      const bucket = slot ?? Math.min(index, length - 1);
       values[bucket] = point.value;
     });
     return values;
@@ -255,8 +263,11 @@ function buildEvidenceChart(row: ScanOpportunityRow | null, hourly: HourlyForeca
   return { data, series };
 }
 
-function currentHourForWindow(row: ScanOpportunityRow | null, hourly: HourlyForecast) {
-  return parseHourOfDay(hourly?.localTime || row?.local_time) ?? new Date().getHours();
+function currentSlotForWindow(row: ScanOpportunityRow | null, hourly: HourlyForecast) {
+  const slot = parseTimeSlot(hourly?.localTime || row?.local_time);
+  if (slot !== null) return slot;
+  const now = new Date();
+  return now.getHours() * 2 + (now.getMinutes() >= 30 ? 1 : 0);
 }
 
 function buildMovingWindowData(
@@ -265,10 +276,12 @@ function buildMovingWindowData(
   hourly: HourlyForecast,
 ) {
   if (!data.length) return data;
-  const currentHour = currentHourForWindow(row, hourly);
-  const endHour = Math.min(23, Math.max(VISIBLE_WINDOW_HOURS - 1, currentHour + 4));
-  const startHour = Math.max(0, endHour - VISIBLE_WINDOW_HOURS + 1);
-  return data.slice(startHour, endHour + 1);
+  const totalHalfHours = 48;
+  const windowSlots = VISIBLE_WINDOW_HOURS * 2; // 24 half-hour slots = 12 hours
+  const currentSlot = currentSlotForWindow(row, hourly);
+  const endSlot = Math.min(totalHalfHours - 1, Math.max(windowSlots - 1, currentSlot + 8));
+  const startSlot = Math.max(0, endSlot - windowSlots + 1);
+  return data.slice(startSlot, endSlot + 1);
 }
 
 function parseTemperatureOptionsFromText(value?: string | null) {
