@@ -256,6 +256,10 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         logger.info(
             f"Open-Meteo 磁盘缓存路径: {self._disk_cache_path} (max_age={self._disk_cache_max_age_sec}s)"
         )
+        self._cache_trim_counter = 0
+        self._CACHE_TRIM_EVERY_N_WRITES = int(
+            os.getenv("POLYWEATHER_CACHE_TRIM_INTERVAL", "200")
+        )
 
         # 设置代理
         proxy = config.get("proxy")
@@ -272,6 +276,56 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             logger.info(f"正在使用天气数据代理: {proxy}")
 
         logger.info("天气数据采集器初始化完成。")
+
+    @staticmethod
+    def _trim_inmemory_cache(
+        cache: Dict[str, Dict],
+        lock: threading.Lock,
+        ttl_sec: float,
+    ) -> None:
+        now = time.time()
+        with lock:
+            stale = [
+                key
+                for key, entry in cache.items()
+                if now - float(entry.get("t", 0)) > ttl_sec
+            ]
+            for key in stale:
+                del cache[key]
+
+    def _maybe_trim_caches(self) -> None:
+        self._cache_trim_counter += 1
+        if self._cache_trim_counter < self._CACHE_TRIM_EVERY_N_WRITES:
+            return
+        self._cache_trim_counter = 0
+        now = time.time()
+        # Trim each cache with 2x its TTL as the hard eviction window
+        for cache, lock, ttl in [
+            (self._open_meteo_cache, self._open_meteo_cache_lock, 3600.0),
+            (self._ensemble_cache, self._ensemble_cache_lock, 7200.0),
+            (self._multi_model_cache, self._multi_model_cache_lock, 7200.0),
+            (self._metar_cache, self._metar_cache_lock, float(self.metar_cache_ttl_sec * 2)),
+            (self._taf_cache, self._taf_cache_lock, float(self.taf_cache_ttl_sec * 2)),
+            (self._jma_cache, self._jma_cache_lock, float(self.jma_cache_ttl_sec * 2)),
+            (self._settlement_cache, self._settlement_cache_lock, float(self.settlement_cache_ttl_sec * 2)),
+            (self._fmi_cache, self._fmi_cache_lock, float(self.fmi_cache_ttl_sec * 2)),
+            (self._knmi_cache, self._knmi_cache_lock, float(self.knmi_cache_ttl_sec * 2)),
+            (self._hko_obs_cache, self._hko_obs_cache_lock, float(self.hko_obs_cache_ttl_sec * 2)),
+        ]:
+            stale = [
+                key
+                for key, entry in cache.items()
+                if now - float(entry.get("t", 0)) > ttl
+            ]
+            if stale:
+                with lock:
+                    for key in stale:
+                        cache.pop(key, None)
+        # MADIS cache is a single list, not a keyed dict — expire on age
+        with self._madis_cache_lock:
+            if self._madis_cache is not None and now - self._madis_cache_ts > self.madis_cache_ttl_sec * 2:
+                self._madis_cache = None
+                self._madis_cache_ts = 0.0
 
     @staticmethod
     def _is_retryable_status(status_code: int) -> bool:
@@ -1333,6 +1387,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         """
         Fetch weather data from all available sources
         """
+        self._maybe_trim_caches()
         results = {}
         city_lower = city.lower().strip()
         use_fahrenheit = self._uses_fahrenheit(city_lower)

@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+import requests as requests_lib
 from loguru import logger
 
 from src.database.db_manager import DBManager
@@ -27,6 +28,54 @@ _CITY_THREAD_IDS_PATH = os.path.join(
 )
 _FORUM_CHAT_ID = "-1003927451869"
 _city_thread_ids: dict = {}
+
+# Shared HTTP session for AROME and auxiliary queries (connection reuse)
+_HTTP_SESSION: Optional[requests_lib.Session] = None
+_HTTP_SESSION_LOCK = threading.Lock()
+
+# Bot send_message rate limiter: max N messages per second across all threads
+_SEND_MSG_LOCK = threading.Lock()
+_SEND_MSG_LAST_TS: float = 0.0
+_SEND_MSG_MIN_INTERVAL_SEC = float(os.getenv("TELEGRAM_SEND_RATE_LIMIT_SEC", "0.05"))
+
+
+def _get_http_session() -> requests_lib.Session:
+    global _HTTP_SESSION
+    if _HTTP_SESSION is None:
+        with _HTTP_SESSION_LOCK:
+            if _HTTP_SESSION is None:
+                _HTTP_SESSION = requests_lib.Session()
+    return _HTTP_SESSION
+
+
+# Reusable executor for airport push cycles (avoids thread pool churn)
+_AIRPORT_EXECUTOR: Optional[ThreadPoolExecutor] = None
+_AIRPORT_EXECUTOR_LOCK = threading.Lock()
+_AIRPORT_EXECUTOR_MAX_WORKERS: int = 0
+
+
+def _get_airport_executor(max_workers: int) -> ThreadPoolExecutor:
+    global _AIRPORT_EXECUTOR, _AIRPORT_EXECUTOR_MAX_WORKERS
+    if _AIRPORT_EXECUTOR is None or _AIRPORT_EXECUTOR_MAX_WORKERS != max_workers:
+        with _AIRPORT_EXECUTOR_LOCK:
+            if _AIRPORT_EXECUTOR is None or _AIRPORT_EXECUTOR_MAX_WORKERS != max_workers:
+                if _AIRPORT_EXECUTOR is not None:
+                    _AIRPORT_EXECUTOR.shutdown(wait=False)
+                _AIRPORT_EXECUTOR = ThreadPoolExecutor(max_workers=max_workers)
+                _AIRPORT_EXECUTOR_MAX_WORKERS = max_workers
+    return _AIRPORT_EXECUTOR
+
+
+def _rate_limited_send(bot: Any, chat_id: str, message: str, **kwargs: Any) -> None:
+    """Throttle bot.send_message calls to avoid hitting Telegram rate limits."""
+    global _SEND_MSG_LAST_TS
+    with _SEND_MSG_LOCK:
+        now = time.time()
+        wait = _SEND_MSG_MIN_INTERVAL_SEC - (now - _SEND_MSG_LAST_TS)
+        if wait > 0:
+            time.sleep(wait)
+        _SEND_MSG_LAST_TS = time.time()
+    bot.send_message(chat_id, message, **kwargs)
 
 
 def _load_city_thread_ids() -> dict:
@@ -814,7 +863,6 @@ def _fetch_arome_temp() -> Optional[float]:
     if cached is not None and (now - cached_at) < _AROME_CACHE_TTL_SEC:
         return cached
     try:
-        import requests
         url = (
             "https://api.open-meteo.com/v1/forecast?"
             "latitude=48.9673&longitude=2.4277"
@@ -823,7 +871,7 @@ def _fetch_arome_temp() -> Optional[float]:
             "&timezone=Europe/Paris"
             "&forecast_minutely_15=2"
         )
-        resp = requests.get(url, timeout=8)
+        resp = _get_http_session().get(url, timeout=8)
         data = resp.json()
         temps = (data.get("minutely_15") or {}).get("temperature_2m") or []
         result = float(temps[-1]) if temps else None
@@ -1314,7 +1362,7 @@ def _process_airport_city(
             thread_id = _resolve_thread_id(chat_id, city)
             if thread_id:
                 kwargs["message_thread_id"] = thread_id
-            bot.send_message(chat_id, message, **kwargs)
+            _rate_limited_send(bot, chat_id, message, **kwargs)
             sent = True
         except Exception as exc:
             logger.warning("airport push failed city={} chat_id={}: {}", city, chat_id, exc)
@@ -1340,29 +1388,29 @@ def _run_high_freq_airport_cycle(
     logger.info("airport cycle tick cities={} max_workers={}", len(HIGH_FREQ_AIRPORT_CITIES), max_workers)
 
     cities = sorted(HIGH_FREQ_AIRPORT_CITIES)
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {
-            pool.submit(
-                _process_airport_city,
-                city,
-                now_ts,
-                last_by_city.get(city) or {},
-                chat_ids,
-                bot,
-            ): city
-            for city in cities
-        }
-        for future in as_completed(futures):
-            try:
-                result = future.result()
-            except Exception:
-                logger.exception("airport city task crashed city={}", futures[future])
-                continue
-            if result is None:
-                continue
-            city, entry = result
-            last_by_city[city] = entry
-            state_dirty = True
+    pool = _get_airport_executor(max_workers)
+    futures = {
+        pool.submit(
+            _process_airport_city,
+            city,
+            now_ts,
+            last_by_city.get(city) or {},
+            chat_ids,
+            bot,
+        ): city
+        for city in cities
+    }
+    for future in as_completed(futures):
+        try:
+            result = future.result()
+        except Exception:
+            logger.exception("airport city task crashed city={}", futures[future])
+            continue
+        if result is None:
+            continue
+        city, entry = result
+        last_by_city[city] = entry
+        state_dirty = True
 
     return state_dirty
 

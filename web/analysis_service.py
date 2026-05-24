@@ -11,7 +11,9 @@ from fastapi import HTTPException
 from loguru import logger
 
 from web.core import (
+    LRUDict,
     _cache,
+    _CACHE_LOCK,
     CACHE_TTL,
     CACHE_TTL_ANKARA,
     CACHE_TTL_KOREAN_AMOS,
@@ -89,7 +91,8 @@ _ANALYSIS_CACHE_STATS: Dict[str, Any] = {
     "last_city": None,
 }
 _SUMMARY_CACHE_LOCK = threading.Lock()
-_SUMMARY_CACHE: Dict[str, Dict[str, Any]] = {}
+_SUMMARY_CACHE_MAXSIZE = 128
+_SUMMARY_CACHE = LRUDict(maxsize=_SUMMARY_CACHE_MAXSIZE)
 def _dedupe_forecast_daily(rows: Any) -> list[Dict[str, Any]]:
     if not isinstance(rows, list):
         return []
@@ -413,20 +416,21 @@ def _get_cached_analysis(
     now_ts = _time.time()
     freshest_payload: Optional[Dict[str, Any]] = None
     freshest_ts = 0.0
-    for detail_mode in detail_modes:
-        cached = _cache.get(_analysis_cache_key(city, detail_mode))
-        if not cached:
-            continue
-        cached_ts = float(cached.get("t", 0))
-        payload = cached.get("d")
-        if (
-            cached_ts
-            and now_ts - cached_ts < ttl
-            and isinstance(payload, dict)
-            and cached_ts >= freshest_ts
-        ):
-            freshest_payload = payload
-            freshest_ts = cached_ts
+    with _CACHE_LOCK:
+        for detail_mode in detail_modes:
+            cached = _cache.get(_analysis_cache_key(city, detail_mode))
+            if not cached:
+                continue
+            cached_ts = float(cached.get("t", 0))
+            payload = cached.get("d")
+            if (
+                cached_ts
+                and now_ts - cached_ts < ttl
+                and isinstance(payload, dict)
+                and cached_ts >= freshest_ts
+            ):
+                freshest_payload = payload
+                freshest_ts = cached_ts
     return freshest_payload
 
 
@@ -1882,7 +1886,8 @@ def _analyze(
             result,
         )
 
-    _cache[cache_key] = {"t": _time.time(), "d": result}
+    with _CACHE_LOCK:
+        _cache[cache_key] = {"t": _time.time(), "d": result}
     return result
 
 

@@ -5,9 +5,11 @@ PolyWeather Web Core Context
 import json
 import os
 import sqlite3
+import threading
 import time
+from collections import OrderedDict
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -77,7 +79,33 @@ SETTLEMENT_SOURCE_LABELS: Dict[str, str] = {
     "wunderground": "Wunderground",
 }
 
-_cache: Dict[str, Dict] = {}
+class LRUDict:
+    """Size-bounded ordered dict that evicts oldest entries on overflow."""
+
+    def __init__(self, maxsize: int = 256) -> None:
+        self._maxsize = max(1, int(maxsize))
+        self._data: OrderedDict[str, Dict] = OrderedDict()
+
+    def get(self, key: str) -> Optional[Dict]:
+        return self._data.get(key)
+
+    def __setitem__(self, key: str, value: Dict) -> None:
+        if key in self._data:
+            self._data.move_to_end(key)
+        self._data[key] = value
+        while len(self._data) > self._maxsize:
+            self._data.popitem(last=False)
+
+    def __contains__(self, key: str) -> bool:
+        return key in self._data
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+
+_CACHE_MAXSIZE = int(os.getenv("POLYWEATHER_ANALYSIS_CACHE_MAXSIZE", "256"))
+_cache: LRUDict = LRUDict(maxsize=_CACHE_MAXSIZE)
+_CACHE_LOCK = threading.Lock()
 CACHE_TTL = 300
 CACHE_TTL_ANKARA = 60
 CACHE_TTL_KOREAN_AMOS = 60
