@@ -6,22 +6,15 @@ import {
   Activity,
   BarChart3,
   Bell,
-  ChevronDown,
   ChevronLeft,
-  ChevronRight,
-  CloudSun,
-  CreditCard,
   Gauge,
   LineChart,
-  LockKeyhole,
-  LogIn,
   Menu,
-  RefreshCw,
   Search,
   Table2,
   UserRound,
 } from "lucide-react";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -65,7 +58,6 @@ import { scanRootClass } from "@/components/dashboard/scan-root-styles";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
 import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { GroupedMarketTable } from "@/components/dashboard/scan-terminal/GroupedMarketTable";
-import { RunwayMeteorologyPanel } from "@/components/dashboard/scan-terminal/RunwayMeteorologyPanel";
 import { rowName, pct, money, temp, edgeClass } from "@/components/dashboard/scan-terminal/utils";
 
 function createEmptyAccess(loading = true): ProAccessState {
@@ -297,6 +289,566 @@ function ProbabilityDistributionChart({
   );
 }
 
+function tablePrice(row: ScanOpportunityRow) {
+  return formatPrice(row.midpoint, row.ask, row.bid);
+}
+
+function ticker(row: ScanOpportunityRow) {
+  return String(row.airport || row.market_key || row.city || "--")
+    .replace(/[^A-Za-z0-9]/g, "")
+    .slice(0, 6)
+    .toUpperCase();
+}
+
+function KoyfinRowsTable({
+  compact = false,
+  isEn,
+  onSelect,
+  rows,
+  selectedId,
+}: {
+  compact?: boolean;
+  isEn: boolean;
+  onSelect: (row: ScanOpportunityRow) => void;
+  rows: ScanOpportunityRow[];
+  selectedId?: string | null;
+}) {
+  return (
+    <table className="w-full border-collapse text-[11px]">
+      <thead>
+        <tr className="border-b border-slate-200 bg-[#f3f5f7] text-[9px] uppercase tracking-wide text-slate-500">
+          <th className="w-5 px-2 py-1 text-left font-black">
+            <span className="block h-3 w-3 rounded-[2px] border border-slate-300 bg-white" />
+          </th>
+          <th className="px-1.5 py-1 text-left font-black">
+            {isEn ? "Weather Contract" : "天气合约"}
+          </th>
+          {!compact && (
+            <th className="px-1.5 py-1 text-left font-black">
+              {isEn ? "Ticker" : "代码"}
+            </th>
+          )}
+          <th className="px-1.5 py-1 text-right font-black">
+            {isEn ? "Price" : "价格"}
+          </th>
+          <th className="px-1.5 py-1 text-right font-black">
+            {isEn ? "Chg" : "变化"}
+          </th>
+          <th className="px-2 py-1 text-right font-black">%</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => {
+          const edge = Number(row.edge_percent ?? row.signed_gap ?? row.gap ?? 0);
+          const positive = edge >= 0;
+          return (
+            <tr
+              key={row.id}
+              onClick={() => onSelect(row)}
+              className={clsx(
+                "cursor-pointer border-b border-slate-100 hover:bg-blue-50/70",
+                selectedId === row.id && "bg-blue-50",
+              )}
+            >
+              <td className="px-2 py-1">
+                <span className="block h-3 w-3 rounded-[2px] border border-slate-300 bg-white" />
+              </td>
+              <td className="px-1.5 py-1">
+                <div className="truncate font-bold text-slate-800">
+                  {rowName(row)}
+                </div>
+                <div className="truncate text-[9px] font-medium text-slate-400">
+                  {row.target_label || row.market_question || row.airport || "--"}
+                </div>
+              </td>
+              {!compact && (
+                <td className="px-1.5 py-1 font-mono font-bold text-slate-600">
+                  {ticker(row)}
+                </td>
+              )}
+              <td className="px-1.5 py-1 text-right font-mono font-bold text-slate-800">
+                {tablePrice(row)}
+              </td>
+              <td
+                className={clsx(
+                  "px-1.5 py-1 text-right font-mono font-bold",
+                  positive ? "text-emerald-700" : "text-red-600",
+                )}
+              >
+                {Number.isFinite(edge) ? `${positive ? "+" : ""}${edge.toFixed(1)}` : "--"}
+              </td>
+              <td
+                className={clsx(
+                  "px-2 py-1 text-right font-mono font-bold",
+                  positive ? "text-emerald-700" : "text-red-600",
+                )}
+              >
+                {pct(row.market_probability ?? row.market_event_probability ?? row.model_probability)}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+function KoyfinMarketPanel({
+  compact,
+  isEn,
+  onSelect,
+  rows,
+  selectedId,
+  title,
+}: {
+  compact?: boolean;
+  isEn: boolean;
+  onSelect: (row: ScanOpportunityRow) => void;
+  rows: ScanOpportunityRow[];
+  selectedId?: string | null;
+  title: string;
+}) {
+  return (
+    <Panel title={title}>
+      <KoyfinRowsTable
+        compact={compact}
+        isEn={isEn}
+        onSelect={onSelect}
+        rows={rows}
+        selectedId={selectedId}
+      />
+    </Panel>
+  );
+}
+
+function WeatherNewsPanel({
+  isEn,
+  rows,
+}: {
+  isEn: boolean;
+  rows: ScanOpportunityRow[];
+}) {
+  const items = rows.slice(0, 3).map((row) => ({
+    title:
+      (isEn ? row.ai_city_thesis_en || row.ai_reason_en : row.ai_city_thesis_zh || row.ai_reason_zh) ||
+      row.market_question ||
+      `${rowName(row)} ${isEn ? "weather contract update" : "天气合约更新"}`,
+    source: row.airport || "PolyWeather",
+    time: row.local_time || row.selected_date || "--",
+  }));
+  return (
+    <Panel title={isEn ? "Weather Market News" : "天气市场新闻"}>
+      <div className="divide-y divide-slate-100 text-[11px]">
+        {items.map((item, index) => (
+          <div
+            key={`${item.source}-${index}`}
+            className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-3 py-1.5 hover:bg-slate-50"
+          >
+            <div className="truncate font-semibold text-slate-700">
+              {item.title}
+            </div>
+            <div className="font-medium text-slate-400">{item.source}</div>
+            <div className="font-mono text-slate-400">{item.time}</div>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+function performanceSeries(row: ScanOpportunityRow | null) {
+  return buildEvidenceChart(row).data;
+}
+
+type ObsPoint = { time?: string | null; temp?: number | null };
+
+type EvidenceSeries = {
+  key: string;
+  label: string;
+  source: string;
+  color: string;
+  dashed?: boolean;
+  featured?: boolean;
+  values: Array<number | null>;
+};
+
+type RunwayObsPayload = {
+  runway_pairs?: Array<[string, string] | string[] | null> | null;
+  temperatures?: Array<[number | null, number | null] | Array<number | null> | null> | null;
+  point_temperatures?: Array<{
+    runway?: string | null;
+    tdz_temp?: number | null;
+    mid_temp?: number | null;
+    end_temp?: number | null;
+  } | null> | null;
+};
+
+function validNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function normalizeObs(points?: ObsPoint[] | null, limit = 88) {
+  return (points || [])
+    .filter((point) => validNumber(point.temp) !== null)
+    .slice(-limit)
+    .map((point, index) => ({
+      label: point.time || String(index + 1),
+      value: Number(point.temp),
+    }));
+}
+
+function formatChartLabel(value: string) {
+  if (!value) return "";
+  const maybeDate = new Date(value);
+  if (!Number.isNaN(maybeDate.getTime())) {
+    return maybeDate.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+  }
+  return value.length > 8 ? value.slice(-8) : value;
+}
+
+function seriesStats(values: Array<number | null>) {
+  const nums = values.filter((value): value is number => validNumber(value) !== null);
+  const latest = nums.length ? nums[nums.length - 1] : null;
+  const high = nums.length ? Math.max(...nums) : null;
+  const first15 = nums.length > 1 ? nums[Math.max(0, nums.length - 15)] : null;
+  const delta15 = latest !== null && first15 !== null ? latest - first15 : null;
+  return { latest, high, delta15 };
+}
+
+function buildModelPoints(row: ScanOpportunityRow | null, length: number) {
+  const modelEntries = Object.entries(row?.model_cluster_sources || {})
+    .map(([label, value]) => [label, validNumber(value)] as const)
+    .filter((entry): entry is readonly [string, number] => entry[1] !== null)
+    .slice(0, 4);
+  const constants: EvidenceSeries[] = modelEntries.map(([label, value], index) => ({
+    key: `model_${index}`,
+    label,
+    source: "Multi-model",
+    color: ["#2563eb", "#14b8a6", "#7c3aed", "#64748b"][index] || "#64748b",
+    dashed: true,
+    values: Array.from({ length }, () => value),
+  }));
+  const deb = validNumber(row?.deb_prediction);
+  if (deb !== null) {
+    constants.unshift({
+      key: "deb",
+      label: "DEB",
+      source: "DEB",
+      color: "#f97316",
+      dashed: true,
+      values: Array.from({ length }, () => deb),
+    });
+  }
+  return constants;
+}
+
+function extractRunwayPointSeries(row: ScanOpportunityRow | null, length: number): EvidenceSeries[] {
+  const payload = row as
+    | (ScanOpportunityRow & {
+        amos?: { runway_obs?: RunwayObsPayload | null; source_label?: string | null; source?: string | null } | null;
+        runway_obs?: RunwayObsPayload | null;
+      })
+    | null;
+  const runwayObs = payload?.amos?.runway_obs || payload?.runway_obs;
+  if (!runwayObs) return [];
+  const pairs = runwayObs.runway_pairs || [];
+  const runwayTemps = runwayObs.temperatures || [];
+  const pointTemps = runwayObs.point_temperatures || [];
+  const source = payload?.amos?.source_label || payload?.amos?.source || "Runway";
+  const series: EvidenceSeries[] = [];
+  pairs.forEach((pair, index) => {
+      const pairLabel = Array.isArray(pair) && pair.length
+        ? pair.filter(Boolean).join("/")
+        : pointTemps[index]?.runway || `RWY ${index + 1}`;
+      const values = [
+        ...(Array.isArray(runwayTemps[index]) ? runwayTemps[index] || [] : []),
+        pointTemps[index]?.tdz_temp,
+        pointTemps[index]?.mid_temp,
+        pointTemps[index]?.end_temp,
+      ]
+        .map(validNumber)
+        .filter((value): value is number => value !== null);
+      if (!values.length) return;
+      const maxTemp = Math.max(...values);
+      series.push({
+        key: `runway_${index}`,
+        label: `${pairLabel} runway`,
+        source,
+        color: ["#009688", "#f97316", "#0ea5e9", "#ef4444"][index] || "#64748b",
+        featured: index === 0,
+        dashed: index !== 0,
+        values: Array.from({ length }, () => maxTemp),
+      });
+    });
+  return series.slice(0, 4);
+}
+
+function buildEvidenceChart(row: ScanOpportunityRow | null) {
+  const settlement = normalizeObs(row?.settlement_today_obs || row?.metar_context?.settlement_today_obs);
+  const metar = normalizeObs(row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs);
+  const baseLabels = settlement.length >= metar.length ? settlement.map((point) => point.label) : metar.map((point) => point.label);
+  const length = Math.max(baseLabels.length, settlement.length, metar.length, 24);
+  const labels = length === baseLabels.length
+    ? baseLabels
+    : Array.from({ length }, (_, index) => baseLabels[index] || `${String(index).padStart(2, "0")}:00`);
+
+  const align = (points: Array<{ label: string; value: number }>) => {
+    if (!points.length) return Array.from({ length }, () => null);
+    const offset = Math.max(0, length - points.length);
+    return Array.from({ length }, (_, index) => (index < offset ? null : points[index - offset]?.value ?? null));
+  };
+
+  const series: EvidenceSeries[] = [];
+  series.push(...extractRunwayPointSeries(row, length));
+  if (settlement.length) {
+    series.push({
+      key: "settlement",
+      label: "Settlement runway",
+      source: row?.metar_context?.station_label || row?.metar_context?.station || row?.airport || "Settlement",
+      color: "#009688",
+      featured: true,
+      values: align(settlement),
+    });
+  }
+  if (metar.length) {
+    series.push({
+      key: "metar",
+      label: "METAR official",
+      source: row?.airport || row?.metar_context?.source || "METAR",
+      color: "#0ea5e9",
+      dashed: true,
+      values: align(metar),
+    });
+  }
+  series.push(...buildModelPoints(row, length));
+
+  const fallbackValue =
+    validNumber(row?.current_temp) ??
+    validNumber(row?.current_max_so_far) ??
+    validNumber(row?.deb_prediction) ??
+    validNumber(row?.target_value) ??
+    validNumber(row?.target_threshold);
+  if (!series.length && fallbackValue !== null) {
+    series.push({
+      key: "current",
+      label: "Current reference",
+      source: row?.metar_context?.source || "Live",
+      color: "#009688",
+      featured: true,
+      values: Array.from({ length }, () => fallbackValue),
+    });
+  }
+
+  const data = labels.map((label, index) => {
+    const point: Record<string, string | number | null> = { label: formatChartLabel(label) };
+    series.forEach((item) => {
+      point[item.key] = item.values[index] ?? null;
+    });
+    return point;
+  });
+  return { data, series };
+}
+
+function NormalizedPerformancePanel({
+  isEn,
+  row,
+  rows = [],
+  onSelect,
+}: {
+  isEn: boolean;
+  row: ScanOpportunityRow | null;
+  rows?: ScanOpportunityRow[];
+  onSelect?: (row: ScanOpportunityRow) => void;
+}) {
+  const { data, series } = useMemo(() => buildEvidenceChart(row), [row]);
+  const threshold = validNumber(row?.target_threshold) ?? validNumber(row?.target_value);
+  const tableRows = series.slice(0, 5).map((item) => ({ ...item, ...seriesStats(item.values) }));
+  return (
+    <Panel
+      title={isEn ? "Live Temperature Trend & Option Threshold Lines" : "实时气温走势与期权阈值线"}
+      actions={
+        <button className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[9px] font-bold uppercase text-slate-500 hover:bg-slate-50">
+          {isEn ? "Export" : "导出"}
+        </button>
+      }
+    >
+      <div className="flex h-full min-h-[420px] flex-col">
+        <div className="flex shrink-0 overflow-x-auto border-b border-slate-200 bg-[#f5f7f9] text-[10px] font-black text-slate-600 scrollbar-none">
+          {rows.slice(0, 18).map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onSelect?.(item)}
+              className={clsx(
+                "min-w-[76px] border-r border-slate-200 px-3 py-2 text-center hover:bg-white",
+                item.id === row?.id ? "bg-white text-blue-600 shadow-[inset_0_2px_0_#2563eb]" : "text-slate-600",
+              )}
+            >
+              <span className="block truncate">{rowName(item)}</span>
+            </button>
+          ))}
+        </div>
+        <div className="shrink-0 border-b border-slate-200 bg-white px-3 py-2">
+          <div className="mb-2 flex items-end justify-between gap-3 text-[10px]">
+            <div className="space-y-0.5">
+              <div className="font-mono font-black text-teal-700">
+                {isEn ? "Settlement live" : "跑道实测"} {temp(validNumber(row?.current_temp))}
+              </div>
+              <div className="font-mono font-black text-blue-600">
+                METAR {temp(validNumber(row?.metar_context?.airport_current_temp ?? row?.metar_context?.last_temp))}
+              </div>
+            </div>
+            <div className="text-right font-mono font-black text-slate-800">
+              {isEn ? "Threshold" : "当日阈值"} {temp(threshold)}
+            </div>
+          </div>
+          <div className="grid grid-cols-5 gap-1.5 text-[10px]">
+            {tableRows.map((item) => (
+              <div key={item.key} className={clsx("rounded border px-2 py-1.5", item.featured ? "border-teal-200 bg-teal-50" : "border-slate-200 bg-slate-50")}>
+                <div className="flex items-center gap-1">
+                  <span className="h-1.5 w-4 rounded-full" style={{ backgroundColor: item.color }} />
+                  <span className="truncate font-black text-slate-700">{item.label}</span>
+                </div>
+                <div className="mt-1 grid grid-cols-3 gap-1 font-mono text-[9px] text-slate-600">
+                  <span>now: {temp(item.latest)}</span>
+                  <span>max: {temp(item.high)}</span>
+                  <span>15m: {item.delta15 === null ? "--" : `${item.delta15 >= 0 ? "+" : ""}${item.delta15.toFixed(1)}°`}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="relative min-h-0 flex-1 p-2">
+          <div className="absolute left-3 top-3 z-10 rounded border border-slate-200 bg-white px-2 py-1 text-[10px] font-black text-slate-800 shadow-sm">
+            {rowName(row)} <span className="ml-1 text-teal-600">{row?.target_label || row?.market_direction || ""}</span>
+          </div>
+          <ResponsiveContainer width="100%" height="100%">
+            <ReLineChart data={data} margin={{ top: 16, right: 28, left: 8, bottom: 8 }}>
+              <CartesianGrid stroke="#dbe6ef" strokeDasharray="2 2" />
+              <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#64748b" }} tickLine={false} axisLine={{ stroke: "#cbd5e1" }} />
+              <YAxis tick={{ fontSize: 10, fill: "#64748b" }} tickFormatter={(v) => `${Number(v).toFixed(1)}°`} orientation="right" axisLine={{ stroke: "#cbd5e1" }} tickLine={false} />
+              {threshold !== null && (
+                <ReferenceLine
+                  y={threshold}
+                  stroke="#f97316"
+                  strokeDasharray="4 3"
+                  label={{ value: `UMA ${threshold.toFixed(1)}°`, fill: "#f97316", fontSize: 10, position: "right" }}
+                />
+              )}
+              <Tooltip
+                contentStyle={{
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 4,
+                  fontSize: 11,
+                  boxShadow: "0 8px 24px rgba(15,23,42,.12)",
+                }}
+                formatter={(value: unknown) => `${Number(value).toFixed(2)}°`}
+              />
+              {series.map((item) => (
+                <Line
+                  key={item.key}
+                  dataKey={item.key}
+                  stroke={item.color}
+                  strokeWidth={item.featured ? 2.4 : 1.4}
+                  strokeDasharray={item.dashed ? "4 3" : undefined}
+                  dot={false}
+                  isAnimationActive={false}
+                  name={item.label}
+                  type="stepAfter"
+                />
+              ))}
+            </ReLineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function FactorMatrix({
+  isEn,
+  rows,
+}: {
+  isEn: boolean;
+  rows: ScanOpportunityRow[];
+}) {
+  const buckets = [
+    [isEn ? "Heat" : "高温", rows.filter((r) => r.risk_level === "high")],
+    [isEn ? "Live Edge" : "实况优势", rows.filter((r) => Number(r.edge_percent || 0) > 0)],
+    [isEn ? "Tradable" : "可交易", rows.filter((r) => r.tradable)],
+    [isEn ? "AI Approved" : "AI 通过", rows.filter((r) => String(r.ai_decision || "").includes("approve"))],
+    [isEn ? "Watch" : "观察", rows.filter((r) => getSignalState(r) === "watch")],
+    [isEn ? "Closed" : "关闭", rows.filter((r) => r.closed)],
+  ];
+  return (
+    <Panel title={isEn ? "Weather Equity Factors" : "天气交易因子"}>
+      <div className="grid h-full grid-cols-3 gap-2 p-3">
+        {buckets.map(([label, list]) => {
+          const count = Array.isArray(list) ? list.length : 0;
+          const ratio = rows.length ? count / rows.length : 0;
+          const tone =
+            ratio >= 0.5 ? "bg-emerald-100 text-emerald-800 border-emerald-200" :
+            ratio >= 0.2 ? "bg-amber-100 text-amber-800 border-amber-200" :
+            "bg-slate-100 text-slate-600 border-slate-200";
+          return (
+            <div key={String(label)} className={clsx("grid place-items-center rounded border p-2 text-center", tone)}>
+              <div className="font-mono text-sm font-black">{(ratio * 100).toFixed(1)}%</div>
+              <div className="mt-1 text-[10px] font-black uppercase">{String(label)}</div>
+            </div>
+          );
+        })}
+      </div>
+    </Panel>
+  );
+}
+
+function YieldLikeTable({
+  isEn,
+  rows,
+}: {
+  isEn: boolean;
+  rows: ScanOpportunityRow[];
+}) {
+  const regionStats = TRADING_REGIONS.map((region) => {
+    const regionRows = rows.filter((row) => String(row.trading_region).toLowerCase() === region.key);
+    const avgEdge = regionRows.reduce((sum, row) => sum + Number(row.edge_percent || 0), 0) / Math.max(regionRows.length, 1);
+    const avgProb = regionRows.reduce((sum, row) => sum + Number(row.model_probability ?? row.model_event_probability ?? 0), 0) / Math.max(regionRows.length, 1);
+    return {
+      label: isEn ? region.labelEn : region.labelZh,
+      edge: avgEdge,
+      prob: avgProb,
+      liq: regionRows.reduce((sum, row) => sum + Number(row.book_liquidity || row.market_liquidity || 0), 0),
+      count: regionRows.length,
+    };
+  }).filter((row) => row.count > 0).slice(0, 7);
+  return (
+    <Panel title={isEn ? "Regional Weather Yields" : "区域天气收益率"}>
+      <table className="w-full border-collapse text-[11px]">
+        <thead>
+          <tr className="border-b border-slate-200 bg-[#f3f5f7] text-[9px] uppercase text-slate-500">
+            <th className="px-3 py-1 text-left font-black">{isEn ? "Region" : "区域"}</th>
+            <th className="px-2 py-1 text-right font-black">1D</th>
+            <th className="px-2 py-1 text-right font-black">5D</th>
+            <th className="px-2 py-1 text-right font-black">10D</th>
+            <th className="px-3 py-1 text-right font-black">{isEn ? "Liq" : "流动性"}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {regionStats.map((row) => (
+            <tr key={row.label} className="border-b border-slate-100">
+              <td className="px-3 py-1.5 font-bold text-slate-800">{row.label}</td>
+              <td className={clsx("px-2 py-1.5 text-right font-mono font-bold", edgeClass(row.edge))}>{pct(row.edge)}</td>
+              <td className="px-2 py-1.5 text-right font-mono">{pct(row.prob)}</td>
+              <td className="px-2 py-1.5 text-right font-mono">{pct(row.edge + row.prob * 0.2)}</td>
+              <td className="px-3 py-1.5 text-right font-mono">{money(row.liq)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Panel>
+  );
+}
+
 function PolyWeatherTerminal({
   generatedText,
   isEn,
@@ -381,6 +933,23 @@ function PolyWeatherTerminal({
       .filter((row) => decisionLabel(row) === "Watch" || !row.tradable)
       .slice(0, 8);
   }, [filteredRegionRows]);
+  const topRows = filteredRegionRows.slice(0, 18);
+  const activeRows = filteredRegionRows
+    .filter((row) => getSignalState(row) === "active" || row.tradable)
+    .slice(0, 10);
+  const heatRows = filteredRegionRows
+    .filter((row) => row.risk_level === "high" || Number(row.current_temp ?? 0) >= 30)
+    .slice(0, 10);
+  const liquidRows = [...filteredRegionRows]
+    .sort(
+      (a, b) =>
+        Number(b.book_liquidity || b.market_liquidity || b.volume || 0) -
+        Number(a.book_liquidity || a.market_liquidity || a.volume || 0),
+    )
+    .slice(0, 9);
+  const negativeRows = filteredRegionRows
+    .filter((row) => Number(row.edge_percent ?? row.signed_gap ?? row.gap ?? 0) < 0)
+    .slice(0, 8);
 
   const selectedSignal = selectedRow ? getSignalState(selectedRow) : "data" as const;
   const selectedLabel = selectedRow ? getSignalLabel(selectedSignal, isEn) : "";
@@ -389,6 +958,9 @@ function PolyWeatherTerminal({
     () => buildContinentGroups(filteredRegionRows, isEn),
     [filteredRegionRows, isEn]
   );
+  const firstRegionRows =
+    continentGroups.find((group) => group.key !== "active_signals")?.rows.slice(0, 8) ||
+    topRows.slice(0, 8);
   const [mobileTab, setMobileTab] = useState<string>("active_signals");
   const mobileActiveGroup = useMemo(
     () => continentGroups.find((g) => g.key === mobileTab) || continentGroups[0],
@@ -586,11 +1158,9 @@ function PolyWeatherTerminal({
           </div>
 
           {/* Desktop layout */}
-          <div className="hidden lg:grid lg:grid-cols-[1.1fr_1.65fr_0.95fr] h-full gap-2 min-h-0">
-            {/* Column 1 */}
-            <div className="flex flex-col gap-2 min-h-0 h-full">
-              {/* Koyfin-style Region Selector */}
-              <div className="flex items-center gap-1 overflow-x-auto bg-white border border-[#d2d9e2] rounded-[4px] p-1 shrink-0 scrollbar-none">
+          <div className="hidden h-full min-h-0 lg:grid lg:grid-cols-[0.96fr_1.72fr_0.96fr] gap-2">
+            <div className="flex min-h-0 flex-col gap-2">
+              <div className="flex shrink-0 items-center gap-1 overflow-x-auto rounded-[4px] border border-[#cfd6df] bg-white p-1 scrollbar-none">
                 {regionTabs.map((tab) => {
                   const isActive = selectedRegionKey === tab.key;
                   return (
@@ -611,186 +1181,89 @@ function PolyWeatherTerminal({
                 })}
               </div>
 
-              <Panel title={isEn ? "Weather Contracts" : "天气合约"} className="flex-1 min-h-0">
-                <div className="grid grid-cols-3 border-b border-slate-200 text-center bg-[#f8f9fa] shrink-0">
-                  <div className="py-2 border-r border-slate-200">
-                    <div className="text-[10px] font-bold uppercase text-slate-400">
-                      {t("rows", isEn)}
-                    </div>
-                    <div className="font-mono text-base font-black text-slate-800">{filteredRegionRows.length}</div>
-                  </div>
-                  <div className="py-2 border-r border-slate-200">
-                    <div className="text-[10px] font-bold uppercase text-slate-400">
-                      {t("avgEdge", isEn)}
-                    </div>
-                    <div className={clsx("font-mono text-base font-black", edgeClass(avgEdge))}>
-                      {pct(avgEdge)}
-                    </div>
-                  </div>
-                  <div className="py-2">
-                    <div className="text-[10px] font-bold uppercase text-slate-400">
-                      {t("liquidity", isEn)}
-                    </div>
-                    <div className="font-mono text-base font-black text-slate-800">
-                      {money(totalLiquidity)}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex-1 min-h-0 overflow-auto">
-                  <GroupedMarketTable
-                    groups={continentGroups}
-                    isEn={isEn}
-                    selectedId={selectedRow?.id}
-                    onSelect={setSelectedRow}
-                  />
-                </div>
-              </Panel>
+              <KoyfinMarketPanel
+                isEn={isEn}
+                onSelect={setSelectedRow}
+                rows={topRows}
+                selectedId={selectedRow?.id}
+                title={isEn ? "Weather Contract Markets" : "天气合约市场"}
+              />
+              <KoyfinMarketPanel
+                compact
+                isEn={isEn}
+                onSelect={setSelectedRow}
+                rows={activeRows.length ? activeRows : topRows.slice(0, 8)}
+                selectedId={selectedRow?.id}
+                title={isEn ? "Active Signal Markets" : "活跃信号市场"}
+              />
+              <KoyfinMarketPanel
+                compact
+                isEn={isEn}
+                onSelect={setSelectedRow}
+                rows={firstRegionRows}
+                selectedId={selectedRow?.id}
+                title={isEn ? "Regional Weather Markets" : "区域天气市场"}
+              />
             </div>
 
-            {/* Column 2 */}
-            <div className="flex flex-col gap-2 min-h-0 h-full">
-              <Panel title={t("selectedContractMonitor", isEn)} className="shrink-0">
-                <div className="grid gap-4 p-3 lg:grid-cols-[1fr_200px]">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h1 className="text-lg font-black leading-tight text-slate-800">
-                        {rowName(selectedRow)}
-                      </h1>
-                      <span
-                        className={clsx(
-                          "rounded border px-1.5 py-0.5 text-[10px] font-bold",
-                          selectedSignal === "active" ? "border-emerald-200 bg-emerald-50 text-emerald-700" :
-                          selectedSignal === "watch" ? "border-amber-200 bg-amber-50 text-amber-700" :
-                          selectedSignal === "closed" ? "border-slate-200 bg-slate-50 text-slate-500" :
-                          "border-red-200 bg-red-50 text-red-700",
-                        )}
-                      >
-                        {selectedLabel}
-                      </span>
-                    </div>
-                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
-                      {isEn
-                        ? selectedRow?.ai_city_thesis_en || selectedRow?.ai_reason_en || selectedRow?.market_question || t("selectContract", isEn)
-                        : selectedRow?.ai_city_thesis_zh || selectedRow?.ai_reason_zh || selectedRow?.market_question || t("selectContract", isEn)}
-                    </p>
-                    <div className="mt-3 grid grid-cols-2 gap-1.5 md:grid-cols-4">
-                      {[
-                        [t("live", isEn), temp(selectedRow?.current_max_so_far ?? selectedRow?.current_temp, selectedRow?.temp_symbol)],
-                        [t("deb", isEn), temp(selectedRow?.deb_prediction, selectedRow?.temp_symbol)],
-                        [t("model", isEn), pct(selectedRow?.model_probability ?? selectedRow?.model_event_probability)],
-                        [t("mkt", isEn), pct(selectedRow?.market_probability ?? selectedRow?.market_event_probability)],
-                      ].map(([label, value]) => (
-                        <div key={String(label)} className="rounded border border-slate-200 bg-slate-50 px-2 py-1">
-                          <div className="text-[9px] font-bold uppercase text-slate-400">
-                            {label}
-                          </div>
-                          <div className="font-mono text-[13px] font-bold text-slate-800">{value}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="rounded border border-slate-200 bg-[#f8f9fa] p-2.5 flex flex-col justify-between">
-                    <div>
-                      <div className="mb-1 text-[9px] font-bold uppercase text-slate-400">
-                        {t("intradayPerformance", isEn)}
-                      </div>
-                      <div className="h-12">
-                        <SparkArea
-                          isEn={isEn}
-                          color={
-                            Number(selectedRow?.edge_percent || 0) >= 0
-                              ? "#059669"
-                              : "#dc2626"
-                          }
-                          data={
-                            selectedRow?.distribution_preview?.map((p) => ({
-                              v:
-                                typeof p === "number"
-                                  ? p
-                                  : p.model_probability ?? 0,
-                            })) || []
-                          }
-                        />
-                      </div>
-                    </div>
-                    <div className="mt-1.5 grid grid-cols-2 gap-1 text-[10px] font-bold">
-                      <span className="rounded border border-slate-200 bg-white p-1 text-center">
-                        {t("edge", isEn)} <b className={clsx("block font-mono", edgeClass(selectedRow?.edge_percent))}>{pct(selectedRow?.edge_percent)}</b>
-                      </span>
-                      <span className="rounded border border-slate-200 bg-white p-1 text-center text-slate-700">
-                        {t("spread", isEn)} <b className="block font-mono">{pct(selectedRow?.spread)}</b>
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </Panel>
-
-              <Panel title={isEn ? "Runway Temperature Trend & Option Threshold Lines" : "实时气象走势与期权阈值线"} className="flex-1 min-h-0">
-                <RunwayMeteorologyPanel row={selectedRow} isEn={isEn} />
-              </Panel>
+            <div className="grid min-h-0 grid-rows-[auto_1fr_0.38fr] gap-2">
+              <WeatherNewsPanel isEn={isEn} rows={topRows} />
+              <NormalizedPerformancePanel
+                isEn={isEn}
+                onSelect={setSelectedRow}
+                row={selectedRow}
+                rows={topRows}
+              />
+              <div className="grid min-h-0 grid-cols-[0.48fr_0.52fr] gap-2">
+                <FactorMatrix isEn={isEn} rows={filteredRegionRows} />
+                <YieldLikeTable isEn={isEn} rows={filteredRegionRows} />
+              </div>
             </div>
 
-            {/* Column 3 */}
-            <div className="flex flex-col gap-2 min-h-0 h-full">
-              <Panel title={t("watchlist", isEn)} className="flex-1 min-h-0">
-                <div className="divide-y divide-slate-100">
-                  {(watchRows.length ? watchRows : rows.slice(0, 8)).map((row) => (
-                    <button
-                      key={row.id}
-                      type="button"
-                      onClick={() => setSelectedRow(row)}
-                      className="grid w-full grid-cols-[1fr_auto] gap-3 px-3 py-1.5 text-left hover:bg-slate-50 transition-colors"
-                    >
-                      <span>
-                        <b className="block text-xs font-bold text-slate-800">{rowName(row)}</b>
-                        <small className="text-[10px] text-slate-400 block truncate max-w-[150px]">
-                          {row.airport || row.trading_region_label || row.local_time || "--"}
-                        </small>
-                      </span>
-                      <span className={clsx("font-mono text-xs font-bold", edgeClass(row.signed_gap ?? row.gap))}>
-                        {pct(row.signed_gap ?? row.gap)}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </Panel>
-
-              <Panel title={t("globalWeatherFactors", isEn)} className="shrink-0">
-                <div className="grid grid-cols-3 gap-1.5 p-2 text-center">
+            <div className="flex min-h-0 flex-col gap-2">
+              <KoyfinMarketPanel
+                compact
+                isEn={isEn}
+                onSelect={setSelectedRow}
+                rows={heatRows.length ? heatRows : topRows.slice(0, 8)}
+                selectedId={selectedRow?.id}
+                title={isEn ? "High Heat Markets" : "高温市场"}
+              />
+              <KoyfinMarketPanel
+                compact
+                isEn={isEn}
+                onSelect={setSelectedRow}
+                rows={liquidRows}
+                selectedId={selectedRow?.id}
+                title={isEn ? "Liquid Weather Markets" : "高流动性市场"}
+              />
+              <KoyfinMarketPanel
+                compact
+                isEn={isEn}
+                onSelect={setSelectedRow}
+                rows={watchRows.length ? watchRows : negativeRows.length ? negativeRows : topRows.slice(0, 8)}
+                selectedId={selectedRow?.id}
+                title={isEn ? "Watchlist & Risk" : "观察与风险"}
+              />
+              <Panel title={t("terminalStatus", isEn)} className="shrink-0">
+                <div className="grid grid-cols-3 gap-1.5 p-2 text-center text-[10px]">
                   {[
-                    [t("heat", isEn), rows.filter((r) => r.risk_level === "high").length],
-                    [t("active", isEn), rows.filter((r) => r.active).length],
-                    [t("tradable", isEn), rows.filter((r) => r.tradable).length],
-                    [t("primary", isEn), rows.filter((r) => r.is_primary_signal).length],
-                    [t("ai", isEn), rows.filter((r) => r.ai_decision).length],
-                    [t("closed", isEn), rows.filter((r) => r.closed).length],
+                    [t("rows", isEn), filteredRegionRows.length],
+                    [t("avgEdge", isEn), pct(avgEdge)],
+                    [t("liquidity", isEn), money(totalLiquidity)],
+                    [t("tsData", isEn), generatedText || t("tsDataLive", isEn)],
+                    [t("tsAccess", isEn), t("tsAccessPaid", isEn)],
+                    [t("tsLayout", isEn), "Koyfin"],
                   ].map(([label, value]) => (
-                    <div key={String(label)} className="rounded border border-slate-200 bg-slate-50 p-1.5">
-                      <div className="font-mono text-sm font-bold text-slate-800">{value}</div>
-                      <div className="text-[9px] font-bold uppercase text-slate-400 truncate">
+                    <div key={String(label)} className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5">
+                      <div className="truncate text-[9px] font-black uppercase text-slate-400">
                         {label}
                       </div>
+                      <div className="truncate font-mono font-black text-slate-800">
+                        {value}
+                      </div>
                     </div>
                   ))}
-                </div>
-              </Panel>
-
-              <Panel title={t("terminalStatus", isEn)} className="shrink-0">
-                <div className="space-y-1.5 p-2 text-[11px]">
-                  <div className="flex items-center justify-between rounded border border-slate-200 bg-slate-50 px-2.5 py-1.5">
-                    <span className="font-bold text-slate-500">{t("tsData", isEn)}</span>
-                    <span className="font-mono text-emerald-700 font-bold">
-                      {generatedText || t("tsDataLive", isEn)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between rounded border border-slate-200 bg-slate-50 px-2.5 py-1.5">
-                    <span className="font-bold text-slate-500">{t("tsAccess", isEn)}</span>
-                    <span className="font-mono text-blue-700 font-bold">{t("tsAccessPaid", isEn)}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded border border-slate-200 bg-slate-50 px-2.5 py-1.5">
-                    <span className="font-bold text-slate-500">{t("tsLayout", isEn)}</span>
-                    <span className="font-mono text-slate-700 font-medium">{t("tsLayoutValue", isEn)}</span>
-                  </div>
                 </div>
               </Panel>
             </div>
