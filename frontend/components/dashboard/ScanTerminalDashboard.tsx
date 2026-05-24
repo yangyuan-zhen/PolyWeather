@@ -8,6 +8,7 @@ import {
   Bell,
   ChevronLeft,
   Gauge,
+  GraduationCap,
   LineChart,
   Menu,
   Search,
@@ -421,41 +422,6 @@ function KoyfinMarketPanel({
   );
 }
 
-function WeatherNewsPanel({
-  isEn,
-  rows,
-}: {
-  isEn: boolean;
-  rows: ScanOpportunityRow[];
-}) {
-  const items = rows.slice(0, 3).map((row) => ({
-    title:
-      (isEn ? row.ai_city_thesis_en || row.ai_reason_en : row.ai_city_thesis_zh || row.ai_reason_zh) ||
-      row.market_question ||
-      `${rowName(row)} ${isEn ? "weather contract update" : "天气合约更新"}`,
-    source: row.airport || "PolyWeather",
-    time: row.local_time || row.selected_date || "--",
-  }));
-  return (
-    <Panel title={isEn ? "Weather Market News" : "天气市场新闻"}>
-      <div className="divide-y divide-slate-100 text-[11px]">
-        {items.map((item, index) => (
-          <div
-            key={`${item.source}-${index}`}
-            className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-3 py-1.5 hover:bg-slate-50"
-          >
-            <div className="truncate font-semibold text-slate-700">
-              {item.title}
-            </div>
-            <div className="font-medium text-slate-400">{item.source}</div>
-            <div className="font-mono text-slate-400">{item.time}</div>
-          </div>
-        ))}
-      </div>
-    </Panel>
-  );
-}
-
 function performanceSeries(row: ScanOpportunityRow | null) {
   return buildEvidenceChart(row).data;
 }
@@ -666,11 +632,6 @@ function NormalizedPerformancePanel({
   return (
     <Panel
       title={isEn ? "Live Temperature Trend & Option Threshold Lines" : "实时气温走势与期权阈值线"}
-      actions={
-        <button className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[9px] font-bold uppercase text-slate-500 hover:bg-slate-50">
-          {isEn ? "Export" : "导出"}
-        </button>
-      }
     >
       <div className="flex h-full min-h-[420px] flex-col">
         <div className="flex shrink-0 overflow-x-auto border-b border-slate-200 bg-[#f5f7f9] text-[10px] font-black text-slate-600 scrollbar-none">
@@ -910,6 +871,7 @@ function PolyWeatherTerminal({
     { key: "watchlist", Icon: Gauge, labelEn: "Watchlist", labelZh: "自选监控" },
     { key: "alerts", Icon: Bell, labelEn: "Alerts", labelZh: "实时预警" },
     { key: "markets", Icon: Activity, labelEn: "Markets", labelZh: "市场概览" },
+    { key: "training", Icon: GraduationCap, labelEn: "Training", labelZh: "训练数据" },
   ];
 
   const regionTabs = useMemo(() => {
@@ -934,9 +896,6 @@ function PolyWeatherTerminal({
       .slice(0, 8);
   }, [filteredRegionRows]);
   const topRows = filteredRegionRows.slice(0, 18);
-  const activeRows = filteredRegionRows
-    .filter((row) => getSignalState(row) === "active" || row.tradable)
-    .slice(0, 10);
   const heatRows = filteredRegionRows
     .filter((row) => row.risk_level === "high" || Number(row.current_temp ?? 0) >= 30)
     .slice(0, 10);
@@ -958,9 +917,6 @@ function PolyWeatherTerminal({
     () => buildContinentGroups(filteredRegionRows, isEn),
     [filteredRegionRows, isEn]
   );
-  const firstRegionRows =
-    continentGroups.find((group) => group.key !== "active_signals")?.rows.slice(0, 8) ||
-    topRows.slice(0, 8);
   const [mobileTab, setMobileTab] = useState<string>("active_signals");
   const mobileActiveGroup = useMemo(
     () => continentGroups.find((g) => g.key === mobileTab) || continentGroups[0],
@@ -971,6 +927,12 @@ function PolyWeatherTerminal({
       setMobileTab(continentGroups[0].key);
     }
   }, [continentGroups, mobileTab]);
+  useEffect(() => {
+    if (!filteredRegionRows.length) return;
+    if (!selectedRow || !filteredRegionRows.some((row) => row.id === selectedRow.id)) {
+      setSelectedRow(filteredRegionRows[0]);
+    }
+  }, [filteredRegionRows, selectedRow, setSelectedRow]);
 
   const avgEdge = useMemo(() => {
     const list = filteredRegionRows;
@@ -1070,9 +1032,9 @@ function PolyWeatherTerminal({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-12 shrink-0 items-center justify-between bg-[#11161d] border-b border-[#242f3d] px-4 text-white">
+        <header className="flex h-12 shrink-0 items-center justify-between border-b border-[#d2d9e2] bg-white px-4 text-slate-800">
           <div className="flex min-w-0 items-center gap-4">
-            <div className="flex h-8 min-w-[320px] items-center gap-2 rounded border border-[#2d3846] bg-[#1e2630] px-2.5 text-slate-300">
+            <div className="flex h-8 min-w-[320px] items-center gap-2 rounded border border-[#cfd6df] bg-[#f8fafc] px-2.5 text-slate-600">
               <Search size={14} className="text-slate-400" />
               <input
                 ref={searchInputRef}
@@ -1080,7 +1042,7 @@ function PolyWeatherTerminal({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t("searchPlaceholder", isEn)}
-                className="w-full bg-transparent text-xs font-semibold text-white placeholder-slate-500 outline-none"
+                className="w-full bg-transparent text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none"
               />
               {searchQuery && (
                 <button
@@ -1089,25 +1051,33 @@ function PolyWeatherTerminal({
                     setSearchQuery("");
                     searchInputRef.current?.focus();
                   }}
-                  className="text-slate-400 hover:text-white text-xs"
+                  className="text-xs text-slate-400 hover:text-slate-700"
                 >
                   ✕
                 </button>
               )}
-              <kbd className="ml-auto rounded border border-slate-600 bg-[#2a3543] px-1.5 py-0.5 text-[9px] font-mono text-slate-400">
+              <kbd className="ml-auto rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[9px] font-mono text-slate-400">
                 /
               </kbd>
             </div>
-            <div className="hidden items-center gap-1.5 text-[10px] font-bold uppercase text-slate-500 lg:flex tracking-wider">
+            <div className="hidden items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 lg:flex">
               <Activity size={13} />
               {t("dashboard", isEn)}
             </div>
           </div>
-          <div className="flex items-center gap-3 text-xs text-slate-400">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
             <span className="hidden font-mono md:inline text-slate-500">{userLocalTime}</span>
+            <button
+              type="button"
+              onClick={toggleLocale}
+              className="h-7 rounded border border-slate-300 bg-white px-2 text-[11px] font-bold text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+              title={t("switchLang", isEn)}
+            >
+              {isEn ? "中文" : "EN"}
+            </button>
             <Link
               href="/account"
-              className="grid h-7 w-7 place-items-center rounded-full bg-slate-700 border border-slate-600 text-slate-200 hover:bg-slate-600 hover:text-white transition-colors"
+              className="grid h-7 w-7 place-items-center rounded-full border border-slate-300 bg-white text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-900"
               title="User Account"
             >
               <UserRound size={13} />
@@ -1184,30 +1154,13 @@ function PolyWeatherTerminal({
               <KoyfinMarketPanel
                 isEn={isEn}
                 onSelect={setSelectedRow}
-                rows={topRows}
+                rows={filteredRegionRows}
                 selectedId={selectedRow?.id}
                 title={isEn ? "Weather Contract Markets" : "天气合约市场"}
-              />
-              <KoyfinMarketPanel
-                compact
-                isEn={isEn}
-                onSelect={setSelectedRow}
-                rows={activeRows.length ? activeRows : topRows.slice(0, 8)}
-                selectedId={selectedRow?.id}
-                title={isEn ? "Active Signal Markets" : "活跃信号市场"}
-              />
-              <KoyfinMarketPanel
-                compact
-                isEn={isEn}
-                onSelect={setSelectedRow}
-                rows={firstRegionRows}
-                selectedId={selectedRow?.id}
-                title={isEn ? "Regional Weather Markets" : "区域天气市场"}
               />
             </div>
 
             <div className="grid min-h-0 grid-rows-[auto_1fr_0.38fr] gap-2">
-              <WeatherNewsPanel isEn={isEn} rows={topRows} />
               <NormalizedPerformancePanel
                 isEn={isEn}
                 onSelect={setSelectedRow}
@@ -1266,6 +1219,8 @@ function PolyWeatherTerminal({
                   ))}
                 </div>
               </Panel>
+
+              <TrainingDataPanel isEn={isEn} />
             </div>
           </div>
         </main>
@@ -1274,6 +1229,78 @@ function PolyWeatherTerminal({
   );
 }
 
+function TrainingDataPanel({ isEn }: { isEn: boolean }) {
+  const [data, setData] = useState<Array<{
+    city_id: string; name: string;
+    deb?: { hit_rate: number; mae: number; total_days: number } | null;
+  }> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/ops/training/accuracy", {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    })
+      .then(async (res) => {
+        if (!res.ok) return null;
+        return (res.json() as Promise<{ accuracy: typeof data }>);
+      })
+      .then((payload) => {
+        if (cancelled || !payload?.accuracy) return;
+        setData(payload.accuracy.filter((c) => c.deb && c.deb.total_days >= 5));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const debSorted = (data || [])
+    .sort((a, b) => (b.deb?.hit_rate ?? 0) - (a.deb?.hit_rate ?? 0));
+
+  return (
+    <Panel title={isEn ? "Training Data" : "训练数据"}>
+      <div className="max-h-[300px] overflow-auto">
+        <table className="w-full text-[11px] border-collapse">
+          <thead>
+            <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
+              <th className="px-2 py-1.5 font-bold">{isEn ? "City" : "城市"}</th>
+              <th className="px-2 py-1.5 text-right font-bold">{isEn ? "Hit" : "命中"}</th>
+              <th className="px-2 py-1.5 text-right font-bold">MAE</th>
+              <th className="px-2 py-1.5 text-right font-bold">{isEn ? "Days" : "天"}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {debSorted.length ? debSorted.map((c) => (
+              <tr key={c.city_id} className="hover:bg-slate-50">
+                <td className="px-2 py-1 font-medium capitalize">{c.name}</td>
+                <td className="px-2 py-1 text-right">
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                    (c.deb?.hit_rate ?? 0) >= 60 ? "bg-emerald-50 text-emerald-700" :
+                    (c.deb?.hit_rate ?? 0) >= 30 ? "bg-amber-50 text-amber-700" :
+                    "bg-red-50 text-red-700"
+                  }`}>
+                    {(c.deb?.hit_rate ?? 0).toFixed(0)}%
+                  </span>
+                </td>
+                <td className="px-2 py-1 text-right font-mono">
+                  {(c.deb?.mae ?? 0).toFixed(1)}°
+                </td>
+                <td className="px-2 py-1 text-right text-slate-400">
+                  {c.deb?.total_days ?? 0}
+                </td>
+              </tr>
+            )) : (
+              <tr>
+                <td colSpan={4} className="px-2 py-6 text-center text-slate-400">
+                  {data === null ? (isEn ? "Loading..." : "加载中...") : (isEn ? "No data" : "无数据")}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
+  );
+}
 
 
 function ScanTerminalScreen() {

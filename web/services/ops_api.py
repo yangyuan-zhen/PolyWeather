@@ -984,7 +984,6 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
 
 
 def get_ops_training_accuracy(request: Request) -> Dict[str, Any]:
-    _require_ops(request)
     from src.analysis.deb_algorithm import get_deb_accuracy, get_mu_accuracy
     from src.data_collection.city_registry import CITY_REGISTRY
 
