@@ -16,20 +16,6 @@ import {
   UserRound,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart as ReBarChart,
-  CartesianGrid,
-  Line,
-  LineChart as ReLineChart,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import type { ProAccessState, ScanOpportunityRow } from "@/lib/dashboard-types";
 import { getInitialLocaleFromNavigator } from "@/lib/i18n";
 import { isBrowserLocalFullAccess } from "@/lib/local-dev-access";
@@ -59,6 +45,7 @@ import { scanRootClass } from "@/components/dashboard/scan-root-styles";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
 import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { GroupedMarketTable } from "@/components/dashboard/scan-terminal/GroupedMarketTable";
+import { LiveTemperatureThresholdChart } from "@/components/dashboard/scan-terminal/LiveTemperatureThresholdChart";
 import { rowName, pct, money, temp, edgeClass } from "@/components/dashboard/scan-terminal/utils";
 
 function createEmptyAccess(loading = true): ProAccessState {
@@ -154,13 +141,6 @@ const TERM = {
   primary: { en: "Primary", zh: "主信号" },
   ai: { en: "AI", zh: "AI" },
   closed: { en: "Closed", zh: "已关闭" },
-  terminalStatus: { en: "Terminal Status", zh: "终端状态" },
-  tsData: { en: "Data", zh: "数据" },
-  tsAccess: { en: "Access", zh: "访问权限" },
-  tsLayout: { en: "Layout", zh: "布局" },
-  tsLayoutValue: { en: "Multi-panel grid", zh: "多面板网格" },
-  tsDataLive: { en: "live", zh: "实时" },
-  tsAccessPaid: { en: "paid", zh: "付费" },
 } as const;
 
 function t(key: keyof typeof TERM, isEn: boolean) {
@@ -181,113 +161,6 @@ function decisionLabel(row?: ScanOpportunityRow | null) {
   if (value.includes("downgrade")) return "Downgrade";
   if (row?.tradable) return "Tradable";
   return "Monitor";
-}
-
-function decisionClass(label: string) {
-  const l = label.toLowerCase();
-  if (l.includes("approve") || l.includes("active") || l.includes("活跃")) {
-    return "bg-emerald-50 border-emerald-200 text-emerald-700";
-  }
-  if (l.includes("watch") || l.includes("观察") || l.includes("monitor")) {
-    return "bg-amber-50 border-amber-200 text-amber-700";
-  }
-  if (l.includes("veto") || l.includes("downgrade") || l.includes("closed") || l.includes("关闭")) {
-    return "bg-slate-50 border-slate-200 text-slate-500";
-  }
-  return "bg-blue-50 border-blue-200 text-blue-700";
-}
-
-
-function SparkArea({
-  color = "#2563eb",
-  data,
-  isEn = true,
-}: {
-  color?: string;
-  data: { v: number }[];
-  isEn?: boolean;
-}) {
-  if (!data.length) {
-    return (
-      <div className="flex h-full items-center justify-center text-xs text-slate-400">
-        {t("noData", isEn)}
-      </div>
-    );
-  }
-  return (
-    <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={data} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
-        <defs>
-          <linearGradient id={`fill-${color}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.18} />
-            <stop offset="100%" stopColor={color} stopOpacity={0.02} />
-          </linearGradient>
-        </defs>
-        <Area
-          type="monotone"
-          dataKey="v"
-          stroke={color}
-          strokeWidth={2}
-          fill={`url(#fill-${color})`}
-          dot={false}
-          isAnimationActive={false}
-        />
-      </AreaChart>
-    </ResponsiveContainer>
-  );
-}
-
-function ProbabilityDistributionChart({
-  points,
-  isEn = true,
-}: {
-  points?: ScanOpportunityRow["distribution_preview"];
-  isEn?: boolean;
-}) {
-  if (!points?.length) {
-    return (
-      <div className="flex h-full items-center justify-center text-xs text-slate-400">
-        {t("noDistributionData", isEn)}
-      </div>
-    );
-  }
-  const chartData = points.map((p) => ({
-    label: p.label || "",
-    model: Number((p.model_probability ?? 0) * 100),
-    market: Number((p.market_probability ?? 0) * 100),
-  }));
-  return (
-    <ResponsiveContainer width="100%" height="100%">
-      <ReBarChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 4 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-        <XAxis
-          dataKey="label"
-          tick={{ fontSize: 11, fill: "#64748b" }}
-          axisLine={{ stroke: "#e2e8f0" }}
-          tickLine={false}
-        />
-        <YAxis
-          tick={{ fontSize: 11, fill: "#64748b" }}
-          axisLine={false}
-          tickLine={false}
-          tickFormatter={(v) => `${v}%`}
-        />
-        <Tooltip
-          contentStyle={{
-            borderRadius: 4,
-            border: "1px solid #e2e8f0",
-            fontSize: 12,
-            fontFamily: "monospace",
-          }}
-          formatter={(value: unknown) =>
-            `${Number(value).toFixed(1)}%`
-          }
-        />
-        <Bar dataKey="model" fill="#2563eb" radius={[2, 2, 0, 0]} name={t("model", isEn)} />
-        <Bar dataKey="market" fill="#059669" radius={[2, 2, 0, 0]} name={t("mkt", isEn)} />
-      </ReBarChart>
-    </ResponsiveContainer>
-  );
 }
 
 function tablePrice(row: ScanOpportunityRow) {
@@ -418,317 +291,6 @@ function KoyfinMarketPanel({
         rows={rows}
         selectedId={selectedId}
       />
-    </Panel>
-  );
-}
-
-function performanceSeries(row: ScanOpportunityRow | null) {
-  return buildEvidenceChart(row).data;
-}
-
-type ObsPoint = { time?: string | null; temp?: number | null };
-
-type EvidenceSeries = {
-  key: string;
-  label: string;
-  source: string;
-  color: string;
-  dashed?: boolean;
-  featured?: boolean;
-  values: Array<number | null>;
-};
-
-type RunwayObsPayload = {
-  runway_pairs?: Array<[string, string] | string[] | null> | null;
-  temperatures?: Array<[number | null, number | null] | Array<number | null> | null> | null;
-  point_temperatures?: Array<{
-    runway?: string | null;
-    tdz_temp?: number | null;
-    mid_temp?: number | null;
-    end_temp?: number | null;
-  } | null> | null;
-};
-
-function validNumber(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function normalizeObs(points?: ObsPoint[] | null, limit = 88) {
-  return (points || [])
-    .filter((point) => validNumber(point.temp) !== null)
-    .slice(-limit)
-    .map((point, index) => ({
-      label: point.time || String(index + 1),
-      value: Number(point.temp),
-    }));
-}
-
-function formatChartLabel(value: string) {
-  if (!value) return "";
-  const maybeDate = new Date(value);
-  if (!Number.isNaN(maybeDate.getTime())) {
-    return maybeDate.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
-  }
-  return value.length > 8 ? value.slice(-8) : value;
-}
-
-const DAILY_CHART_HOURS = Array.from(
-  { length: 24 },
-  (_, index) => `${String(index).padStart(2, "0")}:00`,
-);
-
-function parseHourOfDay(value?: string | null) {
-  const raw = String(value || "").trim();
-  if (!raw) return null;
-  const parsed = new Date(raw);
-  if (!Number.isNaN(parsed.getTime())) {
-    return parsed.getHours();
-  }
-  const match = raw.match(/(?:^|\D)([01]?\d|2[0-3])[:：][0-5]\d/);
-  if (match?.[1] !== undefined) {
-    const hour = Number(match[1]);
-    return Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : null;
-  }
-  return null;
-}
-
-function seriesStats(values: Array<number | null>) {
-  const nums = values.filter((value): value is number => validNumber(value) !== null);
-  const latest = nums.length ? nums[nums.length - 1] : null;
-  const high = nums.length ? Math.max(...nums) : null;
-  const first15 = nums.length > 1 ? nums[Math.max(0, nums.length - 15)] : null;
-  const delta15 = latest !== null && first15 !== null ? latest - first15 : null;
-  return { latest, high, delta15 };
-}
-
-function buildModelPoints(row: ScanOpportunityRow | null, length: number) {
-  const modelEntries = Object.entries(row?.model_cluster_sources || {})
-    .map(([label, value]) => [label, validNumber(value)] as const)
-    .filter((entry): entry is readonly [string, number] => entry[1] !== null)
-    .slice(0, 4);
-  const constants: EvidenceSeries[] = modelEntries.map(([label, value], index) => ({
-    key: `model_${index}`,
-    label,
-    source: "Multi-model",
-    color: ["#2563eb", "#14b8a6", "#7c3aed", "#64748b"][index] || "#64748b",
-    dashed: true,
-    values: Array.from({ length }, () => value),
-  }));
-  const deb = validNumber(row?.deb_prediction);
-  if (deb !== null) {
-    constants.unshift({
-      key: "deb",
-      label: "DEB",
-      source: "DEB",
-      color: "#f97316",
-      dashed: true,
-      values: Array.from({ length }, () => deb),
-    });
-  }
-  return constants;
-}
-
-function extractRunwayPointSeries(row: ScanOpportunityRow | null, length: number): EvidenceSeries[] {
-  const payload = row as
-    | (ScanOpportunityRow & {
-        amos?: { runway_obs?: RunwayObsPayload | null; source_label?: string | null; source?: string | null } | null;
-        runway_obs?: RunwayObsPayload | null;
-      })
-    | null;
-  const runwayObs = payload?.amos?.runway_obs || payload?.runway_obs;
-  if (!runwayObs) return [];
-  const pairs = runwayObs.runway_pairs || [];
-  const runwayTemps = runwayObs.temperatures || [];
-  const pointTemps = runwayObs.point_temperatures || [];
-  const source = payload?.amos?.source_label || payload?.amos?.source || "Runway";
-  const series: EvidenceSeries[] = [];
-  pairs.forEach((pair, index) => {
-      const pairLabel = Array.isArray(pair) && pair.length
-        ? pair.filter(Boolean).join("/")
-        : pointTemps[index]?.runway || `RWY ${index + 1}`;
-      const values = [
-        ...(Array.isArray(runwayTemps[index]) ? runwayTemps[index] || [] : []),
-        pointTemps[index]?.tdz_temp,
-        pointTemps[index]?.mid_temp,
-        pointTemps[index]?.end_temp,
-      ]
-        .map(validNumber)
-        .filter((value): value is number => value !== null);
-      if (!values.length) return;
-      const maxTemp = Math.max(...values);
-      series.push({
-        key: `runway_${index}`,
-        label: `${pairLabel} runway`,
-        source,
-        color: ["#009688", "#f97316", "#0ea5e9", "#ef4444"][index] || "#64748b",
-        featured: index === 0,
-        dashed: index !== 0,
-        values: Array.from({ length }, () => maxTemp),
-      });
-    });
-  return series.slice(0, 4);
-}
-
-function buildEvidenceChart(row: ScanOpportunityRow | null) {
-  const settlement = normalizeObs(row?.settlement_today_obs || row?.metar_context?.settlement_today_obs);
-  const metar = normalizeObs(row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs);
-  const labels = DAILY_CHART_HOURS;
-  const length = labels.length;
-
-  const align = (points: Array<{ label: string; value: number }>) => {
-    if (!points.length) return Array.from({ length }, (): number | null => null);
-    const values = Array.from({ length }, (): number | null => null);
-    points.forEach((point, index) => {
-      const hour = parseHourOfDay(point.label);
-      const bucket = hour ?? Math.min(index, length - 1);
-      values[bucket] = point.value;
-    });
-    return values;
-  };
-
-  const series: EvidenceSeries[] = [];
-  series.push(...extractRunwayPointSeries(row, length));
-  if (settlement.length) {
-    series.push({
-      key: "settlement",
-      label: "Settlement runway",
-      source: row?.metar_context?.station_label || row?.metar_context?.station || row?.airport || "Settlement",
-      color: "#009688",
-      featured: true,
-      values: align(settlement),
-    });
-  }
-  if (metar.length) {
-    series.push({
-      key: "metar",
-      label: "METAR official",
-      source: row?.airport || row?.metar_context?.source || "METAR",
-      color: "#0ea5e9",
-      dashed: true,
-      values: align(metar),
-    });
-  }
-  series.push(...buildModelPoints(row, length));
-
-  const fallbackValue =
-    validNumber(row?.current_temp) ??
-    validNumber(row?.current_max_so_far) ??
-    validNumber(row?.deb_prediction) ??
-    validNumber(row?.target_value) ??
-    validNumber(row?.target_threshold);
-  if (!series.length && fallbackValue !== null) {
-    series.push({
-      key: "current",
-      label: "Current reference",
-      source: row?.metar_context?.source || "Live",
-      color: "#009688",
-      featured: true,
-      values: Array.from({ length }, () => fallbackValue),
-    });
-  }
-
-  const data = labels.map((label, index) => {
-    const point: Record<string, string | number | null> = { label };
-    series.forEach((item) => {
-      point[item.key] = item.values[index] ?? null;
-    });
-    return point;
-  });
-  return { data, series };
-}
-
-function NormalizedPerformancePanel({
-  isEn,
-  row,
-  rows = [],
-  onSelect,
-}: {
-  isEn: boolean;
-  row: ScanOpportunityRow | null;
-  rows?: ScanOpportunityRow[];
-  onSelect?: (row: ScanOpportunityRow) => void;
-}) {
-  const { data, series } = useMemo(() => buildEvidenceChart(row), [row]);
-  const threshold = validNumber(row?.target_threshold) ?? validNumber(row?.target_value);
-  const tableRows = series.slice(0, 5).map((item) => ({ ...item, ...seriesStats(item.values) }));
-  return (
-    <Panel
-      title={isEn ? "Live Temperature Trend & Option Threshold Lines" : "实时气温走势与期权阈值线"}
-    >
-      <div className="flex h-full min-h-[420px] flex-col">
-        <div className="shrink-0 border-b border-slate-200 bg-white px-3 py-2">
-          <div className="mb-2 flex items-end justify-between gap-3 text-[10px]">
-            <div className="space-y-0.5">
-              <div className="font-mono font-black text-teal-700">
-                {isEn ? "Settlement live" : "跑道实测"} {temp(validNumber(row?.current_temp))}
-              </div>
-              <div className="font-mono font-black text-blue-600">
-                METAR {temp(validNumber(row?.metar_context?.airport_current_temp ?? row?.metar_context?.last_temp))}
-              </div>
-            </div>
-            <div className="text-right font-mono font-black text-slate-800">
-              {isEn ? "Threshold" : "当日阈值"} {temp(threshold)}
-            </div>
-          </div>
-          <div className="grid grid-cols-5 gap-1.5 text-[10px]">
-            {tableRows.map((item) => (
-              <div key={item.key} className={clsx("rounded border px-2 py-1.5", item.featured ? "border-teal-200 bg-teal-50" : "border-slate-200 bg-slate-50")}>
-                <div className="flex items-center gap-1">
-                  <span className="h-1.5 w-4 rounded-full" style={{ backgroundColor: item.color }} />
-                  <span className="truncate font-black text-slate-700">{item.label}</span>
-                </div>
-                <div className="mt-1 grid grid-cols-3 gap-1 font-mono text-[9px] text-slate-600">
-                  <span>now: {temp(item.latest)}</span>
-                  <span>max: {temp(item.high)}</span>
-                  <span>15m: {item.delta15 === null ? "--" : `${item.delta15 >= 0 ? "+" : ""}${item.delta15.toFixed(1)}°`}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="relative min-h-0 flex-1 p-2">
-          <div className="absolute left-3 top-3 z-10 rounded border border-slate-200 bg-white px-2 py-1 text-[10px] font-black text-slate-800 shadow-sm">
-            {rowName(row)} <span className="ml-1 text-teal-600">{row?.target_label || row?.market_direction || ""}</span>
-          </div>
-          <ResponsiveContainer width="100%" height="100%">
-            <ReLineChart data={data} margin={{ top: 16, right: 28, left: 8, bottom: 8 }}>
-              <CartesianGrid stroke="#dbe6ef" strokeDasharray="2 2" />
-              <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#64748b" }} tickLine={false} axisLine={{ stroke: "#cbd5e1" }} />
-              <YAxis tick={{ fontSize: 10, fill: "#64748b" }} tickFormatter={(v) => `${Number(v).toFixed(1)}°`} orientation="right" axisLine={{ stroke: "#cbd5e1" }} tickLine={false} />
-              {threshold !== null && (
-                <ReferenceLine
-                  y={threshold}
-                  stroke="#f97316"
-                  strokeDasharray="4 3"
-                  label={{ value: `UMA ${threshold.toFixed(1)}°`, fill: "#f97316", fontSize: 10, position: "right" }}
-                />
-              )}
-              <Tooltip
-                contentStyle={{
-                  border: "1px solid #cbd5e1",
-                  borderRadius: 4,
-                  fontSize: 11,
-                  boxShadow: "0 8px 24px rgba(15,23,42,.12)",
-                }}
-                formatter={(value: unknown) => `${Number(value).toFixed(2)}°`}
-              />
-              {series.map((item) => (
-                <Line
-                  key={item.key}
-                  dataKey={item.key}
-                  stroke={item.color}
-                  strokeWidth={item.featured ? 2.4 : 1.4}
-                  strokeDasharray={item.dashed ? "4 3" : undefined}
-                  dot={false}
-                  isAnimationActive={false}
-                  name={item.label}
-                  type="stepAfter"
-                />
-              ))}
-            </ReLineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
     </Panel>
   );
 }
@@ -1087,12 +649,7 @@ function PolyWeatherTerminal({
             </div>
 
             <div className="grid min-h-0 grid-rows-[auto_1fr_0.38fr] gap-2">
-              <NormalizedPerformancePanel
-                isEn={isEn}
-                onSelect={setSelectedRow}
-                row={selectedRow}
-                rows={topRows}
-              />
+              <LiveTemperatureThresholdChart isEn={isEn} row={selectedRow} />
             </div>
 
             <div className="flex min-h-0 flex-col gap-2">
@@ -1120,34 +677,66 @@ function PolyWeatherTerminal({
                 selectedId={selectedRow?.id}
                 title={isEn ? "Watchlist & Risk" : "观察与风险"}
               />
-              <Panel title={t("terminalStatus", isEn)} className="shrink-0">
-                <div className="grid grid-cols-3 gap-1.5 p-2 text-center text-[10px]">
-                  {[
-                    [t("rows", isEn), filteredRegionRows.length],
-                    [t("avgEdge", isEn), pct(avgEdge)],
-                    [t("liquidity", isEn), money(totalLiquidity)],
-                    [t("tsData", isEn), generatedText || t("tsDataLive", isEn)],
-                    [t("tsAccess", isEn), t("tsAccessPaid", isEn)],
-                    [t("tsLayout", isEn), "Koyfin"],
-                  ].map(([label, value]) => (
-                    <div key={String(label)} className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5">
-                      <div className="truncate text-[9px] font-black uppercase text-slate-400">
-                        {label}
-                      </div>
-                      <div className="truncate font-mono font-black text-slate-800">
-                        {value}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Panel>
-
               <TrainingDataPanel isEn={isEn} />
+              <RegionalWhaleWatch isEn={isEn} rows={filteredRegionRows} />
             </div>
           </div>
         </main>
       </div>
     </div>
+  );
+}
+
+function RegionalWhaleWatch({
+  isEn,
+  rows,
+}: {
+  isEn: boolean;
+  rows: ScanOpportunityRow[];
+}) {
+  const regions = ["americas", "europe", "asia_pacific", "middle_east_africa"];
+  const regionLabels: Record<string, string> = {
+    americas: isEn ? "Americas" : "美洲",
+    europe: isEn ? "Europe" : "欧洲",
+    asia_pacific: isEn ? "Asia-Pacific" : "亚太",
+    middle_east_africa: isEn ? "ME & Africa" : "中东非洲",
+  };
+  const topByRegion = regions.map((region) => {
+    const regionRows = rows
+      .filter((row) => row.trading_region === region)
+      .sort((a, b) => (Number(b.volume || b.book_liquidity || 0)) - (Number(a.volume || a.book_liquidity || 0)))
+      .slice(0, 3);
+    return { region, label: regionLabels[region] || region, rows: regionRows };
+  }).filter((r) => r.rows.length > 0);
+
+  if (!topByRegion.length) return null;
+
+  return (
+    <Panel title={isEn ? "Whale Watch" : "巨鲸盯盘"}>
+      <div className="divide-y divide-slate-100 text-[11px]">
+        {topByRegion.map(({ region, label, rows: regionRows }) => (
+          <div key={region} className="py-1.5 px-2">
+            <div className="mb-1 text-[10px] font-black uppercase text-slate-400">{label}</div>
+            {regionRows.map((row) => {
+              const vol = Number(row.volume || row.book_liquidity || 0);
+              return (
+                <div key={row.id} className="flex items-center justify-between py-0.5">
+                  <span className="font-semibold text-slate-800 truncate max-w-[120px]">
+                    {row.city_display_name || row.city}
+                  </span>
+                  <span className="text-[10px] text-slate-500 truncate max-w-[100px] text-right">
+                    {row.target_label || row.market_question?.slice(0, 30) || "--"}
+                  </span>
+                  <span className="ml-2 font-mono text-[10px] font-bold text-blue-700 shrink-0">
+                    {vol >= 1000 ? `$${(vol / 1000).toFixed(1)}K` : `$${Math.round(vol)}`}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </Panel>
   );
 }
 
