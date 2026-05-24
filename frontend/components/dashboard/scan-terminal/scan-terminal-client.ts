@@ -264,6 +264,7 @@ async function getTerminal({
     time_range: "today",
     limit: "36",
     force_refresh: String(forceRefresh),
+    skip_polymarket: "true",
   });
   if (forceRefresh) {
     params.set("_ts", String(Date.now()));
