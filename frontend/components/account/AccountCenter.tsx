@@ -1148,6 +1148,7 @@ export function AccountCenter() {
   const openTelegramBotBindLink = async () => {
     setTelegramBindOpening(true);
     setPaymentError("");
+    const popup = window.open("about:blank", "_blank", "noopener,noreferrer");
     try {
       const authHeaders = await buildAuthedHeaders(true, false);
       const res = await fetch("/api/auth/telegram/bot-bind-link", {
@@ -1161,11 +1162,16 @@ export function AccountCenter() {
       const data = (await res.json()) as { bot_url?: string };
       const botUrl = String(data.bot_url || "").trim();
       if (!botUrl) throw new Error("telegram bind link missing");
-      window.open(botUrl, "_blank", "noopener,noreferrer");
+      if (popup && !popup.closed) {
+        popup.location.href = botUrl;
+      } else {
+        window.open(botUrl, "_blank", "noopener,noreferrer");
+      }
       setPaymentInfo(
         "已打开 Telegram Bot，请在 Bot 内点击 Start 并确认绑定；完成后刷新本页再申请入群。",
       );
     } catch (error) {
+      if (popup && !popup.closed) popup.close();
       setPaymentError(normalizePaymentError(error).message);
     } finally {
       setTelegramBindOpening(false);
