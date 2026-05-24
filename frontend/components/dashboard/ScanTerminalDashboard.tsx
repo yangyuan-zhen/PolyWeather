@@ -31,6 +31,7 @@ import {
   getGapColor,
   getSignalLabel,
   getSignalState,
+  TRADING_REGIONS,
 } from "@/components/dashboard/scan-terminal/continent-grouping";
 import { MobileCityCard } from "@/components/dashboard/scan-terminal/MobileCityCard";
 import { MobileRegionTabs } from "@/components/dashboard/scan-terminal/MobileRegionTabs";
@@ -346,6 +347,7 @@ function PolyWeatherTerminal({
   }, [searchInputRef, setSearchQuery]);
   const [navExpanded, setNavExpanded] = useState(false);
   const [activeNavKey, setActiveNavKey] = useState<string>("contracts");
+  const [selectedRegionKey, setSelectedRegionKey] = useState<string>("east_asia");
 
   const NAV_ITEMS = [
     { key: "contracts", Icon: Table2, labelEn: "Contracts", labelZh: "天气合约" },
@@ -358,12 +360,15 @@ function PolyWeatherTerminal({
   ];
 
   const filteredRegionRows = useMemo(() => {
-    return rows.filter(
-      (row) =>
-        String(row.trading_region).toLowerCase() === "east_asia" &&
-        row.is_primary_signal !== false,
-    );
-  }, [rows]);
+    const byRegion =
+      selectedRegionKey === "all"
+        ? rows
+        : rows.filter(
+            (row) =>
+              String(row.trading_region).toLowerCase() === selectedRegionKey,
+          );
+    return byRegion.filter((row) => row.is_primary_signal !== false);
+  }, [rows, selectedRegionKey]);
 
   const watchRows = useMemo(() => {
     return filteredRegionRows
@@ -561,6 +566,28 @@ function PolyWeatherTerminal({
         </header>
 
         <main className="min-h-0 flex-1 overflow-hidden flex flex-col p-2 bg-[#eef2f6]">
+          {/* Region tabs */}
+          <div className="flex shrink-0 items-center gap-1 overflow-x-auto rounded-[4px] border border-[#cfd6df] bg-white p-1 mb-2 scrollbar-none">
+            {TRADING_REGIONS.map((r) => ({
+                key: r.key,
+                labelEn: r.labelEn.toUpperCase(),
+                labelZh: r.labelZh,
+              })).map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setSelectedRegionKey(tab.key)}
+                className={clsx(
+                  "px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-[3px] transition-all whitespace-nowrap",
+                  selectedRegionKey === tab.key
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                )}
+              >
+                {isEn ? tab.labelEn : tab.labelZh}
+              </button>
+            ))}
+          </div>
           {/* Mobile layout */}
           <div className="flex flex-col gap-2 lg:hidden overflow-auto flex-1 pb-6">
             <MobileRegionTabs
@@ -643,7 +670,6 @@ function PolyWeatherTerminal({
                 selectedId={selectedRow?.id}
                 title={isEn ? "Watchlist & Risk" : "观察与风险"}
               />
-              <TrainingDataPanel isEn={isEn} />
               <RegionalWhaleWatch isEn={isEn} rows={filteredRegionRows} />
             </div>
           </div>
@@ -748,7 +774,7 @@ function RegionalWhaleWatch({
   );
 }
 
-function TrainingDataPanel({ isEn }: { isEn: boolean }) {
+function TrainingDashboard({ isEn }: { isEn: boolean }) {
   const [data, setData] = useState<Array<{
     city_id: string; name: string;
     deb?: { hit_rate: number; mae: number; total_days: number } | null;
