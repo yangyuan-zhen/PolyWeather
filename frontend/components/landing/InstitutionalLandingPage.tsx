@@ -154,6 +154,12 @@ function InstitutionalLandingScreen() {
               {isEn ? "Log in" : "登录"}
             </Link>
             <Link
+              href="/auth/login?next=%2Fterminal&mode=signup"
+              className="hidden rounded-lg bg-slate-950 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 sm:inline-flex"
+            >
+              {isEn ? "Sign Up" : "注册"}
+            </Link>
+            <Link
               href="/terminal"
               className="inline-flex items-center gap-2 rounded-lg border border-blue-700 bg-blue-600 px-3 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
             >

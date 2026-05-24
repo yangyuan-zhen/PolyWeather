@@ -40,6 +40,18 @@ export function LoginClient({ nextPath }: LoginClientProps) {
   const [resetSent, setResetSent] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const m = params.get("mode");
+      if (m === "signup") {
+        setMode("signup");
+      } else if (m === "login") {
+        setMode("login");
+      }
+    }
+  }, []);
+
   const supabaseReady = hasSupabasePublicEnv();
   const isLogin = mode === "login";
   const siteOrigin =
