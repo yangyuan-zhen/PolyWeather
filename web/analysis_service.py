@@ -1511,6 +1511,10 @@ def _analyze(
     peak_first = int(first_peak_h or 14)
     peak_last_h = int(last_peak_h or 17)
 
+    logger.info(
+        "BIAS_PRE city={} deb_val={} _current_temp={} _local_hour={} _max_so_far={}",
+        city, deb_val, _current_temp, _local_hour, _max_so_far,
+    )
     if (
         deb_val is not None
         and _current_temp is not None
