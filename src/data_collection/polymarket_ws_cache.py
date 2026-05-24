@@ -277,6 +277,8 @@ class PolymarketWsQuoteCache:
         except Exception:
             return
 
+        logger.info("WS_MSG {}", str(raw)[:200])
+
         if isinstance(payload, list):
             for item in payload:
                 self._handle_event(item)
