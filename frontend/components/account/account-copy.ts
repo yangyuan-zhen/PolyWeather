@@ -176,5 +176,151 @@ export function createAccountCopy(isEn: boolean): Record<string, string> {
       chainSwitchPrompt: isEn
         ? "Please manually switch to Polygon network in your wallet and try again."
         : "请在钱包中手动切换到 Polygon 网络后再试。",
+      // ── Payment status messages ──────────────────────────────────────
+      orderAlreadyPaid: isEn
+        ? "This order is already paid. Restoring subscription..."
+        : "该订单已支付，正在恢复订阅...",
+      orderExpired: isEn
+        ? "Payment order expired (valid for 30 minutes). Please create a new order."
+        : "支付订单已过期（30分钟有效），请重新创建订单。",
+      paymentConfirmed: isEn
+        ? "Payment confirmed. Transaction: {txHash}"
+        : "支付确认成功，交易: {txHash}",
+      txSubmitted: isEn
+        ? "Transaction submitted: {txHash}, confirming on chain (status: {status})..."
+        : "交易已提交: {txHash}，正在链上确认（状态: {status}）...",
+      paymentPendingTimeout: isEn
+        ? "Payment pending timeout."
+        : "支付等待超时。",
+      approvalDetected: isEn
+        ? "Insufficient allowance detected. Requesting {symbol} approval..."
+        : "检测到授权不足，正在发起 {symbol} 授权...",
+      approvalDone: isEn
+        ? "{symbol} approval successful. Sending payment..."
+        : "{symbol} 授权成功，正在发起支付...",
+      approvalSufficient: isEn
+        ? "Allowance sufficient. Sending payment..."
+        : "授权额度充足，正在发起支付...",
+      approvalDoneCancelled: isEn
+        ? "{symbol} approval completed. This payment was cancelled. You can pay again."
+        : "{symbol} 授权已完成，本次支付已取消，可直接再次点击支付。",
+      approvalDoneRetry: isEn
+        ? "{symbol} approval completed but payment incomplete. Please retry."
+        : "{symbol} 授权已完成，但支付未完成，请重试。",
+      paymentConfigUpdated: isEn
+        ? "Payment config updated. Switched to latest address {address}."
+        : "检测到支付配置已更新，已切换到最新地址 {address}。",
+      currentReceiver: isEn
+        ? "Current receiver contract: {address}"
+        : "当前收款合约: {address}",
+      manualOrderCreated: isEn
+        ? "Manual transfer order created. Please send {amount} USDC to the receiver on Polygon network. Then submit your tx hash below."
+        : "手动转账订单已创建：请在 Polygon 网络转 {amount} USDC 到收款地址。完成后在下方提交 tx hash。",
+      manualOrderRequired: isEn
+        ? "Please create a manual transfer order first."
+        : "请先创建手动转账订单。",
+      txHashRequired: isEn
+        ? "Please enter a valid tx hash."
+        : "请输入有效的 tx hash。",
+      verifying: isEn ? "Verifying..." : "验证中...",
+      verifyAddressMatch: isEn
+        ? "Receiver address and amount match"
+        : "收款地址和金额匹配",
+      verifyTxNotMined: isEn
+        ? "Transaction not yet mined. Please wait."
+        : "交易未上链，请等待",
+      verifyAddressMismatch: isEn
+        ? "Receiver address mismatch! Please transfer to the correct receiver address."
+        : "收款地址不匹配！请转账到正确的收款地址。",
+      verifyAmountLow: isEn
+        ? "Transfer amount is insufficient."
+        : "转账金额不足",
+      verifyTxReverted: isEn
+        ? "This transaction was reverted."
+        : "该交易已回滚",
+      verifyFailed: isEn ? "Verification failed: " : "验证失败: ",
+      verifyUnknown: isEn ? "Unknown error" : "未知错误",
+      // ── Telegram bind messages ────────────────────────────────────────
+      telegramVerifySuccess: isEn
+        ? "Telegram group membership verified. Current membership price: {amount} U."
+        : "Telegram 群成员验证成功，当前会员价 {amount}U。",
+      telegramBindClickHint: isEn
+        ? "Open the Telegram Bot, click Start, and confirm binding. Then refresh this page to request group entry."
+        : "已打开 Telegram Bot，请在 Bot 内点击 Start 并确认绑定；完成后刷新本页再申请入群。",
+      telegramPopupBlocked: isEn
+        ? "Popup blocked. Please click the link below to complete binding:"
+        : "弹窗被拦截，请点击下方链接完成绑定：",
+      telegramBindFailed: isEn
+        ? "Failed to create Telegram bind link"
+        : "创建 Telegram 绑定链接失败",
+      telegramBindLinkMissing: isEn
+        ? "Telegram bind link missing"
+        : "Telegram 绑定链接缺失",
+      // ── Wallet errors ──────────────────────────────────────────────────
+      noWalletProvider: isEn
+        ? "No EVM wallet provider found"
+        : "未检测到 EVM 钱包插件",
+      txReverted: isEn
+        ? "Transaction reverted: {txHash}"
+        : "交易已回滚: {txHash}",
+      txConfirmTimeout: isEn
+        ? "Transaction confirmation timeout: {txHash}"
+        : "交易确认超时: {txHash}",
+      queryIntentFailed: isEn
+        ? "Query intent failed: {raw}"
+        : "查询支付意向失败: {raw}",
+      paymentStatus: isEn ? "Payment {status}" : "支付状态: {status}",
+      createIntentFailed: isEn
+        ? "Create intent failed: {raw}"
+        : "创建支付意向失败: {raw}",
+      intentPayloadInvalid: isEn
+        ? "Intent payload invalid"
+        : "支付意向数据无效",
+      intentTokenInvalid: isEn
+        ? "Intent token/amount invalid"
+        : "支付币种或金额无效",
+      submitTxFailed: isEn
+        ? "Submit transaction failed: {raw}"
+        : "提交交易失败: {raw}",
+      confirmFailed: isEn
+        ? "Confirm failed: {raw}"
+        : "确认失败: {raw}",
+      createManualIntentFailed: isEn
+        ? "Create manual intent failed: {raw}"
+        : "创建手动转账订单失败: {raw}",
+      manualPaymentInvalid: isEn
+        ? "Manual payment payload invalid"
+        : "手动转账数据无效",
+      bindFailed: isEn ? "Bind failed: {raw}" : "绑定失败: {raw}",
+      challengeFailed: isEn
+        ? "Challenge failed: {raw}"
+        : "钱包验证挑战失败: {raw}",
+      challengeInvalid: isEn
+        ? "Challenge payload invalid"
+        : "验证挑战数据无效",
+      verifyFailedRaw: isEn ? "Verify failed: {raw}" : "钱包验证失败: {raw}",
+      httpError: isEn ? "HTTP {status} {raw}" : "HTTP 错误 {status}: {raw}",
+      loadConfigFailed: isEn
+        ? "Load payment config failed: {raw}"
+        : "加载支付配置失败: {raw}",
+      // ── Points / Footer ────────────────────────────────────────────────
+      pointsRule: isEn
+        ? "Points rule: active messages in group (anti-spam) + daily first message bonus. Weekly leaderboard settles every Monday midnight. All active members receive participation awards."
+        : "积分规则：群内有效发言（自动防刷检测）+ 每日首条发言额外奖励。每周一零点结算周榜，所有活跃用户均享参与奖。",
+      pointsDiscount: isEn
+        ? "Available: {points} points discounting ${amount}. Applied automatically on renewal."
+        : "当前可用 {points} 积分抵扣 ${amount}，续费时会自动生效。",
+      footerEngine: isEn
+        ? "PolyWeather Global Meteorological Engine · Powered by AI"
+        : "PolyWeather 全球气象引擎 · AI 驱动",
+      binanceBindHint: isEn
+        ? "Binance extension bound. If payment is stuck, please use WalletConnect QR payment."
+        : "Binance 扩展已绑定；如支付卡住，请优先使用 WalletConnect 扫码支付。",
+      walletBound: isEn
+        ? "{label} bound: {address}. You can now pay to activate your subscription."
+        : "{label} 已绑定: {address}。现在可点击「立即订阅并激活服务」。",
+      walletBoundSuccess: isEn
+        ? "{label} bound: {address}."
+        : "{label} 绑定成功: {address}。",
     };
 }
