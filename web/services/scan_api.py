@@ -46,9 +46,10 @@ async def get_scan_terminal_payload(
     time_range: str = "today",
     limit: int = 25,
     force_refresh: bool = False,
+    region: str = "",
 ) -> Dict[str, Any]:
     legacy_routes._assert_entitlement(request)
-    filters = {
+    filters: Dict[str, Any] = {
         "scan_mode": scan_mode,
         "min_price": min_price,
         "max_price": max_price,
@@ -59,6 +60,8 @@ async def get_scan_terminal_payload(
         "time_range": time_range,
         "limit": limit,
     }
+    if region:
+        filters["trading_region"] = region
     return await run_in_threadpool(
         legacy_routes.build_scan_terminal_payload,
         filters,

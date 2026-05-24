@@ -26,6 +26,7 @@ async def scan_terminal(
     time_range: str = "today",
     limit: int = 25,
     force_refresh: bool = False,
+    region: str = "",
 ):
     return await get_scan_terminal_payload(
         request,
@@ -39,6 +40,7 @@ async def scan_terminal(
         time_range=time_range,
         limit=limit,
         force_refresh=force_refresh,
+        region=region if region else None,
     )
 
 
