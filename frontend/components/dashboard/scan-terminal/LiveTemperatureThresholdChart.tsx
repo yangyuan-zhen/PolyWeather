@@ -279,6 +279,22 @@ export function LiveTemperatureThresholdChart({
   const { data, series } = useMemo(() => buildEvidenceChart(row, hourly), [row, hourly]);
   const threshold = validNumber(row?.target_threshold) ?? validNumber(row?.target_value);
   const tableRows = series.slice(0, 5).map((item) => ({ ...item, ...seriesStats(item.values) }));
+  const marketTemperatures = useMemo(() => {
+    const buckets = row?.distribution_full?.length
+      ? row.distribution_full
+      : row?.distribution_preview;
+    if (!buckets?.length) return null;
+    const temps = buckets
+      .map((b) => validNumber(b.value))
+      .filter((v): v is number => v !== null)
+      .sort((a, b) => a - b);
+    if (!temps.length) return null;
+    const padding = temps.length > 1 ? temps[1] - temps[0] : 2;
+    return {
+      ticks: temps,
+      domain: [temps[0] - padding, temps[temps.length - 1] + padding] as [number, number],
+    };
+  }, [row]);
 
   return (
     <Panel title={isEn ? "Live Temperature Trend & Option Threshold Lines" : "实时气温走势与期权阈值线"}>
@@ -327,7 +343,14 @@ export function LiveTemperatureThresholdChart({
             <ReLineChart data={data} margin={{ top: 16, right: 28, left: 8, bottom: 8 }}>
               <CartesianGrid stroke="#dbe6ef" strokeDasharray="2 2" />
               <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#64748b" }} tickLine={false} axisLine={{ stroke: "#cbd5e1" }} interval={2} />
-              <YAxis tick={{ fontSize: 10, fill: "#64748b" }} tickFormatter={(v) => `${Number(v).toFixed(1)}°`} axisLine={{ stroke: "#cbd5e1" }} tickLine={false} />
+              <YAxis
+                tick={{ fontSize: 10, fill: "#64748b" }}
+                tickFormatter={(v) => `${Number(v).toFixed(1)}°`}
+                axisLine={{ stroke: "#cbd5e1" }}
+                tickLine={false}
+                domain={marketTemperatures?.domain ?? ["auto", "auto"]}
+                ticks={marketTemperatures?.ticks}
+              />
               {threshold !== null && (
                 <ReferenceLine
                   y={threshold}
