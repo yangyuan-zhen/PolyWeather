@@ -2709,6 +2709,23 @@ class PolymarketReadOnlyLayer:
         if not missing:
             return results
 
+        # Pre-warm WS cache: subscribe all missing tokens at once, then
+        # wait briefly for the first quotes to arrive.  Tokens that get
+        # WS data skip the REST fallback entirely.
+        self._ws_cache.subscribe(missing)
+        if self._ws_cache.enabled:
+            time.sleep(0.6)
+            for token_id in list(missing):
+                ws_data = self._ws_cache.get_market_data(token_id)
+                if ws_data:
+                    with self._lock:
+                        self._price_cache[token_id] = {"data": ws_data, "t": now}
+                    results[token_id] = ws_data
+                    missing.remove(token_id)
+
+        if not missing:
+            return results
+
         buy_map: Dict[str, float] = {}
         sell_map: Dict[str, float] = {}
         midpoint_map: Dict[str, float] = {}
