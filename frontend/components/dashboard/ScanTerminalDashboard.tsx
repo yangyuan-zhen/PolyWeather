@@ -19,6 +19,17 @@ import {
   UserRound,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart as ReBarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import type { ProAccessState, ScanOpportunityRow } from "@/lib/dashboard-types";
 import { getInitialLocaleFromNavigator } from "@/lib/i18n";
 import { isBrowserLocalFullAccess } from "@/lib/local-dev-access";
@@ -114,23 +125,91 @@ function decisionClass(label: string) {
   return "border-amber-200 bg-amber-50 text-amber-700";
 }
 
-function MiniSparkline({ tone = "blue" }: { tone?: "blue" | "emerald" | "red" }) {
-  const stroke =
-    tone === "emerald" ? "#059669" : tone === "red" ? "#dc2626" : "#2563eb";
+function SparkArea({
+  color = "#2563eb",
+  data,
+}: {
+  color?: string;
+  data: { v: number }[];
+}) {
+  if (!data.length) {
+    return (
+      <div className="flex h-full items-center justify-center text-xs text-slate-400">
+        No data
+      </div>
+    );
+  }
   return (
-    <svg viewBox="0 0 140 48" className="h-12 w-full" aria-hidden="true">
-      <path
-        d="M0 34 C18 16 30 38 45 24 S74 12 89 25 114 37 140 15"
-        fill="none"
-        stroke={stroke}
-        strokeWidth="2.4"
-      />
-      <path
-        d="M0 34 C18 16 30 38 45 24 S74 12 89 25 114 37 140 15 V48 H0 Z"
-        fill={stroke}
-        opacity="0.08"
-      />
-    </svg>
+    <ResponsiveContainer width="100%" height="100%">
+      <AreaChart data={data} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
+        <defs>
+          <linearGradient id={`fill-${color}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity={0.18} />
+            <stop offset="100%" stopColor={color} stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
+        <Area
+          type="monotone"
+          dataKey="v"
+          stroke={color}
+          strokeWidth={2}
+          fill={`url(#fill-${color})`}
+          dot={false}
+          isAnimationActive={false}
+        />
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
+function ProbabilityDistributionChart({
+  points,
+}: {
+  points?: ScanOpportunityRow["distribution_preview"];
+}) {
+  if (!points?.length) {
+    return (
+      <div className="flex h-full items-center justify-center text-xs text-slate-400">
+        No distribution data
+      </div>
+    );
+  }
+  const chartData = points.map((p) => ({
+    label: p.label || "",
+    model: Number((p.model_probability ?? 0) * 100),
+    market: Number((p.market_probability ?? 0) * 100),
+  }));
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <ReBarChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 4 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+        <XAxis
+          dataKey="label"
+          tick={{ fontSize: 11, fill: "#64748b" }}
+          axisLine={{ stroke: "#e2e8f0" }}
+          tickLine={false}
+        />
+        <YAxis
+          tick={{ fontSize: 11, fill: "#64748b" }}
+          axisLine={false}
+          tickLine={false}
+          tickFormatter={(v) => `${v}%`}
+        />
+        <Tooltip
+          contentStyle={{
+            borderRadius: 4,
+            border: "1px solid #e2e8f0",
+            fontSize: 12,
+            fontFamily: "monospace",
+          }}
+          formatter={(value: unknown) =>
+            `${Number(value).toFixed(1)}%`
+          }
+        />
+        <Bar dataKey="model" fill="#2563eb" radius={[2, 2, 0, 0]} name="Model" />
+        <Bar dataKey="market" fill="#059669" radius={[2, 2, 0, 0]} name="Market" />
+      </ReBarChart>
+    </ResponsiveContainer>
   );
 }
 
@@ -445,9 +524,23 @@ function KoyfinWeatherTerminal({
                     <div className="mb-2 text-xs font-black uppercase text-slate-500">
                       Intraday Performance
                     </div>
-                    <MiniSparkline
-                      tone={Number(selectedRow?.edge_percent || 0) >= 0 ? "emerald" : "red"}
-                    />
+                    <div className="h-20">
+                      <SparkArea
+                        color={
+                          Number(selectedRow?.edge_percent || 0) >= 0
+                            ? "#059669"
+                            : "#dc2626"
+                        }
+                        data={
+                          selectedRow?.distribution_preview?.map((p) => ({
+                            v:
+                              typeof p === "number"
+                                ? p
+                                : p.model_probability ?? 0,
+                          })) || []
+                        }
+                      />
+                    </div>
                     <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                       <span className="rounded bg-white p-2">
                         Edge <b className={edgeClass(selectedRow?.edge_percent)}>{pct(selectedRow?.edge_percent)}</b>
@@ -460,21 +553,14 @@ function KoyfinWeatherTerminal({
                 </div>
               </Panel>
 
-              <Panel title="Probability & Price Factors">
-                <div className="grid gap-2 p-3 md:grid-cols-3">
-                  {[
-                    ["Model Probability", selectedRow?.model_probability ?? selectedRow?.model_event_probability, "blue"],
-                    ["Market Probability", selectedRow?.market_probability ?? selectedRow?.market_event_probability, "emerald"],
-                    ["Peak Probability", selectedRow?.peak_probability, "red"],
-                  ].map(([label, value, tone]) => (
-                    <div key={String(label)} className="rounded border border-slate-200 bg-slate-50 p-3">
-                      <div className="mb-2 flex justify-between text-xs font-black uppercase text-slate-500">
-                        <span>{label}</span>
-                        <span>{pct(value)}</span>
-                      </div>
-                      <MiniSparkline tone={tone as "blue" | "emerald" | "red"} />
-                    </div>
-                  ))}
+              <Panel title="Probability Distribution">
+                <div className="h-48 p-2">
+                  <ProbabilityDistributionChart
+                    points={
+                      selectedRow?.distribution_preview ??
+                      selectedRow?.distribution_full
+                    }
+                  />
                 </div>
               </Panel>
 
