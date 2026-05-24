@@ -643,12 +643,111 @@ function KoyfinWeatherTerminal({
   );
 }
 
-function ProductAccessRequired({
-  isAuthenticated,
+// ─── Layer 2: Authenticated but no active subscription ───────────────────────
+// Shown inside the terminal shell after middleware has confirmed the user is
+// logged in (Layer 1). Presents a targeted upgrade prompt.
+function SubscriptionGate({ isEn }: { isEn: boolean }) {
+  const features = isEn
+    ? [
+        "Real-time METAR observations across 500+ stations",
+        "DEB forecast blends with 0–240h horizon",
+        "AI decision cards with Poly-score ranking",
+        "Historical backtesting & weather market signals",
+      ]
+    : [
+        "500+ 气象站实时 METAR 实况",
+        "DEB 智能融合预测（0–240 小时）",
+        "AI 决策卡片 + Poly-score 排名",
+        "历史回测与天气市场交易信号",
+      ];
+
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center bg-[#e9edf3] p-6">
+      <div className="w-full max-w-lg">
+        {/* Header badge */}
+        <div className="mb-6 flex items-center justify-center">
+          <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold uppercase tracking-wider text-amber-700">
+            <LockKeyhole size={12} />
+            {isEn ? "Pro Access Required" : "需要付费订阅"}
+          </span>
+        </div>
+
+        {/* Main card */}
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
+          {/* Card top band */}
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-6 text-white">
+            <h1 className="text-xl font-black tracking-tight">
+              {isEn
+                ? "Unlock the Weather Terminal"
+                : "解锁天气交易决策台"}
+            </h1>
+            <p className="mt-1 text-sm text-blue-100">
+              {isEn
+                ? "Your account is verified. One step away from full access."
+                : "账号已验证，只差一步即可获得完整访问权限。"}
+            </p>
+          </div>
+
+          <div className="p-8">
+            {/* Price */}
+            <div className="mb-6 flex items-baseline gap-1">
+              <span className="text-4xl font-black text-slate-900">$10</span>
+              <span className="text-base text-slate-500">
+                {isEn ? "/ month" : "/ 月"}
+              </span>
+            </div>
+
+            {/* Feature list */}
+            <ul className="mb-8 space-y-3">
+              {features.map((f) => (
+                <li key={f} className="flex items-start gap-3 text-sm text-slate-700">
+                  <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-blue-600 text-white">
+                    <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
+                      <path d="M1 3L3 5L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                  {f}
+                </li>
+              ))}
+            </ul>
+
+            {/* CTA */}
+            <Link
+              href="/account"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3.5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700"
+            >
+              <CreditCard size={16} />
+              {isEn ? "Subscribe Now — $10/mo" : "立即订阅 — $10/月"}
+            </Link>
+
+            <p className="mt-4 text-center text-[11px] text-slate-400">
+              {isEn
+                ? "Cancel anytime · No hidden fees · Instant access after payment"
+                : "随时取消 · 无隐藏费用 · 付款后立即解锁"}
+            </p>
+          </div>
+        </div>
+
+        {/* Back link */}
+        <div className="mt-5 text-center">
+          <Link
+            href="/"
+            className="text-xs text-slate-500 hover:text-slate-800 transition-colors"
+          >
+            ← {isEn ? "Back to product overview" : "返回产品介绍页"}
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Layer 1 fallback: Should not normally appear (middleware handles it) ─────
+// Shown only when middleware is not configured (no Supabase env).
+function UnauthenticatedGate({
   isEn,
   userLocalTime,
 }: {
-  isAuthenticated: boolean;
   isEn: boolean;
   userLocalTime: string;
 }) {
@@ -664,55 +763,71 @@ function ProductAccessRequired({
           <div className="font-mono text-sm text-slate-300">{userLocalTime}</div>
         </header>
         <section className="grid flex-1 place-items-center p-6">
-          <div className="w-full max-w-xl rounded border border-slate-300 bg-white p-8 text-center shadow-sm">
-            <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded bg-blue-50 text-blue-700">
-              <LockKeyhole size={28} />
+          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-lg">
+            <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-full bg-slate-100 text-slate-600">
+              <LogIn size={24} />
             </div>
-            <h1 className="text-2xl font-black">
-              {isAuthenticated
-                ? isEn
-                  ? "Subscription required"
-                  : "需要开通订阅"
-                : isEn
-                  ? "Sign in and subscribe to enter"
-                  : "登录并付费后进入产品"}
+            <h1 className="text-xl font-black text-slate-900">
+              {isEn ? "Sign in to continue" : "请先登录"}
             </h1>
-            <p className="mt-3 text-sm leading-6 text-slate-600">
-              {isAuthenticated
-                ? isEn
-                  ? "Your account is signed in, but the Koyfin-style weather terminal is locked until payment is active."
-                  : "你已登录，但 Koyfin 风格天气交易终端会在付款生效后解锁。"
-                : isEn
-                  ? "The landing page is public. The decision terminal is paid-only."
-                  : "落地页公开展示；天气交易决策台仅向付费用户开放。"}
+            <p className="mt-2 text-sm text-slate-500">
+              {isEn
+                ? "The weather terminal is for verified subscribers only."
+                : "天气决策台仅对已验证的付费用户开放。"}
             </p>
-            <div className="mt-6 flex flex-wrap justify-center gap-3">
-              {isAuthenticated ? (
-                <Link
-                  href="/account"
-                  className="inline-flex min-h-10 items-center gap-2 rounded border border-blue-700 bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-700"
-                >
-                  <CreditCard size={16} />
-                  {isEn ? "Subscribe in Account" : "去账户中心付费"}
-                </Link>
-              ) : (
-                <Link
-                  href="/auth/login?next=%2Fterminal"
-                  className="inline-flex min-h-10 items-center gap-2 rounded border border-blue-700 bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-700"
-                >
-                  <LogIn size={16} />
-                  {isEn ? "Log in to continue" : "登录后继续"}
-                </Link>
-              )}
-              <Link
-                href="/"
-                className="inline-flex min-h-10 items-center rounded border border-slate-300 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50"
-              >
-                {isEn ? "Product overview" : "产品介绍"}
-              </Link>
-            </div>
+            <Link
+              href="/auth/login?next=%2Fterminal"
+              className="mt-6 flex items-center justify-center gap-2 rounded-xl bg-slate-900 py-3 text-sm font-black text-white transition hover:bg-slate-700"
+            >
+              <LogIn size={15} />
+              {isEn ? "Log in" : "登录"}
+            </Link>
+            <Link
+              href="/auth/login?next=%2Fterminal&mode=signup"
+              className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-slate-300 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+            >
+              {isEn ? "Create an account" : "注册账号"}
+            </Link>
+            <Link
+              href="/"
+              className="mt-4 block text-xs text-slate-400 hover:text-slate-700 transition-colors"
+            >
+              {isEn ? "← Learn about PolyWeather" : "← 了解 PolyWeather"}
+            </Link>
           </div>
         </section>
+      </main>
+    </div>
+  );
+}
+
+/** Unified access gate — routes to the correct layer based on auth state */
+function ProductAccessRequired({
+  isAuthenticated,
+  isEn,
+  userLocalTime,
+}: {
+  isAuthenticated: boolean;
+  isEn: boolean;
+  userLocalTime: string;
+}) {
+  // Layer 1 fallback (middleware should catch this first in production)
+  if (!isAuthenticated) {
+    return <UnauthenticatedGate isEn={isEn} userLocalTime={userLocalTime} />;
+  }
+  // Layer 2: logged in, no subscription
+  return (
+    <div className="flex h-screen w-full bg-[#e9edf3] text-slate-950">
+      <aside className="w-[52px] bg-[#171d24]" />
+      <main className="flex flex-1 flex-col">
+        <header className="flex h-[64px] items-center justify-between bg-[#171d24] px-4 text-white">
+          <Link href="/" className="flex items-center gap-2 hover:opacity-90">
+            <img src="/logo.png" alt="PolyWeather" className="h-7 w-auto object-contain" />
+            <span className="text-sm font-semibold tracking-tight text-white/90">Terminal</span>
+          </Link>
+          <div className="font-mono text-sm text-slate-300">{userLocalTime}</div>
+        </header>
+        <SubscriptionGate isEn={isEn} />
       </main>
     </div>
   );
