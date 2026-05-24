@@ -936,47 +936,6 @@ function ScanTerminalScreen() {
   );
   const generatedText = useRelativeTime(terminalData?.generated_at ?? null);
 
-  const refreshAuth = useCallback(() => {
-    fetch("/api/auth/me", {
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json() as Promise<{
-          authenticated?: boolean;
-          user_id?: string | null;
-          subscription_active?: boolean | null;
-          subscription_plan_code?: string | null;
-          subscription_expires_at?: string | null;
-          subscription_total_expires_at?: string | null;
-          subscription_queued_days?: number | null;
-          points?: number | null;
-        }>;
-      })
-      .then((payload) => {
-        setProAccess({
-          loading: false,
-          authenticated: Boolean(payload.authenticated),
-          userId: payload.user_id ?? null,
-          subscriptionActive: payload.subscription_active === true,
-          subscriptionPlanCode: payload.subscription_plan_code ?? null,
-          subscriptionExpiresAt: payload.subscription_expires_at ?? null,
-          subscriptionTotalExpiresAt:
-            payload.subscription_total_expires_at ??
-            payload.subscription_expires_at ??
-            null,
-          subscriptionQueuedDays: Math.max(
-            0,
-            Number(payload.subscription_queued_days ?? 0),
-          ),
-          points: Number(payload.points ?? 0),
-          error: null,
-        });
-      })
-      .catch(() => {}); // keep current state on error
-  }, []);
-
   if (!hydrated || (proAccess.loading && !canUseLocalFullAccess)) {
     return (
       <ScanTerminalLoadingScreen
@@ -993,8 +952,6 @@ function ScanTerminalScreen() {
       <ProductAccessRequired
         isAuthenticated={isAuthenticated}
         isEn={isEn}
-        points={proAccess.points}
-        onPaid={refreshAuth}
         userLocalTime={userLocalTime}
       />
     );

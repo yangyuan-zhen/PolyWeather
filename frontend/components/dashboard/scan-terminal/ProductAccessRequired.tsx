@@ -1,10 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { LockKeyhole, CreditCard, LogIn } from "lucide-react";
-import { UnlockProOverlay } from "@/components/subscription/UnlockProOverlay";
-import { useTerminalPay } from "@/components/subscription/useTerminalPay";
 
 const ACCESS_TERM = {
   signInToContinue: { en: "Sign in to continue", zh: "请先登录" },
@@ -19,42 +16,7 @@ function t(key: keyof typeof ACCESS_TERM, isEn: boolean) {
 }
 
 // ─── Layer 2: Authenticated but no active subscription ───────────────────────
-function SubscriptionGate({
-  isEn,
-  points,
-  onPaid,
-}: {
-  isEn: boolean;
-  points: number;
-  onPaid: () => void;
-}) {
-  const [showOverlay, setShowOverlay] = useState(false);
-  const {
-    billing,
-    usePoints,
-    setUsePoints,
-    payBusy,
-    errorText,
-    infoText,
-    txHash,
-    chainId,
-    tokenSymbol,
-    walletAddress,
-    handlePay,
-  } = useTerminalPay({
-    points,
-    planPriceUsd: 10,
-    onPaid: () => {
-      setShowOverlay(false);
-      onPaid();
-    },
-    isEn,
-  });
-
-  const handleSubscribeClick = () => {
-    setShowOverlay(true);
-  };
-
+function SubscriptionGate({ isEn }: { isEn: boolean }) {
   const features = isEn
     ? [
         "Real-time METAR observations across 500+ stations",
@@ -72,7 +34,6 @@ function SubscriptionGate({
   return (
     <div className="flex flex-1 flex-col items-center justify-center bg-[#e9edf3] p-6">
       <div className="w-full max-w-lg">
-        {/* Header badge */}
         <div className="mb-6 flex items-center justify-center">
           <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold uppercase tracking-wider text-amber-700">
             <LockKeyhole size={12} />
@@ -80,9 +41,7 @@ function SubscriptionGate({
           </span>
         </div>
 
-        {/* Main card */}
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
-          {/* Card top band */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-6 text-white">
             <h1 className="text-xl font-black tracking-tight">
               {isEn
@@ -97,7 +56,6 @@ function SubscriptionGate({
           </div>
 
           <div className="p-8">
-            {/* Price */}
             <div className="mb-6 flex items-baseline gap-1">
               <span className="text-4xl font-black text-slate-900">$10</span>
               <span className="text-base text-slate-500">
@@ -105,7 +63,6 @@ function SubscriptionGate({
               </span>
             </div>
 
-            {/* Feature list */}
             <ul className="mb-8 space-y-3">
               {features.map((f) => (
                 <li key={f} className="flex items-start gap-3 text-sm text-slate-700">
@@ -119,15 +76,13 @@ function SubscriptionGate({
               ))}
             </ul>
 
-            {/* CTA */}
-            <button
-              type="button"
-              onClick={handleSubscribeClick}
+            <Link
+              href="/account"
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3.5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700"
             >
               <CreditCard size={16} />
               {t("subscribeNow", isEn)}
-            </button>
+            </Link>
 
             <p className="mt-4 text-center text-[11px] text-slate-400">
               {isEn
@@ -137,7 +92,6 @@ function SubscriptionGate({
           </div>
         </div>
 
-        {/* Back link */}
         <div className="mt-5 text-center">
           <Link
             href="/"
@@ -147,38 +101,6 @@ function SubscriptionGate({
           </Link>
         </div>
       </div>
-
-      {/* Payment overlay */}
-      {showOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <UnlockProOverlay
-            points={points}
-            planPriceUsd={10}
-            usePoints={usePoints}
-            billing={billing}
-            onToggleUsePoints={() => setUsePoints((prev) => !prev)}
-            onPay={() => void handlePay()}
-            onClose={() => setShowOverlay(false)}
-            payBusy={payBusy}
-            payLabel={
-              walletAddress
-                ? isEn
-                  ? "Subscribe & Activate"
-                  : "立即订阅并激活服务"
-                : isEn
-                  ? "Connect Wallet & Subscribe"
-                  : "连接钱包并订阅"
-            }
-            errorText={errorText || undefined}
-            infoText={infoText || undefined}
-            txHash={txHash || undefined}
-            chainId={chainId}
-            paymentTokenLabel={tokenSymbol}
-            locale={isEn ? "en-US" : "zh-CN"}
-            faqHref="/subscription-help"
-          />
-        </div>
-      )}
     </div>
   );
 }
@@ -241,18 +163,13 @@ function UnauthenticatedGate({
   );
 }
 
-/** Unified access gate — routes to the correct layer based on auth state */
 export function ProductAccessRequired({
   isAuthenticated,
   isEn,
-  points,
-  onPaid,
   userLocalTime,
 }: {
   isAuthenticated: boolean;
   isEn: boolean;
-  points: number;
-  onPaid: () => void;
   userLocalTime: string;
 }) {
   if (!isAuthenticated) {
@@ -269,7 +186,7 @@ export function ProductAccessRequired({
           </Link>
           <div className="font-mono text-sm text-slate-300">{userLocalTime}</div>
         </header>
-        <SubscriptionGate isEn={isEn} points={points} onPaid={onPaid} />
+        <SubscriptionGate isEn={isEn} />
       </main>
     </div>
   );

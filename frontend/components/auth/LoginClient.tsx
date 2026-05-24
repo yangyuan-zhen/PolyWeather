@@ -239,8 +239,14 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
     return (
       <div className="flex min-h-screen w-full flex-col lg:flex-row bg-[#f8fafc] font-sans text-slate-900">
         {/* Left Dark Column */}
-        <div className="relative flex flex-col justify-between bg-[#11161d] p-8 text-white lg:w-[480px] xl:w-[540px] shrink-0">
-          <div className="flex flex-col gap-12">
+        <div className="relative flex flex-col justify-between bg-[#0b0f19] p-8 text-white lg:w-[480px] xl:w-[540px] shrink-0 overflow-hidden border-r border-white/5">
+          {/* Ambient Glows */}
+          <div className="absolute -left-20 -top-20 h-80 w-80 rounded-full bg-blue-600/15 blur-[100px] pointer-events-none" />
+          <div className="absolute right-0 bottom-0 h-[300px] w-[300px] rounded-full bg-indigo-500/10 blur-[120px] pointer-events-none" />
+          {/* Grid overlay */}
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
+
+          <div className="relative z-10 flex flex-col gap-12">
             <Link href="/" className="flex items-center hover:opacity-90">
               <img src="/logo.png" alt="PolyWeather" className="h-8 w-auto object-contain" />
             </Link>
@@ -269,31 +275,48 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
             </div>
           </div>
 
-          <div className="mt-12 space-y-8">
-            <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                {copy.trusted}
-              </p>
-              <div className="grid grid-cols-2 gap-3 max-w-sm">
-                {[
-                  "Atmos Capital",
-                  "Celerity Risk",
-                  "Metis Trading",
-                  "Aviation Hedge",
-                ].map((name) => (
-                  <div
-                    key={name}
-                    className="flex h-9 items-center justify-center rounded border border-white/10 bg-white/5 text-xs font-medium text-slate-400"
-                  >
-                    {name}
-                  </div>
-                ))}
+          {/* Sleek Terminal Preview Widget */}
+          <div className="relative z-10 my-8 rounded-xl border border-white/10 bg-white/[0.02] p-5 backdrop-blur-md shadow-2xl max-w-sm">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="font-mono text-[10px] uppercase tracking-wider text-slate-400">
+                  {isEn ? "Runway 02L Settlement" : "跑道 02L 官方结算"}
+                </span>
+              </div>
+              <span className="font-mono text-[9px] font-black text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">LIVE</span>
+            </div>
+            
+            <div className="space-y-3 font-mono text-[11px]">
+              <div className="flex justify-between">
+                <span className="text-slate-400">{isEn ? "Current Temp:" : "当前气温:"}</span>
+                <span className="font-bold text-white">28.8°C</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">{isEn ? "UMA Threshold:" : "UMA 结算阈值:"}</span>
+                <span className="font-bold text-rose-400">30.0°C</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">{isEn ? "Model Probability:" : "模型预测概率:"}</span>
+                <span className="font-bold text-blue-400">88.5%</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">{isEn ? "Market Price:" : "市场买卖价差:"}</span>
+                <span className="font-bold text-white">$10.00</span>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <span className="text-yellow-500">⭐⭐⭐⭐⭐</span>
-              <span>4.9 out of 5 stars (G2 rating)</span>
+            {/* Sparkline visualization */}
+            <div className="mt-4 pt-3 border-t border-white/5">
+              <div className="flex items-end justify-between gap-1.5 h-12">
+                {[30, 45, 38, 52, 68, 85, 78, 92, 88].map((h, i) => (
+                  <div 
+                    key={i} 
+                    className="flex-1 rounded-t bg-gradient-to-t from-blue-600/30 to-blue-500/90 transition-all duration-300" 
+                    style={{ height: `${h}%` }} 
+                  />
+                ))}
+              </div>
             </div>
           </div>
         </div>
