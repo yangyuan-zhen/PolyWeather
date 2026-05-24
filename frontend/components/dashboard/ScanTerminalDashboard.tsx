@@ -936,17 +936,6 @@ function ScanTerminalScreen() {
   );
   const generatedText = useRelativeTime(terminalData?.generated_at ?? null);
 
-  if (!hydrated || (proAccess.loading && !canUseLocalFullAccess)) {
-    return (
-      <ScanTerminalLoadingScreen
-        isEn={isEn}
-        rootClassName={scanRootClass}
-        themeMode={themeMode}
-        userLocalTime={userLocalTime}
-      />
-    );
-  }
-
   const refreshAuth = useCallback(() => {
     fetch("/api/auth/me", {
       cache: "no-store",
@@ -987,6 +976,17 @@ function ScanTerminalScreen() {
       })
       .catch(() => {}); // keep current state on error
   }, []);
+
+  if (!hydrated || (proAccess.loading && !canUseLocalFullAccess)) {
+    return (
+      <ScanTerminalLoadingScreen
+        isEn={isEn}
+        rootClassName={scanRootClass}
+        themeMode={themeMode}
+        userLocalTime={userLocalTime}
+      />
+    );
+  }
 
   if (!isAuthenticated || !isPro) {
     return (
