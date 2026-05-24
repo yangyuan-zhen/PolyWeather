@@ -219,7 +219,7 @@ export function UnlockProOverlay({
               >
                 -${billing.discountAmount.toFixed(2)}
               </span>
-              <span className={s.discountSuffix}>off</span>
+              <span className={s.discountSuffix}>{isEn ? "off" : "减免"}</span>
             </div>
 
             <p className={s.pointsNote}>
@@ -438,7 +438,7 @@ export function UnlockProOverlay({
             <div>{infoText}</div>
             {txHref && (
               <Link href={txHref} target="_blank" className={s.txLink}>
-                查看链上交易
+                {isEn ? "View on-chain transaction" : "查看链上交易"}
                 <ExternalLink size={11} />
               </Link>
             )}
