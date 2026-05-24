@@ -357,7 +357,7 @@ function CityGroupedTable({
                     "cursor-pointer border-b border-slate-100 hover:bg-slate-50/80",
                     selectedId === best.id && "bg-blue-50/50"
                   )}
-                  onClick={() => onSelect(best)}
+                  onClick={() => { onSelect(best); if (hasMultiple) toggle(city); }}
                 >
                   <td className="px-2 py-1.5">
                     <button
