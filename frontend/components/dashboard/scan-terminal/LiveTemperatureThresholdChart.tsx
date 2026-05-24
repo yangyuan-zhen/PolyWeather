@@ -43,52 +43,44 @@ type RunwayObsPayload = {
   } | null> | null;
 };
 
-// Semi-hourly buckets for the 24-hour day — gives the chart enough resolution
-// without making the x-axis unreadable when showing a 12 hour window.
-const HALF_HOUR_SLOTS = Array.from({ length: 48 }, (_, i) => {
-  const h = Math.floor(i / 2);
-  const m = i % 2 === 0 ? "00" : "30";
-  return `${String(h).padStart(2, "0")}:${m}`;
-});
-
-const VISIBLE_WINDOW_HOURS = 12;
+// Sliding window: keep at most this many observation points (24h at 1-min ≈ 1440)
+const MAX_OBS_POINTS = 1440;
 
 function validNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function normalizeObs(points?: ObsPoint[] | null, limit = 88) {
-  return (points || [])
-    .filter((point) => validNumber(point.temp) !== null)
-    .slice(-limit)
-    .map((point, index) => ({
-      label: point.time || String(index + 1),
-      value: Number(point.temp),
-    }));
-}
-
-function parseTimeSlot(value?: string | null) {
+function toTimestamp(value?: string | null): number | null {
   const raw = String(value || "").trim();
   if (!raw) return null;
-  // Try ISO / full date first
-  const parsed = new Date(raw);
-  if (!Number.isNaN(parsed.getTime())) {
-    const h = parsed.getHours();
-    const m = parsed.getMinutes();
-    return h * 2 + (m >= 30 ? 1 : 0);
-  }
-  // Parse "HH:MM" or "HH：MM" or "HH:MM:SS"
-  const match = raw.match(/(?:^|\D)([01]?\d|2[0-3])[:：]([0-5]\d)/);
-  if (match?.[1] !== undefined && match?.[2] !== undefined) {
-    const h = Number(match[1]);
-    const m = Number(match[2]);
-    if (h >= 0 && h < 24) return h * 2 + (m >= 30 ? 1 : 0);
+  const d = new Date(raw);
+  if (!Number.isNaN(d.getTime())) return d.getTime();
+  // HH:MM or HH:MM:SS — treat as today
+  const m = raw.match(/(\d{1,2}):(\d{2})/);
+  if (m) {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), +m[1], +m[2]).getTime();
   }
   return null;
 }
 
+function formatTimestamp(ts: number): string {
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function normObs(points?: ObsPoint[] | null, limit = MAX_OBS_POINTS) {
+  return (points || [])
+    .filter((p) => validNumber(p.temp) !== null)
+    .slice(-limit)
+    .map((p, i) => ({
+      ts: toTimestamp(p.time) ?? (Date.now() - (limit - i) * 60_000),
+      value: Number(p.temp),
+    }));
+}
+
 function seriesStats(values: Array<number | null>) {
-  const nums = values.filter((value): value is number => validNumber(value) !== null);
+  const nums = values.filter((v): v is number => validNumber(v) !== null);
   const latest = nums.length ? nums[nums.length - 1] : null;
   const high = nums.length ? Math.max(...nums) : null;
   const first15 = nums.length > 1 ? nums[Math.max(0, nums.length - 15)] : null;
@@ -104,10 +96,97 @@ type HourlyForecast = {
   modelCurves?: Record<string, Array<number | null>>;
 } | null;
 
-function buildModelCurves(row: ScanOpportunityRow | null, length: number, hourly: HourlyForecast) {
-  const result: EvidenceSeries[] = [];
-  // Use hourly forecast data if available. Daily model highs are not plotted
-  // as curves because they are single terminal values, not a time series.
+// ── Build aligned data rows for the sliding-window chart ────────────────
+
+function buildSlidingChartData(
+  row: ScanOpportunityRow | null,
+  hourly: HourlyForecast,
+) {
+  const settlementObs = normObs(row?.settlement_today_obs || row?.metar_context?.settlement_today_obs);
+  const metarObs = normObs(row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs);
+
+  // Collect all timestamps from observations + forecasts
+  const allTimes = new Set<number>();
+
+  const pushObs = (obs: ReturnType<typeof normObs>) => {
+    obs.forEach((o) => allTimes.add(o.ts));
+  };
+  pushObs(settlementObs);
+  pushObs(metarObs);
+
+  // Forecast timestamps
+  const forecastTimes: number[] = [];
+  if (hourly?.times?.length && hourly?.temps?.length) {
+    hourly.times.forEach((t, i) => {
+      const ts = toTimestamp(t);
+      if (ts !== null && i < hourly.temps.length) {
+        allTimes.add(ts);
+        forecastTimes.push(ts);
+      }
+    });
+  }
+
+  // Runway obs
+  const runwayObs = (row as any)?.amos?.runway_obs || (row as any)?.runway_obs;
+  if (runwayObs) {
+    const pairs = runwayObs.runway_pairs || [];
+    const temps = runwayObs.temperatures || [];
+    pairs.forEach((_: any, idx: number) => {
+      const tArr = Array.isArray(temps[idx]) ? temps[idx] || [] : [];
+      tArr.forEach((tVal: unknown) => {
+        if (validNumber(tVal) !== null) allTimes.add(Date.now() - (MAX_OBS_POINTS - idx) * 60_000);
+      });
+    });
+  }
+
+  // Sort timestamps
+  const sorted = [...allTimes].sort((a, b) => a - b);
+  if (!sorted.length) return { data: [], series: [] };
+
+  // Build a lookup: timestamp → index in the sorted array
+  const tsToIdx = new Map<number, number>();
+  sorted.forEach((ts, i) => tsToIdx.set(ts, i));
+
+  const n = sorted.length;
+  const na = (): Array<number | null> => Array.from({ length: n }, () => null);
+
+  const series: EvidenceSeries[] = [];
+
+  // Settlement
+  const sVals = na();
+  settlementObs.forEach((o) => {
+    const idx = tsToIdx.get(o.ts);
+    if (idx !== undefined) sVals[idx] = o.value;
+  });
+  if (sVals.some((v) => v !== null)) {
+    series.push({
+      key: "settlement",
+      label: row?.metar_context?.station_label || row?.metar_context?.station || "Settlement",
+      source: row?.metar_context?.station || row?.airport || "Settlement",
+      color: "#009688",
+      featured: true,
+      values: sVals,
+    });
+  }
+
+  // METAR
+  const mVals = na();
+  metarObs.forEach((o) => {
+    const idx = tsToIdx.get(o.ts);
+    if (idx !== undefined) mVals[idx] = o.value;
+  });
+  if (mVals.some((v) => v !== null)) {
+    series.push({
+      key: "metar",
+      label: "METAR",
+      source: row?.airport || "METAR",
+      color: "#0ea5e9",
+      dashed: true,
+      values: mVals,
+    });
+  }
+
+  // DEB forecast curve
   if (hourly?.times?.length && hourly?.temps?.length) {
     const debPath = buildDebBaselinePath(
       hourly.times,
@@ -116,54 +195,83 @@ function buildModelCurves(row: ScanOpportunityRow | null, length: number, hourly
       hourly.localTime || row?.local_time,
       hourly.forecastTodayHigh,
     );
-    const values = Array.from({ length }, (): number | null => null);
+    const debVals = na();
     hourly.times.forEach((t, i) => {
-      const slot = parseTimeSlot(t);
-      if (slot !== null && slot >= 0 && slot < length && i < hourly.temps.length) {
-        values[slot] = validNumber(debPath.debTemps[i]);
+      const ts = toTimestamp(t);
+      const idx = ts !== null ? tsToIdx.get(ts) : undefined;
+      if (idx !== undefined && i < debPath.debTemps.length) {
+        debVals[idx] = validNumber(debPath.debTemps[i]);
       }
     });
-    if (values.some((v) => v !== null)) {
-      result.push({
+    if (debVals.some((v) => v !== null)) {
+      series.push({
         key: "hourly_forecast",
         label: "DEB Forecast",
         source: "DEB Hourly",
         color: "#f97316",
         featured: true,
         smooth: true,
-        values,
+        values: debVals,
       });
     }
 
-    // Per-model hourly curves from Open-Meteo multi-model API
+    // Per-model hourly curves
     if (hourly.modelCurves) {
       const modelColors = ["#2563eb", "#7c3aed", "#059669", "#d97706", "#dc2626", "#0891b2"];
       Object.keys(hourly.modelCurves).forEach((model, idx) => {
         const modelTemps = hourly.modelCurves![model];
         if (!modelTemps?.length) return;
-        const values = Array.from({ length }, (): number | null => null);
+        const vals = na();
         hourly.times.forEach((t, i) => {
-          const slot = parseTimeSlot(t);
-          if (slot !== null && slot >= 0 && slot < length && i < modelTemps.length) {
-            values[slot] = validNumber(modelTemps[i]);
-          }
+          const ts = toTimestamp(t);
+          const x = ts !== null ? tsToIdx.get(ts) : undefined;
+          if (x !== undefined && i < modelTemps.length) vals[x] = validNumber(modelTemps[i]);
         });
-        if (values.some((v) => v !== null)) {
-          result.push({
+        if (vals.some((v) => v !== null)) {
+          series.push({
             key: `model_curve_${model}`,
             label: model,
             source: "Multi-model hourly",
             color: modelColors[idx % modelColors.length],
             dashed: true,
             smooth: true,
-            values,
+            values: vals,
           });
         }
       });
     }
   }
-  return result;
+
+  // Fallback: if no series, use current temp as a flat line
+  if (!series.length) {
+    const fallback = validNumber(row?.current_temp) ?? validNumber(row?.deb_prediction) ?? validNumber(row?.target_threshold);
+    if (fallback !== null) {
+      const vals = na().map(() => fallback);
+      series.push({
+        key: "current",
+        label: "Current",
+        source: "Live",
+        color: "#009688",
+        featured: true,
+        values: vals,
+      });
+    }
+  }
+
+  // Build data rows: one per timestamp
+  const data = sorted.map((ts, i) => {
+    const point: Record<string, string | number | null> = {
+      label: formatTimestamp(ts),
+      ts,
+    };
+    series.forEach((s) => { point[s.key] = s.values[i]; });
+    return point;
+  });
+
+  return { data, series };
 }
+
+// ── Model summary cards (daily high point predictions) ─────────────────
 
 function buildModelSummaryCards(row: ScanOpportunityRow | null): EvidenceSeries[] {
   return Object.entries(row?.model_cluster_sources || {})
@@ -180,144 +288,12 @@ function buildModelSummaryCards(row: ScanOpportunityRow | null): EvidenceSeries[
     }));
 }
 
-function extractRunwayPointSeries(row: ScanOpportunityRow | null, length: number): EvidenceSeries[] {
-  const payload = row as
-    | (ScanOpportunityRow & {
-        amos?: { runway_obs?: RunwayObsPayload | null; source_label?: string | null; source?: string | null } | null;
-        runway_obs?: RunwayObsPayload | null;
-      })
-    | null;
-  const runwayObs = payload?.amos?.runway_obs || payload?.runway_obs;
-  if (!runwayObs) return [];
-  const pairs = runwayObs.runway_pairs || [];
-  const runwayTemps = runwayObs.temperatures || [];
-  const pointTemps = runwayObs.point_temperatures || [];
-  const source = payload?.amos?.source_label || payload?.amos?.source || "Runway";
-  const series: EvidenceSeries[] = [];
-
-  pairs.forEach((pair, index) => {
-    const pairLabel = Array.isArray(pair) && pair.length
-      ? pair.filter(Boolean).join("/")
-      : pointTemps[index]?.runway || `RWY ${index + 1}`;
-    const values = [
-      ...(Array.isArray(runwayTemps[index]) ? runwayTemps[index] || [] : []),
-      pointTemps[index]?.tdz_temp,
-      pointTemps[index]?.mid_temp,
-      pointTemps[index]?.end_temp,
-    ]
-      .map(validNumber)
-      .filter((value): value is number => value !== null);
-    if (!values.length) return;
-    const maxTemp = Math.max(...values);
-    series.push({
-      key: `runway_${index}`,
-      label: `${pairLabel} runway`,
-      source,
-      color: ["#009688", "#f97316", "#0ea5e9", "#ef4444"][index] || "#64748b",
-      featured: index === 0,
-      dashed: index !== 0,
-      values: Array.from({ length }, () => maxTemp),
-    });
-  });
-
-  return series.slice(0, 4);
-}
-
-function buildEvidenceChart(row: ScanOpportunityRow | null, hourly: HourlyForecast) {
-  const settlement = normalizeObs(row?.settlement_today_obs || row?.metar_context?.settlement_today_obs);
-  const metar = normalizeObs(row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs);
-  const labels = HALF_HOUR_SLOTS;
-  const length = labels.length;
-
-  const align = (points: Array<{ label: string; value: number }>) => {
-    if (!points.length) return Array.from({ length }, (): number | null => null);
-    const values = Array.from({ length }, (): number | null => null);
-    points.forEach((point, index) => {
-      const slot = parseTimeSlot(point.label);
-      const bucket = slot ?? Math.min(index, length - 1);
-      values[bucket] = point.value;
-    });
-    return values;
-  };
-
-  const series: EvidenceSeries[] = [];
-  series.push(...extractRunwayPointSeries(row, length));
-  if (settlement.length) {
-    series.push({
-      key: "settlement",
-      label: row?.metar_context?.station_label || row?.metar_context?.station || "Settlement station",
-      source: row?.metar_context?.station_label || row?.metar_context?.station || row?.airport || "Settlement",
-      color: "#009688",
-      featured: true,
-      values: align(settlement),
-    });
-  }
-  if (metar.length) {
-    series.push({
-      key: "metar",
-      label: "METAR official",
-      source: row?.airport || row?.metar_context?.source || "METAR",
-      color: "#0ea5e9",
-      dashed: true,
-      values: align(metar),
-    });
-  }
-  series.push(...buildModelCurves(row, length, hourly));
-
-  const fallbackValue =
-    validNumber(row?.current_temp) ??
-    validNumber(row?.current_max_so_far) ??
-    validNumber(row?.deb_prediction) ??
-    validNumber(row?.target_value) ??
-    validNumber(row?.target_threshold);
-  if (!series.length && fallbackValue !== null) {
-    series.push({
-      key: "current",
-      label: "Current reference",
-      source: row?.metar_context?.source || "Live",
-      color: "#009688",
-      featured: true,
-      values: Array.from({ length }, () => fallbackValue),
-    });
-  }
-
-  const data = labels.map((label, index) => {
-    const point: Record<string, string | number | null> = { label };
-    series.forEach((item) => {
-      point[item.key] = item.values[index] ?? null;
-    });
-    return point;
-  });
-  return { data, series };
-}
-
-function currentSlotForWindow(row: ScanOpportunityRow | null, hourly: HourlyForecast) {
-  const slot = parseTimeSlot(hourly?.localTime || row?.local_time);
-  if (slot !== null) return slot;
-  const now = new Date();
-  return now.getHours() * 2 + (now.getMinutes() >= 30 ? 1 : 0);
-}
-
-function buildMovingWindowData(
-  data: Array<Record<string, string | number | null>>,
-  row: ScanOpportunityRow | null,
-  hourly: HourlyForecast,
-) {
-  if (!data.length) return data;
-  const totalHalfHours = 48;
-  const windowSlots = VISIBLE_WINDOW_HOURS * 2; // 24 half-hour slots = 12 hours
-  const currentSlot = currentSlotForWindow(row, hourly);
-  const endSlot = Math.min(totalHalfHours - 1, Math.max(windowSlots - 1, currentSlot + 8));
-  const startSlot = Math.max(0, endSlot - windowSlots + 1);
-  return data.slice(startSlot, endSlot + 1);
-}
+// ── Market temperature ticks for Y-axis ─────────────────────────────────
 
 function parseTemperatureOptionsFromText(value?: string | null) {
   const raw = String(value || "");
   const matches = raw.match(/-?\d+(?:\.\d+)?/g) || [];
-  return matches
-    .map((item) => Number(item))
-    .filter((item) => Number.isFinite(item) && item > -80 && item < 80);
+  return matches.map(Number).filter((v) => Number.isFinite(v) && v > -80 && v < 80);
 }
 
 function buildMarketTemperatureOptions(row: ScanOpportunityRow | null) {
@@ -325,65 +301,38 @@ function buildMarketTemperatureOptions(row: ScanOpportunityRow | null) {
     ? row.distribution_full
     : row?.distribution_preview;
   const values = new Set<number>();
-  (buckets || []).forEach((bucket) => {
-    const value = validNumber(bucket.value);
-    if (value !== null) values.add(value);
-    parseTemperatureOptionsFromText(bucket.label).forEach((item) => values.add(item));
+  (buckets || []).forEach((b) => {
+    const v = validNumber(b.value);
+    if (v !== null) values.add(v);
+    parseTemperatureOptionsFromText(b.label).forEach((x) => values.add(x));
   });
-  [
-    row?.target_lower,
-    row?.target_upper,
-    row?.target_value,
-    row?.target_threshold,
-  ].forEach((value) => {
-    const numeric = validNumber(value);
-    if (numeric !== null) values.add(numeric);
-  });
-  parseTemperatureOptionsFromText(row?.target_label).forEach((item) => values.add(item));
-  parseTemperatureOptionsFromText(row?.market_question).forEach((item) => values.add(item));
+  [row?.target_lower, row?.target_upper, row?.target_value, row?.target_threshold]
+    .forEach((v) => { if (validNumber(v) !== null) values.add(validNumber(v)!); });
+  parseTemperatureOptionsFromText(row?.target_label).forEach((x) => values.add(x));
+  parseTemperatureOptionsFromText(row?.market_question).forEach((x) => values.add(x));
+
   const sorted = [...values].sort((a, b) => a - b);
   if (sorted.length) return sorted;
-  const threshold = validNumber(row?.target_threshold) ?? validNumber(row?.target_value);
-  if (threshold === null) return null;
-  return [threshold - 2, threshold - 1, threshold, threshold + 1, threshold + 2];
+  const t = validNumber(row?.target_threshold) ?? validNumber(row?.target_value);
+  if (t === null) return null;
+  return [t - 2, t - 1, t, t + 1, t + 2];
 }
 
 function buildChartDomain(
-  marketTicks: number[] | null,
+  ticks: number[] | null,
   series: EvidenceSeries[],
 ): [number, number] | ["auto", "auto"] {
-  const values = series
-    .flatMap((item) => item.values)
-    .filter((value): value is number => validNumber(value) !== null);
-  const domainValues = [...(marketTicks || []), ...values];
-  if (!domainValues.length) return ["auto", "auto"];
-  const min = Math.min(...domainValues);
-  const max = Math.max(...domainValues);
+  const vals = series.flatMap((s) => s.values).filter((v): v is number => validNumber(v) !== null);
+  const all = [...(ticks || []), ...vals];
+  if (!all.length) return ["auto", "auto"];
+  const min = Math.min(...all);
+  const max = Math.max(...all);
   const span = Math.max(1, max - min);
-  const padding = Math.max(0.5, span * 0.08);
-  return [Number((min - padding).toFixed(1)), Number((max + padding).toFixed(1))];
+  const pad = Math.max(0.5, span * 0.08);
+  return [Number((min - pad).toFixed(1)), Number((max + pad).toFixed(1))];
 }
 
-function buildProbRefLines(row: ScanOpportunityRow | null) {
-  const buckets = row?.distribution_full?.length
-    ? row.distribution_full
-    : row?.distribution_preview;
-  if (!buckets?.length) return [];
-  const maxProb = Math.max(...buckets.map((b) => b.model_probability ?? 0), 0.01);
-  return buckets
-    .filter((b) => validNumber(b.value) !== null && (b.model_probability ?? 0) > 0)
-    .map((b) => {
-      const prob = b.model_probability ?? 0;
-      const intensity = prob / maxProb; // 0..1
-      return {
-        y: b.value!,
-        prob,
-        stroke: `rgba(37, 99, 235, ${(0.12 + intensity * 0.55).toFixed(2)})`,
-        width: 0.6 + intensity * 2.4,
-        label: `${(prob * 100).toFixed(0)}%`,
-      };
-    });
-}
+// ── Main component ─────────────────────────────────────────────────────
 
 export function LiveTemperatureThresholdChart({
   isEn,
@@ -421,29 +370,24 @@ export function LiveTemperatureThresholdChart({
     return () => { cancelled = true; };
   }, [city]);
 
-  const { data, series } = useMemo(() => buildEvidenceChart(row, hourly), [row, hourly]);
-  const visibleData = useMemo(() => buildMovingWindowData(data, row, hourly), [data, row, hourly]);
+  const { data, series } = useMemo(() => buildSlidingChartData(row, hourly), [row, hourly]);
   const threshold = validNumber(row?.target_threshold) ?? validNumber(row?.target_value);
   const modelSummaryCards = useMemo(() => {
     const cards = buildModelSummaryCards(row);
-    // Exclude models that already show as hourly curves (from buildModelCurves)
     if (!hourly?.modelCurves) return cards;
     const curveKeys = new Set(Object.keys(hourly.modelCurves));
-    return cards.filter((card) => !curveKeys.has(card.label));
+    return cards.filter((c) => !curveKeys.has(c.label));
   }, [row, hourly]);
   const tableRows = [...series, ...modelSummaryCards]
     .slice(0, 5)
     .map((item) => ({ ...item, ...seriesStats(item.values) }));
-  const marketTemperatureTicks = useMemo(() => buildMarketTemperatureOptions(row), [row]);
-  const probRefLines = useMemo(() => buildProbRefLines(row), [row]);
-  const chartDomain = useMemo(
-    () => buildChartDomain(marketTemperatureTicks, series),
-    [marketTemperatureTicks, series],
-  );
+  const marketTicks = useMemo(() => buildMarketTemperatureOptions(row), [row]);
+  const chartDomain = useMemo(() => buildChartDomain(marketTicks, series), [marketTicks, series]);
 
   return (
     <Panel title={isEn ? "Live Temperature Trend & Option Threshold Lines" : "实时气温走势与期权阈值线"}>
       <div className="flex h-full min-h-[420px] flex-col">
+        {/* Stats bar */}
         <div className="shrink-0 border-b border-slate-200 bg-white px-3 py-2">
           <div className="mb-2 flex items-end justify-between gap-3 text-[10px]">
             <div className="space-y-0.5">
@@ -486,21 +430,34 @@ export function LiveTemperatureThresholdChart({
             ))}
           </div>
         </div>
+
+        {/* Chart */}
         <div className="relative min-h-0 flex-1 p-2">
           <div className="absolute left-3 top-3 z-10 rounded border border-slate-200 bg-white px-2 py-1 text-[10px] font-black text-slate-800 shadow-sm">
-            {rowName(row)} <span className="ml-1 text-teal-600">{row?.target_label || row?.market_direction || ""}</span>
+            {rowName(row)}
+            {row?.market_url ? (
+              <Link href={row.market_url} target="_blank" className="ml-1 text-blue-600 hover:underline">
+                <ExternalLink size={10} className="inline" />
+              </Link>
+            ) : null}
           </div>
           <ResponsiveContainer width="100%" height="100%">
-            <ReLineChart data={visibleData} margin={{ top: 16, right: 28, left: 8, bottom: 8 }}>
+            <ReLineChart data={data} margin={{ top: 16, right: 28, left: 8, bottom: 8 }}>
               <CartesianGrid stroke="#dbe6ef" strokeDasharray="2 2" />
-              <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#64748b" }} tickLine={false} axisLine={{ stroke: "#cbd5e1" }} interval={0} />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 10, fill: "#64748b" }}
+                tickLine={false}
+                axisLine={{ stroke: "#cbd5e1" }}
+                interval={Math.max(1, Math.floor(data.length / 8))}
+              />
               <YAxis
                 tick={{ fontSize: 10, fill: "#64748b" }}
                 tickFormatter={(v) => `${Number(v).toFixed(1)}°`}
                 axisLine={{ stroke: "#cbd5e1" }}
                 tickLine={false}
                 domain={chartDomain}
-                ticks={marketTemperatureTicks || undefined}
+                ticks={marketTicks ?? undefined}
               />
               {threshold !== null && (
                 <ReferenceLine
@@ -511,19 +468,6 @@ export function LiveTemperatureThresholdChart({
                   label={{ value: `${threshold.toFixed(1)}°`, fill: "#f97316", fontSize: 10, position: "left" }}
                 />
               )}
-              {probRefLines.map((item, i) => (
-                <ReferenceLine
-                  key={`prob-${i}`}
-                  y={item.y}
-                  stroke={item.stroke}
-                  strokeWidth={item.width}
-                  label={
-                    item.prob >= 0.15
-                      ? { value: item.label, fill: "#2563eb", fontSize: 9, position: "insideRight" }
-                      : undefined
-                  }
-                />
-              ))}
               <Tooltip
                 contentStyle={{
                   border: "1px solid #cbd5e1",
@@ -536,32 +480,20 @@ export function LiveTemperatureThresholdChart({
               {series.map((item) => (
                 <Line
                   key={item.key}
+                  type={item.smooth ? "monotone" : "linear"}
                   dataKey={item.key}
+                  name={item.label}
                   stroke={item.color}
-                  strokeWidth={item.featured ? 2.4 : 1.4}
+                  strokeWidth={item.featured ? 2 : 1}
                   strokeDasharray={item.dashed ? "4 3" : undefined}
                   dot={false}
+                  connectNulls={false}
                   isAnimationActive={false}
-                  name={item.label}
-                  type={item.smooth ? "monotone" : "stepAfter"}
                 />
               ))}
             </ReLineChart>
           </ResponsiveContainer>
         </div>
-        {row?.market_slug ? (
-          <div className="shrink-0 border-t border-slate-200 px-3 py-2">
-            <Link
-              href={`https://polymarket.com/event/${row.market_slug.replace(/-?\d+(?:-?\d+)*[cf](?:or\w+)?(?:for\w+)?$/i, "")}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-600 hover:text-blue-800 transition-colors"
-            >
-              <ExternalLink size={12} />
-              {isEn ? "View on Polymarket" : "在 Polymarket 查看"}
-            </Link>
-          </div>
-        ) : null}
       </div>
     </Panel>
   );
