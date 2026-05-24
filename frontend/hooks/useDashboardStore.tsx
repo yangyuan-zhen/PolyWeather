@@ -154,7 +154,16 @@ type StoredProAccessState = ProAccessState & {
 };
 
 function wait(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
+  return new Promise((resolve) => {
+    if (
+      typeof window !== "undefined" &&
+      typeof window.setTimeout === "function"
+    ) {
+      window.setTimeout(resolve, ms);
+      return;
+    }
+    resolve(undefined);
+  });
 }
 
 function getSubscriptionExpiryMs(access: Pick<
@@ -1147,6 +1156,12 @@ export function DashboardStoreProvider({
         }
       };
     }
+    if (
+      typeof window.setTimeout !== "function" ||
+      typeof window.clearTimeout !== "function"
+    ) {
+      return;
+    }
     const timer = window.setTimeout(schedule, 2000);
     return () => window.clearTimeout(timer);
   }, [cities.length]);
@@ -1351,10 +1366,15 @@ export function DashboardStoreProvider({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (selectedCity) {
-      window.localStorage.setItem(SELECTED_CITY_STORAGE_KEY, selectedCity);
-    } else {
-      window.localStorage.removeItem(SELECTED_CITY_STORAGE_KEY);
+    try {
+      if (!window.localStorage) return;
+      if (selectedCity) {
+        window.localStorage.setItem(SELECTED_CITY_STORAGE_KEY, selectedCity);
+      } else {
+        window.localStorage.removeItem(SELECTED_CITY_STORAGE_KEY);
+      }
+    } catch {
+      // Storage can be unavailable in embedded/private browser contexts.
     }
   }, [selectedCity]);
 
@@ -1368,7 +1388,11 @@ export function DashboardStoreProvider({
     if (typeof window === "undefined") return;
 
     hydratedSelectionRef.current = true;
-    window.localStorage.removeItem(SELECTED_CITY_STORAGE_KEY);
+    try {
+      window.localStorage?.removeItem(SELECTED_CITY_STORAGE_KEY);
+    } catch {
+      // Storage can be unavailable in embedded/private browser contexts.
+    }
   }, [cities, selectedCity]);
 
   const refreshSelectedCity = async () => {

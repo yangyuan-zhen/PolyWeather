@@ -20,7 +20,7 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "PolyWeather | Weather Intelligence",
   description:
-    "PolyWeather pro dashboard with global weather risk map and city analytics.",
+    "PolyWeather paid professional terminal for weather-market intelligence, city decision cards, and subscription-only analytics.",
   manifest: "/site.webmanifest",
   icons: {
     icon: [

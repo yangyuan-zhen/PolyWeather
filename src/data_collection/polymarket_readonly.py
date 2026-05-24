@@ -16,7 +16,7 @@ import re
 import threading
 import time
 import unicodedata
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
@@ -95,6 +95,14 @@ MARKET_CITY_SLUG_ALIASES: Dict[str, str] = {
     # under the user-facing Denver city name.
     "aurora": "denver",
 }
+
+
+def _city_local_date(city_key: str) -> str:
+    """Return ISO date string (YYYY-MM-DD) for the city's local timezone."""
+    city = CITY_REGISTRY.get(city_key, {})
+    tz_offset = city.get("tz_offset", 0)
+    local_dt = datetime.now(timezone.utc) + timedelta(seconds=tz_offset)
+    return local_dt.strftime("%Y-%m-%d")
 
 
 def _resolve_market_city_key(city_key: str) -> str:
@@ -2315,6 +2323,79 @@ class PolymarketReadOnlyLayer:
                 market["eventTitle"] = market.get("eventTitle") or event.get("title")
                 out.append(market)
         return out
+
+    def resolve_city_clob_tokens(self, city_key: str) -> List[Dict[str, Any]]:
+        """Resolve CLOB token IDs for a city using its local date."""
+        local_date = _city_local_date(city_key)
+        market_slug = self._build_weather_event_slug(city_key, local_date)
+        if not market_slug:
+            return []
+        markets = self._load_event_markets(market_slug)
+        tokens: List[Dict[str, Any]] = []
+        for m in markets:
+            clob_ids = _json_or_list(m.get("clobTokenIds"))
+            question = str(m.get("question") or "").strip()
+            prices = _json_or_list(m.get("outcomePrices"))
+            if len(clob_ids) < 2:
+                continue
+            tokens.append({
+                "city": city_key,
+                "local_date": local_date,
+                "question": question,
+                "slug": str(m.get("slug") or "").strip(),
+                "yes_token": clob_ids[0],
+                "no_token": clob_ids[1],
+                "yes_price": _safe_float(prices[0]) if len(prices) > 0 else None,
+                "no_price": _safe_float(prices[1]) if len(prices) > 1 else None,
+            })
+        return tokens
+
+    def resolve_all_cities_clob_tokens(
+        self,
+        cities: Optional[List[str]] = None,
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """Resolve CLOB tokens for all configured cities using local dates.
+
+        Returns dict keyed by city_key, each value is a list of bucket token dicts.
+        """
+        if cities is None:
+            cities = list(CITY_REGISTRY.keys())
+        result: Dict[str, List[Dict[str, Any]]] = {}
+        for city_key in cities:
+            try:
+                buckets = self.resolve_city_clob_tokens(city_key)
+                if buckets:
+                    result[city_key] = buckets
+                    logger.info(
+                        "polymarket market discovery city={} buckets={} date={}",
+                        city_key,
+                        len(buckets),
+                        buckets[0]["local_date"] if buckets else "N/A",
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "polymarket market discovery failed city={} error={}",
+                    city_key,
+                    exc,
+                )
+        return result
+
+    def collect_all_clob_token_ids(
+        self,
+        cities: Optional[List[str]] = None,
+    ) -> List[str]:
+        """Collect all unique YES/NO CLOB token IDs for the given cities."""
+        all_tokens = self.resolve_all_cities_clob_tokens(cities)
+        seen: set = set()
+        token_ids: List[str] = []
+        for city_buckets in all_tokens.values():
+            for bucket in city_buckets:
+                for key in ("yes_token", "no_token"):
+                    tid = str(bucket.get(key) or "").strip()
+                    if tid and tid not in seen:
+                        seen.add(tid)
+                        token_ids.append(tid)
+        return token_ids
 
     def _extract_market_bucket_label(
         self,

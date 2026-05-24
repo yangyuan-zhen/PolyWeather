@@ -37,6 +37,9 @@ export function useScanTerminalQuery({
       showLoading?: boolean;
     } = {}) => {
       if (proAccessLoading || !isPro) return;
+      if (typeof fetch !== "function" || typeof AbortController === "undefined") {
+        return;
+      }
       if (forceRefresh) {
         lastForcedScanRefreshAtRef.current = Date.now();
       }
@@ -75,6 +78,13 @@ export function useScanTerminalQuery({
 
   useEffect(() => {
     if (proAccessLoading || !isPro) return;
+    if (
+      typeof window === "undefined" ||
+      typeof window.setInterval !== "function" ||
+      typeof window.clearInterval !== "function"
+    ) {
+      return;
+    }
     const intervalId = window.setInterval(() => {
       if (
         !shouldRunAutoTerminalRefresh({

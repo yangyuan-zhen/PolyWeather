@@ -10,6 +10,13 @@ export function useUserLocalClock() {
 
   useEffect(() => {
     setUserLocalTime(formatUserLocalTime());
+    if (
+      typeof window === "undefined" ||
+      typeof window.setInterval !== "function" ||
+      typeof window.clearInterval !== "function"
+    ) {
+      return;
+    }
     const intervalId = window.setInterval(() => {
       setUserLocalTime(formatUserLocalTime());
     }, 10_000);

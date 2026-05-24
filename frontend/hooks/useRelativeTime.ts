@@ -23,12 +23,26 @@ export function useRelativeTime(isoString: string | null | undefined): string {
 
   useEffect(() => {
     if (!date) return;
-    const interval = setInterval(() => setTick((n) => n + 1), 30_000);
+    const canUseInterval =
+      typeof window !== "undefined" &&
+      typeof window.setInterval === "function" &&
+      typeof window.clearInterval === "function";
+    const canUseVisibility =
+      typeof document !== "undefined" &&
+      typeof document.addEventListener === "function" &&
+      typeof document.removeEventListener === "function";
+    const interval = canUseInterval
+      ? window.setInterval(() => setTick((n) => n + 1), 30_000)
+      : null;
     const onVisible = () => setTick((n) => n + 1);
-    document.addEventListener("visibilitychange", onVisible);
+    if (canUseVisibility) {
+      document.addEventListener("visibilitychange", onVisible);
+    }
     return () => {
-      clearInterval(interval);
-      document.removeEventListener("visibilitychange", onVisible);
+      if (interval != null) window.clearInterval(interval);
+      if (canUseVisibility) {
+        document.removeEventListener("visibilitychange", onVisible);
+      }
     };
   }, [date]);
 

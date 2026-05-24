@@ -54,9 +54,10 @@ export function getAnalyticsSessionId() {
 
 export function markAnalyticsOnce(key: string, scope: "local" | "session" = "session") {
   if (!isClient()) return false;
-  const storage = scope === "local" ? window.localStorage : window.sessionStorage;
   const normalizedKey = `polyweather:analytics:once:${key}`;
   try {
+    const storage = scope === "local" ? window.localStorage : window.sessionStorage;
+    if (!storage) return true;
     if (storage.getItem(normalizedKey) === "1") {
       return false;
     }

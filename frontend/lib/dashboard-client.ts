@@ -58,8 +58,14 @@ async function fetchJson<T>(
   options?: { cache?: RequestCache; timeoutMs?: number },
 ): Promise<T> {
   const timeoutMs = options?.timeoutMs;
-  const controller = timeoutMs ? new AbortController() : null;
-  const timeoutId = controller
+  const controller =
+    timeoutMs && typeof AbortController !== "undefined"
+      ? new AbortController()
+      : null;
+  const timeoutId =
+    controller &&
+    typeof window !== "undefined" &&
+    typeof window.setTimeout === "function"
     ? window.setTimeout(() => controller.abort(), timeoutMs)
     : null;
   const headers = await buildBrowserBackendHeaders({
@@ -80,7 +86,9 @@ async function fetchJson<T>(
     throw error;
   } finally {
     if (timeoutId != null) {
-      window.clearTimeout(timeoutId);
+      if (typeof window.clearTimeout === "function") {
+        window.clearTimeout(timeoutId);
+      }
     }
   }
 
@@ -222,7 +230,11 @@ function readLegacyCache(raw: string): CityCacheBundle {
 export const dashboardClient = {
   clearCityDetailCache() {
     if (!isClient()) return;
-    window.sessionStorage.removeItem(CACHE_KEY);
+    try {
+      window.sessionStorage?.removeItem(CACHE_KEY);
+    } catch {
+      // Storage can be unavailable in embedded/private browser contexts.
+    }
   },
 
   async getCities() {
@@ -232,13 +244,24 @@ export const dashboardClient = {
 
   sendPriorityWarmHint(timezone?: string | null) {
     if (!isClient()) return;
+    if (
+      typeof fetch !== "function" ||
+      typeof Intl === "undefined" ||
+      !window.sessionStorage
+    ) {
+      return;
+    }
     const tz = String(
       timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "",
     ).trim();
     if (!tz) return;
     const cacheKey = `${PRIORITY_WARM_SESSION_KEY}:${tz}`;
-    if (window.sessionStorage.getItem(cacheKey)) return;
-    window.sessionStorage.setItem(cacheKey, "1");
+    try {
+      if (window.sessionStorage.getItem(cacheKey)) return;
+      window.sessionStorage.setItem(cacheKey, "1");
+    } catch {
+      return;
+    }
     const params = new URLSearchParams({ timezone: tz });
     void fetch(`/api/system/priority-warm?${params.toString()}`, {
       method: "POST",
@@ -532,10 +555,11 @@ export const dashboardClient = {
     const entries = Object.fromEntries(
       topEntries.map((e) => [e.cityName, { cachedAt: e.cachedAt, detail: e.detail, revision: e.revision }]),
     );
-    window.sessionStorage.setItem(
-      CACHE_KEY,
-      JSON.stringify({ entries }),
-    );
+    try {
+      window.sessionStorage?.setItem(CACHE_KEY, JSON.stringify({ entries }));
+    } catch {
+      // Storage can be unavailable in embedded/private browser contexts.
+    }
   },
 
   writeCityDetailCache(data: Record<string, CityDetail>) {

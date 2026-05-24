@@ -3,12 +3,12 @@
 import clsx from "clsx";
 import Link from "next/link";
 import type { Dispatch, SetStateAction } from "react";
-import { LogIn, MessageCircle, Moon, Sun, UserRound } from "lucide-react";
+import { LogIn, UserRound } from "lucide-react";
 import { ProFeaturePaywall } from "@/components/dashboard/ProFeaturePaywall";
 import { LoadingSignal } from "@/components/dashboard/scan-terminal/LoadingSignal";
 import type { Locale } from "@/lib/i18n";
 
-export type ScanTerminalContentView = "city-list" | "analysis" | "map";
+export type ScanTerminalContentView = "city-list" | "analysis";
 
 type ThemeMode = "dark" | "light";
 
@@ -34,8 +34,8 @@ export function ScanTerminalLoadingScreen({
               </strong>
               <span>
                 {isEn
-                  ? "Start from the map, then open city cards to verify weather evidence"
-                  : "从地图选城市，再打开决策卡验证天气证据"}
+                  ? "Loading paid decision cards, city evidence, and market signals"
+                  : "正在加载付费决策卡、城市证据和市场信号"}
               </span>
             </div>
             <div className="scan-topbar-actions">
@@ -91,8 +91,8 @@ export function ScanTerminalTopBar({
         </strong>
         <span>
           {isEn
-            ? "Start from the map, then open city cards to verify weather evidence"
-            : "从地图选城市，再打开决策卡验证天气证据"}
+            ? "Paid workspace for city evidence, model signals, and weather-market decisions"
+            : "面向付费用户的城市证据、模型信号与天气市场决策工作区"}
         </span>
       </div>
       <div className="scan-topbar-actions">

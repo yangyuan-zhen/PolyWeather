@@ -382,7 +382,7 @@ export function normalizeLocale(value?: string | null): Locale {
 
 export function getInitialLocaleFromNavigator(): Locale {
   if (typeof window === "undefined") return DEFAULT_LOCALE;
-  return normalizeLocale(window.navigator.language);
+  return normalizeLocale(window.navigator?.language);
 }
 
 export function formatMessage(

@@ -102,12 +102,12 @@ export function AiPinnedForecastView({
       <div className="scan-ai-workspace empty">
         <div className="scan-empty-state">
           <div className="scan-empty-title">
-            {isEn ? "Click a city on the map" : "从分布视图点击城市"}
+            {isEn ? "Select a city from the market list" : "从市场列表选择城市"}
           </div>
           <div className="scan-empty-copy">
             {isEn
               ? "Selected cities will appear here as deep analysis blocks."
-              : "被点击的城市会加入深度分析页，并保留为城市分析区块。"}
+              : "选中的城市会加入深度分析页，并保留为城市分析区块。"}
           </div>
         </div>
       </div>
@@ -127,8 +127,8 @@ export function AiPinnedForecastView({
         </div>
         <p>
           {isEn
-            ? "Map clicks add cities here. City analysis stays here until you remove it."
-            : "地图点击会把城市加入这里；城市分析会保留，直到你手动移除。"}
+            ? "Market-list selections add cities here. City analysis stays here until you remove it."
+            : "市场列表选择会把城市加入这里；城市分析会保留，直到你手动移除。"}
         </p>
       </div>
       <div className="scan-ai-city-jumpbar" aria-label={isEn ? "Selected city shortcuts" : "已选城市快捷跳转"}>

@@ -7,7 +7,7 @@ export function createAccountCopy(isEn: boolean): Record<string, string> {
       signOut: isEn ? "Sign Out" : "退出",
       signIn: isEn ? "Sign In" : "登录",
       upgradePro: isEn ? "Upgrade Pro" : "升级 Pro",
-      guestUser: isEn ? "Guest User" : "游客用户",
+      guestUser: isEn ? "Signed-out account" : "未登录账户",
       joinedAt: isEn ? "Joined" : "加入时间",
       totalPoints: isEn ? "Total Points" : "总积分 (荣誉)",
       weeklyPoints: isEn ? "Weekly Points" : "本周积分 (竞技)",
@@ -129,7 +129,7 @@ export function createAccountCopy(isEn: boolean): Record<string, string> {
         ? "Wallet bound. Creating order and sending payment..."
         : "钱包已绑定，正在创建订单并发起支付...",
       proMember: "PRO MEMBER",
-      freeTier: "FREE TIER",
+      freeTier: isEn ? "UNSUBSCRIBED" : "未订阅",
       proPendingSync: isEn ? "Activated (pending sync)" : "已开通（待同步）",
       noProSubscription: isEn ? "No Pro subscription" : "暂无 Pro 订阅",
       proEndsSoonTitle: isEn ? "Pro renewal due soon" : "Pro 即将到期",
