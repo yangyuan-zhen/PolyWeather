@@ -31,7 +31,6 @@ import {
   getGapColor,
   getSignalLabel,
   getSignalState,
-  TRADING_REGIONS,
 } from "@/components/dashboard/scan-terminal/continent-grouping";
 import { MobileCityCard } from "@/components/dashboard/scan-terminal/MobileCityCard";
 import { MobileRegionTabs } from "@/components/dashboard/scan-terminal/MobileRegionTabs";
@@ -347,7 +346,6 @@ function PolyWeatherTerminal({
   }, [searchInputRef, setSearchQuery]);
   const [navExpanded, setNavExpanded] = useState(false);
   const [activeNavKey, setActiveNavKey] = useState<string>("contracts");
-  const [selectedRegionKey, setSelectedRegionKey] = useState<string>("all");
 
   const NAV_ITEMS = [
     { key: "contracts", Icon: Table2, labelEn: "Contracts", labelZh: "天气合约" },
@@ -359,24 +357,13 @@ function PolyWeatherTerminal({
     { key: "training", Icon: GraduationCap, labelEn: "Training", labelZh: "训练数据" },
   ];
 
-  const regionTabs = useMemo(() => {
-    return [
-      { key: "all", labelEn: "ALL", labelZh: "全部" },
-      ...TRADING_REGIONS.map((r) => ({
-        key: r.key,
-        labelEn: r.labelEn.toUpperCase(),
-        labelZh: r.labelZh,
-      })),
-    ];
-  }, [isEn]);
-
   const filteredRegionRows = useMemo(() => {
-    const byRegion = selectedRegionKey === "all"
-      ? rows
-      : rows.filter((row) => String(row.trading_region).toLowerCase() === selectedRegionKey);
-    // Only show the primary signal per city (backend marks is_primary_signal)
-    return byRegion.filter((row) => row.is_primary_signal !== false);
-  }, [rows, selectedRegionKey]);
+    return rows.filter(
+      (row) =>
+        String(row.trading_region).toLowerCase() === "east_asia" &&
+        row.is_primary_signal !== false,
+    );
+  }, [rows]);
 
   const watchRows = useMemo(() => {
     return filteredRegionRows
@@ -618,27 +605,6 @@ function PolyWeatherTerminal({
           {/* Desktop layout */}
           <div className="hidden h-full min-h-0 lg:grid lg:grid-cols-[0.96fr_1.72fr_0.96fr] gap-2">
             <div className="flex min-h-0 flex-col gap-2">
-              <div className="flex shrink-0 items-center gap-1 overflow-x-auto rounded-[4px] border border-[#cfd6df] bg-white p-1 scrollbar-none">
-                {regionTabs.map((tab) => {
-                  const isActive = selectedRegionKey === tab.key;
-                  return (
-                    <button
-                      key={tab.key}
-                      type="button"
-                      onClick={() => setSelectedRegionKey(tab.key)}
-                      className={clsx(
-                        "px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-[3px] transition-all whitespace-nowrap",
-                        isActive
-                          ? "bg-blue-600 text-white shadow-sm"
-                          : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                      )}
-                    >
-                      {isEn ? tab.labelEn : tab.labelZh}
-                    </button>
-                  );
-                })}
-              </div>
-
               <KoyfinMarketPanel
                 isEn={isEn}
                 onSelect={setSelectedRow}
