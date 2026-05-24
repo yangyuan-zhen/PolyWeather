@@ -197,7 +197,7 @@ function buildEvidenceChart(row: ScanOpportunityRow | null, hourly: HourlyForeca
   if (settlement.length) {
     series.push({
       key: "settlement",
-      label: "Settlement runway",
+      label: row?.metar_context?.station_label || row?.metar_context?.station || "Settlement station",
       source: row?.metar_context?.station_label || row?.metar_context?.station || row?.airport || "Settlement",
       color: "#009688",
       featured: true,
