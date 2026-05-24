@@ -37,6 +37,9 @@ export function LoginClient({ nextPath }: LoginClientProps) {
   const [resetSent, setResetSent] = useState(false);
 
   const supabaseReady = hasSupabasePublicEnv();
+  const siteOrigin =
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+    (typeof window !== "undefined" ? window.location.origin : "");
   const isEn = locale === "en-US";
   const copy = {
     backHome: isEn ? "Back to Home" : "返回首页",
@@ -136,7 +139,7 @@ export function LoginClient({ nextPath }: LoginClientProps) {
     setLoading(true);
     try {
       const supabase = getSupabaseBrowserClient();
-      const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(
+      const redirectTo = `${siteOrigin}/auth/callback?next=${encodeURIComponent(
         nextPath,
       )}`;
       const { error } = await supabase.auth.signInWithOAuth({
@@ -182,7 +185,7 @@ export function LoginClient({ nextPath }: LoginClientProps) {
         return;
       }
 
-      const emailRedirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(
+      const emailRedirectTo = `${siteOrigin}/auth/callback?next=${encodeURIComponent(
         nextPath,
       )}`;
       const { data, error } = await supabase.auth.signUp({
