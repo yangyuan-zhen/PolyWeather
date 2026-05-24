@@ -252,35 +252,103 @@ function KoyfinRowsTable({
   );
 }
 
-function KoyfinMarketPanel({
-  compact,
+function CityRegionList({
   isEn,
-  onSelect,
   rows,
-  selectedId,
-  title,
+  selectedCity,
+  onSelectCity,
 }: {
-  compact?: boolean;
   isEn: boolean;
-  onSelect: (row: ScanOpportunityRow) => void;
   rows: ScanOpportunityRow[];
-  selectedId?: string | null;
-  title: string;
+  selectedCity: string | null;
+  onSelectCity: (city: string) => void;
 }) {
+  const cities = useMemo(() => {
+    const seen = new Set<string>();
+    const result: { city: string; name: string; contractCount: number; bestEdge: number | null; signal: string }[] = [];
+    rows.forEach((row) => {
+      const key = String(row.city || "").toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      const cityRows = rows.filter((r) => String(r.city || "").toLowerCase() === key);
+      const bestEdge = cityRows.reduce((best, r) => {
+        const e = r.edge_percent ?? 0;
+        return Math.abs(e) > Math.abs(best) ? e : best;
+      }, 0);
+      result.push({
+        city: key,
+        name: rowName(row),
+        contractCount: cityRows.length,
+        bestEdge,
+        signal: cityRows[0]?.signal_status || "",
+      });
+    });
+    return result;
+  }, [rows]);
+
   return (
-    <Panel title={title}>
-      <CityGroupedTable
-        compact={compact}
-        isEn={isEn}
-        onSelect={onSelect}
-        rows={rows}
-        selectedId={selectedId}
-      />
+    <Panel title={isEn ? "Cities" : "城市"} className="shrink-0">
+      <div className="divide-y divide-slate-100 overflow-auto max-h-[320px]">
+        {cities.map(({ city, name, contractCount, bestEdge }) => (
+          <button
+            key={city}
+            type="button"
+            onClick={() => onSelectCity(city)}
+            className={clsx(
+              "flex w-full items-center justify-between px-3 py-2 text-left hover:bg-blue-50/70 transition-colors",
+              selectedCity === city && "bg-blue-50",
+            )}
+          >
+            <div className="min-w-0">
+              <div className="text-[12px] font-bold text-slate-800 truncate">{name}</div>
+              <div className="text-[11px] text-slate-400">{contractCount} {isEn ? "contracts" : "个合约"}</div>
+            </div>
+            <span className={clsx("shrink-0 font-mono text-[12px] font-black", edgeClass(bestEdge))}>
+              {pct(bestEdge)}
+            </span>
+          </button>
+        ))}
+      </div>
     </Panel>
   );
 }
 
-function CityGroupedTable({
+function CityContractDetail({
+  isEn,
+  rows,
+  selectedCity,
+  selectedId,
+  onSelect,
+}: {
+  isEn: boolean;
+  rows: ScanOpportunityRow[];
+  selectedCity: string | null;
+  selectedId?: string | null;
+  onSelect: (row: ScanOpportunityRow) => void;
+}) {
+  const cityRows = useMemo(
+    () => (selectedCity ? rows.filter((r) => String(r.city || "").toLowerCase() === selectedCity) : []),
+    [rows, selectedCity],
+  );
+
+  return (
+    <Panel title={isEn ? "Contracts" : "合约"} className="flex-1 min-h-0">
+      {!selectedCity ? (
+        <div className="flex items-center justify-center p-6 text-[12px] text-slate-400">
+          {isEn ? "Select a city above" : "在上方选择城市"}
+        </div>
+      ) : !cityRows.length ? (
+        <div className="flex items-center justify-center p-6 text-[12px] text-slate-400">
+          {isEn ? "No contracts for this city" : "该城市暂无合约"}
+        </div>
+      ) : (
+        <KoyfinRowsTable compact isEn={isEn} onSelect={onSelect} rows={cityRows} selectedId={selectedId} />
+      )}
+    </Panel>
+  );
+}
+
+function _unused_CityGroupedTable({
   compact,
   isEn,
   onSelect,
@@ -445,6 +513,8 @@ function PolyWeatherTerminal({
   searchQuery: string;
   setSearchQuery: (val: string) => void;
   searchInputRef: React.RefObject<HTMLInputElement | null>;
+  selectedCity: string | null;
+  setSelectedCity: (city: string | null) => void;
 }) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -766,12 +836,18 @@ function PolyWeatherTerminal({
               {/* Desktop layout */}
               <div className="hidden h-full min-h-0 lg:grid lg:grid-cols-[0.96fr_1.72fr] gap-2">
                 <div className="flex min-h-0 flex-col gap-2">
-                  <KoyfinMarketPanel
+                  <CityRegionList
                     isEn={isEn}
-                    onSelect={setSelectedRow}
                     rows={filteredRegionRows}
+                    selectedCity={selectedCity}
+                    onSelectCity={setSelectedCity}
+                  />
+                  <CityContractDetail
+                    isEn={isEn}
+                    rows={filteredRegionRows}
+                    selectedCity={selectedCity}
                     selectedId={selectedRow?.id}
-                    title={isEn ? "Weather Contract Markets" : "天气合约市场"}
+                    onSelect={setSelectedRow}
                   />
                 </div>
 
@@ -909,6 +985,7 @@ function ScanTerminalScreen() {
   }, [rows, searchQuery]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
   const selectedRow = useMemo(
     () => filteredRows.find((row) => row.id === selectedId) || filteredRows[0] || null,
     [filteredRows, selectedId],
@@ -951,6 +1028,8 @@ function ScanTerminalScreen() {
       searchQuery={searchQuery}
       setSearchQuery={setSearchQuery}
       searchInputRef={searchInputRef}
+      selectedCity={selectedCity}
+      setSelectedCity={setSelectedCity}
     />
   );
 }
