@@ -1547,6 +1547,12 @@ def _analyze(
             max_correction_clamped = max(-max_correction, min(max_correction, max_so_far_excess * max(0.3, weight)))
 
             blended_correction = hourly_correction * 0.6 + max_correction_clamped * 0.4
+            logger.info(
+                "BIAS_DEBUG city={} hour={} current={} model_hourly={} hourly_bias={:.1f} "
+                "max_excess={:.1f} weight={:.2f} correction={:.1f} deb_before={}",
+                city, _local_hour, _current_temp, model_hourly_temp, hourly_bias,
+                (_max_so_far or _current_temp) - deb_val, weight, blended_correction, deb_val,
+            )
             deb_val = round(deb_val + blended_correction, 1)
             if mu is not None:
                 mu = round(mu + blended_correction, 1)
