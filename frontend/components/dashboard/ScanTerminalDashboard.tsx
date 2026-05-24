@@ -394,15 +394,11 @@ function CityGroupedTable({
                 {isExpanded && buckets.map((row) => (
                   <tr
                     key={row.id}
-                    className={clsx(
-                      "cursor-pointer border-b border-slate-50 bg-slate-50/50 hover:bg-blue-50/50",
-                      selectedId === row.id && "bg-blue-50"
-                    )}
-                    onClick={() => onSelect(row)}
+                    className="border-b border-slate-50 bg-slate-50/30 text-slate-500"
                   >
                     <td className="px-2 py-1" />
                     <td className="px-1.5 py-1 pl-5">
-                      <span className="text-[10px] font-medium text-slate-700">{row.target_label || "--"}</span>
+                      <span className="text-[10px]">{row.target_label || "--"}</span>
                     </td>
                     <td className={clsx("px-1.5 py-1 text-right font-mono text-[10px] font-bold", edgeClass(row.edge_percent))}>
                       {pct(row.edge_percent)}
