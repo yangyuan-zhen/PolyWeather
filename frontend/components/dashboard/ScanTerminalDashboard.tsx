@@ -171,6 +171,7 @@ const TERM = {
   globalWeatherFactors: { en: "Global Weather Factors", zh: "全球天气因子" },
   heat: { en: "Heat", zh: "高温风险" },
   active: { en: "Active", zh: "活跃" },
+  watch: { en: "Watch", zh: "观察" },
   tradable: { en: "Tradable", zh: "可交易" },
   primary: { en: "Primary", zh: "主信号" },
   ai: { en: "AI", zh: "AI" },
@@ -401,7 +402,7 @@ function GroupedMarketTable({
                         {label}
                       </span>
                       <span className="text-[10px] text-slate-400">
-                        {group.rows.length} · {isEn ? "Active" : "活跃"} {group.activeCount} · {isEn ? "Watch" : "观察"} {group.watchCount}
+                        {group.rows.length} · {t("active", isEn)} {group.activeCount} · {t("watch", isEn)} {group.watchCount}
                         {group.localTimeRange ? ` · LT ${group.localTimeRange}` : ""}
                         {group.hotCity ? ` · Hot: ${group.hotCity}` : ""}
                       </span>

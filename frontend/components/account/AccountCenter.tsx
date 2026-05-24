@@ -550,7 +550,7 @@ export function AccountCenter() {
       });
       if (!configRes.ok) {
         const raw = (await configRes.text()).slice(0, 350);
-        throw new Error(`load payment config failed: ${raw}`);
+        throw new Error(copy.loadConfigFailed.replace("{raw}", raw));
       }
       const configJson = (await configRes.json()) as PaymentConfig;
       if (syncState) {
@@ -606,7 +606,7 @@ export function AccountCenter() {
           return attempt(false);
         }
         const raw = (await backendResult.text()).slice(0, 260);
-        throw new Error(`HTTP ${backendResult.status} ${raw}`.trim());
+        throw new Error(copy.httpError.replace("{status}", String(backendResult.status)).replace("{raw}", raw));
       }
       const backendJson = (await backendResult.json()) as AuthMeResponse;
       setBackend(backendJson);
@@ -745,14 +745,14 @@ export function AccountCenter() {
       ) {
         const ok = await reconcileLatestPayment();
         if (ok) return;
-        setPaymentInfo("该订单已支付，正在恢复订阅...");
+        setPaymentInfo(copy.orderAlreadyPaid);
         await loadSnapshot();
         await loadPaymentSnapshot();
         return;
       }
       // If intent expired, tell user to create a new order
       if (lowerRaw.includes("expired")) {
-        throw new Error("支付订单已过期（30分钟有效），请重新创建订单。");
+        throw new Error(copy.orderExpired);
       }
       // Try fetching intent status as fallback
       try {
@@ -779,13 +779,13 @@ export function AccountCenter() {
             return;
           }
           if (status === "expired") {
-            throw new Error("支付订单已过期（30分钟有效），请重新创建订单。");
+            throw new Error(copy.orderExpired);
           }
         }
       } catch (e) {
         if (e instanceof Error && e.message !== raw) throw e;
       }
-      throw new Error(`submit tx failed: ${raw}`);
+      throw new Error(copy.submitTxFailed.replace("{raw}", raw));
     },
     [
       buildAuthedHeaders,
@@ -864,14 +864,14 @@ export function AccountCenter() {
         });
         if (!res.ok) {
           const raw = (await res.text()).slice(0, 350);
-          throw new Error(`bind failed: ${raw}`);
+          throw new Error(copy.bindFailed.replace("{raw}", raw));
         }
         const data = (await res.json()) as {
           telegram_pricing?: TelegramPricing | null;
         };
         if (data.telegram_pricing?.is_group_member) {
           const amount = data.telegram_pricing.amount_usdc || "10";
-          setPaymentInfo(`Telegram 群成员验证成功，当前会员价 ${amount}U。`);
+          setPaymentInfo(copy.telegramVerifySuccess.replace("{amount}", amount));
         }
         await loadSnapshot();
         await loadPaymentSnapshot();
@@ -1158,19 +1158,19 @@ export function AccountCenter() {
       });
       if (!res.ok) {
         const raw = (await res.text()).slice(0, 300);
-        throw new Error(raw || "failed to create telegram bind link");
+        throw new Error(raw || copy.telegramBindFailed);
       }
       const data = (await res.json()) as { bot_url?: string };
       const botUrl = String(data.bot_url || "").trim();
-      if (!botUrl) throw new Error("telegram bind link missing");
+      if (!botUrl) throw new Error(copy.telegramBindLinkMissing);
       if (popup && !popup.closed) {
         popup.location.href = botUrl;
         setPaymentInfo(
-          "已打开 Telegram Bot，请在 Bot 内点击 Start 并确认绑定；完成后刷新本页再申请入群。",
+          copy.telegramBindClickHint,
         );
       } else {
         setPaymentInfo(
-          "弹窗被拦截，请点击下方链接完成绑定：",
+          copy.telegramPopupBlocked,
         );
         setTelegramBindUrl(botUrl);
       }
@@ -1191,7 +1191,7 @@ export function AccountCenter() {
     pollMs = 3000,
   ) => {
     const eth = provider || getEvmProvider();
-    if (!eth) throw new Error("No EVM wallet provider found");
+    if (!eth) throw new Error(copy.noWalletProvider);
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
       const receipt = await requestWalletWithTimeout<{ status?: string } | null>(
@@ -1205,11 +1205,11 @@ export function AccountCenter() {
       );
       if (receipt && receipt.status) {
         if (receipt.status === "0x1") return receipt;
-        throw new Error(`transaction reverted: ${txHash}`);
+        throw new Error(copy.txReverted.replace("{txHash}", txHash));
       }
       await new Promise((resolve) => setTimeout(resolve, pollMs));
     }
-    throw new Error(`transaction confirmation timeout: ${txHash}`);
+    throw new Error(copy.txConfirmTimeout.replace("{txHash}", txHash));
   };
 
   const pollIntentUntilConfirmed = useCallback(
@@ -1234,7 +1234,7 @@ export function AccountCenter() {
             continue;
           }
           const raw = (await statusRes.text()).slice(0, 260);
-          throw new Error(`query intent failed: ${raw}`);
+          throw new Error(copy.queryIntentFailed.replace("{raw}", raw));
         }
 
         const statusJson = (await statusRes.json()) as IntentStatusResponse;
@@ -1243,7 +1243,7 @@ export function AccountCenter() {
         const txHash = String(intent.tx_hash || txHashHint || "").toLowerCase();
         if (status === "confirmed") {
           setPaymentError("");
-          setPaymentInfo(`支付确认成功，交易: ${shortAddress(txHash)}`);
+          setPaymentInfo(copy.paymentConfirmed.replace("{txHash}", shortAddress(txHash)));
           trackAppEvent("checkout_succeeded", {
             entry: "account_center",
             plan_code: selectedPlan?.plan_code || "pro_monthly",
@@ -1259,14 +1259,14 @@ export function AccountCenter() {
           status === "cancelled" ||
           status === "expired"
         ) {
-          throw new Error(`payment ${status}`);
+          throw new Error(copy.paymentStatus.replace("{status}", status));
         }
         setPaymentInfo(
-          `交易已提交: ${shortTx}，正在链上确认（状态: ${status || "submitted"}）...`,
+          copy.txSubmitted.replace("{txHash}", shortTx).replace("{status}", status || "submitted"),
         );
         await new Promise((resolve) => setTimeout(resolve, pollMs));
       }
-      throw new Error("payment pending timeout");
+      throw new Error(copy.paymentPendingTimeout);
     },
     [loadPaymentSnapshot, loadSnapshot, selectedPlan?.plan_code],
   );
@@ -1375,7 +1375,7 @@ export function AccountCenter() {
       const eth = providerSelection.provider;
       const walletLabel = providerSelection.label;
       const binanceBindHint = walletLabel.toLowerCase().includes("binance")
-        ? " Binance 扩展已绑定；如支付卡住，请优先使用 WalletConnect 扫码支付。"
+        ? copy.binanceBindHint
         : "";
 
       // Ensure we have a valid token BEFORE opening the wallet modal.
@@ -1424,7 +1424,7 @@ export function AccountCenter() {
       });
       if (!challengeRes.ok) {
         const raw = (await challengeRes.text()).slice(0, 300);
-        throw new Error(`challenge failed: ${raw}`);
+        throw new Error(copy.challengeFailed.replace("{raw}", raw));
       }
 
       const challengeJson = (await challengeRes.json()) as {
@@ -1433,7 +1433,7 @@ export function AccountCenter() {
       };
       const message = String(challengeJson.message || "");
       const nonce = String(challengeJson.nonce || "");
-      if (!message || !nonce) throw new Error("challenge payload invalid");
+      if (!message || !nonce) throw new Error(copy.challengeInvalid);
 
       const signature = await signBindMessage(eth, address, message);
       const verifyRes = await fetch("/api/payments/wallets/verify", {
@@ -1443,7 +1443,7 @@ export function AccountCenter() {
       });
       if (!verifyRes.ok) {
         const raw = (await verifyRes.text()).slice(0, 300);
-        throw new Error(`verify failed: ${raw}`);
+        throw new Error(copy.verifyFailedRaw.replace("{raw}", raw));
       }
 
       setPaymentInfo(
@@ -1502,7 +1502,7 @@ export function AccountCenter() {
         } catch {
           // ignore
         }
-        throw new Error(detail || `HTTP ${res.status}`);
+        throw new Error(detail || copy.httpError.replace("{status}", String(res.status)).replace("{raw}", ""));
       }
 
       let data: Record<string, unknown> = {};
@@ -1641,10 +1641,10 @@ export function AccountCenter() {
           expectedReceiver
       ) {
         setPaymentInfo(
-          `检测到支付配置已更新，已切换到最新地址 ${shortAddress(expectedReceiver)}。`,
+          copy.paymentConfigUpdated.replace("{address}", shortAddress(expectedReceiver)),
         );
       } else {
-        setPaymentInfo(`当前收款合约: ${shortAddress(expectedReceiver)}`);
+        setPaymentInfo(copy.currentReceiver.replace("{address}", shortAddress(expectedReceiver)));
       }
 
       const targetChainId = Number(latestConfig.chain_id || 137);
@@ -1670,14 +1670,14 @@ export function AccountCenter() {
       });
       if (!createRes.ok) {
         const raw = (await createRes.text()).slice(0, 350);
-        throw new Error(`create intent failed: ${raw}`);
+        throw new Error(copy.createIntentFailed.replace("{raw}", raw));
       }
 
       const created = (await createRes.json()) as CreatedIntent;
       const intentId = String(created.intent?.intent_id || "");
       const txPayload = created.tx_payload;
       if (!intentId || !txPayload?.to || !txPayload?.data)
-        throw new Error("intent payload invalid");
+        throw new Error(copy.intentPayloadInvalid);
       trackAppEvent("checkout_started", {
         entry: "account_center",
         plan_code: selectedPlan?.plan_code || "pro_monthly",
@@ -1696,7 +1696,7 @@ export function AccountCenter() {
       const tokenAddress = String(txPayload.token_address || "").toLowerCase();
       const amountUnits = BigInt(String(txPayload.amount_units || "0"));
       if (!tokenAddress.startsWith("0x") || amountUnits <= 0n)
-        throw new Error("intent token/amount invalid");
+        throw new Error(copy.intentTokenInvalid);
       const tokenSymbol = String(
         txPayload.token_symbol ||
           selectedPaymentToken?.symbol ||
@@ -1750,7 +1750,7 @@ export function AccountCenter() {
       const allowance = BigInt(String(allowanceHex || "0x0"));
 
       if (allowance < amountUnits) {
-        setPaymentInfo(`检测到授权不足，正在发起 ${tokenSymbol} 授权...`);
+        setPaymentInfo(copy.approvalDetected.replace("{symbol}", tokenSymbol));
         const approveParams: Record<string, any> = {
           from: payingWallet,
           to: tokenAddress,
@@ -1767,9 +1767,9 @@ export function AccountCenter() {
         );
         await waitForReceipt(String(approveHash || ""), eth);
         approvedInThisRun = true;
-        setPaymentInfo(`${tokenSymbol} 授权成功，正在发起支付...`);
+        setPaymentInfo(copy.approvalDone.replace("{symbol}", tokenSymbol));
       } else {
-        setPaymentInfo("授权额度充足，正在发起支付...");
+        setPaymentInfo(copy.approvalSufficient);
       }
 
       const payParams: Record<string, any> = {
@@ -1811,7 +1811,7 @@ export function AccountCenter() {
           await handleSubmit409(intentId, txHashNorm, raw);
           return;
         }
-        throw new Error(`submit tx failed: ${raw}`);
+        throw new Error(copy.submitTxFailed.replace("{raw}", raw));
       }
 
       const confirmRes = await fetch(
@@ -1839,10 +1839,10 @@ export function AccountCenter() {
           await pollIntentUntilConfirmed(intentId, authHeaders, txHashNorm);
           return;
         }
-        throw new Error(`confirm failed: ${raw}`);
+        throw new Error(copy.confirmFailed.replace("{raw}", raw));
       }
 
-      setPaymentInfo(`支付确认成功，交易: ${shortAddress(txHashNorm)}`);
+      setPaymentInfo(copy.paymentConfirmed.replace("{txHash}", shortAddress(txHashNorm)));
       trackAppEvent("checkout_succeeded", {
         entry: "account_center",
         plan_code: selectedPlan?.plan_code || "pro_monthly",
@@ -1921,7 +1921,7 @@ export function AccountCenter() {
       });
       if (!createRes.ok) {
         const raw = (await createRes.text()).slice(0, 350);
-        throw new Error(`create manual intent failed: ${raw}`);
+        throw new Error(copy.createManualIntentFailed.replace("{raw}", raw));
       }
       const created = (await createRes.json()) as CreatedIntent;
       const direct = created.direct_payment;
@@ -1929,7 +1929,7 @@ export function AccountCenter() {
         created.intent?.intent_id || direct?.intent_id || "",
       );
       if (!intentId || !direct?.receiver_address || !direct?.amount_usdc) {
-        throw new Error("manual payment payload invalid");
+        throw new Error(copy.manualPaymentInvalid);
       }
       assertExpectedPaymentReceiver(
         direct.receiver_address,
@@ -1965,11 +1965,11 @@ export function AccountCenter() {
       lastIntentId || manualPayment?.intent_id || "",
     ).trim();
     if (!intentId || !manualPayment) {
-      setPaymentError("请先创建手动转账订单。");
+      setPaymentError(copy.manualOrderRequired);
       return;
     }
     if (!txHashNorm.startsWith("0x") || txHashNorm.length !== 66) {
-      setPaymentError("请输入有效的 tx hash。");
+      setPaymentError(copy.txHashRequired);
       return;
     }
     setPaymentBusy(true);
@@ -1990,7 +1990,7 @@ export function AccountCenter() {
           await handleSubmit409(intentId, txHashNorm, raw);
           return;
         }
-        throw new Error(`submit tx failed: ${raw}`);
+        throw new Error(copy.submitTxFailed.replace("{raw}", raw));
       }
       const confirmRes = await fetch(
         `/api/payments/intents/${intentId}/confirm`,
@@ -2015,10 +2015,10 @@ export function AccountCenter() {
           await pollIntentUntilConfirmed(intentId, authHeaders, txHashNorm);
           return;
         }
-        throw new Error(`confirm failed: ${raw}`);
+        throw new Error(copy.confirmFailed.replace("{raw}", raw));
       }
       setLastTxHash(txHashNorm);
-      setPaymentInfo(`支付确认成功，交易: ${shortAddress(txHashNorm)}`);
+      setPaymentInfo(copy.paymentConfirmed.replace("{txHash}", shortAddress(txHashNorm)));
       setManualPayment(null);
       setManualTxHash("");
       setTxValidation({ loading: false, checked: false });
@@ -2865,18 +2865,18 @@ export function AccountCenter() {
                                 <p className="mt-1 text-[10px] text-red-700">
                                   {txValidation.reason ===
                                   "tx_not_mined"
-                                    ? "交易未上链，请等待"
+                                    ? copy.verifyTxNotMined
                                     : txValidation.reason === "receiver_mismatch"
                                       ? "收款地址不匹配！请检查是否转到了正确的地址"
                                       : txValidation.reason ===
                                           "amount_insufficient"
-                                        ? "转账金额不足"
+                                        ? copy.verifyAmountLow
                                         : txValidation.reason === "tx_reverted"
-                                          ? "该交易已回滚"
+                                          ? copy.verifyTxReverted
                                           : txValidation.detail ||
-                                            "验证失败: " +
+                                            copy.verifyFailed +
                                               (txValidation.reason ||
-                                                "未知错误")}
+                                                copy.verifyUnknown)}
                                 </p>
                               ) : null}
                             </div>
@@ -2909,7 +2909,7 @@ export function AccountCenter() {
       </main>
 
       <footer className="mt-16 text-center text-slate-600 text-[10px] uppercase tracking-[0.3em] font-mono z-10 pb-8">
-        PolyWeather Global Meteorological Engine · Powered by AI
+        copy.footerEngine
       </footer>
     </div>
   );
