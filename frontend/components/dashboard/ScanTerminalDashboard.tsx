@@ -45,6 +45,7 @@ import { scanRootClass } from "@/components/dashboard/scan-root-styles";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
 import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { GroupedMarketTable } from "@/components/dashboard/scan-terminal/GroupedMarketTable";
+import { TrainingDashboard } from "@/components/dashboard/scan-terminal/TrainingDashboard";
 import { LiveTemperatureThresholdChart } from "@/components/dashboard/scan-terminal/LiveTemperatureThresholdChart";
 import { rowName, pct, money, temp, edgeClass } from "@/components/dashboard/scan-terminal/utils";
 
@@ -360,14 +361,11 @@ function PolyWeatherTerminal({
   ];
 
   const filteredRegionRows = useMemo(() => {
-    const byRegion =
-      selectedRegionKey === "all"
-        ? rows
-        : rows.filter(
-            (row) =>
-              String(row.trading_region).toLowerCase() === selectedRegionKey,
-          );
-    return byRegion.filter((row) => row.is_primary_signal !== false);
+    return rows.filter(
+      (row) =>
+        String(row.trading_region).toLowerCase() === selectedRegionKey &&
+        row.is_primary_signal !== false,
+    );
   }, [rows, selectedRegionKey]);
 
   const watchRows = useMemo(() => {
@@ -773,80 +771,6 @@ function RegionalWhaleWatch({
     </Panel>
   );
 }
-
-function TrainingDashboard({ isEn }: { isEn: boolean }) {
-  const [data, setData] = useState<Array<{
-    city_id: string; name: string;
-    deb?: { hit_rate: number; mae: number; total_days: number } | null;
-  }> | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/ops/training/accuracy", {
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-    })
-      .then(async (res) => {
-        if (!res.ok) return null;
-        return (res.json() as Promise<{ accuracy: typeof data }>);
-      })
-      .then((payload) => {
-        if (cancelled || !payload?.accuracy) return;
-        setData(payload.accuracy.filter((c) => c.deb && c.deb.total_days >= 5));
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
-
-  const debSorted = (data || [])
-    .sort((a, b) => (b.deb?.hit_rate ?? 0) - (a.deb?.hit_rate ?? 0));
-
-  return (
-    <Panel title={isEn ? "Training Data" : "训练数据"}>
-      <div className="max-h-[300px] overflow-auto">
-        <table className="w-full text-[11px] border-collapse">
-          <thead>
-            <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
-              <th className="px-2 py-1.5 font-bold">{isEn ? "City" : "城市"}</th>
-              <th className="px-2 py-1.5 text-right font-bold">{isEn ? "Hit" : "命中"}</th>
-              <th className="px-2 py-1.5 text-right font-bold">MAE</th>
-              <th className="px-2 py-1.5 text-right font-bold">{isEn ? "Days" : "天"}</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {debSorted.length ? debSorted.map((c) => (
-              <tr key={c.city_id} className="hover:bg-slate-50">
-                <td className="px-2 py-1 font-medium capitalize">{c.name}</td>
-                <td className="px-2 py-1 text-right">
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                    (c.deb?.hit_rate ?? 0) >= 60 ? "bg-emerald-50 text-emerald-700" :
-                    (c.deb?.hit_rate ?? 0) >= 30 ? "bg-amber-50 text-amber-700" :
-                    "bg-red-50 text-red-700"
-                  }`}>
-                    {(c.deb?.hit_rate ?? 0).toFixed(0)}%
-                  </span>
-                </td>
-                <td className="px-2 py-1 text-right font-mono">
-                  {(c.deb?.mae ?? 0).toFixed(1)}°
-                </td>
-                <td className="px-2 py-1 text-right text-slate-400">
-                  {c.deb?.total_days ?? 0}
-                </td>
-              </tr>
-            )) : (
-              <tr>
-                <td colSpan={4} className="px-2 py-6 text-center text-slate-400">
-                  {data === null ? (isEn ? "Loading..." : "加载中...") : (isEn ? "No data" : "无数据")}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </Panel>
-  );
-}
-
 
 function ScanTerminalScreen() {
   const [proAccess, setProAccess] = useState<ProAccessState>(() =>
