@@ -44,6 +44,10 @@ import {
   getCurrentPaymentHost,
   isPaymentHostAllowed,
 } from "@/lib/payment-host";
+import {
+  assertExpectedPaymentReceiver,
+  EXPECTED_PAYMENT_RECEIVER_ADDRESS,
+} from "@/lib/payment-receiver";
 import { markAnalyticsOnce, trackAppEvent } from "@/lib/app-analytics";
 import { useI18n } from "@/hooks/useI18n";
 import { UnlockProOverlay } from "@/components/subscription/UnlockProOverlay";
@@ -1062,11 +1066,7 @@ export function AccountCenter() {
     (resolvedSelectedTokenAddress.startsWith("0x")
       ? shortAddress(resolvedSelectedTokenAddress)
       : "USDC");
-  const paymentReceiverAddress = String(
-    selectedPaymentToken?.receiver_contract ||
-      paymentConfig?.receiver_contract ||
-      "",
-  ).toLowerCase();
+  const paymentReceiverAddress = EXPECTED_PAYMENT_RECEIVER_ADDRESS;
   const paymentWalletLabel = String(
     selectedWallet ||
       walletAddress ||
@@ -1348,6 +1348,15 @@ export function AccountCenter() {
     options: ConnectBindOptions = {},
   ): Promise<boolean> => {
     clearPaymentMessages();
+    if (!paymentHostAllowed) {
+      setPaymentError(
+        copy.paymentHostBlocked.replace(
+          "{host}",
+          allowedPaymentHosts[0] || "polyweather-pro.vercel.app",
+        ),
+      );
+      return false;
+    }
     if (!isAuthenticated) {
       setPaymentError(copy.loginBeforeBind);
       return false;
@@ -1621,9 +1630,7 @@ export function AccountCenter() {
       const expectedReceiver = String(
         latestConfig.receiver_contract || "",
       ).toLowerCase();
-      if (!expectedReceiver.startsWith("0x")) {
-        throw new Error("payment receiver contract is not configured");
-      }
+      assertExpectedPaymentReceiver(expectedReceiver, "payment receiver contract");
       if (
         paymentConfig?.receiver_contract &&
         String(paymentConfig.receiver_contract).toLowerCase() !==
@@ -1920,6 +1927,10 @@ export function AccountCenter() {
       if (!intentId || !direct?.receiver_address || !direct?.amount_usdc) {
         throw new Error("manual payment payload invalid");
       }
+      assertExpectedPaymentReceiver(
+        direct.receiver_address,
+        "manual payment receiver",
+      );
       setLastIntentId(intentId);
       setManualPayment(direct);
       setPaymentMethodTab("manual");

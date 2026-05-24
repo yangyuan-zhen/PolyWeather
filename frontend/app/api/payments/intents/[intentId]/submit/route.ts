@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   applyAuthResponseCookies,
   buildBackendRequestHeaders,
+  requireBackendAuthUser,
 } from "@/lib/backend-auth";
 import {
   buildProxyExceptionResponse,
@@ -24,6 +25,8 @@ export async function POST(
   try {
     const body = await req.json();
     const auth = await buildBackendRequestHeaders(req);
+    const authError = requireBackendAuthUser(auth);
+    if (authError) return authError;
     const proxiedHeaders = new Headers(auth.headers);
     proxiedHeaders.set("Content-Type", "application/json");
     const res = await fetch(

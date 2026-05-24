@@ -28,7 +28,11 @@ def _raise_payment_error(exc: Exception) -> None:
 
 def _require_payment_identity(request: Request) -> Dict[str, Any]:
     legacy_routes._assert_entitlement(request)
-    return legacy_routes._require_supabase_identity(request)
+    identity = legacy_routes._require_supabase_identity(request)
+    user_id = str(identity.get("user_id") or "").strip()
+    if not user_id or user_id == "entitlement" or user_id.startswith("admin:"):
+        raise HTTPException(status_code=401, detail="Supabase user required")
+    return identity
 
 
 def get_payment_config(request: Request) -> Dict[str, Any]:

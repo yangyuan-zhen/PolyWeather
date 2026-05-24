@@ -206,7 +206,6 @@ class BotIOLayer:
             "🔗 机器人: <a href=\"https://t.me/polyyuanbot\">@polyyuanbot</a>\n"
             "👥 社群: <a href=\"https://t.me/+Io5H9oVHFmVjOTQ5\">加入 Telegram 群组</a>\n\n"
             "📌 <i>私有频道用于接收自动推送；手动查看市场概览请私聊机器人发送 <code>/markets</code>。</i>\n\n"
-            "🔐 <i>/city 与 /deb 仅限官方群成员使用。</i>\n\n"
             "示例: <code>/city 伦敦</code> 或 <code>/pwcity 伦敦</code>\n"
             f"💡 <i>提示: 群内有效发言(满 {MESSAGE_MIN_LENGTH} 字)获得 <b>{MESSAGE_POINTS}</b> 积分，"
             f"每日上限 {MESSAGE_DAILY_CAP} 分。"

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   applyAuthResponseCookies,
   buildBackendRequestHeaders,
+  requireBackendAuthUser,
 } from "@/lib/backend-auth";
 import { buildProxyExceptionResponse } from "@/lib/api-proxy";
 
@@ -17,6 +18,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const auth = await buildBackendRequestHeaders(req);
+    const authError = requireBackendAuthUser(auth);
+    if (authError) return authError;
     const res = await fetch(`${API_BASE}/api/payments/reconcile-latest`, {
       method: "POST",
       headers: auth.headers,

@@ -14,29 +14,23 @@ from web.services.city_api import (
 
 router = APIRouter(tags=["city"])
 
-_MODEL_RANGE_CITIES: List[str] = [
-    "beijing",
-    "shanghai",
-    "guangzhou",
-    "chengdu",
-    "chongqing",
-    "qingdao",
-    "wuhan",
-    "seoul",
-    "busan",
-]
+def _all_city_keys() -> List[str]:
+    from src.data_collection.city_registry import CITY_REGISTRY
 
-_MODEL_RANGE_NAMES: Dict[str, str] = {
-    "beijing": "北京 (ZBAA)",
-    "shanghai": "上海 (ZSPD)",
-    "guangzhou": "广州 (ZGGG)",
-    "chengdu": "成都 (ZUUU)",
-    "chongqing": "重庆 (ZUCK)",
-    "qingdao": "青岛 (ZSQD)",
-    "wuhan": "武汉 (ZHHH)",
-    "seoul": "首尔 (RKSI)",
-    "busan": "釜山 (RKPK)",
-}
+    return sorted(CITY_REGISTRY.keys())
+
+
+def _city_display_name(city: str) -> str:
+    from src.data_collection.city_registry import CITY_REGISTRY
+
+    meta = CITY_REGISTRY.get(city) or {}
+    icao = str(meta.get("icao") or "").strip()
+    display = str(meta.get("display_name") or city).strip()
+    return f"{display} ({icao})" if icao else display
+
+
+_MODEL_RANGE_CITIES: List[str] = _all_city_keys()
+_MODEL_RANGE_NAMES: Dict[str, str] = {c: _city_display_name(c) for c in _MODEL_RANGE_CITIES}
 
 
 @router.get("/api/cities")
@@ -44,55 +38,69 @@ async def list_cities(request: Request):
     return await list_cities_payload(request)
 
 
+def _extract_city_model_range(city: str, _force_refresh: bool) -> Optional[Dict[str, Any]]:
+    """Extract cached model range data without triggering fresh analysis."""
+    from web.analysis_service import _cache, _analysis_cache_key
+
+    for detail_mode in ("full", "panel", "nearby", "market"):
+        cache_key = _analysis_cache_key(city, detail_mode)
+        cached = _cache.get(cache_key)
+        if cached and isinstance(cached.get("d"), dict):
+            result = cached["d"]
+            if isinstance(result.get("multi_model"), dict) and result["multi_model"]:
+                break
+    else:
+        return None
+
+    if not isinstance(result, dict):
+        return None
+
+    deb = result.get("deb") if isinstance(result, dict) else None
+    deb_pred = deb.get("prediction") if isinstance(deb, dict) else None
+
+    models = result.get("multi_model") if isinstance(result, dict) else {}
+    model_min: Optional[float] = None
+    model_max: Optional[float] = None
+    spread: Optional[float] = None
+    spread_label: str = ""
+
+    if isinstance(models, dict):
+        vals = sorted([v for v in models.values() if isinstance(v, (int, float))])
+        if len(vals) >= 2:
+            model_min = vals[0]
+            model_max = vals[-1]
+            spread = model_max - model_min
+            if spread <= 2.0:
+                spread_label = "低分歧"
+            elif spread <= 4.0:
+                spread_label = "中等分歧"
+            else:
+                spread_label = "高分歧"
+
+    return {
+        "id": city,
+        "name": _MODEL_RANGE_NAMES.get(city, city),
+        "deb": round(deb_pred, 1) if deb_pred is not None else None,
+        "model_min": round(model_min, 1) if model_min is not None else None,
+        "model_max": round(model_max, 1) if model_max is not None else None,
+        "spread": round(spread, 1) if spread is not None else None,
+        "spread_label": spread_label,
+    }
+
+
 @router.get("/api/cities/model-range")
 async def cities_model_range(
     request: Request,
     force_refresh: bool = Query(False),
 ):
-    """Return DEB prediction and model range for monitored cities (CN + KR)."""
-    from web.app import _analyze
-
+    """Return DEB prediction and model range for all monitored cities."""
     rows: List[Dict[str, Any]] = []
     for city in _MODEL_RANGE_CITIES:
-        try:
-            result = _analyze(city, force_refresh=force_refresh)
-        except Exception:
-            continue
+        row = _extract_city_model_range(city, force_refresh)
+        if row is not None:
+            rows.append(row)
 
-        deb = result.get("deb") if isinstance(result, dict) else None
-        deb_pred = deb.get("prediction") if isinstance(deb, dict) else None
-
-        models = result.get("multi_model") if isinstance(result, dict) else {}
-        model_min: Optional[float] = None
-        model_max: Optional[float] = None
-        spread: Optional[float] = None
-        spread_label: str = ""
-
-        if isinstance(models, dict):
-            vals = sorted([v for v in models.values() if isinstance(v, (int, float))])
-            if len(vals) >= 2:
-                model_min = vals[0]
-                model_max = vals[-1]
-                spread = model_max - model_min
-                if spread <= 2.0:
-                    spread_label = "低分歧"
-                elif spread <= 4.0:
-                    spread_label = "中等分歧"
-                else:
-                    spread_label = "高分歧"
-
-        rows.append(
-            {
-                "id": city,
-                "name": _MODEL_RANGE_NAMES.get(city, city),
-                "deb": round(deb_pred, 1) if deb_pred is not None else None,
-                "model_min": round(model_min, 1) if model_min is not None else None,
-                "model_max": round(model_max, 1) if model_max is not None else None,
-                "spread": round(spread, 1) if spread is not None else None,
-                "spread_label": spread_label,
-            }
-        )
-
+    rows.sort(key=lambda r: str(r.get("id") or ""))
     return {"cities": rows}
 
 

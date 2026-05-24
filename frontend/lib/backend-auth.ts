@@ -94,4 +94,13 @@ export function applyAuthResponseCookies(
   return target;
 }
 
-
+export function requireBackendAuthUser(auth: HeaderBuildResult) {
+  if (auth.authUserId) return null;
+  return applyAuthResponseCookies(
+    NextResponse.json(
+      { error: "Authentication required", detail: "Supabase user required" },
+      { status: 401 },
+    ),
+    auth.response,
+  );
+}

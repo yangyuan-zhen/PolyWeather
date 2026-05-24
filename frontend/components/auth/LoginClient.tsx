@@ -17,6 +17,7 @@ import {
   getSupabaseBrowserClient,
   hasSupabasePublicEnv,
 } from "@/lib/supabase/client";
+import { getConfiguredSiteUrl, PRODUCTION_SITE_URL } from "@/lib/site-url";
 import { useI18n } from "@/hooks/useI18n";
 
 type Mode = "login" | "signup";
@@ -38,8 +39,8 @@ export function LoginClient({ nextPath }: LoginClientProps) {
 
   const supabaseReady = hasSupabasePublicEnv();
   const siteOrigin =
-    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
-    (typeof window !== "undefined" ? window.location.origin : "");
+    getConfiguredSiteUrl() ||
+    (typeof window !== "undefined" ? window.location.origin : PRODUCTION_SITE_URL);
   const isEn = locale === "en-US";
   const copy = {
     backHome: isEn ? "Back to Home" : "返回首页",
@@ -102,7 +103,11 @@ export function LoginClient({ nextPath }: LoginClientProps) {
     setLoading(true);
     try {
       const supabase = getSupabaseBrowserClient();
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${siteOrigin}/auth/callback?next=${encodeURIComponent(
+          "/account",
+        )}`,
+      });
       if (error) {
         setErrorText(error.message);
         return;

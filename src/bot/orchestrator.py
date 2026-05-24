@@ -81,8 +81,8 @@ def start_bot() -> None:
     startup_coordinator = StartupCoordinator(
         bot=bot,
         config=config,
-        command_access_mode="group_member_only",
-        protected_commands=["/city", "/deb"],
+        command_access_mode="public",
+        protected_commands=[],
         required_group_chat_id=",".join(get_telegram_chat_ids_from_env()),
     )
 
@@ -99,7 +99,7 @@ def start_bot() -> None:
     started_count = sum(1 for loop in runtime_status.loops if loop.started)
 
     logger.info(
-        "🤖 Bot 启动中... access=group-member-only protected_commands=/city,/deb loops_started={}/{}",
+        "🤖 Bot 启动中... access=public protected_commands=none loops_started={}/{}",
         started_count,
         len(runtime_status.loops),
     )

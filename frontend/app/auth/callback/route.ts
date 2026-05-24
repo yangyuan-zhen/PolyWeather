@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseRouteClient, hasSupabaseServerEnv } from "@/lib/supabase/server";
+import { getConfiguredSiteUrl } from "@/lib/site-url";
 
 function normalizeNextPath(input: string | null) {
   const fallback = "/";
@@ -11,6 +12,16 @@ function normalizeNextPath(input: string | null) {
 }
 
 export async function GET(request: NextRequest) {
+  const configuredSiteUrl = getConfiguredSiteUrl();
+  if (configuredSiteUrl) {
+    const canonicalOrigin = new URL(configuredSiteUrl).origin;
+    if (request.nextUrl.origin !== canonicalOrigin) {
+      const canonicalCallbackUrl = new URL(request.nextUrl.pathname, canonicalOrigin);
+      canonicalCallbackUrl.search = request.nextUrl.search;
+      return NextResponse.redirect(canonicalCallbackUrl);
+    }
+  }
+
   const nextPath = normalizeNextPath(request.nextUrl.searchParams.get("next"));
   const redirectUrl = request.nextUrl.clone();
   redirectUrl.pathname = nextPath;
@@ -29,4 +40,3 @@ export async function GET(request: NextRequest) {
 
   return response;
 }
-
