@@ -277,8 +277,6 @@ class PolymarketWsQuoteCache:
         except Exception:
             return
 
-        logger.info("WS_MSG {}", str(raw)[:200])
-
         if isinstance(payload, list):
             for item in payload:
                 self._handle_event(item)
@@ -293,13 +291,30 @@ class PolymarketWsQuoteCache:
         else:
             event_type = str(event.get("type") or "").strip().lower()
 
+        # Polymarket market-channel messages may arrive without a type
+        # envelope — the payload contains price_changes / book / etc.
+        # directly at the top level.
+        has_price_data = any(
+            key in event
+            for key in (
+                "price_changes",
+                "changes",
+                "assets",
+                "best_bid",
+                "best_ask",
+                "bid",
+                "ask",
+                "price",
+            )
+        )
+
         if event_type in {
             "best_bid_ask",
             "best_bid_ask_price_change",
             "price_change",
             "book",
             "last_trade_price",
-        }:
+        } or has_price_data:
             self._handle_quote_event(event_type, event)
 
     def _handle_quote_event(self, event_type: str, event: Dict[str, Any]) -> None:
