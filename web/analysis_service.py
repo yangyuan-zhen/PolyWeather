@@ -1495,29 +1495,18 @@ def _analyze(
     # ── 12a-b. Intraday bias correction ──────────────────────────────────
     # Nudge the DEB high-temp forecast and probability mu using the gap
     # between the current observed temperature and the model's hourly path.
-    # Weight grows as the day progresses toward the peak window.
-    _live_mc = raw.get("live_mc") or {}
-    _settle_cur = raw.get("settlement_current") or {}
-    _sc_cur = _settle_cur.get("current", {}) if _settle_cur else {}
-    _use_settle = str(raw.get("settlement_source") or "").lower() in {
-        "hko", "cwa", "noaa", "wunderground",
-    } and bool(_sc_cur)
-    _pri_cur = _sc_cur if _use_settle else _live_mc
-    _current_temp = _sf(_pri_cur.get("temp"))
-    _max_so_far = _sf(_pri_cur.get("max_temp_so_far"))
-    if _max_so_far is None:
-        _max_so_far = _sf(_live_mc.get("max_temp_so_far"))
+    # Uses cur_temp / max_so_far already resolved at lines 1052-1095 above.
     _local_hour = _parse_local_hour(local_time_str)
     peak_first = int(first_peak_h or 14)
     peak_last_h = int(last_peak_h or 17)
 
     logger.info(
-        "BIAS_PRE city={} deb_val={} _current_temp={} _local_hour={} _max_so_far={}",
-        city, deb_val, _current_temp, _local_hour, _max_so_far,
+        "BIAS_PRE city={} deb_val={} cur_temp={} max_so_far={} local_hour={}",
+        city, deb_val, cur_temp, max_so_far, _local_hour,
     )
     if (
         deb_val is not None
-        and _current_temp is not None
+        and cur_temp is not None
         and _local_hour is not None
         and 6 <= _local_hour <= 22
     ):
@@ -1531,9 +1520,9 @@ def _analyze(
                 if candidate is not None:
                     model_hourly_temp = candidate
                     break
-        reference_temp = model_hourly_temp if model_hourly_temp is not None else _current_temp
+        reference_temp = model_hourly_temp if model_hourly_temp is not None else cur_temp
         if reference_temp is not None:
-            hourly_bias = _current_temp - reference_temp
+            hourly_bias = cur_temp - reference_temp
 
             if _local_hour < peak_first:
                 progress = max(0.0, (_local_hour - 6) / max(1, peak_first - 6))
@@ -1547,15 +1536,16 @@ def _analyze(
             max_correction = 5.0 if str(sym or "").upper() == "F" else 3.0
             hourly_correction = max(-max_correction, min(max_correction, hourly_bias * weight))
 
-            max_so_far_excess = (_max_so_far or _current_temp) - deb_val
+            _msf = max_so_far if max_so_far is not None else cur_temp
+            max_so_far_excess = _msf - deb_val
             max_correction_clamped = max(-max_correction, min(max_correction, max_so_far_excess * max(0.3, weight)))
 
             blended_correction = hourly_correction * 0.6 + max_correction_clamped * 0.4
             logger.info(
                 "BIAS_DEBUG city={} hour={} current={} model_hourly={} hourly_bias={:.1f} "
                 "max_excess={:.1f} weight={:.2f} correction={:.1f} deb_before={}",
-                city, _local_hour, _current_temp, model_hourly_temp, hourly_bias,
-                (_max_so_far or _current_temp) - deb_val, weight, blended_correction, deb_val,
+                city, _local_hour, cur_temp, model_hourly_temp, hourly_bias,
+                _msf - deb_val, weight, blended_correction, deb_val,
             )
             deb_val = round(deb_val + blended_correction, 1)
             if mu is not None:
