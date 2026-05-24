@@ -22,7 +22,7 @@ import {
 import s from "./UnlockProOverlay.module.css";
 
 const DEFAULT_FAQ_HREF = "/subscription-help";
-const DEFAULT_TELEGRAM_GROUP_URL = "https://t.me/+nMG7SjziUKYyZmM1";
+const DEFAULT_TELEGRAM_GROUP_URL = "https://t.me/+Io5H9oVHFmVjOTQ5";
 
 export type UnlockProBilling = {
   pointsEnabled: boolean;

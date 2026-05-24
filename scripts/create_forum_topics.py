@@ -38,7 +38,7 @@ def _load_env() -> None:
 
 _load_env()
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-CHAT_ID = -1003965137823
+CHAT_ID = -1003927451869
 
 CITIES: list[tuple[str, str]] = [
     ("🇨🇳 Beijing", "beijing"),

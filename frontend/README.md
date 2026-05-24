@@ -95,7 +95,7 @@ POLYWEATHER_OPS_ADMIN_EMAILS=yhrsc30@gmail.com
 
 # 社群入口
 NEXT_PUBLIC_TELEGRAM_GROUP_URL=https://t.me/<your_group>
-NEXT_PUBLIC_TELEGRAM_BOT_URL=https://t.me/WeatherQuant_bot
+NEXT_PUBLIC_TELEGRAM_BOT_URL=https://t.me/polyyuanbot
 
 # 推荐默认关闭的前端观测 / 预热开关
 NEXT_PUBLIC_POLYWEATHER_APP_ANALYTICS=false

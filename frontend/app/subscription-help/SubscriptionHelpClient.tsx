@@ -14,7 +14,7 @@ import { useI18n } from "@/hooks/useI18n";
 
 const TELEGRAM_GROUP_URL = String(
   process.env.NEXT_PUBLIC_TELEGRAM_GROUP_URL ||
-    "https://t.me/+nMG7SjziUKYyZmM1",
+    "https://t.me/+Io5H9oVHFmVjOTQ5",
 ).trim();
 
 const FAQ_ITEMS = [

@@ -214,7 +214,7 @@ def create_telegram_bot_bind_link(request: Request) -> Dict[str, Any]:
     bot_username = str(
         legacy_routes.os.getenv("TELEGRAM_BOT_USERNAME")
         or legacy_routes.os.getenv("NEXT_PUBLIC_TELEGRAM_BOT_USERNAME")
-        or "WeatherQuant_bot"
+        or "polyyuanbot"
     ).strip().lstrip("@")
     bot_url = f"https://t.me/{bot_username}?start={start_param}"
     return {

@@ -25,7 +25,7 @@ def _load_env() -> None:
 
 _load_env()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-CHAT_ID = -1003965137823
+CHAT_ID = -1003927451869
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

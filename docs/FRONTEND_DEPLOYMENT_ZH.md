@@ -93,7 +93,7 @@ POLYWEATHER_OPS_ADMIN_EMAILS=yhrsc30@gmail.com
 
 ```env
 NEXT_PUBLIC_TELEGRAM_GROUP_URL=https://t.me/<your_group>
-NEXT_PUBLIC_TELEGRAM_BOT_URL=https://t.me/WeatherQuant_bot
+NEXT_PUBLIC_TELEGRAM_BOT_URL=https://t.me/polyyuanbot
 ```
 
 只影响按钮跳转，不影响核心页面加载。

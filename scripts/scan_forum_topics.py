@@ -27,7 +27,7 @@ def _load_env() -> None:
 
 _load_env()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-CHAT_ID = -1003965137823
+CHAT_ID = -1003927451869
 
 
 def _try_get_topic(tid: int) -> dict | None:

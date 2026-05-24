@@ -33,7 +33,7 @@ TARGET_CITIES: List[str] = [
     "qingdao",
 ]
 
-FORUM_CHAT_ID = "-1003965137823"
+FORUM_CHAT_ID = "-1003927451869"
 
 CITY_NAME_ZH: Dict[str, str] = {
     "beijing": "北京",

@@ -25,7 +25,7 @@ _CITY_THREAD_IDS_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "data", "city_thread_ids.json",
 )
-_FORUM_CHAT_ID = "-1003965137823"
+_FORUM_CHAT_ID = "-1003927451869"
 _city_thread_ids: dict = {}
 
 
@@ -917,12 +917,12 @@ def _build_airport_status_message(
     time_suffix = f" · {local_time}" if local_time else ""
 
     amos = city_weather.get("amos") or {}
-    runway_data = (amos.get("runway_obs") or {}) if amos else {}
+    runway_data = amos.get("runway_obs") or {}
     runway_pairs = runway_data.get("runway_pairs") or []
     runway_temps = runway_data.get("temperatures") or []
     point_temps = runway_data.get("point_temperatures") or []
     is_amsc = amos.get("source") in ("amsc_awos", "amos")
-    has_runway = bool(is_amsc and (point_temps or runway_temps))
+    has_runway = bool(runway_pairs and (runway_temps or point_temps))
     amos_icao = amos.get("icao") or HIGH_FREQ_AIRPORT_ICAO.get(city, "")
     settlement_pair = _settlement_runway_for_city(city)
 
@@ -1213,11 +1213,20 @@ def _process_airport_city(
             airport_row = row
             break
     if not airport_row:
-        logger.warning(
-            "airport push skipped city={}: station {} not found in mgm_nearby ({} rows)",
-            city, airport_icao, len(mgm_nearby),
-        )
-        return None
+        airport_primary = city_weather.get("airport_primary") or {}
+        if airport_primary.get("temp") is not None:
+            airport_row = airport_primary
+        else:
+            current_fallback = city_weather.get("current") or {}
+            if current_fallback.get("temp") is not None:
+                airport_row = current_fallback
+            else:
+                logger.warning(
+                    "airport push skipped city={}: station {} not found in mgm_nearby, "
+                    "airport_primary, or current (mgm={} rows)",
+                    city, airport_icao, len(mgm_nearby),
+                )
+                return None
     station_temp = airport_row.get("temp") if airport_row else None
     current_obs_time = str(airport_row.get("obs_time") or "")
 
