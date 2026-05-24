@@ -510,44 +510,6 @@ function PolyWeatherTerminal({
           </div>
           <div className="flex items-center gap-3 text-xs text-slate-400">
             <span className="hidden font-mono md:inline text-slate-500">{userLocalTime}</span>
-            {/* Language toggle — matches landing page style */}
-            <button
-              type="button"
-              aria-label={t("switchLang", isEn)}
-              title={t("switchLang", isEn)}
-              onClick={toggleLocale}
-              className="inline-flex h-7 items-center gap-0.5 rounded border border-slate-700 bg-[#1e2630] p-0.5 text-[10px] font-bold text-slate-400 hover:border-slate-400"
-            >
-              <span
-                className={clsx(
-                  "rounded px-1.5 py-0.5 transition-colors",
-                  locale === "zh-CN"
-                    ? "bg-blue-600 text-white"
-                    : "hover:text-slate-200",
-                )}
-              >
-                中文
-              </span>
-              <span
-                className={clsx(
-                  "rounded px-1.5 py-0.5 transition-colors",
-                  locale === "en-US"
-                    ? "bg-blue-600 text-white"
-                    : "hover:text-slate-200",
-                )}
-              >
-                EN
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={onRefresh}
-              disabled={refreshing}
-              className="inline-flex h-7 items-center gap-1.5 rounded border border-slate-700 bg-[#1e2630] px-2.5 font-bold hover:bg-[#29323d] text-slate-300 disabled:opacity-60 transition-colors"
-            >
-              <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
-              {t("refresh", isEn)}
-            </button>
             <Link
               href="/account"
               className="grid h-7 w-7 place-items-center rounded-full bg-slate-700 border border-slate-600 text-slate-200 hover:bg-slate-600 hover:text-white transition-colors"
