@@ -12,6 +12,18 @@ export const TRADING_REGIONS = [
 
 export type TradingRegionKey = (typeof TRADING_REGIONS)[number]["key"];
 
+/** Map browser timezone offset (hours) to the closest trading region. */
+export function detectLocalRegion(): TradingRegionKey {
+  const offset = -new Date().getTimezoneOffset() / 60; // UTC offset in hours
+  if (offset >= 8) return "east_asia";
+  if (offset >= 7) return "southeast_asia";
+  if (offset >= 4.5) return "central_asia";
+  if (offset >= 2) return "west_asia";
+  if (offset >= -2) return "europe_africa";
+  if (offset >= -7) return "north_america";
+  return "south_america";
+}
+
 const TRADING_REGION_KEYS = new Set<string>(TRADING_REGIONS.map((region) => region.key));
 
 const CITY_REGION_FALLBACK: Record<string, TradingRegionKey> = {

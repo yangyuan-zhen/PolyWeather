@@ -31,6 +31,7 @@ import {
   getSignalState,
   resolveTradingRegionKey,
   TRADING_REGIONS,
+  detectLocalRegion,
 } from "@/components/dashboard/scan-terminal/continent-grouping";
 import { MobileCityCard } from "@/components/dashboard/scan-terminal/MobileCityCard";
 import { MobileRegionTabs } from "@/components/dashboard/scan-terminal/MobileRegionTabs";
@@ -469,6 +470,10 @@ function PolyWeatherTerminal({
   const [navExpanded, setNavExpanded] = useState(false);
   const [activeNavKey, setActiveNavKey] = useState<string>("contracts");
   const [selectedRegionKey, setSelectedRegionKey] = useState<string>("east_asia");
+
+  useEffect(() => {
+    setSelectedRegionKey(detectLocalRegion());
+  }, []);
 
   const NAV_ITEMS = [
     { key: "contracts", Icon: Table2, labelEn: "Contracts", labelZh: "天气合约" },
