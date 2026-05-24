@@ -327,14 +327,14 @@ export function LiveTemperatureThresholdChart({
             <ReLineChart data={data} margin={{ top: 16, right: 28, left: 8, bottom: 8 }}>
               <CartesianGrid stroke="#dbe6ef" strokeDasharray="2 2" />
               <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#64748b" }} tickLine={false} axisLine={{ stroke: "#cbd5e1" }} interval={2} />
-              <YAxis tick={{ fontSize: 10, fill: "#64748b" }} tickFormatter={(v) => `${Number(v).toFixed(1)}°`} orientation="right" axisLine={{ stroke: "#cbd5e1" }} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: "#64748b" }} tickFormatter={(v) => `${Number(v).toFixed(1)}°`} axisLine={{ stroke: "#cbd5e1" }} tickLine={false} />
               {threshold !== null && (
                 <ReferenceLine
                   y={threshold}
                   stroke="#f97316"
                   strokeDasharray="4 3"
                   strokeWidth={2}
-                  label={{ value: `UMA ${threshold.toFixed(1)}°`, fill: "#f97316", fontSize: 10, position: "right" }}
+                  label={{ value: `UMA ${threshold.toFixed(1)}°`, fill: "#f97316", fontSize: 10, position: "left" }}
                 />
               )}
               <Tooltip
