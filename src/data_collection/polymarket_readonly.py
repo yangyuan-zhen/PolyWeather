@@ -3015,7 +3015,6 @@ class PolymarketReadOnlyLayer:
             target_date=target_date,
             primary_market=primary_market,
         )
-        logger.info("SCAN_DEBUG city={} date={} related_markets={}", city_key, target_date, len(related_markets))
         if not related_markets:
             return {
                 "rows": [],
@@ -3090,10 +3089,6 @@ class PolymarketReadOnlyLayer:
             )
 
         broad_quotes = self._batch_get_token_market_data(token_ids, include_books=False)
-        logger.info(
-            "SCAN_DEBUG city={} date={} token_ids={} broad_quotes={} entries={}",
-            city_key, target_date, len(token_ids), len(broad_quotes), len(market_entries),
-        )
         bias_inputs: List[Tuple[float, float]] = []
         for entry in market_entries:
             yes_quote = self._merge_market_quote_fallback(
@@ -3351,14 +3346,6 @@ class PolymarketReadOnlyLayer:
             ask = _clamp_probability(_safe_float(entry.get("yes_ask") if side == "yes" else entry.get("no_ask")))
             bid = _clamp_probability(_safe_float(entry.get("yes_bid") if side == "yes" else entry.get("no_bid")))
             if model_event_probability is None or ask is None:
-                logger.info(
-                    "SCAN_DEBUG row_skip city={} date={} side={} model_p={} ask={} bid={} "
-                    "yes_ask={} no_ask={} slug={}",
-                    city_key, target_date, side,
-                    model_event_probability, ask, bid,
-                    entry.get("yes_ask"), entry.get("no_ask"),
-                    str(entry.get("market", {}).get("slug") or "")[:60],
-                )
                 return None
 
             market = entry["market"]
@@ -3682,23 +3669,19 @@ class PolymarketReadOnlyLayer:
                 _safe_float(row.get("book_liquidity")) or 0.0,
                 _safe_float(row.get("market_liquidity")) or 0.0,
             )
-            _reason = None
             if ask is None or edge_percent is None:
-                _reason = f"ask_or_edge_none ask={ask} edge={edge_percent}"
-            elif not row.get("tradable") or row.get("accepting_orders") is False:
-                _reason = f"not_tradable tradable={row.get('tradable')} accepting={row.get('accepting_orders')}"
-            elif row.get("enable_order_book") is False:
-                _reason = "order_book_disabled"
-            elif ask < filters["min_price"] or ask > filters["max_price"]:
-                _reason = f"price_range ask={ask} min={filters['min_price']} max={filters['max_price']}"
-            elif abs(edge_percent) < filters["min_edge_pct"]:
-                _reason = f"edge_too_low edge={edge_percent} min={filters['min_edge_pct']}"
-            elif spread is not None and spread > filters["max_spread"]:
-                _reason = f"spread_too_wide spread={spread} max={filters['max_spread']}"
-            elif liquidity < filters["min_liquidity"]:
-                _reason = f"liquidity_too_low liq={liquidity} min={filters['min_liquidity']}"
-            if _reason:
-                logger.info("SCAN_DEBUG filter_skip slug={} side={} reason={}", str(row.get("market_slug") or "")[:60], row.get("side"), _reason)
+                return False
+            if not row.get("tradable") or row.get("accepting_orders") is False:
+                return False
+            if row.get("enable_order_book") is False:
+                return False
+            if ask < filters["min_price"] or ask > filters["max_price"]:
+                return False
+            if abs(edge_percent) < filters["min_edge_pct"]:
+                return False
+            if spread is not None and spread > filters["max_spread"]:
+                return False
+            if liquidity < filters["min_liquidity"]:
                 return False
 
             side = str(row.get("side") or "").lower()
@@ -3754,10 +3737,6 @@ class PolymarketReadOnlyLayer:
 
         primary_signal = filtered_rows[0] if filtered_rows else None
         signal_status = "ready" if primary_signal else "no_signal"
-        logger.info(
-            "SCAN_DEBUG result city={} date={} preliminary={} final={} filtered={} signal={}",
-            city_key, target_date, len(preliminary_rows), len(final_rows), len(filtered_rows), signal_status,
-        )
         return {
             "rows": filtered_rows[: filters["limit"]],
             "distribution_bias": distribution_bias,
