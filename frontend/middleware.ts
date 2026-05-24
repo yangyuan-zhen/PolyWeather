@@ -5,8 +5,6 @@ import {
 } from "@/lib/supabase/server";
 import { isLocalFullAccessHost } from "@/lib/local-dev-access";
 
-const SESSION_COOKIE = "polyweather_entitlement";
-
 function readEnvBool(name: string, fallback: boolean) {
   const raw = process.env[name];
   if (raw == null) return fallback;
@@ -25,7 +23,6 @@ function isPublicPage(pathname: string) {
     pathname === "/" ||
     pathname.startsWith("/docs") ||
     pathname.startsWith("/subscription-help") ||
-    pathname === "/entitlement-required" ||
     pathname.startsWith("/auth/login") ||
     pathname.startsWith("/auth/callback")
   );
@@ -91,52 +88,6 @@ async function handleTerminalGate(request: NextRequest): Promise<NextResponse> {
   loginUrl.search = "";
   loginUrl.searchParams.set("next", pathname);
   return NextResponse.redirect(loginUrl);
-}
-
-function handleLegacyTokenGate(request: NextRequest) {
-  const requiredToken = process.env.POLYWEATHER_DASHBOARD_ACCESS_TOKEN?.trim();
-  if (!requiredToken) {
-    return NextResponse.next();
-  }
-
-  const { pathname, searchParams } = request.nextUrl;
-  if (isPublicPage(pathname) || isPublicApi(pathname)) {
-    return NextResponse.next();
-  }
-
-  const cookieToken = request.cookies.get(SESSION_COOKIE)?.value;
-  if (cookieToken && cookieToken === requiredToken) {
-    return NextResponse.next();
-  }
-
-  const queryToken = searchParams.get("access_token");
-  if (queryToken && queryToken === requiredToken) {
-    const cleanUrl = request.nextUrl.clone();
-    cleanUrl.searchParams.delete("access_token");
-
-    const response = NextResponse.redirect(cleanUrl);
-    response.cookies.set(SESSION_COOKIE, requiredToken, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: cleanUrl.protocol === "https:",
-      path: "/",
-      maxAge: 60 * 60 * 12,
-    });
-    return response;
-  }
-
-  if (pathname.startsWith("/api/")) {
-    return NextResponse.json(
-      { error: "Unauthorized", detail: "Entitlement token required" },
-      { status: 401 },
-    );
-  }
-
-  const deniedUrl = request.nextUrl.clone();
-  deniedUrl.pathname = "/entitlement-required";
-  deniedUrl.search = "";
-  deniedUrl.searchParams.set("next", pathname);
-  return NextResponse.redirect(deniedUrl);
 }
 
 async function handleSupabaseAuthGate(request: NextRequest) {
@@ -224,7 +175,7 @@ export async function middleware(request: NextRequest) {
     }
     return handleSupabaseOptionalSession(request);
   }
-  return handleLegacyTokenGate(request);
+  return NextResponse.next();
 }
 
 export const config = {

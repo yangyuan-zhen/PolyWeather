@@ -2,14 +2,18 @@
 
 import { RefreshCw } from "lucide-react";
 import { useEffect } from "react";
+import { I18nProvider, useI18n } from "@/hooks/useI18n";
 
-export default function AccountErrorPage({
+function AccountErrorContent({
   error,
   reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const { locale } = useI18n();
+  const isEn = locale === "en-US";
+
   useEffect(() => {
     console.error("Account page error:", error);
   }, [error]);
@@ -38,7 +42,7 @@ export default function AccountErrorPage({
           color: "var(--color-accent-primary, #4DA3FF)",
         }}
       >
-        账户页面出错
+        {isEn ? "Account Page Error" : "账户页面出错"}
       </h1>
       <p
         style={{
@@ -49,21 +53,9 @@ export default function AccountErrorPage({
           lineHeight: 1.7,
         }}
       >
-        如果是在支付或绑定钱包时出现此问题，常见原因是钱包插件冲突（例如同时开启了 MetaMask 和
-        Rabby）。请尝试关闭其他钱包插件后刷新页面重试。
-      </p>
-      <p
-        style={{
-          color: "var(--color-text-muted, #7D8FA3)",
-          fontSize: "0.8rem",
-          margin: 0,
-          maxWidth: 420,
-          lineHeight: 1.6,
-        }}
-      >
-        If this happened during payment or wallet binding, the most common cause is
-        conflicting wallet extensions. Try disabling other wallet extensions (e.g.
-        MetaMask + Rabby) and refresh.
+        {isEn
+          ? "If this happened during payment or wallet binding, the most common cause is conflicting wallet extensions (e.g. MetaMask and Rabby open at the same time). Try disabling other wallet extensions and refresh."
+          : "如果是在支付或绑定钱包时出现此问题，常见原因是钱包插件冲突（例如同时开启了 MetaMask 和 Rabby）。请尝试关闭其他钱包插件后刷新页面重试。"}
       </p>
       <button
         type="button"
@@ -84,8 +76,22 @@ export default function AccountErrorPage({
         }}
       >
         <RefreshCw size={14} />
-        重试
+        {isEn ? "Retry" : "重试"}
       </button>
     </div>
+  );
+}
+
+export default function AccountErrorPage({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  return (
+    <I18nProvider>
+      <AccountErrorContent error={error} reset={reset} />
+    </I18nProvider>
   );
 }

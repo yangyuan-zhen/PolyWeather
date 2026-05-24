@@ -888,7 +888,6 @@ export function AccountCenter() {
   const joinedAt = formatTime(user?.created_at, locale);
   const isSubscribed = Boolean(backend?.subscription_active);
   const planCode = String(backend?.subscription_plan_code || "").trim();
-  const isTrialPlan = /trial/i.test(planCode);
   const currentExpiryRaw = String(
     backend?.subscription_expires_at || user?.user_metadata?.pro_expiry || "",
   ).trim();
@@ -904,7 +903,7 @@ export function AccountCenter() {
   );
   const hasQueuedExtension = Boolean(isSubscribed && queuedExtensionDays > 0);
   const canAccessPaidTelegramGroup = Boolean(
-    isSubscribed && (!isTrialPlan || hasQueuedExtension),
+    isSubscribed,
   );
   const telegramBound = Number(backend?.telegram_pricing?.telegram_id || 0) > 0;
   const displayExpiryRaw = isSubscribed ? totalExpiryRaw : currentExpiryRaw;
@@ -933,7 +932,7 @@ export function AccountCenter() {
   const paymentFeatureReady = paymentReadyForRecovery;
   const canOpenCheckoutOverlay = Boolean(
     paymentFeatureReady &&
-    (!isSubscribed || isTrialPlan || showExpiringSoon || showExpiredReminder),
+    (!isSubscribed || showExpiringSoon || showExpiredReminder),
   );
   const subscriptionStatusTitle = showExpiredReminder
     ? copy.proExpiredTitle
@@ -2237,7 +2236,7 @@ export function AccountCenter() {
               >
                 {isSubscribed
                   ? copy.proMember
-                  : copy.freeTier}
+                  : isEn ? "UNSUBSCRIBED" : "未订阅"}
               </span>
             </div>
             <p className="mb-4 font-mono text-sm text-slate-500">

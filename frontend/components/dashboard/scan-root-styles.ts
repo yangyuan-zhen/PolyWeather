@@ -22,6 +22,7 @@ import scanTerminalListStyles from "./ScanTerminalList.module.css";
 import scanTerminalMobileStyles from "./ScanTerminalMobile.module.css";
 import scanTerminalOpportunityStyles from "./ScanTerminalOpportunity.module.css";
 import scanTerminalShellStyles from "./ScanTerminalShell.module.css";
+import scanTerminalContinentStyles from "./ScanTerminalContinent.module.css";
 import scanTerminalStateStyles from "./ScanTerminalState.module.css";
 
 export const scanRootClass = clsx(
@@ -38,6 +39,7 @@ export const scanRootClass = clsx(
   scanTerminalStateStyles.root,
   scanTerminalOpportunityStyles.root,
   scanTerminalCardStyles.root,
+  scanTerminalContinentStyles.root,
   scanTerminalMobileStyles.root,
   detailChromeStyles.root,
   detailContentStyles.root,

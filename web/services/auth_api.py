@@ -31,17 +31,12 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
 
     if legacy_routes.SUPABASE_ENTITLEMENT.enabled and user_id:
         try:
-            latest_subscription = legacy_routes.SUPABASE_ENTITLEMENT.ensure_signup_trial(
-                user_id,
-                created_at=getattr(request.state, "auth_created_at", None),
-            )
-            if not latest_subscription:
-                latest_subscription = (
-                    legacy_routes.SUPABASE_ENTITLEMENT.get_latest_active_subscription(
-                        user_id,
-                        respect_requirement=False,
-                    )
+            latest_subscription = (
+                legacy_routes.SUPABASE_ENTITLEMENT.get_latest_active_subscription(
+                    user_id,
+                    respect_requirement=False,
                 )
+            )
 
             latest_known_subscription = latest_subscription
             if not latest_known_subscription:

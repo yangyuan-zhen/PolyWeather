@@ -1260,18 +1260,6 @@ export function DashboardStoreProvider({
       });
     }
 
-    const isTrialPlan = /trial/i.test(
-      String(proAccess.subscriptionPlanCode || ""),
-    );
-    if (
-      isTrialPlan &&
-      markAnalyticsOnce(`signup-completed:${proAccess.userId}`, "local")
-    ) {
-      trackAppEvent("signup_completed", {
-        source: "auth_me_trial",
-        subscription_plan_code: proAccess.subscriptionPlanCode,
-      });
-    }
   }, [
     proAccess.authenticated,
     proAccess.loading,

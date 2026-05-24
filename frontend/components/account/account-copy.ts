@@ -129,7 +129,6 @@ export function createAccountCopy(isEn: boolean): Record<string, string> {
         ? "Wallet bound. Creating order and sending payment..."
         : "钱包已绑定，正在创建订单并发起支付...",
       proMember: "PRO MEMBER",
-      freeTier: isEn ? "UNSUBSCRIBED" : "未订阅",
       proPendingSync: isEn ? "Activated (pending sync)" : "已开通（待同步）",
       noProSubscription: isEn ? "No Pro subscription" : "暂无 Pro 订阅",
       proEndsSoonTitle: isEn ? "Pro renewal due soon" : "Pro 即将到期",
