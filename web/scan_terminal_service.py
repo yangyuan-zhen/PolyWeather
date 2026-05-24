@@ -1581,21 +1581,31 @@ def start_scan_terminal_prewarm() -> None:
     def _run():
         started = time.time()
         ok = 0
-        workers = max(1, min(SCAN_TERMINAL_MAX_WORKERS, len(city_names)))
-        with ThreadPoolExecutor(max_workers=workers) as ex:
-            futures = {ex.submit(_warm_one, c): c for c in city_names}
-            for f in as_completed(futures):
-                try:
-                    f.result()
-                    ok += 1
-                except Exception:
-                    pass
-        elapsed = int(time.time() - started)
-        logger.info(
-            "scan terminal pre-warm finished ok={}/{} elapsed={}s",
-            ok,
-            len(city_names),
-            elapsed,
-        )
+        try:
+            workers = max(1, min(SCAN_TERMINAL_MAX_WORKERS, len(city_names)))
+            with ThreadPoolExecutor(max_workers=workers) as ex:
+                futures = {ex.submit(_warm_one, c): c for c in city_names}
+                for f in as_completed(futures):
+                    try:
+                        f.result()
+                        ok += 1
+                    except Exception:
+                        pass
+            elapsed = int(time.time() - started)
+            logger.info(
+                "scan terminal pre-warm finished ok={}/{} elapsed={}s",
+                ok,
+                len(city_names),
+                elapsed,
+            )
+        except (ValueError, OSError, IOError):
+            # Process is shutting down — file handles / threads may be closed
+            logger.info(
+                "scan terminal pre-warm interrupted (shutdown) ok={}/{}",
+                ok,
+                len(city_names),
+            )
+        except Exception:
+            logger.exception("scan terminal pre-warm failed")
 
     threading.Thread(target=_run, name="scan-prewarm", daemon=True).start()

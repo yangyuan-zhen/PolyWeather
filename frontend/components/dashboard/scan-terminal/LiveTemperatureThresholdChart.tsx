@@ -364,6 +364,27 @@ function buildChartDomain(
   return [Number((min - padding).toFixed(1)), Number((max + padding).toFixed(1))];
 }
 
+function buildProbRefLines(row: ScanOpportunityRow | null) {
+  const buckets = row?.distribution_full?.length
+    ? row.distribution_full
+    : row?.distribution_preview;
+  if (!buckets?.length) return [];
+  const maxProb = Math.max(...buckets.map((b) => b.model_probability ?? 0), 0.01);
+  return buckets
+    .filter((b) => validNumber(b.value) !== null && (b.model_probability ?? 0) > 0)
+    .map((b) => {
+      const prob = b.model_probability ?? 0;
+      const intensity = prob / maxProb; // 0..1
+      return {
+        y: b.value!,
+        prob,
+        stroke: `rgba(37, 99, 235, ${(0.12 + intensity * 0.55).toFixed(2)})`,
+        width: 0.6 + intensity * 2.4,
+        label: `${(prob * 100).toFixed(0)}%`,
+      };
+    });
+}
+
 export function LiveTemperatureThresholdChart({
   isEn,
   row,
@@ -414,6 +435,7 @@ export function LiveTemperatureThresholdChart({
     .slice(0, 5)
     .map((item) => ({ ...item, ...seriesStats(item.values) }));
   const marketTemperatureTicks = useMemo(() => buildMarketTemperatureOptions(row), [row]);
+  const probRefLines = useMemo(() => buildProbRefLines(row), [row]);
   const chartDomain = useMemo(
     () => buildChartDomain(marketTemperatureTicks, series),
     [marketTemperatureTicks, series],
@@ -489,6 +511,19 @@ export function LiveTemperatureThresholdChart({
                   label={{ value: `UMA ${threshold.toFixed(1)}°`, fill: "#f97316", fontSize: 10, position: "left" }}
                 />
               )}
+              {probRefLines.map((item, i) => (
+                <ReferenceLine
+                  key={`prob-${i}`}
+                  y={item.y}
+                  stroke={item.stroke}
+                  strokeWidth={item.width}
+                  label={
+                    item.prob >= 0.15
+                      ? { value: item.label, fill: "#2563eb", fontSize: 9, position: "insideRight" }
+                      : undefined
+                  }
+                />
+              ))}
               <Tooltip
                 contentStyle={{
                   border: "1px solid #cbd5e1",
