@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import {
   Activity,
@@ -75,7 +74,6 @@ const PRO_FEATURES_ZH = [
 function InstitutionalLandingScreen() {
   const { locale, toggleLocale } = useI18n();
   const isEn = locale === "en-US";
-  const [billingCycle, setBillingCycle] = useState<"annual" | "monthly">("monthly");
 
   const marketRows = isEn ? RAW_MARKET_ROWS_EN : RAW_MARKET_ROWS_ZH;
   const coverage = isEn ? COVERAGE_EN : COVERAGE_ZH;
