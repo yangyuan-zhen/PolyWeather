@@ -296,6 +296,7 @@ class PolymarketWsQuoteCache:
 
         if event_type in {
             "best_bid_ask",
+            "best_bid_ask_price_change",
             "price_change",
             "book",
             "last_trade_price",

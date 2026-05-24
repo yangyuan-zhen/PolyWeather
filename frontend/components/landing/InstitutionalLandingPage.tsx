@@ -52,22 +52,8 @@ const COVERAGE_ZH = [
   "付费电报实时通知",
 ];
 
-const FREE_FEATURES_EN = [
-  "Basic temperature dashboards",
-  "Delayed METAR observations (1 hour)",
-  "Limited city watchlists",
-  "Standard model stacked probability chart",
-];
-
-const FREE_FEATURES_ZH = [
-  "基础温度气象看板",
-  "延迟的 METAR 机场实测 (1小时)",
-  "有限的城市自选列表",
-  "基础模型概率堆栈图",
-];
-
 const PRO_FEATURES_EN = [
-  "Everything in Free",
+  "Real-time METAR observations & runway sensor data",
   "Real-time METAR observations & alerts",
   "DEB blend forecast model",
   "Market-implied temperature pricing",
@@ -77,7 +63,7 @@ const PRO_FEATURES_EN = [
 ];
 
 const PRO_FEATURES_ZH = [
-  "包含所有免费版功能",
+  "实时 METAR 机场实测与跑道传感器数据",
   "实时 METAR 机场实测与预警",
   "DEB 智能融合预测模型",
   "市场隐含温度定价与估值",
@@ -348,120 +334,43 @@ function InstitutionalLandingScreen() {
 
         <section id="pricing" className="border-t border-slate-200 bg-white py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-            {/* Header */}
             <p className="text-xs font-bold uppercase tracking-wider text-blue-600">
               {isEn ? "PRICING" : "价格方案"}
             </p>
             <h2 className="mt-3 text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
-              {isEn ? "We keep it simple" : "简单清晰的定价"}
+              {isEn ? "Simple, transparent pricing" : "简单透明的定价"}
             </h2>
             <p className="mx-auto mt-4 max-w-2xl text-base text-slate-500">
               {isEn
-                ? "The industry's leading tools at a price to suit everyone."
-                : "领先的气象数据服务，以合适的价格满足不同交易需求。"}
+                ? "One plan. Full access. No hidden fees."
+                : "一个方案，全部功能，无隐藏费用。"}
             </p>
 
-            {/* Toggle */}
-            <div className="mt-10 flex justify-center">
-              <div className="relative flex rounded-full bg-slate-100 p-0.5 border border-slate-200">
-                <button
-                  type="button"
-                  className={`rounded-full px-6 py-2 text-xs font-bold transition-all duration-200 ${
-                    billingCycle === "annual"
-                      ? "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                  onClick={() => setBillingCycle("annual")}
-                >
-                  {isEn ? "Annual" : "按年支付"}
-                </button>
-                <button
-                  type="button"
-                  className={`rounded-full px-6 py-2 text-xs font-bold transition-all duration-200 ${
-                    billingCycle === "monthly"
-                      ? "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                  onClick={() => setBillingCycle("monthly")}
-                >
-                  {isEn ? "Monthly" : "按月支付"}
-                </button>
-              </div>
-            </div>
-
-            {/* Pricing Cards */}
-            <div className="mx-auto mt-16 grid max-w-4xl gap-8 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
-              {/* Free Plan */}
-              <div className="flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-8 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md text-left">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-bold text-slate-900">
-                      {isEn ? "Free" : "免费版"}
-                    </h3>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-500 min-h-10 leading-relaxed">
-                    {isEn
-                      ? "The ultimate beginner package — basic weather information to get started."
-                      : "适合初学者的基础气象信息与看板服务，快速体验平台。"}
-                  </p>
-                  <div className="mt-6 flex items-baseline">
-                    <span className="text-5xl font-black tracking-tight text-slate-900">$0</span>
-                    <span className="ml-1 text-sm font-semibold text-slate-500">/ {isEn ? "month" : "月"}</span>
-                  </div>
-                  <p className="mt-1 text-xs text-slate-400">
-                    {isEn ? "Free forever" : "永久免费"}
-                  </p>
-
-                  <div className="mt-8 border-t border-slate-100 pt-6">
-                    <ul className="space-y-4">
-                      {(isEn ? FREE_FEATURES_EN : FREE_FEATURES_ZH).map((feature) => (
-                        <li key={feature} className="flex items-start gap-3">
-                          <Check size={16} className="mt-0.5 shrink-0 text-slate-400" />
-                          <span className="text-sm text-slate-600 font-medium leading-normal">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-
-                <div className="mt-8">
-                  <Link
-                    href="/terminal"
-                    className="block w-full rounded-xl border border-slate-300 bg-white py-3 text-center text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
-                  >
-                    {isEn ? "Get Started" : "开始使用"}
-                  </Link>
-                </div>
-              </div>
-
-              {/* Pro Plan */}
-              <div className="relative flex flex-col justify-between rounded-3xl border-2 border-blue-600 bg-white p-8 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md text-left">
-                {/* Popular Badge */}
+            <div className="mx-auto mt-16 max-w-lg">
+              <div className="relative flex flex-col rounded-3xl border-2 border-blue-600 bg-white p-8 shadow-sm text-left">
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 rounded-full bg-blue-600 px-4 py-1 text-xs font-bold uppercase tracking-wider text-white shadow-sm">
-                  {isEn ? "Recommended" : "推荐方案"}
+                  {isEn ? "Pro Terminal" : "专业终端"}
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-bold text-slate-900">
-                      {isEn ? "Pro" : "专业版"}
-                    </h3>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-500 min-h-10 leading-relaxed">
+                  <h3 className="text-xl font-bold text-slate-900">
+                    PolyWeather Pro
+                  </h3>
+                  <p className="mt-2 text-sm text-slate-500 leading-relaxed">
                     {isEn
-                      ? "For active traders and institutions who need real-time, settlement-ready intelligence."
-                      : "为活跃交易员和机构提供实时、结算级气象交易数据与决策支持。"}
+                      ? "Full access to the institutional weather-market terminal. Live METAR, DEB forecasts, probability distribution, AI decision cards, and real-time alerts."
+                      : "完整访问机构级天气市场终端。实时 METAR、DEB 预报、概率分布、AI 决策卡片、实时通知。"}
                   </p>
                   <div className="mt-6 flex items-baseline">
                     <span className="text-5xl font-black tracking-tight text-slate-900">
-                      {billingCycle === "annual" ? "$8" : "$10"}
+                      $10
                     </span>
-                    <span className="ml-1 text-sm font-semibold text-slate-500">/ {isEn ? "month" : "月"}</span>
+                    <span className="ml-1 text-sm font-semibold text-slate-500">
+                      / {isEn ? "month" : "月"}
+                    </span>
                   </div>
                   <p className="mt-1 text-xs text-slate-400">
-                    {billingCycle === "annual"
-                      ? (isEn ? "Billed annually ($96/year)" : "按年计费 (共 $96/年)")
-                      : (isEn ? "Billed monthly" : "按月计费")}
+                    {isEn ? "Billed monthly. Cancel anytime." : "按月计费，随时可取消。"}
                   </p>
 
                   <div className="mt-8 border-t border-slate-100 pt-6">
@@ -469,7 +378,9 @@ function InstitutionalLandingScreen() {
                       {(isEn ? PRO_FEATURES_EN : PRO_FEATURES_ZH).map((feature) => (
                         <li key={feature} className="flex items-start gap-3">
                           <Check size={16} className="mt-0.5 shrink-0 text-blue-600" />
-                          <span className="text-sm text-slate-700 font-semibold leading-normal">{feature}</span>
+                          <span className="text-sm text-slate-700 font-semibold leading-normal">
+                            {feature}
+                          </span>
                         </li>
                       ))}
                     </ul>
@@ -481,8 +392,13 @@ function InstitutionalLandingScreen() {
                     href="/account"
                     className="block w-full rounded-xl bg-slate-950 py-3 text-center text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
                   >
-                    {isEn ? "Subscribe Now" : "立即付费订阅"}
+                    {isEn ? "Subscribe for $10/month" : "立即订阅 $10/月"}
                   </Link>
+                  <p className="mt-3 text-center text-xs text-slate-400">
+                    {isEn
+                      ? "Login required. Payment via USDC on Polygon."
+                      : "需先登录。通过 Polygon 链 USDC 支付。"}
+                  </p>
                 </div>
               </div>
             </div>
