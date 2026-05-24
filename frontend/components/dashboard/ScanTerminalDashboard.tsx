@@ -168,6 +168,20 @@ const TERM = {
   dashboard: { en: "Weather Market Dashboard", zh: "天气市场数据仪表盘" },
   refresh: { en: "Refresh", zh: "刷新" },
   switchLang: { en: "Switch to Chinese", zh: "切换到英文" },
+  globalWeatherFactors: { en: "Global Weather Factors", zh: "全球天气因子" },
+  heat: { en: "Heat", zh: "高温风险" },
+  active: { en: "Active", zh: "活跃" },
+  tradable: { en: "Tradable", zh: "可交易" },
+  primary: { en: "Primary", zh: "主信号" },
+  ai: { en: "AI", zh: "AI" },
+  closed: { en: "Closed", zh: "已关闭" },
+  terminalStatus: { en: "Terminal Status", zh: "终端状态" },
+  tsData: { en: "Data", zh: "数据" },
+  tsAccess: { en: "Access", zh: "访问权限" },
+  tsLayout: { en: "Layout", zh: "布局" },
+  tsLayoutValue: { en: "Koyfin-style grid", zh: "Koyfin 风格网格" },
+  tsDataLive: { en: "live", zh: "实时" },
+  tsAccessPaid: { en: "paid", zh: "付费" },
 } as const;
 
 function t(key: keyof typeof TERM, isEn: boolean) {
@@ -824,15 +838,15 @@ function KoyfinWeatherTerminal({
                 </div>
               </Panel>
 
-              <Panel title="Global Weather Factors">
+              <Panel title={t("globalWeatherFactors", isEn)}>
                 <div className="grid grid-cols-3 gap-2 p-3 text-center">
                   {[
-                    ["Heat", rows.filter((r) => r.risk_level === "high").length],
-                    ["Active", rows.filter((r) => r.active).length],
-                    ["Tradable", rows.filter((r) => r.tradable).length],
-                    ["Primary", rows.filter((r) => r.is_primary_signal).length],
-                    ["AI", rows.filter((r) => r.ai_decision).length],
-                    ["Closed", rows.filter((r) => r.closed).length],
+                    [t("heat", isEn), rows.filter((r) => r.risk_level === "high").length],
+                    [t("active", isEn), rows.filter((r) => r.active).length],
+                    [t("tradable", isEn), rows.filter((r) => r.tradable).length],
+                    [t("primary", isEn), rows.filter((r) => r.is_primary_signal).length],
+                    [t("ai", isEn), rows.filter((r) => r.ai_decision).length],
+                    [t("closed", isEn), rows.filter((r) => r.closed).length],
                   ].map(([label, value]) => (
                     <div key={String(label)} className="rounded border border-slate-200 bg-slate-50 p-3">
                       <div className="font-mono text-lg font-black">{value}</div>
@@ -844,21 +858,21 @@ function KoyfinWeatherTerminal({
                 </div>
               </Panel>
 
-              <Panel title="Terminal Status">
+              <Panel title={t("terminalStatus", isEn)}>
                 <div className="space-y-3 p-3 text-sm">
                   <div className="flex items-center justify-between rounded border border-slate-200 bg-slate-50 p-3">
-                    <span className="font-semibold">Data</span>
+                    <span className="font-semibold">{t("tsData", isEn)}</span>
                     <span className="font-mono text-emerald-700">
-                      {generatedText || "live"}
+                      {generatedText || t("tsDataLive", isEn)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between rounded border border-slate-200 bg-slate-50 p-3">
-                    <span className="font-semibold">Access</span>
-                    <span className="font-mono text-blue-700">paid</span>
+                    <span className="font-semibold">{t("tsAccess", isEn)}</span>
+                    <span className="font-mono text-blue-700">{t("tsAccessPaid", isEn)}</span>
                   </div>
                   <div className="flex items-center justify-between rounded border border-slate-200 bg-slate-50 p-3">
-                    <span className="font-semibold">Layout</span>
-                    <span className="font-mono">Koyfin-style grid</span>
+                    <span className="font-semibold">{t("tsLayout", isEn)}</span>
+                    <span className="font-mono">{t("tsLayoutValue", isEn)}</span>
                   </div>
                 </div>
               </Panel>
