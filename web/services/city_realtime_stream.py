@@ -14,7 +14,6 @@ import time
 from typing import Any, Dict, List, Optional
 
 from web.analysis_service import _analyze
-from web.core import CITIES
 
 # Per-city ring buffers: city_name → deque of {timestamp, temp, source}
 _STREAM_BUFFERS: Dict[str, collections.deque] = {}
