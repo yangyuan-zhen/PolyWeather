@@ -1628,9 +1628,60 @@ class PolymarketReadOnlyLayer:
             probability = max(0.0, min(1.0, probability))
             total += probability
             matched += 1
-        if matched <= 0:
+        if matched > 0:
+            return max(0.0, min(1.0, total))
+
+        # Fallback: use Gaussian CDF when no distribution bucket matches the
+        # market bucket exactly.  Compute mu/sigma from the distribution, then
+        # integrate the Gaussian tail or band that corresponds to the market.
+        values = []
+        weights = []
+        for row in probability_distribution:
+            v = _safe_float(row.get("value"))
+            p = _safe_float(row.get("probability"))
+            if v is not None and p is not None:
+                prob = p / 100.0 if p > 1.0 else p
+                values.append(v)
+                weights.append(max(0.0, prob))
+        if len(values) < 2:
             return None
-        return max(0.0, min(1.0, total))
+
+        total_weight = sum(weights)
+        if total_weight <= 0:
+            return None
+        mu = sum(v * w for v, w in zip(values, weights)) / total_weight
+        variance = sum(w * (v - mu) ** 2 for v, w in zip(values, weights)) / total_weight
+        sigma = math.sqrt(max(variance, 0.01))
+
+        unit = str(temp_symbol or "C").upper()
+        bucket_range = self._extract_market_bucket_range(market)
+        lower = bucket_range[0] if bucket_range else None
+        upper = bucket_range[1] if bucket_range else None
+        direction = self._extract_market_bucket_direction(market)
+        if lower is not None:
+            lower = self._convert_temp_to_market_unit(
+                lower, source_symbol=None, market_unit=(bucket_range[2] if bucket_range else unit),
+            ) or lower
+        if upper is not None:
+            upper = self._convert_temp_to_market_unit(
+                upper, source_symbol=None, market_unit=(bucket_range[2] if bucket_range else unit),
+            ) or upper
+
+        def _norm_cdf(x: float) -> float:
+            return 0.5 * (1.0 + math.erf((x - mu) / (sigma * math.sqrt(2.0))))
+
+        if lower is not None and upper is not None:
+            prob = _norm_cdf(upper + 0.5) - _norm_cdf(lower - 0.5)
+        elif lower is not None and direction == "above":
+            prob = 1.0 - _norm_cdf(lower - 0.5)
+        elif lower is not None and direction == "below":
+            prob = _norm_cdf(lower + 0.5)
+        elif lower is not None:
+            prob = _norm_cdf(lower + 1.5) - _norm_cdf(lower - 0.5)
+        else:
+            return None
+
+        return max(0.0, min(1.0, prob))
 
     def _load_markets(self, active_only: bool = True) -> List[Dict[str, Any]]:
         now = time.time()
