@@ -593,23 +593,6 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
       kind: "metar",
     },
   ],
-  shenzhen: [
-    {
-      label: "NMC 深圳天气",
-      href: "https://m.nmc.cn/publish/forecast/AGD/shenzuo.html",
-      kind: "agency",
-    },
-    {
-      label: "深圳宝安国际机场",
-      href: "https://www.szairport.com/",
-      kind: "airport",
-    },
-    {
-      label: "ZGSZ METAR",
-      href: "https://aviationweather.gov/data/metar/?id=ZGSZ&decoded=1&taf=1",
-      kind: "metar",
-    },
-  ],
   qingdao: [
     {
       label: "Wunderground ZSQD",

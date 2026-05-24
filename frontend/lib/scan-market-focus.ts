@@ -89,7 +89,6 @@ const CITY_REGION_FALLBACK: Record<string, MarketRegionKey> = {
   seoul: "asia_pacific",
   busan: "asia_pacific",
   "hong kong": "asia_pacific",
-  "shenzhen": "asia_pacific",
   taipei: "asia_pacific",
   shanghai: "asia_pacific",
   singapore: "asia_pacific",
