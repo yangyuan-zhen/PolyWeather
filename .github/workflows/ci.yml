@@ -76,6 +76,7 @@ jobs:
           ssh -o StrictHostKeyChecking=accept-new ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
             cd /root/PolyWeather
             git fetch origin main && git reset --hard origin/main
+            docker compose down
             docker compose up -d --build
             sleep 10
             curl -s http://localhost:8000/healthz
