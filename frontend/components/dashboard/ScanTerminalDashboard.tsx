@@ -56,6 +56,8 @@ import {
   useScanTerminalTheme,
   useUserLocalClock,
 } from "@/components/dashboard/scan-terminal/use-scan-terminal-ui-state";
+import { ScanTerminalLoadingScreen } from "@/components/dashboard/scan-terminal/ScanTerminalShellParts";
+import { scanRootClass } from "@/components/dashboard/scan-root-styles";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
 
 function createEmptyAccess(loading = true): ProAccessState {
@@ -1165,7 +1167,7 @@ function ScanTerminalScreen() {
   const isPro =
     hydrated && (proAccess.subscriptionActive || canUseLocalFullAccess);
   const userLocalTime = useUserLocalClock();
-  useScanTerminalTheme();
+  const { themeMode } = useScanTerminalTheme();
 
   useEffect(() => {
     let cancelled = false;
@@ -1253,11 +1255,12 @@ function ScanTerminalScreen() {
 
   if (!hydrated || (proAccess.loading && !canUseLocalFullAccess)) {
     return (
-      <div className="grid h-screen w-full place-items-center bg-[#e9edf3]">
-        <div className="rounded border border-slate-300 bg-white px-5 py-4 text-sm font-bold text-slate-600 shadow-sm">
-          Loading paid terminal...
-        </div>
-      </div>
+      <ScanTerminalLoadingScreen
+        isEn={isEn}
+        rootClassName={scanRootClass}
+        themeMode={themeMode}
+        userLocalTime={userLocalTime}
+      />
     );
   }
 

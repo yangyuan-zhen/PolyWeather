@@ -18,12 +18,9 @@ export function LoadingSignal({
       <div className="scan-loading-spinner-wrapper" aria-hidden="true">
         <div className="scan-loading-spinner-ring" />
         <img
-          src="/static/logo.png"
+          src="/apple-touch-icon.png"
           alt="PolyWeather"
           className="scan-loading-spinner-logo"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src = "/logo.png";
-          }}
         />
       </div>
       <div className="scan-loading-copy-block">

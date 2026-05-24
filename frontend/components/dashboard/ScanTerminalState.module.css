@@ -124,8 +124,8 @@
 
 .root :global(.scan-loading-spinner-wrapper) {
   position: relative;
-  width: 90px;
-  height: 90px;
+  width: 96px;
+  height: 96px;
   display: grid;
   place-items: center;
   margin: 0 auto;
@@ -134,17 +134,19 @@
 .root :global(.scan-loading-spinner-ring) {
   position: absolute;
   inset: 0;
-  border: 1.5px solid transparent;
-  border-top-color: var(--color-text-primary);
-  border-right-color: var(--color-text-primary);
+  border: 2px solid transparent;
+  border-top-color: #3b82f6;
+  border-right-color: #60a5fa;
   border-radius: 50%;
-  animation: scan-loading-spin 1s linear infinite;
+  animation: scan-loading-spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.12);
 }
 
 .root :global(.scan-loading-spinner-logo) {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   object-fit: contain;
+  border-radius: 8px;
 }
 
 .root :global(.scan-loading-copy-block) {
