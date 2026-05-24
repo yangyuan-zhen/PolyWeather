@@ -344,13 +344,14 @@ export function LiveTemperatureThresholdChart({
         return res.json() as Promise<CityDetail>;
       })
       .then((json) => {
-        if (cancelled || !json?.hourly) return;
+        const hourlySource = (json as any)?.hourly ?? (json as any)?.timeseries?.hourly;
+        if (cancelled || !json || !hourlySource) return;
         const data: HourlyForecast = {
           forecastTodayHigh: json.forecast?.today_high ?? null,
           localTime: json.local_time || null,
-          times: json.hourly.times || [],
-          temps: json.hourly.temps || [],
-          modelCurves: json.models_hourly?.curves || undefined,
+          times: hourlySource.times || [],
+          temps: hourlySource.temps || [],
+          modelCurves: (json.models_hourly ?? (json as any)?.timeseries?.models_hourly)?.curves || undefined,
         };
         _hourlyCache.set(city, { ts: Date.now(), data });
         setHourly(data);
