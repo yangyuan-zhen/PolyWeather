@@ -4,7 +4,9 @@ import clsx from "clsx";
 import Link from "next/link";
 import {
   Activity,
+  ChevronDown,
   ChevronLeft,
+  ChevronRight,
   GraduationCap,
   LineChart,
   Menu,
@@ -12,7 +14,7 @@ import {
   Table2,
   UserRound,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { ProAccessState, ScanOpportunityRow } from "@/lib/dashboard-types";
 import { getInitialLocaleFromNavigator } from "@/lib/i18n";
 import { isBrowserLocalFullAccess } from "@/lib/local-dev-access";
@@ -267,7 +269,7 @@ function KoyfinMarketPanel({
 }) {
   return (
     <Panel title={title}>
-      <KoyfinRowsTable
+      <CityGroupedTable
         compact={compact}
         isEn={isEn}
         onSelect={onSelect}
@@ -275,6 +277,146 @@ function KoyfinMarketPanel({
         selectedId={selectedId}
       />
     </Panel>
+  );
+}
+
+function CityGroupedTable({
+  compact,
+  isEn,
+  onSelect,
+  rows,
+  selectedId,
+}: {
+  compact?: boolean;
+  isEn: boolean;
+  onSelect: (row: ScanOpportunityRow) => void;
+  rows: ScanOpportunityRow[];
+  selectedId?: string | null;
+}) {
+  const [expandedCities, setExpandedCities] = useState<Set<string>>(new Set());
+
+  const cityGroups = useMemo(() => {
+    const map = new Map<string, ScanOpportunityRow[]>();
+    rows.forEach((row) => {
+      const key = String(row.city || "").toLowerCase();
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(row);
+    });
+    return Array.from(map.entries())
+      .map(([city, cityRows]) => {
+        const best = cityRows.reduce((a, b) =>
+          Math.abs(Number(b.edge_percent || 0)) > Math.abs(Number(a.edge_percent || 0)) ? b : a
+        );
+        const buckets = [...cityRows].sort((a, b) =>
+          Number(b.edge_percent || 0) - Number(a.edge_percent || 0)
+        );
+        return { city, displayName: rowName(best), best, buckets };
+      })
+      .sort((a, b) =>
+        Math.abs(Number(b.best.edge_percent || 0)) - Math.abs(Number(a.best.edge_percent || 0))
+      );
+  }, [rows]);
+
+  const toggle = (city: string) => {
+    setExpandedCities((prev) => {
+      const next = new Set(prev);
+      if (next.has(city)) next.delete(city);
+      else next.add(city);
+      return next;
+    });
+  };
+
+  const labelExpand = isEn ? "Expand" : "展开";
+  const labelBuckets = isEn ? "buckets" : "档位";
+
+  return (
+    <div className="overflow-auto h-full">
+      <table className="w-full min-w-[680px] border-collapse text-[11px]">
+        <thead>
+          <tr className="border-b border-slate-200 bg-[#f3f5f7] text-[9px] uppercase tracking-wide text-slate-500">
+            <th className="w-5 px-2 py-1.5 text-left font-black">
+              <span className="block h-3 w-3 rounded-[2px] border border-slate-300 bg-white" />
+            </th>
+            <th className="px-1.5 py-1.5 text-left font-black">
+              {isEn ? "City / Best Signal" : "城市 / 最佳信号"}
+            </th>
+            <th className="px-1.5 py-1.5 text-right font-black">{isEn ? "Edge" : "优势"}</th>
+            <th className="px-1.5 py-1.5 text-right font-black">Live</th>
+            <th className="px-1.5 py-1.5 text-right font-black">DEB</th>
+            <th className="px-1.5 py-1.5 text-right font-black">{isEn ? "Mkt" : "市场"}</th>
+            <th className="px-1.5 py-1.5 text-right font-black">{isEn ? "Liq" : "流动性"}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {cityGroups.map(({ city, displayName, best, buckets }) => {
+            const isExpanded = expandedCities.has(city);
+            const hasMultiple = buckets.length > 1;
+            return (
+              <Fragment key={city}>
+                <tr
+                  className={clsx(
+                    "cursor-pointer border-b border-slate-100 hover:bg-slate-50/80",
+                    selectedId === best.id && "bg-blue-50/50"
+                  )}
+                  onClick={() => onSelect(best)}
+                >
+                  <td className="px-2 py-1.5">
+                    <button
+                      type="button"
+                      className="grid h-4 w-4 place-items-center text-slate-400 hover:text-slate-700"
+                      onClick={(e) => { e.stopPropagation(); toggle(city); }}
+                      title={`${labelExpand} ${hasMultiple ? `${buckets.length} ${labelBuckets}` : ""}`}
+                    >
+                      {hasMultiple ? (
+                        isExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />
+                      ) : (
+                        <span className="text-[8px] text-slate-300">—</span>
+                      )}
+                    </button>
+                  </td>
+                  <td className="px-1.5 py-1.5">
+                    <div className="font-bold text-slate-800">{displayName}</div>
+                    <div className="text-[9px] text-slate-400">
+                      {best.target_label || ""}
+                      {hasMultiple && !isExpanded ? ` +${buckets.length - 1}` : ""}
+                    </div>
+                  </td>
+                  <td className={clsx("px-1.5 py-1.5 text-right font-mono font-bold", edgeClass(best.edge_percent))}>
+                    {pct(best.edge_percent)}
+                  </td>
+                  <td className="px-1.5 py-1.5 text-right font-mono">{temp(best.current_temp || best.current_max_so_far, best.temp_symbol)}</td>
+                  <td className="px-1.5 py-1.5 text-right font-mono">{temp(best.deb_prediction, best.temp_symbol)}</td>
+                  <td className="px-1.5 py-1.5 text-right font-mono">{pct(best.market_probability ?? best.market_event_probability)}</td>
+                  <td className="px-1.5 py-1.5 text-right font-mono">{money(best.book_liquidity ?? best.market_liquidity ?? best.volume)}</td>
+                </tr>
+                {isExpanded && buckets.map((row) => (
+                  <tr
+                    key={row.id}
+                    className={clsx(
+                      "cursor-pointer border-b border-slate-50 bg-slate-50/50 hover:bg-blue-50/50",
+                      selectedId === row.id && "bg-blue-50"
+                    )}
+                    onClick={() => onSelect(row)}
+                  >
+                    <td className="px-2 py-1" />
+                    <td className="px-1.5 py-1 pl-5">
+                      <span className="text-[10px] text-slate-500">{row.target_label || "--"}</span>
+                    </td>
+                    <td className={clsx("px-1.5 py-1 text-right font-mono text-[10px] font-bold", edgeClass(row.edge_percent))}>
+                      {pct(row.edge_percent)}
+                    </td>
+                    <td className="px-1.5 py-1 text-right font-mono text-[10px]">{temp(row.current_temp || row.current_max_so_far, row.temp_symbol)}</td>
+                    <td className="px-1.5 py-1 text-right font-mono text-[10px]">{temp(row.deb_prediction, row.temp_symbol)}</td>
+                    <td className="px-1.5 py-1 text-right font-mono text-[10px]">{pct(row.market_probability ?? row.market_event_probability)}</td>
+                    <td className="px-1.5 py-1 text-right font-mono text-[10px]">{money(row.book_liquidity ?? row.market_liquidity ?? row.volume)}</td>
+                  </tr>
+                ))}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
