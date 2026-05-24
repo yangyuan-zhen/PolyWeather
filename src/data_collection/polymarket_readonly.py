@@ -3682,16 +3682,25 @@ class PolymarketReadOnlyLayer:
                 _safe_float(row.get("book_liquidity")) or 0.0,
                 _safe_float(row.get("market_liquidity")) or 0.0,
             )
+            _reason = None
             if ask is None or edge_percent is None:
+                _reason = f"ask_or_edge_none ask={ask} edge={edge_percent}"
+            elif not row.get("tradable") or row.get("accepting_orders") is False:
+                _reason = f"not_tradable tradable={row.get('tradable')} accepting={row.get('accepting_orders')}"
+            elif row.get("enable_order_book") is False:
+                _reason = "order_book_disabled"
+            elif ask < filters["min_price"] or ask > filters["max_price"]:
+                _reason = f"price_range ask={ask} min={filters['min_price']} max={filters['max_price']}"
+            elif edge_percent < filters["min_edge_pct"]:
+                _reason = f"edge_too_low edge={edge_percent} min={filters['min_edge_pct']}"
+            elif spread is not None and spread > filters["max_spread"]:
+                _reason = f"spread_too_wide spread={spread} max={filters['max_spread']}"
+            elif liquidity < filters["min_liquidity"]:
+                _reason = f"liquidity_too_low liq={liquidity} min={filters['min_liquidity']}"
+            if _reason:
+                logger.info("SCAN_DEBUG filter_skip slug={} side={} reason={}", str(row.get("market_slug") or "")[:60], row.get("side"), _reason)
                 return False
-            if not row.get("tradable") or row.get("accepting_orders") is False:
-                return False
-            if row.get("enable_order_book") is False:
-                return False
-            if ask < filters["min_price"] or ask > filters["max_price"]:
-                return False
-            if edge_percent < filters["min_edge_pct"]:
-                return False
+
             side = str(row.get("side") or "").lower()
             market_direction = str(row.get("market_direction") or "").lower()
             if (
@@ -3702,7 +3711,7 @@ class PolymarketReadOnlyLayer:
                 and not (row.get("cluster_adjusted") and row.get("is_directional_candidate"))
             ):
                 return False
-            if spread is None or spread > filters["max_spread"]:
+            if spread is not None and spread > filters["max_spread"]:
                 return False
             if liquidity < filters["min_liquidity"]:
                 return False
