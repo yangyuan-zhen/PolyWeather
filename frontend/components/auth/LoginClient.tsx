@@ -241,11 +241,8 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
         {/* Left Dark Column */}
         <div className="relative flex flex-col justify-between bg-[#11161d] p-8 text-white lg:w-[480px] xl:w-[540px] shrink-0">
           <div className="flex flex-col gap-12">
-            <Link href="/" className="flex items-center gap-2.5 font-bold hover:opacity-90">
-              <span className="grid h-8 w-8 place-items-center rounded bg-blue-600 text-white">
-                <CloudSun size={18} />
-              </span>
-              <span className="text-lg tracking-tight">PolyWeather</span>
+            <Link href="/" className="flex items-center hover:opacity-90">
+              <img src="/logo.png" alt="PolyWeather" className="h-8 w-auto object-contain" />
             </Link>
 
             <div className="mt-8 space-y-6">
@@ -408,11 +405,8 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
     <div className="flex min-h-screen w-full flex-col bg-[#f8fafc] font-sans text-slate-900">
       {/* Top Header */}
       <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-6">
-        <Link href="/" className="flex items-center gap-2.5 font-bold hover:opacity-90">
-          <span className="grid h-8 w-8 place-items-center rounded bg-blue-600 text-white">
-            <CloudSun size={18} />
-          </span>
-          <span className="text-lg tracking-tight">PolyWeather</span>
+        <Link href="/" className="flex items-center hover:opacity-90">
+          <img src="/logo.png" alt="PolyWeather" className="h-8 w-auto object-contain" />
         </Link>
         <div className="flex items-center gap-3">
           <span className="text-xs text-slate-500 hidden sm:inline">{copy.newToPoly}</span>

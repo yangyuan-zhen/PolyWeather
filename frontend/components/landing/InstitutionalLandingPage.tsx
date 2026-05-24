@@ -121,11 +121,8 @@ function InstitutionalLandingScreen() {
     <div className="min-h-screen bg-[#f4f7fb] text-slate-950">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link href="/" className="flex items-center gap-2 font-bold">
-            <span className="grid h-9 w-9 place-items-center rounded-lg bg-blue-600 text-white">
-              <CloudSun size={20} />
-            </span>
-            <span>PolyWeather</span>
+          <Link href="/" className="flex items-center hover:opacity-90">
+            <img src="/logo.png" alt="PolyWeather" className="h-8 w-auto object-contain" />
           </Link>
           <nav className="hidden items-center gap-7 text-sm font-semibold text-slate-600 md:flex">
             <a href="#platform" className="hover:text-slate-950">

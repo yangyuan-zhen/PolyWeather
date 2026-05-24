@@ -363,10 +363,10 @@ function KoyfinWeatherTerminal({
       <aside className="flex w-[52px] shrink-0 flex-col items-center gap-2 bg-[#171d24] py-4 text-slate-300">
         <Link
           href="/"
-          className="mb-2 grid h-8 w-8 place-items-center rounded bg-blue-600 text-white transition hover:bg-blue-700"
+          className="mb-2 block h-8 w-8 overflow-hidden rounded transition hover:opacity-90"
           title="PolyWeather"
         >
-          <CloudSun size={18} />
+          <img src="/apple-touch-icon.png" alt="PolyWeather" className="h-full w-full object-cover" />
         </Link>
         <Menu size={23} className="mb-3" />
         {[CloudSun, Table2, BarChart3, LineChart, Gauge, Bell].map((Icon, i) => (
@@ -657,11 +657,9 @@ function ProductAccessRequired({
       <aside className="w-[52px] bg-[#171d24]" />
       <main className="flex flex-1 flex-col">
         <header className="flex h-[64px] items-center justify-between bg-[#171d24] px-4 text-white">
-          <Link href="/" className="flex items-center gap-3 font-black hover:opacity-90">
-            <span className="grid h-8 w-8 place-items-center rounded bg-blue-600 text-white">
-              <CloudSun size={18} />
-            </span>
-            <span>PolyWeather Terminal</span>
+          <Link href="/" className="flex items-center gap-2 hover:opacity-90">
+            <img src="/logo.png" alt="PolyWeather" className="h-7 w-auto object-contain" />
+            <span className="text-sm font-semibold tracking-tight text-white/90">Terminal</span>
           </Link>
           <div className="font-mono text-sm text-slate-300">{userLocalTime}</div>
         </header>

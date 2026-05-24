@@ -15,26 +15,20 @@ export function LoadingSignal({
       role="status"
       aria-live="polite"
     >
-      <div className="scan-loading-decision-flow" aria-hidden="true">
-        <span className="scan-loading-node hot" />
-        <span className="scan-loading-rail">
-          <i />
-        </span>
-        <span className="scan-loading-node market" />
-        <span className="scan-loading-rail">
-          <i />
-        </span>
-        <span className="scan-loading-node action" />
+      <div className="scan-loading-spinner-wrapper" aria-hidden="true">
+        <div className="scan-loading-spinner-ring" />
+        <img
+          src="/static/logo.png"
+          alt="PolyWeather"
+          className="scan-loading-spinner-logo"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = "/logo.png";
+          }}
+        />
       </div>
       <div className="scan-loading-copy-block">
         <strong>{title}</strong>
         {description ? <span>{description}</span> : null}
-      </div>
-      <div className="scan-loading-signal-bars" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-        <span />
       </div>
     </div>
   );
