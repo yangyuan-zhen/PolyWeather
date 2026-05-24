@@ -331,7 +331,7 @@ function CityGroupedTable({
 
   return (
     <div className="overflow-auto h-full">
-      <table className="w-full min-w-[680px] border-collapse text-[11px]">
+      <table className="w-full min-w-[780px] border-collapse text-[11px]">
         <thead>
           <tr className="border-b border-slate-200 bg-[#f3f5f7] text-[9px] uppercase tracking-wide text-slate-500">
             <th className="w-5 px-2 py-1.5 text-left font-black">
@@ -341,10 +341,11 @@ function CityGroupedTable({
               {isEn ? "City / Best Signal" : "城市 / 最佳信号"}
             </th>
             <th className="px-1.5 py-1.5 text-right font-black">{isEn ? "Edge" : "优势"}</th>
+            <th className="px-1.5 py-1.5 text-right font-black">{isEn ? "Model" : "模型"}</th>
             <th className="px-1.5 py-1.5 text-right font-black">Live</th>
             <th className="px-1.5 py-1.5 text-right font-black">DEB</th>
-            <th className="px-1.5 py-1.5 text-right font-black">{isEn ? "Mkt" : "市场"}</th>
-            <th className="px-1.5 py-1.5 text-right font-black">{isEn ? "Liq" : "流动性"}</th>
+            <th className="px-1.5 py-1.5 text-right font-black">{isEn ? "Mkt" : "盘口"}</th>
+            <th className="px-1.5 py-1.5 text-right font-black">{isEn ? "Spr/Liq" : "价差/流动性"}</th>
           </tr>
         </thead>
         <tbody>
@@ -384,6 +385,7 @@ function CityGroupedTable({
                   <td className={clsx("px-1.5 py-1.5 text-right font-mono font-bold", edgeClass(best.edge_percent))}>
                     {pct(best.edge_percent)}
                   </td>
+                  <td className="px-1.5 py-1.5 text-right font-mono text-blue-700">{pct(best.model_probability ?? best.model_event_probability)}</td>
                   <td className="px-1.5 py-1.5 text-right font-mono">{temp(best.current_temp || best.current_max_so_far, best.temp_symbol)}</td>
                   <td className="px-1.5 py-1.5 text-right font-mono">{temp(best.deb_prediction, best.temp_symbol)}</td>
                   <td className="px-1.5 py-1.5 text-right font-mono">{formatPrice(best.midpoint, best.ask, best.bid)}</td>
@@ -405,6 +407,7 @@ function CityGroupedTable({
                     <td className={clsx("px-1.5 py-1 text-right font-mono text-[10px] font-bold", edgeClass(row.edge_percent))}>
                       {pct(row.edge_percent)}
                     </td>
+                    <td className="px-1.5 py-1 text-right font-mono text-[10px] text-blue-700">{pct(row.model_probability ?? row.model_event_probability)}</td>
                     <td className="px-1.5 py-1 text-right font-mono text-[10px]">{temp(row.current_temp || row.current_max_so_far, row.temp_symbol)}</td>
                     <td className="px-1.5 py-1 text-right font-mono text-[10px]">{temp(row.deb_prediction, row.temp_symbol)}</td>
                     <td className="px-1.5 py-1 text-right font-mono text-[10px]">{formatPrice(row.midpoint, row.ask, row.bid)}</td>
