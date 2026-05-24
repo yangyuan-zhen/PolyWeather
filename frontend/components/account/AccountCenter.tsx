@@ -166,6 +166,7 @@ export function AccountCenter() {
   } = usePaymentState();
   const [showSecondarySections, setShowSecondarySections] = useState(false);
   const [reconcileBusy, setReconcileBusy] = useState(false);
+  const [telegramBindUrl, setTelegramBindUrl] = useState("");
 
   const supabaseReady = hasSupabasePublicEnv();
   const walletConnectEnabled = Boolean(WALLETCONNECT_PROJECT_ID);
@@ -1148,6 +1149,7 @@ export function AccountCenter() {
   const openTelegramBotBindLink = async () => {
     setTelegramBindOpening(true);
     setPaymentError("");
+    setTelegramBindUrl("");
     const popup = window.open("about:blank", "_blank", "noopener,noreferrer");
     try {
       const authHeaders = await buildAuthedHeaders(true, false);
@@ -1164,12 +1166,15 @@ export function AccountCenter() {
       if (!botUrl) throw new Error("telegram bind link missing");
       if (popup && !popup.closed) {
         popup.location.href = botUrl;
+        setPaymentInfo(
+          "已打开 Telegram Bot，请在 Bot 内点击 Start 并确认绑定；完成后刷新本页再申请入群。",
+        );
       } else {
-        window.open(botUrl, "_blank", "noopener,noreferrer");
+        setPaymentInfo(
+          "弹窗被拦截，请点击下方链接完成绑定：",
+        );
+        setTelegramBindUrl(botUrl);
       }
-      setPaymentInfo(
-        "已打开 Telegram Bot，请在 Bot 内点击 Start 并确认绑定；完成后刷新本页再申请入群。",
-      );
     } catch (error) {
       if (popup && !popup.closed) popup.close();
       setPaymentError(normalizePaymentError(error).message);
@@ -2546,6 +2551,16 @@ export function AccountCenter() {
                 {!paymentError && paymentInfo ? (
                   <div className="mb-4 rounded-xl border border-cyan-400/35 bg-cyan-500/10 px-3 py-2 text-[11px] text-cyan-200">
                     {paymentInfo}
+                    {telegramBindUrl ? (
+                      <a
+                        href={telegramBindUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block mt-1 underline text-cyan-400 hover:text-cyan-300 break-all"
+                      >
+                        {telegramBindUrl}
+                      </a>
+                    ) : null}
                   </div>
                 ) : null}
                 {!paymentHostAllowed ? (
