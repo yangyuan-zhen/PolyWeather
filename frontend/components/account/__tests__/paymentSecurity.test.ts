@@ -53,17 +53,28 @@ export function runTests() {
   const hookSource = fs.existsSync(hookPath)
     ? fs.readFileSync(hookPath, "utf8")
     : "";
+  const paymentFlowPath = path.join(
+    projectRoot,
+    "components",
+    "account",
+    "usePaymentFlow.ts",
+  );
+  const paymentFlowSource = fs.existsSync(paymentFlowPath)
+    ? fs.readFileSync(paymentFlowPath, "utf8")
+    : "";
 
   // The receiver validation now lives in the extracted hook file (called
   // from createManualPaymentIntent and createIntentAndPay).
   assert(
     accountCenterSource.includes("assertExpectedPaymentReceiver") ||
-      hookSource.includes("assertExpectedPaymentReceiver"),
+      hookSource.includes("assertExpectedPaymentReceiver") ||
+      paymentFlowSource.includes("assertExpectedPaymentReceiver"),
     "AccountCenter must validate backend-returned manual payment receiver before displaying it",
   );
   assert(
     accountCenterSource.includes("EXPECTED_PAYMENT_RECEIVER_ADDRESS") ||
-      hookSource.includes("EXPECTED_PAYMENT_RECEIVER_ADDRESS"),
+      hookSource.includes("EXPECTED_PAYMENT_RECEIVER_ADDRESS") ||
+      paymentFlowSource.includes("EXPECTED_PAYMENT_RECEIVER_ADDRESS"),
     "AccountCenter must show the pinned payment receiver address in its payment guard",
   );
 

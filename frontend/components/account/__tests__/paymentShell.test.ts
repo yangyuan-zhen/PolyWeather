@@ -39,6 +39,9 @@ export function runTests() {
     "wallet.ts",
     "payment-utils.ts",
     "usePaymentState.ts",
+    "useWalletBind.ts",
+    "usePaymentFlow.ts",
+    "useBilling.ts",
   ]
     .map((file) => fs.readFileSync(path.join(accountDir, file), "utf8"))
     .join("\n");
