@@ -262,14 +262,11 @@ class PolymarketWsQuoteCache:
         batch = [asset_id for asset_id in asset_ids if asset_id]
         if not batch:
             return
-        payload = {
+        payload: Dict[str, Any] = {
+            "type": "subscribe",
+            "channel": "market",
             "assets_ids": batch,
-            "custom_feature_enabled": True,
         }
-        if initial:
-            payload["type"] = "market"
-        else:
-            payload["operation"] = "subscribe"
         await ws.send(json.dumps(payload))
 
     def _handle_message(self, raw: Any) -> None:

@@ -113,12 +113,12 @@ def test_ws_cache_subscription_payloads_match_market_channel_shape():
     asyncio.run(cache._send_subscription(ws, ["asset-2"], initial=False))
 
     assert ws.messages[0] == {
-        "type": "market",
+        "type": "subscribe",
+        "channel": "market",
         "assets_ids": ["asset-1"],
-        "custom_feature_enabled": True,
     }
     assert ws.messages[1] == {
-        "operation": "subscribe",
+        "type": "subscribe",
+        "channel": "market",
         "assets_ids": ["asset-2"],
-        "custom_feature_enabled": True,
     }
