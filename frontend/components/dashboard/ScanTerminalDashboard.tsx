@@ -694,6 +694,9 @@ function RegionalWhaleWatch({
   isEn: boolean;
   rows: ScanOpportunityRow[];
 }) {
+  type HolderInfo = { city: string; holders: Array<{ proxyWallet?: string; amount?: number; outcomeIndex?: number; pseudonym?: string; name?: string }> | null; loading: boolean };
+  const [holderMap, setHolderMap] = useState<Record<string, HolderInfo>>({});
+
   const regions = ["americas", "europe", "asia_pacific", "middle_east_africa"];
   const regionLabels: Record<string, string> = {
     americas: isEn ? "Americas" : "美洲",
@@ -701,13 +704,31 @@ function RegionalWhaleWatch({
     asia_pacific: isEn ? "Asia-Pacific" : "亚太",
     middle_east_africa: isEn ? "ME & Africa" : "中东非洲",
   };
-  const topByRegion = regions.map((region) => {
-    const regionRows = rows
-      .filter((row) => row.trading_region === region)
-      .sort((a, b) => (Number(b.volume || b.book_liquidity || 0)) - (Number(a.volume || a.book_liquidity || 0)))
-      .slice(0, 3);
-    return { region, label: regionLabels[region] || region, rows: regionRows };
-  }).filter((r) => r.rows.length > 0);
+  const topByRegion = useMemo(() => {
+    return regions.map((region) => {
+      const regionRows = rows
+        .filter((row) => row.trading_region === region)
+        .sort((a, b) => (Number(b.volume || b.book_liquidity || 0)) - (Number(a.volume || a.book_liquidity || 0)))
+        .slice(0, 2);
+      return { region, label: regionLabels[region] || region, rows: regionRows };
+    }).filter((r) => r.rows.length > 0);
+  }, [rows, isEn]);
+
+  useEffect(() => {
+    topByRegion.forEach(({ rows: regionRows }) => {
+      regionRows.forEach((row) => {
+        const city = String(row.city || "").toLowerCase();
+        if (!city || holderMap[city]?.loading || holderMap[city]?.holders) return;
+        setHolderMap((prev) => ({ ...prev, [city]: { city, holders: null, loading: true } }));
+        fetch(`/api/city/${encodeURIComponent(city)}/holders?limit=6`, { cache: "no-store", headers: { Accept: "application/json" } })
+          .then(async (res) => {
+            const json = await res.json() as { holders?: Array<{ proxyWallet?: string; amount?: number; outcomeIndex?: number; pseudonym?: string; name?: string }>; available?: boolean };
+            setHolderMap((prev) => ({ ...prev, [city]: { city, holders: json.holders || [], loading: false } }));
+          })
+          .catch(() => setHolderMap((prev) => ({ ...prev, [city]: { city, holders: null, loading: false } })));
+      });
+    });
+  }, [topByRegion]);
 
   if (!topByRegion.length) return null;
 
@@ -715,21 +736,42 @@ function RegionalWhaleWatch({
     <Panel title={isEn ? "Whale Watch" : "巨鲸盯盘"}>
       <div className="divide-y divide-slate-100 text-[11px]">
         {topByRegion.map(({ region, label, rows: regionRows }) => (
-          <div key={region} className="py-1.5 px-2">
+          <div key={region} className="py-1 px-2">
             <div className="mb-1 text-[10px] font-black uppercase text-slate-400">{label}</div>
             {regionRows.map((row) => {
+              const city = String(row.city || "").toLowerCase();
+              const info = holderMap[city];
               const vol = Number(row.volume || row.book_liquidity || 0);
               return (
-                <div key={row.id} className="flex items-center justify-between py-0.5">
-                  <span className="font-semibold text-slate-800 truncate max-w-[120px]">
-                    {row.city_display_name || row.city}
-                  </span>
-                  <span className="text-[10px] text-slate-500 truncate max-w-[100px] text-right">
-                    {row.target_label || row.market_question?.slice(0, 30) || "--"}
-                  </span>
-                  <span className="ml-2 font-mono text-[10px] font-bold text-blue-700 shrink-0">
-                    {vol >= 1000 ? `$${(vol / 1000).toFixed(1)}K` : `$${Math.round(vol)}`}
-                  </span>
+                <div key={row.id}>
+                  <div className="flex items-center justify-between py-0.5 border-b border-slate-50">
+                    <span className="font-semibold text-slate-800 truncate max-w-[100px]">
+                      {row.city_display_name || row.city}
+                    </span>
+                    <span className="text-[10px] text-slate-500 truncate max-w-[80px] text-right">
+                      {row.target_label || "--"}
+                    </span>
+                    <span className="ml-1 font-mono text-[10px] font-bold text-blue-700 shrink-0">
+                      {vol >= 1000 ? `$${(vol / 1000).toFixed(1)}K` : `$${Math.round(vol)}`}
+                    </span>
+                  </div>
+                  {info?.loading ? (
+                    <div className="text-[9px] text-slate-300 py-0.5 animate-pulse">{isEn ? "Loading holders..." : "加载持仓..."}</div>
+                  ) : info?.holders?.length ? (
+                    info.holders.slice(0, 3).map((h, i) => (
+                      <div key={i} className="flex items-center justify-between py-0.5 text-[10px] ml-2">
+                        <span className="text-slate-500 truncate max-w-[130px]">
+                          {h.name || h.pseudonym || (h.proxyWallet ? `${String(h.proxyWallet).slice(0, 6)}...${String(h.proxyWallet).slice(-4)}` : "--")}
+                        </span>
+                        <span className="font-mono text-slate-600 shrink-0">
+                          {h.outcomeIndex === 0 ? "YES" : h.outcomeIndex === 1 ? "NO" : ""}{" "}
+                          {h.amount != null ? `${Number(h.amount).toFixed(0)}` : ""}
+                        </span>
+                      </div>
+                    ))
+                  ) : info ? (
+                    <div className="text-[9px] text-slate-300 py-0.5">{isEn ? "No holder data" : "无持仓数据"}</div>
+                  ) : null}
                 </div>
               );
             })}

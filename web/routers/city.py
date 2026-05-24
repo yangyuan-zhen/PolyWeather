@@ -170,3 +170,41 @@ async def city_market_scan(
         target_date=target_date,
         lite=lite,
     )
+
+
+@router.get("/api/city/{name}/holders")
+async def city_holders(
+    name: str,
+    limit: int = 10,
+):
+    """Return top token holders for a city's primary Polymarket market."""
+    from web.services.city_payloads import _get_polymarket_layer
+    from web.analysis_service import _analyze
+
+    layer = _get_polymarket_layer()
+    if not layer.enabled:
+        return {"holders": [], "available": False}
+
+    data = _analyze(name, force_refresh=False, include_llm_commentary=False, detail_mode="market")
+    local_date = str(data.get("local_date") or "").strip()
+    if not local_date:
+        return {"holders": [], "available": False}
+
+    scan = layer.build_market_scan(
+        city=name,
+        target_date=local_date,
+        include_related_buckets=False,
+    )
+    if not scan.get("available"):
+        return {"holders": [], "available": False}
+
+    condition_id = scan.get("selected_condition_id")
+    if not condition_id:
+        return {"holders": [], "available": False}
+
+    holders = layer.get_market_holders(condition_id, limit=limit)
+    return {
+        "holders": holders,
+        "available": True,
+        "condition_id": condition_id,
+    }

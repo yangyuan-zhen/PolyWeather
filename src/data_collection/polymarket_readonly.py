@@ -416,6 +416,11 @@ class PolymarketReadOnlyLayer:
             .strip()
             .rstrip("/")
         )
+        self.data_url = (
+            str(os.getenv("POLYMARKET_DATA_URL", "https://data-api.polymarket.com"))
+            .strip()
+            .rstrip("/")
+        )
         self.http_timeout = _safe_float(os.getenv("POLYMARKET_HTTP_TIMEOUT_SEC")) or 20.0
         self.market_cache_ttl = _safe_int(
             os.getenv("POLYMARKET_MARKET_CACHE_TTL_SEC", "60"),
@@ -2387,6 +2392,35 @@ class PolymarketReadOnlyLayer:
                 market["eventTitle"] = market.get("eventTitle") or event.get("title")
                 out.append(market)
         return out
+
+    def get_market_holders(
+        self, condition_id: str, limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """Fetch top token holders for a market from the Polymarket Data API.
+
+        Endpoint: GET /holders?market={conditionId}&limit={limit}
+        Returns a list of holder objects with proxyWallet, amount, outcomeIndex,
+        pseudonym, name, profileImage, etc.
+        """
+        cid = str(condition_id or "").strip()
+        if not cid:
+            return []
+        try:
+            resp = self._session.get(
+                f"{self.data_url}/holders",
+                params={"market": cid, "limit": limit},
+                timeout=self.http_timeout,
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+        except Exception as exc:
+            logger.warning(f"Polymarket holders fetch failed (condition={cid[:20]}): {exc}")
+            return []
+        if isinstance(payload, list):
+            return payload
+        if isinstance(payload, dict):
+            return payload.get("holders") or payload.get("data") or []
+        return []
 
     def resolve_city_clob_tokens(self, city_key: str) -> List[Dict[str, Any]]:
         """Resolve CLOB token IDs for a city using its local date."""
