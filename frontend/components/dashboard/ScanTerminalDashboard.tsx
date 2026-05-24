@@ -386,8 +386,8 @@ function CityGroupedTable({
                   </td>
                   <td className="px-1.5 py-1.5 text-right font-mono">{temp(best.current_temp || best.current_max_so_far, best.temp_symbol)}</td>
                   <td className="px-1.5 py-1.5 text-right font-mono">{temp(best.deb_prediction, best.temp_symbol)}</td>
-                  <td className="px-1.5 py-1.5 text-right font-mono">{pct(best.market_probability ?? best.market_event_probability)}</td>
-                  <td className="px-1.5 py-1.5 text-right font-mono">{money(best.book_liquidity ?? best.market_liquidity ?? best.volume)}</td>
+                  <td className="px-1.5 py-1.5 text-right font-mono">{formatPrice(best.midpoint, best.ask, best.bid)}</td>
+                  <td className="px-1.5 py-1.5 text-right font-mono">{formatSpreadLiquidity(best.spread, best.book_liquidity ?? best.market_liquidity)}</td>
                 </tr>
                 {isExpanded && buckets.map((row) => (
                   <tr
@@ -400,15 +400,15 @@ function CityGroupedTable({
                   >
                     <td className="px-2 py-1" />
                     <td className="px-1.5 py-1 pl-5">
-                      <span className="text-[10px] text-slate-500">{row.target_label || "--"}</span>
+                      <span className="text-[10px] font-medium text-slate-700">{row.target_label || "--"}</span>
                     </td>
                     <td className={clsx("px-1.5 py-1 text-right font-mono text-[10px] font-bold", edgeClass(row.edge_percent))}>
                       {pct(row.edge_percent)}
                     </td>
                     <td className="px-1.5 py-1 text-right font-mono text-[10px]">{temp(row.current_temp || row.current_max_so_far, row.temp_symbol)}</td>
                     <td className="px-1.5 py-1 text-right font-mono text-[10px]">{temp(row.deb_prediction, row.temp_symbol)}</td>
-                    <td className="px-1.5 py-1 text-right font-mono text-[10px]">{pct(row.market_probability ?? row.market_event_probability)}</td>
-                    <td className="px-1.5 py-1 text-right font-mono text-[10px]">{money(row.book_liquidity ?? row.market_liquidity ?? row.volume)}</td>
+                    <td className="px-1.5 py-1 text-right font-mono text-[10px]">{formatPrice(row.midpoint, row.ask, row.bid)}</td>
+                    <td className="px-1.5 py-1 text-right font-mono text-[10px]">{formatSpreadLiquidity(row.spread, row.book_liquidity ?? row.market_liquidity)}</td>
                   </tr>
                 ))}
               </Fragment>
