@@ -126,6 +126,7 @@ def _build_terminal_row(
         "edge_percent": edge_percent,
         "final_score": final_score,
         "volume": volume,
+        "amos": data.get("amos") or None,
     }
 
 
