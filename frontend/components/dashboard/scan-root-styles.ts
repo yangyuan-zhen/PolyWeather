@@ -9,7 +9,6 @@ import dashboardShellStyles from "./DashboardShell.module.css";
 import detailChromeStyles from "./DetailPanelChrome.module.css";
 import detailContentStyles from "./DetailPanelContent.module.css";
 import detailSectionsStyles from "./DetailPanelSections.module.css";
-import futureForecastModalStyles from "./FutureForecastModal.module.css";
 import modalChromeStyles from "./ModalChrome.module.css";
 import scanTerminalStyles from "./ScanTerminal.module.css";
 import scanTerminalBoardStyles from "./ScanTerminalBoard.module.css";
@@ -41,5 +40,4 @@ export const scanRootClass = clsx(
   detailContentStyles.root,
   detailSectionsStyles.root,
   modalChromeStyles.root,
-  futureForecastModalStyles.root,
 );
