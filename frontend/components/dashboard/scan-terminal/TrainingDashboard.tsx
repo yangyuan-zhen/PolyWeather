@@ -10,26 +10,39 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { TrendingUp, Target, Thermometer, Hash } from "lucide-react";
+import { TrendingUp, Target, Thermometer, Hash, BarChart3, Crosshair } from "lucide-react";
+
+type MetricPayload = {
+  hit_rate: number;
+  mae: number;
+  total_days: number;
+  brier_score?: number;
+};
 
 type TrainingCity = {
   city_id: string;
   name: string;
-  deb?: { hit_rate: number; mae: number; total_days: number } | null;
+  deb?: MetricPayload;
+  mu?: MetricPayload;
 };
 
-const CHART_COLORS = {
-  high: "#059669",
-  mid: "#d97706",
-  low: "#dc2626",
-  blue: "#2563eb",
-  purple: "#7c3aed",
+const STAT_CARD_CLASSES: Record<string, string> = {
+  blue: "bg-blue-50 border-blue-200",
+  emerald: "bg-emerald-50 border-emerald-200",
+  amber: "bg-amber-50 border-amber-200",
+  purple: "bg-purple-50 border-purple-200",
+};
+const STAT_ICON_CLASSES: Record<string, string> = {
+  blue: "text-blue-600",
+  emerald: "text-emerald-600",
+  amber: "text-amber-600",
+  purple: "text-purple-600",
 };
 
 function barColor(hr: number) {
-  if (hr >= 65) return CHART_COLORS.high;
-  if (hr >= 45) return CHART_COLORS.mid;
-  return CHART_COLORS.low;
+  if (hr >= 65) return "#059669";
+  if (hr >= 45) return "#d97706";
+  return "#dc2626";
 }
 
 export function TrainingDashboard({ isEn }: { isEn: boolean }) {
@@ -37,241 +50,246 @@ export function TrainingDashboard({ isEn }: { isEn: boolean }) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/ops/training/accuracy", {
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-    })
+    fetch("/api/ops/training/accuracy", { cache: "no-store", headers: { Accept: "application/json" } })
       .then(async (res) => {
         if (!res.ok) return null;
         return res.json() as Promise<{ accuracy: TrainingCity[] }>;
       })
       .then((payload) => {
         if (cancelled || !payload?.accuracy) return;
-        setData(payload.accuracy.filter((c) => c.deb && c.deb.total_days >= 5));
+        setData(payload.accuracy.filter((c) => (c.deb || c.mu) && ((c.deb?.total_days ?? 0) + (c.mu?.total_days ?? 0)) >= 5));
       })
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);
 
-  const debSorted = useMemo(
-    () => (data || []).sort((a, b) => (b.deb?.hit_rate ?? 0) - (a.deb?.hit_rate ?? 0)),
-    [data],
-  );
+  const debSorted = useMemo(() => (data || []).filter((c) => c.deb).sort((a, b) => (b.deb?.hit_rate ?? 0) - (a.deb?.hit_rate ?? 0)), [data]);
+  const muSorted = useMemo(() => (data || []).filter((c) => c.mu).sort((a, b) => (b.mu?.hit_rate ?? 0) - (a.mu?.hit_rate ?? 0)), [data]);
 
-  const stats = useMemo(() => {
+  const debStats = useMemo(() => {
     if (!debSorted.length) return null;
     const avgHit = debSorted.reduce((s, c) => s + (c.deb?.hit_rate ?? 0), 0) / debSorted.length;
     const avgMae = debSorted.reduce((s, c) => s + (c.deb?.mae ?? 0), 0) / debSorted.length;
     const totalDays = debSorted.reduce((s, c) => s + (c.deb?.total_days ?? 0), 0);
-    const high = debSorted.filter((c) => (c.deb?.hit_rate ?? 0) >= 65).length;
-    const mid = debSorted.filter((c) => {
-      const hr = c.deb?.hit_rate ?? 0;
-      return hr >= 45 && hr < 65;
-    }).length;
-    const low = debSorted.filter((c) => (c.deb?.hit_rate ?? 0) < 45).length;
-    return { avgHit, avgMae, totalDays, cities: debSorted.length, high, mid, low };
+    return { avgHit, avgMae, totalDays, cities: debSorted.length };
   }, [debSorted]);
 
-  const chartData = useMemo(
-    () =>
-      debSorted.slice(0, 18).map((c) => ({
-        name: c.name,
-        hit: Number((c.deb?.hit_rate ?? 0).toFixed(1)),
-        mae: Number((c.deb?.mae ?? 0).toFixed(2)),
-        fill: barColor(c.deb?.hit_rate ?? 0),
-      })),
+  const muStats = useMemo(() => {
+    if (!muSorted.length) return null;
+    const avgHit = muSorted.reduce((s, c) => s + (c.mu?.hit_rate ?? 0), 0) / muSorted.length;
+    const avgMae = muSorted.reduce((s, c) => s + (c.mu?.mae ?? 0), 0) / muSorted.length;
+    const avgBrier = muSorted.reduce((s, c) => s + (c.mu?.brier_score ?? 0), 0) / muSorted.length;
+    const totalDays = muSorted.reduce((s, c) => s + (c.mu?.total_days ?? 0), 0);
+    return { avgHit, avgMae, avgBrier, totalDays, cities: muSorted.length };
+  }, [muSorted]);
+
+  const debHitChart = useMemo(
+    () => debSorted.slice(0, 18).map((c) => ({ name: c.name, value: Number((c.deb?.hit_rate ?? 0).toFixed(1)) })),
     [debSorted],
   );
-
-  const maeChartData = useMemo(
-    () =>
-      [...debSorted]
-        .sort((a, b) => (a.deb?.mae ?? 99) - (b.deb?.mae ?? 99))
-        .slice(0, 18)
-        .map((c) => ({
-          name: c.name,
-          mae: Number((c.deb?.mae ?? 0).toFixed(2)),
-        })),
+  const debMaeChart = useMemo(
+    () => [...debSorted].sort((a, b) => (a.deb?.mae ?? 99) - (b.deb?.mae ?? 99)).slice(0, 18).map((c) => ({ name: c.name, value: Number((c.deb?.mae ?? 0).toFixed(2)) })),
     [debSorted],
+  );
+  const muHitChart = useMemo(
+    () => muSorted.slice(0, 18).map((c) => ({ name: c.name, value: Number((c.mu?.hit_rate ?? 0).toFixed(1)) })),
+    [muSorted],
+  );
+  const muBrierChart = useMemo(
+    () => [...muSorted].sort((a, b) => (a.mu?.brier_score ?? 99) - (b.mu?.brier_score ?? 99)).slice(0, 18).map((c) => ({ name: c.name, value: Number((c.mu?.brier_score ?? 0).toFixed(3)) })),
+    [muSorted],
   );
 
   return (
     <div className="h-full overflow-auto bg-[#f5f7fa]">
       <div className="p-4">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-lg font-black text-slate-900 flex items-center gap-2">
-              <Target size={18} className="text-blue-600" />
-              {isEn ? "DEB Training Accuracy" : "DEB 训练数据准确率"}
-            </h1>
-            <p className="mt-0.5 text-xs text-slate-500">
-              {isEn
-                ? "DEB hit rate = forecast within settlement acceptance window"
-                : "DEB 命中率 = 预报落入结算接受窗口的比例"}
-            </p>
-          </div>
-          {stats && (
-            <div className="flex items-center gap-4 text-xs text-slate-500">
-              <span>{isEn ? "Updated" : "更新时间"}: {new Date().toLocaleDateString()}</span>
-            </div>
-          )}
-        </div>
+        <h1 className="text-lg font-black text-slate-900 flex items-center gap-2 mb-1">
+          <BarChart3 size={18} className="text-blue-600" />
+          {isEn ? "Model Training Accuracy" : "模型训练准确率"}
+        </h1>
+        <p className="text-xs text-slate-500 mb-4">
+          {isEn
+            ? "DEB temperature forecast vs. Probability Mu calibration — per-city backtesting metrics."
+            : "DEB 气温预报 与 概率 μ 校准 — 各城市回测指标。"}
+        </p>
 
-        {/* Stats cards */}
-        {stats && (
-          <div className="grid grid-cols-4 gap-2 mb-4">
-            {[
-              { icon: Hash, label: isEn ? "Models" : "城市模型", value: stats.cities, color: "text-blue-600", bg: "bg-blue-50 border-blue-200" },
-              { icon: Target, label: isEn ? "Avg Hit Rate" : "平均命中率", value: `${stats.avgHit.toFixed(1)}%`, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
-              { icon: Thermometer, label: "Avg MAE", value: `${stats.avgMae.toFixed(1)}°`, color: "text-amber-600", bg: "bg-amber-50 border-amber-200" },
-              { icon: TrendingUp, label: isEn ? "Total Days" : "总训练天数", value: stats.totalDays.toLocaleString(), color: "text-purple-600", bg: "bg-purple-50 border-purple-200" },
-            ].map(({ icon: Icon, label, value, color, bg }) => (
-              <div key={label} className={`flex items-center gap-3 rounded-lg border ${bg} p-3`}>
-                <Icon size={20} className={color} />
-                <div>
-                  <div className="text-[10px] font-bold uppercase text-slate-500">{label}</div>
-                  <div className="font-mono text-lg font-black text-slate-900">{String(value)}</div>
+        {/* ── DEB Section ── */}
+        {debStats && (
+          <>
+            <h2 className="text-sm font-black text-slate-800 flex items-center gap-1.5 mb-2">
+              <Thermometer size={14} className="text-amber-600" />
+              {isEn ? "DEB Temperature Forecast" : "DEB 气温预报"}
+            </h2>
+            <div className="grid grid-cols-4 gap-2 mb-3">
+              {[
+                { icon: Hash, label: isEn ? "Cities" : "城市数", value: debStats.cities, tone: "blue" },
+                { icon: Target, label: isEn ? "Avg Hit" : "平均命中", value: `${debStats.avgHit.toFixed(1)}%`, tone: "emerald" },
+                { icon: Thermometer, label: isEn ? "Avg Error" : "平均误差", value: `${debStats.avgMae.toFixed(1)}°`, tone: "amber" },
+                { icon: TrendingUp, label: isEn ? "Total Days" : "训练天数", value: debStats.totalDays.toLocaleString(), tone: "purple" },
+              ].map(({ icon: Icon, label, value, tone }) => (
+                <div key={label} className={`flex items-center gap-3 rounded-lg border ${STAT_CARD_CLASSES[tone]} p-3`}>
+                  <Icon size={20} className={STAT_ICON_CLASSES[tone]} />
+                  <div>
+                    <div className="text-[11px] font-bold uppercase text-slate-500">{label}</div>
+                    <div className="font-mono text-lg font-black text-slate-900">{String(value)}</div>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Distribution summary */}
-        {stats && (
-          <div className="grid grid-cols-3 gap-2 mb-4">
-            {[
-              { label: isEn ? "High (≥65%)" : "高 (≥65%)", count: stats.high, color: "emerald" },
-              { label: isEn ? "Mid (45-64%)" : "中 (45-64%)", count: stats.mid, color: "amber" },
-              { label: isEn ? "Low (<45%)" : "低 (<45%)", count: stats.low, color: "red" },
-            ].map(({ label, count, color }) => (
-              <div key={color} className={`rounded-lg border border-${color}-200 bg-${color}-50 p-3 text-center`}>
-                <div className={`font-mono text-2xl font-black text-${color}-600`}>{count}</div>
-                <div className="text-[10px] font-bold uppercase text-slate-500">{label}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Charts */}
-        {chartData.length > 0 && (
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            {/* Hit rate bar chart */}
-            <div className="rounded-lg border border-slate-200 bg-white p-3">
-              <h2 className="mb-2 text-[11px] font-black uppercase text-slate-500">
-                {isEn ? "Hit Rate by City" : "各城市命中率"}
-              </h2>
-              <div className="h-72">
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <ChartCard title={isEn ? "Forecast Hit Rate by City" : "预报命中率 by 城市"}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 16, left: 48, bottom: 0 }}>
+                  <BarChart data={debHitChart} layout="vertical" margin={{ top: 0, right: 16, left: 48, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-                    <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10, fill: "#64748b" }} tickFormatter={(v) => `${v}%`} />
-                    <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fill: "#334155" }} width={50} />
-                    <Tooltip
-                      contentStyle={{ borderRadius: 6, border: "1px solid #e2e8f0", fontSize: 12 }}
-                      formatter={(value) => [`${Number(value)}%`, isEn ? "Hit Rate" : "命中率"]}
-                    />
-                    <Bar dataKey="hit" radius={[0, 3, 3, 0]} fill="#2563eb" barSize={14} />
+                    <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11, fill: "#64748b" }} tickFormatter={(v) => `${v}%`} />
+                    <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: "#334155" }} width={52} />
+                    <Tooltip contentStyle={{ borderRadius: 6, border: "1px solid #e2e8f0", fontSize: 12 }} formatter={(v: unknown) => [`${Number(v)}%`, isEn ? "Hit Rate" : "命中率"]} />
+                    <Bar dataKey="value" radius={[0, 3, 3, 0]} fill="#2563eb" barSize={14} />
                   </BarChart>
                 </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* MAE bar chart (lower is better) */}
-            <div className="rounded-lg border border-slate-200 bg-white p-3">
-              <h2 className="mb-2 text-[11px] font-black uppercase text-slate-500">
-                {isEn ? "MAE by City (lower = better)" : "各城市 MAE (越低越好)"}
-              </h2>
-              <div className="h-72">
+              </ChartCard>
+              <ChartCard title={isEn ? "Forecast Error by City (lower = better)" : "预报误差 by 城市（越低越好）"}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={maeChartData} layout="vertical" margin={{ top: 0, right: 16, left: 48, bottom: 0 }}>
+                  <BarChart data={debMaeChart} layout="vertical" margin={{ top: 0, right: 16, left: 48, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-                    <XAxis type="number" tick={{ fontSize: 10, fill: "#64748b" }} tickFormatter={(v) => `${v}°`} />
-                    <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fill: "#334155" }} width={50} />
-                    <Tooltip
-                      contentStyle={{ borderRadius: 6, border: "1px solid #e2e8f0", fontSize: 12 }}
-                      formatter={(value) => [`${Number(value)}°`, "MAE"]}
-                    />
-                    <Bar dataKey="mae" radius={[0, 3, 3, 0]} fill="#7c3aed" barSize={14} />
+                    <XAxis type="number" tick={{ fontSize: 11, fill: "#64748b" }} tickFormatter={(v) => `${v}°`} />
+                    <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: "#334155" }} width={52} />
+                    <Tooltip contentStyle={{ borderRadius: 6, border: "1px solid #e2e8f0", fontSize: 12 }} formatter={(v: unknown) => [`${Number(v)}°`, isEn ? "Error" : "误差"]} />
+                    <Bar dataKey="value" radius={[0, 3, 3, 0]} fill="#7c3aed" barSize={14} />
                   </BarChart>
                 </ResponsiveContainer>
-              </div>
+              </ChartCard>
             </div>
-          </div>
+          </>
         )}
 
-        {/* Table */}
+        {/* ── Mu Section ── */}
+        {muStats && (
+          <>
+            <h2 className="text-sm font-black text-slate-800 flex items-center gap-1.5 mb-2">
+              <Crosshair size={14} className="text-emerald-600" />
+              {isEn ? "Probability Mu Calibration" : "概率 μ 校准"}
+            </h2>
+            <div className="grid grid-cols-4 gap-2 mb-3">
+              {[
+                { icon: Hash, label: isEn ? "Cities" : "城市数", value: muStats.cities, tone: "blue" },
+                { icon: Target, label: isEn ? "Avg Hit" : "平均命中", value: `${muStats.avgHit.toFixed(1)}%`, tone: "emerald" },
+                { icon: Thermometer, label: isEn ? "Avg Error" : "平均误差", value: `${muStats.avgMae.toFixed(2)}°`, tone: "amber" },
+                { icon: Crosshair, label: isEn ? "Avg Brier" : "平均 Brier", value: muStats.avgBrier.toFixed(4), tone: "purple" },
+              ].map(({ icon: Icon, label, value, tone }) => (
+                <div key={label} className={`flex items-center gap-3 rounded-lg border ${STAT_CARD_CLASSES[tone]} p-3`}>
+                  <Icon size={20} className={STAT_ICON_CLASSES[tone]} />
+                  <div>
+                    <div className="text-[11px] font-bold uppercase text-slate-500">{label}</div>
+                    <div className="font-mono text-lg font-black text-slate-900">{String(value)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <ChartCard title={isEn ? "Prob Hit Rate by City" : "概率命中率 by 城市"}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={muHitChart} layout="vertical" margin={{ top: 0, right: 16, left: 48, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
+                    <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11, fill: "#64748b" }} tickFormatter={(v) => `${v}%`} />
+                    <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: "#334155" }} width={52} />
+                    <Tooltip contentStyle={{ borderRadius: 6, border: "1px solid #e2e8f0", fontSize: 12 }} formatter={(v: unknown) => [`${Number(v)}%`, isEn ? "Hit Rate" : "命中率"]} />
+                    <Bar dataKey="value" radius={[0, 3, 3, 0]} fill="#059669" barSize={14} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartCard>
+              <ChartCard title={isEn ? "Brier Score by City (lower = better)" : "Brier 评分 by 城市（越低越好）"}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={muBrierChart} layout="vertical" margin={{ top: 0, right: 16, left: 48, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 11, fill: "#64748b" }} tickFormatter={(v) => `${Number(v).toFixed(2)}`} />
+                    <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: "#334155" }} width={52} />
+                    <Tooltip contentStyle={{ borderRadius: 6, border: "1px solid #e2e8f0", fontSize: 12 }} formatter={(v: unknown) => [`${Number(v).toFixed(4)}`, "Brier"]} />
+                    <Bar dataKey="value" radius={[0, 3, 3, 0]} fill="#d97706" barSize={14} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartCard>
+            </div>
+          </>
+        )}
+
+        {/* ── Combined Table ── */}
         <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
           <table className="w-full text-[12px] border-collapse">
             <thead>
               <tr className="border-b border-slate-200 bg-[#f8f9fa] text-left">
-                <th className="w-10 px-3 py-2 text-center text-[10px] font-black text-slate-400">#</th>
-                <th className="px-3 py-2 text-[10px] font-black uppercase text-slate-500">
-                  {isEn ? "City" : "城市"}
-                </th>
-                <th className="px-3 py-2 text-right text-[10px] font-black uppercase text-slate-500">
-                  {isEn ? "Hit Rate" : "命中率"}
-                </th>
-                <th className="px-3 py-2 text-right text-[10px] font-black uppercase text-slate-500">MAE</th>
-                <th className="px-3 py-2 text-right text-[10px] font-black uppercase text-slate-500">
-                  {isEn ? "Days" : "训练天数"}
-                </th>
+                <th className="w-10 px-3 py-2 text-center text-[11px] font-black text-slate-400">#</th>
+                <th className="px-3 py-2 text-[11px] font-black uppercase text-slate-500">{isEn ? "City" : "城市"}</th>
+                <th className="px-2 py-2 text-right text-[11px] font-black uppercase text-slate-500">{isEn ? "DEB Hit" : "DEB 命中"}</th>
+                <th className="px-2 py-2 text-right text-[11px] font-black uppercase text-slate-500">{isEn ? "DEB Error" : "DEB 误差"}</th>
+                <th className="px-2 py-2 text-right text-[11px] font-black uppercase text-slate-500">{isEn ? "μ Hit" : "μ 命中"}</th>
+                <th className="px-2 py-2 text-right text-[11px] font-black uppercase text-slate-500">Brier</th>
+                <th className="px-3 py-2 text-right text-[11px] font-black uppercase text-slate-500">{isEn ? "Days" : "天数"}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {debSorted.length ? debSorted.map((c, i) => {
-                const hr = c.deb?.hit_rate ?? 0;
-                const mae = c.deb?.mae ?? 0;
-                const color = hr >= 65 ? "emerald" : hr >= 45 ? "amber" : "red";
-                return (
-                  <tr key={c.city_id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-3 py-2 text-center text-[10px] font-mono text-slate-400">{i + 1}</td>
-                    <td className="px-3 py-2 font-semibold text-slate-800 capitalize">{c.name}</td>
-                    <td className="px-3 py-2 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <div className="relative h-2 w-28 overflow-hidden rounded-full bg-slate-100">
-                          <div
-                            className={`absolute inset-y-0 left-0 rounded-full bg-${color}-500 transition-all`}
-                            style={{ width: `${Math.min(100, hr)}%` }}
-                          />
-                          <div
-                            className="absolute inset-y-0 left-0 rounded-full opacity-30"
-                            style={{
-                              width: `${Math.min(100, hr)}%`,
-                              background: `repeating-linear-gradient(90deg, transparent, transparent 3px, rgba(255,255,255,0.3) 3px, rgba(255,255,255,0.3) 6px)`,
-                            }}
-                          />
-                        </div>
-                        <span className={`w-10 text-right font-mono text-[11px] font-bold text-${color}-600`}>
-                          {hr.toFixed(0)}%
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono text-slate-600">{mae.toFixed(1)}°</td>
-                    <td className="px-3 py-2 text-right text-slate-400">{c.deb?.total_days ?? 0}</td>
-                  </tr>
-                );
-              }) : (
+              {debSorted.length || muSorted.length ? (
+                (() => {
+                  const cities = new Map<string, { deb?: MetricPayload; mu?: MetricPayload; name: string }>();
+                  for (const c of debSorted) cities.set(c.city_id, { deb: c.deb, mu: c.mu, name: c.name });
+                  for (const c of muSorted) {
+                    const existing = cities.get(c.city_id);
+                    if (existing) existing.mu = c.mu;
+                    else cities.set(c.city_id, { deb: c.deb, mu: c.mu, name: c.name });
+                  }
+                  const merged = [...cities.entries()]
+                    .sort((a, b) => {
+                      const aMax = Math.max(a[1].deb?.hit_rate ?? 0, a[1].mu?.hit_rate ?? 0);
+                      const bMax = Math.max(b[1].deb?.hit_rate ?? 0, b[1].mu?.hit_rate ?? 0);
+                      return bMax - aMax;
+                    })
+                    .slice(0, 30);
+                  return merged.map(([cityId, { deb, mu, name }], i) => {
+                    const debHit = deb?.hit_rate ?? 0;
+                    const muHit = mu?.hit_rate ?? 0;
+                    const brier = mu?.brier_score;
+                    return (
+                      <tr key={cityId} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-3 py-2 text-center text-[12px] font-mono text-slate-400">{i + 1}</td>
+                        <td className="px-3 py-2 font-semibold text-slate-800 capitalize">{name}</td>
+                        <td className="px-2 py-2 text-right font-mono font-bold" style={{ color: barColor(debHit) }}>
+                          {deb ? `${debHit.toFixed(0)}%` : "--"}
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono text-slate-600">{deb ? `${deb.mae.toFixed(1)}°` : "--"}</td>
+                        <td className="px-2 py-2 text-right font-mono font-bold" style={{ color: barColor(muHit) }}>
+                          {mu ? `${muHit.toFixed(0)}%` : "--"}
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono text-slate-600">{brier != null ? brier.toFixed(4) : "--"}</td>
+                        <td className="px-3 py-2 text-right text-slate-400">{(deb?.total_days ?? 0) + (mu?.total_days ?? 0)}</td>
+                      </tr>
+                    );
+                  });
+                })()
+              ) : (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-slate-400">
-                    {data === null
-                      ? (isEn ? "Loading training data..." : "加载训练数据中...")
-                      : (isEn ? "No training data available" : "暂无训练数据")}
+                  <td colSpan={7} className="px-4 py-12 text-center text-slate-400">
+                    {data === null ? (isEn ? "Loading..." : "加载中...") : (isEn ? "No training data" : "暂无训练数据")}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
-
-        {/* Footer note */}
-        <p className="mt-3 text-center text-[10px] text-slate-400">
+        <p className="mt-3 text-center text-[11px] text-slate-400">
           {isEn
-            ? "Training data updated daily. Hit rate = DEB prediction within settlement acceptance range."
-            : "训练数据每日更新。命中率 = DEB 预报落入结算接受窗口的比例。"}
+            ? "DEB = temperature forecast accuracy. μ = probability calibration. Brier = lower is better. Updated daily."
+            : "DEB = 气温预报准确率。μ = 概率校准。Brier = 越低越好。每日更新。"}
         </p>
       </div>
+    </div>
+  );
+}
+
+function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-3">
+      <h3 className="mb-2 text-[12px] font-black uppercase text-slate-500">{title}</h3>
+      <div className="h-72">{children}</div>
     </div>
   );
 }

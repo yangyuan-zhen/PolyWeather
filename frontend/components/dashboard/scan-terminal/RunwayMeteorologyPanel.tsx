@@ -110,7 +110,7 @@ export function RunwayMeteorologyPanel({
       <div className="overflow-x-auto border-b border-slate-200 shrink-0">
         <table className="w-full text-left text-[12px] border-collapse min-w-[500px]">
           <thead>
-            <tr className="bg-[#f8f9fa] border-b border-slate-200 text-[10px] uppercase font-bold text-slate-500">
+            <tr className="bg-[#f8f9fa] border-b border-slate-200 text-[11px] uppercase font-bold text-slate-500">
               <th className="px-3 py-1.5 font-bold">{isEn ? "Runway" : "跑道 (Runway)"}</th>
               <th className="px-2 py-1.5 text-right font-bold">TDZ</th>
               <th className="px-2 py-1.5 text-right font-bold">MID</th>
@@ -131,14 +131,14 @@ export function RunwayMeteorologyPanel({
               <tr
                 key={i}
                 className={clsx(
-                  "border-b border-slate-100 font-mono text-[11px]",
+                  "border-b border-slate-100 font-mono text-[12px]",
                   r.isSettlement ? "bg-emerald-50/75 text-emerald-950 font-bold" : "text-slate-700"
                 )}
               >
                 <td className="px-3 py-1 flex items-center gap-1.5">
                   {r.isSettlement && <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-pulse" />}
                   {r.name}
-                  {r.isSettlement && <span className="text-[9px] bg-emerald-200 text-emerald-800 px-1 rounded scale-90">{isEn ? "Settlement" : "结算"}</span>}
+                  {r.isSettlement && <span className="text-[10px] bg-emerald-200 text-emerald-800 px-1 rounded scale-90">{isEn ? "Settlement" : "结算"}</span>}
                 </td>
                 <td className="px-2 py-1 text-right">{r.tdz}°C</td>
                 <td className="px-2 py-1 text-right text-slate-400">{r.mid}</td>

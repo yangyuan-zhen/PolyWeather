@@ -53,7 +53,7 @@ export function GroupedMarketTable({
     <div className="overflow-auto h-full">
       <table className="w-full min-w-[800px] border-collapse text-[13px]">
         <thead>
-          <tr className="border-b border-slate-200 bg-[#f8f9fa] text-left text-[10px] uppercase font-bold tracking-wider text-slate-500">
+          <tr className="border-b border-slate-200 bg-[#f8f9fa] text-left text-[11px] uppercase font-bold tracking-wider text-slate-500">
             <th className="px-3 py-1.5 font-bold">City</th>
             <th className="px-2 py-1.5 text-right font-bold">Obs</th>
             <th className="px-2 py-1.5 text-right font-bold">High</th>
@@ -144,12 +144,12 @@ export function GroupedMarketTable({
                         <td className={clsx("px-2 py-1.5 text-right font-mono font-bold", edgeClass(row.edge_percent))}>
                           {pct(row.edge_percent)}
                         </td>
-                        <td className="px-2 py-1.5 text-right font-mono text-[11px]">
+                        <td className="px-2 py-1.5 text-right font-mono text-[12px]">
                           {formatSpreadLiquidity(row.spread, row.book_liquidity ?? row.market_liquidity)}
                         </td>
                         <td className="px-3 py-1.5">
                           <span className={clsx(
-                            "text-[11px] font-black",
+                            "text-[12px] font-black",
                             signal === "active" ? "text-emerald-600" :
                             signal === "watch" ? "text-amber-600" :
                             signal === "closed" ? "text-slate-400" : "text-red-500"

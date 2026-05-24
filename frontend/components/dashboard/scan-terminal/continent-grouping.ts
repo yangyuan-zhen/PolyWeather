@@ -12,6 +12,104 @@ export const TRADING_REGIONS = [
 
 export type TradingRegionKey = (typeof TRADING_REGIONS)[number]["key"];
 
+const TRADING_REGION_KEYS = new Set<string>(TRADING_REGIONS.map((region) => region.key));
+
+const CITY_REGION_FALLBACK: Record<string, TradingRegionKey> = {
+  beijing: "east_asia",
+  busan: "east_asia",
+  chengdu: "east_asia",
+  chongqing: "east_asia",
+  guangzhou: "east_asia",
+  "hong kong": "east_asia",
+  "lau fau shan": "east_asia",
+  qingdao: "east_asia",
+  seoul: "east_asia",
+  shanghai: "east_asia",
+  shenzhen: "east_asia",
+  taipei: "east_asia",
+  tokyo: "east_asia",
+  wuhan: "east_asia",
+  jakarta: "southeast_asia",
+  "kuala lumpur": "southeast_asia",
+  manila: "southeast_asia",
+  singapore: "southeast_asia",
+  karachi: "central_asia",
+  lucknow: "central_asia",
+  ankara: "west_asia",
+  istanbul: "west_asia",
+  jeddah: "west_asia",
+  "tel aviv": "west_asia",
+  amsterdam: "europe_africa",
+  "cape town": "europe_africa",
+  helsinki: "europe_africa",
+  london: "europe_africa",
+  madrid: "europe_africa",
+  milan: "europe_africa",
+  moscow: "europe_africa",
+  munich: "europe_africa",
+  paris: "europe_africa",
+  warsaw: "europe_africa",
+  "buenos aires": "south_america",
+  "sao paulo": "south_america",
+  "mexico city": "north_america",
+  atlanta: "north_america",
+  austin: "north_america",
+  chicago: "north_america",
+  dallas: "north_america",
+  denver: "north_america",
+  houston: "north_america",
+  "los angeles": "north_america",
+  miami: "north_america",
+  "new york": "north_america",
+  "panama city": "north_america",
+  "san francisco": "north_america",
+  seattle: "north_america",
+  toronto: "north_america",
+};
+
+function normalizeRegionValue(value?: string | null) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[-\s]+/g, "_");
+}
+
+function normalizeCityValue(value?: string | null) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+function finiteNumber(value: unknown) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+export function resolveTradingRegionKey(row: ScanOpportunityRow): TradingRegionKey | null {
+  const direct = normalizeRegionValue(row.trading_region);
+  if (TRADING_REGION_KEYS.has(direct)) return direct as TradingRegionKey;
+
+  const cityKey = normalizeCityValue(row.city || row.city_display_name || row.display_name);
+  const cityRegion = CITY_REGION_FALLBACK[cityKey];
+  if (cityRegion) return cityRegion;
+
+  const offset = finiteNumber(row.tz_offset_seconds);
+  if (offset !== null) {
+    const hours = offset / 3600;
+    if (hours >= 8) return "east_asia";
+    if (hours >= 7) return "southeast_asia";
+    if (hours >= 5) return "central_asia";
+    if (hours >= 3) return "west_asia";
+    if (hours >= 0) return "europe_africa";
+    if (hours >= -5) return "south_america";
+    return "north_america";
+  }
+
+  return null;
+}
+
 export interface ContinentGroup {
   key: TradingRegionKey | "active_signals";
   labelEn: string;
@@ -117,7 +215,7 @@ export function buildContinentGroups(rows: ScanOpportunityRow[], isEn: boolean):
   const regionMap = new Map<string, ScanOpportunityRow[]>();
 
   for (const row of rows) {
-    const region = String(row.trading_region || "unknown").toLowerCase();
+    const region = resolveTradingRegionKey(row) || "unknown";
     if (!regionMap.has(region)) regionMap.set(region, []);
     regionMap.get(region)!.push(row);
   }

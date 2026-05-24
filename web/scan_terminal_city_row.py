@@ -127,6 +127,8 @@ def _build_terminal_row(
         "final_score": final_score,
         "volume": volume,
         "amos": data.get("amos") or None,
+        "top_buckets": scan.get("top_buckets") or [],
+        "all_buckets": scan.get("all_buckets") or [],
     }
 
 

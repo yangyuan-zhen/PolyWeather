@@ -937,6 +937,8 @@ export interface CityDetail {
   market_scan?: MarketScan;
   intraday_meteorology?: IntradayMeteorology;
   amos?: AmosData | null;
+  top_buckets?: MarketTopBucket[] | null;
+  all_buckets?: MarketTopBucket[] | null;
 }
 
 export interface AmosData {

@@ -28,6 +28,7 @@ import {
   getGapColor,
   getSignalLabel,
   getSignalState,
+  resolveTradingRegionKey,
   TRADING_REGIONS,
 } from "@/components/dashboard/scan-terminal/continent-grouping";
 import { MobileCityCard } from "@/components/dashboard/scan-terminal/MobileCityCard";
@@ -44,6 +45,7 @@ import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { GroupedMarketTable } from "@/components/dashboard/scan-terminal/GroupedMarketTable";
 import { TrainingDashboard } from "@/components/dashboard/scan-terminal/TrainingDashboard";
 import { LiveTemperatureThresholdChart } from "@/components/dashboard/scan-terminal/LiveTemperatureThresholdChart";
+import { MarketOverviewView } from "@/components/dashboard/scan-terminal/MarketOverviewView";
 import { rowName, pct, money, temp, edgeClass } from "@/components/dashboard/scan-terminal/utils";
 
 function createEmptyAccess(loading = true): ProAccessState {
@@ -340,7 +342,7 @@ function PolyWeatherTerminal({
   const filteredRegionRows = useMemo(() => {
     return rows.filter(
       (row) =>
-        String(row.trading_region).toLowerCase() === selectedRegionKey &&
+        resolveTradingRegionKey(row) === selectedRegionKey &&
         row.is_primary_signal !== false,
     );
   }, [rows, selectedRegionKey]);
@@ -543,6 +545,17 @@ function PolyWeatherTerminal({
         <main className="min-h-0 flex-1 overflow-hidden flex flex-col p-2 bg-[#eef2f6]">
           {activeNavKey === "training" ? (
             <TrainingDashboard isEn={isEn} />
+          ) : activeNavKey === "markets" ? (
+            <MarketOverviewView
+              isEn={isEn}
+              rows={rows}
+              onSelectRow={(row) => {
+                const regionKey = resolveTradingRegionKey(row);
+                if (regionKey) setSelectedRegionKey(regionKey);
+                setSelectedRow(row);
+                setActiveNavKey("contracts");
+              }}
+            />
           ) : (
             <>
               {/* Region tabs */}

@@ -310,7 +310,7 @@ export function LiveTemperatureThresholdChart({
                   <span className="h-1.5 w-4 rounded-full" style={{ backgroundColor: item.color }} />
                   <span className="truncate font-black text-slate-700">{item.label}</span>
                 </div>
-                <div className="mt-1 grid grid-cols-3 gap-1 font-mono text-[9px] text-slate-600">
+                <div className="mt-1 grid grid-cols-3 gap-1 font-mono text-[10px] text-slate-600">
                   <span>now: {temp(item.latest)}</span>
                   <span>max: {temp(item.high)}</span>
                   <span>15m: {item.delta15 === null ? "--" : `${item.delta15 >= 0 ? "+" : ""}${item.delta15.toFixed(1)}°`}</span>

@@ -247,7 +247,6 @@ def _call_deepseek_scan_ai(ai_input: Dict[str, Any]) -> Dict[str, Any]:
         "多个天气模型预测值 model_cluster.sources、METAR 实测序列、机场原始报文和候选合约。"
         "你的首要任务不是分析套利，也不是推荐 BUY YES/NO，而是预测该城市今日最终最高温是多少。"
         "必须输出城市级最高温点估计、置信区间、置信度、峰值窗口状态、机场报文解读和一句预测理由。"
-        "V4 禁止使用 EMOS、EMOS peak、EMOS probability、edge 或 Kelly 作为交易依据；"
         "最高温预测必须直接参考该城市全部 model_cluster.sources、DEB、峰值窗口和 METAR/机场报文。"
         "如果天气模型之间分歧大，必须放宽置信区间并降低 confidence；如果 METAR 与模型路径冲突，必须解释修正方向。"
         "必须先判断 peak_window_label、minutes_until_peak_start/end 和 window_phase：峰值窗口尚未到来时，"
@@ -267,7 +266,6 @@ def _call_deepseek_scan_ai(ai_input: Dict[str, Any]) -> Dict[str, Any]:
             "contract_notes items are optional and require row_id, forecast_match, reason_zh, reason_en; "
             "forecast_match must be one of core, edge, outside, watch. "
             "Focus on final max temperature prediction; do not output recommendations/vetoed/downgraded unless needed for backward compatibility. "
-            "Do not mention EMOS, edge, Kelly, arbitrage, position size, or trading recommendation. "
             "Keep every city forecast concise: one sentence for METAR read and one sentence for reasoning."
         ),
         "snapshot": model_snapshot,
