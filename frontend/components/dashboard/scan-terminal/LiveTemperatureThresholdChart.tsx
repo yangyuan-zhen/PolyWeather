@@ -32,17 +32,6 @@ type EvidenceSeries = {
   values: Array<number | null>;
 };
 
-type RunwayObsPayload = {
-  runway_pairs?: Array<[string, string] | string[] | null> | null;
-  temperatures?: Array<[number | null, number | null] | Array<number | null> | null> | null;
-  point_temperatures?: Array<{
-    runway?: string | null;
-    tdz_temp?: number | null;
-    mid_temp?: number | null;
-    end_temp?: number | null;
-  } | null> | null;
-};
-
 // Sliding window: keep at most this many observation points (24h at 1-min ≈ 1440)
 const MAX_OBS_POINTS = 1440;
 
@@ -55,11 +44,17 @@ function toTimestamp(value?: string | null): number | null {
   if (!raw) return null;
   const d = new Date(raw);
   if (!Number.isNaN(d.getTime())) return d.getTime();
-  // HH:MM or HH:MM:SS — treat as today
+  // HH:MM or HH:MM:SS — treat as today, but handle cross-midnight:
+  // if parsed time is >2h ahead of now, assume yesterday
   const m = raw.match(/(\d{1,2}):(\d{2})/);
   if (m) {
     const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), +m[1], +m[2]).getTime();
+    const h = +m[1], min = +m[2];
+    const candidate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, min);
+    if (candidate.getTime() - now.getTime() > 2 * 60 * 60 * 1000) {
+      candidate.setDate(candidate.getDate() - 1);
+    }
+    return candidate.getTime();
   }
   return null;
 }
@@ -123,19 +118,6 @@ function buildSlidingChartData(
         allTimes.add(ts);
         forecastTimes.push(ts);
       }
-    });
-  }
-
-  // Runway obs
-  const runwayObs = (row as any)?.amos?.runway_obs || (row as any)?.runway_obs;
-  if (runwayObs) {
-    const pairs = runwayObs.runway_pairs || [];
-    const temps = runwayObs.temperatures || [];
-    pairs.forEach((_: any, idx: number) => {
-      const tArr = Array.isArray(temps[idx]) ? temps[idx] || [] : [];
-      tArr.forEach((tVal: unknown) => {
-        if (validNumber(tVal) !== null) allTimes.add(Date.now() - (MAX_OBS_POINTS - idx) * 60_000);
-      });
     });
   }
 
