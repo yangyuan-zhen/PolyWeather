@@ -51,6 +51,7 @@ import {
   getGapColor,
   getSignalLabel,
   getSignalState,
+  TRADING_REGIONS,
 } from "@/components/dashboard/scan-terminal/continent-grouping";
 import { MobileCityCard } from "@/components/dashboard/scan-terminal/MobileCityCard";
 import { MobileRegionTabs } from "@/components/dashboard/scan-terminal/MobileRegionTabs";
@@ -347,16 +348,9 @@ function PolyWeatherTerminal({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [searchInputRef, setSearchQuery]);
-  const approveRows = rows
-    .filter((row) => ["Approve", "Tradable"].includes(decisionLabel(row)))
-    .slice(0, 8);
-  const watchRows = rows
-    .filter((row) => decisionLabel(row) === "Watch" || !row.tradable)
-    .slice(0, 8);
-  const selectedSignal = selectedRow ? getSignalState(selectedRow) : "data" as const;
-  const selectedLabel = selectedRow ? getSignalLabel(selectedSignal, isEn) : "";
   const [navExpanded, setNavExpanded] = useState(false);
   const [activeNavKey, setActiveNavKey] = useState<string>("contracts");
+  const [selectedRegionKey, setSelectedRegionKey] = useState<string>("all");
 
   const NAV_ITEMS = [
     { key: "contracts", Icon: Table2, labelEn: "Contracts", labelZh: "天气合约" },
@@ -367,9 +361,40 @@ function PolyWeatherTerminal({
     { key: "markets", Icon: Activity, labelEn: "Markets", labelZh: "市场概览" },
   ];
 
+  const regionTabs = useMemo(() => {
+    return [
+      { key: "all", labelEn: "ALL", labelZh: "全部" },
+      ...TRADING_REGIONS.map((r) => ({
+        key: r.key,
+        labelEn: r.labelEn.toUpperCase(),
+        labelZh: r.labelZh,
+      })),
+    ];
+  }, [isEn]);
+
+  const filteredRegionRows = useMemo(() => {
+    if (selectedRegionKey === "all") return rows;
+    return rows.filter((row) => String(row.trading_region).toLowerCase() === selectedRegionKey);
+  }, [rows, selectedRegionKey]);
+
+  const approveRows = useMemo(() => {
+    return filteredRegionRows
+      .filter((row) => ["Approve", "Tradable"].includes(decisionLabel(row)))
+      .slice(0, 8);
+  }, [filteredRegionRows]);
+
+  const watchRows = useMemo(() => {
+    return filteredRegionRows
+      .filter((row) => decisionLabel(row) === "Watch" || !row.tradable)
+      .slice(0, 8);
+  }, [filteredRegionRows]);
+
+  const selectedSignal = selectedRow ? getSignalState(selectedRow) : "data" as const;
+  const selectedLabel = selectedRow ? getSignalLabel(selectedSignal, isEn) : "";
+
   const continentGroups = useMemo(
-    () => buildContinentGroups(rows, isEn),
-    [rows, isEn]
+    () => buildContinentGroups(filteredRegionRows, isEn),
+    [filteredRegionRows, isEn]
   );
   const [mobileTab, setMobileTab] = useState<string>("active_signals");
   const mobileActiveGroup = useMemo(
@@ -381,14 +406,19 @@ function PolyWeatherTerminal({
       setMobileTab(continentGroups[0].key);
     }
   }, [continentGroups, mobileTab]);
-  const avgEdge =
-    rows.reduce((sum, row) => sum + Number(row.edge_percent || 0), 0) /
-    Math.max(rows.length, 1);
-  const totalLiquidity = rows.reduce(
-    (sum, row) =>
-      sum + Number(row.book_liquidity || row.market_liquidity || row.volume || 0),
-    0,
-  );
+
+  const avgEdge = useMemo(() => {
+    const list = filteredRegionRows;
+    return list.reduce((sum, row) => sum + Number(row.edge_percent || 0), 0) / Math.max(list.length, 1);
+  }, [filteredRegionRows]);
+
+  const totalLiquidity = useMemo(() => {
+    const list = filteredRegionRows;
+    return list.reduce(
+      (sum, row) => sum + Number(row.book_liquidity || row.market_liquidity || row.volume || 0),
+      0
+    );
+  }, [filteredRegionRows]);
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[#e9edf3] text-[#202833]">
@@ -566,63 +596,131 @@ function PolyWeatherTerminal({
           <div className="hidden lg:grid lg:grid-cols-[1.1fr_1.65fr_0.95fr] h-full gap-2 min-h-0">
             {/* Column 1 */}
             <div className="flex flex-col gap-2 min-h-0 h-full">
-              <Panel title={isEn ? "Weather Contracts" : "天气合约"}>
-                <div className="grid grid-cols-3 border-b border-slate-200 text-center bg-[#f8f9fa] shrink-0">
-                  <div className="py-2 border-r border-slate-200">
-                    <div className="text-[10px] font-bold uppercase text-slate-400">
-                      {t("rows", isEn)}
-                    </div>
-                    <div className="font-mono text-base font-black text-slate-800">{rows.length}</div>
-                  </div>
-                  <div className="py-2 border-r border-slate-200">
-                    <div className="text-[10px] font-bold uppercase text-slate-400">
-                      {t("avgEdge", isEn)}
-                    </div>
-                    <div className={clsx("font-mono text-base font-black", edgeClass(avgEdge))}>
-                      {pct(avgEdge)}
-                    </div>
-                  </div>
-                  <div className="py-2">
-                    <div className="text-[10px] font-bold uppercase text-slate-400">
-                      {t("liquidity", isEn)}
-                    </div>
-                    <div className="font-mono text-base font-black text-slate-800">
-                      {money(totalLiquidity)}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex-1 min-h-0 overflow-auto">
-                  <GroupedMarketTable
-                    groups={continentGroups}
-                    isEn={isEn}
-                    selectedId={selectedRow?.id}
-                    onSelect={setSelectedRow}
-                  />
-                </div>
-              </Panel>
-
-              <Panel title={t("approvedSignals", isEn)} className="h-[210px] shrink-0">
-                <div className="divide-y divide-slate-100">
-                  {(approveRows.length ? approveRows : rows.slice(0, 5)).map((row) => (
+              {/* Koyfin-style Region Selector */}
+              <div className="flex items-center gap-1 overflow-x-auto bg-white border border-[#d2d9e2] rounded-[4px] p-1 shrink-0 scrollbar-none">
+                {regionTabs.map((tab) => {
+                  const isActive = selectedRegionKey === tab.key;
+                  return (
                     <button
-                      key={row.id}
+                      key={tab.key}
                       type="button"
-                      onClick={() => setSelectedRow(row)}
-                      className="grid w-full grid-cols-[1fr_auto] items-center gap-3 px-3 py-1.5 text-left hover:bg-slate-50 transition-colors"
+                      onClick={() => setSelectedRegionKey(tab.key)}
+                      className={clsx(
+                        "px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-[3px] transition-all whitespace-nowrap",
+                        isActive
+                          ? "bg-blue-600 text-white shadow-sm"
+                          : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                      )}
                     >
-                      <span>
-                        <b className="block text-xs font-bold text-slate-800">{rowName(row)}</b>
-                        <small className="text-[10px] text-slate-400 block truncate max-w-[200px]">
-                          {row.ai_reason_zh || row.ai_city_thesis_zh || row.target_label || "--"}
-                        </small>
-                      </span>
-                      <span className={clsx("font-mono text-xs font-bold", edgeClass(row.edge_percent))}>
-                        {pct(row.edge_percent)}
-                      </span>
+                      {isEn ? tab.labelEn : tab.labelZh}
                     </button>
-                  ))}
-                </div>
-              </Panel>
+                  );
+                })}
+              </div>
+
+              {activeNavKey === "signals" ? (
+                <>
+                  <Panel title={t("approvedSignals", isEn)} className="flex-1 min-h-0">
+                    <div className="divide-y divide-slate-100">
+                      {approveRows.map((row) => (
+                        <button
+                          key={row.id}
+                          type="button"
+                          onClick={() => setSelectedRow(row)}
+                          className={clsx(
+                            "grid w-full grid-cols-[1fr_auto] items-center gap-3 px-3 py-2 text-left hover:bg-slate-50 transition-colors",
+                            selectedRow?.id === row.id && "bg-blue-50/70"
+                          )}
+                        >
+                          <span>
+                            <b className="block text-xs font-bold text-slate-800">{rowName(row)}</b>
+                            <small className="text-[10px] text-slate-400 block truncate max-w-[200px]">
+                              {row.ai_reason_zh || row.ai_city_thesis_zh || row.target_label || "--"}
+                            </small>
+                          </span>
+                          <span className={clsx("font-mono text-xs font-bold", edgeClass(row.edge_percent))}>
+                            {pct(row.edge_percent)}
+                          </span>
+                        </button>
+                      ))}
+                      {approveRows.length === 0 && (
+                        <div className="p-4 text-center text-xs text-slate-400">
+                          {isEn ? "No approved signals in this timezone" : "该时区暂无已确认信号"}
+                        </div>
+                      )}
+                    </div>
+                  </Panel>
+
+                  <Panel title={t("probabilityDistribution", isEn)} className="h-[250px] shrink-0">
+                    <div className="p-3 h-full">
+                      <ProbabilityDistributionChart points={selectedRow?.distribution_preview} isEn={isEn} />
+                    </div>
+                  </Panel>
+                </>
+              ) : (
+                <>
+                  <Panel title={isEn ? "Weather Contracts" : "天气合约"}>
+                    <div className="grid grid-cols-3 border-b border-slate-200 text-center bg-[#f8f9fa] shrink-0">
+                      <div className="py-2 border-r border-slate-200">
+                        <div className="text-[10px] font-bold uppercase text-slate-400">
+                          {t("rows", isEn)}
+                        </div>
+                        <div className="font-mono text-base font-black text-slate-800">{filteredRegionRows.length}</div>
+                      </div>
+                      <div className="py-2 border-r border-slate-200">
+                        <div className="text-[10px] font-bold uppercase text-slate-400">
+                          {t("avgEdge", isEn)}
+                        </div>
+                        <div className={clsx("font-mono text-base font-black", edgeClass(avgEdge))}>
+                          {pct(avgEdge)}
+                        </div>
+                      </div>
+                      <div className="py-2">
+                        <div className="text-[10px] font-bold uppercase text-slate-400">
+                          {t("liquidity", isEn)}
+                        </div>
+                        <div className="font-mono text-base font-black text-slate-800">
+                          {money(totalLiquidity)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex-1 min-h-0 overflow-auto">
+                      <GroupedMarketTable
+                        groups={continentGroups}
+                        isEn={isEn}
+                        selectedId={selectedRow?.id}
+                        onSelect={setSelectedRow}
+                      />
+                    </div>
+                  </Panel>
+
+                  <Panel title={t("approvedSignals", isEn)} className="h-[210px] shrink-0">
+                    <div className="divide-y divide-slate-100">
+                      {(approveRows.length ? approveRows : rows.slice(0, 5)).map((row) => (
+                        <button
+                          key={row.id}
+                          type="button"
+                          onClick={() => setSelectedRow(row)}
+                          className={clsx(
+                            "grid w-full grid-cols-[1fr_auto] items-center gap-3 px-3 py-1.5 text-left hover:bg-slate-50 transition-colors",
+                            selectedRow?.id === row.id && "bg-blue-50/70"
+                          )}
+                        >
+                          <span>
+                            <b className="block text-xs font-bold text-slate-800">{rowName(row)}</b>
+                            <small className="text-[10px] text-slate-400 block truncate max-w-[200px]">
+                              {row.ai_reason_zh || row.ai_city_thesis_zh || row.target_label || "--"}
+                            </small>
+                          </span>
+                          <span className={clsx("font-mono text-xs font-bold", edgeClass(row.edge_percent))}>
+                            {pct(row.edge_percent)}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </Panel>
+                </>
+              )}
             </div>
 
             {/* Column 2 */}
