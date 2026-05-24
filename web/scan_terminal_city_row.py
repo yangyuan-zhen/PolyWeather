@@ -172,25 +172,6 @@ def _scan_city_terminal_rows(
         if not isinstance(raw_rows, list) or not raw_rows:
             raw_rows = [scan.get("primary_signal")] if isinstance(scan.get("primary_signal"), dict) else []
         if not raw_rows:
-            # No Polymarket market for this city — still emit an observation-only row
-            fallback_row = {
-                "id": f"{city}|{target_date}|live_only",
-                "city": city,
-                "side": "",
-                "edge_percent": None,
-                "final_score": None,
-                "volume": None,
-                "selected_date": target_date,
-                "market_slug": None,
-                "is_primary_signal": True,
-            }
-            row = _build_terminal_row(
-                city=city,
-                data=data,
-                scan=scan,
-                row=fallback_row,
-            )
-            rows.append(row)
             continue
         for raw_row in raw_rows:
             if not isinstance(raw_row, dict) or not raw_row:
