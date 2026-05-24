@@ -1834,12 +1834,7 @@ class PolymarketReadOnlyLayer:
             return ws_data
 
         self._ws_cache.subscribe([token_id])
-
-        data = self._fetch_token_market_data(token_id)
-
-        with self._lock:
-            self._price_cache[token_id] = {"data": data, "t": now}
-        return data
+        return {}
 
     def _fetch_token_market_data(self, token_id: str) -> Dict[str, Any]:
         # REST-only path: CLOB public endpoints.
@@ -2723,128 +2718,7 @@ class PolymarketReadOnlyLayer:
                     results[token_id] = ws_data
                     missing.remove(token_id)
 
-        if not missing:
-            return results
-
-        buy_map: Dict[str, float] = {}
-        sell_map: Dict[str, float] = {}
-        midpoint_map: Dict[str, float] = {}
-        spread_map: Dict[str, float] = {}
-        last_trade_map: Dict[str, float] = {}
-        book_map: Dict[str, Dict[str, Any]] = {}
-
-        for chunk in self._batch_chunks(missing):
-            buy_payload = self._clob_post(
-                "/prices",
-                [{"token_id": token_id, "side": "BUY"} for token_id in chunk],
-            )
-            sell_payload = self._clob_post(
-                "/prices",
-                [{"token_id": token_id, "side": "SELL"} for token_id in chunk],
-            )
-            midpoint_payload = (
-                self._clob_post(
-                    "/midpoints",
-                    [{"token_id": token_id} for token_id in chunk],
-                )
-                if not self.fast_price_only
-                else None
-            )
-            spread_payload = (
-                self._clob_post(
-                    "/spreads",
-                    [{"token_id": token_id} for token_id in chunk],
-                )
-                if not self.fast_price_only
-                else None
-            )
-            last_trade_payload = (
-                self._clob_post(
-                    "/last-trade-prices",
-                    [{"token_id": token_id} for token_id in chunk],
-                )
-                if not self.fast_price_only
-                else None
-            )
-            books_payload = (
-                self._clob_post(
-                    "/books",
-                    [{"token_id": token_id} for token_id in chunk],
-                )
-                if include_books and not self.fast_price_only
-                else None
-            )
-            buy_map.update(self._extract_batch_price_map(buy_payload, "BUY"))
-            sell_map.update(self._extract_batch_price_map(sell_payload, "SELL"))
-            midpoint_map.update(self._extract_batch_scalar_map(midpoint_payload))
-            spread_map.update(self._extract_batch_scalar_map(spread_payload))
-            last_trade_map.update(self._extract_batch_scalar_map(last_trade_payload))
-            if include_books:
-                book_map.update(self._extract_batch_book_map(books_payload))
-
-        fetched: Dict[str, Dict[str, Any]] = {}
-        unresolved: List[str] = []
-        for token_id in missing:
-            raw_book = book_map.get(token_id)
-            book, book_liquidity = self._normalize_orderbook(raw_book)
-            buy_price = _extract_price(buy_map.get(token_id))
-            sell_price = _extract_price(sell_map.get(token_id))
-            midpoint = _extract_price(midpoint_map.get(token_id))
-            spread = _extract_price(spread_map.get(token_id))
-            last_trade = _extract_price(last_trade_map.get(token_id))
-
-            buy, sell = self._resolve_trade_prices(
-                buy=buy_price,
-                sell=sell_price,
-                book=book,
-            )
-            if midpoint is None and buy is not None and sell is not None:
-                midpoint = (buy + sell) / 2.0
-            if midpoint is None:
-                midpoint = _extract_price(raw_book.get("last_trade_price") if isinstance(raw_book, dict) else None)
-            if spread is None and buy is not None and sell is not None:
-                spread = max(0.0, float(buy) - float(sell))
-            if spread is not None and midpoint is not None:
-                midpoint = _clamp_probability(midpoint)
-            if buy is None and midpoint is not None and spread is not None:
-                buy = _clamp_probability(midpoint + spread / 2.0)
-            if sell is None and midpoint is not None and spread is not None:
-                sell = _clamp_probability(midpoint - spread / 2.0)
-
-            if (
-                buy is None
-                and sell is None
-                and midpoint is None
-                and last_trade is None
-                and book is None
-            ):
-                unresolved.append(token_id)
-                continue
-
-            fetched[token_id] = {
-                "buy": buy,
-                "sell": sell,
-                "midpoint": midpoint,
-                "spread": spread,
-                "last_trade_price": last_trade,
-                "quote_source": (
-                    "polymarket_clob_fast_batch"
-                    if self.fast_price_only
-                    else "polymarket_clob_rest_batch"
-                ),
-                "quote_age_ms": 0,
-                "book": book,
-                "book_liquidity": book_liquidity,
-            }
-
-        for token_id in unresolved:
-            fetched[token_id] = self._fetch_token_market_data(token_id)
-
-        with self._lock:
-            for token_id, data in fetched.items():
-                self._price_cache[token_id] = {"data": data, "t": now}
-
-        results.update(fetched)
+        # No REST fallback — prices exclusively from WebSocket.
         return results
 
     def _normalize_scan_filters(self, scan_filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

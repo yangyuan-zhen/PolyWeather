@@ -86,7 +86,7 @@ class PolymarketWsQuoteCache:
     @classmethod
     def from_env(cls) -> "PolymarketWsQuoteCache":
         return cls(
-            enabled=_env_bool("POLYMARKET_WS_PRICE_ENABLED", False),
+            enabled=_env_bool("POLYMARKET_WS_PRICE_ENABLED", True),
             endpoint=os.getenv("POLYMARKET_WS_MARKET_URL"),
             quote_ttl_sec=int(os.getenv("POLYMARKET_WS_QUOTE_TTL_SEC", "8")),
             max_assets=int(os.getenv("POLYMARKET_WS_MAX_ASSETS", "256")),
