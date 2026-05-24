@@ -605,6 +605,14 @@ function PolyWeatherTerminal({
     }
   }, [filteredRegionRows, selectedRow, setSelectedRow]);
 
+  useEffect(() => {
+    if (!selectedCity) return;
+    const cityRows = filteredRegionRows.filter((r) => String(r.city || "").toLowerCase() === selectedCity);
+    if (cityRows.length && (!selectedRow || !cityRows.some((r) => r.id === selectedRow.id))) {
+      setSelectedRow(cityRows[0]);
+    }
+  }, [selectedCity, filteredRegionRows, selectedRow, setSelectedRow]);
+
   const avgEdge = useMemo(() => {
     const list = filteredRegionRows;
     return list.reduce((sum, row) => sum + Number(row.edge_percent || 0), 0) / Math.max(list.length, 1);
