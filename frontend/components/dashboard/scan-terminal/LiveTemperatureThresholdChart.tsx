@@ -14,7 +14,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { ScanOpportunityRow } from "@/lib/dashboard-types";
+import type { CityDetail, ScanOpportunityRow } from "@/lib/dashboard-types";
+import { buildDebBaselinePath } from "@/lib/temperature-chart-paths";
 import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { rowName, temp } from "@/components/dashboard/scan-terminal/utils";
 
@@ -46,6 +47,8 @@ const DAILY_CHART_HOURS = Array.from(
   { length: 24 },
   (_, index) => `${String(index).padStart(2, "0")}:00`,
 );
+
+const VISIBLE_WINDOW_HOURS = 12;
 
 function validNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -85,18 +88,30 @@ function seriesStats(values: Array<number | null>) {
   return { latest, high, delta15 };
 }
 
-type HourlyForecast = { times: string[]; temps: Array<number | null> } | null;
+type HourlyForecast = {
+  forecastTodayHigh?: number | null;
+  localTime?: string | null;
+  times: string[];
+  temps: Array<number | null>;
+} | null;
 
 function buildModelCurves(row: ScanOpportunityRow | null, length: number, hourly: HourlyForecast) {
   const result: EvidenceSeries[] = [];
-  // Use hourly forecast data if available (DEB-blended ensemble curve)
+  // Use hourly forecast data if available. Daily model highs are not plotted
+  // as curves because they are single terminal values, not a time series.
   if (hourly?.times?.length && hourly?.temps?.length) {
+    const debPath = buildDebBaselinePath(
+      hourly.times,
+      hourly.temps,
+      row?.deb_prediction,
+      hourly.localTime || row?.local_time,
+      hourly.forecastTodayHigh,
+    );
     const values = Array.from({ length }, (): number | null => null);
     hourly.times.forEach((t, i) => {
-      const hour = /(\d{1,2}):/.exec(String(t || ""))?.[1];
-      const h = hour ? parseInt(hour, 10) : null;
+      const h = parseHourOfDay(t);
       if (h !== null && h >= 0 && h < length && i < hourly.temps.length) {
-        values[h] = validNumber(hourly.temps[i]);
+        values[h] = validNumber(debPath.debTemps[i]);
       }
     });
     if (values.some((v) => v !== null)) {
@@ -111,25 +126,22 @@ function buildModelCurves(row: ScanOpportunityRow | null, length: number, hourly
       });
     }
   }
-  // Fallback: show model daily-high points as anchors
-  const modelEntries = Object.entries(row?.model_cluster_sources || {})
+  return result;
+}
+
+function buildModelSummaryCards(row: ScanOpportunityRow | null): EvidenceSeries[] {
+  return Object.entries(row?.model_cluster_sources || {})
     .map(([label, value]) => [label, validNumber(value)] as const)
     .filter((entry): entry is readonly [string, number] => entry[1] !== null)
-    .slice(0, 3);
-  modelEntries.forEach(([label, value], index) => {
-    // Place anchor points at peak hours (14-17 local)
-    const values = Array.from({ length }, (): number | null => null);
-    for (let h = 14; h <= 17; h++) values[h] = value;
-    result.push({
-      key: `model_${index}`,
+    .slice(0, 4)
+    .map(([label, value], index) => ({
+      key: `model_summary_${index}`,
       label,
-      source: "Multi-model",
-      color: ["#2563eb", "#14b8a6", "#7c3aed"][index] || "#64748b",
+      source: "Multi-model daily high",
+      color: ["#2563eb", "#14b8a6", "#7c3aed", "#64748b"][index] || "#64748b",
       dashed: true,
-      values,
-    });
-  });
-  return result;
+      values: [value],
+    }));
 }
 
 function extractRunwayPointSeries(row: ScanOpportunityRow | null, length: number): EvidenceSeries[] {
@@ -243,6 +255,74 @@ function buildEvidenceChart(row: ScanOpportunityRow | null, hourly: HourlyForeca
   return { data, series };
 }
 
+function currentHourForWindow(row: ScanOpportunityRow | null, hourly: HourlyForecast) {
+  return parseHourOfDay(hourly?.localTime || row?.local_time) ?? new Date().getHours();
+}
+
+function buildMovingWindowData(
+  data: Array<Record<string, string | number | null>>,
+  row: ScanOpportunityRow | null,
+  hourly: HourlyForecast,
+) {
+  if (!data.length) return data;
+  const currentHour = currentHourForWindow(row, hourly);
+  const endHour = Math.min(23, Math.max(VISIBLE_WINDOW_HOURS - 1, currentHour + 4));
+  const startHour = Math.max(0, endHour - VISIBLE_WINDOW_HOURS + 1);
+  return data.slice(startHour, endHour + 1);
+}
+
+function parseTemperatureOptionsFromText(value?: string | null) {
+  const raw = String(value || "");
+  const matches = raw.match(/-?\d+(?:\.\d+)?/g) || [];
+  return matches
+    .map((item) => Number(item))
+    .filter((item) => Number.isFinite(item) && item > -80 && item < 80);
+}
+
+function buildMarketTemperatureOptions(row: ScanOpportunityRow | null) {
+  const buckets = row?.distribution_full?.length
+    ? row.distribution_full
+    : row?.distribution_preview;
+  const values = new Set<number>();
+  (buckets || []).forEach((bucket) => {
+    const value = validNumber(bucket.value);
+    if (value !== null) values.add(value);
+    parseTemperatureOptionsFromText(bucket.label).forEach((item) => values.add(item));
+  });
+  [
+    row?.target_lower,
+    row?.target_upper,
+    row?.target_value,
+    row?.target_threshold,
+  ].forEach((value) => {
+    const numeric = validNumber(value);
+    if (numeric !== null) values.add(numeric);
+  });
+  parseTemperatureOptionsFromText(row?.target_label).forEach((item) => values.add(item));
+  parseTemperatureOptionsFromText(row?.market_question).forEach((item) => values.add(item));
+  const sorted = [...values].sort((a, b) => a - b);
+  if (sorted.length) return sorted;
+  const threshold = validNumber(row?.target_threshold) ?? validNumber(row?.target_value);
+  if (threshold === null) return null;
+  return [threshold - 2, threshold - 1, threshold, threshold + 1, threshold + 2];
+}
+
+function buildChartDomain(
+  marketTicks: number[] | null,
+  series: EvidenceSeries[],
+): [number, number] | ["auto", "auto"] {
+  const values = series
+    .flatMap((item) => item.values)
+    .filter((value): value is number => validNumber(value) !== null);
+  const domainValues = [...(marketTicks || []), ...values];
+  if (!domainValues.length) return ["auto", "auto"];
+  const min = Math.min(...domainValues);
+  const max = Math.max(...domainValues);
+  const span = Math.max(1, max - min);
+  const padding = Math.max(0.5, span * 0.08);
+  return [Number((min - padding).toFixed(1)), Number((max + padding).toFixed(1))];
+}
+
 export function LiveTemperatureThresholdChart({
   isEn,
   row,
@@ -257,19 +337,21 @@ export function LiveTemperatureThresholdChart({
     setHourly(null);
     if (!city) return;
     let cancelled = false;
-    fetch(`/api/city/${encodeURIComponent(city)}/summary`, {
+    fetch(`/api/city/${encodeURIComponent(city)}/detail?depth=panel&force_refresh=false`, {
       cache: "no-store",
       headers: { Accept: "application/json" },
     })
       .then(async (res) => {
         if (!res.ok) return null;
-        return res.json() as Promise<{ timeseries?: { hourly?: { times?: string[]; temps?: Array<number | null> } } }>;
+        return res.json() as Promise<CityDetail>;
       })
       .then((json) => {
-        if (cancelled || !json?.timeseries?.hourly) return;
+        if (cancelled || !json?.hourly) return;
         setHourly({
-          times: json.timeseries.hourly.times || [],
-          temps: json.timeseries.hourly.temps || [],
+          forecastTodayHigh: json.forecast?.today_high ?? null,
+          localTime: json.local_time || null,
+          times: json.hourly.times || [],
+          temps: json.hourly.temps || [],
         });
       })
       .catch(() => {});
@@ -277,24 +359,17 @@ export function LiveTemperatureThresholdChart({
   }, [city]);
 
   const { data, series } = useMemo(() => buildEvidenceChart(row, hourly), [row, hourly]);
+  const visibleData = useMemo(() => buildMovingWindowData(data, row, hourly), [data, row, hourly]);
   const threshold = validNumber(row?.target_threshold) ?? validNumber(row?.target_value);
-  const tableRows = series.slice(0, 5).map((item) => ({ ...item, ...seriesStats(item.values) }));
-  const marketTemperatures = useMemo(() => {
-    const buckets = row?.distribution_full?.length
-      ? row.distribution_full
-      : row?.distribution_preview;
-    if (!buckets?.length) return null;
-    const temps = buckets
-      .map((b) => validNumber(b.value))
-      .filter((v): v is number => v !== null)
-      .sort((a, b) => a - b);
-    if (!temps.length) return null;
-    const padding = temps.length > 1 ? temps[1] - temps[0] : 2;
-    return {
-      ticks: temps,
-      domain: [temps[0] - padding, temps[temps.length - 1] + padding] as [number, number],
-    };
-  }, [row]);
+  const modelSummaryCards = useMemo(() => buildModelSummaryCards(row), [row]);
+  const tableRows = [...series, ...modelSummaryCards]
+    .slice(0, 5)
+    .map((item) => ({ ...item, ...seriesStats(item.values) }));
+  const marketTemperatureTicks = useMemo(() => buildMarketTemperatureOptions(row), [row]);
+  const chartDomain = useMemo(
+    () => buildChartDomain(marketTemperatureTicks, series),
+    [marketTemperatureTicks, series],
+  );
 
   return (
     <Panel title={isEn ? "Live Temperature Trend & Option Threshold Lines" : "实时气温走势与期权阈值线"}>
@@ -326,10 +401,16 @@ export function LiveTemperatureThresholdChart({
                   <span className="h-1.5 w-4 rounded-full" style={{ backgroundColor: item.color }} />
                   <span className="truncate font-black text-slate-700">{item.label}</span>
                 </div>
-                <div className="mt-1 grid grid-cols-3 gap-1 font-mono text-[10px] text-slate-600">
-                  <span>now: {temp(item.latest)}</span>
-                  <span>max: {temp(item.high)}</span>
-                  <span>15m: {item.delta15 === null ? "--" : `${item.delta15 >= 0 ? "+" : ""}${item.delta15.toFixed(1)}°`}</span>
+                <div className="mt-1 font-mono text-[10px] text-slate-600">
+                  {item.key.startsWith("model_summary_") ? (
+                    <span>{temp(item.latest)}</span>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-1">
+                      <span>now: {temp(item.latest)}</span>
+                      <span>max: {temp(item.high)}</span>
+                      <span>15m: {item.delta15 === null ? "--" : `${item.delta15 >= 0 ? "+" : ""}${item.delta15.toFixed(1)}°`}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -340,16 +421,16 @@ export function LiveTemperatureThresholdChart({
             {rowName(row)} <span className="ml-1 text-teal-600">{row?.target_label || row?.market_direction || ""}</span>
           </div>
           <ResponsiveContainer width="100%" height="100%">
-            <ReLineChart data={data} margin={{ top: 16, right: 28, left: 8, bottom: 8 }}>
+            <ReLineChart data={visibleData} margin={{ top: 16, right: 28, left: 8, bottom: 8 }}>
               <CartesianGrid stroke="#dbe6ef" strokeDasharray="2 2" />
-              <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#64748b" }} tickLine={false} axisLine={{ stroke: "#cbd5e1" }} interval={2} />
+              <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#64748b" }} tickLine={false} axisLine={{ stroke: "#cbd5e1" }} interval={0} />
               <YAxis
                 tick={{ fontSize: 10, fill: "#64748b" }}
                 tickFormatter={(v) => `${Number(v).toFixed(1)}°`}
                 axisLine={{ stroke: "#cbd5e1" }}
                 tickLine={false}
-                domain={marketTemperatures?.domain ?? ["auto", "auto"]}
-                ticks={marketTemperatures?.ticks}
+                domain={chartDomain}
+                ticks={marketTemperatureTicks || undefined}
               />
               {threshold !== null && (
                 <ReferenceLine
