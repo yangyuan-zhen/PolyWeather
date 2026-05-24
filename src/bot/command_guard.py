@@ -98,6 +98,4 @@ class CommandGuard:
         return True
 
     def ensure_access_and_points(self, message: Any, cost: int, command_label: str) -> bool:
-        if not self.ensure_group_member(message, command_label):
-            return False
         return self.io_layer.ensure_query_points(message, cost, command_label)
