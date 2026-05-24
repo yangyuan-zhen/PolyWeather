@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Activity,
@@ -16,6 +17,10 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { I18nProvider, useI18n } from "@/hooks/useI18n";
+import {
+  getSupabaseBrowserClient,
+  hasSupabasePublicEnv,
+} from "@/lib/supabase/client";
 
 const RAW_MARKET_ROWS_EN = [
   ["New York", "91.8°F", "+2.4", "High", "Long Yes"],
@@ -74,6 +79,20 @@ const PRO_FEATURES_ZH = [
 function InstitutionalLandingScreen() {
   const { locale, toggleLocale } = useI18n();
   const isEn = locale === "en-US";
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    if (!hasSupabasePublicEnv()) {
+      setAuthChecked(true);
+      return;
+    }
+    const supabase = getSupabaseBrowserClient();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsAuthenticated(!!session?.user);
+      setAuthChecked(true);
+    });
+  }, []);
 
   const marketRows = isEn ? RAW_MARKET_ROWS_EN : RAW_MARKET_ROWS_ZH;
   const coverage = isEn ? COVERAGE_EN : COVERAGE_ZH;
@@ -144,25 +163,37 @@ function InstitutionalLandingScreen() {
               <span className={`px-2 py-1 rounded-md transition-colors ${!isEn ? "bg-blue-50 text-blue-700 font-bold" : "hover:text-slate-800"}`}>中文</span>
               <span className={`px-2 py-1 rounded-md transition-colors ${isEn ? "bg-blue-50 text-blue-700 font-bold" : "hover:text-slate-800"}`}>EN</span>
             </button>
-            <Link
-              href="/auth/login?next=%2Fterminal"
-              className="hidden rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-400 hover:text-slate-950 sm:inline-flex"
-            >
-              {isEn ? "Log in" : "登录"}
-            </Link>
-            <Link
-              href="/auth/login?next=%2Fterminal&mode=signup"
-              className="hidden rounded-lg bg-slate-950 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 sm:inline-flex"
-            >
-              {isEn ? "Sign Up" : "注册"}
-            </Link>
-            <Link
-              href="/auth/login?next=%2Fterminal"
-              className="inline-flex items-center gap-2 rounded-lg border border-blue-700 bg-blue-600 px-3 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
-            >
-              {isEn ? "Enter Product" : "进入产品"}
-              <ArrowRight size={15} />
-            </Link>
+            {authChecked && isAuthenticated ? (
+              <Link
+                href="/terminal"
+                className="inline-flex items-center gap-2 rounded-lg border border-blue-700 bg-blue-600 px-3 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
+              >
+                {isEn ? "Enter Product" : "进入产品"}
+                <ArrowRight size={15} />
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/auth/login?next=%2Fterminal"
+                  className="hidden rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-400 hover:text-slate-950 sm:inline-flex"
+                >
+                  {isEn ? "Log in" : "登录"}
+                </Link>
+                <Link
+                  href="/auth/login?next=%2Fterminal&mode=signup"
+                  className="hidden rounded-lg bg-slate-950 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 sm:inline-flex"
+                >
+                  {isEn ? "Sign Up" : "注册"}
+                </Link>
+                <Link
+                  href="/auth/login?next=%2Fterminal"
+                  className="inline-flex items-center gap-2 rounded-lg border border-blue-700 bg-blue-600 px-3 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
+                >
+                  {isEn ? "Enter Product" : "进入产品"}
+                  <ArrowRight size={15} />
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
