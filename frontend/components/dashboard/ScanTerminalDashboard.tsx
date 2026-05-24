@@ -883,13 +883,24 @@ function ScanTerminalScreen() {
     if (!searchQuery.trim()) return rows;
     const q = searchQuery.toLowerCase().trim();
     return rows.filter((row) => {
-      const city = (rowName(row) || "").toLowerCase();
-      const airport = (row.airport || "").toLowerCase();
-      const region = ((isEn ? row.trading_region_label : row.trading_region_label_zh) || row.trading_region_label || "").toLowerCase();
-      const signal = (row.ai_decision || row.v4_metar_decision || row.signal_status || "").toLowerCase();
-      return city.includes(q) || airport.includes(q) || region.includes(q) || signal.includes(q);
+      const haystack = [
+        row.city,
+        row.city_display_name,
+        row.display_name,
+        row.airport,
+        row.trading_region_label,
+        row.trading_region_label_zh,
+        row.market_question,
+        row.target_label,
+        row.ai_decision,
+        row.v4_metar_decision,
+        row.signal_status,
+      ]
+        .filter(Boolean)
+        .map((v) => String(v).toLowerCase());
+      return haystack.some((s) => s.includes(q));
     });
-  }, [rows, searchQuery, isEn]);
+  }, [rows, searchQuery]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedRow = useMemo(
