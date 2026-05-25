@@ -2,6 +2,7 @@
 
 import clsx from "clsx";
 import { useEffect, useMemo, useState } from "react";
+import { LoadingSignal } from "@/components/dashboard/scan-terminal/LoadingSignal";
 import {
   Brush,
   CartesianGrid,
@@ -198,6 +199,47 @@ const SLOT_INTERVAL_MS = FULL_DAY_SLOT_MINUTES * 60 * 1000;
 const _hourlyCache = new Map<string, { ts: number; data: HourlyForecast }>();
 const _hourlyRequestCache = new Map<string, Promise<HourlyForecast>>();
 const RUNWAY_LINE_COLORS = ["#00897b", "#d97706", "#7c3aed", "#0891b2", "#ea580c", "#64748b"];
+
+const SESSION_CACHE_PREFIX = "polyweather_city_detail_v1:";
+const SESSION_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes cache for session storage
+
+function readSessionCache(city: string): { ts: number; data: HourlyForecast } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(`${SESSION_CACHE_PREFIX}${city}`);
+    if (!raw) return null;
+    const item = JSON.parse(raw);
+    if (item && item.ts && Date.now() - item.ts < SESSION_CACHE_TTL_MS) {
+      return item;
+    }
+  } catch {}
+  return null;
+}
+
+function writeSessionCache(city: string, data: HourlyForecast) {
+  if (typeof window === "undefined" || !data) return;
+  try {
+    sessionStorage.setItem(
+      `${SESSION_CACHE_PREFIX}${city}`,
+      JSON.stringify({ ts: Date.now(), data })
+    );
+  } catch {}
+}
+
+export function clearCityDetailCache() {
+  _hourlyCache.clear();
+  _hourlyRequestCache.clear();
+  if (typeof window !== "undefined") {
+    try {
+      for (let i = sessionStorage.length - 1; i >= 0; i--) {
+        const key = sessionStorage.key(i);
+        if (key && key.startsWith(SESSION_CACHE_PREFIX)) {
+          sessionStorage.removeItem(key);
+        }
+      }
+    } catch {}
+  }
+}
 
 function validNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -419,11 +461,16 @@ async function fetchHourlyForecastForCity(city: string): Promise<HourlyForecast>
     return cached.data;
   }
 
+  const sessionCached = readSessionCache(city);
+  if (sessionCached) {
+    _hourlyCache.set(city, sessionCached);
+    return sessionCached.data;
+  }
+
   const pending = _hourlyRequestCache.get(city);
   if (pending) return pending;
 
   const request = fetch(`/api/city/${encodeURIComponent(city)}/detail?depth=full&force_refresh=false`, {
-    cache: "no-store",
     headers: { Accept: "application/json" },
   })
     .then(async (res) => {
@@ -451,6 +498,7 @@ async function fetchHourlyForecastForCity(city: string): Promise<HourlyForecast>
         airportPrimaryTodayObs: (json as any)?.official?.airport_primary_today_obs || (json as any)?.airport_primary_today_obs || undefined,
       };
       _hourlyCache.set(city, { ts: Date.now(), data });
+      writeSessionCache(city, data);
       return data;
     })
     .finally(() => {
@@ -1049,6 +1097,8 @@ export function LiveTemperatureThresholdChart({
   onClose,
   isMaximized = false,
   disableClose = false,
+  isActive = !compact,
+  slotIndex = 0,
 }: {
   isEn: boolean;
   row: ScanOpportunityRow | null;
@@ -1059,8 +1109,11 @@ export function LiveTemperatureThresholdChart({
   onClose?: () => void;
   isMaximized?: boolean;
   disableClose?: boolean;
+  isActive?: boolean;
+  slotIndex?: number;
 }) {
   const [hourly, setHourly] = useState<HourlyForecast>(null);
+  const [isFetching, setIsFetching] = useState(false);
   const city = String(row?.city || "").toLowerCase().trim();
   const [timeframe, setTimeframe] = useState<"1D" | "3D">("1D");
   const [userToggledKeys, setUserToggledKeys] = useState<Record<string, boolean>>({});
@@ -1071,21 +1124,48 @@ export function LiveTemperatureThresholdChart({
 
   useEffect(() => {
     if (!city) return;
-    const cached = _hourlyCache.get(city);
+    
+    // Check in-memory cache first
+    let cached = _hourlyCache.get(city);
+    if (!cached) {
+      // Fallback to session cache
+      const sessionEntry = readSessionCache(city);
+      if (sessionEntry) {
+        cached = sessionEntry;
+        _hourlyCache.set(city, sessionEntry);
+      }
+    }
+
     if (cached && Date.now() - cached.ts < HOURLY_CACHE_TTL_MS) {
       setHourly(cached.data);
+      setIsFetching(false);
       return;
     }
+
     setHourly(seedHourlyForecastFromRow(row));
+    setIsFetching(true);
     let cancelled = false;
-    fetchHourlyForecastForCity(city)
-      .then((data) => {
-        if (cancelled || !data) return;
-        setHourly(data);
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [city, row]);
+
+    // Prioritize active slots, stagger/delay background slots to optimize load performance
+    const delay = isActive ? 0 : (slotIndex ? 300 + slotIndex * 250 : 350);
+
+    const timer = setTimeout(() => {
+      fetchHourlyForecastForCity(city)
+        .then((data) => {
+          if (cancelled || !data) return;
+          setHourly(data);
+          setIsFetching(false);
+        })
+        .catch(() => {
+          if (!cancelled) setIsFetching(false);
+        });
+    }, delay);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [city, row, isActive, slotIndex]);
 
   const { data, series } = useMemo(() => {
     if (timeframe === "3D") {
@@ -1125,38 +1205,42 @@ export function LiveTemperatureThresholdChart({
     return getVisibleTemperatureSeries(city, chartSeries, userToggledKeys);
   }, [chartSeries, userToggledKeys, city]);
 
-  const cityKey = String(row?.city || "").toLowerCase().trim();
+  const normalizedKey = normalizeCityKey(row?.city);
   const runwaySensorCities = new Set([
     'beijing', 'shanghai', 'guangzhou', 'qingdao',
     'chengdu', 'chongqing', 'wuhan', // AMSC runway sensors
     'seoul', 'busan',                 // AMOS runway sensors
   ]);
-  const isHKO = cityKey === 'hong kong' || cityKey === 'lau fau shan' || cityKey === 'shenzhen'
-    || cityKey.includes('hongkong') || cityKey.includes('laufau');
-  const isTokyo = cityKey === 'tokyo';
-  const isSingapore = cityKey === 'singapore';
-  const isParis = cityKey === 'paris';
-  const isWeatherStation = !runwaySensorCities.has(cityKey)
-    && !isHKO && !isTokyo && !isSingapore && !isParis;
+  const isShenzhen = normalizedKey === 'shenzhen';
+  const isHKO = (normalizedKey === 'hongkong' || normalizedKey === 'laufaushan') && !isShenzhen;
+  const isTokyo = normalizedKey === 'tokyo';
+  const isSingapore = normalizedKey === 'singapore';
+  const isParis = normalizedKey === 'paris';
+  const isWeatherStation = !runwaySensorCities.has(normalizedKey)
+    && !isHKO && !isShenzhen && !isTokyo && !isSingapore && !isParis;
 
-  const runwayHeaderLabel = isHKO ? '参考站点 (1分钟)'
+  const runwayHeaderLabel = isShenzhen ? '天文台实测 (10分钟)'
+    : isHKO ? '参考站点 (1分钟)'
     : isTokyo ? '机场气象站 (10分钟)'
     : isSingapore ? '航站楼温度'
     : isParis ? '官方机场观测 (15分钟)'
     : isWeatherStation ? '气象站实测'
     : '跑道实测 (1分钟)';
 
-  const metarHeaderLabel = isHKO ? '天文台实测 (10分钟)'
+  const metarHeaderLabel = isShenzhen ? '天文台实测 (10分钟)'
+    : isHKO ? '天文台实测 (10分钟)'
     : 'METAR 结算 (30分钟)';
 
-  const runwayHighLabel = isHKO ? '参考站点'
+  const runwayHighLabel = isShenzhen ? '天文台实测'
+    : isHKO ? '参考站点'
     : isTokyo ? '机场气象站'
     : isSingapore ? '航站楼'
     : isParis ? '官方机场观测'
     : isWeatherStation ? '气象站'
     : '跑道实测';
 
-  const metarHighLabel = isHKO ? '天文台'
+  const metarHighLabel = isShenzhen ? '天文台'
+    : isHKO ? '天文台'
     : 'METAR 官方';
 
   const { currentRunwayTemp, observedHighMetar, observedHighRunway } = useMemo(
@@ -1313,6 +1397,13 @@ export function LiveTemperatureThresholdChart({
 
   return (
     <Panel title={panelTitle} actions={timeframeActions}>
+      {isFetching && (
+        <LoadingSignal
+          title={isEn ? "Loading city data..." : "加载城市数据中..."}
+          description={isEn ? `Fetching latest observations for ${row?.city_display_name || row?.city || "this city"}` : `正在获取 ${row?.city_display_name || row?.city || "该城市"} 的最新观测数据`}
+          compact={compact}
+        />
+      )}
       <div className="flex h-full min-h-[300px] flex-col">
         {/* Compact stats bar */}
         {compact ? (
@@ -1325,7 +1416,7 @@ export function LiveTemperatureThresholdChart({
                 </span>
                 <span className="text-slate-300">|</span>
                 <span className="font-semibold text-slate-500">
-                  {isEn ? "METAR" : metarHeaderLabel}:{" "}
+                  {isEn ? "METAR" : (isShenzhen ? "当日最高" : metarHeaderLabel)}:{" "}
                   <strong className="text-blue-600 font-mono">{temp(observedHighMetar)}</strong>
                 </span>
               </div>
