@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import time as _time
-import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
@@ -10,7 +9,6 @@ from fastapi import HTTPException
 from loguru import logger
 
 from web.core import (
-    LRUDict,
     _cache,
     _CACHE_LOCK,
     CACHE_TTL,
