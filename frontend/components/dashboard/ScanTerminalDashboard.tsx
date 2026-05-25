@@ -349,6 +349,8 @@ function PolyWeatherTerminal({
   setSelectedCity,
   selectedRegionKey,
   setSelectedRegionKey,
+  visibleRegions,
+  toggleRegion,
 }: {
   generatedText: string;
   isEn: boolean;
@@ -367,6 +369,8 @@ function PolyWeatherTerminal({
   setSelectedCity: (city: string | null) => void;
   selectedRegionKey: string;
   setSelectedRegionKey: (key: string) => void;
+  visibleRegions: Set<string>;
+  toggleRegion: (key: string) => void;
 }) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -629,7 +633,7 @@ function PolyWeatherTerminal({
             <>
               {/* Region tabs */}
               <div className="flex shrink-0 items-center gap-1 overflow-x-auto rounded-[4px] border border-[#cfd6df] bg-white p-1 mb-2 scrollbar-none">
-                {TRADING_REGIONS.map((r) => ({
+                {TRADING_REGIONS.filter((r) => visibleRegions.has(r.key)).map((r) => ({
                     key: r.key,
                     labelEn: r.labelEn.toUpperCase(),
                     labelZh: r.labelZh,
@@ -648,6 +652,42 @@ function PolyWeatherTerminal({
                     {isEn ? tab.labelEn : tab.labelZh}
                   </button>
                 ))}
+                {/* Region selector gear */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const el = document.getElementById("region-selector-popover");
+                      if (el) el.classList.toggle("hidden");
+                    }}
+                    className="px-1.5 py-1 text-[10px] font-bold text-slate-400 hover:text-slate-600 rounded-[3px] hover:bg-slate-100"
+                    title={isEn ? "Customize regions" : "自选时区"}
+                  >
+                    &#9881;
+                  </button>
+                  <div
+                    id="region-selector-popover"
+                    className="hidden absolute right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-lg p-2 min-w-[180px]"
+                  >
+                    {TRADING_REGIONS.map((r) => {
+                      const checked = visibleRegions.has(r.key);
+                      return (
+                        <label
+                          key={r.key}
+                          className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 cursor-pointer text-[11px] font-semibold text-slate-700"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleRegion(r.key)}
+                            className="h-3.5 w-3.5"
+                          />
+                          {isEn ? r.labelEn : r.labelZh}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
               {/* Mobile layout */}
               <div className="flex flex-col gap-2 lg:hidden overflow-auto flex-1 pb-6">
@@ -740,6 +780,26 @@ function ScanTerminalScreen() {
   const [selectedRegionKey, setSelectedRegionKey] = useState<string>("east_asia");
   const [localTimezoneOffsetSeconds, setLocalTimezoneOffsetSeconds] = useState<number | null>(null);
   const [useLocalTimezoneDefault, setUseLocalTimezoneDefault] = useState(true);
+  const [visibleRegions, setVisibleRegions] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem("polyweather_visible_regions");
+      if (stored) return new Set(JSON.parse(stored));
+    } catch {}
+    return new Set(TRADING_REGIONS.map((r) => r.key));
+  });
+  const toggleRegion = useCallback((key: string) => {
+    setVisibleRegions((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        if (next.size <= 1) return prev; // keep at least one
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      try { localStorage.setItem("polyweather_visible_regions", JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -907,6 +967,8 @@ function ScanTerminalScreen() {
       setSelectedCity={setSelectedCity}
       selectedRegionKey={selectedRegionKey}
       setSelectedRegionKey={selectRegionManually}
+      visibleRegions={visibleRegions}
+      toggleRegion={toggleRegion}
     />
   );
 }
