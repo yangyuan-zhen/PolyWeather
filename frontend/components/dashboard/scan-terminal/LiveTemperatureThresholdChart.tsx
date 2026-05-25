@@ -812,7 +812,7 @@ function buildFullDayChartData(
     series.push({
       key: rhs.key,
       label: rhs.label,
-      source: "AMOS/AMSC",
+      source: "",
       color: rhs.color,
       featured: rhs.isSettlement,
       dashed: !rhs.isSettlement,
