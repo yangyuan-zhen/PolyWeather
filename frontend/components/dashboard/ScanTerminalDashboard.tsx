@@ -474,7 +474,6 @@ function PolyWeatherTerminal({
 
   const NAV_ITEMS = [
     { key: "contracts", Icon: Table2, labelEn: "Contracts", labelZh: "天气合约" },
-    { key: "markets", Icon: Activity, labelEn: "Markets", labelZh: "市场概览" },
     { key: "training", Icon: GraduationCap, labelEn: "Training", labelZh: "训练数据" },
   ];
 
