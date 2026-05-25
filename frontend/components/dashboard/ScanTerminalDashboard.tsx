@@ -182,22 +182,17 @@ function CityRegionList({
 }) {
   const cities = useMemo(() => {
     const seen = new Set<string>();
-    const result: { city: string; name: string; contractCount: number; bestEdge: number | null; signal: string }[] = [];
+    const result: { city: string; name: string; contractCount: number; localTime: string | null }[] = [];
     rows.forEach((row) => {
       const key = String(row.city || "").toLowerCase();
       if (seen.has(key)) return;
       seen.add(key);
       const cityRows = rows.filter((r) => String(r.city || "").toLowerCase() === key);
-      const bestEdge = cityRows.reduce((best, r) => {
-        const e = r.edge_percent ?? 0;
-        return Math.abs(e) > Math.abs(best) ? e : best;
-      }, 0);
       result.push({
         city: key,
         name: rowName(row),
         contractCount: cityRows.length,
-        bestEdge,
-        signal: cityRows[0]?.signal_status || "",
+        localTime: row.local_time || null,
       });
     });
     return result;
@@ -206,7 +201,7 @@ function CityRegionList({
   return (
     <Panel title={isEn ? "Cities" : "城市"}>
       <div className="divide-y divide-slate-100">
-        {cities.map(({ city, name, contractCount, bestEdge }) => (
+        {cities.map(({ city, name, contractCount, localTime }) => (
           <button
             key={city}
             type="button"
@@ -218,11 +213,11 @@ function CityRegionList({
           >
             <div className="min-w-0">
               <div className="text-[12px] font-bold text-slate-800 truncate">{name}</div>
-              <div className="text-[11px] text-slate-400">{contractCount} {isEn ? "contracts" : "个合约"}</div>
+              <div className="text-[11px] text-slate-400">
+                {localTime && <span className="mr-2">{localTime}</span>}
+                {contractCount} {isEn ? "contracts" : "个合约"}
+              </div>
             </div>
-            <span className={clsx("shrink-0 font-mono text-[12px] font-black", edgeClass(bestEdge))}>
-              {pct(bestEdge)}
-            </span>
           </button>
         ))}
       </div>
