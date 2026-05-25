@@ -389,7 +389,7 @@ function PolyWeatherTerminal({
 
   const filteredRegionRows = useMemo(() => {
     return rows.filter(
-      (row) => resolveTradingRegionKey(row) === selectedRegionKey,
+      (row) => getCityRegion(row) === selectedRegionKey,
     );
   }, [rows, selectedRegionKey]);
 

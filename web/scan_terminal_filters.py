@@ -48,7 +48,6 @@ def normalize_scan_terminal_filters(
         or "today",
         "limit": max(1, min(safe_int(raw.get("limit"), 25), 200)),
         "max_spread": max(0.0, _safe_float(raw.get("max_spread")) or 0.03),
-        in {"1", "true", "yes", "on"},
     }
     trading_region = str(raw.get("trading_region") or "").strip().lower()
     if trading_region and trading_region not in ("all", ""):
