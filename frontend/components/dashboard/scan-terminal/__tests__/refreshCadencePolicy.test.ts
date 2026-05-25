@@ -38,4 +38,10 @@ export function runTests() {
       !chartSource.includes("window.setInterval"),
     "selected city detail chart should be on-demand and use model-layer cache instead of 60-second polling",
   );
+  assert(
+    chartSource.includes("_hourlyRequestCache") &&
+      chartSource.includes("seedHourlyForecastFromRow") &&
+      chartSource.includes("setHourly(seedHourlyForecastFromRow(row))"),
+    "terminal charts should render from row data immediately and dedupe concurrent city detail requests",
+  );
 }

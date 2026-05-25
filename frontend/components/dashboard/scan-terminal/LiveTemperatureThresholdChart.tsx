@@ -32,10 +32,10 @@ const ROLLING_WINDOW_AFTER_FORECAST_MS = 8 * 60 * 60 * 1000;
 
 const SETTLEMENT_RUNWAY_PAIRS: Record<string, Array<[string, string]>> = {
   shanghai: [["17L", "35R"]],
-  beijing: [["01", "19"]],
+  beijing: [["19", "01"]],
   guangzhou: [["02L", "20R"]],
   chengdu: [["02L", "20R"]],
-  chongqing: [["02L", "20R"]],
+  chongqing: [["20R", "02L"]],
   wuhan: [["04", "22"]],
   seoul: [["15R", "33L"]],
 };
@@ -196,6 +196,7 @@ const FULL_DAY_SLOT_MINUTES = 30;
 const FULL_DAY_SLOTS = 48;
 const SLOT_INTERVAL_MS = FULL_DAY_SLOT_MINUTES * 60 * 1000;
 const _hourlyCache = new Map<string, { ts: number; data: HourlyForecast }>();
+const _hourlyRequestCache = new Map<string, Promise<HourlyForecast>>();
 const RUNWAY_LINE_COLORS = ["#00897b", "#d97706", "#7c3aed", "#0891b2", "#ea580c", "#64748b"];
 
 function validNumber(value: unknown): number | null {
@@ -375,6 +376,7 @@ function runwayLabelFromPair(rawPair: unknown, index: number) {
 
 type HourlyForecast = {
   forecastTodayHigh?: number | null;
+  debPrediction?: number | null;
   localTime?: string | null;
   times: string[];
   temps: Array<number | null>;
@@ -389,6 +391,75 @@ type HourlyForecast = {
   metarTodayObs?: ObsPoint[];
   airportPrimaryTodayObs?: RawObsPoint[];
 } | null;
+
+function seedHourlyForecastFromRow(row: ScanOpportunityRow | null): HourlyForecast {
+  if (!row) return null;
+  return {
+    forecastTodayHigh: null,
+    debPrediction: validNumber(row.deb_prediction),
+    localTime: row.local_time || null,
+    times: [],
+    temps: [],
+    modelCurves: undefined,
+    runwayPlateHistory: (row as any)?.runway_plate_history || undefined,
+    amos: null,
+    airportCurrent: null,
+    airportPrimary: null,
+    forecastDaily: [],
+    multiModelDaily: {},
+    settlementTodayObs: row.settlement_today_obs || row.metar_context?.settlement_today_obs || undefined,
+    metarTodayObs: row.metar_today_obs || row.metar_context?.today_obs || row.metar_recent_obs || row.metar_context?.recent_obs || undefined,
+    airportPrimaryTodayObs: undefined,
+  };
+}
+
+async function fetchHourlyForecastForCity(city: string): Promise<HourlyForecast> {
+  const cached = _hourlyCache.get(city);
+  if (cached && Date.now() - cached.ts < HOURLY_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  const pending = _hourlyRequestCache.get(city);
+  if (pending) return pending;
+
+  const request = fetch(`/api/city/${encodeURIComponent(city)}/detail?depth=full&force_refresh=false`, {
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  })
+    .then(async (res) => {
+      if (!res.ok) return null;
+      return res.json() as Promise<CityDetail>;
+    })
+    .then((json) => {
+      const hourlySource = (json as any)?.hourly ?? (json as any)?.timeseries?.hourly;
+      if (!json || !hourlySource) return null;
+      const data: HourlyForecast = {
+        forecastTodayHigh: json.forecast?.today_high ?? null,
+        debPrediction: json.deb?.prediction ?? (json as any)?.overview?.deb_prediction ?? null,
+        localTime: json.local_time || null,
+        times: hourlySource.times || [],
+        temps: hourlySource.temps || [],
+        modelCurves: (json.models_hourly ?? (json as any)?.timeseries?.models_hourly)?.curves || undefined,
+        runwayPlateHistory: (json as any)?.runway_plate_history || (json.amos as any)?.runway_plate_history || undefined,
+        amos: json.amos || null,
+        airportCurrent: json.airport_current || null,
+        airportPrimary: json.airport_primary || null,
+        forecastDaily: json.forecast?.daily || [],
+        multiModelDaily: json.multi_model_daily || {},
+        settlementTodayObs: (json as any).timeseries?.settlement_today_obs || (json as any)?.settlement_today_obs || undefined,
+        metarTodayObs: (json as any).timeseries?.metar_today_obs || (json as any)?.metar_today_obs || undefined,
+        airportPrimaryTodayObs: (json as any)?.official?.airport_primary_today_obs || (json as any)?.airport_primary_today_obs || undefined,
+      };
+      _hourlyCache.set(city, { ts: Date.now(), data });
+      return data;
+    })
+    .finally(() => {
+      _hourlyRequestCache.delete(city);
+    });
+
+  _hourlyRequestCache.set(city, request);
+  return request;
+}
 
 function parseRunwayHistoryValue(point: Record<string, unknown>) {
   return validNumber(point.max_temp_c) ?? validNumber(point.temp_c) ?? validNumber(point.temp) ?? validNumber(point.value);
@@ -689,7 +760,8 @@ function buildDailyChartData(
 
     const label = formatDailyDateLabel(dateStr);
 
-    const debMax = validNumber(dayMultiModel?.deb?.prediction) ?? (dateStr === localDateStr ? validNumber(row?.deb_prediction) : null);
+    const debMax = validNumber(dayMultiModel?.deb?.prediction) ??
+      (dateStr === localDateStr ? validNumber(hourly?.debPrediction) ?? validNumber(row?.deb_prediction) : null);
     const maxTemp = validNumber(dayForecast?.max_temp);
     const minTemp = validNumber(dayForecast?.min_temp);
 
@@ -797,7 +869,7 @@ function buildFullDayChartData(
     const debPath = buildDebBaselinePath(
       hourly.times,
       hourly.temps,
-      row?.deb_prediction,
+      validNumber(hourly?.debPrediction) ?? row?.deb_prediction,
       hourly.localTime || row?.local_time,
       hourly.forecastTodayHigh,
     );
@@ -852,7 +924,7 @@ function buildFullDayChartData(
 
   // ── Fallback ──
   if (!series.length) {
-    const fb = validNumber(row?.current_temp) ?? validNumber(row?.deb_prediction) ?? validNumber(row?.target_threshold);
+    const fb = validNumber(row?.current_temp) ?? validNumber(hourly?.debPrediction) ?? validNumber(row?.deb_prediction) ?? validNumber(row?.target_threshold);
     if (fb !== null) {
       series.push({
         key: "current",
@@ -994,40 +1066,16 @@ export function LiveTemperatureThresholdChart({
       setHourly(cached.data);
       return;
     }
+    setHourly(seedHourlyForecastFromRow(row));
     let cancelled = false;
-    fetch(`/api/city/${encodeURIComponent(city)}/detail?depth=full&force_refresh=false`, {
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-    })
-      .then(async (res) => {
-        if (!res.ok) return null;
-        return res.json() as Promise<CityDetail>;
-      })
-      .then((json) => {
-        const hourlySource = (json as any)?.hourly ?? (json as any)?.timeseries?.hourly;
-        if (cancelled || !json || !hourlySource) return;
-        const data: HourlyForecast = {
-          forecastTodayHigh: json.forecast?.today_high ?? null,
-          localTime: json.local_time || null,
-          times: hourlySource.times || [],
-          temps: hourlySource.temps || [],
-          modelCurves: (json.models_hourly ?? (json as any)?.timeseries?.models_hourly)?.curves || undefined,
-          runwayPlateHistory: (json as any)?.runway_plate_history || (json.amos as any)?.runway_plate_history || undefined,
-          amos: json.amos || null,
-          airportCurrent: json.airport_current || null,
-          airportPrimary: json.airport_primary || null,
-          forecastDaily: json.forecast?.daily || [],
-          multiModelDaily: json.multi_model_daily || {},
-          settlementTodayObs: (json as any).timeseries?.settlement_today_obs || (json as any)?.settlement_today_obs || undefined,
-          metarTodayObs: (json as any).timeseries?.metar_today_obs || (json as any)?.metar_today_obs || undefined,
-          airportPrimaryTodayObs: (json as any)?.official?.airport_primary_today_obs || (json as any)?.airport_primary_today_obs || undefined,
-        };
-        _hourlyCache.set(city, { ts: Date.now(), data });
+    fetchHourlyForecastForCity(city)
+      .then((data) => {
+        if (cancelled || !data) return;
         setHourly(data);
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [city]);
+  }, [city, row]);
 
   const { data, series } = useMemo(() => {
     if (timeframe === "3D") {
@@ -1111,7 +1159,7 @@ export function LiveTemperatureThresholdChart({
     .filter((v): v is number => v !== null);
   const modelMin = modelValues.length ? Math.min(...modelValues) : (row?.cluster_core_low ?? null);
   const modelMax = modelValues.length ? Math.max(...modelValues) : (row?.cluster_core_high ?? null);
-  const debVal = validNumber(row?.deb_prediction) ?? null;
+  const debVal = validNumber(hourly?.debPrediction) ?? validNumber(row?.deb_prediction) ?? null;
 
   const spread = (modelMax !== null && modelMin !== null) ? modelMax - modelMin : null;
   const spreadLabel = spread === null ? "" : (spread <= 2.0 ? "低分歧" : (spread <= 4.0 ? "中等分歧" : "高分歧"));

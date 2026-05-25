@@ -283,4 +283,31 @@ export function runTests() {
   assert(madisSeries, "US MADIS airport-primary observations should render as a dedicated chart series");
   assert(madisSeries.label.includes("MADIS"), "US MADIS series should be labeled as NOAA MADIS instead of plain METAR");
   assert(madisSeries.values.filter((value: number | null) => value !== null).length >= 2, "MADIS series should keep sub-hourly observations");
+
+  const shanghaiDebFromDetail = __buildTemperatureChartDataForTest(
+    {
+      city: "shanghai",
+      local_date: "2026-05-26",
+      local_time: "14:00",
+      tz_offset_seconds: 8 * 60 * 60,
+      deb_prediction: 0,
+    } as any,
+    {
+      localTime: "14:00",
+      times: ["00:00", "12:00", "18:00"],
+      temps: [24.2, 31.5, 26.5],
+      debPrediction: 29.3,
+    } as any,
+    "1D",
+  );
+  const shanghaiDebSeries = seriesByKey(shanghaiDebFromDetail.series, "hourly_forecast") as any;
+  const shanghaiDebValues = shanghaiDebSeries.values.filter((value: number | null): value is number => value !== null);
+  assert(
+    Math.max(...shanghaiDebValues) === 29.3,
+    "DEB curve should use full-detail deb.prediction before stale terminal row deb_prediction",
+  );
+  assert(
+    Math.min(...shanghaiDebValues) > 20,
+    "DEB curve should not be pulled into an impossible negative range by stale row deb_prediction=0",
+  );
 }
