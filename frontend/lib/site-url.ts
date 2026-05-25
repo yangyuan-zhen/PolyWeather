@@ -1,4 +1,4 @@
-export const PRODUCTION_SITE_URL = "https://polyweather-pro.vercel.app";
+export const PRODUCTION_SITE_URL = "https://polyweather.top";
 
 export function getConfiguredSiteUrl() {
   const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();

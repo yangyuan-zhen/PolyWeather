@@ -204,7 +204,7 @@ export async function getWalletConnectProvider(
   const origin =
     typeof window !== "undefined"
       ? window.location.origin
-      : "https://polyweather-pro.vercel.app";
+      : "https://polyweather.top";
   const provider = (await EthereumProvider.init({
     projectId: WALLETCONNECT_PROJECT_ID,
     chains: [chainId],

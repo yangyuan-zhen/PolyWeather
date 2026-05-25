@@ -1,5 +1,6 @@
 const DEFAULT_ALLOWED_PAYMENT_HOSTS = [
   "polyweather-pro.vercel.app",
+  "polyweather.top",
   "localhost",
   "127.0.0.1",
 ];

@@ -885,7 +885,7 @@ export function AccountCenter() {
                     {copy.paymentHostBlocked.replace(
                       "{host}",
                       allowedPaymentHosts[0] ||
-                        "polyweather-pro.vercel.app",
+                        "polyweather.top",
                     )}
                   </div>
                 ) : null}

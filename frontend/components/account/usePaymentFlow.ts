@@ -293,7 +293,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
     clearPaymentState();
     clearStoredPaymentRecovery();
     if (!paymentHostAllowed) {
-      setPaymentError(copy.paymentHostBlocked.replace("{host}", allowedPaymentHosts[0] || "polyweather-pro.vercel.app"));
+      setPaymentError(copy.paymentHostBlocked.replace("{host}", allowedPaymentHosts[0] || "polyweather.top"));
       return;
     }
     if (!authIsAuthenticated) {
@@ -516,7 +516,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
     setLastIntentId("");
     setLastTxHash("");
     if (!paymentHostAllowed) {
-      setPaymentError(copy.paymentHostBlocked.replace("{host}", allowedPaymentHosts[0] || "polyweather-pro.vercel.app"));
+      setPaymentError(copy.paymentHostBlocked.replace("{host}", allowedPaymentHosts[0] || "polyweather.top"));
       return;
     }
     if (!authIsAuthenticated) {
@@ -670,7 +670,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
   // ── handleOverlayCheckout ──────────────────────────────
   const handleOverlayCheckout = async () => {
     if (!paymentHostAllowed) {
-      setPaymentError(copy.paymentHostBlocked.replace("{host}", allowedPaymentHosts[0] || "polyweather-pro.vercel.app"));
+      setPaymentError(copy.paymentHostBlocked.replace("{host}", allowedPaymentHosts[0] || "polyweather.top"));
       return;
     }
     if (!authIsAuthenticated) {
