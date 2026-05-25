@@ -205,7 +205,7 @@ function CityRegionList({
 
   return (
     <Panel title={isEn ? "Cities" : "城市"} className="shrink-0">
-      <div className="divide-y divide-slate-100 overflow-auto max-h-[320px]">
+      <div className="divide-y divide-slate-100 overflow-auto max-h-[320px] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {cities.map(({ city, name, contractCount, bestEdge }) => (
           <button
             key={city}
