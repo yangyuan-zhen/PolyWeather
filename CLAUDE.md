@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PolyWeather Pro — a paid institutional weather-intelligence terminal for temperature settlement markets. 50 monitored cities, DEB multi-model temperature blending, Mu probability calibration, Polymarket CLOB/WS price integration. Next.js 15 + React 19 (Vercel) frontend, FastAPI backend (VPS), Telegram bot.
+PolyWeather Pro — a paid institutional weather-intelligence terminal. 50 monitored cities with real-time METAR/AMOS/MADIS observations, DEB multi-model temperature blending, Mu probability calibration, and intraday bias correction. Pure meteorological decision workspace; no market/price layer. Next.js 15 + React 19 (Vercel) frontend, FastAPI backend (VPS), Telegram bot.
 
 **Business model**: Paid-only, $10/month, no free tier, no trial. Landing page is public; `/terminal` requires login + active subscription.
 
