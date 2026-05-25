@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time as _time
+import threading as _threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
@@ -9,6 +10,7 @@ from fastapi import HTTPException
 from loguru import logger
 
 from web.core import (
+    LRUDict,
     _cache,
     _CACHE_LOCK,
     CACHE_TTL,
@@ -82,6 +84,24 @@ HIGH_FREQ_AIRPORT_ANALYSIS_CITIES = {
     "chongqing",
     "wuhan",
 }
+
+_ANALYSIS_CACHE_STATS_LOCK = _threading.Lock()
+_ANALYSIS_CACHE_STATS: Dict[str, Any] = {
+    "total_requests": 0,
+    "cache_hits": 0,
+    "cache_misses": 0,
+    "force_refresh_requests": 0,
+    "last_cache_hit_at": None,
+    "last_cache_miss_at": None,
+    "last_city": None,
+}
+_SUMMARY_CACHE_LOCK = _threading.Lock()
+_SUMMARY_CACHE = LRUDict(maxsize=128)
+
+
+def _fetch_nmc_current_fallback(city: str, *, use_fahrenheit: bool) -> Dict[str, Any]:
+    return {}
+
 
 def _record_analysis_cache_event(*, city: str, hit: bool, force_refresh: bool) -> None:
     now = datetime.now(timezone.utc).isoformat()
