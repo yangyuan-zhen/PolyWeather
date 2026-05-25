@@ -43,3 +43,26 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+  polyweather_frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: polyweather_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      POLYWEATHER_API_BASE_URL: "${POLYWEATHER_API_BASE_URL:-http://polyweather_web:8000}"
+      NEXT_PUBLIC_POLYWEATHER_API_BASE_URL: "${NEXT_PUBLIC_POLYWEATHER_API_BASE_URL:-}"
+      NEXT_PUBLIC_SUPABASE_URL: "${NEXT_PUBLIC_SUPABASE_URL}"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
+      NEXT_PUBLIC_SITE_URL: "${NEXT_PUBLIC_SITE_URL:-https://38.54.27.70.sslip.io}"
+      POLYWEATHER_AUTH_ENABLED: "${POLYWEATHER_AUTH_ENABLED:-true}"
+      POLYWEATHER_AUTH_REQUIRED: "${POLYWEATHER_AUTH_REQUIRED:-true}"
+      NEXT_PUBLIC_POLYWEATHER_LOCAL_FULL_ACCESS: "false"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
