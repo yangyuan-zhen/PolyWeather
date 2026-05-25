@@ -8,7 +8,9 @@
       "Bash(python -m ruff check web/services/city_runtime.py web/services/city_api.py)",
       "Bash(python -m ruff check .)",
       "Bash(python -m pytest tests/ -q)",
-      "Bash(python -m ruff check . --fix)"
+      "Bash(python -m ruff check . --fix)",
+      "Bash(ssh *)",
+      "Bash(curl *)"
     ]
   }
 }

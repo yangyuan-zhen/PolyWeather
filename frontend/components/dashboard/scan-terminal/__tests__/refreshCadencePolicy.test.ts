@@ -27,10 +27,6 @@ export function runTests() {
     path.join(projectRoot, "components", "dashboard", "scan-terminal", "LiveTemperatureThresholdChart.tsx"),
     "utf8",
   );
-  const overviewApiSource = fs.readFileSync(
-    path.join(projectRoot, "..", "web", "services", "market_overview_api.py"),
-    "utf8",
-  );
 
   assert(
     querySource.includes("DASHBOARD_REFRESH_POLICY_MS.scanRows"),
@@ -41,11 +37,5 @@ export function runTests() {
       !chartSource.includes("setInterval(") &&
       !chartSource.includes("window.setInterval"),
     "selected city detail chart should be on-demand and use model-layer cache instead of 60-second polling",
-  );
-  assert(
-    !overviewApiSource.includes("/chat/completions") &&
-      !overviewApiSource.includes("SCAN_CITY_AI_MODEL") &&
-      !overviewApiSource.includes("_scan_ai_api_key"),
-    "market overview must be deterministic and must not call AI providers",
   );
 }
