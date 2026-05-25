@@ -1,68 +1,88 @@
-x-polyweather-base: &polyweather-base
-  build: .
-  image: polyweather-app:latest
-  env_file:
-    - .env
-
 services:
   polyweather:
-    <<: *polyweather-base
+    build: .
     container_name: polyweather_bot
-    restart: unless-stopped
-    cpus: "${POLYWEATHER_BOT_CPUS:-0.75}"
-    mem_limit: "${POLYWEATHER_BOT_MEM_LIMIT:-768m}"
-    memswap_limit: "${POLYWEATHER_BOT_MEMSWAP_LIMIT:-1g}"
-    pids_limit: 256
+    cpus: ${POLYWEATHER_BOT_CPUS:-0.75}
+    env_file: &id001
+    - .env
     environment:
-      TELEGRAM_AIRPORT_PUSH_INTERVAL_SEC: "${POLYWEATHER_BOT_AIRPORT_PUSH_INTERVAL_SEC:-180}"
-      TELEGRAM_AIRPORT_PUSH_MAX_WORKERS: "${POLYWEATHER_BOT_AIRPORT_PUSH_MAX_WORKERS:-1}"
-    volumes:
-      - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/var/lib/polyweather
-      - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/app/data
-      - ./bot.log:/app/bot.log
-    user: "${UID:-1000}:${GID:-1000}"
+      TELEGRAM_AIRPORT_PUSH_INTERVAL_SEC: ${POLYWEATHER_BOT_AIRPORT_PUSH_INTERVAL_SEC:-180}
+      TELEGRAM_AIRPORT_PUSH_MAX_WORKERS: ${POLYWEATHER_BOT_AIRPORT_PUSH_MAX_WORKERS:-1}
     healthcheck:
-      test: ["CMD", "python", "-c", "import sqlite3; c=sqlite3.connect('/var/lib/polyweather/polyweather.db'); c.execute('SELECT 1'); c.close()"]
       interval: 60s
+      retries: 3
+      test:
+      - CMD
+      - python
+      - -c
+      - import sqlite3; c=sqlite3.connect('/var/lib/polyweather/polyweather.db');
+        c.execute('SELECT 1'); c.close()
       timeout: 10s
-      retries: 3
-
-  polyweather_web:
-    <<: *polyweather-base
-    container_name: polyweather_web
+    image: polyweather-app:latest
+    mem_limit: ${POLYWEATHER_BOT_MEM_LIMIT:-768m}
+    memswap_limit: ${POLYWEATHER_BOT_MEMSWAP_LIMIT:-1g}
+    pids_limit: 256
     restart: unless-stopped
-    command: python web/app.py
+    user: ${UID:-1000}:${GID:-1000}
     volumes:
-      - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/var/lib/polyweather
-      - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/app/data
-    ports:
-      - "8000:8000"
-    user: "${UID:-1000}:${GID:-1000}"
-    healthcheck:
-      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://localhost:8000/healthz')"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-
+    - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/var/lib/polyweather
+    - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/app/data
+    - ./bot.log:/app/bot.log
   polyweather_frontend:
     build:
+      args:
+        NEXT_PUBLIC_POLYWEATHER_API_BASE_URL: https://api.polyweather.top
+        NEXT_PUBLIC_POLYWEATHER_LOCAL_FULL_ACCESS: 'false'
+        NEXT_PUBLIC_SITE_URL: https://polyweather.top
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ''
+        NEXT_PUBLIC_SUPABASE_URL: ''
       context: ./frontend
       dockerfile: Dockerfile
     container_name: polyweather_frontend
-    restart: unless-stopped
-    ports:
-      - "3001:3000"
     environment:
-      POLYWEATHER_API_BASE_URL: "${POLYWEATHER_API_BASE_URL:-http://polyweather_web:8000}"
-      NEXT_PUBLIC_POLYWEATHER_API_BASE_URL: "${NEXT_PUBLIC_POLYWEATHER_API_BASE_URL:-}"
-      NEXT_PUBLIC_SUPABASE_URL: "${NEXT_PUBLIC_SUPABASE_URL}"
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: "${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
-      NEXT_PUBLIC_SITE_URL: "${NEXT_PUBLIC_SITE_URL:-https://polyweather.top}"
-      POLYWEATHER_AUTH_ENABLED: "${POLYWEATHER_AUTH_ENABLED:-true}"
-      POLYWEATHER_AUTH_REQUIRED: "${POLYWEATHER_AUTH_REQUIRED:-true}"
-      NEXT_PUBLIC_POLYWEATHER_LOCAL_FULL_ACCESS: "false"
+      NEXT_PUBLIC_POLYWEATHER_API_BASE_URL: ${NEXT_PUBLIC_POLYWEATHER_API_BASE_URL:-}
+      NEXT_PUBLIC_POLYWEATHER_LOCAL_FULL_ACCESS: 'false'
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://polyweather.top}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+      POLYWEATHER_API_BASE_URL: ${POLYWEATHER_API_BASE_URL:-http://polyweather_web:8000}
+      POLYWEATHER_AUTH_ENABLED: ${POLYWEATHER_AUTH_ENABLED:-true}
+      POLYWEATHER_AUTH_REQUIRED: ${POLYWEATHER_AUTH_REQUIRED:-true}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000"]
       interval: 30s
-      timeout: 5s
       retries: 3
+      test:
+      - CMD
+      - wget
+      - -qO-
+      - http://localhost:3000
+      timeout: 5s
+    ports:
+    - 3001:3000
+    restart: unless-stopped
+  polyweather_web:
+    build: .
+    command: python web/app.py
+    container_name: polyweather_web
+    env_file: *id001
+    healthcheck:
+      interval: 30s
+      retries: 3
+      test:
+      - CMD
+      - python
+      - -c
+      - from urllib.request import urlopen; urlopen('http://localhost:8000/healthz')
+      timeout: 5s
+    image: polyweather-app:latest
+    ports:
+    - 8000:8000
+    restart: unless-stopped
+    user: ${UID:-1000}:${GID:-1000}
+    volumes:
+    - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/var/lib/polyweather
+    - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/app/data
+x-polyweather-base:
+  build: .
+  env_file: *id001
+  image: polyweather-app:latest
