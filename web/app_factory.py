@@ -5,6 +5,8 @@ This module centralizes router registration while preserving the existing
 more modular backend structure.
 """
 
+import os
+
 from fastapi import FastAPI
 
 from web.core import app as core_app
@@ -21,6 +23,12 @@ from web.scan_terminal_service import start_scan_terminal_prewarm
 _ROUTES_REGISTERED_FLAG = "_polyweather_routes_registered"
 
 
+def _scan_terminal_prewarm_enabled() -> bool:
+    return str(
+        os.getenv("POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED") or "false"
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def create_app() -> FastAPI:
     """Return the configured FastAPI app with routers registered once."""
     if not bool(getattr(core_app.state, _ROUTES_REGISTERED_FLAG, False)):
@@ -33,5 +41,6 @@ def create_app() -> FastAPI:
         core_app.include_router(ops_router)
         core_app.include_router(legacy_router)
         setattr(core_app.state, _ROUTES_REGISTERED_FLAG, True)
-        start_scan_terminal_prewarm()
+        if _scan_terminal_prewarm_enabled():
+            start_scan_terminal_prewarm()
     return core_app

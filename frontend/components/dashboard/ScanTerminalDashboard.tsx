@@ -14,7 +14,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ProAccessState, ScanOpportunityRow } from "@/lib/dashboard-types";
+import type { CityListItem, ProAccessState, ScanOpportunityRow } from "@/lib/dashboard-types";
 import { getInitialLocaleFromNavigator } from "@/lib/i18n";
 import { isBrowserLocalFullAccess } from "@/lib/local-dev-access";
 import { sortRowsByUserTime } from "@/components/dashboard/scan-terminal/decision-utils";
@@ -48,6 +48,7 @@ import { KoyfinRowsTable } from "@/components/dashboard/scan-terminal/KoyfinRows
 import { rowName, pct, money, temp, edgeClass } from "@/components/dashboard/scan-terminal/utils";
 import { CitySelectorDropdown } from "@/components/dashboard/scan-terminal/CitySelectorDropdown";
 import { GridLayoutSelector } from "@/components/dashboard/scan-terminal/GridLayoutSelector";
+import { cityListItemsToScanRows } from "@/components/dashboard/scan-terminal/city-fallback-rows";
 
 function createEmptyAccess(loading = true): ProAccessState {
   return {
@@ -1024,9 +1025,32 @@ function ScanTerminalScreen() {
       timezoneOffsetSeconds: useLocalTimezoneDefault ? localTimezoneOffsetSeconds : null,
       tradingRegion: selectedRegionKey,
     });
+  const [cityFallbackRows, setCityFallbackRows] = useState<ScanOpportunityRow[]>([]);
+  useEffect(() => {
+    if (!isPro || typeof fetch !== "function") return;
+    const controller = new AbortController();
+    fetch("/api/cities", {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return response.json() as Promise<{ cities?: CityListItem[] }>;
+      })
+      .then((payload) => {
+        if (!payload || !Array.isArray(payload.cities)) return;
+        setCityFallbackRows(cityListItemsToScanRows(payload.cities));
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [isPro]);
   const rows = useMemo(
-    () => sortRowsByUserTime(terminalData?.rows || []),
-    [terminalData?.rows],
+    () => {
+      const scanRows = terminalData?.rows || [];
+      return sortRowsByUserTime(scanRows.length ? scanRows : cityFallbackRows);
+    },
+    [cityFallbackRows, terminalData?.rows],
   );
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
