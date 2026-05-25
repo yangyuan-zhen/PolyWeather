@@ -287,6 +287,8 @@ type HourlyForecast = {
   amos?: AmosData | null;
   airportCurrent?: AirportCurrentConditions | null;
   airportPrimary?: AirportCurrentConditions | null;
+  forecastDaily?: ForecastDay[];
+  multiModelDaily?: Record<string, DailyModelForecast>;
 } | null;
 
 function parseRunwayHistoryValue(point: Record<string, unknown>) {
@@ -381,6 +383,219 @@ function buildRunwayHistorySeries(
       };
     })
     .filter((series): series is RunwayHistorySeries => series !== null);
+}
+
+function generate3DaySlots(localDateStr: string): number[] {
+  const parts = localDateStr.split("-");
+  if (parts.length !== 3) return [];
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  
+  const slots: number[] = [];
+  // Generate 72 hours starting from local date 00:00
+  for (let h = 0; h < 72; h++) {
+    slots.push(Date.UTC(year, month, day, h, 0));
+  }
+  return slots;
+}
+
+function format3DayTimestamp(ts: number): string {
+  const d = new Date(ts);
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  return `${mm}/${dd} ${hh}:00`;
+}
+
+function build3DayChartData(
+  row: ScanOpportunityRow | null,
+  hourly: HourlyForecast,
+): { data: Array<Record<string, string | number | null>>; series: EvidenceSeries[] } {
+  const tzOffset = row?.tz_offset_seconds ?? 0;
+  const localDateStr = row?.local_date || new Date().toISOString().slice(0, 10);
+
+  const slots = generate3DaySlots(localDateStr);
+  if (!slots.length) return { data: [], series: [] };
+  const n = slots.length;
+
+  const series: EvidenceSeries[] = [];
+  const na = (): Array<number | null> => new Array(n).fill(null);
+
+  // DEB forecast curve (from hourly.times & hourly.temps)
+  if (hourly?.times?.length && hourly?.temps?.length) {
+    const debVals = na();
+    hourly.times.forEach((t, i) => {
+      const ts = getCityLocalUtcTimestamp(t, tzOffset, localDateStr);
+      if (ts === null) return;
+      const slotIdx = slots.findIndex((s) => s === ts);
+      if (slotIdx >= 0) {
+        debVals[slotIdx] = validNumber(hourly.temps[i]);
+      }
+    });
+    if (debVals.some((v) => v !== null)) {
+      series.push({
+        key: "hourly_forecast",
+        label: "DEB Forecast",
+        source: "DEB Hourly",
+        color: "#f97316",
+        featured: true,
+        smooth: true,
+        values: debVals,
+      });
+    }
+
+    // Per-model curves
+    if (hourly.modelCurves) {
+      const modelColors = ["#2563eb", "#7c3aed", "#059669", "#d97706", "#dc2626", "#0891b2"];
+      Object.keys(hourly.modelCurves).forEach((model, idx) => {
+        const modelTemps = hourly.modelCurves![model];
+        if (!modelTemps?.length) return;
+        const vals = na();
+        hourly.times.forEach((t, i) => {
+          const ts = getCityLocalUtcTimestamp(t, tzOffset, localDateStr);
+          if (ts === null) return;
+          const slotIdx = slots.findIndex((s) => s === ts);
+          if (slotIdx >= 0 && i < modelTemps.length) {
+            vals[slotIdx] = validNumber(modelTemps[i]);
+          }
+        });
+        if (vals.some((v) => v !== null)) {
+          series.push({
+            key: `model_curve_${model}`,
+            label: model,
+            source: "Multi-model hourly",
+            color: modelColors[idx % modelColors.length],
+            dashed: true,
+            smooth: true,
+            values: vals,
+          });
+        }
+      });
+    }
+  }
+
+  // Historical METAR observations (past timestamps of the 3 days)
+  const metarObs = normObs(
+    row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs,
+    tzOffset
+  );
+  if (metarObs.length) {
+    const mvals = binObservationsToSlots(slots, metarObs);
+    if (mvals.some((v) => v !== null)) {
+      series.push({
+        key: "metar",
+        label: "METAR",
+        source: row?.airport || "METAR",
+        color: "#0ea5e9",
+        dashed: true,
+        values: mvals,
+      });
+    }
+  }
+
+  // Build data rows
+  const data = slots.map((ts, i) => {
+    const point: Record<string, string | number | null> = {
+      label: format3DayTimestamp(ts),
+      ts,
+    };
+    series.forEach((s) => {
+      point[s.key] = s.values[i] ?? null;
+    });
+    return point;
+  });
+
+  return { data, series };
+}
+
+function generateDailySlots(localDateStr: string, daysCount: number): string[] {
+  const parts = localDateStr.split("-");
+  if (parts.length !== 3) return [];
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  
+  const dates: string[] = [];
+  for (let i = 0; i < daysCount; i++) {
+    const d = new Date(Date.UTC(year, month, day + i));
+    const yyyy = d.getUTCFullYear();
+    const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(d.getUTCDate()).padStart(2, "0");
+    dates.push(`${yyyy}-${mm}-${dd}`);
+  }
+  return dates;
+}
+
+function formatDailyDateLabel(dateStr: string): string {
+  const parts = dateStr.split("-");
+  if (parts.length !== 3) return dateStr;
+  return `${parts[1]}/${parts[2]}`;
+}
+
+function buildDailyChartData(
+  row: ScanOpportunityRow | null,
+  hourly: HourlyForecast,
+  daysCount: number,
+): { data: Array<Record<string, string | number | null>>; series: EvidenceSeries[] } {
+  const localDateStr = row?.local_date || new Date().toISOString().slice(0, 10);
+  const slots = generateDailySlots(localDateStr, daysCount);
+
+  const series: EvidenceSeries[] = [
+    {
+      key: "deb_prediction",
+      label: "DEB Daily Max",
+      source: "DEB",
+      color: "#f97316", // orange
+      featured: true,
+      values: [],
+    },
+    {
+      key: "max_temp",
+      label: "Model Daily Max",
+      source: "Standard Forecast",
+      color: "#dc2626", // red
+      dashed: true,
+      values: [],
+    },
+    {
+      key: "min_temp",
+      label: "Model Daily Min",
+      source: "Standard Forecast",
+      color: "#2563eb", // blue
+      dashed: true,
+      values: [],
+    },
+  ];
+
+  const data = slots.map((dateStr) => {
+    const dayForecast = hourly?.forecastDaily?.find((d) => d.date === dateStr);
+    const dayMultiModel = hourly?.multiModelDaily?.[dateStr];
+
+    const label = formatDailyDateLabel(dateStr);
+
+    const debMax = validNumber(dayMultiModel?.deb?.prediction) ?? (dateStr === localDateStr ? validNumber(row?.deb_prediction) : null);
+    const maxTemp = validNumber(dayForecast?.max_temp);
+    const minTemp = validNumber(dayForecast?.min_temp);
+
+    return {
+      label,
+      date: dateStr,
+      deb_prediction: debMax,
+      max_temp: maxTemp,
+      min_temp: minTemp,
+    };
+  });
+
+  // Populate series values
+  series[0].values = data.map((d) => d.deb_prediction);
+  series[1].values = data.map((d) => d.max_temp);
+  series[2].values = data.map((d) => d.min_temp);
+
+  // Filter out series that have no valid data points
+  const activeSeries = series.filter((s) => s.values.some((v) => v !== null));
+
+  return { data, series: activeSeries };
 }
 
 function buildFullDayChartData(
@@ -616,13 +831,21 @@ export function LiveTemperatureThresholdChart({
   isEn,
   row,
   allRows = [],
+  compact = false,
 }: {
   isEn: boolean;
   row: ScanOpportunityRow | null;
   allRows?: ScanOpportunityRow[];
+  compact?: boolean;
 }) {
   const [hourly, setHourly] = useState<HourlyForecast>(null);
   const city = String(row?.city || "").toLowerCase().trim();
+  const [timeframe, setTimeframe] = useState<"1D" | "3D" | "5D" | "7D">("1D");
+  const [hiddenSeriesKeys, setHiddenSeriesKeys] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setHiddenSeriesKeys(new Set());
+  }, [timeframe]);
 
   useEffect(() => {
     if (!city) return;
@@ -653,6 +876,8 @@ export function LiveTemperatureThresholdChart({
           amos: json.amos || null,
           airportCurrent: json.airport_current || null,
           airportPrimary: json.airport_primary || null,
+          forecastDaily: json.forecast?.daily || [],
+          multiModelDaily: json.multi_model_daily || {},
         };
         _hourlyCache.set(city, { ts: Date.now(), data });
         setHourly(data);
@@ -661,8 +886,18 @@ export function LiveTemperatureThresholdChart({
     return () => { cancelled = true; };
   }, [city]);
 
-  const { data, series } = useMemo(() => buildFullDayChartData(row, hourly), [row, hourly]);
-  const [hiddenSeriesKeys, setHiddenSeriesKeys] = useState<Set<string>>(new Set());
+  const { data, series } = useMemo(() => {
+    if (timeframe === "3D") {
+      return build3DayChartData(row, hourly);
+    }
+    if (timeframe === "5D") {
+      return buildDailyChartData(row, hourly, 5);
+    }
+    if (timeframe === "7D") {
+      return buildDailyChartData(row, hourly, 7);
+    }
+    return buildFullDayChartData(row, hourly);
+  }, [row, hourly, timeframe]);
 
   const tzOffset = row?.tz_offset_seconds ?? 0;
   const settlementObs = useMemo(() => {
@@ -674,8 +909,11 @@ export function LiveTemperatureThresholdChart({
   const settlementPlate = useMemo(() => runwayPlates.find((p) => p.isSettlement), [runwayPlates]);
 
   const chartSeries = useMemo(() => {
+    if (timeframe !== "1D") {
+      return series;
+    }
     return series.filter((item) => !hasRunwayData || !item.key.startsWith("model_curve_"));
-  }, [series, hasRunwayData]);
+  }, [series, hasRunwayData, timeframe]);
 
   const activeSeries = useMemo(() => {
     return chartSeries.filter((s) => !hiddenSeriesKeys.has(s.key));
@@ -771,90 +1009,186 @@ export function LiveTemperatureThresholdChart({
     [series, data],
   );
 
+  const panelTitle = row
+    ? `${rowName(row)} · ${
+        isEn
+          ? timeframe === "1D"
+            ? "Live & Forecast"
+            : `${timeframe} Forecast`
+          : timeframe === "1D"
+          ? "实测与预测"
+          : `${timeframe}预报`
+      }`
+    : isEn
+    ? "Temperature Chart"
+    : "气温图表";
+
+  const timeframeActions = (
+    <div className="flex items-center gap-1 rounded bg-[#eef2f6] p-0.5 border border-slate-200">
+      {(["1D", "3D", "5D", "7D"] as const).map((tf) => (
+        <button
+          key={tf}
+          type="button"
+          onClick={() => setTimeframe(tf)}
+          className={clsx(
+            "px-2 py-0.5 text-[9px] font-bold rounded transition-all",
+            timeframe === tf
+              ? "bg-white text-blue-600 shadow-sm border border-slate-200/50"
+              : "text-slate-500 hover:text-slate-800"
+          )}
+        >
+          {tf}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
-    <Panel title={isEn ? "Live Temperature Trend & Option Threshold Lines" : "实时气温走势与期权阈值线"}>
-      <div className="flex h-full min-h-[420px] flex-col">
-        {/* Stats bar */}
-        <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-3">
-          {/* Top Row: Large temperatures */}
-          <div className="flex justify-between items-center gap-6 mb-3">
-            <div className="flex items-center gap-12">
-              <div className="flex flex-col">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                  {isEn ? "Runway Live (1m)" : `${runwayHeaderLabel}`}
+    <Panel title={panelTitle} actions={timeframeActions}>
+      <div className="flex h-full min-h-[300px] flex-col">
+        {/* Compact stats bar */}
+        {compact ? (
+          <div className="shrink-0 border-b border-slate-200 bg-white px-3 py-1.5 flex items-center justify-between">
+            {timeframe === "1D" ? (
+              <div className="flex items-center gap-4 text-[11px]">
+                <span className="font-semibold text-slate-500">
+                  {isEn ? "Runway" : runwayHeaderLabel}:{" "}
+                  <strong className="text-[#009688] font-mono">{temp(currentRunwayTemp)}</strong>
                 </span>
-                <span className="text-2xl font-bold font-mono text-[#009688] mt-1">
-                  {temp(currentRunwayTemp)}
-                </span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                  {isEn ? "METAR Settlement (30m) · Daily High" : `${metarHeaderLabel} · 当日最高`}
-                </span>
-                <span className="text-2xl font-bold font-mono text-blue-600 mt-1">
-                  {temp(observedHighMetar)}
+                <span className="text-slate-300">|</span>
+                <span className="font-semibold text-slate-500">
+                  {isEn ? "METAR" : metarHeaderLabel}:{" "}
+                  <strong className="text-blue-600 font-mono">{temp(observedHighMetar)}</strong>
                 </span>
               </div>
-            </div>
-            
-            <div className="hidden sm:flex flex-col items-end text-right">
-              <span className="text-[10px] text-slate-400 uppercase font-semibold">
-                {isEn ? "Daily Peak" : "当日最高气温"}
-              </span>
-              <div className="mt-1 flex items-center gap-2 text-xs font-mono text-slate-600">
-                <span>{isEn ? "Runway" : runwayHighLabel}: <strong className="text-[#009688]">{temp(observedHighRunway)}</strong></span>
-                <span>|</span>
-                <span>{isEn ? "METAR" : metarHighLabel}: <strong className="text-blue-600">{temp(observedHighMetar)}</strong></span>
-                {wundergroundDailyHigh !== null && (
+            ) : (
+              <div className="flex items-center gap-4 text-[11px]">
+                <span className="font-semibold text-slate-500">
+                  DEB: <strong className="text-orange-600 font-mono">{temp(debVal)}</strong>
+                </span>
+                {modelMin !== null && modelMax !== null && (
                   <>
-                    <span>|</span>
-                    <span>WU: <strong className="text-purple-600">{temp(wundergroundDailyHigh)}</strong></span>
+                    <span className="text-slate-300">|</span>
+                    <span className="font-semibold text-slate-500">
+                      {isEn ? "Models" : "多模型"}:{" "}
+                      <strong className="text-slate-700 font-mono">
+                        {temp(modelMin)} - {temp(modelMax)}
+                      </strong>
+                    </span>
                   </>
                 )}
               </div>
+            )}
+            <div className="text-[10px] text-slate-400 font-mono">
+              {timeframe === "1D" && formattedUpdateTime.includes(" ") ? formattedUpdateTime.split(" ")[1].slice(0, 5) : ""}
             </div>
           </div>
+        ) : (
+          /* Normal detailed stats bar */
+          <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-3">
+            {/* Top Row: Large temperatures */}
+            <div className="flex justify-between items-center gap-6 mb-3">
+              {timeframe === "1D" ? (
+                <div className="flex items-center gap-12">
+                  <div className="flex flex-col">
+                    <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                      {isEn ? "Runway Live (1m)" : `${runwayHeaderLabel}`}
+                    </span>
+                    <span className="text-2xl font-bold font-mono text-[#009688] mt-1">
+                      {temp(currentRunwayTemp)}
+                    </span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                      {isEn ? "METAR Settlement (30m) · Daily High" : `${metarHeaderLabel} · 当日最高`}
+                    </span>
+                    <span className="text-2xl font-bold font-mono text-blue-600 mt-1">
+                      {temp(observedHighMetar)}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-12">
+                  <div className="flex flex-col">
+                    <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                      DEB Max
+                    </span>
+                    <span className="text-2xl font-bold font-mono text-orange-600 mt-1">
+                      {temp(debVal)}
+                    </span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                      {isEn ? "Model Range" : "多模型区间"}
+                    </span>
+                    <span className="text-2xl font-bold font-mono text-slate-700 mt-1">
+                      {modelMin !== null && modelMax !== null ? `${temp(modelMin)} - ${temp(modelMax)}` : "--"}
+                    </span>
+                  </div>
+                </div>
+              )}
+              
+              <div className="hidden sm:flex flex-col items-end text-right">
+                <span className="text-[10px] text-slate-400 uppercase font-semibold">
+                  {isEn ? "Daily Peak" : "当日最高气温"}
+                </span>
+                <div className="mt-1 flex items-center gap-2 text-xs font-mono text-slate-600">
+                  <span>{isEn ? "Runway" : runwayHighLabel}: <strong className="text-[#009688]">{temp(observedHighRunway)}</strong></span>
+                  <span>|</span>
+                  <span>{isEn ? "METAR" : metarHighLabel}: <strong className="text-blue-600">{temp(observedHighMetar)}</strong></span>
+                  {wundergroundDailyHigh !== null && (
+                    <>
+                      <span>|</span>
+                      <span>WU: <strong className="text-purple-600">{temp(wundergroundDailyHigh)}</strong></span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
 
-          {/* Bottom Row: Model Range Panel */}
-          <div className="grid grid-cols-4 gap-4 border-t border-slate-100 pt-3 text-xs font-mono text-slate-700 bg-slate-50/50 -mx-4 px-4 rounded-b-md">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] text-slate-400 uppercase font-semibold">
-                {isEn ? "Model Range" : "模型区间"}
-              </span>
-              <strong className="text-slate-800 font-bold">
-                {modelMin !== null && modelMax !== null ? `${temp(modelMin)} - ${temp(modelMax)}` : "--"}
-              </strong>
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] text-slate-400 uppercase font-semibold">
-                DEB
-              </span>
-              <strong className="text-blue-600 font-bold">
-                {temp(debVal)}
-              </strong>
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] text-slate-400 uppercase font-semibold">
-                {isEn ? "Spread" : "分歧"}
-              </span>
-              <strong className={clsx("font-bold", spreadLabel === "高分歧" ? "text-amber-600" : "text-slate-600")}>
-                {spread !== null ? `${spread.toFixed(1)}°C` : "--"}
-                {spreadLabel && ` · ${isEn ? spreadLabelEn : spreadLabel}`}
-              </strong>
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] text-slate-400 uppercase font-semibold">
-                {isEn ? "Updated" : "更新时间"}
-              </span>
-              <strong className="text-slate-800 font-bold">
-                {formattedUpdateTime}
-              </strong>
-            </div>
+            {/* Bottom Row: Model Range Panel (Only for 1D mode) */}
+            {timeframe === "1D" && (
+              <div className="grid grid-cols-4 gap-4 border-t border-slate-100 pt-3 text-xs font-mono text-slate-700 bg-slate-50/50 -mx-4 px-4 rounded-b-md">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold">
+                    {isEn ? "Model Range" : "模型区间"}
+                  </span>
+                  <strong className="text-slate-800 font-bold">
+                    {modelMin !== null && modelMax !== null ? `${temp(modelMin)} - ${temp(modelMax)}` : "--"}
+                  </strong>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold">
+                    DEB
+                  </span>
+                  <strong className="text-blue-600 font-bold">
+                    {temp(debVal)}
+                  </strong>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold">
+                    {isEn ? "Spread" : "分歧"}
+                  </span>
+                  <strong className={clsx("font-bold", spreadLabel === "高分歧" ? "text-amber-600" : "text-slate-600")}>
+                    {spread !== null ? `${spread.toFixed(1)}°C` : "--"}
+                    {spreadLabel && ` · ${isEn ? spreadLabelEn : spreadLabel}`}
+                  </strong>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold">
+                    {isEn ? "Updated" : "更新时间"}
+                  </span>
+                  <strong className="text-slate-800 font-bold">
+                    {formattedUpdateTime}
+                  </strong>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        )}
 
-        {/* Runway observations */}
-        {runwayPlates.length > 0 && (
+        {/* Runway observations (Only for 1D mode and when not compact) */}
+        {timeframe === "1D" && !compact && runwayPlates.length > 0 && (
           <div className="shrink-0 border-b border-slate-200 bg-[#f8fafc] px-3 py-2">
             <div className="flex items-center justify-between text-[11px] font-black text-slate-700 mb-1.5 uppercase">
               <span>{isEn ? "Runway Observations" : "跑道观测"}</span>
@@ -898,8 +1232,8 @@ export function LiveTemperatureThresholdChart({
           </div>
         )}
 
-        {/* Multi-model list (only when runway data is on chart) */}
-        {hasRunwayData && series.some((s) => s.key.startsWith("model_curve_")) && (
+        {/* Multi-model list (Only in 1D mode and when not compact) */}
+        {timeframe === "1D" && !compact && hasRunwayData && series.some((s) => s.key.startsWith("model_curve_")) && (
           <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-2">
             <div className="flex flex-wrap gap-x-6 gap-y-1 text-[11px]">
               <span className="font-black text-slate-500 uppercase mr-2">
@@ -923,11 +1257,8 @@ export function LiveTemperatureThresholdChart({
 
         {/* Chart */}
         <div className="relative min-h-0 flex-1 p-2">
-          <div className="absolute left-3 top-3 z-10 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-black text-slate-800 shadow-sm">
-            {row ? rowName(row) : ""}
-          </div>
           {/* Interactive legend */}
-          <div className="flex flex-wrap gap-x-4 gap-y-1 px-3 py-1.5 text-[11px] border-b border-slate-200 bg-white">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 px-3 py-1.5 text-[11px] border-b border-[#e2e8f0] bg-white">
             {chartSeries.length > 1 && chartSeries.map((s) => (
               <button
                 key={s.key}
@@ -951,25 +1282,25 @@ export function LiveTemperatureThresholdChart({
             ))}
           </div>
           <ResponsiveContainer width="100%" height="100%">
-            <ReLineChart data={data} margin={{ top: 16, right: 44, left: 4, bottom: 8 }}>
+            <ReLineChart data={data} margin={{ top: 16, right: compact ? 20 : 44, left: 4, bottom: 8 }}>
               <CartesianGrid stroke="#dbe6ef" strokeDasharray="2 2" />
               <XAxis
                 dataKey="label"
-                tick={{ fontSize: 10, fill: "#64748b" }}
+                tick={{ fontSize: 9, fill: "#64748b" }}
                 tickLine={false}
                 axisLine={{ stroke: "#cbd5e1" }}
-                interval={Math.max(1, Math.floor(data.length / 8))}
+                interval={Math.max(1, Math.floor(data.length / (compact ? 6 : 10)))}
               />
               <YAxis
                 orientation="right"
-                tick={{ fontSize: 10, fill: "#64748b" }}
+                tick={{ fontSize: 9, fill: "#64748b" }}
                 tickFormatter={(v) => `${Number(v).toFixed(0)}°`}
                 axisLine={{ stroke: "#cbd5e1" }}
                 tickLine={false}
                 domain={chartDomain}
                 ticks={intDegreeTicks ?? undefined}
               />
-              {cityThresholds.map((t, idx) => {
+              {timeframe === "1D" && cityThresholds.map((t, idx) => {
                 const isSelected = row && (Number(row.target_threshold ?? row.target_value) === t.threshold);
                 const labelText = isEn
                   ? `${t.kind === "gte" ? "≥" : "≤"} ${t.threshold.toFixed(1)}° [${t.isBreached ? "Excluded" : "Active"}]`
@@ -983,7 +1314,7 @@ export function LiveTemperatureThresholdChart({
                     strokeDasharray={isSelected ? undefined : "4 4"}
                     strokeWidth={isSelected ? 2 : 1}
                     label={{
-                      value: labelText,
+                      value: compact ? undefined : labelText,
                       fill: isSelected ? "#3b82f6" : t.isBreached ? "#ef4444" : "#f97316",
                       fontSize: 9,
                       position: isSelected ? "left" : "insideBottomRight",
@@ -1007,23 +1338,25 @@ export function LiveTemperatureThresholdChart({
                   dataKey={item.key}
                   name={item.label}
                   stroke={item.color}
-                  strokeWidth={item.featured ? 2 : 1}
+                  strokeWidth={item.featured ? 2 : 1.2}
                   strokeDasharray={item.dashed ? "4 3" : undefined}
-                  dot={false}
+                  dot={timeframe === "5D" || timeframe === "7D"}
                   activeDot={{ r: item.featured ? 5 : 4 }}
                   connectNulls={true}
                   isAnimationActive={false}
                 />
               ))}
-              <Brush
-                dataKey="label"
-                height={20}
-                stroke="#64748b"
-                fill="#f8fafc"
-                travellerWidth={8}
-                startIndex={0}
-                endIndex={data.length - 1}
-              />
+              {!compact && (timeframe === "1D" || timeframe === "3D") && (
+                <Brush
+                  dataKey="label"
+                  height={18}
+                  stroke="#64748b"
+                  fill="#f8fafc"
+                  travellerWidth={8}
+                  startIndex={0}
+                  endIndex={data.length - 1}
+                />
+              )}
             </ReLineChart>
           </ResponsiveContainer>
         </div>

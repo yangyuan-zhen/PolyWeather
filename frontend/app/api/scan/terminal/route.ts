@@ -30,7 +30,6 @@ export async function GET(req: NextRequest) {
     "time_range",
     "limit",
     "force_refresh",
-    "skip_polymarket",
     "timezone_offset_seconds",
   ]) {
     const value = req.nextUrl.searchParams.get(key);
