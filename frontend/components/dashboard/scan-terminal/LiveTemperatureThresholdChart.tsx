@@ -7,7 +7,6 @@ import { ExternalLink } from "lucide-react";
 import {
   Brush,
   CartesianGrid,
-  Legend,
   Line,
   LineChart as ReLineChart,
   ReferenceLine,
@@ -379,12 +378,10 @@ function buildRunwayHistorySeries(
     .filter((series): series is RunwayHistorySeries => series !== null);
 }
 
-// ── Build aligned data rows for the sliding-window chart ────────────────
-
-function buildSlidingChartData(
+function buildFullDayChartData(
   row: ScanOpportunityRow | null,
   hourly: HourlyForecast,
-) {
+): { data: Array<Record<string, string | number | null>>; series: EvidenceSeries[] } {
   const tzOffset = row?.tz_offset_seconds ?? 0;
   const localDateStr = row?.local_date || new Date().toISOString().slice(0, 10);
 
@@ -392,123 +389,60 @@ function buildSlidingChartData(
   const metarObs = normObs(row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs, tzOffset);
   const runwayHistorySeries = buildRunwayHistorySeries(row, hourly, tzOffset, localDateStr);
 
-  // Collect all timestamps from observations + forecasts
-  const allTimes = new Set<number>();
-
-  const pushObs = (obs: ReturnType<typeof normObs>) => {
-    obs.forEach((o) => allTimes.add(o.ts));
-  };
-  pushObs(settlementObs);
-  pushObs(metarObs);
-  runwayHistorySeries.forEach((item) => {
-    item.points.forEach((point) => allTimes.add(point.ts));
-  });
-
-  // Forecast timestamps
-  const forecastTimes: number[] = [];
-  if (hourly?.times?.length && hourly?.temps?.length) {
-    hourly.times.forEach((t, i) => {
-      const ts = getCityLocalUtcTimestamp(t, tzOffset, localDateStr);
-      if (ts !== null && i < hourly.temps.length) {
-        allTimes.add(ts);
-        forecastTimes.push(ts);
-      }
-    });
-  }
-
-  // Sort timestamps
-  const sorted = [...allTimes].sort((a, b) => a - b);
-  if (!sorted.length) return { data: [], series: [] };
-
-  // Build a lookup: timestamp → index in the sorted array
-  const tsToIdx = new Map<number, number>();
-  sorted.forEach((ts, i) => tsToIdx.set(ts, i));
-
-  const n = sorted.length;
-  const na = (): Array<number | null> => Array.from({ length: n }, () => null);
+  const slots = generateFullDaySlots(localDateStr);
+  if (!slots.length) return { data: [], series: [] };
+  const slotLabels = slots.map(formatTimestamp);
+  const n = slots.length;
 
   const series: EvidenceSeries[] = [];
+  const na = (): Array<number | null> => new Array(n).fill(null);
 
-  runwayHistorySeries.forEach((item) => {
-    const vals = na();
-    item.points.forEach((o) => {
-      const idx = tsToIdx.get(o.ts);
-      if (idx !== undefined) vals[idx] = o.value;
+  // ── Runway history series ──
+  runwayHistorySeries.forEach((rhs) => {
+    const binned = binObservationsToSlots(slots, rhs.points);
+    if (!binned.some((v) => v !== null)) return;
+    series.push({
+      key: rhs.key,
+      label: rhs.label,
+      source: "AMOS/AMSC",
+      color: rhs.color,
+      featured: rhs.isSettlement,
+      dashed: !rhs.isSettlement,
+      values: binned,
     });
-    if (vals.some((v) => v !== null)) {
+  });
+
+  // ── Settlement observations ──
+  if (!runwayHistorySeries.length && settlementObs.length) {
+    const svals = binObservationsToSlots(slots, settlementObs);
+    if (svals.some((v) => v !== null)) {
       series.push({
-        key: item.key,
-        label: item.label,
-        source: "Runway",
-        color: item.color,
-        dashed: !item.isSettlement,
-        featured: item.isSettlement,
-        curve: "monotone",
-        connectNulls: true,
-        showDot: item.isSettlement,
-        values: vals,
+        key: "settlement",
+        label: row?.metar_context?.station_label || row?.metar_context?.station || "Settlement",
+        source: row?.metar_context?.station || row?.airport || "Settlement",
+        color: "#009688",
+        featured: true,
+        values: svals,
       });
     }
-  });
-
-  // Settlement
-  const sVals = na();
-  settlementObs.forEach((o) => {
-    const idx = tsToIdx.get(o.ts);
-    if (idx !== undefined) sVals[idx] = o.value;
-  });
-  if (!runwayHistorySeries.length && sVals.some((v) => v !== null)) {
-    const cityKey = String(row?.city || "").toLowerCase().trim();
-    const runwaySensorCities = new Set([
-      'beijing', 'shanghai', 'guangzhou', 'shenzhen', 'qingdao',
-      'chengdu', 'chongqing', 'wuhan', // AMSC runway sensors
-      'seoul', 'busan',                 // AMOS runway sensors
-    ]);
-    const isHKO = cityKey === 'hong kong' || cityKey === 'lau fau shan' || cityKey.includes('hongkong') || cityKey.includes('laufau');
-    const isTokyo = cityKey === 'tokyo';
-    const isSingapore = cityKey === 'singapore';
-    const isWeatherStation = !runwaySensorCities.has(cityKey)
-      && !isHKO && !isTokyo && !isSingapore;
-
-    const runwayHeaderLabel = isHKO ? '参考站点 (1分钟)'
-      : isTokyo ? '机场气象站 (10分钟)'
-      : isSingapore ? '航站楼温度'
-      : isWeatherStation ? '气象站实测'
-      : '跑道实测 (1分钟)';
-
-    series.push({
-      key: "settlement",
-      label: runwayHeaderLabel,
-      source: row?.metar_context?.station || row?.airport || "Settlement",
-      color: "#009688",
-      featured: true,
-      curve: "monotone",
-      connectNulls: true,
-      values: sVals,
-    });
   }
 
-  // METAR
-  const mVals = na();
-  metarObs.forEach((o) => {
-    const idx = tsToIdx.get(o.ts);
-    if (idx !== undefined) mVals[idx] = o.value;
-  });
-  if (mVals.some((v) => v !== null)) {
-    series.push({
-      key: "metar",
-      label: "METAR",
-      source: row?.airport || "METAR",
-      color: "#0ea5e9",
-      dashed: true,
-      curve: "stepAfter",
-      connectNulls: true,
-      showDot: true,
-      values: mVals,
-    });
+  // ── METAR ──
+  if (metarObs.length) {
+    const mvals = binObservationsToSlots(slots, metarObs);
+    if (mvals.some((v) => v !== null)) {
+      series.push({
+        key: "metar",
+        label: "METAR",
+        source: row?.airport || "METAR",
+        color: "#0ea5e9",
+        dashed: true,
+        values: mvals,
+      });
+    }
   }
 
-  // DEB forecast curve
+  // ── DEB forecast curve ──
   if (hourly?.times?.length && hourly?.temps?.length) {
     const debPath = buildDebBaselinePath(
       hourly.times,
@@ -520,9 +454,10 @@ function buildSlidingChartData(
     const debVals = na();
     hourly.times.forEach((t, i) => {
       const ts = getCityLocalUtcTimestamp(t, tzOffset, localDateStr);
-      const idx = ts !== null ? tsToIdx.get(ts) : undefined;
-      if (idx !== undefined && i < debPath.debTemps.length) {
-        debVals[idx] = validNumber(debPath.debTemps[i]);
+      if (ts === null) return;
+      const slotIdx = slots.findIndex((s) => s === ts);
+      if (slotIdx >= 0 && i < debPath.debTemps.length) {
+        debVals[slotIdx] = validNumber(debPath.debTemps[i]);
       }
     });
     if (debVals.some((v) => v !== null)) {
@@ -533,32 +468,22 @@ function buildSlidingChartData(
         color: "#f97316",
         featured: true,
         smooth: true,
-        curve: "monotone",
-        connectNulls: true,
         values: debVals,
       });
     }
 
-    // Per-model hourly curves
+    // Per-model curves
     if (hourly.modelCurves) {
       const modelColors = ["#2563eb", "#7c3aed", "#059669", "#d97706", "#dc2626", "#0891b2"];
       Object.keys(hourly.modelCurves).forEach((model, idx) => {
         const modelTemps = hourly.modelCurves![model];
         if (!modelTemps?.length) return;
-        const finiteModelTemps = modelTemps
-          .map(validNumber)
-          .filter((v): v is number => v !== null);
-        if (
-          finiteModelTemps.length < 2 ||
-          Math.max(...finiteModelTemps) - Math.min(...finiteModelTemps) < 0.05
-        ) {
-          return;
-        }
         const vals = na();
         hourly.times.forEach((t, i) => {
           const ts = getCityLocalUtcTimestamp(t, tzOffset, localDateStr);
-          const x = ts !== null ? tsToIdx.get(ts) : undefined;
-          if (x !== undefined && i < modelTemps.length) vals[x] = validNumber(modelTemps[i]);
+          if (ts === null) return;
+          const slotIdx = slots.findIndex((s) => s === ts);
+          if (slotIdx >= 0 && i < modelTemps.length) vals[slotIdx] = validNumber(modelTemps[i]);
         });
         if (vals.some((v) => v !== null)) {
           series.push({
@@ -568,8 +493,6 @@ function buildSlidingChartData(
             color: modelColors[idx % modelColors.length],
             dashed: true,
             smooth: true,
-            curve: "monotone",
-            connectNulls: true,
             values: vals,
           });
         }
@@ -577,85 +500,32 @@ function buildSlidingChartData(
     }
   }
 
-  // Fallback: if no series, use current temp as a flat line
+  // ── Fallback ──
   if (!series.length) {
-    const fallback = validNumber(row?.current_temp) ?? validNumber(row?.deb_prediction) ?? validNumber(row?.target_threshold);
-    if (fallback !== null) {
-      const vals = na().map(() => fallback);
+    const fb = validNumber(row?.current_temp) ?? validNumber(row?.deb_prediction) ?? validNumber(row?.target_threshold);
+    if (fb !== null) {
       series.push({
         key: "current",
-        label: "Current",
-        source: "Live",
+        label: "Current reference",
+        source: row?.metar_context?.source || "Live",
         color: "#009688",
         featured: true,
-        curve: "monotone",
-        connectNulls: true,
-        values: vals,
+        values: Array.from({ length: n }, () => fb),
       });
     }
   }
 
-  // Build data rows: one per timestamp
-  const data = sorted.map((ts, i) => {
+  // ── Build data rows ──
+  const data = slots.map((ts, i) => {
     const point: Record<string, string | number | null> = {
       label: formatTimestamp(ts),
       ts,
     };
-    series.forEach((s) => { point[s.key] = s.values[i]; });
+    series.forEach((s) => { point[s.key] = s.values[i] ?? null; });
     return point;
   });
 
   return { data, series };
-}
-
-function hasNumericValue(row: Record<string, string | number | null>, keys: string[]) {
-  return keys.some((key) => validNumber(row[key]) !== null);
-}
-
-function buildRollingWindowData(
-  data: Array<Record<string, string | number | null>>,
-  series: EvidenceSeries[],
-  row: ScanOpportunityRow | null,
-  hourly: HourlyForecast,
-) {
-  if (data.length <= 1) return data;
-
-  const liveKeys = series
-    .filter((item) => item.key !== "hourly_forecast" && !item.key.startsWith("model_curve_"))
-    .map((item) => item.key);
-  const forecastKeys = series
-    .filter((item) => item.key === "hourly_forecast" || item.key.startsWith("model_curve_"))
-    .map((item) => item.key);
-
-  const timestampRows = data
-    .filter((point) => typeof point.ts === "number")
-    .sort((a, b) => Number(a.ts) - Number(b.ts));
-  if (!timestampRows.length) return data;
-
-  const latestLiveTs = [...timestampRows]
-    .reverse()
-    .find((point) => hasNumericValue(point, liveKeys))?.ts as number | undefined;
-
-  const tzOffset = row?.tz_offset_seconds ?? 0;
-  const localDateStr = row?.local_date || new Date().toISOString().slice(0, 10);
-  const currentLocalTs = getCityLocalUtcTimestamp(
-    hourly?.localTime || row?.local_time,
-    tzOffset,
-    localDateStr,
-  );
-  const maxDataTs = Number(timestampRows[timestampRows.length - 1].ts);
-  const anchor = latestLiveTs ?? currentLocalTs ?? maxDataTs;
-  const afterMs = latestLiveTs ? ROLLING_WINDOW_AFTER_LIVE_MS : ROLLING_WINDOW_AFTER_FORECAST_MS;
-  const start = anchor - ROLLING_WINDOW_BEFORE_MS;
-  const end = anchor + afterMs;
-
-  const visible = timestampRows.filter((point) => {
-    const ts = Number(point.ts);
-    if (ts < start || ts > end) return false;
-    return hasNumericValue(point, liveKeys) || hasNumericValue(point, forecastKeys);
-  });
-
-  return visible.length >= 2 ? visible : timestampRows.slice(-120);
 }
 
 // ── Model summary cards (daily high point predictions) ─────────────────
@@ -707,10 +577,10 @@ function buildMarketTemperatureOptions(row: ScanOpportunityRow | null) {
 function buildChartDomain(
   ticks: number[] | null,
   series: EvidenceSeries[],
-  visibleData?: Array<Record<string, string | number | null>>,
+  data?: Array<Record<string, string | number | null>>,
 ): [number, number] | ["auto", "auto"] {
-  const vals = visibleData?.length
-    ? visibleData.flatMap((point) => series.map((s) => point[s.key])).filter((v): v is number => validNumber(v) !== null)
+  const vals = data?.length
+    ? data.flatMap((point) => series.map((s) => point[s.key])).filter((v): v is number => validNumber(v) !== null)
     : series.flatMap((s) => s.values).filter((v): v is number => validNumber(v) !== null);
   const all = [...(ticks || []), ...vals];
   if (!all.length) return ["auto", "auto"];
@@ -803,11 +673,8 @@ export function LiveTemperatureThresholdChart({
     return () => { cancelled = true; };
   }, [city]);
 
-  const { data, series } = useMemo(() => buildSlidingChartData(row, hourly), [row, hourly]);
-  const visibleData = useMemo(
-    () => buildRollingWindowData(data, series, row, hourly),
-    [data, series, row, hourly],
-  );
+  const { data, series } = useMemo(() => buildFullDayChartData(row, hourly), [row, hourly]);
+  const [hiddenSeriesKeys, setHiddenSeriesKeys] = useState<Set<string>>(new Set());
 
   const tzOffset = row?.tz_offset_seconds ?? 0;
   const settlementObs = useMemo(() => {
@@ -817,6 +684,14 @@ export function LiveTemperatureThresholdChart({
   const runwayPlates = useMemo(() => buildRunwayPlates(hourly?.amos, row, settlementObs), [hourly?.amos, row, settlementObs]);
   const hasRunwayData = runwayPlates.length > 0;
   const settlementPlate = useMemo(() => runwayPlates.find((p) => p.isSettlement), [runwayPlates]);
+
+  const chartSeries = useMemo(() => {
+    return series.filter((item) => !hasRunwayData || !item.key.startsWith("model_curve_"));
+  }, [series, hasRunwayData]);
+
+  const activeSeries = useMemo(() => {
+    return chartSeries.filter((s) => !hiddenSeriesKeys.has(s.key));
+  }, [chartSeries, hiddenSeriesKeys]);
 
   const cityKey = String(row?.city || "").toLowerCase().trim();
   const runwaySensorCities = new Set([
@@ -904,8 +779,8 @@ export function LiveTemperatureThresholdChart({
 
   const marketTicks = useMemo(() => buildMarketTemperatureOptions(row), [row]);
   const chartDomain = useMemo(
-    () => buildChartDomain(marketTicks, series, visibleData),
-    [marketTicks, series, visibleData],
+    () => buildChartDomain(marketTicks, series, data),
+    [marketTicks, series, data],
   );
 
   return (
@@ -1068,15 +943,39 @@ export function LiveTemperatureThresholdChart({
               </Link>
             ) : null}
           </div>
+          {/* Interactive legend */}
+          <div className="flex flex-wrap gap-x-4 gap-y-1 px-3 py-1.5 text-[11px] border-b border-slate-200 bg-white">
+            {chartSeries.length > 1 && chartSeries.map((s) => (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => {
+                  setHiddenSeriesKeys((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(s.key)) next.delete(s.key);
+                    else next.add(s.key);
+                    return next;
+                  });
+                }}
+                className={clsx(
+                  "inline-flex items-center gap-1.5 font-mono cursor-pointer transition-opacity hover:opacity-80",
+                  hiddenSeriesKeys.has(s.key) && "opacity-40 line-through"
+                )}
+              >
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                <span className="text-slate-700 font-bold">{s.label}</span>
+              </button>
+            ))}
+          </div>
           <ResponsiveContainer width="100%" height="100%">
-            <ReLineChart data={visibleData} margin={{ top: 16, right: 28, left: 8, bottom: 8 }}>
+            <ReLineChart data={data} margin={{ top: 16, right: 28, left: 8, bottom: 8 }}>
               <CartesianGrid stroke="#dbe6ef" strokeDasharray="2 2" />
               <XAxis
                 dataKey="label"
                 tick={{ fontSize: 10, fill: "#64748b" }}
                 tickLine={false}
                 axisLine={{ stroke: "#cbd5e1" }}
-                interval={Math.max(1, Math.floor(visibleData.length / 8))}
+                interval={Math.max(1, Math.floor(data.length / 8))}
               />
               <YAxis
                 tick={{ fontSize: 10, fill: "#64748b" }}
@@ -1117,29 +1016,30 @@ export function LiveTemperatureThresholdChart({
                 }}
                 formatter={(value: unknown) => `${Number(value).toFixed(2)}°`}
               />
-              <Legend
-                verticalAlign="bottom"
-                height={series.length > 5 ? 56 : 36}
-                iconType="plainline"
-                wrapperStyle={{ fontSize: 11 }}
-              />
-              {series
-                .filter((item) => !hasRunwayData || !item.key.startsWith("model_curve_"))
-                .map((item) => (
+              {activeSeries.map((item) => (
                 <Line
                   key={item.key}
-                  type={item.curve || (item.smooth ? "monotone" : "linear")}
+                  type={item.smooth ? "monotone" : "linear"}
                   dataKey={item.key}
                   name={item.label}
                   stroke={item.color}
                   strokeWidth={item.featured ? 2 : 1}
                   strokeDasharray={item.dashed ? "4 3" : undefined}
-                  dot={item.showDot ? { r: 2.5, fill: item.color } : false}
+                  dot={false}
                   activeDot={{ r: item.featured ? 5 : 4 }}
-                  connectNulls={item.connectNulls ?? true}
+                  connectNulls={true}
                   isAnimationActive={false}
                 />
               ))}
+              <Brush
+                dataKey="label"
+                height={20}
+                stroke="#64748b"
+                fill="#f8fafc"
+                travellerWidth={8}
+                startIndex={0}
+                endIndex={data.length - 1}
+              />
             </ReLineChart>
           </ResponsiveContainer>
         </div>
