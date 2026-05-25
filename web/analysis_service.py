@@ -825,6 +825,14 @@ def _analyze(
         cur_temp = _sf(live_mc.get("temp"))
         if cur_temp is not None and not _is_plausible_city_temp(city, cur_temp, sym):
             cur_temp = None
+    # Official settlement station: e.g. CWA for Taipei, HKO for Hong Kong
+    if cur_temp is None:
+        cur_temp = _sf((settlement_current.get("current") or {}).get("temp"))
+        if cur_temp is not None:
+            current_source = settlement_source or "settlement"
+            current_source_label = settlement_source_label or "Settlement Station"
+            current_station_code = settlement_current.get("station_code") or current_station_code
+            current_station_name = settlement_current.get("station_name") or current_station_name
     if cur_temp is None:
         cur_temp = _sf(mg_cur.get("temp"))
         if cur_temp is not None and not _is_plausible_city_temp(city, cur_temp, sym):
@@ -1837,6 +1845,11 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         cur_temp = _sf(live_mc.get("temp"))
         if cur_temp is not None and not _is_plausible_city_temp(city, cur_temp, sym):
             cur_temp = None
+    if cur_temp is None:
+        cur_temp = _sf((settlement_current.get("current") or {}).get("temp"))
+        if cur_temp is not None:
+            current_source = settlement_source or "settlement"
+            current_source_label = settlement_source_label or "Settlement Station"
     if cur_temp is None:
         cur_temp = _sf(mg_cur.get("temp"))
         if cur_temp is not None and not _is_plausible_city_temp(city, cur_temp, sym):
