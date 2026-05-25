@@ -593,7 +593,7 @@ function PolyWeatherTerminal({
     <div className="flex h-screen w-full overflow-hidden bg-[#e9edf3] text-[#202833]">
       <aside
         className={clsx(
-          "flex shrink-0 flex-col bg-[#11161d] py-3 text-slate-400 transition-all duration-200",
+          "flex shrink-0 flex-col bg-white border-r border-[#d2d9e2] py-3 text-slate-500 transition-all duration-200",
           navExpanded ? "w-[172px] items-start px-3" : "w-[52px] items-center gap-2",
         )}
       >
@@ -610,7 +610,7 @@ function PolyWeatherTerminal({
             <img src="/apple-touch-icon.png" alt="PolyWeather" className="h-full w-full object-cover" />
           </Link>
           {navExpanded && (
-            <span className="text-sm font-black text-white tracking-tight truncate">
+            <span className="text-sm font-black text-slate-800 tracking-tight truncate">
               PolyWeather
             </span>
           )}
@@ -621,7 +621,7 @@ function PolyWeatherTerminal({
           type="button"
           onClick={() => setNavExpanded((prev) => !prev)}
           className={clsx(
-            "flex items-center gap-3 transition-colors hover:text-white",
+            "flex items-center gap-3 transition-colors hover:text-slate-800",
             navExpanded
               ? "w-full h-8 px-1 mb-2"
               : "grid h-9 w-full place-items-center mb-2",
@@ -630,7 +630,7 @@ function PolyWeatherTerminal({
           {navExpanded ? (
             <>
               <ChevronLeft size={14} />
-              <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
                 {isEn ? "Collapse" : "收起"}
               </span>
             </>
@@ -654,11 +654,11 @@ function PolyWeatherTerminal({
                   : "grid h-9 w-full place-items-center border-l-4",
                 isActive
                   ? navExpanded
-                    ? "bg-white/8 text-white"
-                    : "border-blue-500 bg-white/5 text-white"
+                    ? "bg-blue-50 text-blue-600 font-bold"
+                    : "border-blue-500 bg-blue-50/50 text-blue-600"
                   : navExpanded
-                    ? "hover:bg-white/5 hover:text-white"
-                    : "border-transparent hover:bg-white/5 hover:text-white",
+                    ? "hover:bg-slate-50 hover:text-slate-900"
+                    : "border-transparent hover:bg-slate-50 hover:text-slate-700",
               )}
               title={isEn ? labelEn : labelZh}
             >

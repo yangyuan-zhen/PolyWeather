@@ -833,18 +833,29 @@ export function LiveTemperatureThresholdChart({
   allRows = [],
   compact = false,
   onSearchClick,
+  onMaximize,
+  onClose,
+  isMaximized = false,
+  disableClose = false,
 }: {
   isEn: boolean;
   row: ScanOpportunityRow | null;
   allRows?: ScanOpportunityRow[];
   compact?: boolean;
   onSearchClick?: () => void;
+  onMaximize?: () => void;
+  onClose?: () => void;
+  isMaximized?: boolean;
+  disableClose?: boolean;
 }) {
   const [hourly, setHourly] = useState<HourlyForecast>(null);
   const city = String(row?.city || "").toLowerCase().trim();
   const [timeframe, setTimeframe] = useState<"1D" | "3D">("1D");
-  const [hiddenSeriesKeys, setHiddenSeriesKeys] = useState<Set<string>>(new Set());
-  const [prevCityAndTf, setPrevCityAndTf] = useState({ city: "", timeframe: "" });
+  const [userToggledKeys, setUserToggledKeys] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    setUserToggledKeys({});
+  }, [city, timeframe]);
 
   useEffect(() => {
     if (!city) return;
@@ -905,41 +916,22 @@ export function LiveTemperatureThresholdChart({
     return series;
   }, [series]);
 
-  useEffect(() => {
-    const currentKey = `${city}-${timeframe}`;
-    const prevKey = `${prevCityAndTf.city}-${prevCityAndTf.timeframe}`;
-    
-    if (currentKey !== prevKey) {
-      const defaults = new Set<string>();
-      // Always default all model curves to hidden across all cities and timeframes
-      series.forEach((s) => {
-        if (s.key.startsWith("model_curve_")) {
-          // Keep AROME HD visible by default on Paris chart
-          if (city === "paris" && s.key === "model_curve_AROME HD") {
-            return;
-          }
-          defaults.add(s.key);
-        }
-      });
-      setHiddenSeriesKeys(defaults);
-      setPrevCityAndTf({ city, timeframe });
-    } else {
-      setHiddenSeriesKeys((prev) => {
-        const next = new Set<string>();
-        const seriesKeys = new Set(series.map((s) => s.key));
-        prev.forEach((k) => {
-          if (seriesKeys.has(k)) {
-            next.add(k);
-          }
-        });
-        return next;
-      });
+  const isSeriesVisible = (sKey: string) => {
+    if (userToggledKeys[sKey] !== undefined) {
+      return userToggledKeys[sKey];
     }
-  }, [city, timeframe, series, prevCityAndTf]);
+    if (sKey.startsWith("model_curve_")) {
+      if (city === "paris" && sKey === "model_curve_AROME HD") {
+        return true;
+      }
+      return false;
+    }
+    return true;
+  };
 
   const activeSeries = useMemo(() => {
-    return chartSeries.filter((s) => !hiddenSeriesKeys.has(s.key));
-  }, [chartSeries, hiddenSeriesKeys]);
+    return chartSeries.filter((s) => isSeriesVisible(s.key));
+  }, [chartSeries, userToggledKeys, city]);
 
   const cityKey = String(row?.city || "").toLowerCase().trim();
   const runwaySensorCities = new Set([
@@ -1067,22 +1059,61 @@ export function LiveTemperatureThresholdChart({
   );
 
   const timeframeActions = (
-    <div className="flex items-center gap-1 rounded bg-[#eef2f6] p-0.5 border border-slate-200">
-      {(["1D", "3D"] as const).map((tf) => (
-        <button
-          key={tf}
-          type="button"
-          onClick={() => setTimeframe(tf)}
-          className={clsx(
-            "px-2 py-0.5 text-[9px] font-bold rounded transition-all",
-            timeframe === tf
-              ? "bg-white text-blue-600 shadow-sm border border-slate-200/50"
-              : "text-slate-500 hover:text-slate-800"
+    <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1 rounded bg-[#eef2f6] p-0.5 border border-slate-200">
+        {(["1D", "3D"] as const).map((tf) => (
+          <button
+            key={tf}
+            type="button"
+            onClick={() => setTimeframe(tf)}
+            className={clsx(
+              "px-2 py-0.5 text-[9px] font-bold rounded transition-all",
+              timeframe === tf
+                ? "bg-white text-blue-600 shadow-sm border border-slate-200/50"
+                : "text-slate-500 hover:text-slate-800"
+            )}
+          >
+            {tf}
+          </button>
+        ))}
+      </div>
+
+      {(onMaximize || onClose) && (
+        <div className="flex items-center gap-1">
+          {onMaximize && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onMaximize();
+              }}
+              className="grid h-6 w-6 place-items-center rounded bg-white hover:bg-slate-50 border border-slate-200 text-slate-500 hover:text-slate-800 transition-colors shadow-sm"
+              title={isMaximized ? (isEn ? "Restore Grid" : "还原网格") : (isEn ? "Maximize" : "最大化")}
+            >
+              {isMaximized ? "❐" : "⛶"}
+            </button>
           )}
-        >
-          {tf}
-        </button>
-      ))}
+          {onClose && (
+            <button
+              type="button"
+              disabled={disableClose}
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              className={clsx(
+                "grid h-6 w-6 place-items-center rounded border transition-colors shadow-sm",
+                disableClose
+                  ? "bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed"
+                  : "bg-white hover:bg-slate-50 border-slate-200 text-slate-500 hover:text-red-600"
+              )}
+              title={isEn ? "Clear Slot" : "清除槽位"}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 
@@ -1307,16 +1338,14 @@ export function LiveTemperatureThresholdChart({
                 key={s.key}
                 type="button"
                 onClick={() => {
-                  setHiddenSeriesKeys((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(s.key)) next.delete(s.key);
-                    else next.add(s.key);
-                    return next;
-                  });
+                  setUserToggledKeys((prev) => ({
+                    ...prev,
+                    [s.key]: !isSeriesVisible(s.key),
+                  }));
                 }}
                 className={clsx(
                   "inline-flex items-center gap-1.5 font-mono cursor-pointer transition-opacity hover:opacity-80",
-                  hiddenSeriesKeys.has(s.key) && "opacity-40 line-through"
+                  !isSeriesVisible(s.key) && "opacity-40 line-through"
                 )}
               >
                 <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
