@@ -2,14 +2,9 @@
    Consolidates 20 CSS Modules that are always co-imported into
    a single className, keeping ScanTerminalDashboard.tsx lean. */
 
+/* Barrel: pre-combined scan-terminal root class name. */
 import clsx from "clsx";
 
-import dashboardModalGuideStyles from "./DashboardModalGuide.module.css";
-import dashboardShellStyles from "./DashboardShell.module.css";
-import detailChromeStyles from "./DetailPanelChrome.module.css";
-import detailContentStyles from "./DetailPanelContent.module.css";
-import detailSectionsStyles from "./DetailPanelSections.module.css";
-import modalChromeStyles from "./ModalChrome.module.css";
 import scanTerminalStyles from "./ScanTerminal.module.css";
 import scanTerminalBoardStyles from "./ScanTerminalBoard.module.css";
 import scanTerminalCardStyles from "./ScanTerminalCard.module.css";
@@ -23,8 +18,6 @@ import scanTerminalContinentStyles from "./ScanTerminalContinent.module.css";
 import scanTerminalStateStyles from "./ScanTerminalState.module.css";
 
 export const scanRootClass = clsx(
-  dashboardShellStyles.root,
-  dashboardModalGuideStyles.root,
   scanTerminalStyles.root,
   scanTerminalShellStyles.root,
   scanTerminalFiltersStyles.root,
@@ -36,8 +29,4 @@ export const scanRootClass = clsx(
   scanTerminalCardStyles.root,
   scanTerminalContinentStyles.root,
   scanTerminalMobileStyles.root,
-  detailChromeStyles.root,
-  detailContentStyles.root,
-  detailSectionsStyles.root,
-  modalChromeStyles.root,
 );
