@@ -24,7 +24,6 @@ from web.analysis_service import (
     _analyze,
     _analyze_summary,
     _build_city_detail_payload,  # noqa: F401 - compatibility export for tests and transitional routers
-    _build_city_market_scan_payload,
     _build_city_summary_payload,
 )
 from web.scan_terminal_service import (
@@ -195,12 +194,7 @@ def _attach_market_scan_payload(
 ) -> dict:
     if not isinstance(payload, dict):
         return payload
-    scan_payload = _build_city_market_scan_payload(
-        payload,
-        market_slug=market_slug,
-        target_date=target_date,
-        lite=lite,
-    )
+    scan_payload = {"market_scan": {"available": False}, "selected_date": target_date or "", "fetched_at": payload.get("updated_at")}
     now_ts = time.time()
     payload["market_scan_payload"] = scan_payload
     payload["market_scan_updated_at"] = datetime.now().isoformat()

@@ -920,7 +920,7 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
     else:
         results["cwa"] = {"ok": False, "error": "not configured"}
 
-    # Polymarket health checks have been removed from the project
+
 
     # AMOS (Korea runway sensors)
     try:

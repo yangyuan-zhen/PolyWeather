@@ -3,7 +3,11 @@
     "allow": [
       "Bash(npm --prefix \"/e/web/PolyWeather/frontend\" run build)",
       "mcp__Claude_Preview__preview_start",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Bash(python -c \"from web.services.city_payloads import build_city_detail_payload; print\\('OK'\\)\")",
+      "Bash(python -m ruff check web/services/city_runtime.py web/services/city_api.py)",
+      "Bash(python -m ruff check .)",
+      "Bash(python -m pytest tests/ -q)"
     ]
   }
 }
