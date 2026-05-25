@@ -551,7 +551,7 @@ function buildRunwayHistorySeries(
               : [];
       const values = valuesForLine
         .map((value, pointIndex) => {
-          const minutesFromEnd = (valuesForLine.length - 1 - pointIndex) * FULL_DAY_SLOT_MINUTES;
+          const minutesFromEnd = (valuesForLine.length - 1 - pointIndex);
           return {
             ts: anchor - minutesFromEnd * 60 * 1000,
             value,
@@ -821,12 +821,17 @@ function buildFullDayChartData(
   });
 
   // ── Settlement observations ──
+  // Determine if this is an HKO-sourced city to force the label
+  const settlementCityKey = normalizeCityKey(row?.city);
+  const isHKOCity = settlementCityKey === 'hongkong' || settlementCityKey === 'laufaushan'
+    || settlementCityKey === 'shenzhen' || (row?.city || '').toLowerCase().includes('hong kong')
+    || (row?.city || '').toLowerCase().includes('lau fau shan');
   if (settlementObs.length) {
     const svals = binObservationsToSlots(slots, settlementObs);
     if (svals.some((v) => v !== null)) {
       series.push({
         key: "settlement",
-        label: row?.metar_context?.station_label || row?.metar_context?.station || "Settlement",
+        label: isHKOCity ? "HKO" : (row?.metar_context?.station_label || row?.metar_context?.station || "Settlement"),
         source: row?.metar_context?.station || row?.airport || "Settlement",
         color: "#009688",
         featured: true,
@@ -835,8 +840,13 @@ function buildFullDayChartData(
     }
   }
 
-  // ── METAR ──
-  if (madisObs.length) {
+  // ── Airport Primary (MADIS / AMSC AWOS) ──
+  // Skip this series for AMSC AWOS cities — their data is redundant with
+  // runway sensor data and adds a confusing "AMSC AWOS" label to the chart.
+  const isAmscSource =
+    (hourly?.airportPrimary as any)?.source === "amsc_awos" ||
+    String(hourly?.airportPrimary?.source_label || "").toLowerCase().includes("amsc");
+  if (madisObs.length && !isAmscSource) {
     const madisVals = binObservationsToSlots(slots, madisObs);
     if (madisVals.some((v) => v !== null)) {
       series.push({
@@ -855,7 +865,7 @@ function buildFullDayChartData(
     if (mvals.some((v) => v !== null)) {
       series.push({
         key: "metar",
-        label: row?.metar_context?.station_label || "METAR",
+        label: isHKOCity ? "HKO" : (row?.metar_context?.station_label || "METAR"),
         source: row?.airport || "METAR",
         color: "#0ea5e9",
         dashed: true,
@@ -1117,11 +1127,12 @@ export function LiveTemperatureThresholdChart({
 
   const cityKey = String(row?.city || "").toLowerCase().trim();
   const runwaySensorCities = new Set([
-    'beijing', 'shanghai', 'guangzhou', 'shenzhen', 'qingdao',
+    'beijing', 'shanghai', 'guangzhou', 'qingdao',
     'chengdu', 'chongqing', 'wuhan', // AMSC runway sensors
     'seoul', 'busan',                 // AMOS runway sensors
   ]);
-  const isHKO = cityKey === 'hong kong' || cityKey === 'lau fau shan' || cityKey.includes('hongkong') || cityKey.includes('laufau');
+  const isHKO = cityKey === 'hong kong' || cityKey === 'lau fau shan' || cityKey === 'shenzhen'
+    || cityKey.includes('hongkong') || cityKey.includes('laufau');
   const isTokyo = cityKey === 'tokyo';
   const isSingapore = cityKey === 'singapore';
   const isParis = cityKey === 'paris';
