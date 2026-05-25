@@ -111,17 +111,7 @@ Local dev bypass: set `NEXT_PUBLIC_POLYWEATHER_LOCAL_FULL_ACCESS=false` to test 
 
 ## Polymarket Integration
 
-Price pipeline (WS-only, no REST fallback):
-```
-Gamma API (slug discovery) → WS subscribe + cache → market_scan → terminal rows
-```
-
-- `PolymarketWsQuoteCache` — daemon thread connects `wss://ws-subscriptions-clob.polymarket.com/ws/market`
-- `_batch_get_token_market_data()` — subscribes all missing tokens, waits 0.6s for WS quotes, returns from cache
-- `_get_token_market_data()` — WS-only, returns `{}` on miss (no REST fallback)
-- Gamma market fallback used when WS prices unavailable (bestBid/bestAsk from event payload)
-- Enable with `POLYMARKET_WS_PRICE_ENABLED=true` (default: true)
-- `skip_polymarket=true` query param skips price fetching entirely for fast city/weather loads
+**Removed.** No Polymarket price fetching, no market scan, no WS cache. Terminal operates on weather data only (Live observations + DEB predictions + model probabilities). All `polymarket_readonly.py`, `polymarket_ws_cache.py`, and market-scan API routes have been deleted.
 
 ## Trading Regions
 
@@ -130,7 +120,7 @@ Gamma API (slug discovery) → WS subscribe + cache → market_scan → terminal
 ## Scan Terminal Performance
 
 - **Region lazy-loading**: `region=east_asia` filters cities server-side before scanning (see `_market_region_from_tz_offset`)
-- **skip_polymarket mode**: `skip_polymarket=true` returns 1 row/city instantly (Live/DEB only, no market prices); full contract prices load on second pass after WS warmup
+- **Weather-only**: Terminal returns 1 row per city with Live/DEB/probability data; no market contract matching
 - **DB**: SQLite WAL mode + `busy_timeout=5000` enabled in `db_manager.py` (fixes "database is locked" with parallel workers)
 - **VPS env**: `POLYWEATHER_SCAN_TERMINAL_MAX_WORKERS=2`, `POLYWEATHER_SCAN_TERMINAL_BUILD_TIMEOUT_SEC=180`
 - **Caching**: `_cache` is `LRUDict(256)` with `_CACHE_LOCK`; `_SUMMARY_CACHE` is `LRUDict(128)`; weather caches trimmed every 200 writes
