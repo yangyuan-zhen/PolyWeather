@@ -8,10 +8,11 @@ import {
   shouldSkipManualTerminalRefresh,
 } from "@/components/dashboard/scan-terminal/scan-terminal-client";
 import { useRemoteDataQuery } from "@/components/dashboard/scan-terminal/use-remote-data-query";
+import { REGIONS } from "@/components/dashboard/scan-terminal/continent-grouping";
 import type { ScanTerminalResponse } from "@/lib/dashboard-types";
 
 const SCAN_CACHE_PREFIX = "polyweather_scan_v2";
-const SCAN_CACHE_TTL_MS = 2 * 60 * 1000; // 2 min — cities list instant on revisit
+const SCAN_CACHE_TTL_MS = 10 * 60 * 1000; // 10 min — cities list instant on revisit
 
 function scanCacheKey(tradingRegion: string): string {
   return `${SCAN_CACHE_PREFIX}:${tradingRegion || "all"}`;
@@ -135,6 +136,37 @@ export function useScanTerminalQuery({
     }, scanTerminalQueryPolicy.autoRefreshMs);
     return () => window.clearInterval(intervalId);
   }, [fetchScanTerminal, isLoading, isPro, proAccessLoading]);
+
+  // Preload adjacent regions in idle time for instant tab switches
+  useEffect(() => {
+    if (typeof window === "undefined" || !tradingRegion || !isPro) return;
+    const sorted = [...REGIONS].sort((a, b) => a.sort - b.sort);
+    const idx = sorted.findIndex((r) => r.key === tradingRegion);
+    if (idx < 0) return;
+    const neighbors = [idx - 1, idx + 1]
+      .filter((i) => i >= 0 && i < sorted.length)
+      .map((i) => sorted[i].key);
+    if (!neighbors.length) return;
+
+    const preloadOne = (region: string) => {
+      if (readScanCache(region)) return; // already cached
+      const idleFn = (window as any).requestIdleCallback || ((cb: () => void) => setTimeout(cb, 5000));
+      const handle = idleFn(() => {
+        void scanTerminalClient.getTerminal({
+          forceRefresh: false,
+          signal: new AbortController().signal,
+          tradingRegion: region,
+        }).then((data) => { writeScanCache(data, region); });
+      });
+      return handle;
+    };
+
+    const handles = neighbors.map(preloadOne).filter(Boolean);
+    return () => {
+      const cancelFn = (window as any).cancelIdleCallback || clearTimeout;
+      handles.forEach((h) => { try { cancelFn(h); } catch { /* */ } });
+    };
+  }, [tradingRegion, isPro]);
 
   return {
     refreshScanTerminalManually,
