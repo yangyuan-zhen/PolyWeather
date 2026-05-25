@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from web.core import CITIES
-from web.analysis_service import _analyze
+from web.analysis_service import _analyze, _build_city_market_scan_payload
 from web.scan_city_ai_helpers import _safe_float
 from web.scan_terminal_ai_compact import _build_metar_decision_context
 from web.scan_terminal_filters import (
@@ -164,7 +164,14 @@ def _scan_city_terminal_rows(
     candidate_total = 0
 
     for target_date in target_dates:
-        scan = {"available": False}
+        payload = _build_city_market_scan_payload(
+            data,
+            market_slug=None,
+            target_date=target_date,
+            lite=True,
+            scan_filters=filters,
+        )
+        scan = payload.get("market_scan") or {}
         candidate_total += int(scan.get("candidate_count") or 0)
         raw_rows = scan.get("scan_rows")
         if not isinstance(raw_rows, list) or not raw_rows:

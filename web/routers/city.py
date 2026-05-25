@@ -7,6 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, Query, Request
 from web.services.city_api import (
     get_city_detail_aggregate_payload,
     get_city_detail_payload,
+    get_city_market_scan_payload,
     get_city_summary_payload,
     list_cities_payload,
 )
@@ -149,6 +150,65 @@ async def city_detail_aggregate(
         market_slug=market_slug,
         target_date=target_date,
     )
+
+
+@router.get("/api/city/{name}/market-scan")
+async def city_market_scan(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    name: str,
+    force_refresh: bool = False,
+    market_slug: Optional[str] = None,
+    target_date: Optional[str] = None,
+    lite: bool = False,
+):
+    return await get_city_market_scan_payload(
+        request,
+        background_tasks,
+        name,
+        force_refresh=force_refresh,
+        market_slug=market_slug,
+        target_date=target_date,
+        lite=lite,
+    )
+
+
+@router.get("/api/city/{name}/holders")
+async def city_holders(
+    name: str,
+    limit: int = 10,
+):
+    """Return top token holders for a city's primary Polymarket market."""
+    from web.services.city_payloads import _get_polymarket_layer
+    from web.analysis_service import _analyze
+
+    layer = _get_polymarket_layer()
+    if not layer.enabled:
+        return {"holders": [], "available": False}
+
+    data = _analyze(name, force_refresh=False, include_llm_commentary=False, detail_mode="market")
+    local_date = str(data.get("local_date") or "").strip()
+    if not local_date:
+        return {"holders": [], "available": False}
+
+    scan = layer.build_market_scan(
+        city=name,
+        target_date=local_date,
+        include_related_buckets=False,
+    )
+    if not scan.get("available"):
+        return {"holders": [], "available": False}
+
+    condition_id = scan.get("selected_condition_id")
+    if not condition_id:
+        return {"holders": [], "available": False}
+
+    holders = layer.get_market_holders(condition_id, limit=limit)
+    return {
+        "holders": holders,
+        "available": True,
+        "condition_id": condition_id,
+    }
 
 
 @router.get("/api/city/{name}/realtime-stream")

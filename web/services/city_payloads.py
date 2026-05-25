@@ -8,6 +8,27 @@ from web.core import _is_excluded_model_name
 
 TURKISH_MGM_CITIES = {"ankara", "istanbul"}
 
+_polymarket_layer = None
+
+
+def _get_polymarket_layer():
+    global _polymarket_layer
+    if _polymarket_layer is None:
+        from src.data_collection.polymarket_readonly import PolymarketReadOnlyLayer
+
+        _polymarket_layer = PolymarketReadOnlyLayer()
+    return _polymarket_layer
+
+
+def _top_probability_bucket(distribution: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(distribution, list):
+        return None
+    candidates = [row for row in distribution if isinstance(row, dict)]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda row: float(row.get("probability") or -1.0))
+
+
 def build_city_summary_payload(data: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "name": data.get("name"),
@@ -33,11 +54,66 @@ def build_city_summary_payload(data: Dict[str, Any]) -> Dict[str, Any]:
         "updated_at": data.get("updated_at"),
     }
 
+
+def build_city_market_scan_payload(
+    data: Dict[str, Any],
+    market_slug: Optional[str] = None,
+    target_date: Optional[str] = None,
+    lite: bool = False,
+    scan_filters: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    local_date = str(data.get("local_date") or "").strip()
+    requested_date = str(target_date or "").strip()
+    selected_date = requested_date or local_date
+
+    try:
+        layer = _get_polymarket_layer()
+        probabilities = data.get("probabilities") or {}
+        distribution = probabilities.get("distribution") or []
+        top_bucket = _top_probability_bucket(distribution)
+        model_probability = (
+            float(top_bucket.get("probability"))
+            if (isinstance(top_bucket, dict) and top_bucket.get("probability") is not None)
+            else None
+        )
+
+        scan = layer.build_market_scan(
+            city=data.get("name"),
+            target_date=selected_date,
+            temperature_bucket=top_bucket,
+            model_probability=model_probability,
+            probability_distribution=distribution,
+            temp_symbol=str(data.get("temp_symbol") or ""),
+            forced_market_slug=market_slug,
+            include_related_buckets=not lite,
+            scan_filters=scan_filters,
+        )
+        return {
+            "market_scan": scan,
+            "selected_date": selected_date,
+            "fetched_at": data.get("updated_at"),
+        }
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        return {
+            "market_scan": {"available": False},
+            "selected_date": selected_date,
+            "fetched_at": data.get("updated_at"),
+        }
+
+
 def build_city_detail_payload(
     data: Dict[str, Any],
     market_slug: Optional[str] = None,
     target_date: Optional[str] = None,
 ) -> Dict[str, Any]:
+    market_payload = build_city_market_scan_payload(
+        data,
+        market_slug=market_slug,
+        target_date=target_date,
+    )
+    market_scan = market_payload.get("market_scan")
     return {
         "city": data.get("name"),
         "fetched_at": data.get("updated_at"),
@@ -124,7 +200,7 @@ def build_city_detail_payload(
         or _build_intraday_meteorology(data),
         "vertical_profile_signal": data.get("vertical_profile_signal") or {},
         "taf": data.get("taf") or {},
-        "market_scan": {"available": False},
+        "market_scan": market_scan,
         "risk": data.get("risk"),
         "settlement_station": data.get("settlement_station") or {},
         "airport_primary": data.get("airport_primary") or {},

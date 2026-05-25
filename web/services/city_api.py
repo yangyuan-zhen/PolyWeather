@@ -222,4 +222,10 @@ async def get_city_market_scan_payload(
             )
             if cached_scan is not None:
                 return cached_scan
-    return {"market_scan": {"available": False}, "selected_date": target_date or str(data.get("local_date", "")), "fetched_at": data.get("updated_at")}
+    return await run_in_threadpool(
+        legacy_routes._build_city_market_scan_payload,
+        data,
+        market_slug,
+        target_date,
+        lite,
+    )
