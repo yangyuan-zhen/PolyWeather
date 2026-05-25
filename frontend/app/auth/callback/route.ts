@@ -27,9 +27,8 @@ export async function GET(request: NextRequest) {
   }
 
   const nextPath = normalizeNextPath(request.nextUrl.searchParams.get("next"));
-  const redirectUrl = request.nextUrl.clone();
-  redirectUrl.pathname = nextPath;
-  redirectUrl.search = "";
+  const baseUrl = siteUrl || request.nextUrl.origin;
+  const redirectUrl = new URL(nextPath, baseUrl);
 
   if (!hasSupabaseServerEnv()) {
     return NextResponse.redirect(redirectUrl);
