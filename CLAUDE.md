@@ -26,7 +26,7 @@ cd frontend
 npm run dev          # dev server :3000
 npm run build        # production build
 npm run typecheck    # tsc --noEmit
-npm run test:business  # 21 business state tests
+npm run test:business  # 19 business state tests
 
 # Backend
 uvicorn web.app:app --reload --host 0.0.0.0 --port 8000
@@ -75,10 +75,8 @@ Users → Next.js (Vercel) → FastAPI :8000 (VPS)
 - `CityRegionList` — city list panel (left top)
 - `CityContractDetail` — contract table panel (left bottom)
 - `LiveTemperatureThresholdChart` — temperature trend + market thresholds (right)
-- `TrainingDashboard` — DEB + Mu accuracy charts (sidebar tab)
-- `MarketOverviewView` — regional heat + top opportunities (sidebar tab)
-- `GroupedMarketTable` — contract comparison table
-- `continent-grouping.ts` — 7 trading regions, city-to-region mapping, timezone detection
+- `TrainingDashboard` — DEB + Mu accuracy charts (sidebar "训练数据" tab)
+- `continent-grouping.ts` — 7 trading regions (`TRADING_REGIONS`), city-to-region fallback (`CITY_REGION_FALLBACK`), timezone detection (`detectLocalRegion`)
 
 ### Account Module
 
@@ -113,19 +111,37 @@ Local dev bypass: set `NEXT_PUBLIC_POLYWEATHER_LOCAL_FULL_ACCESS=false` to test 
 
 ## Polymarket Integration
 
-Price pipeline:
+Price pipeline (WS-only, no REST fallback):
 ```
-Gamma API (slug discovery) → CLOB REST + WS cache → market_scan → terminal rows
+Gamma API (slug discovery) → WS subscribe + cache → market_scan → terminal rows
 ```
 
-- `resolve_city_clob_tokens()` — timezone-aware market discovery
-- `collect_all_clob_token_ids()` — all YES/NO tokens for WS subscription
-- `PolymarketWsQuoteCache` — WebSocket quote cache (daemon thread)
-- Prices flow to terminal via `**row` spread in `_build_terminal_row`
+- `PolymarketWsQuoteCache` — daemon thread connects `wss://ws-subscriptions-clob.polymarket.com/ws/market`
+- `_batch_get_token_market_data()` — subscribes all missing tokens, waits 0.6s for WS quotes, returns from cache
+- `_get_token_market_data()` — WS-only, returns `{}` on miss (no REST fallback)
+- Gamma market fallback used when WS prices unavailable (bestBid/bestAsk from event payload)
+- Enable with `POLYMARKET_WS_PRICE_ENABLED=true` (default: true)
+- `skip_polymarket=true` query param skips price fetching entirely for fast city/weather loads
 
 ## Trading Regions
 
 7 regions: east_asia, southeast_asia, central_asia, west_asia, europe_africa, south_america, north_america. Mappings in `continent-grouping.ts` (`CITY_REGION_FALLBACK` — all 50 cities hardcoded) and `scan_terminal_filters.py` (`market_region_from_tz_offset`). Default region auto-detected from browser timezone.
+
+## Scan Terminal Performance
+
+- **Region lazy-loading**: `region=east_asia` filters cities server-side before scanning (see `_market_region_from_tz_offset`)
+- **skip_polymarket mode**: `skip_polymarket=true` returns 1 row/city instantly (Live/DEB only, no market prices); full contract prices load on second pass after WS warmup
+- **DB**: SQLite WAL mode + `busy_timeout=5000` enabled in `db_manager.py` (fixes "database is locked" with parallel workers)
+- **VPS env**: `POLYWEATHER_SCAN_TERMINAL_MAX_WORKERS=2`, `POLYWEATHER_SCAN_TERMINAL_BUILD_TIMEOUT_SEC=180`
+- **Caching**: `_cache` is `LRUDict(256)` with `_CACHE_LOCK`; `_SUMMARY_CACHE` is `LRUDict(128)`; weather caches trimmed every 200 writes
+
+## Intraday Bias Correction
+
+`analysis_service.py:_analyze()` applies intraday correction after probability generation:
+- Compares current observed temp vs model hourly forecast for current hour
+- Time-of-day weight: 0.15↗0.35 pre-peak, 0.40↗0.75 during peak, 0.80 post-peak
+- Also checks if max-so-far already exceeds DEB prediction (strong upward nudge)
+- Correction capped at ±5°F / ±3°C, applied to both `deb_val` and `mu`
 
 ## Code Style
 
