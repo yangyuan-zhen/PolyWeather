@@ -948,6 +948,7 @@ def _build_airport_status_message(
     local_time: str = "",
     state: str = "",
     source_label: str = "",
+    arome_temp: Optional[float] = None,
 ) -> str:
     _AIRPORT_EN = {"seoul": "Incheon", "singapore": "Changi", "busan": "Gimhae", "tokyo": "Haneda",
                    "ankara": "Esenboğa", "helsinki": "Vantaa", "amsterdam": "Schiphol",
@@ -1122,6 +1123,13 @@ def _build_airport_status_message(
     if source_label:
         lines.append("")
         lines.append(f"📡 {source_label}")
+        if arome_temp is not None:
+            diff_str = ""
+            if display_temp is not None:
+                d = arome_temp - display_temp
+                sign = "+" if d >= 0 else ""
+                diff_str = f"（{'偏高' if d > 0 else '偏低'}{sign}{d:.1f}°）"
+            lines.append(f"🕐 AROME HD 15分钟临近预报：{arome_temp:.1f}{temp_symbol}{diff_str}")
 
     # Model summary (compact)
     models = city_weather.get("multi_model") or {}
@@ -1305,15 +1313,16 @@ def _process_airport_city(
         if not current_obs_time:
             current_obs_time = str(airport_primary.get("obs_time") or "")
     source_label = ""  # human-readable data source for Paris messages
+    arome_temp_val = None  # AROME HD temperature for display
     if city == "paris":
         airport_primary = city_weather.get("airport_primary") or {}
         if airport_primary.get("source_code") == "aeroweb":
             source_label = "AEROWEB 机场实况 · Météo-France"
         else:
-            arome_temp = _fetch_arome_temp()
-            if arome_temp is not None:
-                current_temp = arome_temp
-                city_weather.setdefault("current", {})["temp"] = arome_temp
+            arome_temp_val = _fetch_arome_temp()
+            if arome_temp_val is not None:
+                current_temp = arome_temp_val
+                city_weather.setdefault("current", {})["temp"] = arome_temp_val
                 source_label = "AROME HD 15分钟临近预报 · Météo-France"
                 if not current_obs_time:
                     current_obs_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
@@ -1360,7 +1369,7 @@ def _process_airport_city(
         or city_weather.get("local_time")
         or ""
     )
-    message = _build_airport_status_message(city, city_weather, deb_pred, obs_local, state="", source_label=source_label)
+    message = _build_airport_status_message(city, city_weather, deb_pred, obs_local, state="", source_label=source_label, arome_temp=arome_temp_val)
 
     # Send to all target chats
     sent = False
