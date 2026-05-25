@@ -13,6 +13,13 @@
 | hong kong | HKO 官方 CSV | ~1 min | data.weather.gov.hk, 4 路 CSV |
 | lau fau shan | HKO 官方 CSV | ~1 min | 同上，站号 LFS |
 | singapore | MSS 官方 API | ~1 min | api.data.gov.sg, 站号 S24 |
+| beijing | AMSC AWOS (ZBAA) | ~1 min | 中国 |
+| shanghai | AMSC AWOS (ZSPD) | ~1 min | 中国 |
+| guangzhou | AMSC AWOS (ZGGG) | ~1 min | 中国 |
+| chengdu | AMSC AWOS (ZUUU) | ~1 min | 中国 |
+| chongqing | AMSC AWOS (ZUCK) | ~1 min | 中国 |
+| wuhan | AMSC AWOS (ZHHH) | ~1 min | 中国 |
+| qingdao | AMSC AWOS (ZSQD) | ~1 min | 中国 |
 
 ### Tier 2 — 5 分钟高频 (MADIS)
 
@@ -34,13 +41,6 @@
 
 | 城市 | 来源 | 频率 | 国家/地区 |
 |------|------|------|------|
-| beijing | AMSC AWOS (ZBAA) | 准实时 | 中国 |
-| shanghai | AMSC AWOS (ZSPD) | 准实时 | 中国 |
-| guangzhou | AMSC AWOS (ZGGG) | 准实时 | 中国 |
-| chengdu | AMSC AWOS (ZUUU) | 准实时 | 中国 |
-| chongqing | AMSC AWOS (ZUCK) | 准实时 | 中国 |
-| wuhan | AMSC AWOS (ZHHH) | 准实时 | 中国 |
-| qingdao | AMSC AWOS (ZSQD) | 准实时 | 中国 |
 | tokyo | JMA AMeDAS (44166) | 10 min | 日本 |
 | ankara | MGM (17128) | 5-15 min | 土耳其 |
 | istanbul | MGM (17058) | 5-15 min | 土耳其 |
@@ -48,7 +48,6 @@
 | amsterdam | KNMI 数据平台 | 10 min | 荷兰 |
 | taipei | CWA 开放数据 (466920) | ~10 min | 台湾 |
 | tel aviv | IMS Lod (225) | 实时 | 以色列 |
-| jeddah | NCM 官方 | 实时 | 沙特 |
 | paris | AEROWEB 实况 / AROME HD 15min | 实时/15min | 法国 |
 
 ### Tier 4 — 仅 METAR（10 分钟缓存）
@@ -56,6 +55,7 @@
 | 城市 | ICAO | 备注 |
 |------|------|------|
 | london | EGLC | Met Office 仅 1 小时更新 |
+| jeddah | OEJN | NCM 数据源目前不可用 |
 | moscow | UUWW | 俄罗斯 METAR 集群 + NOAA WRH 结算 |
 | shenzhen | ZGSZ | 唯一无 AMSC AWOS 的中国城市 |
 | munich | EDDM | DWD 延迟约 1 小时 |
