@@ -9,6 +9,13 @@ services:
     <<: *polyweather-base
     container_name: polyweather_bot
     restart: unless-stopped
+    cpus: "${POLYWEATHER_BOT_CPUS:-0.75}"
+    mem_limit: "${POLYWEATHER_BOT_MEM_LIMIT:-768m}"
+    memswap_limit: "${POLYWEATHER_BOT_MEMSWAP_LIMIT:-1g}"
+    pids_limit: 256
+    environment:
+      TELEGRAM_AIRPORT_PUSH_INTERVAL_SEC: "${POLYWEATHER_BOT_AIRPORT_PUSH_INTERVAL_SEC:-180}"
+      TELEGRAM_AIRPORT_PUSH_MAX_WORKERS: "${POLYWEATHER_BOT_AIRPORT_PUSH_MAX_WORKERS:-1}"
     volumes:
       - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/var/lib/polyweather
       - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/app/data
@@ -36,4 +43,3 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-
