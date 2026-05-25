@@ -268,7 +268,7 @@ async function getTerminal({
     time_range: "today",
     limit: "180",
     force_refresh: String(forceRefresh),
-    skip_polymarket: "false",
+    skip_polymarket: "true",
   });
   if (tradingRegion && tradingRegion !== "all") {
     params.set("trading_region", tradingRegion);

@@ -247,6 +247,41 @@ function CityContractDetail({
     () => (selectedCity ? rows.filter((r) => String(r.city || "").toLowerCase() === selectedCity) : []),
     [rows, selectedCity],
   );
+  const [priceMap, setPriceMap] = useState<Record<string, { midpoint: number; ask: number; bid: number }> | null>(null);
+
+  useEffect(() => {
+    setPriceMap(null);
+    if (!selectedCity) return;
+    let cancelled = false;
+    const cityName = cityRows[0]?.city_display_name || selectedCity;
+    fetch(`/api/city/${encodeURIComponent(cityName)}/market-scan?lite=true`, {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    })
+      .then(async (res) => { if (!res.ok) return null; return res.json(); })
+      .then((json: any) => {
+        if (cancelled || !json?.market_scan?.scan_rows) return;
+        const map: Record<string, { midpoint: number; ask: number; bid: number }> = {};
+        for (const r of json.market_scan.scan_rows) {
+          const key = r.id || r.market_slug || "";
+          if (key && (r.midpoint != null || r.ask != null || r.bid != null)) {
+            map[key] = { midpoint: r.midpoint, ask: r.ask, bid: r.bid };
+          }
+        }
+        setPriceMap(map);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [selectedCity, cityRows]);
+
+  const pricedRows = useMemo(() => {
+    if (!priceMap) return cityRows;
+    return cityRows.map((r) => {
+      const prices = priceMap[r.id || r.market_slug || ""];
+      if (!prices) return r;
+      return { ...r, ...prices };
+    });
+  }, [cityRows, priceMap]);
 
   return (
     <Panel title={isEn ? "Contracts" : "合约"} className="flex-1 min-h-0">
@@ -259,7 +294,7 @@ function CityContractDetail({
           {isEn ? "No contracts for this city" : "该城市暂无合约"}
         </div>
       ) : (
-        <KoyfinRowsTable compact isEn={isEn} onSelect={onSelect} rows={cityRows} selectedId={selectedId} />
+        <KoyfinRowsTable compact isEn={isEn} onSelect={onSelect} rows={pricedRows} selectedId={selectedId} />
       )}
     </Panel>
   );
