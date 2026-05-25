@@ -1,12 +1,45 @@
-#!/bin/bash
-set -e
-VPS="root@38.54.27.70"
-PROJECT="/root/PolyWeather"
+#!/usr/bin/env bash
+set -euo pipefail
 
-echo "🚀 Deploying to $VPS..."
+GHCR_PAT="$1"
+NEW_TAG="${2:-latest}"
+TAG_FILE="/var/lib/polyweather/.current_tag"
+COMPOSE_DIR="/root/PolyWeather"
 
-ssh "$VPS" "cd $PROJECT && git pull && docker compose up -d --build"
+echo "$GHCR_PAT" | docker login ghcr.io -u yangyuan-zhen --password-stdin
 
-echo "✅ Deploy complete. Checking health..."
-sleep 8
-ssh "$VPS" "curl -s http://localhost:8000/healthz"
+cd "$COMPOSE_DIR"
+git fetch origin main && git reset --hard origin/main
+
+PREVIOUS_TAG=""
+if [ -f "$TAG_FILE" ]; then
+    PREVIOUS_TAG=$(cat "$TAG_FILE")
+    echo "Previous tag: $PREVIOUS_TAG"
+fi
+
+export IMAGE_TAG="$NEW_TAG"
+docker compose pull
+docker compose up -d
+sleep 5
+
+FAILED=0
+curl -fsSo /dev/null --max-time 10 "https://api.polyweather.top/healthz" && echo "✅ healthz" || { echo "❌ healthz"; FAILED=1; }
+curl -fsSo /dev/null --max-time 10 "https://api.polyweather.top/api/scan/terminal?limit=1" && echo "✅ scan" || { echo "❌ scan"; FAILED=1; }
+curl -fsSo /dev/null --max-time 10 "https://www.polyweather.top/" && echo "✅ frontend" || { echo "❌ frontend"; FAILED=1; }
+
+if [ "$FAILED" = "1" ]; then
+    echo "❌ Smoke tests failed. Rolling back..."
+    if [ -n "$PREVIOUS_TAG" ]; then
+        export IMAGE_TAG="$PREVIOUS_TAG"
+        docker compose pull
+        docker compose up -d
+        echo "✅ Rolled back to $PREVIOUS_TAG"
+    else
+        echo "⚠️  No previous tag to rollback to"
+    fi
+    exit 1
+fi
+
+mkdir -p "$(dirname "$TAG_FILE")"
+echo "$NEW_TAG" > "$TAG_FILE"
+echo "✅ Deployed $NEW_TAG"

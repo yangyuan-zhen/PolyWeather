@@ -51,9 +51,6 @@ jobs:
       - name: Business state tests
         run: npm run test:business
 
-      - name: Build
-        run: npm run build
-
   build-and-push:
     needs: [python-quality, frontend-quality]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -105,17 +102,15 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Deploy to VPS
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          scp -o StrictHostKeyChecking=accept-new deploy.sh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/deploy.sh
           ssh -o StrictHostKeyChecking=accept-new ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
-            echo '${{ secrets.GHCR_PAT }}' | docker login ghcr.io -u yangyuan-zhen --password-stdin
-            cd /root/PolyWeather
-            git fetch origin main && git reset --hard origin/main
-            docker compose pull
-            docker compose up -d
-            sleep 10
-            curl -s http://localhost:8000/healthz
+            bash /tmp/deploy.sh '${{ secrets.GHCR_PAT }}' '${{ github.sha }}'
           "

@@ -17,7 +17,7 @@ services:
       - import sqlite3; c=sqlite3.connect('/var/lib/polyweather/polyweather.db');
         c.execute('SELECT 1'); c.close()
       timeout: 10s
-    image: ghcr.io/yangyuan-zhen/polyweather-backend:latest
+    image: ghcr.io/yangyuan-zhen/polyweather-backend:${IMAGE_TAG:-latest}
     mem_limit: ${POLYWEATHER_BOT_MEM_LIMIT:-768m}
     memswap_limit: ${POLYWEATHER_BOT_MEMSWAP_LIMIT:-1g}
     pids_limit: 256
@@ -47,7 +47,7 @@ services:
       - -qO-
       - http://localhost:3000
       timeout: 5s
-    image: ghcr.io/yangyuan-zhen/polyweather-frontend:latest
+    image: ghcr.io/yangyuan-zhen/polyweather-frontend:${IMAGE_TAG:-latest}
     ports:
     - 3001:3000
     restart: unless-stopped
@@ -64,7 +64,7 @@ services:
       - -c
       - from urllib.request import urlopen; urlopen('http://localhost:8000/healthz')
       timeout: 5s
-    image: ghcr.io/yangyuan-zhen/polyweather-backend:latest
+    image: ghcr.io/yangyuan-zhen/polyweather-backend:${IMAGE_TAG:-latest}
     ports:
     - 8000:8000
     restart: unless-stopped
@@ -74,4 +74,4 @@ services:
     - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/app/data
 x-polyweather-base:
   env_file: *id001
-  image: ghcr.io/yangyuan-zhen/polyweather-backend:latest
+  image: ghcr.io/yangyuan-zhen/polyweather-backend:${IMAGE_TAG:-latest}
