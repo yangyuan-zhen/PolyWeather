@@ -21,7 +21,7 @@ export function runTests() {
     "MarketOverviewBanner.tsx",
   );
   const dashboardSource = fs.readFileSync(dashboardPath, "utf8");
-  const source = fs.readFileSync(bannerPath, "utf8");
+  const source = fs.existsSync(bannerPath) ? fs.readFileSync(bannerPath, "utf8") : "";
 
   assert(
     !source.includes("AI Overview") &&

@@ -9,11 +9,9 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from src.utils.refresh_policy import MARKET_OVERVIEW_TTL_SEC
-
 _OVERVIEW_CACHE: Dict[str, Dict[str, Any]] = {}
 _OVERVIEW_CACHE_LOCK = threading.Lock()
-OVERVIEW_CACHE_TTL_SEC = MARKET_OVERVIEW_TTL_SEC
+OVERVIEW_CACHE_TTL_SEC = 600
 
 
 def _safe_float(value: Any) -> Optional[float]:

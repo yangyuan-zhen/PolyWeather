@@ -7,7 +7,6 @@ from typing import Any, Dict
 from fastapi import HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 
-from web.services.market_overview_api import build_market_overview_payload
 import web.routes as legacy_routes
 
 
