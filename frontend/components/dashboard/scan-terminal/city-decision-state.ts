@@ -1,16 +1,9 @@
-import type {
-  AiCityForecastPayload,
-  AiCityForecastState,
-} from "@/components/dashboard/scan-terminal/types";
-
 export type CityDecisionUrgency = "now" | "soon" | "later" | "past";
 export type CityDecisionRecommendation = "watch" | "wait" | "avoid" | "background";
 export type CityDecisionEvidenceQuality = "fresh" | "mixed" | "stale";
 export type CityDecisionAiStatus =
   | "fast-ready"
-  | "deepseek-loading"
-  | "complete"
-  | "fallback";
+  | "ready";
 export type StatusBadgeTone = "green" | "blue" | "amber" | "red" | "muted";
 
 export type StatusBadge = {
@@ -38,50 +31,7 @@ function uniqueStatusBadges(badges: Array<StatusBadge | null | undefined>) {
   });
 }
 
-function resolveAiStatus({
-  aiCityForecast,
-  aiForecast,
-  aiRuleEvidenceMode,
-}: {
-  aiCityForecast: AiCityForecastPayload["city_forecast"] | null;
-  aiForecast: AiCityForecastState;
-  aiRuleEvidenceMode: boolean;
-}): CityDecisionAiStatus {
-  if (aiRuleEvidenceMode || aiForecast.status === "failed") return "fallback";
-  if (aiForecast.status === "loading") return "deepseek-loading";
-  if (aiForecast.status === "ready" && aiCityForecast) return "complete";
-  return "fast-ready";
-}
-
-function resolveAiStatusView(aiStatus: CityDecisionAiStatus, isEn: boolean) {
-  if (aiStatus === "deepseek-loading") {
-    return {
-      label: isEn ? "Fast read ready" : "快速判断已完成",
-      tone: "blue" as const,
-    };
-  }
-  if (aiStatus === "complete") {
-    return {
-      label: isEn ? "AI read complete" : "AI 解读已完成",
-      tone: "green" as const,
-    };
-  }
-  if (aiStatus === "fallback") {
-    return {
-      label: isEn ? "Rule evidence" : "规则证据模式",
-      tone: "amber" as const,
-    };
-  }
-  return {
-    label: isEn ? "AI pending" : "AI 待返回",
-    tone: "muted" as const,
-  };
-}
-
 export function buildCityDecisionState({
-  aiCityForecast,
-  aiForecast,
-  aiRuleEvidenceMode,
   isEn,
   isHkoObservation,
   modelHighlyConsistent,
@@ -92,9 +42,6 @@ export function buildCityDecisionState({
   observedLowLag,
   peakHasPassed,
 }: {
-  aiCityForecast: AiCityForecastPayload["city_forecast"] | null;
-  aiForecast: AiCityForecastState;
-  aiRuleEvidenceMode: boolean;
   isEn: boolean;
   isHkoObservation: boolean;
   modelHighlyConsistent: boolean;
@@ -105,13 +52,9 @@ export function buildCityDecisionState({
   observedLowLag: boolean;
   peakHasPassed: boolean;
 }): CityDecisionState {
-  const aiStatus = resolveAiStatus({ aiCityForecast, aiForecast, aiRuleEvidenceMode });
-  const aiStatusView = resolveAiStatusView(aiStatus, isEn);
   const evidenceQuality: CityDecisionEvidenceQuality = observationStale
     ? "stale"
-    : aiStatus === "fallback"
-      ? "mixed"
-      : "fresh";
+    : "fresh";
   const urgency: CityDecisionUrgency = peakHasPassed
     ? "past"
     : observedHighBreak
@@ -181,12 +124,6 @@ export function buildCityDecisionState({
           tone: "blue",
         }
       : null,
-    aiStatus === "deepseek-loading"
-      ? {
-          label: isEn ? "Fast read ready" : "快速判断已完成",
-          tone: aiStatusView.tone,
-        }
-      : null,
     modelHighlyConsistent
       ? {
           label: isEn ? "Models agree" : "模型高度一致",
@@ -205,9 +142,9 @@ export function buildCityDecisionState({
     urgency,
     recommendation,
     evidenceQuality,
-    aiStatus,
-    aiStatusLabel: aiStatusView.label,
-    aiStatusTone: aiStatusView.tone,
+    aiStatus: "ready",
+    aiStatusLabel: isEn ? "AI ready" : "AI 就绪",
+    aiStatusTone: "blue",
     badges,
     primaryReason,
   };

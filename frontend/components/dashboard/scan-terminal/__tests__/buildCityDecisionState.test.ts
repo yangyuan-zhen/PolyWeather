@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { buildCityDecisionState } from "@/components/dashboard/scan-terminal/city-decision-state";
 import type { MarketDecisionView } from "@/components/dashboard/scan-terminal/city-card-decision-utils";
-import type { AiCityForecastState } from "@/components/dashboard/scan-terminal/types";
 
 function market(status: MarketDecisionView["status"]): MarketDecisionView {
   return {
@@ -18,15 +17,8 @@ function market(status: MarketDecisionView["status"]): MarketDecisionView {
   };
 }
 
-function ai(status: AiCityForecastState["status"], extra: Partial<AiCityForecastState> = {}): AiCityForecastState {
-  return { status, ...extra };
-}
-
 export function runTests() {
   const breakout = buildCityDecisionState({
-    aiCityForecast: null,
-    aiForecast: ai("ready"),
-    aiRuleEvidenceMode: false,
     isEn: false,
     isHkoObservation: false,
     modelHighlyConsistent: true,
@@ -45,9 +37,6 @@ export function runTests() {
   assert.ok(breakout.badges.some((badge) => badge.label === "实测突破"));
 
   const marketUnavailable = buildCityDecisionState({
-    aiCityForecast: null,
-    aiForecast: ai("ready"),
-    aiRuleEvidenceMode: false,
     isEn: false,
     isHkoObservation: false,
     modelHighlyConsistent: false,
@@ -61,9 +50,6 @@ export function runTests() {
 
 
   const fallback = buildCityDecisionState({
-    aiCityForecast: null,
-    aiForecast: ai("ready", { payload: { degraded: true } }),
-    aiRuleEvidenceMode: true,
     isEn: false,
     isHkoObservation: false,
     modelHighlyConsistent: false,
@@ -75,14 +61,9 @@ export function runTests() {
     peakHasPassed: false,
   });
 
-  assert.equal(fallback.aiStatus, "fallback");
-  assert.equal(fallback.aiStatusLabel, "规则证据模式");
-  assert.notEqual(fallback.aiStatusLabel, "AI 解读已完成");
+  assert.equal(fallback.recommendation, "watch");
 
   const partialStream = buildCityDecisionState({
-    aiCityForecast: null,
-    aiForecast: ai("loading", { streamText: "partial" }),
-    aiRuleEvidenceMode: false,
     isEn: false,
     isHkoObservation: false,
     modelHighlyConsistent: false,
@@ -94,6 +75,6 @@ export function runTests() {
     peakHasPassed: false,
   });
 
-  assert.equal(partialStream.aiStatus, "deepseek-loading");
-  assert.equal(partialStream.aiStatusLabel, "快速判断已完成");
+  assert.equal(partialStream.urgency, "soon");
+  assert.equal(partialStream.recommendation, "wait");
 }

@@ -17,9 +17,6 @@ const readyMarket: MarketDecisionView = {
 
 export function runTests() {
   const peakPassed = buildCityDecisionState({
-    aiCityForecast: null,
-    aiForecast: { status: "ready" },
-    aiRuleEvidenceMode: false,
     isEn: false,
     isHkoObservation: false,
     modelHighlyConsistent: true,
@@ -41,9 +38,6 @@ export function runTests() {
   );
 
   const staleMetar = buildCityDecisionState({
-    aiCityForecast: null,
-    aiForecast: { status: "ready" },
-    aiRuleEvidenceMode: false,
     isEn: false,
     isHkoObservation: false,
     modelHighlyConsistent: false,

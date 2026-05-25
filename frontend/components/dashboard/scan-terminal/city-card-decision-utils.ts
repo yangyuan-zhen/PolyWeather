@@ -4,7 +4,6 @@ import {
   formatTemperatureValue,
   normalizeTemperatureLabel,
 } from "@/lib/temperature-utils";
-import type { AiCityForecastPayload } from "@/components/dashboard/scan-terminal/types";
 
 export type WeatherDecisionView = {
   action: string;
@@ -476,7 +475,6 @@ export function buildMarketDecisionView({
 }
 
 export function buildWeatherDecisionView({
-  aiCityForecast,
   currentTemp,
   deb,
   isEn,
@@ -489,7 +487,6 @@ export function buildWeatherDecisionView({
   peakWindow,
   tempSymbol,
 }: {
-  aiCityForecast: AiCityForecastPayload["city_forecast"] | null;
   currentTemp: number | null;
   deb: number | null;
   isEn: boolean;
@@ -503,35 +500,26 @@ export function buildWeatherDecisionView({
   tempSymbol: string;
 }): WeatherDecisionView {
   const center = resolveExpectedHighCandidate({
-    aiPredictedMax: aiCityForecast?.predicted_max,
     currentTemp,
     deb,
     modelMax,
     modelMin,
     paceAdjustedHigh: paceView?.paceAdjustedHigh ?? null,
   });
-  const aiLow = toFiniteMarketNumber(aiCityForecast?.range_low);
-  const aiHigh = toFiniteMarketNumber(aiCityForecast?.range_high);
-  const low = aiLow != null
-    ? aiLow
-    : modelMin != null
-      ? modelMin
-      : center != null
-        ? center - 1
-        : null;
-  const high = aiHigh != null
-    ? aiHigh
-    : modelMax != null
-      ? modelMax
-      : center != null
-        ? center + 1
-        : null;
+  const low = modelMin != null
+    ? modelMin
+    : center != null
+      ? center - 1
+      : null;
+  const high = modelMax != null
+    ? modelMax
+    : center != null
+      ? center + 1
+      : null;
   const spread = modelMax != null && modelMin != null ? modelMax - modelMin : null;
   const modelCount = modelEntries.length;
-  const aiConfidence = String(aiCityForecast?.confidence || "").trim();
   const confidence =
-    aiConfidence ||
-    (modelCount >= 4 && spread != null && spread <= 2
+    modelCount >= 4 && spread != null && spread <= 2
       ? isEn
         ? "High"
         : "高"
@@ -541,7 +529,7 @@ export function buildWeatherDecisionView({
           : "中"
         : isEn
           ? "Low"
-          : "低");
+          : "低";
   const tone =
     modelCount <= 1
       ? "watch"

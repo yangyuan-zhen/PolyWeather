@@ -649,18 +649,6 @@ export interface ScanOpportunityRow {
 
 export interface PrimarySignal extends ScanOpportunityRow {}
 
-export interface ScanAiCityThesis {
-  city: string;
-  thesis_zh?: string | null;
-  thesis_en?: string | null;
-  summary_zh?: string | null;
-  summary_en?: string | null;
-  model_cluster_note?: string | null;
-  confidence?: string | null;
-  recommended_row_ids?: string[] | null;
-  vetoed_row_ids?: string[] | null;
-}
-
 export interface ScanAiWatchlistItem {
   row_id: string;
   reason?: string | null;
@@ -695,7 +683,6 @@ export interface ScanAiReview {
   reason?: string | null;
   summary_zh?: string | null;
   summary_en?: string | null;
-  city_theses?: ScanAiCityThesis[] | null;
   watchlist?: ScanAiWatchlistItem[] | null;
   recommended_count?: number | null;
   vetoed_count?: number | null;
