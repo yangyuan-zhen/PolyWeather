@@ -739,7 +739,7 @@ export function LiveTemperatureThresholdChart({
       return;
     }
     let cancelled = false;
-    fetch(`/api/city/${encodeURIComponent(city)}/detail?depth=panel&force_refresh=false`, {
+    fetch(`/api/city/${encodeURIComponent(city)}/detail?depth=full&force_refresh=false`, {
       cache: "no-store",
       headers: { Accept: "application/json" },
     })
