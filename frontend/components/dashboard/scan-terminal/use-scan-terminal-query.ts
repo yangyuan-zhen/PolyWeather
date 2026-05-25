@@ -13,10 +13,12 @@ import type { ScanTerminalResponse } from "@/lib/dashboard-types";
 export function useScanTerminalQuery({
   isPro,
   proAccessLoading,
+  timezoneOffsetSeconds,
   tradingRegion,
 }: {
   isPro: boolean;
   proAccessLoading: boolean;
+  timezoneOffsetSeconds?: number | null;
   tradingRegion?: string;
 }) {
   const {
@@ -50,12 +52,13 @@ export function useScanTerminalQuery({
           scanTerminalClient.getTerminal({
             forceRefresh,
             signal,
+            timezoneOffsetSeconds,
             tradingRegion,
           }),
         showLoading,
       });
     },
-    [isPro, proAccessLoading, run, tradingRegion],
+    [isPro, proAccessLoading, run, timezoneOffsetSeconds, tradingRegion],
   );
 
   useEffect(() => {
@@ -65,7 +68,7 @@ export function useScanTerminalQuery({
       return;
     }
     void fetchScanTerminal({ forceRefresh: false, showLoading: true });
-  }, [fetchScanTerminal, isPro, proAccessLoading, reset, tradingRegion]);
+  }, [fetchScanTerminal, isPro, proAccessLoading, reset, timezoneOffsetSeconds, tradingRegion]);
 
   const refreshScanTerminalManually = useCallback(() => {
     if (

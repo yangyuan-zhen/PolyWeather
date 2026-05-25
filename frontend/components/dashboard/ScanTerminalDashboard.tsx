@@ -672,6 +672,8 @@ function ScanTerminalScreen() {
   const userLocalTime = useUserLocalClock();
   const { themeMode } = useScanTerminalTheme();
   const [selectedRegionKey, setSelectedRegionKey] = useState<string>("east_asia");
+  const [localTimezoneOffsetSeconds, setLocalTimezoneOffsetSeconds] = useState<number | null>(null);
+  const [useLocalTimezoneDefault, setUseLocalTimezoneDefault] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -743,12 +745,19 @@ function ScanTerminalScreen() {
 
   useEffect(() => {
     setSelectedRegionKey(detectLocalRegion());
+    setLocalTimezoneOffsetSeconds(-new Date().getTimezoneOffset() * 60);
+  }, []);
+
+  const selectRegionManually = useCallback((key: string) => {
+    setUseLocalTimezoneDefault(false);
+    setSelectedRegionKey(key);
   }, []);
 
   const { refreshScanTerminalManually, scanLoading, terminalData } =
     useScanTerminalQuery({
       isPro,
       proAccessLoading: !hydrated || (proAccess.loading && !canUseLocalFullAccess),
+      timezoneOffsetSeconds: useLocalTimezoneDefault ? localTimezoneOffsetSeconds : null,
       tradingRegion: selectedRegionKey,
     });
   const rows = useMemo(
@@ -831,7 +840,7 @@ function ScanTerminalScreen() {
       selectedCity={selectedCity}
       setSelectedCity={setSelectedCity}
       selectedRegionKey={selectedRegionKey}
-      setSelectedRegionKey={setSelectedRegionKey}
+      setSelectedRegionKey={selectRegionManually}
     />
   );
 }

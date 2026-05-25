@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 import time as _time
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -43,8 +42,15 @@ from web.services.analysis_utils import (
     add_signal as _add_signal,
     bucket_label as _bucket_label,
     bucket_label_from_value as _bucket_label_from_value,
+    dedupe_forecast_daily as _dedupe_forecast_daily,
     format_clock_minutes as _format_clock_minutes,
+    format_observation_time_local as _format_observation_time_local,
+    is_plausible_city_temp as _is_plausible_city_temp,
+    metar_is_current_local_day as _metar_is_current_local_day,
+    mgm_hourly_high as _mgm_hourly_high,
     next_observation_clock as _next_observation_clock,
+    parse_local_hour as _parse_local_hour,
+    parse_utc_datetime as _parse_utc_datetime,
     top_probability_bucket as _top_probability_bucket,
 )
 from web.services.analysis_signals import (
@@ -78,128 +84,6 @@ HIGH_FREQ_AIRPORT_ANALYSIS_CITIES = {
     "chongqing",
     "wuhan",
 }
-
-
-def _mgm_hourly_high(mgm: Dict[str, Any]) -> Optional[float]:
-    hourly = mgm.get("hourly") if isinstance(mgm, dict) else []
-    if not isinstance(hourly, list):
-        return None
-    values = []
-    for row in hourly:
-        if not isinstance(row, dict):
-            continue
-        value = _sf(row.get("temp"))
-        if value is not None:
-            values.append(value)
-    return max(values) if values else None
-_ANALYSIS_CACHE_STATS_LOCK = threading.Lock()
-_ANALYSIS_CACHE_STATS: Dict[str, Any] = {
-    "total_requests": 0,
-    "cache_hits": 0,
-    "cache_misses": 0,
-    "force_refresh_requests": 0,
-    "last_cache_hit_at": None,
-    "last_cache_miss_at": None,
-    "last_city": None,
-}
-_SUMMARY_CACHE_LOCK = threading.Lock()
-_SUMMARY_CACHE_MAXSIZE = 128
-_SUMMARY_CACHE = LRUDict(maxsize=_SUMMARY_CACHE_MAXSIZE)
-def _dedupe_forecast_daily(rows: Any) -> list[Dict[str, Any]]:
-    if not isinstance(rows, list):
-        return []
-    seen = set()
-    out = []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        date = str(row.get("date") or "").strip()
-        if not date or date in seen:
-            continue
-        seen.add(date)
-        out.append(row)
-    return out
-
-
-def _format_observation_time_local(value: Any, utc_offset: int) -> str:
-    raw = str(value or "").strip()
-    if not raw:
-        return ""
-    if "T" in raw:
-        try:
-            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            return dt.astimezone(timezone(timedelta(seconds=utc_offset))).strftime("%H:%M")
-        except Exception:
-            pass
-    match = re.search(r"(\d{1,2}):(\d{2})", raw)
-    if match:
-        return f"{int(match.group(1)):02d}:{match.group(2)}"
-    return raw[:16]
-
-
-def _fetch_nmc_current_fallback(city: str, *, use_fahrenheit: bool) -> Dict[str, Any]:
-    return {}
-
-
-def _is_plausible_city_temp(city: str, value: Any, unit: str = "°C") -> bool:
-    temp = _sf(value)
-    if temp is None:
-        return False
-    meta = CITY_REGISTRY.get(str(city or "").strip().lower(), {}) or {}
-    min_c = _sf(meta.get("min_plausible_metar_temp_c"))
-    if min_c is None:
-        return True
-    min_value = min_c * 9 / 5 + 32 if str(unit or "").upper().endswith("F") else min_c
-    return temp >= min_value
-
-
-def _parse_local_hour(local_time_str: Optional[str]) -> Optional[int]:
-    if not local_time_str:
-        return None
-    try:
-        parts = str(local_time_str).strip().split(":")
-        hour = int(parts[0])
-        if 0 <= hour <= 23:
-            return hour
-    except Exception:
-        pass
-    return None
-
-
-def _parse_utc_datetime(value: Any) -> Optional[datetime]:
-    raw = str(value or "").strip()
-    if not raw or "T" not in raw:
-        return None
-    try:
-        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-    except Exception:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
-
-
-def _metar_is_current_local_day(
-    metar: Dict[str, Any],
-    *,
-    local_date: str,
-    utc_offset: int,
-) -> bool:
-    if not isinstance(metar, dict) or not metar:
-        return False
-    if metar.get("stale_for_today") is True:
-        return False
-    observation_local_date = str(metar.get("observation_local_date") or "").strip()
-    if observation_local_date:
-        return observation_local_date == local_date
-    obs_dt = _parse_utc_datetime(metar.get("observation_time"))
-    if obs_dt is None:
-        return True
-    local_dt = obs_dt.astimezone(timezone(timedelta(seconds=utc_offset)))
-    return local_dt.strftime("%Y-%m-%d") == local_date
-
 
 def _record_analysis_cache_event(*, city: str, hit: bool, force_refresh: bool) -> None:
     now = datetime.now(timezone.utc).isoformat()

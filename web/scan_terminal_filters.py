@@ -54,6 +54,8 @@ def normalize_scan_terminal_filters(
     trading_region = str(raw.get("trading_region") or "").strip().lower()
     if trading_region and trading_region not in ("all", ""):
         result["trading_region"] = trading_region
+    if raw.get("timezone_offset_seconds") is not None:
+        result["timezone_offset_seconds"] = safe_int(raw.get("timezone_offset_seconds"), 0)
     return result
 
 

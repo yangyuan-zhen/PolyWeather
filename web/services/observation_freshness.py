@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Optional
 
+from web.services.analysis_utils import parse_utc_datetime
 
 _OBSERVATION_SOURCE_PROFILES: Dict[str, Dict[str, Any]] = {
     "amos": {
@@ -88,19 +89,6 @@ _OBSERVATION_SOURCE_PROFILES: Dict[str, Dict[str, Any]] = {
         "stale_after_sec": 3600,
     },
 }
-
-
-def parse_utc_datetime(value: Any) -> Optional[datetime]:
-    raw = str(value or "").strip()
-    if not raw or "T" not in raw:
-        return None
-    try:
-        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-    except Exception:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
 
 
 def observation_age_min(value: Any, now_utc: Optional[datetime] = None) -> Optional[int]:

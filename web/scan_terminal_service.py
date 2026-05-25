@@ -1111,6 +1111,14 @@ def _build_scan_terminal_payload_uncached(
 
     try:
         city_names = list(CITIES.keys())
+        timezone_offset = filters.get("timezone_offset_seconds")
+        if timezone_offset is not None:
+            target_tz = int(timezone_offset)
+            city_names = [
+                city_name
+                for city_name in city_names
+                if int((CITIES.get(city_name) or {}).get("tz", 0)) == target_tz
+            ]
         region_filter = str(filters.get("trading_region") or "").strip().lower()
         if region_filter and region_filter not in ("all", ""):
             from web.scan_terminal_filters import market_region_from_tz_offset as _tz_region

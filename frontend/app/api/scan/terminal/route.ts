@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
     "limit",
     "force_refresh",
     "skip_polymarket",
+    "timezone_offset_seconds",
   ]) {
     const value = req.nextUrl.searchParams.get(key);
     if (value != null && value !== "") {
