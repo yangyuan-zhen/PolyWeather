@@ -49,7 +49,7 @@ docker compose down && docker compose up -d --build
 ```
 Users → Next.js (Vercel) → FastAPI :8000 (VPS)
          /terminal (paid gate)    Weather Collector
-         / (landing page)         Analysis (DEB + Mu + Polymarket scan)
+         / (landing page)         Analysis (DEB + Mu)
                                   Payment Layer (USDC on Polygon)
          Telegram Bot → bot_listener.py
 ```
@@ -74,7 +74,8 @@ Users → Next.js (Vercel) → FastAPI :8000 (VPS)
 - `PolyWeatherTerminal` — main layout: sidebar + region tabs + 2-column grid
 - `CityRegionList` — city list panel (left top)
 - `CityContractDetail` — contract table panel (left bottom)
-- `LiveTemperatureThresholdChart` — temperature trend + market thresholds (right)
+- `LiveTemperatureThresholdChart` — multi-source overlay: obs + DEB + model curves + thresholds
+- `RealtimeScrollChart` — lightweight realtime scrolling temperature + threshold bars
 - `TrainingDashboard` — DEB + Mu accuracy charts (sidebar "训练数据" tab)
 - `continent-grouping.ts` — 7 trading regions (`TRADING_REGIONS`), city-to-region fallback (`CITY_REGION_FALLBACK`), timezone detection (`detectLocalRegion`)
 
@@ -90,14 +91,15 @@ Users → Next.js (Vercel) → FastAPI :8000 (VPS)
 
 | Path | Purpose |
 |------|---------|
-| `web/routers/city.py` | City detail/summary/market-scan endpoints |
+| `web/routers/city.py` | City detail/summary/realtime-stream endpoints |
 | `web/routers/scan.py` | Scan terminal aggregation |
-| `web/services/city_payloads.py` | Market scan with Polymarket integration |
+| `web/services/city_payloads.py` | City detail and summary payload builders |
 | `web/scan_terminal_city_row.py` | Builds terminal rows from analysis data |
 | `src/data_collection/city_registry.py` | 50-city registry with tz_offset |
-| `src/data_collection/polymarket_readonly.py` | Market discovery, CLOB prices, WS cache |
-| `src/data_collection/polymarket_ws_cache.py` | WebSocket quote cache |
 | `src/analysis/deb_algorithm.py` | DEB prediction + Mu calibration + accuracy |
+| `web/services/analysis_utils.py` | Clock helpers, bucket labeling, time parsing |
+| `web/services/observation_freshness.py` | Source profiles and freshness computation |
+| `web/services/scan_ai_config.py` | Scan terminal and AI configuration constants |
 
 ## Auth Gating
 
