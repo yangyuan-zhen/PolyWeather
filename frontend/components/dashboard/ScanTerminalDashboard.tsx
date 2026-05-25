@@ -47,6 +47,7 @@ import { LiveTemperatureThresholdChart } from "@/components/dashboard/scan-termi
 import { KoyfinRowsTable } from "@/components/dashboard/scan-terminal/KoyfinRowsTable";
 import { rowName, pct, money, temp, edgeClass } from "@/components/dashboard/scan-terminal/utils";
 import { CitySelectorDropdown } from "@/components/dashboard/scan-terminal/CitySelectorDropdown";
+import { GridLayoutSelector } from "@/components/dashboard/scan-terminal/GridLayoutSelector";
 
 function createEmptyAccess(loading = true): ProAccessState {
   return {
@@ -357,19 +358,119 @@ function PolyWeatherTerminal({
   const [navExpanded, setNavExpanded] = useState(false);
   const [activeNavKey, setActiveNavKey] = useState<string>("contracts");
 
+  const [gridCols, setGridCols] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const val = localStorage.getItem("polyweather_terminal_grid_cols");
+        if (val) {
+          const num = parseInt(val, 10);
+          if (num >= 1 && num <= 3) return num;
+        }
+      } catch {}
+    }
+    return 2;
+  });
+
+  const [gridRows, setGridRows] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const val = localStorage.getItem("polyweather_terminal_grid_rows");
+        if (val) {
+          const num = parseInt(val, 10);
+          if (num >= 1 && num <= 3) return num;
+        }
+      } catch {}
+    }
+    return 2;
+  });
+
+  const totalSlots = gridCols * gridRows;
+
   const [slots, setSlots] = useState<Array<string | null>>(() => {
-    try {
-      const stored = localStorage.getItem("polyweather_terminal_slots");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length === 4) return parsed;
-      }
-    } catch {}
-    return [null, null, null, null];
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("polyweather_terminal_slots");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            let targetLen = 4;
+            try {
+              const cVal = localStorage.getItem("polyweather_terminal_grid_cols");
+              const rVal = localStorage.getItem("polyweather_terminal_grid_rows");
+              if (cVal && rVal) {
+                const c = parseInt(cVal, 10);
+                const r = parseInt(rVal, 10);
+                if (c >= 1 && c <= 3 && r >= 1 && r <= 3) {
+                  targetLen = c * r;
+                }
+              }
+            } catch {}
+
+            if (parsed.length === targetLen) {
+              return parsed;
+            } else if (parsed.length < targetLen) {
+              return [...parsed, ...Array(targetLen - parsed.length).fill(null)];
+            } else {
+              return parsed.slice(0, targetLen);
+            }
+          }
+        }
+      } catch {}
+    }
+    let defaultLen = 4;
+    if (typeof window !== "undefined") {
+      try {
+        const cVal = localStorage.getItem("polyweather_terminal_grid_cols");
+        const rVal = localStorage.getItem("polyweather_terminal_grid_rows");
+        if (cVal && rVal) {
+          const c = parseInt(cVal, 10);
+          const r = parseInt(rVal, 10);
+          if (c >= 1 && c <= 3 && r >= 1 && r <= 3) {
+            defaultLen = c * r;
+          }
+        }
+      } catch {}
+    }
+    return Array(defaultLen).fill(null);
   });
   const [activeSlotIndex, setActiveSlotIndex] = useState<number>(0);
   const [maximizedSlotIndex, setMaximizedSlotIndex] = useState<number | null>(null);
   const [activeSearchSlotIndex, setActiveSearchSlotIndex] = useState<number | null>(null);
+
+  const handleSetGridSize = (cols: number, rows: number) => {
+    const nextTotalSlots = cols * rows;
+    
+    setGridCols(cols);
+    setGridRows(rows);
+    
+    try {
+      localStorage.setItem("polyweather_terminal_grid_cols", String(cols));
+      localStorage.setItem("polyweather_terminal_grid_rows", String(rows));
+    } catch {}
+
+    let nextSlots = [...slots];
+    if (nextSlots.length < nextTotalSlots) {
+      const diff = nextTotalSlots - nextSlots.length;
+      nextSlots = [...nextSlots, ...Array(diff).fill(null)];
+    } else if (nextSlots.length > nextTotalSlots) {
+      nextSlots = nextSlots.slice(0, nextTotalSlots);
+    }
+    
+    setSlots(nextSlots);
+    try {
+      localStorage.setItem("polyweather_terminal_slots", JSON.stringify(nextSlots));
+    } catch {}
+
+    if (activeSlotIndex >= nextTotalSlots) {
+      setActiveSlotIndex(0);
+    }
+    if (maximizedSlotIndex !== null && maximizedSlotIndex >= nextTotalSlots) {
+      setMaximizedSlotIndex(null);
+    }
+    if (activeSearchSlotIndex !== null && activeSearchSlotIndex >= nextTotalSlots) {
+      setActiveSearchSlotIndex(null);
+    }
+  };
 
   const NAV_ITEMS = [
     { key: "contracts", Icon: Table2, labelEn: "Contracts", labelZh: "天气合约" },
@@ -390,18 +491,15 @@ function PolyWeatherTerminal({
 
   useEffect(() => {
     if (filteredRegionRows.length && slots.every((s) => s === null)) {
-      const next = [
-        filteredRegionRows[0]?.city || null,
-        filteredRegionRows[1]?.city || null,
-        filteredRegionRows[2]?.city || null,
-        filteredRegionRows[3]?.city || null,
-      ];
+      const next = Array(totalSlots)
+        .fill(null)
+        .map((_, idx) => filteredRegionRows[idx]?.city || null);
       setSlots(next);
       try {
         localStorage.setItem("polyweather_terminal_slots", JSON.stringify(next));
       } catch {}
     }
-  }, [filteredRegionRows, slots]);
+  }, [filteredRegionRows, slots, totalSlots]);
 
   const handleSelectCityForSlot = (index: number, city: string | null) => {
     const next = [...slots];
@@ -612,6 +710,14 @@ function PolyWeatherTerminal({
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <span className="hidden font-mono md:inline text-slate-500">{userLocalTime}</span>
+            <div className="hidden lg:block">
+              <GridLayoutSelector
+                isEn={isEn}
+                cols={gridCols}
+                rows={gridRows}
+                onSelectGrid={handleSetGridSize}
+              />
+            </div>
             <button
               type="button"
               onClick={toggleLocale}
@@ -743,9 +849,15 @@ function PolyWeatherTerminal({
                       )}
                     </div>
                   ) : (
-                    // 2x2 grid layout
-                    <div className="grid grid-cols-2 grid-rows-2 gap-2 h-full">
-                      {[0, 1, 2, 3].map((slotIndex) => {
+                    // Custom grid layout
+                    <div
+                      className="grid gap-2 h-full"
+                      style={{
+                        gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`,
+                        gridTemplateRows: `repeat(${gridRows}, minmax(0, 1fr))`,
+                      }}
+                    >
+                      {Array.from({ length: totalSlots }).map((_, slotIndex) => {
                         const isSlotActive = activeSlotIndex === slotIndex;
                         const cityInSlot = slots[slotIndex];
 

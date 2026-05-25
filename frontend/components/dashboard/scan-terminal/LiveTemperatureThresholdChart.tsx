@@ -842,12 +842,9 @@ export function LiveTemperatureThresholdChart({
 }) {
   const [hourly, setHourly] = useState<HourlyForecast>(null);
   const city = String(row?.city || "").toLowerCase().trim();
-  const [timeframe, setTimeframe] = useState<"1D" | "3D" | "5D" | "7D">("1D");
+  const [timeframe, setTimeframe] = useState<"1D" | "3D">("1D");
   const [hiddenSeriesKeys, setHiddenSeriesKeys] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    setHiddenSeriesKeys(new Set());
-  }, [timeframe]);
+  const [prevCityAndTf, setPrevCityAndTf] = useState({ city: "", timeframe: "" });
 
   useEffect(() => {
     if (!city) return;
@@ -892,12 +889,6 @@ export function LiveTemperatureThresholdChart({
     if (timeframe === "3D") {
       return build3DayChartData(row, hourly);
     }
-    if (timeframe === "5D") {
-      return buildDailyChartData(row, hourly, 5);
-    }
-    if (timeframe === "7D") {
-      return buildDailyChartData(row, hourly, 7);
-    }
     return buildFullDayChartData(row, hourly);
   }, [row, hourly, timeframe]);
 
@@ -911,11 +902,36 @@ export function LiveTemperatureThresholdChart({
   const settlementPlate = useMemo(() => runwayPlates.find((p) => p.isSettlement), [runwayPlates]);
 
   const chartSeries = useMemo(() => {
-    if (timeframe !== "1D") {
-      return series;
+    return series;
+  }, [series]);
+
+  useEffect(() => {
+    const currentKey = `${city}-${timeframe}`;
+    const prevKey = `${prevCityAndTf.city}-${prevCityAndTf.timeframe}`;
+    
+    if (currentKey !== prevKey) {
+      const defaults = new Set<string>();
+      // Always default all model curves to hidden across all cities and timeframes
+      series.forEach((s) => {
+        if (s.key.startsWith("model_curve_")) {
+          defaults.add(s.key);
+        }
+      });
+      setHiddenSeriesKeys(defaults);
+      setPrevCityAndTf({ city, timeframe });
+    } else {
+      setHiddenSeriesKeys((prev) => {
+        const next = new Set<string>();
+        const seriesKeys = new Set(series.map((s) => s.key));
+        prev.forEach((k) => {
+          if (seriesKeys.has(k)) {
+            next.add(k);
+          }
+        });
+        return next;
+      });
     }
-    return series.filter((item) => !hasRunwayData || !item.key.startsWith("model_curve_"));
-  }, [series, hasRunwayData, timeframe]);
+  }, [city, timeframe, series, prevCityAndTf]);
 
   const activeSeries = useMemo(() => {
     return chartSeries.filter((s) => !hiddenSeriesKeys.has(s.key));
@@ -1045,7 +1061,7 @@ export function LiveTemperatureThresholdChart({
 
   const timeframeActions = (
     <div className="flex items-center gap-1 rounded bg-[#eef2f6] p-0.5 border border-slate-200">
-      {(["1D", "3D", "5D", "7D"] as const).map((tf) => (
+      {(["1D", "3D"] as const).map((tf) => (
         <button
           key={tf}
           type="button"
@@ -1358,10 +1374,10 @@ export function LiveTemperatureThresholdChart({
                   dataKey={item.key}
                   name={item.label}
                   stroke={item.color}
-                  strokeWidth={item.featured ? 2 : 1.2}
+                  strokeWidth={item.featured ? 2.8 : 1.2}
                   strokeDasharray={item.dashed ? "4 3" : undefined}
-                  dot={timeframe === "5D" || timeframe === "7D"}
-                  activeDot={{ r: item.featured ? 5 : 4 }}
+                  dot={false}
+                  activeDot={{ r: item.featured ? 6 : 4 }}
                   connectNulls={true}
                   isAnimationActive={false}
                 />

@@ -76,7 +76,7 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
       kind: "metar",
     },
     {
-      label: "深圳流浮山站（HKO）",
+      label: "深圳站（HKO）",
       href: "https://www.hko.gov.hk/sc/wxinfo/ts/index.htm",
       kind: "agency",
     },
@@ -88,7 +88,7 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
       kind: "agency",
     },
     {
-      label: "深圳流浮山站（HKO）",
+      label: "深圳站（HKO）",
       href: "https://www.hko.gov.hk/sc/wxinfo/ts/index.htm",
       kind: "airport",
     },
