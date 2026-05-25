@@ -947,6 +947,7 @@ def _build_airport_status_message(
     deb_pred: Optional[float],
     local_time: str = "",
     state: str = "",
+    source_label: str = "",
 ) -> str:
     _AIRPORT_EN = {"seoul": "Incheon", "singapore": "Changi", "busan": "Gimhae", "tokyo": "Haneda",
                    "ankara": "Esenboğa", "helsinki": "Vantaa", "amsterdam": "Schiphol",
@@ -1117,6 +1118,10 @@ def _build_airport_status_message(
             lines.append(f"DEB：{deb_pred:.1f}{temp_symbol}（已突破 +{display_temp - deb_pred:.1f}°）")
         else:
             lines.append(f"DEB：{deb_pred:.1f}{temp_symbol}")
+
+    if source_label:
+        lines.append("")
+        lines.append(f"📡 {source_label}")
 
     # Model summary (compact)
     models = city_weather.get("multi_model") or {}
@@ -1299,14 +1304,17 @@ def _process_airport_city(
         current_temp = airport_primary.get("temp") or (city_weather.get("current") or {}).get("temp")
         if not current_obs_time:
             current_obs_time = str(airport_primary.get("obs_time") or "")
+    source_label = ""  # human-readable data source for Paris messages
     if city == "paris":
-        # AEROWEB provides real observations; prefer over AROME model nowcast
         airport_primary = city_weather.get("airport_primary") or {}
-        if airport_primary.get("source_code") != "aeroweb":
+        if airport_primary.get("source_code") == "aeroweb":
+            source_label = "AEROWEB 机场实况 · Météo-France"
+        else:
             arome_temp = _fetch_arome_temp()
             if arome_temp is not None:
                 current_temp = arome_temp
                 city_weather.setdefault("current", {})["temp"] = arome_temp
+                source_label = "AROME HD 15分钟临近预报 · Météo-France"
                 if not current_obs_time:
                     current_obs_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
     if current_temp is None or deb_pred is None:
@@ -1352,7 +1360,7 @@ def _process_airport_city(
         or city_weather.get("local_time")
         or ""
     )
-    message = _build_airport_status_message(city, city_weather, deb_pred, obs_local, state="")
+    message = _build_airport_status_message(city, city_weather, deb_pred, obs_local, state="", source_label=source_label)
 
     # Send to all target chats
     sent = False
