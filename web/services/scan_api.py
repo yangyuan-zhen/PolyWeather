@@ -83,18 +83,4 @@ async def get_scan_terminal_ai_payload(request: Request) -> Dict[str, Any]:
 
 
 async def get_scan_terminal_overview_payload(request: Request) -> Dict[str, Any]:
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
-    if not isinstance(body, dict):
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
-    rows = body.get("rows") if isinstance(body.get("rows"), list) else []
-    locale = str(body.get("locale") or "zh-CN").strip()
-    force_refresh = str(body.get("force_refresh") or "false").strip().lower() in {"1", "true", "yes"}
-    return await run_in_threadpool(
-        build_market_overview_payload,
-        rows,
-        locale=locale,
-        force_refresh=force_refresh,
-    )
+    return {"overview": [], "available": False}
