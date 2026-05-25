@@ -677,32 +677,6 @@ function PolyWeatherTerminal({
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-[#d2d9e2] bg-white px-4 text-slate-800">
           <div className="flex min-w-0 items-center gap-4">
-            <div className="flex h-8 min-w-[320px] items-center gap-2 rounded border border-[#cfd6df] bg-[#f8fafc] px-2.5 text-slate-600">
-              <Search size={14} className="text-slate-400" />
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t("searchPlaceholder", isEn)}
-                className="w-full bg-transparent text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchQuery("");
-                    searchInputRef.current?.focus();
-                  }}
-                  className="text-xs text-slate-400 hover:text-slate-700"
-                >
-                  ✕
-                </button>
-              )}
-              <kbd className="ml-auto rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-mono text-slate-400">
-                /
-              </kbd>
-            </div>
             <div className="hidden items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 lg:flex">
               <Activity size={13} />
               {t("dashboard", isEn)}
@@ -794,45 +768,19 @@ function PolyWeatherTerminal({
                         activeSearchSlotIndex === maximizedSlotIndex ? "" : "overflow-hidden"
                       )}
                     >
-                      {/* Floating actions toolbar */}
-                      <div className="absolute right-2 top-[38px] z-20 flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setMaximizedSlotIndex(null);
-                          }}
-                          className="grid h-6 w-6 place-items-center rounded bg-white hover:bg-slate-50 border border-slate-200 text-slate-500 hover:text-slate-800 transition-colors shadow-sm"
-                          title={isEn ? "Restore Grid" : "还原网格"}
-                        >
-                          ❐
-                        </button>
-                        <button
-                          type="button"
-                          disabled={slots.filter(Boolean).length <= 1}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelectCityForSlot(maximizedSlotIndex, null);
-                            setMaximizedSlotIndex(null);
-                          }}
-                          className={clsx(
-                            "grid h-6 w-6 place-items-center rounded border transition-colors shadow-sm",
-                            slots.filter(Boolean).length <= 1
-                              ? "bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed"
-                              : "bg-white hover:bg-slate-50 border-slate-200 text-slate-500 hover:text-red-600"
-                          )}
-                          title={isEn ? "Clear Slot" : "清除槽位"}
-                        >
-                          ✕
-                        </button>
-                      </div>
-
                       <LiveTemperatureThresholdChart
                         isEn={isEn}
                         row={filteredRegionRows.find((r) => String(r.city || "").toLowerCase() === slots[maximizedSlotIndex]) || null}
                         allRows={filteredRegionRows}
                         compact={false}
                         onSearchClick={() => setActiveSearchSlotIndex(maximizedSlotIndex)}
+                        onMaximize={() => setMaximizedSlotIndex(null)}
+                        onClose={() => {
+                          handleSelectCityForSlot(maximizedSlotIndex, null);
+                          setMaximizedSlotIndex(null);
+                        }}
+                        isMaximized={true}
+                        disableClose={slots.filter(Boolean).length <= 1}
                       />
 
                       {activeSearchSlotIndex === maximizedSlotIndex && (
@@ -904,45 +852,21 @@ function PolyWeatherTerminal({
                               activeSearchSlotIndex === slotIndex ? "" : "overflow-hidden"
                             )}
                           >
-                            {/* Floating actions toolbar */}
-                            <div className="absolute right-2 top-[38px] z-20 flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setMaximizedSlotIndex(slotIndex);
-                                  setActiveSlotIndex(slotIndex);
-                                }}
-                                className="grid h-6 w-6 place-items-center rounded bg-white hover:bg-slate-50 border border-slate-200 text-slate-500 hover:text-slate-800 transition-colors shadow-sm"
-                                title={isEn ? "Maximize" : "最大化"}
-                              >
-                                ⛶
-                              </button>
-                              <button
-                                type="button"
-                                disabled={slots.filter(Boolean).length <= 1}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSelectCityForSlot(slotIndex, null);
-                                }}
-                                className={clsx(
-                                  "grid h-6 w-6 place-items-center rounded border transition-colors shadow-sm",
-                                  slots.filter(Boolean).length <= 1
-                                    ? "bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed"
-                                    : "bg-white hover:bg-slate-50 border-slate-200 text-slate-500 hover:text-red-600"
-                                )}
-                                title={isEn ? "Clear Slot" : "清除槽位"}
-                              >
-                                ✕
-                              </button>
-                            </div>
-
                             <LiveTemperatureThresholdChart
                               isEn={isEn}
                               row={rowForSlot}
                               allRows={filteredRegionRows}
                               compact={true}
                               onSearchClick={() => setActiveSearchSlotIndex(slotIndex)}
+                              onMaximize={() => {
+                                setMaximizedSlotIndex(slotIndex);
+                                setActiveSlotIndex(slotIndex);
+                              }}
+                              onClose={() => {
+                                handleSelectCityForSlot(slotIndex, null);
+                              }}
+                              isMaximized={false}
+                              disableClose={slots.filter(Boolean).length <= 1}
                             />
 
                             {activeSearchSlotIndex === slotIndex && (
