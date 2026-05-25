@@ -1,6 +1,6 @@
 import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 
-export const TRADING_REGIONS = [
+export const REGIONS = [
   { key: "east_asia", labelEn: "East Asia", labelZh: "东亚", sort: 1 },
   { key: "southeast_asia", labelEn: "Southeast Asia", labelZh: "东南亚", sort: 2 },
   { key: "central_asia", labelEn: "Central / South Asia", labelZh: "中亚 / 南亚", sort: 3 },
@@ -10,23 +10,11 @@ export const TRADING_REGIONS = [
   { key: "north_america", labelEn: "North America", labelZh: "北美", sort: 7 },
 ] as const;
 
-export type TradingRegionKey = (typeof TRADING_REGIONS)[number]["key"];
+export type RegionKey = (typeof REGIONS)[number]["key"];
 
-/** Map browser timezone offset (hours) to the closest trading region. */
-export function detectLocalRegion(): TradingRegionKey {
-  const offset = -new Date().getTimezoneOffset() / 60; // UTC offset in hours
-  if (offset >= 8) return "east_asia";
-  if (offset >= 7) return "southeast_asia";
-  if (offset >= 4.5) return "central_asia";
-  if (offset >= 2) return "west_asia";
-  if (offset >= -2) return "europe_africa";
-  if (offset >= -4) return "south_america";
-  return "north_america";
-}
+const REGION_KEYS = new Set<string>(REGIONS.map((r) => r.key));
 
-const TRADING_REGION_KEYS = new Set<string>(TRADING_REGIONS.map((region) => region.key));
-
-const CITY_REGION_FALLBACK: Record<string, TradingRegionKey> = {
+const CITY_REGION: Record<string, RegionKey> = {
   beijing: "east_asia",
   busan: "east_asia",
   chengdu: "east_asia",
@@ -79,51 +67,23 @@ const CITY_REGION_FALLBACK: Record<string, TradingRegionKey> = {
   wellington: "east_asia",
 };
 
-function normalizeRegionValue(value?: string | null) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[-\s]+/g, "_");
+function normalizeCity(value?: string | null) {
+  return String(value || "").trim().toLowerCase()
+    .replace(/[_-]+/g, " ").replace(/\s+/g, " ");
 }
 
-function normalizeCityValue(value?: string | null) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ");
+export function getCityRegion(row: ScanOpportunityRow): RegionKey | null {
+  const key = normalizeCity(row.city || row.city_display_name || row.display_name);
+  return CITY_REGION[key] || null;
 }
 
-function finiteNumber(value: unknown) {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
-}
-
-export function resolveTradingRegionKey(row: ScanOpportunityRow): TradingRegionKey | null {
-  const direct = normalizeRegionValue(row.trading_region);
-  if (TRADING_REGION_KEYS.has(direct)) return direct as TradingRegionKey;
-
-  const cityKey = normalizeCityValue(row.city || row.city_display_name || row.display_name);
-  const cityRegion = CITY_REGION_FALLBACK[cityKey];
-  if (cityRegion) return cityRegion;
-
-  const offset = finiteNumber(row.tz_offset_seconds);
-  if (offset !== null) {
-    const hours = offset / 3600;
-    if (hours >= 8) return "east_asia";
-    if (hours >= 7) return "southeast_asia";
-    if (hours >= 4.5) return "central_asia";
-    if (hours >= 2) return "west_asia";
-    if (hours >= -2) return "europe_africa";
-    if (hours >= -4) return "south_america";
-    return "north_america";
-  }
-
-  return null;
+/** Default region on first load — East Asia. */
+export function getDefaultRegion(): RegionKey {
+  return "east_asia";
 }
 
 export interface ContinentGroup {
-  key: TradingRegionKey | "active_signals";
+  key: RegionKey | "active_signals";
   labelEn: string;
   labelZh: string;
   sort: number;
@@ -203,7 +163,7 @@ export function buildContinentGroups(rows: ScanOpportunityRow[], isEn: boolean):
   const regionMap = new Map<string, ScanOpportunityRow[]>();
 
   for (const row of rows) {
-    const region = resolveTradingRegionKey(row) || "unknown";
+    const region = getCityRegion(row) || "unknown";
     if (!regionMap.has(region)) regionMap.set(region, []);
     regionMap.get(region)!.push(row);
   }
@@ -229,7 +189,7 @@ export function buildContinentGroups(rows: ScanOpportunityRow[], isEn: boolean):
     });
   }
 
-  for (const region of TRADING_REGIONS) {
+  for (const region of REGIONS) {
     const regionRows = regionMap.get(region.key) || [];
     if (regionRows.length === 0) continue;
 

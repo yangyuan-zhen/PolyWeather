@@ -27,9 +27,9 @@ import {
   getGapColor,
   getSignalLabel,
   getSignalState,
-  resolveTradingRegionKey,
-  TRADING_REGIONS,
-  detectLocalRegion,
+  getCityRegion,
+  REGIONS,
+  getDefaultRegion,
 } from "@/components/dashboard/scan-terminal/continent-grouping";
 import { MobileCityCard } from "@/components/dashboard/scan-terminal/MobileCityCard";
 import { MobileRegionTabs } from "@/components/dashboard/scan-terminal/MobileRegionTabs";
@@ -290,7 +290,7 @@ function PolyWeatherTerminal({
 
   const filteredRegionRows = useMemo(() => {
     return rows.filter(
-      (row) => resolveTradingRegionKey(row) === selectedRegionKey,
+      (row) => getCityRegion(row) === selectedRegionKey,
     );
   }, [rows, selectedRegionKey]);
 
@@ -504,7 +504,7 @@ function PolyWeatherTerminal({
             <>
               {/* Region tabs */}
               <div className="flex shrink-0 items-center gap-1 overflow-x-auto rounded-[4px] border border-[#cfd6df] bg-white p-1 mb-2 scrollbar-none">
-                {TRADING_REGIONS.filter((r) => visibleRegions.has(r.key)).map((r) => ({
+                {REGIONS.filter((r) => visibleRegions.has(r.key)).map((r) => ({
                     key: r.key,
                     labelEn: r.labelEn.toUpperCase(),
                     labelZh: r.labelZh,
@@ -540,7 +540,7 @@ function PolyWeatherTerminal({
                     id="region-selector-popover"
                     className="hidden absolute right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-lg p-2 min-w-[180px]"
                   >
-                    {TRADING_REGIONS.map((r) => {
+                    {REGIONS.map((r) => {
                       const checked = visibleRegions.has(r.key);
                       return (
                         <label
@@ -649,7 +649,7 @@ function ScanTerminalScreen() {
       const stored = localStorage.getItem("polyweather_visible_regions");
       if (stored) return new Set(JSON.parse(stored));
     } catch {}
-    return new Set(TRADING_REGIONS.map((r) => r.key));
+    return new Set(REGIONS.map((r) => r.key));
   });
   const toggleRegion = useCallback((key: string) => {
     setVisibleRegions((prev) => {
@@ -734,7 +734,7 @@ function ScanTerminalScreen() {
   }, []);
 
   useEffect(() => {
-    setSelectedRegionKey(detectLocalRegion());
+    setSelectedRegionKey(getDefaultRegion());
     setLocalTimezoneOffsetSeconds(-new Date().getTimezoneOffset() * 60);
   }, []);
 

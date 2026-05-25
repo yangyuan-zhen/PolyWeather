@@ -13,7 +13,14 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { AmosData, AirportCurrentConditions, CityDetail, ScanOpportunityRow } from "@/lib/dashboard-types";
+import type {
+  AmosData,
+  AirportCurrentConditions,
+  CityDetail,
+  ScanOpportunityRow,
+  ForecastDay,
+  DailyModelForecast,
+} from "@/lib/dashboard-types";
 import { buildDebBaselinePath } from "@/lib/temperature-chart-paths";
 import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { rowName, temp } from "@/components/dashboard/scan-terminal/utils";
