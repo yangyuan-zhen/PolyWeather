@@ -27,7 +27,10 @@ class DBManager:
         return raw
 
     def _get_connection(self):
-        return sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=10)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=5000")
+        return conn
 
     def _init_cache_key(self) -> str:
         return os.path.abspath(self.db_path)
