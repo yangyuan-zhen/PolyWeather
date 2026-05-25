@@ -1658,7 +1658,10 @@ def _analyze(
                 "attribution": mm.get("attribution"),
             } if isinstance(mm, dict) and mm else {},
         },
-        "multi_model": {k: v for k, v in current_forecasts.items() if v is not None},
+        "multi_model": {
+            **mm,
+            "forecasts": {k: v for k, v in current_forecasts.items() if v is not None},
+        },
         "multi_model_daily": multi_model_daily,
         "deb": {"prediction": deb_val, "weights_info": deb_weights},
         "deviation_monitor": deviation_monitor,
