@@ -21,7 +21,7 @@ export IMAGE_TAG="$NEW_TAG"
 docker compose pull
 docker compose up -d
 
-# Wait for backend to be ready (retry up to 60s)
+# Wait for backend to be ready (retry up to 150s)
 echo "Waiting for backend..."
 for i in $(seq 1 30); do
     sleep 5
@@ -34,7 +34,7 @@ done
 
 FAILED=0
 curl -fsSo /dev/null --max-time 15 "https://api.polyweather.top/healthz" && echo "✅ healthz" || { echo "❌ healthz"; FAILED=1; }
-curl -fsSo /dev/null --max-time 15 "https://api.polyweather.top/api/scan/terminal?limit=1" && echo "✅ scan" || { echo "❌ scan"; FAILED=1; }
+curl -fsSo /dev/null --max-time 10 "https://api.polyweather.top/api/cities" && echo "✅ cities" || { echo "❌ cities"; FAILED=1; }
 curl -fsSo /dev/null --max-time 10 "https://www.polyweather.top/" && echo "✅ frontend" || { echo "❌ frontend"; FAILED=1; }
 
 if [ "$FAILED" = "1" ]; then
