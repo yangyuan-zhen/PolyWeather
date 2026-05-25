@@ -144,6 +144,36 @@ const TERM = {
   closed: { en: "Closed", zh: "已关闭" },
 } as const;
 
+const MAX_TERMINAL_GRID_SIDE = 3;
+const MAX_TERMINAL_CHARTS = 9;
+const MOBILE_TERMINAL_CHARTS = 1;
+const DEFAULT_TERMINAL_GRID_SIDE = 2;
+
+function clampGridSide(value: number) {
+  if (!Number.isFinite(value)) return DEFAULT_TERMINAL_GRID_SIDE;
+  return Math.max(1, Math.min(MAX_TERMINAL_GRID_SIDE, Math.floor(value)));
+}
+
+function getStoredGridSide(key: string) {
+  if (typeof window === "undefined") return DEFAULT_TERMINAL_GRID_SIDE;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return DEFAULT_TERMINAL_GRID_SIDE;
+    return clampGridSide(parseInt(raw, 10));
+  } catch {}
+  return DEFAULT_TERMINAL_GRID_SIDE;
+}
+
+function getSlotCount(cols: number, rows: number) {
+  return Math.min(MAX_TERMINAL_CHARTS, clampGridSide(cols) * clampGridSide(rows));
+}
+
+function normalizeSlotList(slots: Array<string | null>, totalSlots: number) {
+  if (slots.length === totalSlots) return slots;
+  if (slots.length > totalSlots) return slots.slice(0, totalSlots);
+  return [...slots, ...Array(totalSlots - slots.length).fill(null)];
+}
+
 function t(key: keyof typeof TERM, isEn: boolean) {
   return isEn ? TERM[key].en : TERM[key].zh;
 }
@@ -359,102 +389,51 @@ function PolyWeatherTerminal({
   const [activeNavKey, setActiveNavKey] = useState<string>("thresholds");
 
   const [gridCols, setGridCols] = useState<number>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const val = localStorage.getItem("polyweather_terminal_grid_cols");
-        if (val) {
-          const num = parseInt(val, 10);
-          if (num >= 1 && num <= 3) return num;
-        }
-      } catch {}
-    }
-    return 2;
+    return getStoredGridSide("polyweather_terminal_grid_cols");
   });
 
   const [gridRows, setGridRows] = useState<number>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const val = localStorage.getItem("polyweather_terminal_grid_rows");
-        if (val) {
-          const num = parseInt(val, 10);
-          if (num >= 1 && num <= 3) return num;
-        }
-      } catch {}
-    }
-    return 2;
+    return getStoredGridSide("polyweather_terminal_grid_rows");
   });
 
-  const totalSlots = gridCols * gridRows;
+  const totalSlots = getSlotCount(gridCols, gridRows);
 
   const [slots, setSlots] = useState<Array<string | null>>(() => {
+    const storedCols = getStoredGridSide("polyweather_terminal_grid_cols");
+    const storedRows = getStoredGridSide("polyweather_terminal_grid_rows");
+    const initialSlotCount = getSlotCount(storedCols, storedRows);
     if (typeof window !== "undefined") {
       try {
         const stored = localStorage.getItem("polyweather_terminal_slots");
         if (stored) {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed)) {
-            let targetLen = 4;
-            try {
-              const cVal = localStorage.getItem("polyweather_terminal_grid_cols");
-              const rVal = localStorage.getItem("polyweather_terminal_grid_rows");
-              if (cVal && rVal) {
-                const c = parseInt(cVal, 10);
-                const r = parseInt(rVal, 10);
-                if (c >= 1 && c <= 3 && r >= 1 && r <= 3) {
-                  targetLen = c * r;
-                }
-              }
-            } catch {}
-
-            if (parsed.length === targetLen) {
-              return parsed;
-            } else if (parsed.length < targetLen) {
-              return [...parsed, ...Array(targetLen - parsed.length).fill(null)];
-            } else {
-              return parsed.slice(0, targetLen);
-            }
+            return normalizeSlotList(parsed, initialSlotCount);
           }
         }
       } catch {}
     }
-    let defaultLen = 4;
-    if (typeof window !== "undefined") {
-      try {
-        const cVal = localStorage.getItem("polyweather_terminal_grid_cols");
-        const rVal = localStorage.getItem("polyweather_terminal_grid_rows");
-        if (cVal && rVal) {
-          const c = parseInt(cVal, 10);
-          const r = parseInt(rVal, 10);
-          if (c >= 1 && c <= 3 && r >= 1 && r <= 3) {
-            defaultLen = c * r;
-          }
-        }
-      } catch {}
-    }
-    return Array(defaultLen).fill(null);
+    return Array(initialSlotCount).fill(null);
   });
   const [activeSlotIndex, setActiveSlotIndex] = useState<number>(0);
   const [maximizedSlotIndex, setMaximizedSlotIndex] = useState<number | null>(null);
   const [activeSearchSlotIndex, setActiveSearchSlotIndex] = useState<number | null>(null);
+  const visibleSlots = useMemo(() => normalizeSlotList(slots, totalSlots), [slots, totalSlots]);
 
   const handleSetGridSize = (cols: number, rows: number) => {
-    const nextTotalSlots = cols * rows;
+    const safeCols = clampGridSide(cols);
+    const safeRows = clampGridSide(rows);
+    const nextTotalSlots = getSlotCount(safeCols, safeRows);
     
-    setGridCols(cols);
-    setGridRows(rows);
+    setGridCols(safeCols);
+    setGridRows(safeRows);
     
     try {
-      localStorage.setItem("polyweather_terminal_grid_cols", String(cols));
-      localStorage.setItem("polyweather_terminal_grid_rows", String(rows));
+      localStorage.setItem("polyweather_terminal_grid_cols", String(safeCols));
+      localStorage.setItem("polyweather_terminal_grid_rows", String(safeRows));
     } catch {}
 
-    let nextSlots = [...slots];
-    if (nextSlots.length < nextTotalSlots) {
-      const diff = nextTotalSlots - nextSlots.length;
-      nextSlots = [...nextSlots, ...Array(diff).fill(null)];
-    } else if (nextSlots.length > nextTotalSlots) {
-      nextSlots = nextSlots.slice(0, nextTotalSlots);
-    }
+    const nextSlots = normalizeSlotList(visibleSlots, nextTotalSlots);
     
     setSlots(nextSlots);
     try {
@@ -489,7 +468,7 @@ function PolyWeatherTerminal({
   }, [rows, selectedRegionKey]);
 
   useEffect(() => {
-    if (filteredRegionRows.length && slots.every((s) => s === null)) {
+    if (filteredRegionRows.length && visibleSlots.every((s) => s === null)) {
       const next = Array(totalSlots)
         .fill(null)
         .map((_, idx) => filteredRegionRows[idx]?.city || null);
@@ -498,10 +477,11 @@ function PolyWeatherTerminal({
         localStorage.setItem("polyweather_terminal_slots", JSON.stringify(next));
       } catch {}
     }
-  }, [filteredRegionRows, slots, totalSlots]);
+  }, [filteredRegionRows, visibleSlots, totalSlots]);
 
   const handleSelectCityForSlot = (index: number, city: string | null) => {
-    const next = [...slots];
+    if (index < 0 || index >= totalSlots) return;
+    const next = [...visibleSlots];
     next[index] = city;
     setSlots(next);
     try {
@@ -561,6 +541,14 @@ function PolyWeatherTerminal({
       setMobileTab(continentGroups[0].key);
     }
   }, [continentGroups, mobileTab]);
+  const mobileChartRow = useMemo(
+    () =>
+      selectedRow ||
+      mobileActiveGroup?.rows.slice(0, MOBILE_TERMINAL_CHARTS)[0] ||
+      filteredRegionRows[0] ||
+      null,
+    [filteredRegionRows, mobileActiveGroup?.rows, selectedRow],
+  );
   useEffect(() => {
     if (!filteredRegionRows.length) return;
     if (!selectedRow || !filteredRegionRows.some((row) => row.id === selectedRow.id)) {
@@ -722,6 +710,22 @@ function PolyWeatherTerminal({
                   isEn={isEn}
                   onSelectTab={setMobileTab}
                 />
+                <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] font-semibold leading-4 text-blue-700">
+                  {isEn
+                    ? "Mobile renders one chart. Rotate to landscape to inspect the full terminal grid."
+                    : "手机端仅渲染 1 个图表。建议横屏查看完整终端网格。"}
+                </div>
+                {mobileChartRow && (
+                  <div className="h-[420px] min-h-[420px] overflow-hidden rounded border border-[#d2d9e2] bg-white">
+                    <LiveTemperatureThresholdChart
+                      isEn={isEn}
+                      row={mobileChartRow}
+                      allRows={filteredRegionRows}
+                      compact={false}
+                      disableClose={true}
+                    />
+                  </div>
+                )}
                 <div className="space-y-2 px-1">
                   {mobileActiveGroup?.rows.map((row) => (
                     <MobileCityCard
@@ -769,7 +773,7 @@ function PolyWeatherTerminal({
                     >
                       <LiveTemperatureThresholdChart
                         isEn={isEn}
-                        row={filteredRegionRows.find((r) => String(r.city || "").toLowerCase() === slots[maximizedSlotIndex]) || null}
+                        row={filteredRegionRows.find((r) => String(r.city || "").toLowerCase() === visibleSlots[maximizedSlotIndex]) || null}
                         allRows={filteredRegionRows}
                         compact={false}
                         onSearchClick={() => setActiveSearchSlotIndex(maximizedSlotIndex)}
@@ -779,7 +783,7 @@ function PolyWeatherTerminal({
                           setMaximizedSlotIndex(null);
                         }}
                         isMaximized={true}
-                        disableClose={slots.filter(Boolean).length <= 1}
+                        disableClose={visibleSlots.filter(Boolean).length <= 1}
                       />
 
                       {activeSearchSlotIndex === maximizedSlotIndex && (
@@ -804,9 +808,8 @@ function PolyWeatherTerminal({
                         gridTemplateRows: `repeat(${gridRows}, minmax(0, 1fr))`,
                       }}
                     >
-                      {Array.from({ length: totalSlots }).map((_, slotIndex) => {
+                      {visibleSlots.map((cityInSlot, slotIndex) => {
                         const isSlotActive = activeSlotIndex === slotIndex;
-                        const cityInSlot = slots[slotIndex];
 
                         if (!cityInSlot) {
                           return (
@@ -865,7 +868,7 @@ function PolyWeatherTerminal({
                                 handleSelectCityForSlot(slotIndex, null);
                               }}
                               isMaximized={false}
-                              disableClose={slots.filter(Boolean).length <= 1}
+                              disableClose={visibleSlots.filter(Boolean).length <= 1}
                             />
 
                             {activeSearchSlotIndex === slotIndex && (
