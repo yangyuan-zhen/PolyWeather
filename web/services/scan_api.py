@@ -47,6 +47,7 @@ async def get_scan_terminal_payload(
     limit: int = 25,
     force_refresh: bool = False,
     region: str = "",
+    skip_polymarket: bool = False,
 ) -> Dict[str, Any]:
     legacy_routes._assert_entitlement(request)
     filters: Dict[str, Any] = {
@@ -59,6 +60,7 @@ async def get_scan_terminal_payload(
         "market_type": market_type,
         "time_range": time_range,
         "limit": limit,
+        "skip_polymarket": skip_polymarket,
     }
     if region:
         filters["trading_region"] = region

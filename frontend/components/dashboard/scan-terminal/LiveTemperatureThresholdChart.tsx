@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import {
   CartesianGrid,
+  Legend,
   Line,
   LineChart as ReLineChart,
   ReferenceLine,
@@ -135,13 +136,29 @@ type EvidenceSeries = {
   dashed?: boolean;
   featured?: boolean;
   smooth?: boolean;
+  curve?: "linear" | "monotone" | "stepAfter";
+  connectNulls?: boolean;
+  showDot?: boolean;
   values: Array<number | null>;
+};
+
+type RunwayHistorySeries = {
+  key: string;
+  label: string;
+  rwy: string;
+  isSettlement: boolean;
+  color: string;
+  points: Array<{ ts: number; value: number }>;
 };
 
 // Sliding window: keep at most this many observation points (24h at 1-min ≈ 1440)
 const MAX_OBS_POINTS = 1440;
 const HOURLY_CACHE_TTL_MS = 30 * 60 * 1000;
+const ROLLING_WINDOW_BEFORE_MS = 6 * 60 * 60 * 1000;
+const ROLLING_WINDOW_AFTER_LIVE_MS = 45 * 60 * 1000;
+const ROLLING_WINDOW_AFTER_FORECAST_MS = 6 * 60 * 60 * 1000;
 const _hourlyCache = new Map<string, { ts: number; data: HourlyForecast }>();
+const RUNWAY_LINE_COLORS = ["#00897b", "#d97706", "#7c3aed", "#0891b2", "#ea580c", "#64748b"];
 
 function validNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -232,16 +249,131 @@ function seriesStats(values: Array<number | null>) {
   return { latest, high, delta15 };
 }
 
+function isSettlementRunway(row: ScanOpportunityRow | null, rwy: string) {
+  const cityKey = normalizeCityKey(row?.city);
+  const settlementPairs = SETTLEMENT_RUNWAY_PAIRS[cityKey] || [];
+  if (!settlementPairs.length) return false;
+  const normalized = rwy
+    .split("/")
+    .map(normalizeRunwayLabel)
+    .filter(Boolean)
+    .sort()
+    .join("/");
+  return settlementPairs.some((pair) => pairKey(pair) === normalized);
+}
+
+function runwayLabelFromPair(rawPair: unknown, index: number) {
+  if (Array.isArray(rawPair) && rawPair.length >= 2) {
+    return `${normalizeRunwayLabel(rawPair[0])}/${normalizeRunwayLabel(rawPair[1])}`;
+  }
+  return `RWY ${index + 1}`;
+}
+
 type HourlyForecast = {
   forecastTodayHigh?: number | null;
   localTime?: string | null;
   times: string[];
   temps: Array<number | null>;
   modelCurves?: Record<string, Array<number | null>>;
+  runwayPlateHistory?: Record<string, Array<Record<string, unknown>>>;
   amos?: AmosData | null;
   airportCurrent?: AirportCurrentConditions | null;
   airportPrimary?: AirportCurrentConditions | null;
 } | null;
+
+function parseRunwayHistoryValue(point: Record<string, unknown>) {
+  return validNumber(point.max_temp_c) ?? validNumber(point.temp_c) ?? validNumber(point.temp) ?? validNumber(point.value);
+}
+
+function parseRunwayHistoryTime(
+  point: Record<string, unknown>,
+  tzOffset: number,
+  localDateStr: string,
+) {
+  return getCityLocalUtcTimestamp(
+    (point.timestamp as string | number | null | undefined) ??
+      (point.time as string | number | null | undefined) ??
+      (point.observed_at as string | number | null | undefined),
+    tzOffset,
+    localDateStr,
+  );
+}
+
+function buildRunwayHistorySeries(
+  row: ScanOpportunityRow | null,
+  hourly: HourlyForecast,
+  tzOffset: number,
+  localDateStr: string,
+): RunwayHistorySeries[] {
+  const directHistory =
+    hourly?.runwayPlateHistory ??
+    ((hourly?.amos as any)?.runway_plate_history as Record<string, Array<Record<string, unknown>>> | undefined) ??
+    ((row as any)?.runway_plate_history as Record<string, Array<Record<string, unknown>>> | undefined);
+
+  if (directHistory && typeof directHistory === "object") {
+    return Object.entries(directHistory)
+      .map(([rwy, rawPoints], index) => {
+        const normalizedRwy = String(rwy || `RWY ${index + 1}`).trim();
+        const points = (Array.isArray(rawPoints) ? rawPoints : [])
+          .map((point) => {
+            const ts = parseRunwayHistoryTime(point, tzOffset, localDateStr);
+            const value = parseRunwayHistoryValue(point);
+            return ts !== null && value !== null ? { ts, value } : null;
+          })
+          .filter((point): point is { ts: number; value: number } => point !== null)
+          .sort((a, b) => a.ts - b.ts)
+          .slice(-MAX_OBS_POINTS);
+        const isSettlement = isSettlementRunway(row, normalizedRwy);
+        return {
+          key: `runway_${index}`,
+          label: `${normalizedRwy}${isSettlement ? (row ? " 结算跑道" : " Settlement") : ""}`,
+          rwy: normalizedRwy,
+          isSettlement,
+          color: isSettlement ? "#009688" : RUNWAY_LINE_COLORS[index % RUNWAY_LINE_COLORS.length],
+          points,
+        };
+      })
+      .filter((series) => series.points.length > 1);
+  }
+
+  const amos = hourly?.amos;
+  const runwayObs = amos?.runway_obs;
+  const runwayPairs = runwayObs?.runway_pairs || [];
+  const runwayTemps = runwayObs?.temperatures || [];
+  const anchor =
+    getCityLocalUtcTimestamp(amos?.observation_time_local || amos?.observation_time || hourly?.localTime || row?.local_time, tzOffset, localDateStr) ??
+    getCityLocalUtcTimestamp(row?.local_time, tzOffset, localDateStr);
+
+  if (!anchor || !Array.isArray(runwayTemps)) return [];
+
+  return runwayTemps
+    .map((rawTemps, index) => {
+      if (!Array.isArray(rawTemps) || rawTemps.length <= 2) return null;
+      const rwy = runwayLabelFromPair(runwayPairs[index], index);
+      const isSettlement = isSettlementRunway(row, rwy);
+      const values = rawTemps
+        .map(validNumber)
+        .map((value, pointIndex) => {
+          if (value === null) return null;
+          const minutesFromEnd = rawTemps.length - 1 - pointIndex;
+          return {
+            ts: anchor - minutesFromEnd * 60 * 1000,
+            value,
+          };
+        })
+        .filter((point): point is { ts: number; value: number } => point !== null);
+      if (values.length <= 1) return null;
+      return {
+        key: `runway_${index}`,
+        label: `${rwy}${isSettlement ? " 结算跑道" : ""}`,
+        rwy,
+        isSettlement,
+        color: isSettlement ? "#009688" : RUNWAY_LINE_COLORS[index % RUNWAY_LINE_COLORS.length],
+        points: values.slice(-MAX_OBS_POINTS),
+      };
+    })
+    .filter((series): series is RunwayHistorySeries => series !== null);
+}
 
 // ── Build aligned data rows for the sliding-window chart ────────────────
 
@@ -254,6 +386,7 @@ function buildSlidingChartData(
 
   const settlementObs = normObs(row?.settlement_today_obs || row?.metar_context?.settlement_today_obs, tzOffset);
   const metarObs = normObs(row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs, tzOffset);
+  const runwayHistorySeries = buildRunwayHistorySeries(row, hourly, tzOffset, localDateStr);
 
   // Collect all timestamps from observations + forecasts
   const allTimes = new Set<number>();
@@ -263,6 +396,9 @@ function buildSlidingChartData(
   };
   pushObs(settlementObs);
   pushObs(metarObs);
+  runwayHistorySeries.forEach((item) => {
+    item.points.forEach((point) => allTimes.add(point.ts));
+  });
 
   // Forecast timestamps
   const forecastTimes: number[] = [];
@@ -289,13 +425,35 @@ function buildSlidingChartData(
 
   const series: EvidenceSeries[] = [];
 
+  runwayHistorySeries.forEach((item) => {
+    const vals = na();
+    item.points.forEach((o) => {
+      const idx = tsToIdx.get(o.ts);
+      if (idx !== undefined) vals[idx] = o.value;
+    });
+    if (vals.some((v) => v !== null)) {
+      series.push({
+        key: item.key,
+        label: item.label,
+        source: "Runway",
+        color: item.color,
+        dashed: !item.isSettlement,
+        featured: item.isSettlement,
+        curve: "monotone",
+        connectNulls: true,
+        showDot: item.isSettlement,
+        values: vals,
+      });
+    }
+  });
+
   // Settlement
   const sVals = na();
   settlementObs.forEach((o) => {
     const idx = tsToIdx.get(o.ts);
     if (idx !== undefined) sVals[idx] = o.value;
   });
-  if (sVals.some((v) => v !== null)) {
+  if (!runwayHistorySeries.length && sVals.some((v) => v !== null)) {
     const cityKey = String(row?.city || "").toLowerCase().trim();
     const runwaySensorCities = new Set([
       'beijing', 'shanghai', 'guangzhou', 'shenzhen', 'qingdao',
@@ -320,6 +478,8 @@ function buildSlidingChartData(
       source: row?.metar_context?.station || row?.airport || "Settlement",
       color: "#009688",
       featured: true,
+      curve: "monotone",
+      connectNulls: true,
       values: sVals,
     });
   }
@@ -337,6 +497,9 @@ function buildSlidingChartData(
       source: row?.airport || "METAR",
       color: "#0ea5e9",
       dashed: true,
+      curve: "stepAfter",
+      connectNulls: true,
+      showDot: true,
       values: mVals,
     });
   }
@@ -366,6 +529,8 @@ function buildSlidingChartData(
         color: "#f97316",
         featured: true,
         smooth: true,
+        curve: "monotone",
+        connectNulls: true,
         values: debVals,
       });
     }
@@ -376,6 +541,15 @@ function buildSlidingChartData(
       Object.keys(hourly.modelCurves).forEach((model, idx) => {
         const modelTemps = hourly.modelCurves![model];
         if (!modelTemps?.length) return;
+        const finiteModelTemps = modelTemps
+          .map(validNumber)
+          .filter((v): v is number => v !== null);
+        if (
+          finiteModelTemps.length < 2 ||
+          Math.max(...finiteModelTemps) - Math.min(...finiteModelTemps) < 0.05
+        ) {
+          return;
+        }
         const vals = na();
         hourly.times.forEach((t, i) => {
           const ts = getCityLocalUtcTimestamp(t, tzOffset, localDateStr);
@@ -390,6 +564,8 @@ function buildSlidingChartData(
             color: modelColors[idx % modelColors.length],
             dashed: true,
             smooth: true,
+            curve: "monotone",
+            connectNulls: true,
             values: vals,
           });
         }
@@ -408,6 +584,8 @@ function buildSlidingChartData(
         source: "Live",
         color: "#009688",
         featured: true,
+        curve: "monotone",
+        connectNulls: true,
         values: vals,
       });
     }
@@ -424,6 +602,56 @@ function buildSlidingChartData(
   });
 
   return { data, series };
+}
+
+function hasNumericValue(row: Record<string, string | number | null>, keys: string[]) {
+  return keys.some((key) => validNumber(row[key]) !== null);
+}
+
+function buildRollingWindowData(
+  data: Array<Record<string, string | number | null>>,
+  series: EvidenceSeries[],
+  row: ScanOpportunityRow | null,
+  hourly: HourlyForecast,
+) {
+  if (data.length <= 1) return data;
+
+  const liveKeys = series
+    .filter((item) => item.key !== "hourly_forecast" && !item.key.startsWith("model_curve_"))
+    .map((item) => item.key);
+  const forecastKeys = series
+    .filter((item) => item.key === "hourly_forecast" || item.key.startsWith("model_curve_"))
+    .map((item) => item.key);
+
+  const timestampRows = data
+    .filter((point) => typeof point.ts === "number")
+    .sort((a, b) => Number(a.ts) - Number(b.ts));
+  if (!timestampRows.length) return data;
+
+  const latestLiveTs = [...timestampRows]
+    .reverse()
+    .find((point) => hasNumericValue(point, liveKeys))?.ts as number | undefined;
+
+  const tzOffset = row?.tz_offset_seconds ?? 0;
+  const localDateStr = row?.local_date || new Date().toISOString().slice(0, 10);
+  const currentLocalTs = getCityLocalUtcTimestamp(
+    hourly?.localTime || row?.local_time,
+    tzOffset,
+    localDateStr,
+  );
+  const maxDataTs = Number(timestampRows[timestampRows.length - 1].ts);
+  const anchor = latestLiveTs ?? currentLocalTs ?? maxDataTs;
+  const afterMs = latestLiveTs ? ROLLING_WINDOW_AFTER_LIVE_MS : ROLLING_WINDOW_AFTER_FORECAST_MS;
+  const start = anchor - ROLLING_WINDOW_BEFORE_MS;
+  const end = anchor + afterMs;
+
+  const visible = timestampRows.filter((point) => {
+    const ts = Number(point.ts);
+    if (ts < start || ts > end) return false;
+    return hasNumericValue(point, liveKeys) || hasNumericValue(point, forecastKeys);
+  });
+
+  return visible.length >= 2 ? visible : timestampRows.slice(-120);
 }
 
 // ── Model summary cards (daily high point predictions) ─────────────────
@@ -475,8 +703,11 @@ function buildMarketTemperatureOptions(row: ScanOpportunityRow | null) {
 function buildChartDomain(
   ticks: number[] | null,
   series: EvidenceSeries[],
+  visibleData?: Array<Record<string, string | number | null>>,
 ): [number, number] | ["auto", "auto"] {
-  const vals = series.flatMap((s) => s.values).filter((v): v is number => validNumber(v) !== null);
+  const vals = visibleData?.length
+    ? visibleData.flatMap((point) => series.map((s) => point[s.key])).filter((v): v is number => validNumber(v) !== null)
+    : series.flatMap((s) => s.values).filter((v): v is number => validNumber(v) !== null);
   const all = [...(ticks || []), ...vals];
   if (!all.length) return ["auto", "auto"];
   const min = Math.min(...all);
@@ -525,6 +756,7 @@ export function LiveTemperatureThresholdChart({
           times: hourlySource.times || [],
           temps: hourlySource.temps || [],
           modelCurves: (json.models_hourly ?? (json as any)?.timeseries?.models_hourly)?.curves || undefined,
+          runwayPlateHistory: (json as any)?.runway_plate_history || (json.amos as any)?.runway_plate_history || undefined,
           amos: json.amos || null,
           airportCurrent: json.airport_current || null,
           airportPrimary: json.airport_primary || null,
@@ -537,7 +769,10 @@ export function LiveTemperatureThresholdChart({
   }, [city]);
 
   const { data, series } = useMemo(() => buildSlidingChartData(row, hourly), [row, hourly]);
-  const threshold = validNumber(row?.target_threshold) ?? validNumber(row?.target_value);
+  const visibleData = useMemo(
+    () => buildRollingWindowData(data, series, row, hourly),
+    [data, series, row, hourly],
+  );
 
   const tzOffset = row?.tz_offset_seconds ?? 0;
   const settlementObs = useMemo(() => {
@@ -632,7 +867,10 @@ export function LiveTemperatureThresholdChart({
   }, [row, allRows]);
 
   const marketTicks = useMemo(() => buildMarketTemperatureOptions(row), [row]);
-  const chartDomain = useMemo(() => buildChartDomain(marketTicks, series), [marketTicks, series]);
+  const chartDomain = useMemo(
+    () => buildChartDomain(marketTicks, series, visibleData),
+    [marketTicks, series, visibleData],
+  );
 
   return (
     <Panel title={isEn ? "Live Temperature Trend & Option Threshold Lines" : "实时气温走势与期权阈值线"}>
@@ -772,14 +1010,14 @@ export function LiveTemperatureThresholdChart({
             ) : null}
           </div>
           <ResponsiveContainer width="100%" height="100%">
-            <ReLineChart data={data} margin={{ top: 16, right: 28, left: 8, bottom: 8 }}>
+            <ReLineChart data={visibleData} margin={{ top: 16, right: 28, left: 8, bottom: 8 }}>
               <CartesianGrid stroke="#dbe6ef" strokeDasharray="2 2" />
               <XAxis
                 dataKey="label"
                 tick={{ fontSize: 10, fill: "#64748b" }}
                 tickLine={false}
                 axisLine={{ stroke: "#cbd5e1" }}
-                interval={Math.max(1, Math.floor(data.length / 8))}
+                interval={Math.max(1, Math.floor(visibleData.length / 8))}
               />
               <YAxis
                 tick={{ fontSize: 10, fill: "#64748b" }}
@@ -820,17 +1058,24 @@ export function LiveTemperatureThresholdChart({
                 }}
                 formatter={(value: unknown) => `${Number(value).toFixed(2)}°`}
               />
+              <Legend
+                verticalAlign="bottom"
+                height={series.length > 5 ? 56 : 36}
+                iconType="plainline"
+                wrapperStyle={{ fontSize: 11 }}
+              />
               {series.map((item) => (
                 <Line
                   key={item.key}
-                  type={item.smooth ? "monotone" : "linear"}
+                  type={item.curve || (item.smooth ? "monotone" : "linear")}
                   dataKey={item.key}
                   name={item.label}
                   stroke={item.color}
                   strokeWidth={item.featured ? 2 : 1}
                   strokeDasharray={item.dashed ? "4 3" : undefined}
-                  dot={false}
-                  connectNulls={false}
+                  dot={item.showDot ? { r: 2.5, fill: item.color } : false}
+                  activeDot={{ r: item.featured ? 5 : 4 }}
+                  connectNulls={item.connectNulls ?? true}
                   isAnimationActive={false}
                 />
               ))}

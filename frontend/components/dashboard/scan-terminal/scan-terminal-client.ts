@@ -264,7 +264,7 @@ async function getTerminal({
     min_liquidity: "500",
     market_type: "maxtemp",
     time_range: "today",
-    limit: "36",
+    limit: "180",
     force_refresh: String(forceRefresh),
     skip_polymarket: "true",
   });

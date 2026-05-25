@@ -500,6 +500,8 @@ function PolyWeatherTerminal({
   searchInputRef,
   selectedCity,
   setSelectedCity,
+  selectedRegionKey,
+  setSelectedRegionKey,
 }: {
   generatedText: string;
   isEn: boolean;
@@ -516,6 +518,8 @@ function PolyWeatherTerminal({
   searchInputRef: React.RefObject<HTMLInputElement | null>;
   selectedCity: string | null;
   setSelectedCity: (city: string | null) => void;
+  selectedRegionKey: string;
+  setSelectedRegionKey: (key: string) => void;
 }) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -540,11 +544,6 @@ function PolyWeatherTerminal({
   }, [searchInputRef, setSearchQuery]);
   const [navExpanded, setNavExpanded] = useState(false);
   const [activeNavKey, setActiveNavKey] = useState<string>("contracts");
-  const [selectedRegionKey, setSelectedRegionKey] = useState<string>("east_asia");
-
-  useEffect(() => {
-    setSelectedRegionKey(detectLocalRegion());
-  }, []);
 
   const NAV_ITEMS = [
     { key: "contracts", Icon: Table2, labelEn: "Contracts", labelZh: "天气合约" },
@@ -552,11 +551,13 @@ function PolyWeatherTerminal({
     { key: "training", Icon: GraduationCap, labelEn: "Training", labelZh: "训练数据" },
   ];
 
+  useEffect(() => {
+    setSelectedCity(null);
+  }, [selectedRegionKey, setSelectedCity]);
+
   const filteredRegionRows = useMemo(() => {
     return rows.filter(
-      (row) =>
-        resolveTradingRegionKey(row) === selectedRegionKey &&
-        row.is_primary_signal !== false,
+      (row) => resolveTradingRegionKey(row) === selectedRegionKey,
     );
   }, [rows, selectedRegionKey]);
 
@@ -889,6 +890,7 @@ function ScanTerminalScreen() {
     hydrated && (proAccess.subscriptionActive || canUseLocalFullAccess);
   const userLocalTime = useUserLocalClock();
   const { themeMode } = useScanTerminalTheme();
+  const [selectedRegionKey, setSelectedRegionKey] = useState<string>("east_asia");
 
   useEffect(() => {
     let cancelled = false;
@@ -958,10 +960,15 @@ function ScanTerminalScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    setSelectedRegionKey(detectLocalRegion());
+  }, []);
+
   const { refreshScanTerminalManually, scanLoading, terminalData } =
     useScanTerminalQuery({
       isPro,
       proAccessLoading: !hydrated || (proAccess.loading && !canUseLocalFullAccess),
+      tradingRegion: selectedRegionKey,
     });
   const rows = useMemo(
     () => sortRowsByUserTime(terminalData?.rows || []),
@@ -1042,6 +1049,8 @@ function ScanTerminalScreen() {
       searchInputRef={searchInputRef}
       selectedCity={selectedCity}
       setSelectedCity={setSelectedCity}
+      selectedRegionKey={selectedRegionKey}
+      setSelectedRegionKey={setSelectedRegionKey}
     />
   );
 }

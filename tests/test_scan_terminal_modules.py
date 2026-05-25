@@ -22,7 +22,7 @@ def test_normalize_scan_terminal_filters_clamps_and_swaps_bounds():
 
     assert filters["min_price"] == 0.0
     assert filters["max_price"] == 1.0
-    assert filters["limit"] == 100
+    assert filters["limit"] == 200
     assert filters["min_liquidity"] == 5000.0
 
 

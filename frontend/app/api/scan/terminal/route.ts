@@ -30,11 +30,16 @@ export async function GET(req: NextRequest) {
     "time_range",
     "limit",
     "force_refresh",
+    "skip_polymarket",
   ]) {
     const value = req.nextUrl.searchParams.get(key);
     if (value != null && value !== "") {
       params.set(key, value);
     }
+  }
+  const tradingRegion = req.nextUrl.searchParams.get("trading_region");
+  if (tradingRegion != null && tradingRegion !== "") {
+    params.set("region", tradingRegion);
   }
   const cachePolicy = buildForceRefreshProxyCachePolicy(forceRefresh, 10);
 

@@ -27,6 +27,8 @@ async def scan_terminal(
     limit: int = 25,
     force_refresh: bool = False,
     region: str = "",
+    trading_region: str = "",
+    skip_polymarket: bool = False,
 ):
     return await get_scan_terminal_payload(
         request,
@@ -40,7 +42,8 @@ async def scan_terminal(
         time_range=time_range,
         limit=limit,
         force_refresh=force_refresh,
-        region=region if region else None,
+        region=region or trading_region or None,
+        skip_polymarket=skip_polymarket,
     )
 
 
