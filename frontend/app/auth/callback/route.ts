@@ -12,11 +12,15 @@ function normalizeNextPath(input: string | null) {
 }
 
 export async function GET(request: NextRequest) {
-  const configuredSiteUrl = getConfiguredSiteUrl();
-  if (configuredSiteUrl) {
-    const canonicalOrigin = new URL(configuredSiteUrl).origin;
-    if (request.nextUrl.origin !== canonicalOrigin) {
-      const canonicalCallbackUrl = new URL(request.nextUrl.pathname, canonicalOrigin);
+  const siteUrl = getConfiguredSiteUrl();
+  if (siteUrl) {
+    const expectedHost = new URL(siteUrl).host;
+    const requestHost =
+      request.headers.get("x-forwarded-host") ||
+      request.headers.get("host") ||
+      "";
+    if (requestHost !== expectedHost) {
+      const canonicalCallbackUrl = new URL(request.nextUrl.pathname, siteUrl);
       canonicalCallbackUrl.search = request.nextUrl.search;
       return NextResponse.redirect(canonicalCallbackUrl);
     }
