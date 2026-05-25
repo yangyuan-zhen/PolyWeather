@@ -1,5 +1,7 @@
 """Market scan and scan AI API routes."""
 
+from __future__ import annotations
+
 from fastapi import APIRouter, Request
 
 from web.services.scan_api import (
