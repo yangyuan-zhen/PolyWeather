@@ -914,6 +914,10 @@ export function LiveTemperatureThresholdChart({
       // Always default all model curves to hidden across all cities and timeframes
       series.forEach((s) => {
         if (s.key.startsWith("model_curve_")) {
+          // Keep AROME HD visible by default on Paris chart
+          if (city === "paris" && s.key === "model_curve_AROME HD") {
+            return;
+          }
           defaults.add(s.key);
         }
       });

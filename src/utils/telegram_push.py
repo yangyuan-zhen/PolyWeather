@@ -1123,13 +1123,14 @@ def _build_airport_status_message(
     if source_label:
         lines.append("")
         lines.append(f"📡 {source_label}")
-        if arome_temp is not None:
-            diff_str = ""
-            if display_temp is not None:
-                d = arome_temp - display_temp
-                sign = "+" if d >= 0 else ""
-                diff_str = f"（{'偏高' if d > 0 else '偏低'}{sign}{d:.1f}°）"
-            lines.append(f"🕐 AROME HD 15分钟临近预报：{arome_temp:.1f}{temp_symbol}{diff_str}")
+    # Show AROME as supplementary info ONLY when AEROWEB is the primary source
+    if arome_temp is not None and "AEROWEB" in source_label:
+        diff_str = ""
+        if display_temp is not None:
+            d = arome_temp - display_temp
+            sign = "+" if d >= 0 else ""
+            diff_str = f"（{'偏高' if d > 0 else '偏低'}{sign}{d:.1f}°）"
+        lines.append(f"🕐 AROME HD 15分钟临近预报：{arome_temp:.1f}{temp_symbol}{diff_str}")
 
     # Model summary (compact)
     models = city_weather.get("multi_model") or {}
@@ -1313,19 +1314,18 @@ def _process_airport_city(
         if not current_obs_time:
             current_obs_time = str(airport_primary.get("obs_time") or "")
     source_label = ""  # human-readable data source for Paris messages
-    arome_temp_val = None  # AROME HD temperature for display
+    arome_temp_val = None  # AROME HD temperature for display (always fetched for comparison)
     if city == "paris":
+        arome_temp_val = _fetch_arome_temp()
         airport_primary = city_weather.get("airport_primary") or {}
         if airport_primary.get("source_code") == "aeroweb":
             source_label = "AEROWEB 机场实况 · Météo-France"
-        else:
-            arome_temp_val = _fetch_arome_temp()
-            if arome_temp_val is not None:
-                current_temp = arome_temp_val
-                city_weather.setdefault("current", {})["temp"] = arome_temp_val
-                source_label = "AROME HD 15分钟临近预报 · Météo-France"
-                if not current_obs_time:
-                    current_obs_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+        elif arome_temp_val is not None:
+            current_temp = arome_temp_val
+            city_weather.setdefault("current", {})["temp"] = arome_temp_val
+            source_label = "AROME HD 15分钟临近预报 · Météo-France"
+            if not current_obs_time:
+                current_obs_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
     if current_temp is None or deb_pred is None:
         return None
 

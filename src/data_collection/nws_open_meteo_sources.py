@@ -98,6 +98,14 @@ OPEN_METEO_MULTI_MODEL_SPECS: Dict[str, Dict[str, Any]] = {
         "resolution_km": None,
         "horizon": "11d",
     },
+    "meteofrance_arome_france_hd": {
+        "label": "AROME HD",
+        "provider": "Meteo-France",
+        "model": "AROME France HD",
+        "tier": "short_range_europe",
+        "resolution_km": 1.3,
+        "horizon": "1.5d",
+    },
 }
 
 OPEN_METEO_MULTI_MODEL_ORDER = tuple(OPEN_METEO_MULTI_MODEL_SPECS.keys())
