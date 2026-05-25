@@ -23,13 +23,13 @@ docker compose up -d
 
 # Wait for backend to be ready (retry up to 60s)
 echo "Waiting for backend..."
-for i in $(seq 1 12); do
+for i in $(seq 1 30); do
     sleep 5
     if curl -fsSo /dev/null --max-time 5 "https://api.polyweather.top/healthz"; then
         echo "✅ healthz ready after ${i}x5s"
         break
     fi
-    echo "   retry $i/12..."
+    echo "   retry $i/30..."
 done
 
 FAILED=0
