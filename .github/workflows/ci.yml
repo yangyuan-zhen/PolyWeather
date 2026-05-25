@@ -54,37 +54,21 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Upload frontend build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-next
-          path: |
-            frontend/.next
-            frontend/package.json
-            frontend/package-lock.json
-            frontend/next.config.mjs
-            frontend/public
-            !frontend/.next/cache
-
   deploy:
     needs: [python-quality, frontend-quality]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download frontend build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-next
-          path: frontend
-
       - name: Deploy to VPS
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh -o StrictHostKeyChecking=accept-new ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "cd /root/PolyWeather && git fetch origin main && git reset --hard origin/main && mkdir -p frontend"
-          scp -o StrictHostKeyChecking=accept-new -r frontend/.next frontend/package.json frontend/package-lock.json frontend/next.config.mjs ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/root/PolyWeather/frontend/
-          ssh -o StrictHostKeyChecking=accept-new ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "cd /root/PolyWeather && docker compose down && docker compose up -d --build && sleep 10 && curl -s http://localhost:8000/healthz"
+          ssh -o StrictHostKeyChecking=accept-new ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            cd /root/PolyWeather
+            git fetch origin main && git reset --hard origin/main
+            docker compose down
+            docker compose up -d --build
+            sleep 10
+            curl -s http://localhost:8000/healthz
+          "
