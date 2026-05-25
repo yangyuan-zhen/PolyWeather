@@ -780,6 +780,7 @@ export function LiveTemperatureThresholdChart({
   }, [row, tzOffset]);
 
   const runwayPlates = useMemo(() => buildRunwayPlates(hourly?.amos, row, settlementObs), [hourly?.amos, row, settlementObs]);
+  const hasRunwayData = runwayPlates.length > 0;
   const settlementPlate = useMemo(() => runwayPlates.find((p) => p.isSettlement), [runwayPlates]);
 
   const cityKey = String(row?.city || "").toLowerCase().trim();
@@ -999,6 +1000,29 @@ export function LiveTemperatureThresholdChart({
           </div>
         )}
 
+        {/* Multi-model list (only when runway data is on chart) */}
+        {hasRunwayData && series.some((s) => s.key.startsWith("model_curve_")) && (
+          <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-2">
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-[11px]">
+              <span className="font-black text-slate-500 uppercase mr-2">
+                {isEn ? "Models:" : "多模型:"}
+              </span>
+              {series
+                .filter((s) => s.key.startsWith("model_curve_"))
+                .map((s) => {
+                  const stats = seriesStats(s.values);
+                  return (
+                    <span key={s.key} className="inline-flex items-center gap-1.5 font-mono">
+                      <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                      <span className="text-slate-700 font-bold">{s.label}</span>
+                      <span className="text-slate-500">{temp(stats.latest)}</span>
+                    </span>
+                  );
+                })}
+            </div>
+          </div>
+        )}
+
         {/* Chart */}
         <div className="relative min-h-0 flex-1 p-2">
           <div className="absolute left-3 top-3 z-10 rounded border border-slate-200 bg-white px-2 py-1 text-[10px] font-black text-slate-800 shadow-sm">
@@ -1064,7 +1088,9 @@ export function LiveTemperatureThresholdChart({
                 iconType="plainline"
                 wrapperStyle={{ fontSize: 11 }}
               />
-              {series.map((item) => (
+              {series
+                .filter((item) => !hasRunwayData || !item.key.startsWith("model_curve_"))
+                .map((item) => (
                 <Line
                   key={item.key}
                   type={item.curve || (item.smooth ? "monotone" : "linear")}
