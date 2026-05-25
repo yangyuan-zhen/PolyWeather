@@ -51,7 +51,7 @@ services:
     container_name: polyweather_frontend
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
       POLYWEATHER_API_BASE_URL: "${POLYWEATHER_API_BASE_URL:-http://polyweather_web:8000}"
       NEXT_PUBLIC_POLYWEATHER_API_BASE_URL: "${NEXT_PUBLIC_POLYWEATHER_API_BASE_URL:-}"
