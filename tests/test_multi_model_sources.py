@@ -4,7 +4,11 @@ from src.data_collection.nws_open_meteo_sources import (
 )
 import src.data_collection.open_meteo_cache as open_meteo_cache_module
 from src.data_collection.weather_sources import WeatherDataCollector
-from src.database.runtime_state import OpenMeteoRateLimitRepository, RuntimeStateDB
+from src.database.runtime_state import (
+    OpenMeteoCacheRepository,
+    OpenMeteoRateLimitRepository,
+    RuntimeStateDB,
+)
 
 
 def test_multi_model_parser_exposes_open_recommended_models():
@@ -144,11 +148,29 @@ def test_persisted_open_meteo_cooldown_skips_outbound_request(monkeypatch, tmp_p
     monkeypatch.setenv("POLYWEATHER_DB_PATH", str(tmp_path / "polyweather.db"))
     monkeypatch.setenv("OPEN_METEO_DISK_CACHE_PATH", str(tmp_path / "om-cache.json"))
     db = RuntimeStateDB(str(tmp_path / "polyweather.db"))
+    cache_repo = OpenMeteoCacheRepository(db)
     rate_repo = OpenMeteoRateLimitRepository(db)
-    rate_repo.set_until(9999999999.0, reason="test_429")
+    monkeypatch.setattr(open_meteo_cache_module, "_open_meteo_cache_repo", cache_repo)
     monkeypatch.setattr(open_meteo_cache_module, "_open_meteo_rate_limit_repo", rate_repo)
 
     collector = WeatherDataCollector({})
+    cache_key = (
+        f"{round(float(40.1281), 4)}:{round(float(32.9951), 4)}:ankara:"
+        f"c:{collector.multi_model_cache_version}"
+    )
+    cache_repo.replace_payload(
+        {
+            "multi_model": {
+                cache_key: {
+                    "t": 9999999998.0,
+                    "data": {"forecasts": {"ECMWF": 26.0}},
+                }
+            }
+        },
+        max_age=86400,
+    )
+    collector._load_open_meteo_disk_cache()
+    rate_repo.set_until(9999999999.0, reason="test_429")
 
     def fail_http(*args, **kwargs):
         raise AssertionError("Open-Meteo HTTP request should be skipped during persisted cooldown")
@@ -218,4 +240,3 @@ def test_merge_multi_model_result_with_cache_hourly():
     assert merged["hourly_forecasts"]["ECMWF"] == [15.1, 15.3]
     assert merged["hourly_forecasts"]["GFS"] == [14.5, None]
     assert merged["hourly_forecasts"]["ICON-EU"] == [14.8, None]
-
