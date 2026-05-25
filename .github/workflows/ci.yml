@@ -85,10 +85,14 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          scp -o StrictHostKeyChecking=accept-new -r frontend/.next frontend/package.json frontend/package-lock.json frontend/next.config.mjs ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/root/PolyWeather/frontend/
           ssh -o StrictHostKeyChecking=accept-new ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
             cd /root/PolyWeather
             git fetch origin main && git reset --hard origin/main
+            mkdir -p frontend
+          "
+          scp -o StrictHostKeyChecking=accept-new -r frontend/.next frontend/package.json frontend/package-lock.json frontend/next.config.mjs ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/root/PolyWeather/frontend/
+          ssh -o StrictHostKeyChecking=accept-new ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            cd /root/PolyWeather
             docker compose down
             docker compose up -d --build
             sleep 10
