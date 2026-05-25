@@ -321,7 +321,7 @@ def _refresh_city_summary_cache(city: str, force_refresh: bool = False) -> dict:
 
 
 def _refresh_city_panel_cache(city: str, force_refresh: bool = False) -> dict:
-    payload = _analyze(city, force_refresh=force_refresh, include_llm_commentary=False, detail_mode="panel")
+    payload = _analyze(city, force_refresh=force_refresh, detail_mode="panel")
     _CACHE_DB.set_city_cache(
         "panel",
         city,
@@ -333,7 +333,7 @@ def _refresh_city_panel_cache(city: str, force_refresh: bool = False) -> dict:
 
 
 def _refresh_city_nearby_cache(city: str, force_refresh: bool = False) -> dict:
-    payload = _analyze(city, force_refresh=force_refresh, include_llm_commentary=False, detail_mode="nearby")
+    payload = _analyze(city, force_refresh=force_refresh, detail_mode="nearby")
     _CACHE_DB.set_city_cache(
         "nearby",
         city,
@@ -345,7 +345,7 @@ def _refresh_city_nearby_cache(city: str, force_refresh: bool = False) -> dict:
 
 
 def _refresh_city_market_cache(city: str, force_refresh: bool = False) -> dict:
-    payload = _analyze(city, force_refresh=force_refresh, include_llm_commentary=False, detail_mode="market")
+    payload = _analyze(city, force_refresh=force_refresh, detail_mode="market")
     now_ts = time.time()
     payload["market_analysis_cached_at"] = datetime.now().isoformat()
     payload["market_analysis_cached_at_ts"] = now_ts
@@ -361,7 +361,7 @@ def _refresh_city_market_cache(city: str, force_refresh: bool = False) -> dict:
 
 
 def _refresh_city_full_cache(city: str, force_refresh: bool = False) -> dict:
-    payload = _analyze(city, force_refresh=force_refresh, include_llm_commentary=False, detail_mode="full")
+    payload = _analyze(city, force_refresh=force_refresh, detail_mode="full")
     _CACHE_DB.set_city_cache(
         "full",
         city,

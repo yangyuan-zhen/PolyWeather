@@ -152,7 +152,6 @@ def _scan_city_terminal_rows_quick(
     data = _analyze(
         city,
         force_refresh=force_refresh,
-        include_llm_commentary=False,
         detail_mode="panel",
     )
     row = _build_quick_row(city=city, data=data)
