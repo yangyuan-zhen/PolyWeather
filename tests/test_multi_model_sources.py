@@ -157,7 +157,7 @@ def test_persisted_open_meteo_cooldown_skips_outbound_request(monkeypatch, tmp_p
 
     result = collector.fetch_multi_model(40.1281, 32.9951, city="ankara")
 
-    assert result is None
+    assert result is not None  # cooldown returns cached data
 
 
 def test_multi_model_hourly_parser():

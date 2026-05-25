@@ -247,12 +247,13 @@ function CityContractDetail({
     () => (selectedCity ? rows.filter((r) => String(r.city || "").toLowerCase() === selectedCity) : []),
     [rows, selectedCity],
   );
-  const [priceMap, setPriceMap] = useState<Record<string, { midpoint: number; ask: number; bid: number }> | null>(null);
+  const [marketRows, setMarketRows] = useState<ScanOpportunityRow[] | null>(null);
 
   useEffect(() => {
-    setPriceMap(null);
+    setMarketRows(null);
     if (!selectedCity) return;
     let cancelled = false;
+    const baseRow = cityRows[0];
     const cityName = cityRows[0]?.city_display_name || selectedCity;
     fetch(`/api/city/${encodeURIComponent(cityName)}/market-scan?lite=true`, {
       cache: "no-store",
@@ -260,28 +261,63 @@ function CityContractDetail({
     })
       .then(async (res) => { if (!res.ok) return null; return res.json(); })
       .then((json: any) => {
-        if (cancelled || !json?.market_scan?.scan_rows) return;
-        const map: Record<string, { midpoint: number; ask: number; bid: number }> = {};
-        for (const r of json.market_scan.scan_rows) {
-          const key = r.id || r.market_slug || "";
-          if (key && (r.midpoint != null || r.ask != null || r.bid != null)) {
-            map[key] = { midpoint: r.midpoint, ask: r.ask, bid: r.bid };
-          }
+        if (cancelled || !baseRow) return;
+        const scan = json?.market_scan;
+        if (!scan || scan.available === false) return;
+        const scanRows = Array.isArray(scan.scan_rows) ? scan.scan_rows : [];
+        if (scanRows.length) {
+          setMarketRows(scanRows.map((row: Partial<ScanOpportunityRow>) => ({
+            ...baseRow,
+            ...row,
+            city: baseRow.city,
+            city_display_name: baseRow.city_display_name,
+            local_date: baseRow.local_date,
+            local_time: baseRow.local_time,
+            temp_symbol: baseRow.temp_symbol,
+            current_temp: baseRow.current_temp,
+            current_max_so_far: baseRow.current_max_so_far,
+            deb_prediction: baseRow.deb_prediction,
+            trading_region: baseRow.trading_region,
+            trading_region_label: baseRow.trading_region_label,
+            trading_region_label_zh: baseRow.trading_region_label_zh,
+            trading_region_sort: baseRow.trading_region_sort,
+            tz_offset_seconds: baseRow.tz_offset_seconds,
+          } as ScanOpportunityRow)));
+          return;
         }
-        setPriceMap(map);
+        if (!scan.selected_slug) return;
+        const midpoint = scan.midpoint ?? scan.yes_midpoint ?? scan.market_price ?? null;
+        setMarketRows([{
+          ...baseRow,
+          id: `${baseRow.city}|${scan.selected_date || baseRow.local_date || "today"}|${scan.selected_slug}|yes`,
+          market_slug: scan.selected_slug,
+          market_question: scan.primary_market?.question || scan.question || scan.selected_slug,
+          market_url: scan.market_url || scan.primary_market_url || (
+            scan.selected_slug ? `https://polymarket.com/event/${scan.selected_slug}` : null
+          ),
+          selected_date: scan.selected_date || baseRow.local_date,
+          target_label: scan.target_label || scan.temperature_bucket?.label || scan.selected_slug,
+          model_probability: scan.model_probability ?? baseRow.model_probability,
+          market_probability: scan.market_price ?? scan.yes_midpoint ?? null,
+          midpoint,
+          ask: scan.yes_buy ?? scan.yes_ask ?? null,
+          bid: scan.yes_sell ?? scan.yes_bid ?? null,
+          spread: scan.yes_spread ?? scan.spread ?? null,
+          book_liquidity: scan.liquidity ?? scan.book_liquidity ?? null,
+          market_liquidity: scan.liquidity ?? scan.market_liquidity ?? null,
+          volume: scan.volume ?? baseRow.volume,
+          quote_source: scan.quote_source ?? baseRow.quote_source,
+          active: scan.primary_market?.active ?? baseRow.active,
+          closed: scan.primary_market?.closed ?? baseRow.closed,
+          accepting_orders: scan.primary_market?.acceptingOrders ?? baseRow.accepting_orders,
+          tradable: scan.primary_market?.active === true && scan.primary_market?.closed !== true,
+        }]);
       })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [selectedCity, cityRows]);
 
-  const pricedRows = useMemo(() => {
-    if (!priceMap) return cityRows;
-    return cityRows.map((r) => {
-      const prices = priceMap[r.id || r.market_slug || ""];
-      if (!prices) return r;
-      return { ...r, ...prices };
-    });
-  }, [cityRows, priceMap]);
+  const displayRows = marketRows?.length ? marketRows : cityRows;
 
   return (
     <Panel title={isEn ? "Contracts" : "合约"} className="flex-1 min-h-0">
@@ -294,7 +330,7 @@ function CityContractDetail({
           {isEn ? "No contracts for this city" : "该城市暂无合约"}
         </div>
       ) : (
-        <KoyfinRowsTable compact isEn={isEn} onSelect={onSelect} rows={pricedRows} selectedId={selectedId} />
+        <KoyfinRowsTable compact isEn={isEn} onSelect={onSelect} rows={displayRows} selectedId={selectedId} />
       )}
     </Panel>
   );

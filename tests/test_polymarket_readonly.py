@@ -294,6 +294,47 @@ def test_lau_fau_shan_uses_shenzhen_market_city():
     assert scan["selected_slug"] == "highest-temperature-in-shenzhen-on-april-23-2026-30c-or-higher"
 
 
+def test_lau_fau_shan_alias_resolves_to_shenzhen_market_city():
+    layer = PolymarketReadOnlyLayer()
+    captured = {}
+
+    def _fake_find_primary_market(city_key, target_date, **_kwargs):
+        captured["primary_city_key"] = city_key
+        captured["target_date"] = target_date
+        return (
+            {
+                "id": "market-1",
+                "question": "Will the highest temperature in Shenzhen be 30C or higher on April 23?",
+                "slug": "highest-temperature-in-shenzhen-on-april-23-2026-30c-or-higher",
+                "conditionId": "condition-1",
+                "active": True,
+                "closed": False,
+                "acceptingOrders": True,
+            },
+            None,
+        )
+
+    layer._find_primary_market = _fake_find_primary_market
+    layer._extract_market_tokens = lambda _market: [
+        {"outcome": "Yes", "token_id": "yes-token"},
+        {"outcome": "No", "token_id": "no-token"},
+    ]
+    layer._get_token_market_data = lambda _token_id: {"buy": 0.42, "sell": 0.40, "midpoint": 0.41}
+    layer._build_top_temperature_buckets = lambda *_args, **_kwargs: []
+
+    scan = layer.build_market_scan(
+        city="lau fau shan",
+        target_date="2026-04-23",
+        temperature_bucket={"temp": 30, "probability": 0.58},
+        model_probability=0.58,
+    )
+
+    assert captured["primary_city_key"] == "shenzhen"
+    assert scan["city_key"] == "shenzhen"
+    assert scan["market_city_key"] == "shenzhen"
+    assert scan["selected_slug"] == "highest-temperature-in-shenzhen-on-april-23-2026-30c-or-higher"
+
+
 def test_build_market_scan_lite_skips_related_buckets():
     layer = PolymarketReadOnlyLayer()
 

@@ -729,7 +729,7 @@ def _analyze(
         include_taf=not is_panel_mode and not is_nearby_mode and not is_market_mode,
         include_nearby=not is_panel_mode and not is_market_mode,
         include_ensemble=not is_panel_mode and not is_nearby_mode and not is_market_mode,
-        include_multi_model=not is_panel_mode and not is_nearby_mode,
+        include_multi_model=not is_nearby_mode,
         include_mgm=not is_market_mode,
     )
     om = raw.get("open-meteo", {})
