@@ -2,8 +2,6 @@
 
 import clsx from "clsx";
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { ExternalLink } from "lucide-react";
 import {
   Brush,
   CartesianGrid,
@@ -918,13 +916,8 @@ export function LiveTemperatureThresholdChart({
 
         {/* Chart */}
         <div className="relative min-h-0 flex-1 p-2">
-          <div className="absolute left-3 top-3 z-10 rounded border border-slate-200 bg-white px-2 py-1 text-[10px] font-black text-slate-800 shadow-sm">
-            {rowName(row)}
-            {row?.market_url ? (
-              <Link href={row.market_url} target="_blank" className="ml-1 text-blue-600 hover:underline">
-                <ExternalLink size={10} className="inline" />
-              </Link>
-            ) : null}
+          <div className="absolute left-3 top-3 z-10 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-black text-slate-800 shadow-sm">
+            {row ? rowName(row) : ""}
           </div>
           {/* Interactive legend */}
           <div className="flex flex-wrap gap-x-4 gap-y-1 px-3 py-1.5 text-[11px] border-b border-slate-200 bg-white">
