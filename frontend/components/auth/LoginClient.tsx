@@ -236,33 +236,35 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
   };
 
   return (
-    <div className="flex min-h-screen w-full flex-col lg:flex-row bg-[#f8fafc] font-sans text-slate-900">
+    <div className="flex min-h-screen w-full bg-[#f8fafc] font-sans text-slate-900">
       {/* Left Column (Shared Dark Column with Illustrative Widget) */}
-      <div className="relative flex flex-col justify-between bg-[#0b0f19] p-8 text-white lg:w-[480px] xl:w-[540px] shrink-0 overflow-hidden border-r border-white/5">
+      <div className="relative hidden lg:flex lg:w-[460px] xl:w-[500px] 2xl:w-[560px] flex-col justify-between bg-gradient-to-br from-[#060913] via-[#0f1527] to-[#040815] p-10 text-white shrink-0 overflow-hidden border-r border-white/5">
         {/* Ambient Glows */}
-        <div className="absolute -left-20 -top-20 h-80 w-80 rounded-full bg-blue-600/15 blur-[100px] pointer-events-none" />
-        <div className="absolute right-0 bottom-0 h-[300px] w-[300px] rounded-full bg-indigo-500/10 blur-[120px] pointer-events-none" />
+        <div className="absolute -left-20 -top-20 h-96 w-96 rounded-full bg-blue-600/10 blur-[130px] pointer-events-none" />
+        <div className="absolute -right-20 -bottom-20 h-[360px] w-[360px] rounded-full bg-purple-500/10 blur-[120px] pointer-events-none" />
+        <div className="absolute top-1/2 right-0 h-[240px] w-[240px] -translate-y-1/2 rounded-full bg-amber-500/5 blur-[100px] pointer-events-none" />
+        
         {/* Grid overlay */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col gap-12">
-          <Link href="/" className="flex items-center hover:opacity-90">
+        <div className="relative z-10 flex flex-col gap-14">
+          <Link href="/" className="flex items-center hover:opacity-90 transition-opacity">
             <img src="/logo.png" alt="PolyWeather" className="h-8 w-auto object-contain brightness-0 invert" />
           </Link>
 
-          <div className="mt-8 space-y-6">
-            <h2 className="text-3xl font-black leading-[1.2] tracking-tight">
+          <div className="space-y-6">
+            <h2 className="text-3xl font-black leading-[1.25] tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
               {isEn ? (
                 <>
                   Weather intelligence and risk management{" "}
-                  <span className="inline-block px-2 py-0.5 rounded bg-blue-600 text-white font-bold text-[0.95em]">
+                  <span className="inline-block px-2.5 py-0.5 rounded bg-blue-600 text-white font-bold text-[0.9em] shadow-lg shadow-blue-600/25">
                     simplified.
                   </span>
                 </>
               ) : (
                 <>
                   天气信息与风险管理{" "}
-                  <span className="inline-block px-2 py-0.5 rounded bg-blue-600 text-white font-bold text-[0.95em]">
+                  <span className="inline-block px-2.5 py-0.5 rounded bg-blue-600 text-white font-bold text-[0.9em] shadow-lg shadow-blue-600/25">
                     化繁为简。
                   </span>
                 </>
@@ -274,103 +276,176 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
           </div>
         </div>
 
-        {/* Sleek Terminal Preview Widget */}
-        <div className="relative z-10 my-8 rounded-xl border border-white/10 bg-white/[0.02] p-5 backdrop-blur-md shadow-2xl max-w-sm">
-          <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
-            <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="font-mono text-[10px] uppercase tracking-wider text-slate-400">
-                {isEn ? "Runway 02L Settlement" : "跑道 02L 官方结算"}
-              </span>
+        {/* High-Fidelity Mock Terminal Preview Widget */}
+        <div className="relative z-10 my-auto p-[1px] bg-gradient-to-b from-white/15 to-transparent rounded-2xl shadow-2xl overflow-hidden hover:scale-[1.01] hover:shadow-blue-500/10 transition-all duration-500 max-w-[420px] w-full">
+          <div className="bg-[#0b0f19]/80 backdrop-blur-xl rounded-2xl p-6">
+            {/* Terminal Top Window Controls */}
+            <div className="flex items-center gap-1.5 mb-5">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f56]" />
+              <span className="h-2.5 w-2.5 rounded-full bg-[#ffbd2e]" />
+              <span className="h-2.5 w-2.5 rounded-full bg-[#27c93f]" />
+              <span className="ml-2 font-mono text-[9px] text-slate-500 tracking-wider">POLYWEATHER_TERMINAL_v1.7</span>
             </div>
-            <span className="font-mono text-[9px] font-black text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">LIVE</span>
-          </div>
-          
-          <div className="space-y-3 font-mono text-[11px]">
-            <div className="flex justify-between">
-              <span className="text-slate-400">{isEn ? "Current Temp:" : "当前气温:"}</span>
-              <span className="font-bold text-white">28.8°C</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">{isEn ? "UMA Threshold:" : "UMA 结算阈值:"}</span>
-              <span className="font-bold text-rose-400">30.0°C</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">{isEn ? "Model Probability:" : "模型预测概率:"}</span>
-              <span className="font-bold text-blue-400">88.5%</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">{isEn ? "Market Price:" : "市场买卖价差:"}</span>
-              <span className="font-bold text-white">$10.00</span>
-            </div>
-          </div>
 
-          {/* Sparkline visualization */}
-          <div className="mt-4 pt-3 border-t border-white/5">
-            <div className="flex items-end justify-between gap-1.5 h-12">
-              {[30, 45, 38, 52, 68, 85, 78, 92, 88].map((h, i) => (
-                <div 
-                  key={i} 
-                  className="flex-1 rounded-t bg-gradient-to-t from-blue-600/30 to-blue-500/90 transition-all duration-300" 
-                  style={{ height: `${h}%` }} 
-                />
-              ))}
+            <div className="flex items-center justify-between border-b border-white/5 pb-3.5 mb-4">
+              <div className="flex items-center gap-2.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="font-mono text-[10px] uppercase tracking-wider text-slate-300">
+                  {isEn ? "Runway 02L Settlement" : "跑道 02L 官方结算"}
+                </span>
+              </div>
+              <span className="font-mono text-[9px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 tracking-wider">LIVE</span>
+            </div>
+
+            {/* Terminal metrics grid */}
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                <span className="block text-[9px] uppercase tracking-wider text-slate-400 mb-0.5">{isEn ? "Current Temp" : "当前温度"}</span>
+                <span className="font-mono text-base font-bold text-white tracking-tight">28.8°C</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                <span className="block text-[9px] uppercase tracking-wider text-slate-400 mb-0.5">{isEn ? "UMA Threshold" : "结算阈值"}</span>
+                <span className="font-mono text-base font-bold text-rose-400 tracking-tight">30.0°C</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                <span className="block text-[9px] uppercase tracking-wider text-slate-400 mb-0.5">{isEn ? "Model Blend" : "模型融合"}</span>
+                <span className="font-mono text-base font-bold text-blue-400 tracking-tight">88.5%</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                <span className="block text-[9px] uppercase tracking-wider text-slate-400 mb-0.5">{isEn ? "Index Price" : "结算指数"}</span>
+                <span className="font-mono text-base font-bold text-emerald-400 tracking-tight">$9.20</span>
+              </div>
+            </div>
+
+            {/* SVG Interactive Line Chart Preview */}
+            <div className="mb-2">
+              <div className="flex items-center justify-between text-[9px] text-slate-400 mb-2 font-mono">
+                <span>{isEn ? "TEMP TREND (24H)" : "气温趋势 (24小时)"}</span>
+                <span className="text-blue-400 font-bold">Blend vs Obs</span>
+              </div>
+              <div className="relative h-28 w-full bg-slate-950/60 rounded-xl p-2 border border-white/5">
+                <svg className="w-full h-full" viewBox="0 0 340 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  {/* Grid Lines */}
+                  <line x1="0" y1="20" x2="340" y2="20" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
+                  <line x1="0" y1="50" x2="340" y2="50" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
+                  <line x1="0" y1="80" x2="340" y2="80" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
+                  <line x1="85" y1="0" x2="85" y2="100" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
+                  <line x1="170" y1="0" x2="170" y2="100" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
+                  <line x1="255" y1="0" x2="255" y2="100" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
+
+                  {/* Threshold Line (30.0°C) */}
+                  <line x1="0" y1="40" x2="340" y2="40" stroke="#f43f5e" strokeWidth="1" strokeDasharray="3 3" opacity="0.8" />
+                  <text x="5" y="36" fill="#f43f5e" className="text-[8px] font-mono font-semibold">30.0°C UMA</text>
+
+                  {/* Gradient Area under Forecast */}
+                  <path
+                    d="M 0 85 Q 40 75 85 60 T 170 35 T 255 45 T 340 55 L 340 100 L 0 100 Z"
+                    fill="url(#chartGradient)"
+                    opacity="0.15"
+                  />
+
+                  {/* Forecast Line (Blue) */}
+                  <path
+                    d="M 0 85 Q 40 75 85 60 T 170 35 T 255 45 T 340 55"
+                    stroke="#3b82f6"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+
+                  {/* Observation Line (Green Solid, ending at current 170px) */}
+                  <path
+                    d="M 0 87 Q 40 78 85 63 T 170 33"
+                    stroke="#10b981"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+
+                  {/* Current Temp Point */}
+                  <circle cx="170" cy="33" r="4" fill="#10b981" />
+                  <circle cx="170" cy="33" r="8" stroke="#10b981" strokeWidth="1.5" className="animate-ping" opacity="0.5" />
+
+                  {/* Definitions for Gradients */}
+                  <defs>
+                    <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3b82f6" />
+                      <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
             </div>
           </div>
+        </div>
+
+        {/* Footer */}
+        <div className="relative z-10 text-[10px] text-slate-500 font-mono">
+          {isEn ? "PolyWeather institutional analytics suite" : "PolyWeather 机构版天气决策系统"}
         </div>
       </div>
 
       {/* Right Column (Forms) */}
-      <div className="flex flex-1 flex-col justify-between p-6 sm:p-8 bg-white min-h-[calc(100vh-100px)] lg:min-h-screen">
-        {/* Top bar switch */}
-        <div className="flex justify-end items-center gap-3">
-          <span className="text-xs text-slate-500">
-            {isLogin ? copy.newToPoly : copy.alreadyHave}
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              setErrorText("");
-              setInfoText("");
-              setMode(isLogin ? "signup" : "login");
-            }}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm transition hover:border-slate-400 hover:text-slate-950"
-          >
-            {isLogin ? copy.signup : copy.login}
-          </button>
+      <div className="flex flex-1 flex-col justify-between p-6 sm:p-10 bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#eff4f9] min-h-screen relative overflow-hidden">
+        {/* Subtle mesh background */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(15,23,42,0.01)_1px,transparent_1px),linear-gradient(to_bottom,rgba(15,23,42,0.01)_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
+        
+        {/* Top Header Switch */}
+        <div className="relative z-10 flex justify-between lg:justify-end items-center gap-3">
+          {/* Logo on top-left for mobile only */}
+          <Link href="/" className="flex items-center hover:opacity-90 transition-opacity lg:hidden">
+            <img src="/logo.png" alt="PolyWeather" className="h-7 w-auto object-contain" />
+          </Link>
+          
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-slate-500">
+              {isLogin ? copy.newToPoly : copy.alreadyHave}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setErrorText("");
+                setInfoText("");
+                setMode(isLogin ? "signup" : "login");
+              }}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 active:scale-[0.98]"
+            >
+              {isLogin ? copy.signup : copy.login}
+            </button>
+          </div>
         </div>
 
         {/* Center Form Card */}
-        <div className="flex flex-1 items-center justify-center my-8">
-          <div className="w-full max-w-[400px]">
-            <h1 className="text-2xl font-black tracking-tight text-slate-900 mb-2">
-              {isLogin ? copy.welcomeBack : copy.signUpTitle}
-            </h1>
-            <p className="text-xs text-slate-500 mb-6">
-              {copy.subtitle}
-            </p>
+        <div className="relative z-10 flex flex-1 items-center justify-center my-10">
+          <div className="w-full max-w-[440px] bg-white/90 backdrop-blur-xl border border-slate-200/50 rounded-2xl p-6 sm:p-10 shadow-[0_24px_60px_rgba(8,16,36,0.06)]">
+            <div className="mb-6">
+              <h1 className="text-2xl font-black tracking-tight text-slate-900 mb-2">
+                {isLogin ? copy.welcomeBack : copy.signUpTitle}
+              </h1>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {copy.subtitle}
+              </p>
+            </div>
 
-            <form onSubmit={(event) => void onEmailSubmit(event)} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+            <form onSubmit={(event) => void onEmailSubmit(event)} className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                   {copy.workEmail}
                 </label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input
                     type="email"
                     required
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                     placeholder="yourname@email.com"
-                    className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-950 placeholder:text-slate-400 transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-11 pr-4 text-sm text-slate-900 placeholder:text-slate-400 transition-all duration-200 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10"
                   />
                 </div>
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <div className="flex justify-between items-center">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                     {copy.password}
                   </label>
                   {isLogin && !resetSent ? (
@@ -378,14 +453,14 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
                       type="button"
                       onClick={() => void onResetPassword()}
                       disabled={loading}
-                      className="text-xs text-slate-500 hover:text-blue-600 transition-colors"
+                      className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors"
                     >
                       {copy.reset}
                     </button>
                   ) : null}
                 </div>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Lock className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input
                     type={showPassword ? "text" : "password"}
                     required
@@ -393,12 +468,12 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     placeholder={isLogin ? copy.passwordLoginPlaceholder : copy.passwordSignupPlaceholder}
-                    className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-10 pr-10 text-sm text-slate-950 placeholder:text-slate-400 transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-11 pr-11 text-sm text-slate-900 placeholder:text-slate-400 transition-all duration-200 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
                   >
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
@@ -406,7 +481,7 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
               </div>
 
               {!isLogin && (
-                <p className="text-[11px] leading-5 text-slate-500 mt-2">
+                <p className="text-[11px] leading-relaxed text-slate-400">
                   {copy.termsAgreement}
                 </p>
               )}
@@ -414,43 +489,44 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
               <button
                 type="submit"
                 disabled={loading}
-                className="flex w-full items-center justify-center rounded-lg bg-[#11161d] py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#1f2937] disabled:opacity-50 mt-6"
+                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 hover:from-slate-950 hover:to-slate-900 text-sm font-bold text-white shadow-lg shadow-slate-950/10 hover:shadow-slate-950/20 active:scale-[0.98] transition-all duration-200 disabled:opacity-50 mt-8 flex items-center justify-center gap-2"
               >
-                {isLogin ? (isEn ? "Sign In" : "开启天气决策之旅") : (isEn ? "Sign Up" : "立即创建账号")}
+                <span>{isLogin ? copy.loginSubmit : copy.signupSubmit}</span>
+                <ArrowRight size={16} />
               </button>
             </form>
 
-            <div className="my-5 flex items-center">
-              <div className="h-px flex-grow bg-slate-200" />
-              <span className="px-3 text-[10px] font-semibold uppercase text-slate-400">
+            <div className="my-6 flex items-center">
+              <div className="h-px flex-grow bg-slate-200/60" />
+              <span className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 {isEn ? "or" : "或"}
               </span>
-              <div className="h-px flex-grow bg-slate-200" />
+              <div className="h-px flex-grow bg-slate-200/60" />
             </div>
 
             <button
               type="button"
               onClick={() => void onGoogleSignIn()}
               disabled={loading}
-              className="flex w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
+              className="w-full py-3 px-4 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 active:scale-[0.99] transition-all duration-150 flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              <Chrome className="mr-2 h-4 w-4 text-blue-600" />
-              {copy.googleOneClick}
+              <Chrome className="h-4 w-4 text-blue-600" />
+              <span>{copy.googleOneClick}</span>
             </button>
 
-            {errorText ? <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{errorText}</p> : null}
-            {infoText ? <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{infoText}</p> : null}
+            {errorText ? <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-700 leading-normal">{errorText}</p> : null}
+            {infoText ? <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-700 leading-normal">{infoText}</p> : null}
             {errorText && isLogin && errorText.includes("Invalid login") ? (
-              <p className="mt-2 text-center text-xs text-slate-500">{copy.loginFailedHint}</p>
+              <p className="mt-2 text-center text-xs text-slate-500 leading-relaxed">{copy.loginFailedHint}</p>
             ) : null}
             {infoText === copy.signupCheckEmail ? (
-              <p className="mt-2 text-center text-xs text-slate-500">{copy.resendVerify}</p>
+              <p className="mt-2 text-center text-xs text-slate-500 leading-relaxed">{copy.resendVerify}</p>
             ) : null}
           </div>
         </div>
 
         {/* Footer */}
-        <div className="text-[10px] text-slate-400 text-center">
+        <div className="relative z-10 text-[10px] text-slate-400 text-center font-mono">
           © {new Date().getFullYear()} PolyWeather. All rights reserved.
         </div>
       </div>

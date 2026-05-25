@@ -44,9 +44,9 @@ SCAN_TERMINAL_BUILD_TIMEOUT_SEC = max(
 )
 SCAN_TERMINAL_MAX_WORKERS = _env_int(
     "POLYWEATHER_SCAN_TERMINAL_MAX_WORKERS",
-    6,
+    8,
     min_value=1,
-    max_value=8,
+    max_value=12,
 )
 DEFAULT_SCAN_AI_MODEL = "mimo-v2.5-pro"
 DEFAULT_SCAN_AI_BASE_URL = "https://token-plan-cn.xiaomimimo.com/v1"
