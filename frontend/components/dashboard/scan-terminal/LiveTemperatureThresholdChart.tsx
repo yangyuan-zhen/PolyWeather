@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import {
+  Brush,
   CartesianGrid,
   Legend,
   Line,
@@ -19,6 +20,10 @@ import type { AmosData, AirportCurrentConditions, CityDetail, ScanOpportunityRow
 import { buildDebBaselinePath } from "@/lib/temperature-chart-paths";
 import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { rowName, temp } from "@/components/dashboard/scan-terminal/utils";
+
+const ROLLING_WINDOW_BEFORE_MS = 12 * 60 * 60 * 1000;
+const ROLLING_WINDOW_AFTER_LIVE_MS = 2 * 60 * 60 * 1000;
+const ROLLING_WINDOW_AFTER_FORECAST_MS = 8 * 60 * 60 * 1000;
 
 const SETTLEMENT_RUNWAY_PAIRS: Record<string, Array<[string, string]>> = {
   shanghai: [["17L", "35R"]],
@@ -151,12 +156,11 @@ type RunwayHistorySeries = {
   points: Array<{ ts: number; value: number }>;
 };
 
-// Sliding window: keep at most this many observation points (24h at 1-min ≈ 1440)
 const MAX_OBS_POINTS = 1440;
 const HOURLY_CACHE_TTL_MS = 30 * 60 * 1000;
-const ROLLING_WINDOW_BEFORE_MS = 6 * 60 * 60 * 1000;
-const ROLLING_WINDOW_AFTER_LIVE_MS = 45 * 60 * 1000;
-const ROLLING_WINDOW_AFTER_FORECAST_MS = 6 * 60 * 60 * 1000;
+const FULL_DAY_SLOT_MINUTES = 30;
+const FULL_DAY_SLOTS = 48;
+const SLOT_INTERVAL_MS = FULL_DAY_SLOT_MINUTES * 60 * 1000;
 const _hourlyCache = new Map<string, { ts: number; data: HourlyForecast }>();
 const RUNWAY_LINE_COLORS = ["#00897b", "#d97706", "#7c3aed", "#0891b2", "#ea580c", "#64748b"];
 
@@ -715,6 +719,37 @@ function buildChartDomain(
   const span = Math.max(1, max - min);
   const pad = Math.max(0.5, span * 0.08);
   return [Number((min - pad).toFixed(1)), Number((max + pad).toFixed(1))];
+}
+
+function generateFullDaySlots(localDateStr: string): number[] {
+  const parts = localDateStr.split("-");
+  if (parts.length !== 3) return [];
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  const slots: number[] = [];
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += FULL_DAY_SLOT_MINUTES) {
+      slots.push(Date.UTC(year, month, day, h, m));
+    }
+  }
+  return slots;
+}
+
+function binObservationsToSlots(
+  slots: number[],
+  obs: Array<{ ts: number; value: number }>,
+): Array<number | null> {
+  const result: Array<number | null> = new Array(slots.length).fill(null);
+  for (const point of obs) {
+    for (let i = slots.length - 1; i >= 0; i--) {
+      if (point.ts >= slots[i]) {
+        result[i] = point.value;
+        break;
+      }
+    }
+  }
+  return result;
 }
 
 // ── Main component ─────────────────────────────────────────────────────
