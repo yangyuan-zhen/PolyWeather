@@ -32,8 +32,7 @@ from src.data_collection.city_time import get_city_utc_offset_seconds
 from src.database.runtime_state import IntradayPathSnapshotRepository
 from web.services.city_payloads import (
     build_city_detail_payload as _city_payload_detail,
-    build_city_market_scan_payload as _city_payload_market_scan,
-    build_city_summary_payload as _city_payload_summary,
+    build_city_summary_payload as _city_payload_summary
 )
 from web.services.observation_freshness import (
     build_observation_freshness as _build_observation_freshness,
@@ -2054,20 +2053,6 @@ def _build_city_summary_payload(data: Dict[str, Any]) -> Dict[str, Any]:
     return _city_payload_summary(data)
 
 
-def _build_city_market_scan_payload(
-    data: Dict[str, Any],
-    market_slug: Optional[str] = None,
-    target_date: Optional[str] = None,
-    lite: bool = False,
-    scan_filters: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    return _city_payload_market_scan(
-        data,
-        market_slug=market_slug,
-        target_date=target_date,
-        lite=lite,
-        scan_filters=scan_filters,
-    )
 
 
 def _build_city_detail_payload(
@@ -2086,3 +2071,18 @@ def _build_city_detail_payload(
 # ──────────────────────────────────────────────────────────
 #  Routes
 # ──────────────────────────────────────────────────────────
+
+def _build_city_market_scan_payload(
+    data,
+    market_slug=None,
+    target_date=None,
+    lite=False,
+    scan_filters=None,
+):
+    local_date = str(data.get("local_date") or "").strip()
+    return {
+        "market_scan": {"available": False},
+        "selected_date": target_date or local_date,
+        "fetched_at": data.get("updated_at"),
+    }
+

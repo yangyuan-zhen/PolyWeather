@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from web.core import CITIES
-from web.analysis_service import _analyze, _build_city_market_scan_payload
+from web.analysis_service import _analyze
 from web.scan_city_ai_helpers import _safe_float
 from web.scan_terminal_ai_compact import _build_metar_decision_context
 from web.scan_terminal_filters import (
@@ -139,65 +139,7 @@ def _scan_city_terminal_rows(
     *,
     force_refresh: bool = False,
 ) -> Dict[str, Any]:
-    # Quick mode: skip Polymarket matching, return cached analysis rows only
-    if filters.get("skip_polymarket"):
-        return _scan_city_terminal_rows_quick(city, filters, force_refresh=force_refresh)
-
-    # Try cached analysis first; force-refresh if probability distribution is missing
-    data = _analyze(
-        city,
-        force_refresh=force_refresh,
-        include_llm_commentary=False,
-        detail_mode="market",
-    )
-    probs = data.get("probabilities") or {}
-    if not probs.get("distribution") and not force_refresh:
-        data = _analyze(
-            city,
-            force_refresh=True,
-            include_llm_commentary=False,
-            detail_mode="market",
-        )
-    target_dates = _resolve_time_range_dates(data, filters["time_range"])
-    rows: List[Dict[str, Any]] = []
-    primary_scores: List[float] = []
-    candidate_total = 0
-
-    for target_date in target_dates:
-        payload = _build_city_market_scan_payload(
-            data,
-            market_slug=None,
-            target_date=target_date,
-            lite=True,
-            scan_filters=filters,
-        )
-        scan = payload.get("market_scan") or {}
-        candidate_total += int(scan.get("candidate_count") or 0)
-        raw_rows = scan.get("scan_rows")
-        if not isinstance(raw_rows, list) or not raw_rows:
-            raw_rows = [scan.get("primary_signal")] if isinstance(scan.get("primary_signal"), dict) else []
-        if not raw_rows:
-            continue
-        for raw_row in raw_rows:
-            if not isinstance(raw_row, dict) or not raw_row:
-                continue
-            row = _build_terminal_row(
-                city=city,
-                data=data,
-                scan=scan,
-                row=raw_row,
-            )
-            rows.append(row)
-            score = _safe_float(row.get("final_score"))
-            if score is not None and row.get("is_primary_signal"):
-                primary_scores.append(score)
-
-    return {
-        "city": city,
-        "rows": rows,
-        "candidate_total": candidate_total,
-        "primary_scores": primary_scores,
-    }
+    return _scan_city_terminal_rows_quick(city, filters, force_refresh=force_refresh)
 
 
 def _scan_city_terminal_rows_quick(

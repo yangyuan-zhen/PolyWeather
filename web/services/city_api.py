@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from fastapi import BackgroundTasks, HTTPException, Request
+from fastapi import HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from loguru import logger
 
@@ -165,67 +165,4 @@ async def get_city_detail_aggregate_payload(
     )
 
 
-async def get_city_market_scan_payload(
-    request: Request,
-    background_tasks: BackgroundTasks,
-    name: str,
-    *,
-    force_refresh: bool = False,
-    market_slug: Optional[str] = None,
-    target_date: Optional[str] = None,
-    lite: bool = False,
-) -> Dict[str, Any]:
-    legacy_routes._assert_entitlement(request)
-    city = legacy_routes._normalize_city_or_404(name)
-    if force_refresh:
-        data = await run_in_threadpool(legacy_routes._refresh_city_market_cache, city, True)
-        cached_scan = legacy_routes._get_cached_market_scan_payload(
-            data,
-            market_slug=market_slug,
-            target_date=target_date,
-            lite=lite,
-        )
-        if cached_scan is not None:
-            return cached_scan
-    else:
-        cached_entry = await run_in_threadpool(legacy_routes._CACHE_DB.get_city_cache, "market", city)
-        if cached_entry:
-            data = cached_entry.get("payload") or {}
-            cached_scan = legacy_routes._get_cached_market_scan_payload(
-                data,
-                market_slug=market_slug,
-                target_date=target_date,
-                lite=lite,
-            )
-            if cached_scan is not None:
-                if not legacy_routes._market_analysis_cache_is_fresh(cached_entry):
-                    legacy_routes._schedule_cache_refresh(background_tasks, kind="market", city=city)
-                return cached_scan
-            if legacy_routes._market_analysis_cache_is_fresh(cached_entry):
-                return await run_in_threadpool(
-                    legacy_routes._refresh_market_scan_payload_from_cached_analysis,
-                    city,
-                    data,
-                    market_slug=market_slug,
-                    target_date=target_date,
-                    lite=lite,
-                )
-            else:
-                legacy_routes._schedule_cache_refresh(background_tasks, kind="market", city=city)
-        else:
-            data = await run_in_threadpool(legacy_routes._refresh_city_market_cache, city, False)
-            cached_scan = legacy_routes._get_cached_market_scan_payload(
-                data,
-                market_slug=market_slug,
-                target_date=target_date,
-                lite=lite,
-            )
-            if cached_scan is not None:
-                return cached_scan
-    return await run_in_threadpool(
-        legacy_routes._build_city_market_scan_payload,
-        data,
-        market_slug,
-        target_date,
-        lite,
-    )
+
