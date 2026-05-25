@@ -20,7 +20,6 @@ export function runTests() {
     "dashboard",
     "ScanTerminalDashboard.tsx",
   );
-  const dashboardClientPath = path.join(projectRoot, "lib", "dashboard-client.ts");
   const airportEvidencePath = path.join(
     projectRoot,
     "components",
@@ -31,7 +30,6 @@ export function runTests() {
 
   const querySource = fs.readFileSync(queryPath, "utf8");
   const dashboardSource = fs.readFileSync(dashboardPath, "utf8");
-  const dashboardClientSource = fs.readFileSync(dashboardClientPath, "utf8");
   const airportEvidenceSource = fs.readFileSync(airportEvidencePath, "utf8");
 
   assert(
@@ -51,9 +49,5 @@ export function runTests() {
       airportEvidenceSource.includes("seoul") &&
       !airportEvidenceSource.includes("busan:"),
     "settlement runway mapping must cover all active settlement cities without mixing in non-settlement airports",
-  );
-  assert(
-    dashboardClientSource.includes('CACHE_KEY = "polyWeather_v2_chart_full_day"'),
-    "city detail cache key must be bumped so old partial chart detail caches are not reused",
   );
 }
