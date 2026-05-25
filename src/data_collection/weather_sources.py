@@ -37,7 +37,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
     - NWS (US National Weather Service)
     - MGM (Turkish Meteorological Service)
     - JMA / HKO / CWA (country official networks)
-    - Polymarket (weather derivative markets)
+    - Weather derivative markets
     """
 
     from src.data_collection.city_registry import CITY_REGISTRY
@@ -612,7 +612,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
 
     def extract_city_from_question(self, question: str) -> Optional[str]:
         """
-        从 Polymarket 问题描述或 Slug 中提取城市名称
+        从市场问题描述或 Slug 中提取城市名称
         """
         q = question.lower()
 

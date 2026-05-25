@@ -151,7 +151,7 @@ CITY_REGISTRY = {
         "risk_emoji": "🟡",
         "airport_name": "流浮山天文台站",
         "distance_km": 0.0,
-        "warning": "香港天文台流浮山站分钟级观测，Polymarket 深圳温度市场结算源；非机场 METAR，不可与 ZGSZ/VHHH 报文混用。",
+        "warning": "香港天文台流浮山站分钟级观测，深圳温度市场结算源；非机场 METAR，不可与 ZGSZ/VHHH 报文混用。",
     },
     "taipei": {
         "name": "Taipei",

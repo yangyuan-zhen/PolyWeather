@@ -27,8 +27,6 @@ const LABELS: Record<string, string> = {
   hko: "HKO (香港)",
   singapore_mss: "Singapore MSS",
   cwa: "CWA (台湾)",
-  polymarket_gamma: "Polymarket Gamma",
-  polymarket_clob: "Polymarket CLOB",
   amos: "AMOS (韩国跑道)",
   amsc_awos: "AMSC AWOS (中国)",
   noaa_wrh: "NOAA WRH (美国结算)",

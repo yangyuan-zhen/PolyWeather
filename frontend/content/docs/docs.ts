@@ -492,7 +492,7 @@ export const DOCS_PAGES: DocsPage[] = [
               {
                 type: "bullets",
                 items: [
-                  "自动识别当前 Polymarket 页面中的城市，也支持手动切换。",
+                  "自动识别当前页面中的城市，也支持手动切换。",
                   "展示城市档案：结算站点、站点距离、观测更新时间、周边站点数量。",
                   "展示今日日内走势（简版）：DEB 走势与机场主站实况 / 官方增强站网对照，可悬停查看时间与温度。",
                   "展示多日最高温预报（简版），并提供一键刷新与跳转主站入口。",
@@ -566,7 +566,7 @@ export const DOCS_PAGES: DocsPage[] = [
               {
                 type: "bullets",
                 items: [
-                  "Auto-detects the current Polymarket page city, with manual switching also available.",
+                  "Auto-detects the current page city, with manual switching also available.",
                   "Shows a city profile with settlement station, station distance, observation timestamp, and nearby station count.",
                   "Shows a compact intraday chart with DEB versus airport-primary observations and official nearby-network observations, including hoverable time and temperature.",
                   "Shows a compact multi-day daily-high forecast, plus refresh and jump-to-site actions.",

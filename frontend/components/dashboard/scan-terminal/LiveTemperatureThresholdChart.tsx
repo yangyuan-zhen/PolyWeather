@@ -832,11 +832,13 @@ export function LiveTemperatureThresholdChart({
   row,
   allRows = [],
   compact = false,
+  onSearchClick,
 }: {
   isEn: boolean;
   row: ScanOpportunityRow | null;
   allRows?: ScanOpportunityRow[];
   compact?: boolean;
+  onSearchClick?: () => void;
 }) {
   const [hourly, setHourly] = useState<HourlyForecast>(null);
   const city = String(row?.city || "").toLowerCase().trim();
@@ -1009,19 +1011,37 @@ export function LiveTemperatureThresholdChart({
     [series, data],
   );
 
-  const panelTitle = row
-    ? `${rowName(row)} · ${
-        isEn
-          ? timeframe === "1D"
-            ? "Live & Forecast"
-            : `${timeframe} Forecast`
-          : timeframe === "1D"
-          ? "实测与预测"
-          : `${timeframe}预报`
-      }`
-    : isEn
-    ? "Temperature Chart"
-    : "气温图表";
+  const subtitle = row
+    ? isEn
+      ? timeframe === "1D"
+        ? "Live & Forecast"
+        : `${timeframe} Forecast`
+      : timeframe === "1D"
+      ? "实测与预测"
+      : `${timeframe}预报`
+    : "";
+
+  const panelTitle = row ? (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={onSearchClick}
+        className={clsx(
+          "flex items-center gap-1.5 px-1.5 py-0.5 rounded text-left transition-colors font-bold text-slate-800 outline-none select-none",
+          onSearchClick ? "hover:bg-slate-200/80 cursor-pointer" : ""
+        )}
+      >
+        <span>{rowName(row)}</span>
+        {onSearchClick && <span className="text-[8px] text-slate-400">▼</span>}
+      </button>
+      <span className="text-slate-400 font-normal">·</span>
+      <span className="text-slate-500 font-normal">{subtitle}</span>
+    </div>
+  ) : isEn ? (
+    "Temperature Chart"
+  ) : (
+    "气温图表"
+  );
 
   const timeframeActions = (
     <div className="flex items-center gap-1 rounded bg-[#eef2f6] p-0.5 border border-slate-200">

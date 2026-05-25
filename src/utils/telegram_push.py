@@ -595,7 +595,7 @@ HIGH_FREQ_AIRPORT_ICAO = {
     "san francisco": "KSFO", "houston": "KHOU", "dallas": "KDAL",
     "austin": "KAUS", "seattle": "KSEA",
 }
-# Settlement runway mapping — matches Polymarket settlement anchor stations.
+# Settlement runway mapping — matches settlement anchor stations.
 # Format: (low_number, high_number) order-independent; stored sorted for lookup.
 SETTLEMENT_RUNWAY_PAIRS: Dict[str, Set[Tuple[str, str]]] = {
     "shanghai": {("17L", "35R")},

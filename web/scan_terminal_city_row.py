@@ -148,7 +148,7 @@ def _scan_city_terminal_rows_quick(
     *,
     force_refresh: bool = False,
 ) -> Dict[str, Any]:
-    """Fast path that skips Polymarket matching — returns a single row per city
+    """Fast path that returns cached analysis rows only — returns a single row per city
     with cached analysis data (Obs, DEB, probabilities) but no market prices."""
     data = _analyze(
         city,

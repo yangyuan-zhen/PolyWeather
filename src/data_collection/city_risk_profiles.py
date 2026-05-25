@@ -1,4 +1,4 @@
-# Polymarket 城市温度市场 - 数据偏差风险档案
+# 城市温度市场 - 数据偏差风险档案
 # 基于 METAR 机场站与市区实际温度的系统性差异
 
 from src.data_collection.city_registry import CITY_REGISTRY

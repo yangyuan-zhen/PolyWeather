@@ -4,7 +4,7 @@ import type { CityDetail } from "@/lib/dashboard-types";
 import { getDisplayAirportPrimary } from "@/lib/airport-observation-display";
 import { formatTemperatureValue } from "@/lib/temperature-utils";
 
-// Settlement runway mapping — matches Polymarket settlement anchors
+// Settlement runway mapping — matches settlement anchors
 const SETTLEMENT_RUNWAY_PAIRS: Record<string, Array<[string, string]>> = {
   shanghai: [["17L", "35R"]],
   beijing: [["01", "19"]],
