@@ -545,47 +545,30 @@ function buildModelSummaryCards(row: ScanOpportunityRow | null): EvidenceSeries[
     }));
 }
 
-// ── Market temperature ticks for Y-axis ─────────────────────────────────
+// ── Integer-degree ticks for Y-axis ──────────────────────────────────
 
-function parseTemperatureOptionsFromText(value?: string | null) {
-  const raw = String(value || "");
-  const matches = raw.match(/-?\d+(?:\.\d+)?/g) || [];
-  return matches.map(Number).filter((v) => Number.isFinite(v) && v > -80 && v < 80);
-}
-
-function buildMarketTemperatureOptions(row: ScanOpportunityRow | null) {
-  const buckets = row?.distribution_full?.length
-    ? row.distribution_full
-    : row?.distribution_preview;
-  const values = new Set<number>();
-  (buckets || []).forEach((b) => {
-    const v = validNumber(b.value);
-    if (v !== null) values.add(v);
-    parseTemperatureOptionsFromText(b.label).forEach((x) => values.add(x));
-  });
-  [row?.target_lower, row?.target_upper, row?.target_value, row?.target_threshold]
-    .forEach((v) => { if (validNumber(v) !== null) values.add(validNumber(v)!); });
-  parseTemperatureOptionsFromText(row?.target_label).forEach((x) => values.add(x));
-
-  const sorted = [...values].sort((a, b) => a - b);
-  if (sorted.length) return sorted;
-  const t = validNumber(row?.target_threshold) ?? validNumber(row?.target_value);
-  if (t === null) return null;
-  return [t - 2, t - 1, t, t + 1, t + 2];
+function buildIntDegreeTicks(series: EvidenceSeries[], data?: Array<Record<string, string | number | null>>): number[] | null {
+  const vals = data?.length
+    ? data.flatMap((point) => series.map((s) => point[s.key])).filter((v): v is number => validNumber(v) !== null)
+    : series.flatMap((s) => s.values).filter((v): v is number => validNumber(v) !== null);
+  if (!vals.length) return null;
+  const min = Math.floor(Math.min(...vals));
+  const max = Math.ceil(Math.max(...vals));
+  const ticks: number[] = [];
+  for (let d = min; d <= max; d++) ticks.push(d);
+  return ticks.length > 0 ? ticks : null;
 }
 
 function buildChartDomain(
-  ticks: number[] | null,
   series: EvidenceSeries[],
   data?: Array<Record<string, string | number | null>>,
 ): [number, number] | ["auto", "auto"] {
   const vals = data?.length
     ? data.flatMap((point) => series.map((s) => point[s.key])).filter((v): v is number => validNumber(v) !== null)
     : series.flatMap((s) => s.values).filter((v): v is number => validNumber(v) !== null);
-  const all = [...(ticks || []), ...vals];
-  if (!all.length) return ["auto", "auto"];
-  const min = Math.min(...all);
-  const max = Math.max(...all);
+  if (!vals.length) return ["auto", "auto"];
+  const min = Math.min(...vals);
+  const max = Math.max(...vals);
   const span = Math.max(1, max - min);
   const pad = Math.max(0.5, span * 0.08);
   return [Number((min - pad).toFixed(1)), Number((max + pad).toFixed(1))];
@@ -777,10 +760,10 @@ export function LiveTemperatureThresholdChart({
     return list.sort((a, b) => a.threshold - b.threshold);
   }, [row, allRows]);
 
-  const marketTicks = useMemo(() => buildMarketTemperatureOptions(row), [row]);
+  const intDegreeTicks = useMemo(() => buildIntDegreeTicks(series, data), [series, data]);
   const chartDomain = useMemo(
-    () => buildChartDomain(marketTicks, series, data),
-    [marketTicks, series, data],
+    () => buildChartDomain(series, data),
+    [series, data],
   );
 
   return (
@@ -968,7 +951,7 @@ export function LiveTemperatureThresholdChart({
             ))}
           </div>
           <ResponsiveContainer width="100%" height="100%">
-            <ReLineChart data={data} margin={{ top: 16, right: 28, left: 8, bottom: 8 }}>
+            <ReLineChart data={data} margin={{ top: 16, right: 44, left: 4, bottom: 8 }}>
               <CartesianGrid stroke="#dbe6ef" strokeDasharray="2 2" />
               <XAxis
                 dataKey="label"
@@ -978,12 +961,13 @@ export function LiveTemperatureThresholdChart({
                 interval={Math.max(1, Math.floor(data.length / 8))}
               />
               <YAxis
+                orientation="right"
                 tick={{ fontSize: 10, fill: "#64748b" }}
-                tickFormatter={(v) => `${Number(v).toFixed(1)}°`}
+                tickFormatter={(v) => `${Number(v).toFixed(0)}°`}
                 axisLine={{ stroke: "#cbd5e1" }}
                 tickLine={false}
                 domain={chartDomain}
-                ticks={marketTicks ?? undefined}
+                ticks={intDegreeTicks ?? undefined}
               />
               {cityThresholds.map((t, idx) => {
                 const isSelected = row && (Number(row.target_threshold ?? row.target_value) === t.threshold);

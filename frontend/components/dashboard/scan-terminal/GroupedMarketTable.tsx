@@ -2,19 +2,17 @@
 
 import { Fragment, useState } from "react";
 import clsx from "clsx";
-import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 import {
   type ContinentGroup,
-  formatPrice,
-  formatSpreadLiquidity,
   GAP_COLOR_MAP,
   getGapColor,
   getSignalLabel,
   getSignalState,
   getDefaultExpanded,
 } from "@/components/dashboard/scan-terminal/continent-grouping";
-import { rowName, temp, pct, edgeClass } from "./utils";
+import { rowName, temp } from "./utils";
 
 export function GroupedMarketTable({
   groups,
@@ -51,7 +49,7 @@ export function GroupedMarketTable({
 
   return (
     <div className="overflow-auto h-full">
-      <table className="w-full min-w-[800px] border-collapse text-[13px]">
+      <table className="w-full min-w-[600px] border-collapse text-[13px]">
         <thead>
           <tr className="border-b border-slate-200 bg-[#f8f9fa] text-left text-[11px] uppercase font-bold tracking-wider text-slate-500">
             <th className="px-3 py-1.5 font-bold">City</th>
@@ -59,9 +57,6 @@ export function GroupedMarketTable({
             <th className="px-2 py-1.5 text-right font-bold">High</th>
             <th className="px-2 py-1.5 text-right font-bold">DEB</th>
             <th className="px-2 py-1.5 text-right font-bold">Gap</th>
-            <th className="px-2 py-1.5 text-right font-bold">Market</th>
-            <th className="px-2 py-1.5 text-right font-bold">Edge</th>
-            <th className="px-2 py-1.5 text-right font-bold">Spr/Liq</th>
             <th className="px-3 py-1.5 font-bold">Signal</th>
           </tr>
         </thead>
@@ -73,7 +68,7 @@ export function GroupedMarketTable({
               <Fragment key={group.key}>
                 {showHeaders && (
                   <tr className="border-b border-slate-200 bg-[#eef2f6]">
-                    <td colSpan={9} className="p-0">
+                    <td colSpan={6} className="p-0">
                       <button
                         type="button"
                         onClick={() => toggleGroup(group.key)}
@@ -123,29 +118,6 @@ export function GroupedMarketTable({
                         </td>
                         <td className={clsx("px-2 py-1.5 text-right font-mono font-bold", gapColor)}>
                           {temp(row.signed_gap ?? row.gap_to_target, row.temp_symbol)}
-                        </td>
-                        <td className="px-2 py-1.5 text-right font-mono">
-                          {row.market_url ? (
-                            <a
-                              href={row.market_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center gap-0.5 text-blue-600 hover:text-blue-800 hover:underline"
-                              title={row.market_question || "Polymarket"}
-                            >
-                              {formatPrice(row.midpoint, row.ask, row.bid)}
-                              <ExternalLink size={10} />
-                            </a>
-                          ) : (
-                            formatPrice(row.midpoint, row.ask, row.bid)
-                          )}
-                        </td>
-                        <td className={clsx("px-2 py-1.5 text-right font-mono font-bold", edgeClass(row.edge_percent))}>
-                          {pct(row.edge_percent)}
-                        </td>
-                        <td className="px-2 py-1.5 text-right font-mono text-[12px]">
-                          {formatSpreadLiquidity(row.spread, row.book_liquidity ?? row.market_liquidity)}
                         </td>
                         <td className="px-3 py-1.5">
                           <span className={clsx(

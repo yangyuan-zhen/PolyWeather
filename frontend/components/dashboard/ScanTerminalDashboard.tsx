@@ -22,8 +22,6 @@ import { ProductAccessRequired } from "@/components/dashboard/scan-terminal/Prod
 import {
   type ContinentGroup,
   buildContinentGroups,
-  formatPrice,
-  formatSpreadLiquidity,
   GAP_COLOR_MAP,
   getDefaultExpanded,
   getGapColor,
@@ -46,7 +44,6 @@ import { useRelativeTime } from "@/hooks/useRelativeTime";
 import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { TrainingDashboard } from "@/components/dashboard/scan-terminal/TrainingDashboard";
 import { LiveTemperatureThresholdChart } from "@/components/dashboard/scan-terminal/LiveTemperatureThresholdChart";
-import { MarketOverviewView } from "@/components/dashboard/scan-terminal/MarketOverviewView";
 import { KoyfinRowsTable } from "@/components/dashboard/scan-terminal/KoyfinRowsTable";
 import { rowName, pct, money, temp, edgeClass } from "@/components/dashboard/scan-terminal/utils";
 
@@ -163,10 +160,6 @@ function decisionLabel(row?: ScanOpportunityRow | null) {
   if (value.includes("downgrade")) return "Downgrade";
   if (row?.tradable) return "Tradable";
   return "Monitor";
-}
-
-function tablePrice(row: ScanOpportunityRow) {
-  return formatPrice(row.midpoint, row.ask, row.bid);
 }
 
 function CityRegionList({
@@ -512,17 +505,6 @@ function PolyWeatherTerminal({
         <main className="min-h-0 flex-1 overflow-hidden flex flex-col p-2 bg-[#eef2f6]">
           {activeNavKey === "training" ? (
             <TrainingDashboard isEn={isEn} />
-          ) : activeNavKey === "markets" ? (
-            <MarketOverviewView
-              isEn={isEn}
-              rows={rows}
-              onSelectRow={(row) => {
-                const regionKey = resolveTradingRegionKey(row);
-                if (regionKey) setSelectedRegionKey(regionKey);
-                setSelectedRow(row);
-                setActiveNavKey("contracts");
-              }}
-            />
           ) : (
             <>
               {/* Region tabs */}
@@ -612,7 +594,7 @@ function PolyWeatherTerminal({
                         ["DEB", temp(selectedRow.deb_prediction, selectedRow.temp_symbol)],
                         ["Gap", temp(selectedRow.signed_gap ?? selectedRow.gap_to_target, selectedRow.temp_symbol)],
                         ["Edge", pct(selectedRow.edge_percent)],
-                        ["Market", formatPrice(selectedRow.midpoint, selectedRow.ask, selectedRow.bid)],
+                        ["Market", "--"],
                       ].map(([label, value]) => (
                         <div key={label} className="rounded border border-slate-200 bg-slate-50 p-2">
                           <div className="text-[10px] font-black uppercase text-slate-500">{label}</div>

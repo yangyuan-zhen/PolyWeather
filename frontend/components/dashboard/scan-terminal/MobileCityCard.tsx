@@ -2,7 +2,6 @@
 
 import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 import {
-  formatPrice,
   GAP_COLOR_MAP,
   getGapColor,
   getSignalLabel,
@@ -58,7 +57,7 @@ export function MobileCityCard({
           Gap {tempVal(row.signed_gap ?? row.gap_to_target, row.temp_symbol)}
         </span>
         <span className="text-slate-600">
-          {formatPrice(row.midpoint, row.ask, row.bid)}
+          {row.local_time || "--"}
         </span>
       </div>
 

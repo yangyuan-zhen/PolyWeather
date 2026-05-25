@@ -176,16 +176,10 @@ export type GapColor = "green" | "orange" | "slate" | "gray" | "red";
 
 export function getGapColor(row: ScanOpportunityRow): GapColor {
   const gap = Number(row.signed_gap ?? row.gap_to_target);
-  const edge = Number(row.edge_percent || 0);
-  const spread = Number(row.spread || 0);
-  const liq = Number(row.book_liquidity || row.market_liquidity || 0);
-
   if (!Number.isFinite(gap)) return "gray";
-  if (liq <= 0 || spread > 20) return "red";
   if (gap >= 2) return "green";
-  if (gap >= 0 && edge > 5) return "orange";
-  if (gap >= 0) return "slate";
-  if (gap < -5 || edge < -10) return "gray";
+  if (gap >= 0) return "orange";
+  if (gap < -5) return "gray";
   return "slate";
 }
 
@@ -197,30 +191,12 @@ export const GAP_COLOR_MAP: Record<GapColor, string> = {
   red: "text-red-500",
 };
 
-export function formatPrice(midpoint?: number | null, ask?: number | null, bid?: number | null): string {
-  const m = Number(midpoint);
-  if (Number.isFinite(m) && m > 0) {
-    const cents = Math.round(m * 100);
-    return `Y ${cents}¢`;
-  }
-  const a = Number(ask);
-  if (Number.isFinite(a) && a > 0) {
-    const cents = Math.round(a * 100);
-    return `Y ${cents}¢`;
-  }
+export function formatPrice(_midpoint?: number | null, _ask?: number | null, _bid?: number | null): string {
   return "--";
 }
 
-export function formatSpreadLiquidity(spread?: number | null, liquidity?: number | null): string {
-  const sp = Number(spread);
-  const liq = Number(liquidity);
-  const spStr = Number.isFinite(sp) ? `${Math.round(sp)}¢` : "--";
-  const liqStr = Number.isFinite(liq)
-    ? liq >= 1000
-      ? `$${(liq / 1000).toFixed(1)}K`
-      : `$${Math.round(liq)}`
-    : "--";
-  return `${spStr} / ${liqStr}`;
+export function formatSpreadLiquidity(_spread?: number | null, _liquidity?: number | null): string {
+  return "--";
 }
 
 export function buildContinentGroups(rows: ScanOpportunityRow[], isEn: boolean): ContinentGroup[] {
