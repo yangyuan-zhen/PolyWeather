@@ -236,6 +236,11 @@ def _build_quick_row(
     distribution = probs.get("distribution") or []
     local_date = str(data.get("local_date") or "")
     local_time = str(data.get("local_time") or "")
+    city_meta = CITIES.get(city) or {}
+    tz_offset = data.get("utc_offset_seconds")
+    if tz_offset is None:
+        tz_offset = _safe_int(city_meta.get("tz"), 0)
+    market_region = _market_region_from_tz_offset(tz_offset)
 
     id_parts = [city, local_date or "today"]
     if data.get("temp_symbol") == "°F":
@@ -249,7 +254,7 @@ def _build_quick_row(
         "airport": str(risk.get("airport") or ""),
         "local_date": local_date,
         "local_time": local_time,
-        "tz_offset_seconds": data.get("utc_offset_seconds"),
+        "tz_offset_seconds": tz_offset,
         "temp_symbol": data.get("temp_symbol"),
         "risk_level": risk.get("level"),
         "current_temp": curr.get("temp"),
@@ -260,8 +265,10 @@ def _build_quick_row(
             if v is not None
         },
         "distribution_preview": distribution[:6] if distribution else [],
-        "trading_region": data.get("trading_region"),
-        "trading_region_sort": data.get("trading_region_sort"),
+        "trading_region": market_region["key"],
+        "trading_region_label": market_region["label_en"],
+        "trading_region_label_zh": market_region["label_zh"],
+        "trading_region_sort": market_region.get("sort_order", 0),
         "active": True,
         "closed": False,
         "tradable": False,
