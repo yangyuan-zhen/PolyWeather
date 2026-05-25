@@ -63,7 +63,7 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
     passwordSignupPlaceholder: isEn
       ? "Set at least 6 characters"
       : "设置至少 6 位密码",
-    loginSubmit: isEn ? "Start your weather journey" : "开启天气交易之旅",
+    loginSubmit: isEn ? "Start your weather decision journey" : "开启气象决策之旅",
     signupSubmit: isEn ? "Create account now" : "立即创建账号",
     loginHint: isEn
       ? "After signing in, your homepage will be personalized."
@@ -105,9 +105,9 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
       ? "By proceeding, you agree to the Privacy Policy and Terms & Conditions."
       : "继续操作即代表您同意隐私政策与服务条款。",
     desc: isEn
-      ? "Access robust METAR observations, advanced DEB forecast blends, and real-time AI decision cards that bring clarity to your weather-signal portfolios."
-      : "提供精准的机场 METAR 实况、先进的 DEB 智能融合预测和实时 AI 决策卡片，助您看清天气信号脉络。",
-    trusted: isEn ? "Trusted by institutional traders" : "深受机构交易员信赖",
+      ? "Access robust METAR observations, advanced DEB forecast blends, and real-time AI decision cards that bring clarity to your weather risk analyses."
+      : "提供精准的机场 METAR 实况、先进的 DEB 智能融合预测和实时 AI 决策卡片，助您理清气象风险脉络。",
+    trusted: isEn ? "Trusted by industry professionals" : "深受行业决策人员信赖",
   } as const;
 
   const onResetPassword = async () => {
@@ -253,45 +253,45 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
           </Link>
 
           <div className="space-y-6">
-            <h2 className="text-3xl font-black leading-[1.25] tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
+            <h2 className="text-3xl font-black leading-[1.25] tracking-tight text-white animate-fade-up [animation-delay:150ms] opacity-0">
               {isEn ? (
                 <>
                   Weather intelligence and risk management{" "}
-                  <span className="inline-block px-2.5 py-0.5 rounded bg-blue-600 text-white font-bold text-[0.9em] shadow-lg shadow-blue-600/25">
+                  <span className="inline-block px-2.5 py-0.5 mt-1 rounded bg-gradient-to-r from-blue-600 to-indigo-500 text-white font-bold text-[0.9em] shadow-lg shadow-blue-600/25 animate-gradient bg-[length:200%_auto]">
                     simplified.
                   </span>
                 </>
               ) : (
                 <>
                   天气信息与风险管理{" "}
-                  <span className="inline-block px-2.5 py-0.5 rounded bg-blue-600 text-white font-bold text-[0.9em] shadow-lg shadow-blue-600/25">
+                  <span className="inline-block px-2.5 py-0.5 mt-1 rounded bg-gradient-to-r from-blue-600 to-indigo-500 text-white font-bold text-[0.9em] shadow-lg shadow-blue-600/25 animate-gradient bg-[length:200%_auto]">
                     化繁为简。
                   </span>
                 </>
               )}
             </h2>
-            <p className="text-sm leading-7 text-slate-400 max-w-md">
+            <p className="text-sm leading-7 text-slate-400 max-w-md animate-fade-up [animation-delay:300ms] opacity-0">
               {copy.desc}
             </p>
           </div>
         </div>
 
         {/* High-Fidelity Mock Terminal Preview Widget */}
-        <div className="relative z-10 my-auto p-[1px] bg-gradient-to-b from-white/15 to-transparent rounded-2xl shadow-2xl overflow-hidden hover:scale-[1.01] hover:shadow-blue-500/10 transition-all duration-500 max-w-[420px] w-full">
+        <div className="relative z-10 my-auto p-[1px] bg-gradient-to-b from-white/15 to-transparent rounded-2xl shadow-2xl overflow-hidden hover:scale-[1.01] hover:shadow-blue-500/10 transition-all duration-500 max-w-[420px] w-full animate-fade-up [animation-delay:450ms] opacity-0">
           <div className="bg-[#0b0f19]/80 backdrop-blur-xl rounded-2xl p-6">
             {/* Terminal Top Window Controls */}
             <div className="flex items-center gap-1.5 mb-5">
               <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f56]" />
               <span className="h-2.5 w-2.5 rounded-full bg-[#ffbd2e]" />
               <span className="h-2.5 w-2.5 rounded-full bg-[#27c93f]" />
-              <span className="ml-2 font-mono text-[9px] text-slate-500 tracking-wider">POLYWEATHER_TERMINAL_v1.7</span>
+              <span className="ml-2 font-mono text-[9px] text-slate-500 tracking-wider">POLYWEATHER_CONSOLE_v1.7</span>
             </div>
 
             <div className="flex items-center justify-between border-b border-white/5 pb-3.5 mb-4">
               <div className="flex items-center gap-2.5">
                 <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span className="font-mono text-[10px] uppercase tracking-wider text-slate-300">
-                  {isEn ? "Runway 02L Settlement" : "跑道 02L 官方结算"}
+                  {isEn ? "Runway 02L Consensus" : "跑道 02L 实测校验"}
                 </span>
               </div>
               <span className="font-mono text-[9px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 tracking-wider">LIVE</span>
@@ -304,7 +304,7 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
                 <span className="font-mono text-base font-bold text-white tracking-tight">28.8°C</span>
               </div>
               <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 mb-0.5">{isEn ? "UMA Threshold" : "结算阈值"}</span>
+                <span className="block text-[9px] uppercase tracking-wider text-slate-400 mb-0.5">{isEn ? "Target Threshold" : "监控阈值"}</span>
                 <span className="font-mono text-base font-bold text-rose-400 tracking-tight">30.0°C</span>
               </div>
               <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04]">
@@ -312,8 +312,8 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
                 <span className="font-mono text-base font-bold text-blue-400 tracking-tight">88.5%</span>
               </div>
               <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 mb-0.5">{isEn ? "Index Price" : "结算指数"}</span>
-                <span className="font-mono text-base font-bold text-emerald-400 tracking-tight">$9.20</span>
+                <span className="block text-[9px] uppercase tracking-wider text-slate-400 mb-0.5">{isEn ? "Observed Peak" : "今日最高"}</span>
+                <span className="font-mono text-base font-bold text-emerald-400 tracking-tight">29.2°C</span>
               </div>
             </div>
 
@@ -335,7 +335,7 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
 
                   {/* Threshold Line (30.0°C) */}
                   <line x1="0" y1="40" x2="340" y2="40" stroke="#f43f5e" strokeWidth="1" strokeDasharray="3 3" opacity="0.8" />
-                  <text x="5" y="36" fill="#f43f5e" className="text-[8px] font-mono font-semibold">30.0°C UMA</text>
+                  <text x="5" y="36" fill="#f43f5e" className="text-[8px] font-mono font-semibold">30.0°C Target</text>
 
                   {/* Gradient Area under Forecast */}
                   <path

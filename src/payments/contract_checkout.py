@@ -22,7 +22,6 @@ DEFAULT_POLYGON_CHAIN_ID = 137
 DEFAULT_USDC_E_ADDRESS = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
 DEFAULT_NATIVE_USDC_ADDRESS = "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359"
 DEFAULT_USDT_ADDRESS = "0xc2132d05d31c914a87c6611c10748aeb04b58e8f"
-DEFAULT_PUSD_ADDRESS = "0xc011a7e12a19f7b1f670d46f03b03f3342e82dfb"
 
 PAYMENT_CONTRACT_ABI = [
     {
@@ -392,8 +391,6 @@ class PaymentContractCheckoutService:
             return {"code": "usdc", "symbol": "USDC", "name": "Native USDC"}
         if normalized == _normalize_address(DEFAULT_USDT_ADDRESS):
             return {"code": "usdt", "symbol": "USDT", "name": "USDT"}
-        if normalized == _normalize_address(DEFAULT_PUSD_ADDRESS):
-            return {"code": "pusd", "symbol": "pUSD", "name": "Polymarket pUSD"}
         if normalized == _normalize_address(DEFAULT_USDC_E_ADDRESS):
             return {"code": "usdc_e", "symbol": "USDC.e", "name": "USDC.e (PoS)"}
         short = f"{normalized[:6]}...{normalized[-4:]}"

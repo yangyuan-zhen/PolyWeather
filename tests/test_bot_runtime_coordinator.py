@@ -6,7 +6,6 @@ class DummyBot:
 
 
 def test_startup_coordinator_respects_disable_flags(monkeypatch):
-    monkeypatch.setenv("POLYGON_WALLET_WATCH_ENABLED", "false")
     monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
 
     coordinator = StartupCoordinator(
@@ -19,7 +18,8 @@ def test_startup_coordinator_respects_disable_flags(monkeypatch):
     runtime = coordinator.start_all()
     loop_map = runtime.loop_map()
 
-    assert loop_map["polygon_wallet_watch"].reason == "disabled_by_env"
+    assert "weekly_reward" in loop_map
+    assert "polygon_wallet_watch" not in loop_map
 
 
 def test_render_runtime_status_html_contains_key_fields():

@@ -84,7 +84,6 @@ class StartupCoordinator:
     def start_all(self) -> RuntimeStatus:
         loops = [
             self._start_airport_high_freq_loop(),
-            self._start_polygon_wallet_loop(),
             self._start_weekly_reward_loop(),
             self._start_payment_event_loop(),
             self._start_payment_confirm_loop(),
@@ -186,36 +185,6 @@ class StartupCoordinator:
                 self.bot,
                 self.config,
             ),
-        )
-
-    def _start_polygon_wallet_loop(self) -> LoopStatus:
-        enabled = _env_bool("POLYGON_WALLET_WATCH_ENABLED", False)
-        chat_ids = get_telegram_chat_ids_from_env()
-        rpc_url = str(os.getenv("POLYGON_RPC_URL") or "").strip()
-        wallets_count = _parse_csv_count(os.getenv("POLYGON_WALLET_WATCH_ADDRESSES"))
-        poll = max(3, _env_int("POLYGON_WALLET_WATCH_INTERVAL_SEC", 8))
-        details = {
-            "poll_sec": poll,
-            "wallets_count": wallets_count,
-            "polymarket_only": _env_bool("POLYGON_WALLET_WATCH_POLYMARKET_ONLY", True),
-            "chat_targets": len(chat_ids),
-        }
-        validation_error = None
-        if not chat_ids:
-            validation_error = "missing_TELEGRAM_CHAT_IDS"
-        elif not rpc_url:
-            validation_error = "missing_POLYGON_RPC_URL"
-        elif wallets_count == 0:
-            validation_error = "missing_POLYGON_WALLET_WATCH_ADDRESSES"
-        return self._start_with_validation(
-            key="polygon_wallet_watch",
-            label="Polygon 钱包监听",
-            configured_enabled=enabled,
-            details=details,
-            validation_error=validation_error,
-            starter=lambda: import_module(
-                "src.onchain.polygon_wallet_watcher"
-            ).start_polygon_wallet_watch_loop(self.bot),
         )
 
     def _start_weekly_reward_loop(self) -> LoopStatus:

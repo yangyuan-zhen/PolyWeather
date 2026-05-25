@@ -71,7 +71,6 @@ def validate_runtime_env(
     entitlement_guard = _env_bool("POLYWEATHER_REQUIRE_ENTITLEMENT", False)
     payment_enabled = _env_bool("POLYWEATHER_PAYMENT_ENABLED", False)
     weekly_reward_enabled = _env_bool("POLYWEATHER_WEEKLY_REWARD_ENABLED", False)
-    polygon_watch_enabled = _env_bool("POLYGON_WALLET_WATCH_ENABLED", False)
 
     if component_key == "bot":
         missing = _missing(["TELEGRAM_BOT_TOKEN"])
@@ -111,11 +110,6 @@ def validate_runtime_env(
                 "已启用支付，但未配置 POLYWEATHER_PAYMENT_RECEIVER_CONTRACT 或 POLYWEATHER_PAYMENT_ACCEPTED_TOKENS_JSON"
             )
 
-    if polygon_watch_enabled:
-        if not _has("POLYGON_WALLET_WATCH_ADDRESSES"):
-            report.warnings.append(
-                "已启用 polygon watcher，但未配置 POLYGON_WALLET_WATCH_ADDRESSES"
-            )
 
     if component_key == "web":
         if auth_enabled and not auth_required:

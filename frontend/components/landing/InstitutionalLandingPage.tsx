@@ -23,26 +23,26 @@ import {
 } from "@/lib/supabase/client";
 
 const RAW_MARKET_ROWS_EN = [
-  ["New York", "91.8°F", "+2.4", "High", "Long Yes"],
-  ["Austin", "103.1°F", "+1.1", "Medium", "Wait"],
-  ["Seoul", "83.4°F", "-0.7", "Low", "No Trade"],
-  ["Tokyo", "88.2°F", "+1.8", "High", "Long Yes"],
-  ["London", "72.6°F", "-0.2", "Low", "Observe"],
+  ["New York", "91.8°F", "+2.4", "High Anomaly", "Approve Temp"],
+  ["Austin", "103.1°F", "+1.1", "Normal", "Observe"],
+  ["Seoul", "83.4°F", "-0.7", "Low Anomaly", "Veto Anomaly"],
+  ["Tokyo", "88.2°F", "+1.8", "High Anomaly", "Approve Temp"],
+  ["London", "72.6°F", "-0.2", "Normal", "Observe"],
 ];
 
 const RAW_MARKET_ROWS_ZH = [
-  ["纽约", "91.8°F", "+2.4", "高", "买入多头"],
-  ["奥斯汀", "103.1°F", "+1.1", "中", "观望"],
-  ["首尔", "83.4°F", "-0.7", "低", "无交易"],
-  ["东京", "88.2°F", "+1.8", "高", "买入多头"],
-  ["伦敦", "72.6°F", "-0.2", "低", "观察"],
+  ["纽约", "91.8°F", "+2.4", "高偏差", "符合高温"],
+  ["奥斯汀", "103.1°F", "+1.1", "正常", "持续观察"],
+  ["首尔", "83.4°F", "-0.7", "低偏差", "否决偏差"],
+  ["东京", "88.2°F", "+1.8", "高偏差", "符合高温"],
+  ["伦敦", "72.6°F", "-0.2", "正常", "持续观察"],
 ];
 
 const COVERAGE_EN = [
   "Live airport observations",
   "DEB blend forecast",
-  "Signal-implied temperature",
-  "Intraday settlement windows",
+  "Model-implied distribution",
+  "Intraday observation windows",
   "AI weather evidence",
   "Paid Telegram alerts",
 ];
@@ -50,8 +50,8 @@ const COVERAGE_EN = [
 const COVERAGE_ZH = [
   "机场实况观测数据",
   "DEB 智能融合预报",
-  "信号隐含温度定价",
-  "日内分段结算窗口",
+  "模型隐含分布预测",
+  "日内分段观测窗口",
   "AI 气象证据链解读",
   "付费电报实时通知",
 ];
@@ -60,8 +60,8 @@ const PRO_FEATURES_EN = [
   "Real-time METAR observations & runway sensor data",
   "Real-time METAR observations & alerts",
   "DEB blend forecast model",
-  "Signal-implied temperature pricing",
-  "Intraday settlement windows & risk metrics",
+  "Model-implied distribution analysis",
+  "Intraday observation windows & deviation metrics",
   "Paid Telegram alerts & Webhook API",
   "24/7 priority professional support",
 ];
@@ -70,8 +70,8 @@ const PRO_FEATURES_ZH = [
   "实时 METAR 机场实测与跑道传感器数据",
   "实时 METAR 机场实测与预警",
   "DEB 智能融合预测模型",
-  "信号隐含温度定价与估值",
-  "日内结算窗口与风险度量指标",
+  "模型隐含分布预测与估算",
+  "日内观测窗口与偏差度量指标",
   "付费电报群通知与 API 接口推送",
   "7×24小时专业技术与客服支持",
 ];
@@ -101,7 +101,7 @@ function InstitutionalLandingScreen() {
         {
           icon: Radar,
           title: "Live Evidence",
-          body: "Airport observations and official station data are structured for settlement-aware decisions.",
+          body: "Airport observations and official station data are structured for deviation-aware decisions.",
         },
         {
           icon: Gauge,
@@ -118,12 +118,12 @@ function InstitutionalLandingScreen() {
         {
           icon: Radar,
           title: "实况证据",
-          body: "针对机场 METAR 与官方站点数据进行结构化整理，专为结算博弈与交割设计。",
+          body: "针对机场 METAR 与官方站点数据进行结构化整理，专为气象决策设计。",
         },
         {
           icon: Gauge,
           title: "决策工作流",
-          body: "城市决策卡片融合了气象预报、实况偏差、历史风险系数及目标阈值盘口。",
+          body: "城市决策卡片依赖了气象预报、实测气温、偏差系数及目标阈值条件。",
         },
         {
           icon: ShieldCheck,
@@ -133,8 +133,8 @@ function InstitutionalLandingScreen() {
       ];
 
   const modelLabels = isEn
-    ? ["DEB Blend", "Live METAR", "Signal Implied"]
-    : ["DEB 融合预测", "METAR 机场实测", "信号隐含价格"];
+    ? ["DEB Blend", "Live METAR", "Model Consensus"]
+    : ["DEB 融合预测", "METAR 机场实测", "模型多方共识"];
 
   return (
     <div className="min-h-screen bg-[#f4f7fb] text-slate-950">
@@ -214,35 +214,49 @@ function InstitutionalLandingScreen() {
 
       <main>
         <section className="mx-auto grid min-h-[calc(100vh-64px)] max-w-7xl items-center gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
-          <div>
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold uppercase text-blue-700">
-              <LockKeyhole size={13} />
-              {isEn ? "Paid professional terminal" : "付费专业交易终端"}
+          <div className="animate-fade-in">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-200/60 bg-blue-50/80 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide text-blue-700 shadow-sm backdrop-blur-sm animate-fade-up [animation-delay:150ms] opacity-0">
+              <LockKeyhole size={14} className="text-blue-600" />
+              {isEn ? "Paid professional dashboard" : "付费专业气象决策台"}
             </div>
-            <h1 className="max-w-2xl text-4xl font-black leading-[1.05] tracking-normal text-slate-950 sm:text-5xl lg:text-6xl">
-              {isEn ? "Institutional weather signal intelligence for paid users." : "面向付费用户的机构级天气决策台"}
+            <h1 className="max-w-3xl text-4xl font-black leading-[1.1] tracking-tight text-slate-900 sm:text-5xl lg:text-[4rem] lg:leading-[1.05] animate-fade-up [animation-delay:300ms] opacity-0">
+              {isEn ? (
+                <>
+                  Institutional weather intelligence for{" "}
+                  <span className="inline-block text-transparent bg-clip-text bg-[linear-gradient(to_right,#2563eb,#8b5cf6,#2563eb)] bg-[length:200%_auto] animate-gradient">
+                    professional teams.
+                  </span>
+                </>
+              ) : (
+                <>
+                  面向专业团队的机构级{" "}
+                  <span className="inline-block text-transparent bg-clip-text bg-[linear-gradient(to_right,#2563eb,#8b5cf6,#2563eb)] bg-[length:200%_auto] animate-gradient pb-2">
+                    天气决策台
+                  </span>
+                </>
+              )}
             </h1>
-            <p className="mt-5 max-w-xl text-base leading-8 text-slate-600 sm:text-lg">
+            <p className="mt-6 max-w-2xl text-base leading-relaxed text-slate-500 sm:text-lg animate-fade-up [animation-delay:450ms] opacity-0">
               {isEn
-                ? "PolyWeather turns live METAR observations, DEB forecast blends, model probabilities, and signal settlement logic into one professional decision workspace."
-                : "PolyWeather 将 METAR 机场实测、DEB 智能融合预报、模型概率及信号结算逻辑整合于一体，打造气象风险管理专业决策环境。"}
+                ? "PolyWeather turns live METAR observations, DEB forecast blends, model probabilities, and deviation verification logic into one professional decision workspace."
+                : "PolyWeather 将 METAR 机场实测、DEB 智能融合预报、模型概率及偏差校验逻辑整合于一体，打造气象风险管理专业决策环境。"}
             </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-10 flex flex-col gap-4 sm:flex-row animate-fade-up [animation-delay:600ms] opacity-0">
               <Link
                 href={authChecked && isAuthenticated ? "/terminal" : "/auth/login?next=%2Fterminal"}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-blue-700 bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
+                className="group inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-blue-700 bg-blue-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition-all hover:bg-blue-700 hover:shadow-blue-600/30 hover:-translate-y-0.5"
               >
                 {isEn ? "Enter product" : "进入产品决策台"}
-                <ArrowRight size={16} />
+                <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
               </Link>
               <Link
                 href="/account"
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-800 shadow-sm transition hover:border-slate-400 hover:text-slate-950"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-6 py-3 text-sm font-bold text-slate-800 shadow-sm transition-all hover:border-slate-400 hover:bg-slate-50 hover:text-slate-950 hover:-translate-y-0.5"
               >
                 {isEn ? "Subscribe / Manage account" : "订阅服务 / 管理账户"}
               </Link>
             </div>
-            <p className="mt-4 text-xs font-medium text-slate-500">
+            <p className="mt-5 text-xs font-medium text-slate-400 animate-fade-up [animation-delay:750ms] opacity-0">
               {isEn
                 ? "No free product access. Subscription is required before the terminal opens."
                 : "无免费公开产品通道。在使用决策台前必须先登录并开通订阅。"}
@@ -253,19 +267,19 @@ function InstitutionalLandingScreen() {
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
               <div className="flex items-center gap-2 text-sm font-bold">
                 <BarChart3 size={16} className="text-blue-700" />
-                {isEn ? "Weather Signals Dashboard" : "天气信号交易面板"}
+                {isEn ? "Weather Intelligence Console" : "气象决策分析台"}
               </div>
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                 {isEn ? "Live" : "实时数据"}
               </div>
             </div>
             <div className="grid gap-3 p-3 lg:grid-cols-[1fr_0.85fr]">
-              <div className="rounded-xl border border-slate-200">
-                <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2">
-                  <strong className="text-sm">{isEn ? "Temperature Thresholds" : "温度天气阈值"}</strong>
-                  <span className="text-xs font-semibold text-slate-500">
-                    {isEn ? "Price / Edge / Signal" : "价格 / 偏差 / 信号"}
+              <div className="rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-4 py-2.5">
+                  <strong className="text-sm text-slate-800">{isEn ? "Temperature Metrics" : "温度决策指标"}</strong>
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    {isEn ? "Observed / Deviation / Decision" : "实测 / 偏差 / 决策"}
                   </span>
                 </div>
                 <div className="divide-y divide-slate-100">
@@ -320,13 +334,13 @@ function InstitutionalLandingScreen() {
                 </div>
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
                   <div className="mb-2 flex items-center gap-2 text-sm font-bold text-emerald-800">
-                    <TrendingUp size={16} />
-                    {isEn ? "Current Signal" : "当前交易信号"}
+                    <TrendingUp size={16} className="animate-pulse" />
+                    {isEn ? "Current Anomaly / Action" : "当前异常与决策"}
                   </div>
-                  <p className="text-sm leading-6 text-emerald-900">
+                  <p className="text-sm leading-relaxed text-emerald-900/90 font-medium">
                     {isEn
-                      ? "New York high-temperature signal shows a positive observation deviation with confirmed airport evidence."
-                      : "纽约高温阈值信号出现显著的正向观测偏差，机场天气实况已验证确认。"}
+                      ? "New York high-temperature target shows a positive observation deviation with confirmed airport evidence."
+                      : "纽约高温阈值监测出现显著的正向观测偏差，机场天气实况已验证确认。"}
                   </p>
                 </div>
               </div>
@@ -355,8 +369,8 @@ function InstitutionalLandingScreen() {
               <p className="text-xs font-bold uppercase text-blue-700">
                 {isEn ? "Data Coverage" : "数据覆盖范围"}
               </p>
-              <h2 className="mt-2 text-3xl font-black">
-                {isEn ? "Everything weather-signal users need in one place." : "天气信号交易者所需的一切，在此集结。"}
+              <h2 className="mt-3 text-3xl font-black sm:text-4xl">
+                {isEn ? "Everything weather intelligence users need in one place." : "气象决策分析人员所需的一切，在此集结。"}
               </h2>
             </div>
             <p className="max-w-xl text-sm leading-6 text-slate-600">
@@ -394,18 +408,18 @@ function InstitutionalLandingScreen() {
 
             <div className="mx-auto mt-16 max-w-lg">
               <div className="relative flex flex-col rounded-3xl border-2 border-blue-600 bg-white p-8 shadow-sm text-left">
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 rounded-full bg-blue-600 px-4 py-1 text-xs font-bold uppercase tracking-wider text-white shadow-sm">
-                  {isEn ? "Pro Terminal" : "专业终端"}
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-1.5 text-xs font-bold uppercase tracking-widest text-white shadow-md">
+                  {isEn ? "Pro Workspace" : "专业决策分析台"}
                 </div>
 
                 <div>
-                  <h3 className="text-xl font-bold text-slate-900">
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">
                     PolyWeather Pro
                   </h3>
-                  <p className="mt-2 text-sm text-slate-500 leading-relaxed">
+                  <p className="mt-3 text-sm text-slate-500 leading-relaxed">
                     {isEn
-                      ? "Full access to the institutional weather-signal terminal. Live METAR, DEB forecasts, probability distribution, AI decision cards, and real-time alerts."
-                      : "完整访问机构级天气信号终端。实时 METAR、DEB 预报、概率分布、AI 决策卡片、实时通知。"}
+                      ? "Full access to the institutional weather intelligence workspace. Live METAR, DEB forecasts, probability distribution, AI decision cards, and real-time alerts."
+                      : "完整访问机构级天气决策分析台。实时 METAR、DEB 预报、概率分布、AI 决策卡片、实时通知。"}
                   </p>
                   <div className="mt-6 flex items-baseline">
                     <span className="text-5xl font-black tracking-tight text-slate-900">
