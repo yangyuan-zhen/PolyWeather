@@ -10,12 +10,16 @@ import {
 import { useRemoteDataQuery } from "@/components/dashboard/scan-terminal/use-remote-data-query";
 import type { ScanTerminalResponse } from "@/lib/dashboard-types";
 
-const SCAN_CACHE_KEY = "polyweather_scan_v1";
+const SCAN_CACHE_PREFIX = "polyweather_scan_v2";
 const SCAN_CACHE_TTL_MS = 2 * 60 * 1000; // 2 min — cities list instant on revisit
 
-function readScanCache(): ScanTerminalResponse | null {
+function scanCacheKey(tradingRegion: string): string {
+  return `${SCAN_CACHE_PREFIX}:${tradingRegion || "all"}`;
+}
+
+function readScanCache(tradingRegion: string): ScanTerminalResponse | null {
   try {
-    const raw = localStorage.getItem(SCAN_CACHE_KEY);
+    const raw = localStorage.getItem(scanCacheKey(tradingRegion));
     if (!raw) return null;
     const cached = JSON.parse(raw);
     if (cached.ts && Date.now() - cached.ts < SCAN_CACHE_TTL_MS && cached.data?.rows) {
@@ -25,8 +29,8 @@ function readScanCache(): ScanTerminalResponse | null {
   return null;
 }
 
-function writeScanCache(data: ScanTerminalResponse) {
-  try { localStorage.setItem(SCAN_CACHE_KEY, JSON.stringify({ ts: Date.now(), data })); } catch { /* ignore */ }
+function writeScanCache(data: ScanTerminalResponse, tradingRegion: string) {
+  try { localStorage.setItem(scanCacheKey(tradingRegion), JSON.stringify({ ts: Date.now(), data })); } catch { /* ignore */ }
 }
 
 export function useScanTerminalQuery({
@@ -52,7 +56,7 @@ export function useScanTerminalQuery({
 
   const lastForcedScanRefreshAtRef = useRef(0);
   const [cachedRows, setCachedRows] = useState<ScanTerminalResponse | null>(() => {
-    if (typeof window !== "undefined") return readScanCache();
+    if (typeof window !== "undefined") return readScanCache(tradingRegion || "");
     return null;
   });
 
@@ -80,7 +84,7 @@ export function useScanTerminalQuery({
             tradingRegion,
           }),
         showLoading,
-        onSuccess: (data) => { writeScanCache(data); setCachedRows(data); },
+        onSuccess: (data) => { writeScanCache(data, tradingRegion || ""); setCachedRows(data); },
       });
     },
     [isPro, proAccessLoading, run, timezoneOffsetSeconds, tradingRegion],
