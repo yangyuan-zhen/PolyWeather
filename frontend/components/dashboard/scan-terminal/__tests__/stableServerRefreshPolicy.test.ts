@@ -40,10 +40,10 @@ export function runTests() {
     "web auto refresh must read cached scan data instead of forcing a full server scan",
   );
   assert(
-    dashboardSource.includes("MarketTable") &&
+    dashboardSource.includes("CityRegionList") &&
       dashboardSource.includes("Panel") &&
       dashboardSource.includes("decisionLabel"),
-    "scan terminal must use new institutional terminal layout with MarketTable + decisionLabel",
+    "scan terminal must use new institutional terminal layout with CityRegionList + decisionLabel",
   );
   assert(
     airportEvidenceSource.includes("SETTLEMENT_RUNWAY_PAIRS") &&
