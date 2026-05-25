@@ -82,18 +82,18 @@ function createLocalAccess(): ProAccessState {
 
 
 const TERM = {
-  cityContract: { en: "City / Contract", zh: "城市 / 合约" },
+  cityThreshold: { en: "City / Threshold", zh: "城市 / 阈值" },
   live: { en: "Live", zh: "实测" },
   deb: { en: "DEB", zh: "DEB" },
-  mkt: { en: "Mkt", zh: "市场" },
+  mkt: { en: "Mkt", zh: "信号" },
   edge: { en: "Edge", zh: "优势" },
   liq: { en: "Liq", zh: "流动性" },
   signal: { en: "Signal", zh: "信号" },
-  searchPlaceholder: { en: "Search city, contract, station, or signal", zh: "搜索城市、合约、站点或信号" },
-  weatherContracts: { en: "Weather Contracts", zh: "天气合约" },
-  selectedContractMonitor: { en: "Selected Contract Monitor", zh: "选中合约监控" },
+  searchPlaceholder: { en: "Search city, threshold, station, or signal", zh: "搜索城市、阈值、站点或信号" },
+  weatherThresholds: { en: "Weather Thresholds", zh: "天气阈值" },
+  selectedThresholdMonitor: { en: "Selected Threshold Monitor", zh: "选中阈值监控" },
   probabilityDistribution: { en: "Probability Distribution", zh: "概率分布" },
-  marketList: { en: "Market List", zh: "市场列表" },
+  signalList: { en: "Signal List", zh: "信号列表" },
   watchlist: { en: "Watchlist", zh: "观察列表" },
   rows: { en: "Rows", zh: "行数" },
   avgEdge: { en: "Avg Edge", zh: "平均优势" },
@@ -103,9 +103,9 @@ const TERM = {
   model: { en: "Model", zh: "模型" },
   noData: { en: "No data", zh: "无数据" },
   noDistributionData: { en: "No distribution data", zh: "无分布数据" },
-  selectContract: {
-    en: "Select a weather contract to inspect model edge, market price, and live evidence.",
-    zh: "选择天气合约以查看模型优势、市场价格和实况证据。",
+  selectThreshold: {
+    en: "Select a weather threshold to inspect model edge, signal price, and live evidence.",
+    zh: "选择天气阈值以查看模型优势、信号价格和实况证据。",
   },
   signInToContinue: { en: "Sign in to continue", zh: "请先登录" },
   signInHint: {
@@ -117,8 +117,8 @@ const TERM = {
   learnAbout: { en: "Learn about PolyWeather", zh: "了解 PolyWeather" },
   proAccessRequired: { en: "Pro Access Required", zh: "需要付费订阅" },
   proDesc: {
-    en: "The PolyWeather terminal is a paid product. Subscribe to unlock real-time weather-market intelligence.",
-    zh: "PolyWeather 决策台为付费产品。订阅以解锁实时天气市场情报。",
+    en: "The PolyWeather terminal is a paid product. Subscribe to unlock real-time weather-signal intelligence.",
+    zh: "PolyWeather 决策台为付费产品。订阅以解锁实时天气信号情报。",
   },
   subscriptionTerms: {
     en: "Billed monthly. Cancel anytime. Payment via USDC on Polygon.",
@@ -131,7 +131,7 @@ const TERM = {
     zh: "你需要开通有效订阅才能访问决策台。",
   },
   backToProduct: { en: "Back to product overview", zh: "返回产品介绍页" },
-  dashboard: { en: "PolyWeather Terminal", zh: "PolyWeather 交易决策台" },
+  dashboard: { en: "PolyWeather Terminal", zh: "PolyWeather 天气决策台" },
   refresh: { en: "Refresh", zh: "刷新" },
   switchLang: { en: "Switch to Chinese", zh: "切换到英文" },
   globalWeatherFactors: { en: "Global Weather Factors", zh: "全球天气因子" },
@@ -356,7 +356,7 @@ function PolyWeatherTerminal({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [searchInputRef, setSearchQuery]);
   const [navExpanded, setNavExpanded] = useState(false);
-  const [activeNavKey, setActiveNavKey] = useState<string>("contracts");
+  const [activeNavKey, setActiveNavKey] = useState<string>("thresholds");
 
   const [gridCols, setGridCols] = useState<number>(() => {
     if (typeof window !== "undefined") {
@@ -473,7 +473,7 @@ function PolyWeatherTerminal({
   };
 
   const NAV_ITEMS = [
-    { key: "contracts", Icon: Table2, labelEn: "Contracts", labelZh: "天气合约" },
+    { key: "thresholds", Icon: Table2, labelEn: "Thresholds", labelZh: "天气阈值" },
     { key: "training", Icon: GraduationCap, labelEn: "Training", labelZh: "训练数据" },
   ];
 

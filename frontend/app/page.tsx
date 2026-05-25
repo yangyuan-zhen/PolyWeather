@@ -3,9 +3,9 @@ import { redirect } from "next/navigation";
 import { InstitutionalLandingPage } from "@/components/landing/InstitutionalLandingPage";
 
 export const metadata: Metadata = {
-  title: "PolyWeather | Institutional Weather Market Intelligence",
+  title: "PolyWeather | Institutional Weather Signal Intelligence",
   description:
-    "PolyWeather is a paid professional weather-market intelligence terminal with METAR evidence, DEB forecast blending, and AI decision cards.",
+    "PolyWeather is a paid professional weather-signal intelligence terminal with METAR evidence, DEB forecast blending, and AI decision cards.",
 };
 
 export default async function HomePage({

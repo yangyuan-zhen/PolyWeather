@@ -51,6 +51,21 @@ function pairKey(pair: [string, string]) {
   return pair.map(normalizeRunwayLabel).sort().join("/");
 }
 
+function runwaySeriesKey(rwy: string) {
+  return `runway_${String(rwy || "unknown")
+    .split("/")
+    .map(normalizeRunwayLabel)
+    .filter(Boolean)
+    .join("_")}`;
+}
+
+function isTemperatureSeriesVisibleByDefault(city: string, seriesKey: string) {
+  if (seriesKey.startsWith("model_curve_")) {
+    return normalizeCityKey(city) === "paris" && seriesKey === "model_curve_AROME HD";
+  }
+  return true;
+}
+
 function buildRunwayPlates(
   amos: AmosData | null | undefined,
   row: ScanOpportunityRow | null,
@@ -289,6 +304,8 @@ type HourlyForecast = {
   airportPrimary?: AirportCurrentConditions | null;
   forecastDaily?: ForecastDay[];
   multiModelDaily?: Record<string, DailyModelForecast>;
+  settlementTodayObs?: ObsPoint[];
+  metarTodayObs?: ObsPoint[];
 } | null;
 
 function parseRunwayHistoryValue(point: Record<string, unknown>) {
@@ -335,7 +352,7 @@ function buildRunwayHistorySeries(
           .slice(-MAX_OBS_POINTS);
         const isSettlement = isSettlementRunway(row, normalizedRwy);
         return {
-          key: `runway_${index}`,
+          key: runwaySeriesKey(normalizedRwy),
           label: `${normalizedRwy}${isSettlement ? (row ? " 结算跑道" : " Settlement") : ""}`,
           rwy: normalizedRwy,
           isSettlement,
@@ -374,7 +391,7 @@ function buildRunwayHistorySeries(
         .filter((point): point is { ts: number; value: number } => point !== null);
       if (values.length <= 1) return null;
       return {
-        key: `runway_${index}`,
+        key: runwaySeriesKey(rwy),
         label: `${rwy}${isSettlement ? " 结算跑道" : ""}`,
         rwy,
         isSettlement,
@@ -605,8 +622,8 @@ function buildFullDayChartData(
   const tzOffset = row?.tz_offset_seconds ?? 0;
   const localDateStr = row?.local_date || new Date().toISOString().slice(0, 10);
 
-  const settlementObs = normObs(row?.settlement_today_obs || row?.metar_context?.settlement_today_obs, tzOffset);
-  const metarObs = normObs(row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs, tzOffset);
+  const settlementObs = normObs(hourly?.settlementTodayObs || row?.settlement_today_obs || row?.metar_context?.settlement_today_obs, tzOffset);
+  const metarObs = normObs(hourly?.metarTodayObs || row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs, tzOffset);
   const runwayHistorySeries = buildRunwayHistorySeries(row, hourly, tzOffset, localDateStr);
 
   const slots = generateFullDaySlots(localDateStr);
@@ -633,7 +650,7 @@ function buildFullDayChartData(
   });
 
   // ── Settlement observations ──
-  if (!runwayHistorySeries.length && settlementObs.length) {
+  if (settlementObs.length) {
     const svals = binObservationsToSlots(slots, settlementObs);
     if (svals.some((v) => v !== null)) {
       series.push({
@@ -653,7 +670,7 @@ function buildFullDayChartData(
     if (mvals.some((v) => v !== null)) {
       series.push({
         key: "metar",
-        label: "METAR",
+        label: row?.metar_context?.station_label || "METAR",
         source: row?.airport || "METAR",
         color: "#0ea5e9",
         dashed: true,
@@ -888,6 +905,8 @@ export function LiveTemperatureThresholdChart({
           airportPrimary: json.airport_primary || null,
           forecastDaily: json.forecast?.daily || [],
           multiModelDaily: json.multi_model_daily || {},
+          settlementTodayObs: (json as any).timeseries?.settlement_today_obs || (json as any)?.settlement_today_obs || undefined,
+          metarTodayObs: (json as any).timeseries?.metar_today_obs || (json as any)?.metar_today_obs || undefined,
         };
         _hourlyCache.set(city, { ts: Date.now(), data });
         setHourly(data);
@@ -905,8 +924,15 @@ export function LiveTemperatureThresholdChart({
 
   const tzOffset = row?.tz_offset_seconds ?? 0;
   const settlementObs = useMemo(() => {
-    return normObs(row?.settlement_today_obs || row?.metar_context?.settlement_today_obs, tzOffset);
-  }, [row, tzOffset]);
+    let obs = normObs(hourly?.settlementTodayObs || row?.settlement_today_obs || row?.metar_context?.settlement_today_obs, tzOffset);
+    if (!obs.length && !hourly?.runwayPlateHistory) {
+      const mObs = normObs(hourly?.metarTodayObs || row?.metar_today_obs || row?.metar_context?.today_obs, tzOffset);
+      if (mObs.length > 0) {
+        obs = mObs;
+      }
+    }
+    return obs;
+  }, [row, hourly, tzOffset]);
 
   const runwayPlates = useMemo(() => buildRunwayPlates(hourly?.amos, row, settlementObs), [hourly?.amos, row, settlementObs]);
   const hasRunwayData = runwayPlates.length > 0;
@@ -920,13 +946,7 @@ export function LiveTemperatureThresholdChart({
     if (userToggledKeys[sKey] !== undefined) {
       return userToggledKeys[sKey];
     }
-    if (sKey.startsWith("model_curve_")) {
-      if (city === "paris" && sKey === "model_curve_AROME HD") {
-        return true;
-      }
-      return false;
-    }
-    return true;
+    return isTemperatureSeriesVisibleByDefault(city, sKey);
   };
 
   const activeSeries = useMemo(() => {
@@ -1436,3 +1456,13 @@ export function LiveTemperatureThresholdChart({
     </Panel>
   );
 }
+
+export function __buildTemperatureChartDataForTest(
+  row: ScanOpportunityRow | null,
+  hourly: HourlyForecast,
+  timeframe: "1D" | "3D" = "1D",
+) {
+  return timeframe === "3D" ? build3DayChartData(row, hourly) : buildFullDayChartData(row, hourly);
+}
+
+export const __isTemperatureSeriesVisibleByDefaultForTest = isTemperatureSeriesVisibleByDefault;

@@ -105,8 +105,8 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
       ? "By proceeding, you agree to the Privacy Policy and Terms & Conditions."
       : "继续操作即代表您同意隐私政策与服务条款。",
     desc: isEn
-      ? "Access robust METAR observations, advanced DEB forecast blends, and real-time AI decision cards that bring clarity to your weather-market portfolios."
-      : "提供精准的机场 METAR 实况、先进的 DEB 智能融合预测和实时 AI 决策卡片，助您看清天气市场脉络。",
+      ? "Access robust METAR observations, advanced DEB forecast blends, and real-time AI decision cards that bring clarity to your weather-signal portfolios."
+      : "提供精准的机场 METAR 实况、先进的 DEB 智能融合预测和实时 AI 决策卡片，助您看清天气信号脉络。",
     trusted: isEn ? "Trusted by institutional traders" : "深受机构交易员信赖",
   } as const;
 

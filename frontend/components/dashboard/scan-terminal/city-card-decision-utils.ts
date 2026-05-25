@@ -466,8 +466,8 @@ export function buildMarketDecisionView({
           ? "Quote is available, but model probability or YES price is incomplete."
           : "已获取报价，但模型概率或 YES 价格不完整。"
         : isEn
-          ? `Model probability is ${formatMarketPercent(modelProbability)} versus market-implied ${formatMarketPercent(implied)}.${bucketMappingExplanation ? ` ${bucketMappingExplanation}` : ""}`
-          : `模型概率 ${formatMarketPercent(modelProbability)}，市场隐含约 ${formatMarketPercent(implied)}。${bucketMappingExplanation ? ` ${bucketMappingExplanation}` : ""}`,
+          ? `Model probability is ${formatMarketPercent(modelProbability)} versus signal-implied ${formatMarketPercent(implied)}.${bucketMappingExplanation ? ` ${bucketMappingExplanation}` : ""}`
+          : `模型概率 ${formatMarketPercent(modelProbability)}，信号隐含约 ${formatMarketPercent(implied)}。${bucketMappingExplanation ? ` ${bucketMappingExplanation}` : ""}`,
     status: "ready",
     title,
     tone,

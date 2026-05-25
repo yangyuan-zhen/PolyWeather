@@ -41,7 +41,7 @@ const RAW_MARKET_ROWS_ZH = [
 const COVERAGE_EN = [
   "Live airport observations",
   "DEB blend forecast",
-  "Market-implied temperature",
+  "Signal-implied temperature",
   "Intraday settlement windows",
   "AI weather evidence",
   "Paid Telegram alerts",
@@ -50,7 +50,7 @@ const COVERAGE_EN = [
 const COVERAGE_ZH = [
   "机场实况观测数据",
   "DEB 智能融合预报",
-  "市场隐含温度定价",
+  "信号隐含温度定价",
   "日内分段结算窗口",
   "AI 气象证据链解读",
   "付费电报实时通知",
@@ -60,7 +60,7 @@ const PRO_FEATURES_EN = [
   "Real-time METAR observations & runway sensor data",
   "Real-time METAR observations & alerts",
   "DEB blend forecast model",
-  "Market-implied temperature pricing",
+  "Signal-implied temperature pricing",
   "Intraday settlement windows & risk metrics",
   "Paid Telegram alerts & Webhook API",
   "24/7 priority professional support",
@@ -70,7 +70,7 @@ const PRO_FEATURES_ZH = [
   "实时 METAR 机场实测与跑道传感器数据",
   "实时 METAR 机场实测与预警",
   "DEB 智能融合预测模型",
-  "市场隐含温度定价与估值",
+  "信号隐含温度定价与估值",
   "日内结算窗口与风险度量指标",
   "付费电报群通知与 API 接口推送",
   "7×24小时专业技术与客服支持",
@@ -106,7 +106,7 @@ function InstitutionalLandingScreen() {
         {
           icon: Gauge,
           title: "Decision Workflow",
-          body: "City cards combine model forecast, current deviation, risk, and target contract context.",
+          body: "City cards combine model forecast, current deviation, risk, and target threshold context.",
         },
         {
           icon: ShieldCheck,
@@ -123,18 +123,18 @@ function InstitutionalLandingScreen() {
         {
           icon: Gauge,
           title: "决策工作流",
-          body: "城市决策卡片融合了气象预报、实况偏差、历史风险系数及目标合约盘口。",
+          body: "城市决策卡片融合了气象预报、实况偏差、历史风险系数及目标阈值盘口。",
         },
         {
           icon: ShieldCheck,
           title: "付费准入",
-          body: "除公开介绍和账户管理外，气象交易决策台仅向付费活跃订阅用户开放。",
+          body: "除公开介绍和账户管理外，气象决策台仅向付费活跃订阅用户开放。",
         },
       ];
 
   const modelLabels = isEn
-    ? ["DEB Blend", "Live METAR", "Market Implied"]
-    : ["DEB 融合预测", "METAR 机场实测", "市场隐含价格"];
+    ? ["DEB Blend", "Live METAR", "Signal Implied"]
+    : ["DEB 融合预测", "METAR 机场实测", "信号隐含价格"];
 
   return (
     <div className="min-h-screen bg-[#f4f7fb] text-slate-950">
@@ -220,12 +220,12 @@ function InstitutionalLandingScreen() {
               {isEn ? "Paid professional terminal" : "付费专业交易终端"}
             </div>
             <h1 className="max-w-2xl text-4xl font-black leading-[1.05] tracking-normal text-slate-950 sm:text-5xl lg:text-6xl">
-              {isEn ? "Institutional weather market intelligence for paid users." : "面向付费用户的机构级天气交易决策台"}
+              {isEn ? "Institutional weather signal intelligence for paid users." : "面向付费用户的机构级天气决策台"}
             </h1>
             <p className="mt-5 max-w-xl text-base leading-8 text-slate-600 sm:text-lg">
               {isEn
-                ? "PolyWeather turns live METAR observations, DEB forecast blends, model probabilities, and market settlement logic into one professional decision workspace."
-                : "PolyWeather 将 METAR 机场实测、DEB 智能融合预报、模型概率及市场结算逻辑整合于一体，打造气象风险管理专业决策环境。"}
+                ? "PolyWeather turns live METAR observations, DEB forecast blends, model probabilities, and signal settlement logic into one professional decision workspace."
+                : "PolyWeather 将 METAR 机场实测、DEB 智能融合预报、模型概率及信号结算逻辑整合于一体，打造气象风险管理专业决策环境。"}
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
@@ -253,7 +253,7 @@ function InstitutionalLandingScreen() {
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
               <div className="flex items-center gap-2 text-sm font-bold">
                 <BarChart3 size={16} className="text-blue-700" />
-                {isEn ? "Weather Markets Dashboard" : "天气市场交易面板"}
+                {isEn ? "Weather Signals Dashboard" : "天气信号交易面板"}
               </div>
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
                 <span className="h-2 w-2 rounded-full bg-emerald-500" />
@@ -263,7 +263,7 @@ function InstitutionalLandingScreen() {
             <div className="grid gap-3 p-3 lg:grid-cols-[1fr_0.85fr]">
               <div className="rounded-xl border border-slate-200">
                 <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2">
-                  <strong className="text-sm">{isEn ? "Temperature Contracts" : "温度天气合约"}</strong>
+                  <strong className="text-sm">{isEn ? "Temperature Thresholds" : "温度天气阈值"}</strong>
                   <span className="text-xs font-semibold text-slate-500">
                     {isEn ? "Price / Edge / Signal" : "价格 / 偏差 / 信号"}
                   </span>
@@ -325,8 +325,8 @@ function InstitutionalLandingScreen() {
                   </div>
                   <p className="text-sm leading-6 text-emerald-900">
                     {isEn
-                      ? "New York high-temperature market shows a positive observation deviation with confirmed airport evidence."
-                      : "纽约高温合约市场出现显著的正向观测偏差，机场天气实况已验证确认。"}
+                      ? "New York high-temperature signal shows a positive observation deviation with confirmed airport evidence."
+                      : "纽约高温阈值信号出现显著的正向观测偏差，机场天气实况已验证确认。"}
                   </p>
                 </div>
               </div>
@@ -356,7 +356,7 @@ function InstitutionalLandingScreen() {
                 {isEn ? "Data Coverage" : "数据覆盖范围"}
               </p>
               <h2 className="mt-2 text-3xl font-black">
-                {isEn ? "Everything weather-market users need in one place." : "天气市场交易者所需的一切，在此集结。"}
+                {isEn ? "Everything weather-signal users need in one place." : "天气信号交易者所需的一切，在此集结。"}
               </h2>
             </div>
             <p className="max-w-xl text-sm leading-6 text-slate-600">
@@ -404,8 +404,8 @@ function InstitutionalLandingScreen() {
                   </h3>
                   <p className="mt-2 text-sm text-slate-500 leading-relaxed">
                     {isEn
-                      ? "Full access to the institutional weather-market terminal. Live METAR, DEB forecasts, probability distribution, AI decision cards, and real-time alerts."
-                      : "完整访问机构级天气市场终端。实时 METAR、DEB 预报、概率分布、AI 决策卡片、实时通知。"}
+                      ? "Full access to the institutional weather-signal terminal. Live METAR, DEB forecasts, probability distribution, AI decision cards, and real-time alerts."
+                      : "完整访问机构级天气信号终端。实时 METAR、DEB 预报、概率分布、AI 决策卡片、实时通知。"}
                   </p>
                   <div className="mt-6 flex items-baseline">
                     <span className="text-5xl font-black tracking-tight text-slate-900">

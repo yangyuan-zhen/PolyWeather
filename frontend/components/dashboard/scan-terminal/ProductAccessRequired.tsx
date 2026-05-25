@@ -22,13 +22,13 @@ function SubscriptionGate({ isEn }: { isEn: boolean }) {
         "Real-time METAR observations across 500+ stations",
         "DEB forecast blends with 0–240h horizon",
         "AI decision cards with Poly-score ranking",
-        "Historical backtesting & weather market signals",
+        "Historical backtesting & weather signals",
       ]
     : [
         "500+ 气象站实时 METAR 实况",
         "DEB 智能融合预测（0–240 小时）",
         "AI 决策卡片 + Poly-score 排名",
-        "历史回测与天气市场交易信号",
+        "历史回测与天气信号",
       ];
 
   return (
@@ -46,7 +46,7 @@ function SubscriptionGate({ isEn }: { isEn: boolean }) {
             <h1 className="text-xl font-black tracking-tight">
               {isEn
                 ? "Unlock the Weather Terminal"
-                : "解锁天气交易决策台"}
+                : "解锁天气决策台"}
             </h1>
             <p className="mt-1 text-sm text-blue-100">
               {isEn

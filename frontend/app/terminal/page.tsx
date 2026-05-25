@@ -4,7 +4,7 @@ import { ScanTerminalDashboard } from "@/components/dashboard/ScanTerminalDashbo
 export const metadata: Metadata = {
   title: "PolyWeather Terminal | Paid Product",
   description:
-    "Paid PolyWeather decision terminal for weather-market analysis and city decision cards.",
+    "Paid PolyWeather decision terminal for weather-signal analysis and city decision cards.",
 };
 
 export default function TerminalPage() {
