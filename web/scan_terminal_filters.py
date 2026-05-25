@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from web.scan_city_ai_helpers import _safe_float
+from web.core import _sf as _safe_float
 
 
 def safe_int(value: Any, default: int) -> int:

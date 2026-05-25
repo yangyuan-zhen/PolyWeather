@@ -22,6 +22,7 @@ import type {
   DailyModelForecast,
 } from "@/lib/dashboard-types";
 import { buildDebBaselinePath } from "@/lib/temperature-chart-paths";
+import { DASHBOARD_REFRESH_POLICY_MS } from "@/lib/refresh-policy";
 import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { rowName, temp } from "@/components/dashboard/scan-terminal/utils";
 
@@ -176,7 +177,7 @@ type RunwayHistorySeries = {
 };
 
 const MAX_OBS_POINTS = 1440;
-const HOURLY_CACHE_TTL_MS = 30 * 60 * 1000;
+const HOURLY_CACHE_TTL_MS = DASHBOARD_REFRESH_POLICY_MS.observation;
 const FULL_DAY_SLOT_MINUTES = 30;
 const FULL_DAY_SLOTS = 48;
 const SLOT_INTERVAL_MS = FULL_DAY_SLOT_MINUTES * 60 * 1000;

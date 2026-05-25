@@ -4,6 +4,7 @@ import {
   buildBrowserBackendHeaders,
   fetchBackendApi,
 } from "@/lib/backend-api";
+import { DASHBOARD_REFRESH_POLICY_MS } from "@/lib/refresh-policy";
 import type {
   CityDetail,
   MarketScan,
@@ -17,7 +18,7 @@ export type RemoteData<T> =
   | { status: "error"; error: string; previous?: T };
 
 export const scanTerminalQueryPolicy = {
-  autoRefreshMs: 10 * 60_000,
+  autoRefreshMs: DASHBOARD_REFRESH_POLICY_MS.scanRows,
   manualForceRefreshCooldownMs: 2 * 60_000,
 } as const;
 

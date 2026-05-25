@@ -1,4 +1,5 @@
 import type { CityDetail, ObservationFreshness } from "@/lib/dashboard-types";
+import { DASHBOARD_REFRESH_POLICY_SEC } from "@/lib/refresh-policy";
 import { normalizeObservationSourceCode } from "@/lib/source-labels";
 
 export type MonitorFreshnessLevel = "fresh" | "aging" | "stale" | "unknown";
@@ -27,27 +28,27 @@ const DEFAULT_SOURCE_PROFILE: SourceProfile = {
   freshWindowSec: 600,
   expectedGraceSec: 900,
   staleAfterSec: 3600,
-  pollIntervalSec: 300,
+  pollIntervalSec: DASHBOARD_REFRESH_POLICY_SEC.metar,
 };
 
 const SOURCE_PROFILES: Record<string, SourceProfile> = {
   amsc_awos: {
     code: "amsc_awos",
     label: "AMSC AWOS",
-    nativeUpdateIntervalSec: 60,
+    nativeUpdateIntervalSec: DASHBOARD_REFRESH_POLICY_SEC.observation,
     freshWindowSec: 180,
     expectedGraceSec: 180,
     staleAfterSec: 900,
-    pollIntervalSec: 60,
+    pollIntervalSec: DASHBOARD_REFRESH_POLICY_SEC.observation,
   },
   amos: {
     code: "amos",
     label: "AMOS",
-    nativeUpdateIntervalSec: 60,
+    nativeUpdateIntervalSec: DASHBOARD_REFRESH_POLICY_SEC.observation,
     freshWindowSec: 180,
     expectedGraceSec: 180,
     staleAfterSec: 900,
-    pollIntervalSec: 60,
+    pollIntervalSec: DASHBOARD_REFRESH_POLICY_SEC.observation,
   },
   jma: {
     code: "jma",
@@ -79,11 +80,11 @@ const SOURCE_PROFILES: Record<string, SourceProfile> = {
   hko: {
     code: "hko",
     label: "HKO",
-    nativeUpdateIntervalSec: 600,
-    freshWindowSec: 900,
-    expectedGraceSec: 600,
-    staleAfterSec: 2700,
-    pollIntervalSec: 300,
+    nativeUpdateIntervalSec: DASHBOARD_REFRESH_POLICY_SEC.observation,
+    freshWindowSec: 180,
+    expectedGraceSec: 180,
+    staleAfterSec: 900,
+    pollIntervalSec: DASHBOARD_REFRESH_POLICY_SEC.observation,
   },
   cwa: {
     code: "cwa",

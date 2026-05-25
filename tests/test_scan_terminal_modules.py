@@ -1,4 +1,3 @@
-from web.scan_terminal_ai_merge import merge_scan_ai_result
 from web.scan_terminal_filters import normalize_scan_terminal_filters
 from web.scan_terminal_metar_gate import _apply_metar_gate_to_row
 from web.scan_terminal_payloads import (
@@ -151,55 +150,3 @@ def test_metar_gate_vetoes_yes_when_observed_breaks_above_bucket():
     assert "越过目标桶上沿" in row["ai_reason_zh"]
 
 
-def test_merge_scan_ai_result_applies_city_forecast_and_metadata():
-    payload = {
-        "snapshot_id": "scan-abc",
-        "rows": [
-            {
-                "id": "row-1",
-                "city": "manila",
-                "city_display_name": "Manila",
-                "final_score": 80.0,
-                "edge_percent": 5.0,
-                "metar_context": {"obs_count": 0},
-            }
-        ],
-    }
-    ai_raw = {
-        "summary_zh": "摘要",
-        "city_forecasts": [
-            {
-                "city": "Manila",
-                "predicted_max": 35.0,
-                "range_low": 34.0,
-                "range_high": 36.0,
-                "reasoning_zh": "实测突破",
-            }
-        ],
-        "recommendations": [{"row_id": "row-1", "rank": 1, "reason_zh": "观察"}],
-        "_polyweather_input_meta": {"sent_cities": 1, "sent_contracts": 1},
-    }
-
-    merged = merge_scan_ai_result(
-        payload,
-        ai_raw,
-        model="mimo-v2.5-pro",
-        max_rows=40,
-        timeout_sec=40,
-        cache_ttl_sec=1800,
-        base_url="https://token-plan-cn.xiaomimimo.com/v1",
-        provider="mimo",
-        duration_ms=123,
-        input_rows=1,
-    )
-
-    row = merged["rows"][0]
-    assert row["ai_predicted_max"] == 35.0
-    assert row["ai_forecast_reason_zh"] == "实测突破"
-    assert row["ai_decision"] == "approve"
-    assert merged["ai_scan"]["sent_cities"] == 1
-    assert merged["ai_scan"]["sent_rows"] == 1
-    assert merged["ai_scan"]["duration_ms"] == 123
-    assert merged["ai_scan"]["model"] == "mimo-v2.5-pro"
-    assert merged["ai_scan"]["provider"] == "mimo"
-    assert merged["ai_scan"]["base_url"] == "https://token-plan-cn.xiaomimimo.com/v1"

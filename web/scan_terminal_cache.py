@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import threading
 import time
@@ -10,8 +9,6 @@ from typing import Any, Dict, Optional
 _SCAN_TERMINAL_CACHE_LOCK = threading.Lock()
 _SCAN_TERMINAL_CACHE: Dict[str, Dict[str, Any]] = {}
 _SCAN_TERMINAL_REFRESHING: set[str] = set()
-_SCAN_TERMINAL_AI_CACHE_LOCK = threading.Lock()
-_SCAN_TERMINAL_AI_CACHE: Dict[str, Dict[str, Any]] = {}
 
 
 def scan_terminal_cache_key(filters: Dict[str, Any]) -> str:
@@ -91,73 +88,3 @@ def clear_scan_terminal_refreshing(filters: Dict[str, Any]) -> None:
     cache_key = scan_terminal_cache_key(filters)
     with _SCAN_TERMINAL_CACHE_LOCK:
         _SCAN_TERMINAL_REFRESHING.discard(cache_key)
-
-
-def scan_ai_cache_key(
-    snapshot_id: str,
-    filters: Dict[str, Any],
-    *,
-    max_rows: int,
-    model: str,
-) -> str:
-    raw = json.dumps(
-        {
-            "schema_version": "city_forecast_v1",
-            "snapshot_id": snapshot_id,
-            "filters": filters,
-            "model": model,
-            "max_rows": max_rows,
-        },
-        sort_keys=True,
-        ensure_ascii=False,
-    )
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
-
-
-def get_cached_scan_ai_result(
-    snapshot_id: str,
-    filters: Dict[str, Any],
-    *,
-    max_rows: int,
-    model: str,
-    ttl_sec: int,
-) -> Optional[Dict[str, Any]]:
-    cache_key = scan_ai_cache_key(
-        snapshot_id,
-        filters,
-        max_rows=max_rows,
-        model=model,
-    )
-    now = time.time()
-    with _SCAN_TERMINAL_AI_CACHE_LOCK:
-        cached = _SCAN_TERMINAL_AI_CACHE.get(cache_key)
-        if not cached:
-            return None
-        cached_at = float(cached.get("cached_at") or 0.0)
-        if now - cached_at >= float(ttl_sec):
-            return None
-        result = cached.get("result")
-        if isinstance(result, dict):
-            return dict(result)
-    return None
-
-
-def set_cached_scan_ai_result(
-    snapshot_id: str,
-    filters: Dict[str, Any],
-    result: Dict[str, Any],
-    *,
-    max_rows: int,
-    model: str,
-) -> None:
-    cache_key = scan_ai_cache_key(
-        snapshot_id,
-        filters,
-        max_rows=max_rows,
-        model=model,
-    )
-    with _SCAN_TERMINAL_AI_CACHE_LOCK:
-        _SCAN_TERMINAL_AI_CACHE[cache_key] = {
-            "cached_at": time.time(),
-            "result": result,
-        }

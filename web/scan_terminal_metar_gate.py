@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Optional
 
-from web.scan_city_ai_helpers import _safe_float
+from web.core import _sf as _safe_float
 from web.scan_terminal_filters import safe_int as _safe_int
 
 

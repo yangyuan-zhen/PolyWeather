@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import time
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, Iterator, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from loguru import logger
@@ -20,6 +20,7 @@ from src.analysis.settlement_rounding import apply_city_settlement
 from src.data_collection.country_networks import get_country_network_provider  # noqa: F401 - compatibility export for transitional routers
 from src.data_collection.city_registry import ALIASES
 from src.data_collection.city_time import get_city_utc_offset_seconds  # noqa: F401 - compatibility export for transitional routers
+from src.utils.refresh_policy import OBSERVATION_REFRESH_SEC, SCAN_ROWS_REFRESH_SEC
 from web.analysis_service import (
     _analyze,
     _analyze_summary,
@@ -27,12 +28,7 @@ from web.analysis_service import (
     _build_city_market_scan_payload,
     _build_city_summary_payload,
 )
-from web.scan_terminal_service import (
-    build_scan_city_ai_forecast_payload,  # noqa: F401 - compatibility export for tests and transitional routers
-    build_scan_terminal_ai_payload,  # noqa: F401 - compatibility export for tests and transitional routers
-    build_scan_terminal_payload,  # noqa: F401 - compatibility export for tests and transitional routers
-    stream_scan_city_ai_forecast_payload,  # noqa: F401 - compatibility export for tests and transitional routers
-)
+from web.scan_terminal_service import build_scan_terminal_payload  # noqa: F401 - compatibility export for tests and transitional routers
 from web.core import (
     CITIES,
     CITY_REGISTRY,  # noqa: F401 - compatibility export for tests and transitional routers
@@ -61,6 +57,50 @@ from web.core import (
 
 router = APIRouter()
 _CACHE_DB = DBManager()
+
+
+def build_scan_terminal_ai_payload(
+    raw_filters: Optional[Dict[str, Any]] = None,
+    *,
+    snapshot_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    return {
+        "available": False,
+        "status": "disabled",
+        "reason": "scan AI has been removed",
+        "snapshot_id": snapshot_id,
+        "rows": [],
+    }
+
+
+def build_scan_city_ai_forecast_payload(
+    city: str,
+    *,
+    force_refresh: bool = False,
+    locale: str = "zh-CN",
+) -> Dict[str, Any]:
+    return {
+        "available": False,
+        "status": "disabled",
+        "reason": "city AI has been removed",
+        "city": city,
+        "locale": locale,
+        "force_refresh": force_refresh,
+    }
+
+
+def stream_scan_city_ai_forecast_payload(
+    city: str,
+    *,
+    force_refresh: bool = False,
+    locale: str = "zh-CN",
+) -> Iterator[str]:
+    payload = build_scan_city_ai_forecast_payload(
+        city,
+        force_refresh=force_refresh,
+        locale=locale,
+    )
+    yield f"data: {payload}\n\n"
 
 _DEB_RECENT_LOOKBACK = 7
 _DEB_RECENT_MIN_SAMPLES = 3
@@ -138,11 +178,11 @@ US_CORE_CITIES = [
     "atlanta",
     "seattle",
 ]
-CITY_SUMMARY_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_SUMMARY_CACHE_TTL_SEC", "1800")))
-CITY_PANEL_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_PANEL_CACHE_TTL_SEC", "1800")))
-CITY_NEARBY_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_NEARBY_CACHE_TTL_SEC", "1800")))
-CITY_MARKET_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_MARKET_CACHE_TTL_SEC", "1800")))
-CITY_FULL_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_FULL_CACHE_TTL_SEC", "1800")))
+CITY_SUMMARY_CACHE_TTL_SEC = min(SCAN_ROWS_REFRESH_SEC, max(30, int(os.getenv("POLYWEATHER_CITY_SUMMARY_CACHE_TTL_SEC", str(SCAN_ROWS_REFRESH_SEC)))))
+CITY_PANEL_CACHE_TTL_SEC = min(SCAN_ROWS_REFRESH_SEC, max(30, int(os.getenv("POLYWEATHER_CITY_PANEL_CACHE_TTL_SEC", str(SCAN_ROWS_REFRESH_SEC)))))
+CITY_NEARBY_CACHE_TTL_SEC = min(SCAN_ROWS_REFRESH_SEC, max(30, int(os.getenv("POLYWEATHER_CITY_NEARBY_CACHE_TTL_SEC", str(SCAN_ROWS_REFRESH_SEC)))))
+CITY_MARKET_CACHE_TTL_SEC = min(SCAN_ROWS_REFRESH_SEC, max(30, int(os.getenv("POLYWEATHER_CITY_MARKET_CACHE_TTL_SEC", str(SCAN_ROWS_REFRESH_SEC)))))
+CITY_FULL_CACHE_TTL_SEC = min(OBSERVATION_REFRESH_SEC, max(30, int(os.getenv("POLYWEATHER_CITY_FULL_CACHE_TTL_SEC", str(OBSERVATION_REFRESH_SEC)))))
 MARKET_SCAN_PAYLOAD_TTL_SEC = max(
     5,
     int(os.getenv("POLYWEATHER_MARKET_SCAN_PAYLOAD_TTL_SEC", "30")),
@@ -321,7 +361,7 @@ def _refresh_city_market_cache(city: str, force_refresh: bool = False) -> dict:
 
 
 def _refresh_city_full_cache(city: str, force_refresh: bool = False) -> dict:
-    payload = _analyze(city, force_refresh=force_refresh, include_llm_commentary=True, detail_mode="full")
+    payload = _analyze(city, force_refresh=force_refresh, include_llm_commentary=False, detail_mode="full")
     _CACHE_DB.set_city_cache(
         "full",
         city,

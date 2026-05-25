@@ -6,7 +6,6 @@ from typing import Any, Dict
 
 from fastapi import HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import StreamingResponse
 
 from web.services.market_overview_api import build_market_overview_payload
 import web.routes as legacy_routes
@@ -81,40 +80,6 @@ async def get_scan_terminal_ai_payload(request: Request) -> Dict[str, Any]:
         legacy_routes.build_scan_terminal_ai_payload,
         filters,
         snapshot_id=snapshot_id,
-    )
-
-
-async def get_scan_city_ai_forecast_payload(request: Request) -> Dict[str, Any]:
-    legacy_routes._assert_entitlement(request)
-    body = await _json_body_or_empty(request)
-    city = _extract_required_city(body)
-    force_refresh = _boolish(body.get("force_refresh"))
-    locale = str(body.get("locale") or "zh-CN").strip()
-    return await run_in_threadpool(
-        legacy_routes.build_scan_city_ai_forecast_payload,
-        city,
-        force_refresh=force_refresh,
-        locale=locale,
-    )
-
-
-async def get_scan_city_ai_stream_response(request: Request) -> StreamingResponse:
-    legacy_routes._assert_entitlement(request)
-    body = await _json_body_or_empty(request)
-    city = _extract_required_city(body)
-    force_refresh = _boolish(body.get("force_refresh"))
-    locale = str(body.get("locale") or "zh-CN").strip()
-    return StreamingResponse(
-        legacy_routes.stream_scan_city_ai_forecast_payload(
-            city,
-            force_refresh=force_refresh,
-            locale=locale,
-        ),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-store",
-            "X-Accel-Buffering": "no",
-        },
     )
 
 

@@ -9,10 +9,11 @@ import {
 } from "@/components/dashboard/scan-terminal/scan-terminal-client";
 import { useRemoteDataQuery } from "@/components/dashboard/scan-terminal/use-remote-data-query";
 import { REGIONS } from "@/components/dashboard/scan-terminal/continent-grouping";
+import { DASHBOARD_REFRESH_POLICY_MS } from "@/lib/refresh-policy";
 import type { ScanTerminalResponse } from "@/lib/dashboard-types";
 
 const SCAN_CACHE_PREFIX = "polyweather_scan_v2";
-const SCAN_CACHE_TTL_MS = 10 * 60 * 1000; // 10 min — cities list instant on revisit
+const SCAN_CACHE_TTL_MS = DASHBOARD_REFRESH_POLICY_MS.scanRows;
 
 function scanCacheKey(tradingRegion: string): string {
   return `${SCAN_CACHE_PREFIX}:${tradingRegion || "all"}`;

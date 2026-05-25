@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from web.core import CITIES
+from web.core import CITIES, _sf as _safe_float
 from web.analysis_service import _analyze
-from web.scan_city_ai_helpers import _safe_float
-from web.scan_terminal_ai_compact import _build_metar_decision_context
 from web.scan_terminal_filters import (
     market_region_from_tz_offset as _market_region_from_tz_offset,
     safe_int as _safe_int,
@@ -226,3 +225,117 @@ def _build_quick_row(
     row["model_probability"] = best_model_prob
     row["final_score"] = float(deb.get("prediction") or 0)
     return row
+
+
+# ── METAR/observation context helpers (moved from deleted scan_terminal_ai_compact) ──
+
+
+def _observation_sort_key(point: Dict[str, Any]) -> tuple[int, str]:
+    raw_time = str(point.get("time") or "").strip()
+    try:
+        parsed = datetime.fromisoformat(raw_time.replace("Z", "+00:00"))
+        return parsed.hour * 60 + parsed.minute, raw_time
+    except Exception:
+        pass
+    match = re.search(r"(\d{1,2}):(\d{2})", raw_time)
+    if match:
+        hour = max(0, min(23, int(match.group(1))))
+        minute = max(0, min(59, int(match.group(2))))
+        return hour * 60 + minute, raw_time
+    return 9999, raw_time
+
+
+def _compact_observation_points(raw_points: Any, limit: int = 24) -> List[Dict[str, Any]]:
+    if not isinstance(raw_points, list):
+        return []
+    points: List[Dict[str, Any]] = []
+    for item in raw_points:
+        if isinstance(item, dict):
+            temp = _safe_float(item.get("temp"))
+            time_value = str(item.get("time") or item.get("obs_time") or item.get("time_label") or "").strip()
+        elif isinstance(item, (list, tuple)) and len(item) >= 2:
+            time_value = str(item[0] or "").strip()
+            temp = _safe_float(item[1])
+        else:
+            continue
+        if temp is None or not time_value:
+            continue
+        points.append({"time": time_value, "temp": temp})
+    sorted_points = sorted(points, key=_observation_sort_key)
+    return sorted_points[-max(1, int(limit)):]
+
+
+def _build_metar_decision_context(data: Dict[str, Any]) -> Dict[str, Any]:
+    today_obs = _compact_observation_points(data.get("metar_today_obs"), 36)
+    recent_obs = _compact_observation_points(data.get("metar_recent_obs"), 12)
+    settlement_obs = _compact_observation_points(data.get("settlement_today_obs"), 36)
+    airport_current = data.get("airport_current") if isinstance(data.get("airport_current"), dict) else {}
+    metar_status = data.get("metar_status") if isinstance(data.get("metar_status"), dict) else {}
+
+    source_obs = today_obs or recent_obs or settlement_obs
+    trend_source = recent_obs or source_obs[-4:]
+    last_point = source_obs[-1] if source_obs else {}
+    first_trend = trend_source[0] if trend_source else {}
+    last_trend = trend_source[-1] if trend_source else {}
+    max_point = None
+    for point in source_obs:
+        if max_point is None or float(point["temp"]) >= float(max_point["temp"]):
+            max_point = point
+
+    last_temp = _safe_float(last_point.get("temp"))
+    first_temp = _safe_float(first_trend.get("temp"))
+    trend_last_temp = _safe_float(last_trend.get("temp"))
+    trend_delta = (
+        trend_last_temp - first_temp
+        if trend_last_temp is not None and first_temp is not None and len(trend_source) >= 2
+        else None
+    )
+    station = data.get("risk") if isinstance(data.get("risk"), dict) else {}
+    current = data.get("current") if isinstance(data.get("current"), dict) else {}
+    settlement_station = data.get("settlement_station") if isinstance(data.get("settlement_station"), dict) else {}
+    settlement_source = str(
+        current.get("settlement_source")
+        or settlement_station.get("settlement_source")
+        or "metar"
+    ).strip().lower()
+    is_hko = settlement_source == "hko"
+    source_label = "HKO" if is_hko else "METAR"
+    return {
+        "source": source_label,
+        "is_airport_metar": not is_hko,
+        "station": (
+            current.get("station_code")
+            or settlement_station.get("settlement_station_code")
+            or station.get("icao")
+            or airport_current.get("station_code")
+        ),
+        "station_label": (
+            current.get("station_name")
+            or settlement_station.get("settlement_station_label")
+            or station.get("airport")
+            or airport_current.get("station_label")
+        ),
+        "today_obs": today_obs[-12:],
+        "recent_obs": recent_obs[-8:],
+        "settlement_today_obs": settlement_obs[-12:],
+        "obs_count": len(source_obs),
+        "last_time": last_point.get("time"),
+        "last_temp": last_temp,
+        "max_temp": _safe_float((max_point or {}).get("temp")),
+        "max_time": (max_point or {}).get("time"),
+        "trend_delta": trend_delta,
+        "stale_for_today": bool(metar_status.get("stale_for_today")),
+        "available_for_today": bool(metar_status.get("available_for_today")),
+        "last_observation_time": metar_status.get("last_observation_time"),
+        "airport_current_temp": _safe_float(airport_current.get("temp")),
+        "airport_max_so_far": _safe_float(airport_current.get("max_so_far")),
+        "airport_obs_time": airport_current.get("obs_time"),
+        "airport_report_time": airport_current.get("report_time"),
+        "airport_raw_metar": airport_current.get("raw_metar"),
+        "airport_wx_desc": airport_current.get("wx_desc"),
+        "airport_cloud_desc": airport_current.get("cloud_desc"),
+        "airport_visibility_mi": _safe_float(airport_current.get("visibility_mi")),
+        "airport_wind_speed_kt": _safe_float(airport_current.get("wind_speed_kt")),
+        "airport_wind_dir": _safe_float(airport_current.get("wind_dir")),
+        "airport_humidity": _safe_float(airport_current.get("humidity")),
+    }

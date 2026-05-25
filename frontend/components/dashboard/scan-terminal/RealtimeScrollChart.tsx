@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import { Panel } from "@/components/dashboard/scan-terminal/Panel";
+import { DASHBOARD_REFRESH_POLICY_MS } from "@/lib/refresh-policy";
 
 type StreamPoint = { timestamp: string; temp: number; source: string };
 type Threshold = { label: string; threshold_c: number; breached: boolean };
@@ -21,7 +22,7 @@ type StreamPayload = {
   thresholds: Threshold[];
 };
 
-const POLL_INTERVAL_MS = 30_000;
+const POLL_INTERVAL_MS = DASHBOARD_REFRESH_POLICY_MS.observation;
 
 export function RealtimeScrollChart({
   city,
