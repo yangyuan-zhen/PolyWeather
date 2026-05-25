@@ -37,7 +37,7 @@ services:
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ''
         NEXT_PUBLIC_SUPABASE_URL: ''
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: prod.Dockerfile
     container_name: polyweather_frontend
     environment:
       NEXT_PUBLIC_POLYWEATHER_API_BASE_URL: ${NEXT_PUBLIC_POLYWEATHER_API_BASE_URL:-}
