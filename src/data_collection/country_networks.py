@@ -425,6 +425,35 @@ def _airport_primary_from_raw(city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
             },
         )
 
+    cowin = raw.get("cowin_current") or {}
+    if cowin.get("temp") is not None:
+        return _normalize_station_row(
+            station_code=meta.get("icao") or str(cowin.get("icao") or "COWIN6087"),
+            station_label=meta.get("airport_name") or cowin.get("station_label") or meta.get("icao"),
+            temp=_safe_float(cowin["temp"]),
+            obs_time=str(cowin.get("obs_time") or metar.get("observation_time") or ""),
+            source_code="cowin_obs",
+            source_label="CoWIN 6087",
+            is_official=True,
+            is_airport_station=True,
+            is_settlement_anchor=False,
+            extra={
+                "max_so_far": _safe_float(current.get("max_temp_so_far")),
+                "max_temp_time": current.get("max_temp_time"),
+                "obs_age_min": None,
+                "report_time": metar.get("report_time"),
+                "receipt_time": metar.get("receipt_time"),
+                "obs_time_epoch": metar.get("obs_time_epoch"),
+                "obs_time_utc_offset_seconds": 0,
+                "wind_speed_kt": _safe_float(current.get("wind_speed_kt")),
+                "wind_dir": _safe_float(current.get("wind_dir")),
+                "humidity": _safe_float(current.get("humidity")),
+                "visibility_mi": _safe_float(current.get("visibility_mi")),
+                "wx_desc": current.get("wx_desc"),
+                "raw_metar": current.get("raw_metar"),
+            },
+        )
+
     aeroweb = raw.get("aeroweb") or {}
     aw_current = aeroweb.get("current") or {}
     if aw_current.get("temp") is not None:
