@@ -1065,10 +1065,29 @@ def _build_airport_status_message(
     lines.append("")
     temp_symbol = str(city_weather.get("temp_symbol") or "°C").strip()
     cur_str = f"{display_temp:.1f}{temp_symbol}" if display_temp is not None else "--"
-    if has_runway:
-        lines.append(f"结算跑道当前：{cur_str}")
+
+    if city == "paris":
+        # Paris: show both AEROWEB and AROME explicitly
+        airport_primary = city_weather.get("airport_primary") or {}
+        if airport_primary.get("source_code") == "aeroweb" and display_temp is not None:
+            lines.append(f"AEROWEB 实况：{cur_str}")
+        else:
+            lines.append("AEROWEB 实况：--")
+        if arome_temp is not None:
+            diff_str = ""
+            if display_temp is not None and airport_primary.get("source_code") == "aeroweb":
+                d = arome_temp - display_temp
+                sign = "+" if d >= 0 else ""
+                diff_str = f"（{'偏高' if d > 0 else '偏低'}{sign}{d:.1f}°）"
+            lines.append(f"AROME HD 临近预报：{arome_temp:.1f}{temp_symbol}{diff_str}")
+        else:
+            lines.append("AROME HD 临近预报：--")
     else:
-        lines.append(f"当前：{cur_str}")
+        if has_runway:
+            lines.append(f"结算跑道当前：{cur_str}")
+        else:
+            lines.append(f"当前：{cur_str}")
+
     if max_so_far is not None:
         time_str = f"（{max_temp_time}）" if max_temp_time else ""
         if has_runway:
@@ -1120,17 +1139,9 @@ def _build_airport_status_message(
         else:
             lines.append(f"DEB：{deb_pred:.1f}{temp_symbol}")
 
-    if source_label:
+    if source_label and city != "paris":
         lines.append("")
         lines.append(f"📡 {source_label}")
-    # Show AROME as supplementary info ONLY when AEROWEB is the primary source
-    if arome_temp is not None and "AEROWEB" in source_label:
-        diff_str = ""
-        if display_temp is not None:
-            d = arome_temp - display_temp
-            sign = "+" if d >= 0 else ""
-            diff_str = f"（{'偏高' if d > 0 else '偏低'}{sign}{d:.1f}°）"
-        lines.append(f"🕐 AROME HD 15分钟临近预报：{arome_temp:.1f}{temp_symbol}{diff_str}")
 
     # Model summary (compact)
     models = city_weather.get("multi_model") or {}
