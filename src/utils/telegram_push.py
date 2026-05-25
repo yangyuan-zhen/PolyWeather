@@ -579,6 +579,8 @@ HIGH_FREQ_AIRPORT_CITIES = {
     "seoul", "singapore", "busan", "tokyo", "ankara", "helsinki", "amsterdam",
     "istanbul", "paris", "hong kong", "shenzhen", "taipei",
     "beijing", "shanghai", "guangzhou", "qingdao", "chengdu", "chongqing", "wuhan",
+    "new york", "los angeles", "chicago", "denver", "atlanta",
+    "miami", "san francisco", "houston", "dallas", "austin", "seattle",
     "tel aviv",
 }
 HIGH_FREQ_AIRPORT_ICAO = {
@@ -587,6 +589,10 @@ HIGH_FREQ_AIRPORT_ICAO = {
     "paris": "LFPB", "hong kong": "HKO", "shenzhen": "LFS", "taipei": "466920",
     "beijing": "ZBAA", "shanghai": "ZSPD", "guangzhou": "ZGGG", "qingdao": "ZSQD",
     "chengdu": "ZUUU", "chongqing": "ZUCK", "wuhan": "ZHHH",
+    "new york": "KLGA", "los angeles": "KLAX", "chicago": "KORD",
+    "denver": "KBKF", "atlanta": "KATL", "miami": "KMIA",
+    "san francisco": "KSFO", "houston": "KHOU", "dallas": "KDAL",
+    "austin": "KAUS", "seattle": "KSEA",
     "tel aviv": "LLBG",
 }
 # Settlement runway mapping — matches settlement anchor stations.
