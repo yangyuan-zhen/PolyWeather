@@ -350,10 +350,11 @@ function InstitutionalLandingScreen() {
 
         <section id="platform" className="border-y border-slate-200 bg-white">
           <div className="mx-auto grid max-w-7xl gap-4 px-4 py-10 sm:px-6 md:grid-cols-3 lg:px-8">
-            {platformCards.map(({ body, icon: Icon, title }) => (
+            {platformCards.map(({ body, icon: Icon, title }, i) => (
               <article
                 key={title}
-                className="rounded-xl border border-slate-200 bg-slate-50 p-5"
+                className="rounded-xl border border-slate-200 bg-slate-50 p-5 animate-fade-up opacity-0 transition-all hover:-translate-y-1 hover:shadow-md hover:border-slate-300 duration-300"
+                style={{ animationDelay: `${200 + i * 150}ms`, animationFillMode: "forwards" }}
               >
                 <Icon className="mb-4 text-blue-700" size={22} />
                 <h2 className="text-lg font-bold">{title}</h2>
@@ -363,27 +364,28 @@ function InstitutionalLandingScreen() {
           </div>
         </section>
 
-        <section id="coverage" className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
-          <div className="mb-7 flex flex-col justify-between gap-3 md:flex-row md:items-end">
+        <section id="coverage" className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 overflow-hidden">
+          <div className="mb-7 flex flex-col justify-between gap-3 md:flex-row md:items-end animate-fade-up opacity-0" style={{ animationDelay: "300ms", animationFillMode: "forwards" }}>
             <div>
-              <p className="text-xs font-bold uppercase text-blue-700">
+              <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
                 {isEn ? "Data Coverage" : "数据覆盖范围"}
               </p>
               <h2 className="mt-3 text-3xl font-black sm:text-4xl">
                 {isEn ? "Everything weather intelligence users need in one place." : "气象决策分析人员所需的一切，在此集结。"}
               </h2>
             </div>
-            <p className="max-w-xl text-sm leading-6 text-slate-600">
+            <p className="max-w-xl text-sm leading-relaxed text-slate-500">
               {isEn
                 ? "Built for repeat professional use: dense tables, clear status chips, restrained color, and fast entry into paid workflows."
                 : "专为高频专业决策设计：高数据密度、直观的状态徽标、严谨的数据呈现，助您快速进入分析流。"}
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {coverage.map((item) => (
+            {coverage.map((item, i) => (
               <div
                 key={item}
-                className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm font-semibold shadow-sm"
+                className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm font-semibold shadow-sm animate-fade-up opacity-0 transition-all hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5 duration-300"
+                style={{ animationDelay: `${400 + i * 100}ms`, animationFillMode: "forwards" }}
               >
                 <CheckCircle2 size={17} className="text-emerald-600" />
                 {item}
@@ -407,7 +409,7 @@ function InstitutionalLandingScreen() {
             </p>
 
             <div className="mx-auto mt-16 max-w-lg">
-              <div className="relative flex flex-col rounded-3xl border-2 border-blue-600 bg-white p-8 shadow-sm text-left">
+              <div className="relative flex flex-col rounded-3xl border-2 border-blue-500/80 bg-white p-8 shadow-[0_20px_60px_rgba(37,99,235,0.12)] text-left animate-fade-up opacity-0 transition-transform hover:-translate-y-1 hover:shadow-[0_30px_80px_rgba(37,99,235,0.2)] duration-500" style={{ animationDelay: "500ms", animationFillMode: "forwards" }}>
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-1.5 text-xs font-bold uppercase tracking-widest text-white shadow-md">
                   {isEn ? "Pro Workspace" : "专业决策分析台"}
                 </div>
@@ -450,11 +452,12 @@ function InstitutionalLandingScreen() {
                 <div className="mt-8">
                   <Link
                     href="/account"
-                    className="block w-full rounded-xl bg-slate-950 py-3 text-center text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                    className="group flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 py-3.5 text-center text-sm font-bold text-white shadow-lg shadow-slate-900/20 transition-all hover:scale-[1.02] hover:shadow-slate-900/30 hover:from-blue-600 hover:to-indigo-600 duration-300 active:scale-[0.98]"
                   >
-                    {isEn ? "Subscribe for $10/month" : "立即订阅 $10/月"}
+                    <span>{isEn ? "Subscribe for $10/month" : "立即订阅 $10/月"}</span>
+                    <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
                   </Link>
-                  <p className="mt-3 text-center text-xs text-slate-400">
+                  <p className="mt-4 text-center text-xs text-slate-400">
                     {isEn
                       ? "Login required. Payment via USDC on Polygon."
                       : "需先登录。通过 Polygon 链 USDC 支付。"}

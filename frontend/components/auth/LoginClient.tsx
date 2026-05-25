@@ -386,7 +386,7 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
       {/* Right Column (Forms) */}
       <div className="flex flex-1 flex-col justify-between p-6 sm:p-10 bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#eff4f9] min-h-screen relative overflow-hidden">
         {/* Subtle mesh background */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(15,23,42,0.01)_1px,transparent_1px),linear-gradient(to_bottom,rgba(15,23,42,0.01)_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(15,23,42,0.01)_1px,transparent_1px),linear-gradient(to_bottom,rgba(15,23,42,0.01)_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none animate-pulse" style={{ animationDuration: '4s' }} />
         
         {/* Top Header Switch */}
         <div className="relative z-10 flex justify-between lg:justify-end items-center gap-3">
@@ -415,7 +415,7 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
 
         {/* Center Form Card */}
         <div className="relative z-10 flex flex-1 items-center justify-center my-10">
-          <div className="w-full max-w-[440px] bg-white/90 backdrop-blur-xl border border-slate-200/50 rounded-2xl p-6 sm:p-10 shadow-[0_24px_60px_rgba(8,16,36,0.06)]">
+          <div className="w-full max-w-[440px] bg-white/90 backdrop-blur-xl border border-slate-200/50 rounded-2xl p-6 sm:p-10 shadow-[0_24px_60px_rgba(8,16,36,0.06)] animate-fade-up [animation-delay:200ms] opacity-0 transition-transform hover:-translate-y-1 hover:shadow-[0_32px_80px_rgba(8,16,36,0.08)] duration-500">
             <div className="mb-6">
               <h1 className="text-2xl font-black tracking-tight text-slate-900 mb-2">
                 {isLogin ? copy.welcomeBack : copy.signUpTitle}
@@ -426,7 +426,7 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
             </div>
 
             <form onSubmit={(event) => void onEmailSubmit(event)} className="space-y-5">
-              <div className="space-y-2">
+              <div className="space-y-2 animate-fade-up [animation-delay:350ms] opacity-0">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                   {copy.workEmail}
                 </label>
@@ -443,7 +443,7 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2 animate-fade-up [animation-delay:450ms] opacity-0">
                 <div className="flex justify-between items-center">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                     {copy.password}
@@ -489,10 +489,10 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 hover:from-slate-950 hover:to-slate-900 text-sm font-bold text-white shadow-lg shadow-slate-950/10 hover:shadow-slate-950/20 active:scale-[0.98] transition-all duration-200 disabled:opacity-50 mt-8 flex items-center justify-center gap-2"
+                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 hover:from-blue-600 hover:to-indigo-600 text-sm font-bold text-white shadow-lg shadow-slate-950/10 hover:shadow-blue-600/25 active:scale-[0.98] transition-all duration-300 disabled:opacity-50 mt-8 flex items-center justify-center gap-2 group animate-fade-up [animation-delay:550ms] opacity-0"
               >
                 <span>{isLogin ? copy.loginSubmit : copy.signupSubmit}</span>
-                <ArrowRight size={16} />
+                <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
               </button>
             </form>
 
