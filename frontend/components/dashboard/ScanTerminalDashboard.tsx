@@ -45,7 +45,6 @@ import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { TrainingDashboard } from "@/components/dashboard/scan-terminal/TrainingDashboard";
 import { LiveTemperatureThresholdChart } from "@/components/dashboard/scan-terminal/LiveTemperatureThresholdChart";
 import { KoyfinRowsTable } from "@/components/dashboard/scan-terminal/KoyfinRowsTable";
-import { MarketOverviewView } from "@/components/dashboard/scan-terminal/MarketOverviewView";
 import { rowName, pct, money, temp, edgeClass } from "@/components/dashboard/scan-terminal/utils";
 
 function createEmptyAccess(loading = true): ProAccessState {
