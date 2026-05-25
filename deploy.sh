@@ -52,4 +52,5 @@ fi
 
 mkdir -p "$(dirname "$TAG_FILE")"
 echo "$NEW_TAG" > "$TAG_FILE"
+docker image prune -af
 echo "✅ Deployed $NEW_TAG"
