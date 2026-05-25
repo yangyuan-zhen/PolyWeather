@@ -175,16 +175,14 @@ function CityRegionList({
 }) {
   const cities = useMemo(() => {
     const seen = new Set<string>();
-    const result: { city: string; name: string; contractCount: number; localTime: string | null }[] = [];
+    const result: { city: string; name: string; localTime: string | null }[] = [];
     rows.forEach((row) => {
       const key = String(row.city || "").toLowerCase();
       if (seen.has(key)) return;
       seen.add(key);
-      const cityRows = rows.filter((r) => String(r.city || "").toLowerCase() === key);
       result.push({
         city: key,
         name: rowName(row),
-        contractCount: cityRows.length,
         localTime: row.local_time || null,
       });
     });
@@ -194,7 +192,7 @@ function CityRegionList({
   return (
     <Panel title={isEn ? "Cities" : "城市"}>
       <div className="divide-y divide-slate-100">
-        {cities.map(({ city, name, contractCount, localTime }) => (
+        {cities.map(({ city, name, localTime }) => (
           <button
             key={city}
             type="button"
@@ -206,10 +204,7 @@ function CityRegionList({
           >
             <div className="min-w-0">
               <div className="text-[12px] font-bold text-slate-800 truncate">{name}</div>
-              <div className="text-[11px] text-slate-400">
-                {localTime && <span className="mr-2">{localTime}</span>}
-                {contractCount} {isEn ? "contracts" : "个合约"}
-              </div>
+              <div className="text-[11px] text-slate-400">{localTime}</div>
             </div>
           </button>
         ))}
