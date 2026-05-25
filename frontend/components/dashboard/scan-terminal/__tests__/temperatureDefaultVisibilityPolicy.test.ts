@@ -13,6 +13,10 @@ function seriesByKey(series: Array<{ key: string }>, key: string) {
   return series.find((item) => item.key === key);
 }
 
+function runwayKey(rwy: string) {
+  return `runway_${rwy.split("/").map((part) => part.trim().toUpperCase()).join("_")}`;
+}
+
 export function runTests() {
   const guangzhou = {
     city: "guangzhou",
@@ -96,9 +100,61 @@ export function runTests() {
     "users should still be able to enable a hidden multi-model curve from the legend",
   );
   assert(
+    defaultVisibleSeries.some((item) => item.key === "hourly_forecast"),
+    "DEB fusion forecast should be visible by default",
+  );
+  assert(
     __isTemperatureSeriesVisibleByDefaultForTest("paris", "model_curve_AROME HD"),
     "Paris AROME HD should be the only default-visible model curve exception",
   );
+  assert(
+    __getVisibleTemperatureSeriesForTest(
+      "paris",
+      [{ key: "model_curve_AROME HD" }, { key: "model_curve_ECMWF" }] as any,
+      {},
+    ).some((item) => item.key === "model_curve_AROME HD"),
+    "Paris AROME HD should be active in the default visible series",
+  );
+
+  const settlementRunwayCases = [
+    ["beijing", "19/01"],
+    ["shanghai", "17L/35R"],
+    ["guangzhou", "02L/20R"],
+    ["chengdu", "02L/20R"],
+    ["chongqing", "20R/02L"],
+    ["wuhan", "04/22"],
+    ["seoul", "15R/33L"],
+  ] as const;
+  settlementRunwayCases.forEach(([city, settlementRwy]) => {
+    const chart = __buildTemperatureChartDataForTest(
+      {
+        city,
+        local_date: "2026-05-25",
+        local_time: "10:00",
+        tz_offset_seconds: 8 * 60 * 60,
+        runway_plate_history: {
+          [settlementRwy]: [
+            { time: "00:05", temp: 25.1 },
+            { time: "00:35", temp: 25.3 },
+          ],
+          "99/00": [
+            { time: "00:05", temp: 24.1 },
+            { time: "00:35", temp: 24.3 },
+          ],
+        },
+      } as any,
+      { localTime: "10:00", times: ["00:00", "00:30"], temps: [25, 26] } as any,
+      "1D",
+    );
+    const highlighted = seriesByKey(chart.series, runwayKey(settlementRwy)) as any;
+    assert(highlighted, `${city} settlement runway should be present`);
+    assert(highlighted.label.includes("结算跑道"), `${city} settlement runway should be labeled`);
+    assert(highlighted.color === "#009688", `${city} settlement runway should use highlight cyan`);
+    assert(highlighted.featured === true, `${city} settlement runway should be featured`);
+    assert(!highlighted.dashed, `${city} settlement runway should be solid`);
+    const auxiliary = seriesByKey(chart.series, "runway_99_00") as any;
+    assert(auxiliary?.dashed === true, `${city} auxiliary runway should be dashed`);
+  });
 
   const shenzhen = __buildTemperatureChartDataForTest(
     {
