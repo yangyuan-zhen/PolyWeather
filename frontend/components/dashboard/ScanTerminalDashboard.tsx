@@ -795,7 +795,7 @@ function PolyWeatherTerminal({
                             setActiveSearchSlotIndex(null);
                           }}
                           onClose={() => setActiveSearchSlotIndex(null)}
-                          className="absolute left-3 top-9 z-50 w-[280px] bg-white border border-slate-200 rounded shadow-lg p-2"
+                          className="absolute left-3 top-9 z-50 w-[380px] bg-white border border-slate-200 rounded shadow-lg p-2"
                         />
                       )}
                     </div>
@@ -831,7 +831,7 @@ function PolyWeatherTerminal({
                                     setActiveSearchSlotIndex(null);
                                   }}
                                   onClose={() => setActiveSearchSlotIndex(null)}
-                                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[280px] bg-white border border-slate-200 rounded shadow-lg p-2"
+                                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[380px] bg-white border border-slate-200 rounded shadow-lg p-2"
                                 />
                               )}
                             </div>
@@ -880,7 +880,7 @@ function PolyWeatherTerminal({
                                   setActiveSearchSlotIndex(null);
                                 }}
                                 onClose={() => setActiveSearchSlotIndex(null)}
-                                className="absolute left-3 top-9 z-50 w-[280px] bg-white border border-slate-200 rounded shadow-lg p-2"
+                                className="absolute left-3 top-9 z-50 w-[380px] bg-white border border-slate-200 rounded shadow-lg p-2"
                               />
                             )}
                           </div>

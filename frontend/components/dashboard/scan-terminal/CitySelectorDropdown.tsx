@@ -243,7 +243,7 @@ export function CitySelectorDropdown({
       </div>
 
       {/* Results List */}
-      <div className="flex-1 overflow-y-auto max-h-[240px] divide-y divide-slate-100">
+      <div className="flex-1 overflow-y-auto max-h-[380px] divide-y divide-slate-100">
         {filteredRows.length === 0 ? (
           <div className="p-4 text-center text-slate-400 font-medium">
             {isEn ? "No matching cities" : "无匹配城市"}
