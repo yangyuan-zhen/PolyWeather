@@ -32,6 +32,15 @@ def _safe_float(value: Any) -> Optional[float]:
         return None
 
 
+def _display_temp_from_c(temp_c: Any, use_fahrenheit: bool) -> Optional[float]:
+    numeric = _safe_float(temp_c)
+    if numeric is None:
+        return None
+    if use_fahrenheit:
+        return round(numeric * 9.0 / 5.0 + 32.0, 1)
+    return round(numeric, 1)
+
+
 def _parse_obs_datetime(
     value: Any,
     epoch_value: Any = None,
@@ -248,11 +257,18 @@ def _airport_primary_from_raw(city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
 
     # High-frequency realtime sources take priority over plain METAR.
     madis = raw.get("madis_hfmetar_current") or {}
-    if madis.get("temp_c") is not None:
+    madis_temp_c = _safe_float(madis.get("temp_c"))
+    madis_temp = _safe_float(madis.get("temp"))
+    if madis_temp is None and madis_temp_c is not None:
+        madis_temp = _display_temp_from_c(
+            madis_temp_c,
+            bool(meta.get("use_fahrenheit")),
+        )
+    if madis_temp is not None:
         return _normalize_station_row(
             station_code=meta.get("icao") or madis.get("icao"),
             station_label=meta.get("airport_name") or meta.get("icao"),
-            temp=madis["temp_c"],
+            temp=madis_temp,
             obs_time=madis.get("obs_time") or metar.get("observation_time"),
             source_code="madis_hfmetar",
             source_label="NOAA MADIS",
@@ -260,6 +276,8 @@ def _airport_primary_from_raw(city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
             is_airport_station=True,
             is_settlement_anchor=False,
             extra={
+                "temp_c": madis_temp_c,
+                "unit": "fahrenheit" if bool(meta.get("use_fahrenheit")) else "celsius",
                 "max_so_far": _safe_float(current.get("max_temp_so_far")),
                 "max_temp_time": current.get("max_temp_time"),
                 "obs_age_min": None,

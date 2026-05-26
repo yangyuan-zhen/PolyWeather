@@ -53,6 +53,60 @@ def test_multi_model_order_includes_legacy_and_new_sources():
     assert "jma_seamless" in OPEN_METEO_MULTI_MODEL_ORDER
 
 
+def test_madis_patch_uses_city_display_unit_for_us(monkeypatch):
+    collector = WeatherDataCollector({})
+    emitted = []
+    stored = []
+
+    monkeypatch.setattr(
+        collector,
+        "fetch_madis_hfmetar",
+        lambda: [
+            {
+                "icao": "KHOU",
+                "temp_c": 19.4,
+                "obs_time": "2026-05-27T17:00:00+00:00",
+                "wind_kt": 8.0,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        collector,
+        "_emit_temperature_patch_if_changed",
+        lambda city, temp, obs_time=None, **kwargs: emitted.append(
+            {
+                "city": city,
+                "temp": temp,
+                "obs_time": obs_time,
+                **kwargs,
+            }
+        ),
+    )
+
+    class FakeDBManager:
+        def append_airport_obs(self, **kwargs):
+            stored.append(kwargs)
+
+    monkeypatch.setattr(
+        "src.data_collection.weather_sources.DBManager",
+        lambda: FakeDBManager(),
+    )
+
+    results = {}
+    collector._attach_madis_hfmetar_data(
+        results,
+        "houston",
+        use_fahrenheit=True,
+    )
+
+    assert results["madis_hfmetar_current"]["temp"] == 66.9
+    assert results["madis_hfmetar_current"]["temp_c"] == 19.4
+    assert emitted[0]["temp"] == 66.9
+    assert emitted[0]["extra"]["temp_c"] == 19.4
+    assert emitted[0]["extra"]["unit"] == "fahrenheit"
+    assert stored[0]["temp_c"] == 19.4
+
+
 def test_fetch_all_sources_prioritizes_multi_model_before_forecast(monkeypatch, tmp_path):
     monkeypatch.setenv("OPEN_METEO_DISK_CACHE_PATH", str(tmp_path / "om-cache.json"))
     collector = WeatherDataCollector({})

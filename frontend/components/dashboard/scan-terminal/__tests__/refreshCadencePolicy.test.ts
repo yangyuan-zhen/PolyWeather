@@ -6,12 +6,23 @@ import {
 } from "@/lib/refresh-policy";
 import { scanTerminalQueryPolicy } from "@/components/dashboard/scan-terminal/scan-terminal-client";
 import { __shouldPollLiveChartForTest } from "@/components/dashboard/scan-terminal/LiveTemperatureThresholdChart";
+import {
+  MAX_HOURLY_DETAIL_CONCURRENT_REQUESTS,
+  __resetHourlyDetailRequestQueueForTest,
+  __runQueuedHourlyDetailRequestForTest,
+} from "@/components/dashboard/scan-terminal/temperature-chart-logic";
 
 function assert(condition: unknown, message: string) {
   if (!condition) throw new Error(message);
 }
 
-export function runTests() {
+async function flushMicrotasks() {
+  for (let i = 0; i < 8; i += 1) {
+    await Promise.resolve();
+  }
+}
+
+export async function runTests() {
   assert(DASHBOARD_REFRESH_POLICY_MS.observation === 60_000, "observation layer should refresh every 60 seconds");
   assert(DASHBOARD_REFRESH_POLICY_MS.scanRows === 5 * 60_000, "region/city rows should refresh every 5 minutes");
   assert(DASHBOARD_REFRESH_POLICY_MS.marketOverview === 10 * 60_000, "market overview should refresh every 10 minutes");
@@ -68,4 +79,55 @@ export function runTests() {
       chartSource.includes("setHourly(seedHourlyForecastFromRow(row))"),
     "terminal charts should render from row data immediately and dedupe concurrent city detail requests",
   );
+
+  __resetHourlyDetailRequestQueueForTest();
+  let activeRequests = 0;
+  let maxActiveRequests = 0;
+  let startedRequests = 0;
+  const releases: Array<(() => void) | undefined> = [];
+  const requestCount = MAX_HOURLY_DETAIL_CONCURRENT_REQUESTS + 3;
+
+  const requests = Array.from({ length: requestCount }, (_, index) =>
+    __runQueuedHourlyDetailRequestForTest(
+      () =>
+        new Promise<number>((resolve) => {
+          startedRequests += 1;
+          activeRequests += 1;
+          maxActiveRequests = Math.max(maxActiveRequests, activeRequests);
+          releases[index] = () => {
+            activeRequests -= 1;
+            resolve(index);
+          };
+        }),
+    ),
+  );
+
+  await flushMicrotasks();
+  assert(
+    startedRequests === MAX_HOURLY_DETAIL_CONCURRENT_REQUESTS,
+    "city detail queue should start only the configured number of concurrent requests",
+  );
+  assert(
+    maxActiveRequests === MAX_HOURLY_DETAIL_CONCURRENT_REQUESTS,
+    "city detail queue must cap simultaneous full-detail requests",
+  );
+
+  releases[0]?.();
+  await flushMicrotasks();
+  assert(
+    startedRequests === MAX_HOURLY_DETAIL_CONCURRENT_REQUESTS + 1,
+    "city detail queue should start the next pending request when one active request finishes",
+  );
+
+  for (let index = 1; index < requestCount; index += 1) {
+    await flushMicrotasks();
+    assert(Boolean(releases[index]), `city detail queue should eventually start queued request #${index}`);
+    releases[index]?.();
+  }
+  const results = await Promise.all(requests);
+  assert(
+    results.length === requestCount && results.every((value, index) => value === index),
+    "city detail queue should resolve every queued request in order",
+  );
+  __resetHourlyDetailRequestQueueForTest();
 }

@@ -925,6 +925,16 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
     def _uses_fahrenheit(self, city_lower: str) -> bool:
         return city_lower in self.US_CITIES
 
+    @staticmethod
+    def _display_temp_from_c(temp_c: Any, use_fahrenheit: bool) -> Optional[float]:
+        try:
+            numeric = float(temp_c)
+        except (TypeError, ValueError):
+            return None
+        if use_fahrenheit:
+            return round(numeric * 9.0 / 5.0 + 32.0, 1)
+        return round(numeric, 1)
+
     def _supports_aviationweather(self, city_lower: str) -> bool:
         city_meta = self.CITY_REGISTRY.get(str(city_lower or "").strip().lower(), {}) or {}
         settlement_source = str(city_meta.get("settlement_source") or "").strip().lower()
@@ -1451,7 +1461,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             logger.warning("AMSC AWOS attach failed city={}: {}", city_lower, exc)
 
     def _attach_madis_hfmetar_data(
-        self, results: Dict, city_lower: str
+        self, results: Dict, city_lower: str, use_fahrenheit: bool
     ) -> None:
         """Fetch MADIS HFMETAR data and attach matching US station observations."""
         # Only run for US cities (ICAO starts with K)
@@ -1476,19 +1486,33 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         # Find this city's station in the MADIS results
         for obs in obs_list:
             if obs["icao"] == icao:
+                temp_c = self._display_temp_from_c(obs.get("temp_c"), False)
+                display_temp = self._display_temp_from_c(
+                    temp_c,
+                    use_fahrenheit,
+                )
+                if temp_c is None or display_temp is None:
+                    continue
+                display_unit = "fahrenheit" if use_fahrenheit else "celsius"
                 # Inject into results so it flows through to airport_primary
-                results["madis_hfmetar_current"] = obs
+                results["madis_hfmetar_current"] = {
+                    **obs,
+                    "temp_c": temp_c,
+                    "temp": display_temp,
+                    "unit": display_unit,
+                }
                 self._emit_temperature_patch_if_changed(
                     city_lower,
-                    obs.get("temp_c"),
+                    display_temp,
                     obs.get("obs_time"),
                     source="madis_hfmetar",
+                    extra={"temp_c": temp_c, "unit": display_unit},
                 )
                 try:
                     DBManager().append_airport_obs(
                         icao=icao,
                         city=city_lower,
-                        temp_c=obs["temp_c"],
+                        temp_c=temp_c,
                         wind_kt=obs.get("wind_kt"),
                         pressure_hpa=obs.get("pressure_hpa"),
                         obs_time=obs["obs_time"] or datetime.now().isoformat(),
@@ -1686,7 +1710,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 )
                 self._attach_korean_amos_data(results, city_lower, use_fahrenheit)
                 self._attach_china_amsc_awos_data(results, city_lower, use_fahrenheit)
-                self._attach_madis_hfmetar_data(results, city_lower)
+                self._attach_madis_hfmetar_data(results, city_lower, use_fahrenheit)
                 self._attach_singapore_mss_data(results, city_lower)
                 self._attach_israel_ims_data(results, city_lower)
                 self._attach_saudi_ncm_data(results, city_lower)
@@ -1738,7 +1762,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 )
                 self._attach_korean_amos_data(results, city_lower, use_fahrenheit)
                 self._attach_china_amsc_awos_data(results, city_lower, use_fahrenheit)
-                self._attach_madis_hfmetar_data(results, city_lower)
+                self._attach_madis_hfmetar_data(results, city_lower, use_fahrenheit)
                 self._attach_singapore_mss_data(results, city_lower)
                 self._attach_israel_ims_data(results, city_lower)
                 self._attach_saudi_ncm_data(results, city_lower)

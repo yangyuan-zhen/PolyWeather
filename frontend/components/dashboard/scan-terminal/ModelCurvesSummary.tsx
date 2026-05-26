@@ -6,9 +6,11 @@ import { temp } from "@/components/dashboard/scan-terminal/utils";
 export function ModelCurvesSummary({
   isEn,
   activeSeries,
+  tempSymbol,
 }: {
   isEn: boolean;
   activeSeries: EvidenceSeries[];
+  tempSymbol: string;
 }) {
   const modelSeries = activeSeries.filter((s) => s.key.startsWith("model_curve_"));
   if (!modelSeries.length) return null;
@@ -25,7 +27,7 @@ export function ModelCurvesSummary({
             <span key={s.key} className="inline-flex items-center gap-1.5 font-mono">
               <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
               <span className="text-slate-700 font-bold">{s.label}</span>
-              <span className="text-slate-500">{temp(stats.latest)}</span>
+              <span className="text-slate-500">{temp(stats.latest, tempSymbol)}</span>
             </span>
           );
         })}

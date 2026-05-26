@@ -31,12 +31,14 @@ export function TemperatureTooltipContent({
   payload,
   data,
   series,
+  tempSymbol = "°C",
 }: {
   active?: boolean;
   label?: string | number;
   payload?: ReadonlyArray<{ payload?: Record<string, any> }>;
   data: Array<Record<string, any>>;
   series: TooltipSeries[];
+  tempSymbol?: string;
 }) {
   if (!active || !payload?.length || !series.length) return null;
   const activePoint = payload[0]?.payload || {};
@@ -60,7 +62,7 @@ export function TemperatureTooltipContent({
               <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />
               <span className="font-semibold">{item.label}</span>
             </span>
-            <strong className="font-mono text-slate-900">{item.value.toFixed(2)}°</strong>
+            <strong className="font-mono text-slate-900">{item.value.toFixed(2)}{tempSymbol}</strong>
           </div>
         ))}
       </div>

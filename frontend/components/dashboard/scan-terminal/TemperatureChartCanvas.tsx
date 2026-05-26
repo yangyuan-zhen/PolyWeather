@@ -73,6 +73,7 @@ export function TemperatureChartCanvas({
 }) {
   const chartHostRef = useRef<HTMLDivElement | null>(null);
   const [chartSize, setChartSize] = useState({ width: 0, height: 0 });
+  const tempSymbol = row?.temp_symbol || "°C";
 
   useEffect(() => {
     const host = chartHostRef.current;
@@ -177,7 +178,7 @@ export function TemperatureChartCanvas({
             <YAxis
               orientation="right"
               tick={{ fontSize: 9, fill: "#64748b" }}
-              tickFormatter={(v) => `${Number(v).toFixed(0)}°`}
+              tickFormatter={(v) => `${Number(v).toFixed(0)}${tempSymbol}`}
               axisLine={{ stroke: "#cbd5e1" }}
               tickLine={false}
               domain={chartDomain}
@@ -186,8 +187,8 @@ export function TemperatureChartCanvas({
             {timeframe === "1D" && cityThresholds.map((t, idx) => {
               const isSelected = row && (Number(row.target_threshold ?? row.target_value) === t.threshold);
               const labelText = isEn
-                ? `${t.kind === "gte" ? "≥" : "≤"} ${t.threshold.toFixed(1)}° [${t.isBreached ? "Excluded" : "Active"}]`
-                : `${t.kind === "gte" ? "≥" : "≤"} ${t.threshold.toFixed(1)}° [${t.isBreached ? "已排除" : "活跃"}]`;
+                ? `${t.kind === "gte" ? "≥" : "≤"} ${t.threshold.toFixed(1)}${tempSymbol} [${t.isBreached ? "Excluded" : "Active"}]`
+                : `${t.kind === "gte" ? "≥" : "≤"} ${t.threshold.toFixed(1)}${tempSymbol} [${t.isBreached ? "已排除" : "活跃"}]`;
 
               return (
                 <ReferenceLine
@@ -221,17 +222,18 @@ export function TemperatureChartCanvas({
                   payload={props.payload as ReadonlyArray<{ payload?: Record<string, any> }> | undefined}
                   data={zoomedData}
                   series={activeSeries}
+                  tempSymbol={tempSymbol}
                 />
               )}
               formatter={(value: unknown) => {
                 if (Array.isArray(value)) {
                   const [low, high] = value;
                   if (typeof low === "number" && typeof high === "number") {
-                    return `${low.toFixed(1)}° - ${high.toFixed(1)}°`;
+                    return `${low.toFixed(1)}${tempSymbol} - ${high.toFixed(1)}${tempSymbol}`;
                   }
                 }
                 const num = Number(value);
-                return Number.isFinite(num) ? `${num.toFixed(2)}°` : String(value);
+                return Number.isFinite(num) ? `${num.toFixed(2)}${tempSymbol}` : String(value);
               }}
             />
             {hasRunwayData && (

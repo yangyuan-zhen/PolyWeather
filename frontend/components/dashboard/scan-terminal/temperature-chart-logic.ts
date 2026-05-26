@@ -203,6 +203,9 @@ const MAX_OBS_POINTS = 1440;
 const HOURLY_CACHE_TTL_MS = DASHBOARD_REFRESH_POLICY_MS.metar;
 const _hourlyCache = new Map<string, { ts: number; data: HourlyForecast }>();
 const _hourlyRequestCache = new Map<string, Promise<HourlyForecast>>();
+const MAX_HOURLY_DETAIL_CONCURRENT_REQUESTS = 3;
+let _hourlyActiveDetailRequests = 0;
+const _hourlyDetailRequestQueue: Array<() => void> = [];
 const RUNWAY_LINE_COLORS = ["#00897b", "#d97706", "#7c3aed", "#0891b2", "#ea580c", "#64748b"];
 
 const SESSION_CACHE_PREFIX = "polyweather_city_detail_v1:";
@@ -231,6 +234,34 @@ function writeSessionCache(city: string, data: HourlyForecast) {
   } catch {}
 }
 
+function drainHourlyDetailRequestQueue() {
+  while (
+    _hourlyActiveDetailRequests < MAX_HOURLY_DETAIL_CONCURRENT_REQUESTS &&
+    _hourlyDetailRequestQueue.length > 0
+  ) {
+    const start = _hourlyDetailRequestQueue.shift();
+    if (start) start();
+  }
+}
+
+function runQueuedHourlyDetailRequest<T>(task: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const start = () => {
+      _hourlyActiveDetailRequests += 1;
+      Promise.resolve()
+        .then(task)
+        .then(resolve, reject)
+        .finally(() => {
+          _hourlyActiveDetailRequests = Math.max(0, _hourlyActiveDetailRequests - 1);
+          drainHourlyDetailRequestQueue();
+        });
+    };
+
+    _hourlyDetailRequestQueue.push(start);
+    drainHourlyDetailRequestQueue();
+  });
+}
+
 export function clearCityDetailCache() {
   _hourlyCache.clear();
   _hourlyRequestCache.clear();
@@ -245,6 +276,13 @@ export function clearCityDetailCache() {
     } catch {}
   }
 }
+
+function __resetHourlyDetailRequestQueueForTest() {
+  _hourlyActiveDetailRequests = 0;
+  _hourlyDetailRequestQueue.length = 0;
+}
+
+const __runQueuedHourlyDetailRequestForTest = runQueuedHourlyDetailRequest;
 
 function validNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -619,20 +657,22 @@ async function fetchHourlyForecastForCity(
   const pending = _hourlyRequestCache.get(requestKey);
   if (pending) return pending;
 
-  const request = fetch(`/api/city/${encodeURIComponent(city)}/detail?depth=full&force_refresh=false&resolution=${resParam}`, {
-    headers: { Accept: "application/json" },
-  })
-    .then(async (res) => {
-      if (!res.ok) return null;
-      return res.json() as Promise<CityDetail>;
+  const request = runQueuedHourlyDetailRequest(() =>
+    fetch(`/api/city/${encodeURIComponent(city)}/detail?depth=full&force_refresh=false&resolution=${resParam}`, {
+      headers: { Accept: "application/json" },
     })
-    .then((json) => {
-      const data = parseHourlyForecastFromCityDetail(json);
-      if (!data) return null;
-      _hourlyCache.set(cacheKey, { ts: Date.now(), data });
-      writeSessionCache(cacheKey, data);
-      return data;
-    })
+      .then(async (res) => {
+        if (!res.ok) return null;
+        return res.json() as Promise<CityDetail>;
+      })
+      .then((json) => {
+        const data = parseHourlyForecastFromCityDetail(json);
+        if (!data) return null;
+        _hourlyCache.set(cacheKey, { ts: Date.now(), data });
+        writeSessionCache(cacheKey, data);
+        return data;
+      }),
+  )
     .finally(() => {
       _hourlyRequestCache.delete(requestKey);
     });
@@ -1597,8 +1637,11 @@ function binObservationsToSlots(
 }
 
 export {
+  MAX_HOURLY_DETAIL_CONCURRENT_REQUESTS,
   HOURLY_CACHE_TTL_MS,
   _hourlyCache,
+  __resetHourlyDetailRequestQueueForTest,
+  __runQueuedHourlyDetailRequestForTest,
   buildChartDomain,
   buildFullDayChartData,
   getDebPeakWindowRange,

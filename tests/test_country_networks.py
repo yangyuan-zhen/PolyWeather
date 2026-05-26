@@ -344,6 +344,33 @@ def test_moscow_provider_uses_realtime_metar_cluster_not_station_archive_rows():
     assert snapshot["official_nearby"][0]["is_airport_station"] is True
 
 
+def test_us_madis_airport_primary_uses_city_display_unit():
+    raw = {
+        "madis_hfmetar_current": {
+            "icao": "KHOU",
+            "temp_c": 19.4,
+            "temp": 66.9,
+            "obs_time": "2026-05-27T17:00:00+00:00",
+            "wind_kt": 8.0,
+        },
+        "metar": {
+            "observation_time": "2026-05-27T17:00:00+00:00",
+            "current": {
+                "temp": 66.9,
+                "max_temp_so_far": 84.9,
+            },
+        },
+    }
+
+    snapshot = build_country_network_snapshot("houston", raw)
+    airport_primary = snapshot["airport_primary_current"]
+
+    assert airport_primary["source_code"] == "madis_hfmetar"
+    assert airport_primary["source_label"] == "NOAA MADIS"
+    assert airport_primary["temp"] == 66.9
+    assert airport_primary["temp_c"] == 19.4
+
+
 def test_city_detail_payload_exposes_airport_and_official_network_layers():
     payload = _build_city_detail_payload(
         {

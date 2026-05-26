@@ -16,9 +16,11 @@ type RunwayPlate = {
 export function TemperatureRunwayDetails({
   isEn,
   plates,
+  tempSymbol,
 }: {
   isEn: boolean;
   plates: RunwayPlate[];
+  tempSymbol: string;
 }) {
   if (!plates.length) return null;
 
@@ -52,13 +54,13 @@ export function TemperatureRunwayDetails({
                 </span>
               )}
             </div>
-            <div>TDZ: <strong>{plate.tdzTemp !== null ? `${plate.tdzTemp.toFixed(1)}°C` : "--"}</strong></div>
-            <div>MID: <strong>{plate.midTemp !== null ? `${plate.midTemp.toFixed(1)}°C` : "--"}</strong></div>
-            <div>END: <strong>{plate.endTemp !== null ? `${plate.endTemp.toFixed(1)}°C` : "--"}</strong></div>
-            <div>max: <strong>{plate.maxTemp !== null ? `${plate.maxTemp.toFixed(1)}°C` : "--"}</strong></div>
-            <div>high: <strong>{plate.dailyHigh !== null ? `${plate.dailyHigh.toFixed(1)}°C` : "--"}</strong></div>
+            <div>TDZ: <strong>{plate.tdzTemp !== null ? `${plate.tdzTemp.toFixed(1)}${tempSymbol}` : "--"}</strong></div>
+            <div>MID: <strong>{plate.midTemp !== null ? `${plate.midTemp.toFixed(1)}${tempSymbol}` : "--"}</strong></div>
+            <div>END: <strong>{plate.endTemp !== null ? `${plate.endTemp.toFixed(1)}${tempSymbol}` : "--"}</strong></div>
+            <div>max: <strong>{plate.maxTemp !== null ? `${plate.maxTemp.toFixed(1)}${tempSymbol}` : "--"}</strong></div>
+            <div>high: <strong>{plate.dailyHigh !== null ? `${plate.dailyHigh.toFixed(1)}${tempSymbol}` : "--"}</strong></div>
             <div className={clsx(plate.trend_15m !== null && plate.trend_15m > 0 ? "text-orange-600 font-bold" : "text-slate-500")}>
-              15m: <strong>{plate.trend_15m !== null ? `${plate.trend_15m >= 0 ? "+" : ""}${plate.trend_15m.toFixed(1)}°C` : "--"}</strong>
+              15m: <strong>{plate.trend_15m !== null ? `${plate.trend_15m >= 0 ? "+" : ""}${plate.trend_15m.toFixed(1)}${tempSymbol}` : "--"}</strong>
             </div>
           </div>
         ))}

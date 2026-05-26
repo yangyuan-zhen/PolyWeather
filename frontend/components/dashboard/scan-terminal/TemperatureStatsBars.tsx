@@ -7,6 +7,7 @@ export function TemperatureStatsBars({
   isEn,
   compact,
   timeframe,
+  tempSymbol,
   runwayHeaderLabel,
   metarHeaderLabel,
   runwayHighLabel,
@@ -27,6 +28,7 @@ export function TemperatureStatsBars({
   isEn: boolean;
   compact: boolean;
   timeframe: string;
+  tempSymbol: string;
   runwayHeaderLabel: string;
   metarHeaderLabel: string;
   runwayHighLabel: string;
@@ -51,18 +53,18 @@ export function TemperatureStatsBars({
           <div className="flex items-center gap-4 text-[11px]">
             <span className="font-semibold text-slate-500">
               {isEn ? "Runway" : runwayHeaderLabel}:{" "}
-              <strong className="text-[#009688] font-mono">{temp(displayRunwayTemp)}</strong>
+              <strong className="text-[#009688] font-mono">{temp(displayRunwayTemp, tempSymbol)}</strong>
             </span>
             <span className="text-slate-300">|</span>
             <span className="font-semibold text-slate-500">
               {isEn ? "METAR" : (isShenzhen ? "当日最高" : metarHeaderLabel)}:{" "}
-              <strong className="text-blue-600 font-mono">{temp(observedHighMetar)}</strong>
+              <strong className="text-blue-600 font-mono">{temp(observedHighMetar, tempSymbol)}</strong>
             </span>
           </div>
         ) : (
           <div className="flex items-center gap-4 text-[11px]">
             <span className="font-semibold text-slate-500">
-              DEB: <strong className="text-orange-600 font-mono">{temp(debVal)}</strong>
+              DEB: <strong className="text-orange-600 font-mono">{temp(debVal, tempSymbol)}</strong>
             </span>
             {modelMin !== null && modelMax !== null && (
               <>
@@ -70,7 +72,7 @@ export function TemperatureStatsBars({
                 <span className="font-semibold text-slate-500">
                   {isEn ? "Models" : "多模型"}:{" "}
                   <strong className="text-slate-700 font-mono">
-                    {temp(modelMin)} - {temp(modelMax)}
+                    {temp(modelMin, tempSymbol)} - {temp(modelMax, tempSymbol)}
                   </strong>
                 </span>
               </>
@@ -94,7 +96,7 @@ export function TemperatureStatsBars({
                 {isEn ? "Runway Live (1m)" : `${runwayHeaderLabel}`}
               </span>
               <span className="text-2xl font-bold font-mono text-[#009688] mt-1">
-                {temp(displayRunwayTemp)}
+                {temp(displayRunwayTemp, tempSymbol)}
               </span>
             </div>
             <div className="flex flex-col">
@@ -102,7 +104,7 @@ export function TemperatureStatsBars({
                 {isEn ? "METAR Settlement · Daily High" : `${metarHeaderLabel} · 当日最高`}
               </span>
               <span className="text-2xl font-bold font-mono text-blue-600 mt-1">
-                {temp(observedHighMetar)}
+                {temp(observedHighMetar, tempSymbol)}
               </span>
             </div>
           </div>
@@ -113,7 +115,7 @@ export function TemperatureStatsBars({
                 DEB Max
               </span>
               <span className="text-2xl font-bold font-mono text-orange-600 mt-1">
-                {temp(debVal)}
+                {temp(debVal, tempSymbol)}
               </span>
             </div>
             <div className="flex flex-col">
@@ -121,7 +123,7 @@ export function TemperatureStatsBars({
                 {isEn ? "Model Range" : "多模型区间"}
               </span>
               <span className="text-2xl font-bold font-mono text-slate-700 mt-1">
-                {modelMin !== null && modelMax !== null ? `${temp(modelMin)} - ${temp(modelMax)}` : "--"}
+                {modelMin !== null && modelMax !== null ? `${temp(modelMin, tempSymbol)} - ${temp(modelMax, tempSymbol)}` : "--"}
               </span>
             </div>
           </div>
@@ -132,13 +134,13 @@ export function TemperatureStatsBars({
             {isEn ? "Daily Peak" : "当日最高气温"}
           </span>
           <div className="mt-1 flex items-center gap-2 text-xs font-mono text-slate-600">
-            <span>{isEn ? "Runway" : runwayHighLabel}: <strong className="text-[#009688]">{temp(observedHighRunway)}</strong></span>
+            <span>{isEn ? "Runway" : runwayHighLabel}: <strong className="text-[#009688]">{temp(observedHighRunway, tempSymbol)}</strong></span>
             <span>|</span>
-            <span>{isEn ? "METAR" : metarHighLabel}: <strong className="text-blue-600">{temp(observedHighMetar)}</strong></span>
+            <span>{isEn ? "METAR" : metarHighLabel}: <strong className="text-blue-600">{temp(observedHighMetar, tempSymbol)}</strong></span>
             {wundergroundDailyHigh !== null && (
               <>
                 <span>|</span>
-                <span>WU: <strong className="text-purple-600">{temp(wundergroundDailyHigh)}</strong></span>
+                <span>WU: <strong className="text-purple-600">{temp(wundergroundDailyHigh, tempSymbol)}</strong></span>
               </>
             )}
           </div>
@@ -152,7 +154,7 @@ export function TemperatureStatsBars({
               {isEn ? "Model Range" : "模型区间"}
             </span>
             <strong className="text-slate-800 font-bold">
-              {modelMin !== null && modelMax !== null ? `${temp(modelMin)} - ${temp(modelMax)}` : "--"}
+              {modelMin !== null && modelMax !== null ? `${temp(modelMin, tempSymbol)} - ${temp(modelMax, tempSymbol)}` : "--"}
             </strong>
           </div>
           <div className="flex flex-col gap-0.5">
@@ -160,7 +162,7 @@ export function TemperatureStatsBars({
               DEB
             </span>
             <strong className="text-blue-600 font-bold">
-              {temp(debVal)}
+              {temp(debVal, tempSymbol)}
             </strong>
           </div>
           <div className="flex flex-col gap-0.5">
@@ -168,7 +170,7 @@ export function TemperatureStatsBars({
               {isEn ? "Spread" : "分歧"}
             </span>
             <strong className={clsx("font-bold", spreadLabel === "高分歧" ? "text-amber-600" : "text-slate-600")}>
-              {spread !== null ? `${spread.toFixed(1)}°C` : "--"}
+              {spread !== null ? `${spread.toFixed(1)}${tempSymbol}` : "--"}
               {spreadLabel && ` · ${isEn ? spreadLabelEn : spreadLabel}`}
             </strong>
           </div>

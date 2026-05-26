@@ -390,6 +390,7 @@ export function LiveTemperatureThresholdChart({
 
   const cityThresholds = useMemo(() => {
     if (!row || !allRows || !allRows.length) return [];
+    const tempSymbol = row.temp_symbol || "°C";
     const cityKey = String(row.city || "").toLowerCase().trim();
     const sameCityRows = allRows.filter(
       (r) => String(r.city || "").toLowerCase().trim() === cityKey
@@ -409,7 +410,7 @@ export function LiveTemperatureThresholdChart({
 
       list.push({
         threshold: t,
-        label: r.target_label || `${t}°C`,
+        label: r.target_label || `${t}${tempSymbol}`,
         isBreached,
         kind,
       });
@@ -564,6 +565,7 @@ export function LiveTemperatureThresholdChart({
           isEn={isEn}
           compact={compact}
           timeframe={timeframe}
+          tempSymbol={row?.temp_symbol || "°C"}
           runwayHeaderLabel={runwayHeaderLabel}
           metarHeaderLabel={metarHeaderLabel}
           runwayHighLabel={runwayHighLabel}
@@ -583,11 +585,11 @@ export function LiveTemperatureThresholdChart({
         />
 
         {timeframe === "1D" && !compact && (
-          <TemperatureRunwayDetails isEn={isEn} plates={runwayPlates} />
+          <TemperatureRunwayDetails isEn={isEn} plates={runwayPlates} tempSymbol={row?.temp_symbol || "°C"} />
         )}
 
         {timeframe === "1D" && !compact && (
-          <ModelCurvesSummary isEn={isEn} activeSeries={activeSeries} />
+          <ModelCurvesSummary isEn={isEn} activeSeries={activeSeries} tempSymbol={row?.temp_symbol || "°C"} />
         )}
 
         <TemperatureChartCanvas
