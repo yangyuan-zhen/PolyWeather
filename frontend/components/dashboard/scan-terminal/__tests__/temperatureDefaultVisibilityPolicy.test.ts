@@ -394,12 +394,12 @@ export function runTests() {
     null,
   );
   assert(
-    panamaLabels.runwayHeaderLabel === "机场气象站",
-    "Panama City/MPMG should not be labeled as runway observations when no runway sensor feed exists",
+    panamaLabels.runwayHeaderLabel === "机场报文",
+    "Panama City/MPMG should be labeled as an airport METAR report when no station or runway sensor feed exists",
   );
   assert(
-    panamaLabels.runwayHighLabel === "机场气象站",
-    "Panama City high label should use airport weather station wording, not runway wording",
+    panamaLabels.runwayHighLabel === "机场报文",
+    "Panama City high label should use airport METAR report wording, not weather-station or runway wording",
   );
 
   const newYorkWithMadis = __buildTemperatureChartDataForTest(
@@ -608,6 +608,36 @@ export function runTests() {
   assert(
     qingdaoFullDay.data[0]?.ts === qingdaoDayStart,
     "Full-day chart should start at local 00:00 when the DEB hourly path has a midnight point",
+  );
+
+  const chongqingRolledToNextDay = __buildTemperatureChartDataForTest(
+    {
+      city: "chongqing",
+      local_date: "2026-05-26",
+      local_time: "23:50",
+      tz_offset_seconds: 8 * 60 * 60,
+      deb_prediction: 22,
+    } as any,
+    {
+      localDate: "2026-05-27",
+      localTime: "00:34",
+      times: ["00:00", "06:00", "12:00", "18:00", "23:00"],
+      temps: [25.2, 25.6, 28.4, 27.6, 26.1],
+      debPrediction: 30.1,
+    } as any,
+    "1D",
+  );
+  const chongqingNextDayStart = Date.UTC(2026, 4, 27, 0, 0, 0);
+  const chongqingNextDayEnd = Date.UTC(2026, 4, 28, 0, 0, 0);
+  assert(
+    chongqingRolledToNextDay.data.every((point) => point.ts >= chongqingNextDayStart && point.ts < chongqingNextDayEnd),
+    "Full-day chart should switch to the city-detail localDate after local midnight instead of keeping stale terminal row.local_date",
+  );
+  const chongqingNextDayDeb = seriesByKey(chongqingRolledToNextDay.series, "hourly_forecast") as any;
+  const chongqingNextDayDebValues = chongqingNextDayDeb.values.filter((value: number | null): value is number => value !== null);
+  assert(
+    Math.max(...chongqingNextDayDebValues) === 30.1,
+    "DEB curve should use the next local day's detail debPrediction after local midnight",
   );
 
   // ── Runway range band and runway_max test ──

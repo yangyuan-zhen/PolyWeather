@@ -35,6 +35,15 @@ import {
 } from "@/components/dashboard/scan-terminal/temperature-chart-logic";
 export { clearCityDetailCache } from "@/components/dashboard/scan-terminal/temperature-chart-logic";
 
+function formatCityLocalDate(tzOffsetSeconds: number | null | undefined) {
+  const cityOffsetMs = (tzOffsetSeconds ?? 0) * 1000;
+  const cityNow = new Date(Date.now() + cityOffsetMs + new Date().getTimezoneOffset() * 60_000);
+  const y = cityNow.getFullYear();
+  const m = String(cityNow.getMonth() + 1).padStart(2, "0");
+  const d = String(cityNow.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 // ── Main component ─────────────────────────────────────────────────────
 
 export function LiveTemperatureThresholdChart({
@@ -74,12 +83,16 @@ export function LiveTemperatureThresholdChart({
   const hasLoadedHourlyDetailRef = useRef(false);
   const lastPatchAtRef = useRef<number>(Date.now());
   const lastAppliedPatchRevisionRef = useRef<number>(0);
+  const localDayRolloverFetchDateRef = useRef<string>("");
 
   const [showRunwayDetails, setShowRunwayDetails] = useState<boolean>(true);
   const [refAreaLeft, setRefAreaLeft] = useState<number | null>(null);
   const [refAreaRight, setRefAreaRight] = useState<number | null>(null);
   const [zoomRange, setZoomRange] = useState<[number, number] | null>(null);
   const [targetResolution, setTargetResolution] = useState<string>("10m");
+  const [currentCityLocalDate, setCurrentCityLocalDate] = useState(() =>
+    formatCityLocalDate(row?.tz_offset_seconds),
+  );
 
   useEffect(() => {
     setUserToggledKeys({});
@@ -91,7 +104,17 @@ export function LiveTemperatureThresholdChart({
     hasLoadedHourlyDetailRef.current = false;
     lastPatchAtRef.current = Date.now();
     lastAppliedPatchRevisionRef.current = 0;
+    localDayRolloverFetchDateRef.current = "";
+    setCurrentCityLocalDate(formatCityLocalDate(row?.tz_offset_seconds));
   }, [city]);
+
+  useEffect(() => {
+    setCurrentCityLocalDate(formatCityLocalDate(row?.tz_offset_seconds));
+    const id = setInterval(() => {
+      setCurrentCityLocalDate(formatCityLocalDate(row?.tz_offset_seconds));
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [row?.tz_offset_seconds]);
 
   useEffect(() => {
     if (!city) {
@@ -216,7 +239,40 @@ export function LiveTemperatureThresholdChart({
     };
   }, [city, compact, isActive, isMaximized]);
 
-  const { data, series } = useMemo(() => buildFullDayChartData(row, hourly, isEn), [row, hourly, isEn]);
+  useEffect(() => {
+    if (!city || !currentCityLocalDate) return;
+    const loadedLocalDate = hourly?.localDate || row?.local_date || "";
+    if (currentCityLocalDate === loadedLocalDate) return;
+    if (localDayRolloverFetchDateRef.current === currentCityLocalDate) return;
+
+    localDayRolloverFetchDateRef.current = currentCityLocalDate;
+    let cancelled = false;
+    fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })
+      .then((data) => {
+        if (cancelled || !data) return;
+        hasLoadedHourlyDetailRef.current = true;
+        setHourly(data);
+      })
+      .catch(() => {
+        if (!cancelled) localDayRolloverFetchDateRef.current = "";
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [city, currentCityLocalDate, hourly?.localDate, row?.local_date, targetResolution]);
+
+  const chartHourly = useMemo<HourlyForecast>(() => {
+    if (!hourly) return hourly;
+    const loadedLocalDate = hourly.localDate || row?.local_date || "";
+    if (currentCityLocalDate && currentCityLocalDate !== loadedLocalDate) {
+      return { ...hourly, localDate: currentCityLocalDate };
+    }
+    return hourly;
+  }, [hourly, currentCityLocalDate, row?.local_date]);
+  const chartLocalDate = chartHourly?.localDate || row?.local_date || currentCityLocalDate;
+
+  const { data, series } = useMemo(() => buildFullDayChartData(row, chartHourly, isEn), [row, chartHourly, isEn]);
 
   const autoWindowRange = useMemo(
     () => (viewMode === "auto" ? getDebPeakWindowRange(data, series) : null),
@@ -253,17 +309,17 @@ export function LiveTemperatureThresholdChart({
 
   const tzOffset = row?.tz_offset_seconds ?? 0;
   const settlementObs = useMemo(() => {
-    let obs = normObs(hourly?.settlementTodayObs || row?.settlement_today_obs || row?.metar_context?.settlement_today_obs, tzOffset, undefined, row?.local_date || null);
-    if (!obs.length && !hourly?.runwayPlateHistory) {
-      const mObs = normObs(hourly?.metarTodayObs || row?.metar_today_obs || row?.metar_context?.today_obs, tzOffset, undefined, row?.local_date || null);
+    let obs = normObs(chartHourly?.settlementTodayObs || row?.settlement_today_obs || row?.metar_context?.settlement_today_obs, tzOffset, undefined, chartLocalDate || null);
+    if (!obs.length && !chartHourly?.runwayPlateHistory) {
+      const mObs = normObs(chartHourly?.metarTodayObs || row?.metar_today_obs || row?.metar_context?.today_obs, tzOffset, undefined, chartLocalDate || null);
       if (mObs.length > 0) {
         obs = mObs;
       }
     }
     return obs;
-  }, [row, hourly, tzOffset]);
+  }, [row, chartHourly, tzOffset, chartLocalDate]);
 
-  const runwayPlates = useMemo(() => buildRunwayPlates(hourly?.amos, row, settlementObs), [hourly?.amos, row, settlementObs]);
+  const runwayPlates = useMemo(() => buildRunwayPlates(chartHourly?.amos, row, settlementObs), [chartHourly?.amos, row, settlementObs]);
   const hasRunwayData = runwayPlates.length > 0;
   const settlementPlate = useMemo(() => runwayPlates.find((p) => p.isSettlement), [runwayPlates]);
 
@@ -293,26 +349,26 @@ export function LiveTemperatureThresholdChart({
     metarHighLabel,
     runwayHeaderLabel,
     runwayHighLabel,
-  } = useMemo(() => getLiveObservationLabels(row, hourly), [row, hourly]);
+  } = useMemo(() => getLiveObservationLabels(row, chartHourly), [row, chartHourly]);
 
   const { currentRunwayTemp, observedHighMetar, observedHighRunway } = useMemo(
-    () => getObservationDisplayMetrics(row, hourly, settlementPlate),
-    [row, hourly, settlementPlate],
+    () => getObservationDisplayMetrics(row, chartHourly, settlementPlate),
+    [row, chartHourly, settlementPlate],
   );
   const displayRunwayTemp = liveTemp ?? currentRunwayTemp;
-  const wundergroundDailyHigh = validNumber(hourly?.airportCurrent?.max_so_far ?? hourly?.airportPrimary?.max_so_far) ?? null;
+  const wundergroundDailyHigh = validNumber(chartHourly?.airportCurrent?.max_so_far ?? chartHourly?.airportPrimary?.max_so_far) ?? null;
 
-  const localDateStr = row?.local_date || new Date().toISOString().slice(0, 10);
+  const localDateStr = chartLocalDate || new Date().toISOString().slice(0, 10);
   const modelSources = (row?.model_cluster_sources && Object.keys(row.model_cluster_sources).length > 0)
     ? row.model_cluster_sources
-    : (hourly?.multiModelDaily?.[localDateStr]?.models || null);
+    : (chartHourly?.multiModelDaily?.[localDateStr]?.models || null);
 
   const modelValues = Object.values(modelSources || {})
     .map(validNumber)
     .filter((v): v is number => v !== null);
   const modelMin = modelValues.length ? Math.min(...modelValues) : (row?.cluster_core_low ?? null);
   const modelMax = modelValues.length ? Math.max(...modelValues) : (row?.cluster_core_high ?? null);
-  const debVal = validNumber(hourly?.debPrediction) ?? validNumber(row?.deb_prediction) ?? null;
+  const debVal = validNumber(chartHourly?.debPrediction) ?? validNumber(row?.deb_prediction) ?? null;
 
   const spread = (modelMax !== null && modelMin !== null) ? modelMax - modelMin : null;
   const spreadLabel = spread === null ? "" : (spread <= 2.0 ? "低分歧" : (spread <= 4.0 ? "中等分歧" : "高分歧"));

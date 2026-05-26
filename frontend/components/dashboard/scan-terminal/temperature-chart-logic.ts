@@ -327,6 +327,21 @@ function getLocalDayBounds(localDateStr: string): LocalDayBounds | null {
   return Number.isFinite(start) ? { start, end: start + DAY_MS } : null;
 }
 
+function dateFromLocalTime(value?: string | null) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || "").trim());
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : null;
+}
+
+function resolveChartLocalDate(row: ScanOpportunityRow | null, hourly: HourlyForecast) {
+  return (
+    hourly?.localDate ||
+    dateFromLocalTime(hourly?.localTime) ||
+    row?.local_date ||
+    dateFromLocalTime(row?.local_time) ||
+    new Date().toISOString().slice(0, 10)
+  );
+}
+
 function isWithinLocalDay(ts: number | null, bounds: LocalDayBounds | null) {
   return ts !== null && Number.isFinite(ts) && (!bounds || (ts >= bounds.start && ts < bounds.end));
 }
@@ -423,7 +438,7 @@ function getObservationDisplayMetrics(
   settlementPlate?: { maxTemp: number | null } | null,
 ) {
   const tzOffset = row?.tz_offset_seconds ?? 0;
-  const localDateStr = row?.local_date || null;
+  const localDateStr = resolveChartLocalDate(row, hourly);
   const settlementObs = normObs(hourly?.settlementTodayObs || row?.settlement_today_obs || row?.metar_context?.settlement_today_obs, tzOffset, MAX_OBS_POINTS, localDateStr);
   const metarObs = normObs(hourly?.metarTodayObs || row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs, tzOffset, MAX_OBS_POINTS, localDateStr);
   const madisObs = normObs(hourly?.airportPrimaryTodayObs, tzOffset, MAX_OBS_POINTS, localDateStr);
@@ -509,6 +524,7 @@ function runwayLabelFromPair(rawPair: unknown, index: number) {
 type HourlyForecast = {
   forecastTodayHigh?: number | null;
   debPrediction?: number | null;
+  localDate?: string | null;
   localTime?: string | null;
   times: string[];
   temps: Array<number | null>;
@@ -531,6 +547,7 @@ function seedHourlyForecastFromRow(row: ScanOpportunityRow | null): HourlyForeca
   return {
     forecastTodayHigh: null,
     debPrediction: validNumber(row.deb_prediction),
+    localDate: row.local_date || null,
     localTime: row.local_time || null,
     times: [],
     temps: [],
@@ -559,6 +576,7 @@ function parseHourlyForecastFromCityDetail(json: CityDetail | null): HourlyForec
   return {
     forecastTodayHigh: json.forecast?.today_high ?? null,
     debPrediction: json.deb?.prediction ?? (json as any)?.overview?.deb_prediction ?? null,
+    localDate: json.local_date || (json as any)?.overview?.local_date || null,
     localTime: json.local_time || null,
     times: hourlySource.times || [],
     temps: hourlySource.temps || [],
@@ -687,7 +705,7 @@ function getLiveObservationLabels(
     : isTaipei ? "CWA (10分钟)"
     : isWeatherStation ? "气象站实测"
     : isRunwaySensorCity ? "跑道实测 (1分钟)"
-    : "机场气象站";
+    : "机场报文";
 
   const metarHeaderLabel = (isShenzhen || isHKO) ? "天文台实测 (10分钟)"
     : "METAR 结算 (30分钟)";
@@ -700,7 +718,7 @@ function getLiveObservationLabels(
     : isTaipei ? "CWA"
     : isWeatherStation ? "气象站"
     : isRunwaySensorCity ? "跑道实测"
-    : "机场气象站";
+    : "机场报文";
 
   const metarHighLabel = isShenzhen ? "天文台"
     : isHKO ? "天文台"
@@ -735,6 +753,7 @@ function mergePatchIntoHourly(
     ...(prev || {
       forecastTodayHigh: null,
       debPrediction: null,
+      localDate: null,
       localTime: null,
       times: [],
       temps: [],
@@ -743,6 +762,10 @@ function mergePatchIntoHourly(
     }),
     ...explicitHourlyPatch,
   };
+
+  if (typeof (changes as any).local_date === "string") {
+    next.localDate = (changes as any).local_date;
+  }
 
   if (changes.amos && typeof changes.amos === "object") {
     const oldAmos = prev?.amos || {};
@@ -982,7 +1005,7 @@ function buildDailyChartData(
   hourly: HourlyForecast,
   daysCount: number,
 ): { data: Array<Record<string, string | number | null>>; series: EvidenceSeries[] } {
-  const localDateStr = row?.local_date || new Date().toISOString().slice(0, 10);
+  const localDateStr = resolveChartLocalDate(row, hourly);
   const slots = generateDailySlots(localDateStr, daysCount);
 
   const series: EvidenceSeries[] = [
@@ -1162,7 +1185,7 @@ function buildFullDayChartData(
   isEn: boolean,
 ): { data: Array<Record<string, any>>; series: EvidenceSeries[] } {
   const tzOffset = row?.tz_offset_seconds ?? 0;
-  const localDateStr = row?.local_date || new Date().toISOString().slice(0, 10);
+  const localDateStr = resolveChartLocalDate(row, hourly);
   const localDayBounds = getLocalDayBounds(localDateStr);
 
   const settlementObs = filterTimelinePointsToLocalDay(

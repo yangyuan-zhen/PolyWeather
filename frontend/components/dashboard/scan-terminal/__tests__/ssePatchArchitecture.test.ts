@@ -120,6 +120,12 @@ export function runTests() {
   assert(chart.includes("isHourlyLoading"), "temperature chart must keep a per-panel hourly loading state");
   assert(chartCanvas.includes("加载图表") && chartCanvas.includes("absolute inset-2"), "temperature chart must render an in-chart loading overlay");
   assert(chart.includes("hasLoadedHourlyDetailRef"), "temperature chart must distinguish first load from background refreshes");
+  assert(chart.includes("currentCityLocalDate"), "temperature chart must track the current city-local date while the page stays open");
+  assert(chart.includes("localDayRolloverFetchDateRef"), "temperature chart must avoid duplicate midnight rollover detail fetches");
+  assert(
+    chart.includes("ignoreCache: true") && chart.includes("currentCityLocalDate !== loadedLocalDate"),
+    "temperature chart must background-refresh full city detail when the city-local day rolls over",
+  );
   const fallbackRefreshBlock = chart.match(/const refreshFullDetail = \(\) => \{[\s\S]*?\n    \};/)?.[0] || "";
   assert(
     !fallbackRefreshBlock.includes("setIsHourlyLoading(true)"),
