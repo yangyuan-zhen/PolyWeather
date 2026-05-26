@@ -26,7 +26,7 @@ HKO_STATIONS = {
         "label": "HK Observatory 1min (HKO)",
     },
     "shenzhen": {
-        "code": "Shenzhen (LFS)",
+        "code": "Lau Fau Shan",
         "icao": "LFS",
         "label": "流浮山天文台 1min (HKO)",
     },
