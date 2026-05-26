@@ -33,10 +33,10 @@ export function runTests() {
     "scan list local cache should use the shared 5-minute row cadence",
   );
   assert(
-    chartSource.includes("DASHBOARD_REFRESH_POLICY_MS.model") &&
+    chartSource.includes("DASHBOARD_REFRESH_POLICY_MS.metar") &&
       !chartSource.includes("setInterval(") &&
       !chartSource.includes("window.setInterval"),
-    "selected city detail chart should be on-demand and use model-layer cache instead of 60-second polling",
+    "selected city detail chart cache should align with 5-minute scan/metar cadence",
   );
   assert(
     chartSource.includes("_hourlyRequestCache") &&

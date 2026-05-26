@@ -192,7 +192,7 @@ type RunwayHistorySeries = {
 };
 
 const MAX_OBS_POINTS = 1440;
-const HOURLY_CACHE_TTL_MS = DASHBOARD_REFRESH_POLICY_MS.model;
+const HOURLY_CACHE_TTL_MS = DASHBOARD_REFRESH_POLICY_MS.metar;
 const FULL_DAY_SLOT_MINUTES = 30;
 const FULL_DAY_SLOTS = 48;
 const SLOT_INTERVAL_MS = FULL_DAY_SLOT_MINUTES * 60 * 1000;
@@ -201,7 +201,7 @@ const _hourlyRequestCache = new Map<string, Promise<HourlyForecast>>();
 const RUNWAY_LINE_COLORS = ["#00897b", "#d97706", "#7c3aed", "#0891b2", "#ea580c", "#64748b"];
 
 const SESSION_CACHE_PREFIX = "polyweather_city_detail_v1:";
-const SESSION_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes cache for session storage
+const SESSION_CACHE_TTL_MS = DASHBOARD_REFRESH_POLICY_MS.metar;
 
 function readSessionCache(city: string): { ts: number; data: HourlyForecast } | null {
   if (typeof window === "undefined") return null;
