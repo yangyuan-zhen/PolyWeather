@@ -463,6 +463,7 @@ type HourlyForecast = {
   forecastDaily?: ForecastDay[];
   multiModelDaily?: Record<string, DailyModelForecast>;
   settlementTodayObs?: ObsPoint[];
+  settlementStationLabel?: string | null;
   metarTodayObs?: ObsPoint[];
   airportPrimaryTodayObs?: RawObsPoint[];
 } | null;
@@ -512,6 +513,7 @@ function parseHourlyForecastFromCityDetail(json: CityDetail | null): HourlyForec
     forecastDaily: json.forecast?.daily || [],
     multiModelDaily: json.multi_model_daily || {},
     settlementTodayObs: (json as any).timeseries?.settlement_today_obs || (json as any)?.settlement_today_obs || undefined,
+    settlementStationLabel: (json as any)?.settlement_station?.settlement_station_label || null,
     metarTodayObs: (json as any).timeseries?.metar_today_obs || (json as any)?.metar_today_obs || undefined,
     airportPrimaryTodayObs: (json as any)?.official?.airport_primary_today_obs || (json as any)?.airport_primary_today_obs || undefined,
   };
@@ -1166,7 +1168,7 @@ function buildFullDayChartData(
     if (svals.some((v) => v !== null)) {
       series.push({
         key: "settlement",
-        label: isHKO ? "CoWIN 6087" : (isHKOCity ? "HKO" : (row?.metar_context?.station_label || row?.metar_context?.station || "Settlement")),
+        label: isHKO ? "CoWIN 6087" : (isHKOCity ? "HKO" : (hourly?.settlementStationLabel || row?.metar_context?.station_label || row?.metar_context?.station || "Settlement")),
         source: isHKO ? "cowin_obs" : (row?.metar_context?.station || row?.airport || "Settlement"),
         color: "#009688",
         featured: true,
@@ -1657,11 +1659,17 @@ export function LiveTemperatureThresholdChart({
   const spreadLabelEn = spread === null ? "" : (spread <= 2.0 ? "Low" : (spread <= 4.0 ? "Medium" : "High"));
 
   const formattedUpdateTime = useMemo(() => {
-    if (row?.local_date && row?.local_time) {
-      return `${row.local_date} ${row.local_time.slice(0, 8)}`;
-    }
-    const d = new Date();
-    return d.toISOString().replace('T', ' ').slice(0, 19);
+    const nowUtc = Date.now();
+    const cityOffsetMs = (row?.tz_offset_seconds ?? 0) * 1000;
+    const cityNow = new Date(nowUtc + cityOffsetMs + new Date().getTimezoneOffset() * 60_000);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const y = cityNow.getFullYear();
+    const mo = pad(cityNow.getMonth() + 1);
+    const d = pad(cityNow.getDate());
+    const hh = pad(cityNow.getHours());
+    const mm = pad(cityNow.getMinutes());
+    const ss = pad(cityNow.getSeconds());
+    return `${y}-${mo}-${d} ${hh}:${mm}:${ss}`;
   }, [row]);
 
   const cityThresholds = useMemo(() => {
@@ -2028,7 +2036,7 @@ export function LiveTemperatureThresholdChart({
         )}
 
         {/* Multi-model list (Only in 1D mode and when not compact) */}
-        {timeframe === "1D" && !compact && hasRunwayData && activeSeries.some((s) => s.key.startsWith("model_curve_")) && (
+        {timeframe === "1D" && !compact && activeSeries.some((s) => s.key.startsWith("model_curve_")) && (
           <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-2">
             <div className="flex flex-wrap gap-x-6 gap-y-1 text-[11px]">
               <span className="font-black text-slate-500 uppercase mr-2">
