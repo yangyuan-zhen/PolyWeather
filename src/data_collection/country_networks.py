@@ -1201,12 +1201,29 @@ def build_country_network_snapshot(city: str, raw: Dict[str, Any]) -> Dict[str, 
         "stale_row_count": stale_count,
         "unknown_timing_count": unknown_count,
     }
+    airport_primary_today_obs = ((raw.get("metar") or {}).get("today_obs") or [])
+    if airport_primary.get("source_code") == "cowin_obs":
+        try:
+            from src.database.runtime_state import OfficialIntradayObservationRepository
+            repo = OfficialIntradayObservationRepository()
+            local_now = datetime.now(timezone.utc) + timedelta(seconds=city_offset or 0)
+            local_date_str = local_now.strftime("%Y-%m-%d")
+            points = repo.load_points(
+                source_code="cowin_obs",
+                station_code=airport_primary.get("station_code") or "6087",
+                target_date=local_date_str,
+            )
+            if points:
+                airport_primary_today_obs = [{"time": p["time"], "temp": p["temp"]} for p in points]
+        except Exception:
+            pass
+
     return {
         "provider_code": provider.provider_code,
         "provider_label": provider.provider_label,
         "settlement_station": metadata,
         "airport_primary_current": airport_primary,
-        "airport_primary_today_obs": ((raw.get("metar") or {}).get("today_obs") or []),
+        "airport_primary_today_obs": airport_primary_today_obs,
         "official_nearby": official_nearby,
         "official_network_source": status.get("provider_code"),
         "official_network_status": status,

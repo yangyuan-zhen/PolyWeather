@@ -114,7 +114,7 @@ def _build_terminal_row(
         "distribution_bias": scan.get("distribution_bias"),
         "distribution_preview": scan.get("distribution_preview") or row.get("distribution_preview") or [],
         "distribution_full": scan.get("distribution_full") or scan.get("distribution_preview") or row.get("distribution_preview") or [],
-        "model_cluster_sources": daily_entry.get("models") if isinstance(daily_entry.get("models"), dict) else data.get("multi_model"),
+        "model_cluster_sources": daily_entry.get("models") if isinstance(daily_entry.get("models"), dict) else data.get("multi_model", {}).get("forecasts"),
         "window_phase": row.get("window_phase") or scan.get("window_phase"),
         "window_score": row.get("window_score") if row.get("window_score") is not None else scan.get("window_score"),
         "signal_status": scan.get("signal_status"),
@@ -129,6 +129,7 @@ def _build_terminal_row(
         "amos": data.get("amos") or None,
         "top_buckets": scan.get("top_buckets") or [],
         "all_buckets": scan.get("all_buckets") or [],
+        "runway_plate_history": data.get("runway_plate_history") or {},
     }
 
 
@@ -215,6 +216,7 @@ def _build_quick_row(
         "is_primary_signal": True,
         "accepting_orders": False,
         "row_id": row_id,
+        "runway_plate_history": data.get("runway_plate_history") or {},
     }
     # Compute a simple edge: model top probability vs neutral
     best_model_prob = max(

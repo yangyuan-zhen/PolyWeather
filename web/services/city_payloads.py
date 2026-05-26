@@ -125,6 +125,7 @@ def build_city_detail_payload(
         or _build_intraday_meteorology(data),
         "vertical_profile_signal": data.get("vertical_profile_signal") or {},
         "taf": data.get("taf") or {},
+        "runway_plate_history": data.get("runway_plate_history") or {},
 
         "risk": data.get("risk"),
         "settlement_station": data.get("settlement_station") or {},

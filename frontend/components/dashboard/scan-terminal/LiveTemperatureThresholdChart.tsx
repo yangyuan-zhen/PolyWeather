@@ -367,31 +367,62 @@ function getObservationDisplayMetrics(
   const tzOffset = row?.tz_offset_seconds ?? 0;
   const settlementObs = normObs(hourly?.settlementTodayObs || row?.settlement_today_obs || row?.metar_context?.settlement_today_obs, tzOffset);
   const metarObs = normObs(hourly?.metarTodayObs || row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs, tzOffset);
+  const madisObs = normObs(hourly?.airportPrimaryTodayObs, tzOffset);
   const latestSettlement = latestObservationValue(settlementObs);
   const latestMetar = latestObservationValue(metarObs);
+  const latestMadis = latestObservationValue(madisObs);
   const highSettlement = maxObservationValue(settlementObs);
   const highMetar = maxObservationValue(metarObs);
+  const highMadis = maxObservationValue(madisObs);
   const airportCurrentTemp = validNumber(hourly?.airportCurrent?.temp) ?? validNumber(hourly?.airportPrimary?.temp);
   const airportHigh = validNumber(hourly?.airportCurrent?.max_so_far) ?? validNumber(hourly?.airportPrimary?.max_so_far);
   const rowMetarHigh = validNumber(row?.metar_context?.airport_max_so_far ?? row?.metar_context?.max_temp ?? row?.current_max_so_far);
 
-  const currentRunwayTemp =
-    validNumber(hourly?.amos?.temp_c) ??
-    settlementPlate?.maxTemp ??
-    latestSettlement ??
-    latestMetar ??
-    airportCurrentTemp ??
-    validNumber(row?.current_temp) ??
-    null;
+  const settlementCityKey = normalizeCityKey(row?.city);
+  const isShenzhen = settlementCityKey === 'shenzhen';
+  const isHKO = (settlementCityKey === 'hongkong' || settlementCityKey === 'laufaushan'
+    || (row?.city || '').toLowerCase().includes('hong kong')
+    || (row?.city || '').toLowerCase().includes('lau fau shan')) && !isShenzhen;
+
+  let currentRunwayTemp: number | null = null;
+  let observedHighRunway: number | null = null;
+
+  if (isHKO) {
+    currentRunwayTemp =
+      latestMadis ??
+      latestSettlement ??
+      latestMetar ??
+      airportCurrentTemp ??
+      validNumber(row?.current_temp) ??
+      null;
+    observedHighRunway =
+      highMadis ??
+      highSettlement ??
+      airportHigh ??
+      highMetar ??
+      validNumber(row?.current_max_so_far) ??
+      currentRunwayTemp ??
+      null;
+  } else {
+    currentRunwayTemp =
+      validNumber(hourly?.amos?.temp_c) ??
+      settlementPlate?.maxTemp ??
+      latestSettlement ??
+      latestMetar ??
+      airportCurrentTemp ??
+      validNumber(row?.current_temp) ??
+      null;
+    observedHighRunway =
+      settlementPlate?.maxTemp ??
+      highSettlement ??
+      airportHigh ??
+      highMetar ??
+      validNumber(row?.current_max_so_far) ??
+      currentRunwayTemp ??
+      null;
+  }
+
   const observedHighMetar = airportHigh ?? highSettlement ?? highMetar ?? rowMetarHigh ?? null;
-  const observedHighRunway =
-    settlementPlate?.maxTemp ??
-    highSettlement ??
-    airportHigh ??
-    highMetar ??
-    validNumber(row?.current_max_so_far) ??
-    currentRunwayTemp ??
-    null;
 
   return { currentRunwayTemp, observedHighMetar, observedHighRunway };
 }
@@ -845,6 +876,19 @@ function buildFullDayChartData(
   const madisObs = normObs(hourly?.airportPrimaryTodayObs, tzOffset);
   const runwayHistorySeries = buildRunwayHistorySeries(row, hourly, tzOffset, localDateStr);
 
+  const settlementCityKey = normalizeCityKey(row?.city);
+  const isShenzhen = settlementCityKey === 'shenzhen';
+  const isHKO = (settlementCityKey === 'hongkong' || settlementCityKey === 'laufaushan'
+    || (row?.city || '').toLowerCase().includes('hong kong')
+    || (row?.city || '').toLowerCase().includes('lau fau shan')) && !isShenzhen;
+
+  let finalSettlementObs = settlementObs;
+  let finalMadisObs = madisObs;
+  if (isHKO) {
+    finalSettlementObs = madisObs;
+    finalMadisObs = settlementObs;
+  }
+
   const slots = generateFullDaySlots(localDateStr);
   if (!slots.length) return { data: [], series: [] };
   const slotLabels = slots.map(formatTimestamp);
@@ -870,17 +914,16 @@ function buildFullDayChartData(
 
   // ── Settlement observations ──
   // Determine if this is an HKO-sourced city to force the label
-  const settlementCityKey = normalizeCityKey(row?.city);
   const isHKOCity = settlementCityKey === 'hongkong' || settlementCityKey === 'laufaushan'
     || settlementCityKey === 'shenzhen' || (row?.city || '').toLowerCase().includes('hong kong')
     || (row?.city || '').toLowerCase().includes('lau fau shan');
-  if (settlementObs.length) {
-    const svals = binObservationsToSlots(slots, settlementObs);
+  if (finalSettlementObs.length) {
+    const svals = binObservationsToSlots(slots, finalSettlementObs);
     if (svals.some((v) => v !== null)) {
       series.push({
         key: "settlement",
-        label: isHKOCity ? "HKO" : (row?.metar_context?.station_label || row?.metar_context?.station || "Settlement"),
-        source: row?.metar_context?.station || row?.airport || "Settlement",
+        label: isHKO ? "CoWIN 6087" : (isHKOCity ? "HKO" : (row?.metar_context?.station_label || row?.metar_context?.station || "Settlement")),
+        source: isHKO ? "cowin_obs" : (row?.metar_context?.station || row?.airport || "Settlement"),
         color: "#009688",
         featured: true,
         values: svals,
@@ -894,26 +937,26 @@ function buildFullDayChartData(
   const isAmscSource =
     (hourly?.airportPrimary as any)?.source === "amsc_awos" ||
     String(hourly?.airportPrimary?.source_label || "").toLowerCase().includes("amsc");
-  if (madisObs.length && !isAmscSource) {
-    const madisVals = binObservationsToSlots(slots, madisObs);
+  if (finalMadisObs.length && !isAmscSource) {
+    const madisVals = binObservationsToSlots(slots, finalMadisObs);
     if (madisVals.some((v) => v !== null)) {
       series.push({
         key: "madis",
-        label: hourly?.airportPrimary?.source_label || "NOAA MADIS",
-        source: hourly?.airportPrimary?.station_code || row?.airport || "MADIS",
+        label: isHKO ? "HKO" : (hourly?.airportPrimary?.source_label || "NOAA MADIS"),
+        source: isHKO ? "HKO" : (hourly?.airportPrimary?.station_code || row?.airport || "MADIS"),
         color: "#0284c7",
-        dashed: false,
+        dashed: isHKO ? true : false,
         values: madisVals,
       });
     }
   }
 
-  if (metarObs.length && !observationSetContains(madisObs, metarObs)) {
+  if (metarObs.length && !observationSetContains(finalMadisObs, metarObs)) {
     const mvals = binObservationsToSlots(slots, metarObs);
     if (mvals.some((v) => v !== null)) {
       series.push({
         key: "metar",
-        label: isHKOCity ? "HKO" : (row?.metar_context?.station_label || "METAR"),
+        label: isHKO ? "VHHH METAR" : (isHKOCity ? "HKO" : (row?.metar_context?.station_label || "METAR")),
         source: row?.airport || "METAR",
         color: "#0ea5e9",
         dashed: true,
@@ -1416,13 +1459,15 @@ export function LiveTemperatureThresholdChart({
   );
 
   return (
-    <Panel title={panelTitle} actions={timeframeActions}>
+    <Panel title={panelTitle} actions={timeframeActions} className="relative">
       {isFetching && (
-        <LoadingSignal
-          title={isEn ? "Loading city data..." : "加载城市数据中..."}
-          description={isEn ? `Fetching latest observations for ${row?.city_display_name || row?.city || "this city"}` : `正在获取 ${row?.city_display_name || row?.city || "该城市"} 的最新观测数据`}
-          compact={compact}
-        />
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/70 backdrop-blur-sm dark:bg-slate-950/70 rounded-[4px]">
+          <LoadingSignal
+            title={isEn ? "Loading city data..." : "加载城市数据中..."}
+            description={isEn ? `Fetching latest observations for ${row?.city_display_name || row?.city || "this city"}` : `正在获取 ${row?.city_display_name || row?.city || "该城市"} 的最新观测数据`}
+            compact={compact}
+          />
+        </div>
       )}
       <div className="flex h-full min-h-[300px] flex-col">
         {/* Compact stats bar */}

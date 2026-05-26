@@ -1141,14 +1141,26 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         results["nearby_source"] = "cowin_obs"
         try:
             row = rows[0] if rows else {}
+            temp_c = row.get("temp")
+            if use_fahrenheit and temp_c is not None:
+                temp_c = round((temp_c - 32.0) * 5.0 / 9.0, 1)
+            
             DBManager().append_airport_obs(
                 icao=str(row.get("icao") or "COWIN6087"),
                 city=city_lower,
-                temp_c=row.get("temp"),
+                temp_c=temp_c,
                 obs_time=str(row.get("obs_time") or datetime.now().isoformat()),
             )
+            
+            self._update_official_today_obs(
+                source_code="cowin_obs",
+                station_code=str(row.get("istNo") or "6087"),
+                obs_iso=str(row.get("obs_time") or datetime.now(timezone.utc).isoformat()),
+                current_temp=temp_c,
+                utc_offset_seconds=28800,
+            )
         except Exception:
-            logger.exception("airport_obs_log append failed for cowin_obs city={}", city_lower)
+            logger.exception("airport_obs_log append/update failed for cowin_obs city={}", city_lower)
 
     def _attach_cwa_settlement_nearby(
         self, results: Dict, city_lower: str, use_fahrenheit: bool

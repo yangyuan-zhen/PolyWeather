@@ -1532,8 +1532,42 @@ def _analyze(
             }
 
     # ── Assemble result ──
+    runway_plate_history = {}
+    icao = risk.get("icao", "")
+    if icao:
+        try:
+            from src.database.db_manager import DBManager
+            raw_runway_obs = DBManager().get_runway_obs_recent(icao, minutes=36 * 60)
+            for r in raw_runway_obs:
+                rw = r.get("runway")
+                if not rw:
+                    continue
+                temp_val = r.get("target_runway_max")
+                if temp_val is None:
+                    temp_val = r.get("tdz_temp")
+                if temp_val is not None:
+                    temp_val = float(temp_val)
+                    if is_f:
+                        temp_val = round(temp_val * 9.0 / 5.0 + 32.0, 1)
+                    else:
+                        temp_val = round(temp_val, 1)
+                
+                time_val = r.get("otime_utc") or r.get("created_at")
+                if not time_val:
+                    continue
+                
+                if rw not in runway_plate_history:
+                    runway_plate_history[rw] = []
+                runway_plate_history[rw].append({
+                    "time": time_val,
+                    "temp": temp_val
+                })
+        except Exception:
+            logger.exception("Failed to fetch runway plate history for icao={}", icao)
+
     city_meta = CITIES.get(city, {}) or {}
     result = {
+        "runway_plate_history": runway_plate_history,
         "detail_depth": (
             "panel"
             if is_panel_mode
