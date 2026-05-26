@@ -55,6 +55,17 @@ jobs:
     needs: [python-quality, frontend-quality]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image:
+          - name: backend
+            context: .
+            file: Dockerfile
+            tag: ghcr.io/yangyuan-zhen/polyweather-backend
+          - name: frontend
+            context: ./frontend
+            file: ./frontend/Dockerfile
+            tag: ghcr.io/yangyuan-zhen/polyweather-frontend
     permissions:
       contents: read
       packages: write
@@ -72,25 +83,29 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push backend image
+      - name: Build and push backend
+        if: matrix.image.name == 'backend'
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ${{ matrix.image.context }}
+          file: ${{ matrix.image.file }}
           push: true
           tags: |
-            ghcr.io/yangyuan-zhen/polyweather-backend:latest
-            ghcr.io/yangyuan-zhen/polyweather-backend:${{ github.sha }}
+            ${{ matrix.image.tag }}:latest
+            ${{ matrix.image.tag }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build and push frontend image
+      - name: Build and push frontend
+        if: matrix.image.name == 'frontend'
         uses: docker/build-push-action@v6
         with:
-          context: ./frontend
+          context: ${{ matrix.image.context }}
+          file: ${{ matrix.image.file }}
           push: true
           tags: |
-            ghcr.io/yangyuan-zhen/polyweather-frontend:latest
-            ghcr.io/yangyuan-zhen/polyweather-frontend:${{ github.sha }}
+            ${{ matrix.image.tag }}:latest
+            ${{ matrix.image.tag }}:${{ github.sha }}
           build-args: |
             NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
             NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
