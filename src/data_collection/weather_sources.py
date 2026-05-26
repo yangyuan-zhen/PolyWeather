@@ -4,7 +4,7 @@ import re
 import threading
 import time
 from typing import Any, Optional, Dict, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from loguru import logger
 from src.data_collection.open_meteo_cache import OpenMeteoCacheMixin
 from src.utils.refresh_policy import (
