@@ -2079,11 +2079,13 @@ def _build_city_detail_payload(
     data: Dict[str, Any],
     market_slug: Optional[str] = None,
     target_date: Optional[str] = None,
+    resolution: Optional[str] = "10m",
 ) -> Dict[str, Any]:
     return _city_payload_detail(
         data,
         market_slug=market_slug,
         target_date=target_date,
+        resolution=resolution,
     )
 
 

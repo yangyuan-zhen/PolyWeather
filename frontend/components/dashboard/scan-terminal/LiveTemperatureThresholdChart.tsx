@@ -5,8 +5,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CartesianGrid,
   Line,
-  LineChart as ReLineChart,
+  Area,
+  ComposedChart as ReComposedChart,
   ReferenceLine,
+  ReferenceArea,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -454,6 +456,7 @@ type HourlyForecast = {
   temps: Array<number | null>;
   modelCurves?: Record<string, Array<number | null>>;
   runwayPlateHistory?: Record<string, Array<Record<string, unknown>>>;
+  runwayBandHistory?: Array<{ time: string; high_temp: number; low_temp: number; avg_temp: number }>;
   amos?: AmosData | null;
   airportCurrent?: AirportCurrentConditions | null;
   airportPrimary?: AirportCurrentConditions | null;
@@ -474,6 +477,7 @@ function seedHourlyForecastFromRow(row: ScanOpportunityRow | null): HourlyForeca
     temps: [],
     modelCurves: undefined,
     runwayPlateHistory: (row as any)?.runway_plate_history || undefined,
+    runwayBandHistory: undefined,
     amos: null,
     airportCurrent: null,
     airportPrimary: null,
@@ -487,6 +491,7 @@ function seedHourlyForecastFromRow(row: ScanOpportunityRow | null): HourlyForeca
 
 type HourlyForecastFetchOptions = {
   ignoreCache?: boolean;
+  resolution?: string;
 };
 
 function parseHourlyForecastFromCityDetail(json: CityDetail | null): HourlyForecast {
@@ -500,6 +505,7 @@ function parseHourlyForecastFromCityDetail(json: CityDetail | null): HourlyForec
     temps: hourlySource.temps || [],
     modelCurves: (json.models_hourly ?? (json as any)?.timeseries?.models_hourly)?.curves || undefined,
     runwayPlateHistory: (json as any)?.runway_plate_history || (json.amos as any)?.runway_plate_history || undefined,
+    runwayBandHistory: (json as any)?.runway_band_history || undefined,
     amos: json.amos || null,
     airportCurrent: json.airport_current || null,
     airportPrimary: json.airport_primary || null,
@@ -515,24 +521,27 @@ async function fetchHourlyForecastForCity(
   city: string,
   options: HourlyForecastFetchOptions = {},
 ): Promise<HourlyForecast> {
+  const resParam = options.resolution || "10m";
+  const cacheKey = `${city}:${resParam}`;
+
   if (!options.ignoreCache) {
-    const cached = _hourlyCache.get(city);
+    const cached = _hourlyCache.get(cacheKey);
     if (cached && Date.now() - cached.ts < HOURLY_CACHE_TTL_MS) {
       return cached.data;
     }
 
-    const sessionCached = readSessionCache(city);
+    const sessionCached = readSessionCache(cacheKey);
     if (sessionCached) {
-      _hourlyCache.set(city, sessionCached);
+      _hourlyCache.set(cacheKey, sessionCached);
       return sessionCached.data;
     }
   }
 
-  const requestKey = options.ignoreCache ? `${city}:live` : city;
+  const requestKey = options.ignoreCache ? `${city}:${resParam}:live` : `${city}:${resParam}`;
   const pending = _hourlyRequestCache.get(requestKey);
   if (pending) return pending;
 
-  const request = fetch(`/api/city/${encodeURIComponent(city)}/detail?depth=full&force_refresh=false`, {
+  const request = fetch(`/api/city/${encodeURIComponent(city)}/detail?depth=full&force_refresh=false&resolution=${resParam}`, {
     headers: { Accept: "application/json" },
   })
     .then(async (res) => {
@@ -542,8 +551,8 @@ async function fetchHourlyForecastForCity(
     .then((json) => {
       const data = parseHourlyForecastFromCityDetail(json);
       if (!data) return null;
-      _hourlyCache.set(city, { ts: Date.now(), data });
-      writeSessionCache(city, data);
+      _hourlyCache.set(cacheKey, { ts: Date.now(), data });
+      writeSessionCache(cacheKey, data);
       return data;
     })
     .finally(() => {
@@ -816,7 +825,8 @@ function format3DayTimestamp(ts: number): string {
 function build3DayChartData(
   row: ScanOpportunityRow | null,
   hourly: HourlyForecast,
-): { data: Array<Record<string, string | number | null>>; series: EvidenceSeries[] } {
+  isEn: boolean,
+): { data: Array<Record<string, any>>; series: EvidenceSeries[] } {
   const tzOffset = row?.tz_offset_seconds ?? 0;
   const localDateStr = row?.local_date || new Date().toISOString().slice(0, 10);
 
@@ -826,6 +836,52 @@ function build3DayChartData(
 
   const series: EvidenceSeries[] = [];
   const na = (): Array<number | null> => new Array(n).fill(null);
+
+  // ── Runway history series ──
+  const runwayHistorySeries = buildRunwayHistorySeries(row, hourly, tzOffset, localDateStr);
+  runwayHistorySeries.forEach((rhs) => {
+    const binned = binObservationsToSlots(slots, rhs.points);
+    if (!binned.some((v) => v !== null)) return;
+    series.push({
+      key: rhs.key,
+      label: rhs.label,
+      source: "",
+      color: rhs.color,
+      featured: rhs.isSettlement,
+      dashed: !rhs.isSettlement,
+      values: binned,
+    });
+  });
+
+  // ── Runway band & max series ──
+  const normBandObs = (hourly?.runwayBandHistory || []).map((pt) => {
+    try {
+      const ts = getCityLocalUtcTimestamp(pt.time, tzOffset, localDateStr);
+      if (ts === null) return null;
+      return {
+        ts,
+        high: pt.high_temp,
+        low: pt.low_temp,
+        avg: pt.avg_temp
+      };
+    } catch {
+      return null;
+    }
+  }).filter((v): v is NonNullable<typeof v> => v !== null);
+
+  const bandVals = binBandObservationsToSlots(slots, normBandObs);
+  const maxVals = bandVals.map((val) => val ? val[1] : null);
+
+  if (maxVals.some((v) => v !== null)) {
+    series.push({
+      key: "runway_max",
+      label: isEn ? "Runway Max" : "跑道最高温",
+      source: "Runway Max",
+      color: "#009688",
+      featured: true,
+      values: maxVals,
+    });
+  }
 
   // DEB forecast curve (from hourly.times & hourly.temps)
   if (hourly?.times?.length && hourly?.temps?.length) {
@@ -901,9 +957,10 @@ function build3DayChartData(
 
   // Build data rows
   const data = slots.map((ts, i) => {
-    const point: Record<string, string | number | null> = {
+    const point: Record<string, any> = {
       label: format3DayTimestamp(ts),
       ts,
+      runway_band: bandVals[i] ?? null,
     };
     series.forEach((s) => {
       point[s.key] = s.values[i] ?? null;
@@ -1004,10 +1061,27 @@ function buildDailyChartData(
   return { data, series: activeSeries };
 }
 
+function binBandObservationsToSlots(
+  slots: number[],
+  obs: Array<{ ts: number; high: number; low: number; avg: number }>,
+): Array<[number, number] | null> {
+  const result: Array<[number, number] | null> = new Array(slots.length).fill(null);
+  for (const point of obs) {
+    for (let i = slots.length - 1; i >= 0; i--) {
+      if (point.ts >= slots[i]) {
+        result[i] = [point.low, point.high];
+        break;
+      }
+    }
+  }
+  return result;
+}
+
 function buildFullDayChartData(
   row: ScanOpportunityRow | null,
   hourly: HourlyForecast,
-): { data: Array<Record<string, string | number | null>>; series: EvidenceSeries[] } {
+  isEn: boolean,
+): { data: Array<Record<string, any>>; series: EvidenceSeries[] } {
   const tzOffset = row?.tz_offset_seconds ?? 0;
   const localDateStr = row?.local_date || new Date().toISOString().slice(0, 10);
 
@@ -1051,6 +1125,36 @@ function buildFullDayChartData(
       values: binned,
     });
   });
+
+  // ── Runway band & max series ──
+  const normBandObs = (hourly?.runwayBandHistory || []).map((pt) => {
+    try {
+      const ts = getCityLocalUtcTimestamp(pt.time, tzOffset, localDateStr);
+      if (ts === null) return null;
+      return {
+        ts,
+        high: pt.high_temp,
+        low: pt.low_temp,
+        avg: pt.avg_temp
+      };
+    } catch {
+      return null;
+    }
+  }).filter((v): v is NonNullable<typeof v> => v !== null);
+
+  const bandVals = binBandObservationsToSlots(slots, normBandObs);
+  const maxVals = bandVals.map((val) => val ? val[1] : null);
+
+  if (maxVals.some((v) => v !== null)) {
+    series.push({
+      key: "runway_max",
+      label: isEn ? "Runway Max" : "跑道最高温",
+      source: "Runway Max",
+      color: "#009688",
+      featured: true,
+      values: maxVals,
+    });
+  }
 
   // ── Settlement observations ──
   // Determine if this is an HKO-sourced city to force the label
@@ -1180,9 +1284,10 @@ function buildFullDayChartData(
 
   // ── Build data rows ──
   const data = slots.map((ts, i) => {
-    const point: Record<string, string | number | null> = {
+    const point: Record<string, any> = {
       label: formatTimestamp(ts),
       ts,
+      runway_band: bandVals[i] ?? null,
     };
     series.forEach((s) => { point[s.key] = s.values[i] ?? null; });
     return point;
@@ -1304,6 +1409,19 @@ export function LiveTemperatureThresholdChart({
   const lastPatchAtRef = useRef<number>(Date.now());
   const lastAppliedPatchRevisionRef = useRef<number>(0);
 
+  const [showRunwayDetails, setShowRunwayDetails] = useState<boolean>(false);
+  const [refAreaLeft, setRefAreaLeft] = useState<number | null>(null);
+  const [refAreaRight, setRefAreaRight] = useState<number | null>(null);
+  const [zoomRange, setZoomRange] = useState<[number, number] | null>(null);
+  const [targetResolution, setTargetResolution] = useState<string>("10m");
+
+  useEffect(() => {
+    setUserToggledKeys({});
+    setZoomRange(null);
+    lastPatchAtRef.current = Date.now();
+    lastAppliedPatchRevisionRef.current = 0;
+  }, [city, timeframe]);
+
   useEffect(() => {
     setUserToggledKeys({});
     lastPatchAtRef.current = Date.now();
@@ -1313,14 +1431,15 @@ export function LiveTemperatureThresholdChart({
   useEffect(() => {
     if (!city) return;
     
+    const cacheKey = `${city}:${targetResolution}`;
     // Check in-memory cache first
-    let cached = _hourlyCache.get(city);
+    let cached = _hourlyCache.get(cacheKey);
     if (!cached) {
       // Fallback to session cache
-      const sessionEntry = readSessionCache(city);
+      const sessionEntry = readSessionCache(cacheKey);
       if (sessionEntry) {
         cached = sessionEntry;
-        _hourlyCache.set(city, sessionEntry);
+        _hourlyCache.set(cacheKey, sessionEntry);
       }
     }
 
@@ -1336,7 +1455,7 @@ export function LiveTemperatureThresholdChart({
     const delay = isActive ? 0 : (slotIndex ? 300 + slotIndex * 250 : 350);
 
     const timer = setTimeout(() => {
-      fetchHourlyForecastForCity(city)
+      fetchHourlyForecastForCity(city, { resolution: targetResolution })
         .then((data) => {
           if (cancelled || !data) return;
           setHourly(data);
@@ -1348,7 +1467,7 @@ export function LiveTemperatureThresholdChart({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [city, row, isActive, slotIndex]);
+  }, [city, row, isActive, slotIndex, targetResolution]);
 
   useEffect(() => {
     if (!latestPatch || latestPatch.revision <= lastAppliedPatchRevisionRef.current) return;
@@ -1400,10 +1519,37 @@ export function LiveTemperatureThresholdChart({
 
   const { data, series } = useMemo(() => {
     if (timeframe === "3D") {
-      return build3DayChartData(row, hourly);
+      return build3DayChartData(row, hourly, isEn);
     }
-    return buildFullDayChartData(row, hourly);
-  }, [row, hourly, timeframe]);
+    return buildFullDayChartData(row, hourly, isEn);
+  }, [row, hourly, timeframe, isEn]);
+
+  const zoomedData = useMemo(() => {
+    if (!zoomRange || data.length === 0) return data;
+    const [start, end] = zoomRange;
+    return data.slice(start, end + 1);
+  }, [data, zoomRange]);
+
+  useEffect(() => {
+    if (timeframe === "3D") {
+      setTargetResolution("30m");
+    } else if (zoomRange && data.length > 0) {
+      const zoomedData = data.slice(zoomRange[0], zoomRange[1] + 1);
+      if (zoomedData.length > 0) {
+        const startTs = zoomedData[0].ts;
+        const endTs = zoomedData[zoomedData.length - 1].ts;
+        if (endTs - startTs <= 2 * 60 * 60 * 1000) {
+          setTargetResolution("1m");
+        } else {
+          setTargetResolution("10m");
+        }
+      } else {
+        setTargetResolution("10m");
+      }
+    } else {
+      setTargetResolution("10m");
+    }
+  }, [timeframe, zoomRange, data]);
 
   const tzOffset = row?.tz_offset_seconds ?? 0;
   const settlementObs = useMemo(() => {
@@ -1433,8 +1579,16 @@ export function LiveTemperatureThresholdChart({
   };
 
   const activeSeries = useMemo(() => {
-    return getVisibleTemperatureSeries(city, chartSeries, userToggledKeys);
-  }, [chartSeries, userToggledKeys, city]);
+    const rawVisible = getVisibleTemperatureSeries(city, chartSeries, userToggledKeys);
+    return rawVisible.filter((s) => {
+      const isIndividualRunway = s.key.startsWith("runway_") && s.key !== "runway_max";
+      if (showRunwayDetails) {
+        return s.key !== "runway_max";
+      } else {
+        return !isIndividualRunway;
+      }
+    });
+  }, [chartSeries, userToggledKeys, city, showRunwayDetails]);
 
   const normalizedKey = normalizeCityKey(row?.city);
   const runwaySensorCities = new Set([
@@ -1540,10 +1694,10 @@ export function LiveTemperatureThresholdChart({
     return list.sort((a, b) => a.threshold - b.threshold);
   }, [row, allRows]);
 
-  const intDegreeTicks = useMemo(() => buildIntDegreeTicks(activeSeries, data), [activeSeries, data]);
+  const intDegreeTicks = useMemo(() => buildIntDegreeTicks(activeSeries, zoomedData), [activeSeries, zoomedData]);
   const chartDomain = useMemo(
-    () => buildChartDomain(activeSeries, data),
-    [activeSeries, data],
+    () => buildChartDomain(activeSeries, zoomedData),
+    [activeSeries, zoomedData],
   );
 
   const subtitle = row
@@ -1580,6 +1734,15 @@ export function LiveTemperatureThresholdChart({
 
   const timeframeActions = (
     <div className="flex items-center gap-1.5">
+      {zoomRange && (
+        <button
+          type="button"
+          onClick={() => setZoomRange(null)}
+          className="px-2 py-0.5 text-[9px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 shadow-sm transition-all cursor-pointer"
+        >
+          {isEn ? "Reset Zoom" : "重置缩放"}
+        </button>
+      )}
       <div className="flex items-center gap-1 rounded bg-[#eef2f6] p-0.5 border border-slate-200">
         {(["1D", "3D"] as const).map((tf) => (
           <button
@@ -1587,7 +1750,7 @@ export function LiveTemperatureThresholdChart({
             type="button"
             onClick={() => setTimeframe(tf)}
             className={clsx(
-              "px-2 py-0.5 text-[9px] font-bold rounded transition-all",
+              "px-2 py-0.5 text-[9px] font-bold rounded transition-all cursor-pointer",
               timeframe === tf
                 ? "bg-white text-blue-600 shadow-sm border border-slate-200/50"
                 : "text-slate-500 hover:text-slate-800"
@@ -1635,7 +1798,45 @@ export function LiveTemperatureThresholdChart({
         </div>
       )}
     </div>
-  );
+  );  const handleMouseDown = (e: any) => {
+    if (compact || !e) return;
+    if (typeof e.activeTooltipIndex === "number") {
+      setRefAreaLeft(e.activeTooltipIndex);
+      setRefAreaRight(e.activeTooltipIndex);
+    }
+  };
+
+  const handleMouseMove = (e: any) => {
+    if (compact || !e || refAreaLeft === null) return;
+    if (typeof e.activeTooltipIndex === "number") {
+      setRefAreaRight(e.activeTooltipIndex);
+    }
+  };
+
+  const handleMouseUp = () => {
+    if (refAreaLeft === null || refAreaRight === null) {
+      setRefAreaLeft(null);
+      setRefAreaRight(null);
+      return;
+    }
+
+    let leftIdx = refAreaLeft;
+    let rightIdx = refAreaRight;
+
+    if (leftIdx > rightIdx) {
+      [leftIdx, rightIdx] = [rightIdx, leftIdx];
+    }
+
+    if (rightIdx - leftIdx >= 1) {
+      const originalStartIndex = zoomRange ? zoomRange[0] : 0;
+      const newStart = originalStartIndex + leftIdx;
+      const newEnd = originalStartIndex + rightIdx;
+      setZoomRange([newStart, newEnd]);
+    }
+
+    setRefAreaLeft(null);
+    setRefAreaRight(null);
+  };
 
   return (
     <Panel title={panelTitle} actions={timeframeActions}>
@@ -1852,36 +2053,66 @@ export function LiveTemperatureThresholdChart({
         {/* Chart */}
         <div className="relative min-h-0 flex-1 p-2">
           {/* Interactive legend */}
-          <div className="flex flex-wrap gap-x-4 gap-y-1 px-3 py-1.5 text-[11px] border-b border-[#e2e8f0] bg-white">
-            {chartSeries.length > 1 && chartSeries.map((s) => (
-              <button
-                key={s.key}
-                type="button"
-                onClick={() => {
-                  setUserToggledKeys((prev) => ({
-                    ...prev,
-                    [s.key]: !isSeriesVisible(s.key),
-                  }));
-                }}
-                className={clsx(
-                  "inline-flex items-center gap-1.5 font-mono cursor-pointer transition-opacity hover:opacity-80",
-                  !isSeriesVisible(s.key) && "opacity-40 line-through"
-                )}
-              >
-                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
-                <span className="text-slate-700 font-bold">{s.label}</span>
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-1.5 text-[11px] border-b border-[#e2e8f0] bg-white">
+            {chartSeries.length > 1 &&
+              chartSeries
+                .filter((s) => {
+                  const isIndividualRunway = s.key.startsWith("runway_") && s.key !== "runway_max";
+                  if (showRunwayDetails) {
+                    return s.key !== "runway_max";
+                  } else {
+                    return !isIndividualRunway;
+                  }
+                })
+                .map((s) => (
+                  <button
+                    key={s.key}
+                    type="button"
+                    onClick={() => {
+                      setUserToggledKeys((prev) => ({
+                        ...prev,
+                        [s.key]: !isSeriesVisible(s.key),
+                      }));
+                    }}
+                    className={clsx(
+                      "inline-flex items-center gap-1.5 font-mono cursor-pointer transition-opacity hover:opacity-80",
+                      !isSeriesVisible(s.key) && "opacity-40 line-through"
+                    )}
+                  >
+                    <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                    <span className="text-slate-700 font-bold">{s.label}</span>
+                  </button>
+                ))}
+
+            {/* "Show Runway Details" toggle switch */}
+            {hasRunwayData && (
+              <label className="inline-flex items-center gap-1.5 ml-auto cursor-pointer text-slate-600 hover:text-slate-800 font-semibold select-none">
+                <input
+                  type="checkbox"
+                  checked={showRunwayDetails}
+                  onChange={(e) => setShowRunwayDetails(e.target.checked)}
+                  className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-3.5 w-3.5 cursor-pointer"
+                />
+                <span>{isEn ? "Show Runway Details" : "显示跑道明细"}</span>
+              </label>
+            )}
           </div>
           <ResponsiveContainer width="100%" height="100%">
-            <ReLineChart data={data} margin={{ top: 16, right: compact ? 20 : 44, left: 4, bottom: 8 }}>
+            <ReComposedChart
+              data={zoomedData}
+              margin={{ top: 16, right: compact ? 20 : 44, left: 4, bottom: 8 }}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onDoubleClick={() => setZoomRange(null)}
+            >
               <CartesianGrid stroke="#dbe6ef" strokeDasharray="2 2" />
               <XAxis
                 dataKey="label"
                 tick={{ fontSize: 9, fill: "#64748b" }}
                 tickLine={false}
                 axisLine={{ stroke: "#cbd5e1" }}
-                interval={Math.max(1, Math.floor(data.length / (compact ? 6 : 10)))}
+                interval={Math.max(1, Math.floor(zoomedData.length / (compact ? 6 : 10)))}
               />
               <YAxis
                 orientation="right"
@@ -1921,8 +2152,38 @@ export function LiveTemperatureThresholdChart({
                   fontSize: 11,
                   boxShadow: "0 8px 24px rgba(15,23,42,.12)",
                 }}
-                formatter={(value: unknown) => `${Number(value).toFixed(2)}°`}
+                formatter={(value: unknown) => {
+                  if (Array.isArray(value)) {
+                    const [low, high] = value;
+                    if (typeof low === "number" && typeof high === "number") {
+                      return `${low.toFixed(1)}° - ${high.toFixed(1)}°`;
+                    }
+                  }
+                  const num = Number(value);
+                  return Number.isFinite(num) ? `${num.toFixed(2)}°` : String(value);
+                }}
               />
+              {/* Runway Temperature Band (low-high range area) */}
+              {hasRunwayData && (
+                <Area
+                  dataKey="runway_band"
+                  name={isEn ? "Runway Range" : "跑道区间"}
+                  stroke="none"
+                  fill="#009688"
+                  fillOpacity={showRunwayDetails ? 0.08 : 0.18}
+                  connectNulls={true}
+                  isAnimationActive={false}
+                />
+              )}
+              {refAreaLeft !== null && refAreaRight !== null && zoomedData[refAreaLeft] && zoomedData[refAreaRight] && (
+                <ReferenceArea
+                  x1={zoomedData[refAreaLeft].label}
+                  x2={zoomedData[refAreaRight].label}
+                  strokeOpacity={0.3}
+                  fill="#3b82f6"
+                  fillOpacity={0.15}
+                />
+              )}
               {activeSeries.map((item) => (
                 <Line
                   key={item.key}
@@ -1938,7 +2199,7 @@ export function LiveTemperatureThresholdChart({
                   isAnimationActive={false}
                 />
               ))}
-            </ReLineChart>
+            </ReComposedChart>
           </ResponsiveContainer>
         </div>
       </div>
@@ -1950,8 +2211,9 @@ export function __buildTemperatureChartDataForTest(
   row: ScanOpportunityRow | null,
   hourly: HourlyForecast,
   timeframe: "1D" | "3D" = "1D",
+  isEn = false,
 ) {
-  return timeframe === "3D" ? build3DayChartData(row, hourly) : buildFullDayChartData(row, hourly);
+  return timeframe === "3D" ? build3DayChartData(row, hourly, isEn) : buildFullDayChartData(row, hourly, isEn);
 }
 
 export const __isTemperatureSeriesVisibleByDefaultForTest = isTemperatureSeriesVisibleByDefault;

@@ -141,6 +141,7 @@ async def city_detail_aggregate(
     force_refresh: bool = False,
     market_slug: Optional[str] = None,
     target_date: Optional[str] = None,
+    resolution: Optional[str] = "10m",
 ):
     return await get_city_detail_aggregate_payload(
         request,
@@ -148,6 +149,7 @@ async def city_detail_aggregate(
         force_refresh=force_refresh,
         market_slug=market_slug,
         target_date=target_date,
+        resolution=resolution,
     )
 
 

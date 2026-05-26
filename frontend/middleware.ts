@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  createSupabaseMiddlewareClient,
   hasSupabaseServerEnv,
+  refreshMiddlewareSession,
 } from "@/lib/supabase/server";
 import { isLocalFullAccessHost } from "@/lib/local-dev-access";
 
@@ -69,13 +69,7 @@ async function handleTerminalGate(request: NextRequest): Promise<NextResponse> {
     return NextResponse.next();
   }
 
-  const response = NextResponse.next({
-    request: { headers: request.headers },
-  });
-  const supabase = createSupabaseMiddlewareClient(request, response);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { response, user } = await refreshMiddlewareSession(request);
 
   if (user) {
     // Authenticated — pass through. Terminal client handles subscription gate.
@@ -96,15 +90,7 @@ async function handleSupabaseAuthGate(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  });
-  const supabase = createSupabaseMiddlewareClient(request, response);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { response, user } = await refreshMiddlewareSession(request);
 
   if (user) {
     return response;
@@ -134,13 +120,7 @@ async function handleSupabaseOptionalSession(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  });
-  const supabase = createSupabaseMiddlewareClient(request, response);
-  await supabase.auth.getUser();
+  const { response } = await refreshMiddlewareSession(request);
   return response;
 }
 

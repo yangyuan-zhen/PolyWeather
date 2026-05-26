@@ -18,6 +18,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import type { CityListItem, ProAccessState, ScanOpportunityRow } from "@/lib/dashboard-types";
 import { getInitialLocaleFromNavigator } from "@/lib/i18n";
 import { isBrowserLocalFullAccess } from "@/lib/local-dev-access";
+import { getSupabaseBrowserClient, hasSupabasePublicEnv } from "@/lib/supabase/client";
 import { sortRowsByUserTime } from "@/components/dashboard/scan-terminal/decision-utils";
 import { ProductAccessRequired } from "@/components/dashboard/scan-terminal/ProductAccessRequired";
 import {
@@ -915,6 +916,65 @@ function ScanTerminalScreen() {
   const [proAccess, setProAccess] = useState<ProAccessState>(() =>
     createEmptyAccess(true),
   );
+
+  // Listen to Supabase auth events (e.g. token refreshed, signed out)
+  useEffect(() => {
+    if (!hasSupabasePublicEnv()) return;
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === "SIGNED_OUT") {
+          setProAccess(createEmptyAccess(false));
+        } else if (event === "TOKEN_REFRESHED" || event === "SIGNED_IN") {
+          try {
+            const response = await fetch("/api/auth/me", {
+              cache: "no-store",
+              headers: { Accept: "application/json" },
+            });
+            if (response.ok) {
+              const payload = await response.json();
+              setProAccess({
+                loading: false,
+                authenticated: Boolean(payload.authenticated),
+                userId: payload.user_id ?? null,
+                subscriptionActive: payload.subscription_active === true,
+                subscriptionPlanCode: payload.subscription_plan_code ?? null,
+                subscriptionExpiresAt: payload.subscription_expires_at ?? null,
+                subscriptionTotalExpiresAt:
+                  payload.subscription_total_expires_at ??
+                  payload.subscription_expires_at ??
+                  null,
+                subscriptionQueuedDays: Math.max(
+                  0,
+                  Number(payload.subscription_queued_days ?? 0),
+                ),
+                points: Number(payload.points ?? 0),
+                error: null,
+              });
+            }
+          } catch {}
+        }
+      });
+      return () => {
+        subscription.unsubscribe();
+      };
+    } catch {}
+  }, []);
+
+  // Periodically touch the session to trigger background refresh if near expiry
+  useEffect(() => {
+    if (!hasSupabasePublicEnv()) return;
+    const supabase = getSupabaseBrowserClient();
+    const interval = setInterval(async () => {
+      try {
+        await supabase.auth.getSession();
+      } catch {}
+    }, 15 * 60 * 1000); // every 15 minutes
+    
+    return () => clearInterval(interval);
+  }, []);
   const [locale, setLocale] = useState<"zh-CN" | "en-US">("zh-CN");
   const isEn = locale === "en-US";
   const toggleLocale = () =>

@@ -41,19 +41,14 @@ export async function buildBackendRequestHeaders(
   const incomingAuth = extractBearerToken(request.headers.get("authorization"));
   const includeSupabaseIdentity = options?.includeSupabaseIdentity !== false;
   if (hasSupabaseServerEnv() && includeSupabaseIdentity) {
-    const supabase = createSupabaseRouteClient(request, new NextResponse(null, { status: 200 }));
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    let user = session?.user ?? null;
-    if (session) {
-      const {
-        data: { user: validated },
-      } = await supabase.auth.getUser();
-      user = validated ?? session.user;
-    }
-
     const passthroughResponse = new NextResponse(null, { status: 200 });
+    const supabase = createSupabaseRouteClient(request, passthroughResponse);
+    
+    // Always call getUser() to ensure token is validated and refreshed if expired
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
     const forwardedUserId = String(user?.id || "").trim();
     const forwardedEmail = String(user?.email || "").trim();
     if (forwardedUserId) {
@@ -67,6 +62,11 @@ export async function buildBackendRequestHeaders(
       headers.set("Authorization", `Bearer ${incomingAuth}`);
       return { headers, response: passthroughResponse, authUserId: forwardedUserId || null, authEmail: forwardedEmail || null };
     }
+
+    // Call getSession() to get the updated access token (after getUser() has refreshed it if needed)
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     const accessToken = session?.access_token || "";
     if (accessToken) {
       // Fallback to cookie-backed session when request does not carry bearer.

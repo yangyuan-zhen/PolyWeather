@@ -142,6 +142,7 @@ async def get_city_detail_aggregate_payload(
     force_refresh: bool = False,
     market_slug: Optional[str] = None,
     target_date: Optional[str] = None,
+    resolution: Optional[str] = "10m",
 ) -> Dict[str, Any]:
     legacy_routes._assert_entitlement(request)
     city = legacy_routes._normalize_city_or_404(name)
@@ -162,6 +163,7 @@ async def get_city_detail_aggregate_payload(
         data,
         market_slug,
         target_date,
+        resolution,
     )
 
 

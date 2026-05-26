@@ -310,4 +310,35 @@ export function runTests() {
     Math.min(...shanghaiDebValues) > 20,
     "DEB curve should not be pulled into an impossible negative range by stale row deb_prediction=0",
   );
+
+  // ── Runway range band and runway_max test ──
+  const shanghaiWithBand = __buildTemperatureChartDataForTest(
+    {
+      city: "shanghai",
+      local_date: "2026-05-26",
+      local_time: "14:00",
+      tz_offset_seconds: 8 * 60 * 60,
+    } as any,
+    {
+      localTime: "14:00",
+      times: ["00:00", "12:00", "18:00"],
+      temps: [24.2, 31.5, 26.5],
+      runwayBandHistory: [
+        { time: "2026-05-26T00:00:00+08:00", high_temp: 26.0, low_temp: 24.0, avg_temp: 25.0 },
+        { time: "2026-05-26T12:00:00+08:00", high_temp: 32.0, low_temp: 29.0, avg_temp: 30.5 },
+      ]
+    } as any,
+    "1D",
+  );
+
+  const runwayMaxSeries = seriesByKey(shanghaiWithBand.series, "runway_max") as any;
+  assert(runwayMaxSeries, "runway_max series should be present when runwayBandHistory is provided");
+  assert(runwayMaxSeries.color === "#009688", "runway_max series should use the primary teal color");
+  assert(runwayMaxSeries.featured === true, "runway_max series should be featured");
+
+  // Verify that runway_band exists on some data rows
+  const bandPoints = shanghaiWithBand.data.filter((d) => d.runway_band !== null);
+  assert(bandPoints.length >= 2, "runway_band tuples should be binned into data slots");
+  const firstBand = bandPoints[0].runway_band;
+  assert(Array.isArray(firstBand) && firstBand[0] === 24.0 && firstBand[1] === 26.0, "runway_band tuple values should match input limits");
 }

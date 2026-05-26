@@ -48,6 +48,7 @@ export async function GET(
   const depth = req.nextUrl.searchParams.get("depth");
   const marketSlug = req.nextUrl.searchParams.get("market_slug");
   const targetDate = req.nextUrl.searchParams.get("target_date");
+  const resolution = req.nextUrl.searchParams.get("resolution");
   const searchParams = new URLSearchParams({
     force_refresh: forceRefresh,
   });
@@ -59,6 +60,9 @@ export async function GET(
   }
   if (targetDate) {
     searchParams.set("target_date", targetDate);
+  }
+  if (resolution) {
+    searchParams.set("resolution", resolution);
   }
   const url = `${API_BASE}/api/city/${encodeURIComponent(name)}/detail?${searchParams.toString()}`;
 

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
+from datetime import datetime, timezone
+import re
 
 from web.core import _is_excluded_model_name
 
@@ -34,10 +36,134 @@ def build_city_summary_payload(data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _parse_time_val(val: str) -> Optional[datetime]:
+    if not val:
+        return None
+    try:
+        val = str(val).strip().replace("Z", "+00:00")
+        if "T" in val:
+            return datetime.fromisoformat(val)
+        else:
+            return datetime.fromisoformat(val)
+    except Exception:
+        try:
+            val_clean = re.sub(r'\.\d+', '', val)
+            return datetime.strptime(val_clean, "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return None
+
+
+def aggregate_runway_history(raw_history: Dict[str, List[Dict[str, Any]]], resolution: str) -> Dict[str, List[Dict[str, Any]]]:
+    if not raw_history:
+        return {}
+    if not resolution or resolution == "1m":
+        return raw_history
+    
+    try:
+        if resolution.endswith("m"):
+            minutes = int(resolution[:-1])
+        elif resolution.endswith("h"):
+            minutes = int(resolution[:-1]) * 60
+        else:
+            minutes = 10
+    except Exception:
+        minutes = 10
+        
+    seconds = minutes * 60
+    aggregated = {}
+    for rwy, points in raw_history.items():
+        if not points:
+            continue
+        
+        buckets = {}
+        for pt in points:
+            t_str = pt.get("time") or pt.get("timestamp")
+            temp = pt.get("temp") or pt.get("temp_c") or pt.get("value")
+            if temp is None or not isinstance(t_str, str):
+                continue
+            dt = _parse_time_val(t_str)
+            if not dt:
+                continue
+                
+            ts = int(dt.timestamp())
+            bucket_ts = (ts // seconds) * seconds
+            
+            if bucket_ts not in buckets:
+                buckets[bucket_ts] = []
+            buckets[bucket_ts].append(temp)
+            
+        bucket_points = []
+        for bucket_ts in sorted(buckets.keys()):
+            temps = buckets[bucket_ts]
+            close_temp = temps[-1]
+            bucket_dt = datetime.fromtimestamp(bucket_ts, tz=timezone.utc)
+            bucket_points.append({
+                "time": bucket_dt.isoformat(),
+                "temp": round(close_temp, 1)
+            })
+        aggregated[rwy] = bucket_points
+        
+    return aggregated
+
+
+def build_runway_band_history(raw_history: Dict[str, List[Dict[str, Any]]], resolution: str) -> List[Dict[str, Any]]:
+    if not raw_history:
+        return []
+    
+    try:
+        if resolution.endswith("m"):
+            minutes = int(resolution[:-1])
+        elif resolution.endswith("h"):
+            minutes = int(resolution[:-1]) * 60
+        else:
+            minutes = 10
+    except Exception:
+        minutes = 10
+        
+    seconds = minutes * 60
+    buckets = {}
+    for rwy, points in raw_history.items():
+        for pt in points:
+            t_str = pt.get("time") or pt.get("timestamp")
+            temp = pt.get("temp") or pt.get("temp_c") or pt.get("value")
+            if temp is None or not isinstance(t_str, str):
+                continue
+            dt = _parse_time_val(t_str)
+            if not dt:
+                continue
+                
+            ts = int(dt.timestamp())
+            bucket_ts = (ts // seconds) * seconds
+            
+            if bucket_ts not in buckets:
+                buckets[bucket_ts] = []
+            buckets[bucket_ts].append(temp)
+            
+    band_history = []
+    for bucket_ts in sorted(buckets.keys()):
+        temps = buckets[bucket_ts]
+        if not temps:
+            continue
+        high_temp = max(temps)
+        low_temp = min(temps)
+        avg_temp = sum(temps) / len(temps)
+        
+        bucket_dt = datetime.fromtimestamp(bucket_ts, tz=timezone.utc)
+        band_history.append({
+            "time": bucket_dt.isoformat(),
+            "high_temp": round(high_temp, 1),
+            "low_temp": round(low_temp, 1),
+            "avg_temp": round(avg_temp, 1),
+        })
+        
+    return band_history
+
+
 def build_city_detail_payload(
     data: Dict[str, Any],
     market_slug: Optional[str] = None,
     target_date: Optional[str] = None,
+    resolution: Optional[str] = "10m",
 ) -> Dict[str, Any]:
     return {
         "city": data.get("name"),
@@ -125,7 +251,8 @@ def build_city_detail_payload(
         or _build_intraday_meteorology(data),
         "vertical_profile_signal": data.get("vertical_profile_signal") or {},
         "taf": data.get("taf") or {},
-        "runway_plate_history": data.get("runway_plate_history") or {},
+        "runway_plate_history": aggregate_runway_history(data.get("runway_plate_history") or {}, resolution),
+        "runway_band_history": build_runway_band_history(data.get("runway_plate_history") or {}, resolution),
 
         "risk": data.get("risk"),
         "settlement_station": data.get("settlement_station") or {},
