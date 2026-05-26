@@ -13,9 +13,16 @@ from web.sse_manager import sse_manager
 router = APIRouter(tags=["events"])
 
 
+@router.options("/api/events")
+async def sse_events_preflight(request: Request):
+    return {"ok": True}
+
+
 @router.get("/api/events")
 async def sse_events(request: Request):
     user_id = getattr(request.state, "auth_user_id", None) or "anon"
+    origin = request.headers.get("origin", "")
+    allowed = origin in {"https://polyweather.top", "https://www.polyweather.top", "http://localhost:3000"}
     return StreamingResponse(
         sse_manager.event_stream(user_id),
         media_type="text/event-stream",
@@ -23,6 +30,8 @@ async def sse_events(request: Request):
             "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
+            "Access-Control-Allow-Origin": origin if allowed else "https://polyweather.top",
+            "Access-Control-Allow-Credentials": "true",
         },
     )
 
