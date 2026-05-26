@@ -475,7 +475,7 @@ export function LiveTemperatureThresholdChart({
                 : "text-slate-500 hover:text-slate-800"
             )}
           >
-            {mode === "auto" ? (isEn ? "Auto" : "高温") : (isEn ? "Full" : "全天")}
+            {mode === "auto" ? (isEn ? "Peak" : "高温") : (isEn ? "All Day" : "全天")}
           </button>
         ))}
       </div>

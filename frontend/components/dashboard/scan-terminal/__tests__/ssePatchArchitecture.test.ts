@@ -138,6 +138,14 @@ export function runTests() {
   );
   assert(chart.includes("viewMode"), "temperature chart must expose a view mode for DEB-peak auto view versus full-day view");
   assert(chart.includes("getDebPeakWindowRange"), "temperature chart must derive its default view from the DEB peak window");
+  assert(
+    chart.includes('isEn ? "Peak" : "高温"') && chart.includes('isEn ? "All Day" : "全天"'),
+    "temperature chart view-mode labels must translate 高温/全天 as Peak/All Day",
+  );
+  assert(
+    !chart.includes('isEn ? "Auto" : "高温"') && !chart.includes('isEn ? "Full" : "全天"'),
+    "temperature chart view-mode labels must not expose internal Auto/Full wording",
+  );
   assert(chart.includes("nextTargetResolution"), "temperature chart must derive target resolution without setting state on every render");
   assert(
     chart.includes("targetResolution !== nextTargetResolution"),
