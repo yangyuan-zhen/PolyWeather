@@ -161,6 +161,56 @@ export function runTests() {
     "DEB peak auto window should not expand beyond 12 hours",
   );
 
+  const postPeakWindowChart = __buildTemperatureChartDataForTest(
+    {
+      city: "beijing",
+      local_date: "2026-05-26",
+      local_time: "21:10",
+      tz_offset_seconds: 8 * 60 * 60,
+      deb_prediction: 35,
+      runway_plate_history: {
+        "19/01": [
+          { time: "2026-05-26T10:00:00+08:00", temp: 29.8 },
+          { time: "2026-05-26T15:00:00+08:00", temp: 34.9 },
+          { time: "2026-05-26T21:00:00+08:00", temp: 28.6 },
+        ],
+      },
+    } as any,
+    {
+      localTime: "21:10",
+      times: [
+        "00:00", "01:00", "02:00", "03:00", "04:00", "05:00",
+        "06:00", "07:00", "08:00", "09:00", "10:00", "11:00",
+        "12:00", "13:00", "14:00", "15:00", "16:00", "17:00",
+        "18:00", "19:00", "20:00", "21:00", "22:00", "23:00",
+      ],
+      temps: [
+        20, 20.5, 21, 21.5, 22, 23,
+        24, 25, 26, 27, 29, 31,
+        32, 33, 34.2, 35, 34.4, 33.3,
+        31.8, 30.2, 28.5, 27, 25.5, 24,
+      ],
+      debPrediction: 35,
+    } as any,
+    "1D",
+  );
+  const postPeakWindowRange = __getDebPeakWindowRangeForTest(
+    postPeakWindowChart.data,
+    postPeakWindowChart.series as any,
+  );
+  assert(postPeakWindowRange, "post-peak default chart view should still derive from the DEB peak window");
+  const postPeakWindowRows = postPeakWindowChart.data.slice(postPeakWindowRange![0], postPeakWindowRange![1] + 1);
+  const postPeakWindowStart = postPeakWindowRows[0].ts;
+  const postPeakWindowEnd = postPeakWindowRows[postPeakWindowRows.length - 1].ts;
+  assert(
+    postPeakWindowEnd >= Date.UTC(2026, 4, 26, 21, 0, 0),
+    "After the peak window, default high-temperature view should extend to the latest live observation",
+  );
+  assert(
+    postPeakWindowEnd - postPeakWindowStart <= 12 * 60 * 60 * 1000,
+    "Post-peak high-temperature view should keep a bounded 12-hour window",
+  );
+
   assert(
     __isTemperatureSeriesVisibleByDefaultForTest("paris", "model_curve_AROME HD"),
     "Paris AROME HD should be the only default-visible model curve exception",

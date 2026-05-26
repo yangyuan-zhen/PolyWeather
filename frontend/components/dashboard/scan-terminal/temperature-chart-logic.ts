@@ -1445,6 +1445,33 @@ function buildChartDomain(
   return [Number((min - pad).toFixed(1)), Number((max + pad).toFixed(1))];
 }
 
+function isLiveObservationSeries(series: EvidenceSeries) {
+  if (series.key === "hourly_forecast") return false;
+  if (series.key.startsWith("model_curve_")) return false;
+  if (series.key.startsWith("model_summary_")) return false;
+  if (["deb_prediction", "max_temp", "min_temp"].includes(series.key)) return false;
+
+  const source = String(series.source || "").toLowerCase();
+  if (source.includes("forecast") || source.includes("multi-model") || source === "deb") return false;
+  return true;
+}
+
+function latestLiveObservationTimestamp(
+  data: Array<Record<string, any>>,
+  series: EvidenceSeries[],
+) {
+  let latest: number | null = null;
+  series.filter(isLiveObservationSeries).forEach((item) => {
+    item.values.forEach((value, index) => {
+      if (validNumber(value) === null) return;
+      const ts = typeof data[index]?.ts === "number" ? data[index].ts : null;
+      if (ts === null) return;
+      latest = latest === null ? ts : Math.max(latest, ts);
+    });
+  });
+  return latest;
+}
+
 function getDebPeakWindowRange(
   data: Array<Record<string, any>>,
   series: EvidenceSeries[],
@@ -1487,6 +1514,7 @@ function getDebPeakWindowRange(
   let startTs = debPoints[hotStartPoint].ts - 1.5 * hour;
   let endTs = debPoints[hotEndPoint].ts + 2 * hour;
   const centerTs = peak.ts;
+  const latestObsTs = latestLiveObservationTimestamp(data, series);
 
   if (endTs - startTs < targetSpan) {
     startTs = centerTs - targetSpan / 2;
@@ -1495,6 +1523,12 @@ function getDebPeakWindowRange(
   if (endTs - startTs > maxSpan) {
     startTs = centerTs - maxSpan / 2;
     endTs = centerTs + maxSpan / 2;
+  }
+  if (latestObsTs !== null && latestObsTs > endTs && latestObsTs > debPoints[hotEndPoint].ts) {
+    endTs = Math.min(lastTs, latestObsTs);
+    if (endTs - startTs > maxSpan) {
+      startTs = Math.max(firstTs, endTs - maxSpan);
+    }
   }
 
   if (startTs < firstTs) {
