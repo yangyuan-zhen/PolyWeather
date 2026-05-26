@@ -110,7 +110,7 @@ jobs:
             NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
             NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
             NEXT_PUBLIC_SITE_URL=${{ secrets.NEXT_PUBLIC_SITE_URL || 'https://polyweather.top' }}
-            NEXT_PUBLIC_POLYWEATHER_API_BASE_URL=${{ secrets.NEXT_PUBLIC_POLYWEATHER_API_BASE_URL || 'https://api.polyweather.top' }}
+            NEXT_PUBLIC_POLYWEATHER_API_BASE_URL=${{ secrets.NEXT_PUBLIC_POLYWEATHER_API_BASE_URL || '' }}
             NEXT_PUBLIC_POLYWEATHER_LOCAL_FULL_ACCESS=false
           cache-from: type=gha
           cache-to: type=gha,mode=max
