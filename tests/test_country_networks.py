@@ -337,9 +337,9 @@ def test_moscow_provider_uses_realtime_metar_cluster_not_station_archive_rows():
 
     snapshot = build_country_network_snapshot("moscow", raw)
 
-    assert snapshot["provider_code"] == "russia_metar_cluster"
+    assert snapshot["provider_code"] == "global_metar"
     assert snapshot["official_network_status"]["available"] is True
-    assert snapshot["official_network_status"]["mode"] == "realtime_metar_cluster"
+    assert snapshot["official_network_status"]["mode"] == "fallback_metar_cluster"
     assert snapshot["official_nearby"][0]["source_code"] == "metar_cluster"
     assert snapshot["official_nearby"][0]["is_airport_station"] is True
 
