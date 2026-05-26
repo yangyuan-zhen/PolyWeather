@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
 from web.services.scan_api import (
     get_scan_terminal_ai_payload,
@@ -30,7 +31,7 @@ async def scan_terminal(
     trading_region: str = "",
     timezone_offset_seconds: int | None = None,
 ):
-    return await get_scan_terminal_payload(
+    payload = await get_scan_terminal_payload(
         request,
         scan_mode=scan_mode,
         min_price=min_price,
@@ -44,6 +45,12 @@ async def scan_terminal(
         force_refresh=force_refresh,
         region=region or trading_region or None,
         timezone_offset_seconds=timezone_offset_seconds,
+    )
+    return JSONResponse(
+        content=payload,
+        headers={
+            "Cache-Control": "public, s-maxage=30, stale-while-revalidate=120",
+        },
     )
 
 
