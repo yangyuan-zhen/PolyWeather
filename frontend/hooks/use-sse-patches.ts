@@ -20,6 +20,7 @@ let eventSource: EventSource | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempt = 0;
 let patchVersion = 0;
+let useFallbackUrl = false;
 
 function normalizeCityKey(city: string | null | undefined) {
   return String(city || "").trim().toLowerCase();
@@ -50,8 +51,13 @@ function closeEventSource() {
 function connectSsePatches() {
   if (typeof window === "undefined" || eventSource) return;
 
-  const url = resolveBackendApiUrl("/api/events");
-  console.log("[SSE] Attempting to connect to:", url);
+  let url = resolveBackendApiUrl("/api/events");
+  if (useFallbackUrl) {
+    url = "/api/events";
+    console.log("[SSE] Falling back to same-origin BFF proxy URL:", url);
+  } else {
+    console.log("[SSE] Attempting to connect to direct URL:", url);
+  }
 
   try {
     closeEventSource();
@@ -74,10 +80,17 @@ function connectSsePatches() {
     eventSource.onerror = (err) => {
       console.error("[SSE] Connection error or stream closed:", err);
       closeEventSource();
+      if (!useFallbackUrl && url !== "/api/events") {
+        console.warn("[SSE] Direct connection failed. Switching to same-origin BFF proxy fallback for next attempt.");
+        useFallbackUrl = true;
+      }
       scheduleReconnect();
     };
   } catch (err) {
     console.error("[SSE] Exception thrown while instantiating EventSource:", err);
+    if (!useFallbackUrl && url !== "/api/events") {
+      useFallbackUrl = true;
+    }
     scheduleReconnect();
   }
 }
