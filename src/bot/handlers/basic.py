@@ -298,7 +298,7 @@ class BasicCommandHandler:
                     trace.set_status("blocked", f"not_group_member:{member_status or 'none'}")
                     return
                 token = self.io_layer.db.create_bind_token(user.id, ttl_minutes=10)
-                app_url = str(os.getenv("POLYWEATHER_APP_URL") or "https://polyweather-pro.vercel.app").rstrip("/")
+                app_url = str(os.getenv("POLYWEATHER_APP_URL") or "https://polyweather.top").rstrip("/")
                 bind_url = f"{app_url}/account?bind_token={token}"
                 self.bot.reply_to(
                     message,
@@ -535,7 +535,7 @@ class BasicCommandHandler:
 
             self.bot.reply_to(
                 message,
-                "ℹ️ 市场概览 (Focus Digest) 功能已移除。\n频道继续接收关键市场警报推送；如需查看当前市场状态，请访问 https://polyweather-pro.vercel.app/",
+                "ℹ️ 市场概览 (Focus Digest) 功能已移除。\n频道继续接收关键市场警报推送；如需查看当前市场状态，请访问 https://polyweather.top/",
                 disable_web_page_preview=True,
             )
             trace.set_status("ok", "removed")

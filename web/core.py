@@ -37,7 +37,7 @@ app = FastAPI(title="PolyWeather Map", version="1.0")
 
 _cors_origins = os.getenv(
     "WEB_CORS_ORIGINS",
-    "http://localhost:3000,http://127.0.0.1:3000,https://polyweather-pro.vercel.app,https://polyweather.top,https://api.polyweather.top",
+    "http://localhost:3000,http://127.0.0.1:3000,https://polyweather.top,https://www.polyweather.top,https://api.polyweather.top",
 )
 app.add_middleware(
     CORSMiddleware,

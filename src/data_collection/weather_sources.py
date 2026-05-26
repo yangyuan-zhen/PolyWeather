@@ -158,7 +158,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         self.user_agent = str(
             os.getenv(
                 "POLYWEATHER_USER_AGENT",
-                "PolyWeather/1.0 (+https://polyweather-pro.vercel.app)",
+                "PolyWeather/1.0 (+https://polyweather.top)",
             )
         ).strip()
         self.session = httpx.Client(
