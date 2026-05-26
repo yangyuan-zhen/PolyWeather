@@ -18,7 +18,7 @@ export type RemoteData<T> =
   | { status: "error"; error: string; previous?: T };
 
 export const scanTerminalQueryPolicy = {
-  autoRefreshMs: DASHBOARD_REFRESH_POLICY_MS.scanRows,
+  autoRefreshMs: null,
   manualForceRefreshCooldownMs: 2 * 60_000,
 } as const;
 

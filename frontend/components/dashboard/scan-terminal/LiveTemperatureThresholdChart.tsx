@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -22,6 +22,7 @@ import type {
 } from "@/lib/dashboard-types";
 import { buildDebBaselinePath } from "@/lib/temperature-chart-paths";
 import { DASHBOARD_REFRESH_POLICY_MS } from "@/lib/refresh-policy";
+import { useLatestPatch, type CityPatch } from "@/hooks/use-sse-patches";
 import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { rowName, temp } from "@/components/dashboard/scan-terminal/utils";
 
@@ -484,19 +485,51 @@ function seedHourlyForecastFromRow(row: ScanOpportunityRow | null): HourlyForeca
   };
 }
 
-async function fetchHourlyForecastForCity(city: string): Promise<HourlyForecast> {
-  const cached = _hourlyCache.get(city);
-  if (cached && Date.now() - cached.ts < HOURLY_CACHE_TTL_MS) {
-    return cached.data;
+type HourlyForecastFetchOptions = {
+  ignoreCache?: boolean;
+};
+
+function parseHourlyForecastFromCityDetail(json: CityDetail | null): HourlyForecast {
+  const hourlySource = (json as any)?.hourly ?? (json as any)?.timeseries?.hourly;
+  if (!json || !hourlySource) return null;
+  return {
+    forecastTodayHigh: json.forecast?.today_high ?? null,
+    debPrediction: json.deb?.prediction ?? (json as any)?.overview?.deb_prediction ?? null,
+    localTime: json.local_time || null,
+    times: hourlySource.times || [],
+    temps: hourlySource.temps || [],
+    modelCurves: (json.models_hourly ?? (json as any)?.timeseries?.models_hourly)?.curves || undefined,
+    runwayPlateHistory: (json as any)?.runway_plate_history || (json.amos as any)?.runway_plate_history || undefined,
+    amos: json.amos || null,
+    airportCurrent: json.airport_current || null,
+    airportPrimary: json.airport_primary || null,
+    forecastDaily: json.forecast?.daily || [],
+    multiModelDaily: json.multi_model_daily || {},
+    settlementTodayObs: (json as any).timeseries?.settlement_today_obs || (json as any)?.settlement_today_obs || undefined,
+    metarTodayObs: (json as any).timeseries?.metar_today_obs || (json as any)?.metar_today_obs || undefined,
+    airportPrimaryTodayObs: (json as any)?.official?.airport_primary_today_obs || (json as any)?.airport_primary_today_obs || undefined,
+  };
+}
+
+async function fetchHourlyForecastForCity(
+  city: string,
+  options: HourlyForecastFetchOptions = {},
+): Promise<HourlyForecast> {
+  if (!options.ignoreCache) {
+    const cached = _hourlyCache.get(city);
+    if (cached && Date.now() - cached.ts < HOURLY_CACHE_TTL_MS) {
+      return cached.data;
+    }
+
+    const sessionCached = readSessionCache(city);
+    if (sessionCached) {
+      _hourlyCache.set(city, sessionCached);
+      return sessionCached.data;
+    }
   }
 
-  const sessionCached = readSessionCache(city);
-  if (sessionCached) {
-    _hourlyCache.set(city, sessionCached);
-    return sessionCached.data;
-  }
-
-  const pending = _hourlyRequestCache.get(city);
+  const requestKey = options.ignoreCache ? `${city}:live` : city;
+  const pending = _hourlyRequestCache.get(requestKey);
   if (pending) return pending;
 
   const request = fetch(`/api/city/${encodeURIComponent(city)}/detail?depth=full&force_refresh=false`, {
@@ -507,35 +540,94 @@ async function fetchHourlyForecastForCity(city: string): Promise<HourlyForecast>
       return res.json() as Promise<CityDetail>;
     })
     .then((json) => {
-      const hourlySource = (json as any)?.hourly ?? (json as any)?.timeseries?.hourly;
-      if (!json || !hourlySource) return null;
-      const data: HourlyForecast = {
-        forecastTodayHigh: json.forecast?.today_high ?? null,
-        debPrediction: json.deb?.prediction ?? (json as any)?.overview?.deb_prediction ?? null,
-        localTime: json.local_time || null,
-        times: hourlySource.times || [],
-        temps: hourlySource.temps || [],
-        modelCurves: (json.models_hourly ?? (json as any)?.timeseries?.models_hourly)?.curves || undefined,
-        runwayPlateHistory: (json as any)?.runway_plate_history || (json.amos as any)?.runway_plate_history || undefined,
-        amos: json.amos || null,
-        airportCurrent: json.airport_current || null,
-        airportPrimary: json.airport_primary || null,
-        forecastDaily: json.forecast?.daily || [],
-        multiModelDaily: json.multi_model_daily || {},
-        settlementTodayObs: (json as any).timeseries?.settlement_today_obs || (json as any)?.settlement_today_obs || undefined,
-        metarTodayObs: (json as any).timeseries?.metar_today_obs || (json as any)?.metar_today_obs || undefined,
-        airportPrimaryTodayObs: (json as any)?.official?.airport_primary_today_obs || (json as any)?.airport_primary_today_obs || undefined,
-      };
+      const data = parseHourlyForecastFromCityDetail(json);
+      if (!data) return null;
       _hourlyCache.set(city, { ts: Date.now(), data });
       writeSessionCache(city, data);
       return data;
     })
     .finally(() => {
-      _hourlyRequestCache.delete(city);
+      _hourlyRequestCache.delete(requestKey);
     });
 
-  _hourlyRequestCache.set(city, request);
+  _hourlyRequestCache.set(requestKey, request);
   return request;
+}
+
+function shouldPollLiveChart({
+  city,
+  compact,
+  isActive,
+  isMaximized,
+}: {
+  city: string;
+  compact: boolean;
+  isActive: boolean;
+  isMaximized: boolean;
+}) {
+  return Boolean(city) && (compact || isActive || isMaximized);
+}
+
+function mergePatchIntoHourly(
+  prev: HourlyForecast,
+  patch: CityPatch,
+): HourlyForecast {
+  const changes = patch.changes || {};
+  const tempValue = validNumber(changes.temp);
+  const obsTime = typeof changes.obs_time === "string" ? changes.obs_time : null;
+  const source = typeof changes.source === "string" ? changes.source : "";
+  const explicitHourlyPatch = changes.hourly && typeof changes.hourly === "object"
+    ? changes.hourly as Partial<NonNullable<HourlyForecast>>
+    : {};
+
+  const next: NonNullable<HourlyForecast> = {
+    ...(prev || {
+      forecastTodayHigh: null,
+      debPrediction: null,
+      localTime: null,
+      times: [],
+      temps: [],
+      forecastDaily: [],
+      multiModelDaily: {},
+    }),
+    ...explicitHourlyPatch,
+  };
+
+  if (changes.amos && typeof changes.amos === "object") {
+    next.amos = changes.amos as AmosData;
+  }
+
+  if (tempValue !== null) {
+    next.airportCurrent = {
+      ...(next.airportCurrent || {}),
+      obs_time: next.airportCurrent?.obs_time ?? null,
+      temp: tempValue,
+      max_so_far: Math.max(
+        tempValue,
+        validNumber(next.airportCurrent?.max_so_far) ?? tempValue,
+      ),
+    };
+    next.airportPrimary = {
+      ...(next.airportPrimary || {}),
+      obs_time: next.airportPrimary?.obs_time ?? null,
+      temp: tempValue,
+      max_so_far: Math.max(
+        tempValue,
+        validNumber(next.airportPrimary?.max_so_far) ?? tempValue,
+      ),
+      source_label: next.airportPrimary?.source_label || source || undefined,
+    };
+  }
+
+  if (tempValue !== null && obsTime) {
+    const obsPoint: RawObsPoint = [obsTime, tempValue];
+    const currentObs = Array.isArray(next.airportPrimaryTodayObs)
+      ? next.airportPrimaryTodayObs
+      : [];
+    next.airportPrimaryTodayObs = [...currentObs, obsPoint].slice(-MAX_OBS_POINTS);
+  }
+
+  return next;
 }
 
 function parseRunwayHistoryValue(point: Record<string, unknown>) {
@@ -1155,12 +1247,17 @@ export function LiveTemperatureThresholdChart({
 }) {
   const [hourly, setHourly] = useState<HourlyForecast>(null);
   const city = String(row?.city || "").toLowerCase().trim();
+  const latestPatch = useLatestPatch(city);
   const [timeframe, setTimeframe] = useState<"1D" | "3D">("1D");
   const [userToggledKeys, setUserToggledKeys] = useState<Record<string, boolean>>({});
   const [liveTemp, setLiveTemp] = useState<number | null>(null);
+  const lastPatchAtRef = useRef<number>(Date.now());
+  const lastAppliedPatchRevisionRef = useRef<number>(0);
 
   useEffect(() => {
     setUserToggledKeys({});
+    lastPatchAtRef.current = Date.now();
+    lastAppliedPatchRevisionRef.current = 0;
   }, [city, timeframe]);
 
   useEffect(() => {
@@ -1203,53 +1300,53 @@ export function LiveTemperatureThresholdChart({
     };
   }, [city, row, isActive, slotIndex]);
 
-  // ── 60s live poll: summary (number) + detail amos/runway (curves) ──
   useEffect(() => {
-    if (!city) return;
-    const poll = () => {
-      // Lightweight: current temp number
+    if (!latestPatch || latestPatch.revision <= lastAppliedPatchRevisionRef.current) return;
+    lastAppliedPatchRevisionRef.current = latestPatch.revision;
+    lastPatchAtRef.current = Date.now();
+    const tempValue = validNumber(latestPatch.changes.temp);
+    if (tempValue !== null) setLiveTemp(tempValue);
+    setHourly((prev) => mergePatchIntoHourly(prev ?? seedHourlyForecastFromRow(row), latestPatch));
+  }, [latestPatch, row]);
+
+  // ── SSE fallback: only full-fetch if a visible chart has seen no patch for 2 minutes ──
+  useEffect(() => {
+    if (!shouldPollLiveChart({ city, compact, isActive, isMaximized })) return;
+    let cancelled = false;
+
+    const refreshFullDetail = () => {
+      lastPatchAtRef.current = Date.now();
+
+      fetchHourlyForecastForCity(city, { ignoreCache: true })
+        .then((data) => {
+          if (cancelled || !data) return;
+          setHourly(data);
+        })
+        .catch(() => {});
+    };
+
+    const checkFallback = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      if (Date.now() - lastPatchAtRef.current < 2 * 60_000) return;
+
       fetch(`/api/city/${encodeURIComponent(city)}/summary`)
         .then((res) => (res.ok ? res.json() : null))
         .then((payload) => {
-          if (!payload) return;
+          if (cancelled || !payload) return;
           const temp = validNumber(payload?.current?.temp);
           if (temp !== null) setLiveTemp(temp);
         })
         .catch(() => {});
 
-      // Refresh runway curves and station observations
-      fetch(`/api/city/${encodeURIComponent(city)}/detail?depth=full&force_refresh=false`)
-        .then((res) => (res.ok ? res.json() : null))
-        .then((json) => {
-          if (!json) return;
-          setHourly((prev) => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              amos: json.amos ?? prev.amos,
-              airportPrimary: json.airport_primary ?? prev.airportPrimary,
-              airportCurrent: json.airport_current ?? prev.airportCurrent,
-              airportPrimaryTodayObs: (json as any)?.official?.airport_primary_today_obs
-                || json.airport_primary_today_obs
-                || prev.airportPrimaryTodayObs,
-              runwayPlateHistory: (json as any)?.runway_plate_history
-                || (json.amos as any)?.runway_plate_history
-                || prev.runwayPlateHistory,
-              settlementTodayObs: (json as any).timeseries?.settlement_today_obs
-                || (json as any)?.settlement_today_obs
-                || prev.settlementTodayObs,
-              metarTodayObs: (json as any).timeseries?.metar_today_obs
-                || (json as any)?.metar_today_obs
-                || prev.metarTodayObs,
-            };
-          });
-        })
-        .catch(() => {});
+      refreshFullDetail();
     };
-    poll();
-    const id = setInterval(poll, 60_000);
-    return () => clearInterval(id);
-  }, [city]);
+
+    const id = setInterval(checkFallback, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [city, compact, isActive, isMaximized]);
 
   const { data, series } = useMemo(() => {
     if (timeframe === "3D") {
@@ -1300,8 +1397,11 @@ export function LiveTemperatureThresholdChart({
   const isTokyo = normalizedKey === 'tokyo';
   const isSingapore = normalizedKey === 'singapore';
   const isParis = normalizedKey === 'paris';
+  const stationSourceCode = hourly?.airportPrimary?.source_code || (row as any)?.station_source_code || '';
+  const hasRealStationNetwork = /^(mgm|jma_amedas|fmi|knmi|cowin_obs|ims|ncm|aeroweb|madis_hfmetar|singapore_mss)$/.test(stationSourceCode);
   const isWeatherStation = !runwaySensorCities.has(normalizedKey)
-    && !isHKO && !isShenzhen && !isTokyo && !isSingapore && !isParis;
+    && !isHKO && !isShenzhen && !isTokyo && !isSingapore && !isParis
+    && hasRealStationNetwork;
 
   const runwayHeaderLabel = isShenzhen ? '天文台实测 (10分钟)'
     : isHKO ? '参考站点 (1分钟)'
@@ -1311,8 +1411,7 @@ export function LiveTemperatureThresholdChart({
     : isWeatherStation ? '气象站实测'
     : '跑道实测 (1分钟)';
 
-  const metarHeaderLabel = isShenzhen ? '天文台实测 (10分钟)'
-    : isHKO ? '天文台实测 (10分钟)'
+  const metarHeaderLabel = (isShenzhen || isHKO) ? '天文台实测 (10分钟)'
     : 'METAR 结算 (30分钟)';
 
   const runwayHighLabel = isShenzhen ? '天文台实测'
@@ -1800,3 +1899,4 @@ export function __buildTemperatureChartDataForTest(
 export const __isTemperatureSeriesVisibleByDefaultForTest = isTemperatureSeriesVisibleByDefault;
 export const __getVisibleTemperatureSeriesForTest = getVisibleTemperatureSeries;
 export const __getObservationDisplayMetricsForTest = getObservationDisplayMetrics;
+export const __shouldPollLiveChartForTest = shouldPollLiveChart;

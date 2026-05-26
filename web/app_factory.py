@@ -16,6 +16,7 @@ from web.routers.auth import router as auth_router
 from web.routers.ops import router as ops_router
 from web.routers.payments import router as payments_router
 from web.routers.scan import router as scan_router
+from web.routers.sse_router import router as sse_router
 from web.routers.system import router as system_router
 from web.routes import router as legacy_router
 from web.scan_terminal_service import start_scan_terminal_prewarm
@@ -37,6 +38,7 @@ def create_app() -> FastAPI:
         core_app.include_router(auth_router)
         core_app.include_router(analytics_router)
         core_app.include_router(scan_router)
+        core_app.include_router(sse_router)
         core_app.include_router(payments_router)
         core_app.include_router(ops_router)
         core_app.include_router(legacy_router)

@@ -1,15 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  scanTerminalQueryPolicy,
   scanTerminalClient,
-  shouldRunAutoTerminalRefresh,
   shouldSkipManualTerminalRefresh,
 } from "@/components/dashboard/scan-terminal/scan-terminal-client";
 import { useRemoteDataQuery } from "@/components/dashboard/scan-terminal/use-remote-data-query";
 import { REGIONS } from "@/components/dashboard/scan-terminal/continent-grouping";
 import { DASHBOARD_REFRESH_POLICY_MS } from "@/lib/refresh-policy";
+import {
+  getLatestPatchesSnapshot,
+  useSsePatchVersion,
+  type CityPatch,
+} from "@/hooks/use-sse-patches";
 import type { ScanTerminalResponse } from "@/lib/dashboard-types";
 
 const SCAN_CACHE_PREFIX = "polyweather_scan_v2";
@@ -35,6 +38,44 @@ function writeScanCache(data: ScanTerminalResponse, tradingRegion: string) {
   try { localStorage.setItem(scanCacheKey(tradingRegion), JSON.stringify({ ts: Date.now(), data })); } catch { /* ignore */ }
 }
 
+function normalizeCityKey(city: string | null | undefined) {
+  return String(city || "").trim().toLowerCase();
+}
+
+function applyPatchToScanRow(row: any, patch: CityPatch) {
+  const temp = typeof patch.changes.temp === "number" && Number.isFinite(patch.changes.temp)
+    ? patch.changes.temp
+    : null;
+  if (temp === null) return row;
+  return {
+    ...row,
+    current_temp: temp,
+    current_max_so_far: Math.max(
+      temp,
+      typeof row.current_max_so_far === "number" && Number.isFinite(row.current_max_so_far)
+        ? row.current_max_so_far
+        : temp,
+    ),
+    local_time: typeof patch.changes.obs_time === "string" ? patch.changes.obs_time : row.local_time,
+    sse_revision: patch.revision,
+  };
+}
+
+function applyTerminalPatches(
+  data: ScanTerminalResponse | null | undefined,
+  patches: Map<string, CityPatch>,
+): ScanTerminalResponse | null | undefined {
+  if (!data?.rows?.length || !patches.size) return data;
+  let changed = false;
+  const rows = data.rows.map((row: any) => {
+    const patch = patches.get(normalizeCityKey(row.city));
+    if (!patch) return row;
+    changed = true;
+    return applyPatchToScanRow(row, patch);
+  });
+  return changed ? { ...data, rows } : data;
+}
+
 export function useScanTerminalQuery({
   isPro,
   proAccessLoading,
@@ -49,7 +90,6 @@ export function useScanTerminalQuery({
   const {
     data: terminalData,
     error: scanError,
-    isLoading,
     loading: scanLoading,
     remote: scanRemote,
     reset,
@@ -57,6 +97,7 @@ export function useScanTerminalQuery({
   } = useRemoteDataQuery<ScanTerminalResponse>();
 
   const lastForcedScanRefreshAtRef = useRef(0);
+  const patchVersion = useSsePatchVersion();
   const [cachedRows, setCachedRows] = useState<ScanTerminalResponse | null>(() => {
     if (typeof window !== "undefined") return readScanCache(tradingRegion || "");
     return null;
@@ -101,7 +142,10 @@ export function useScanTerminalQuery({
     void fetchScanTerminal({ forceRefresh: false, showLoading: true });
   }, [fetchScanTerminal, isPro, proAccessLoading, reset, timezoneOffsetSeconds, tradingRegion]);
 
-  const effectiveData = terminalData || cachedRows;
+  const effectiveData = useMemo(
+    () => applyTerminalPatches(terminalData || cachedRows, getLatestPatchesSnapshot()),
+    [terminalData, cachedRows, patchVersion],
+  );
 
   const refreshScanTerminalManually = useCallback(() => {
     if (
@@ -114,29 +158,6 @@ export function useScanTerminalQuery({
     }
     void fetchScanTerminal({ forceRefresh: true, showLoading: true });
   }, [fetchScanTerminal, terminalData]);
-
-  useEffect(() => {
-    if (proAccessLoading || !isPro) return;
-    if (
-      typeof window === "undefined" ||
-      typeof window.setInterval !== "function" ||
-      typeof window.clearInterval !== "function"
-    ) {
-      return;
-    }
-    const intervalId = window.setInterval(() => {
-      if (
-        !shouldRunAutoTerminalRefresh({
-          documentHidden: document.hidden,
-          isLoading: isLoading(),
-        })
-      ) {
-        return;
-      }
-      void fetchScanTerminal({ forceRefresh: false, showLoading: false });
-    }, scanTerminalQueryPolicy.autoRefreshMs);
-    return () => window.clearInterval(intervalId);
-  }, [fetchScanTerminal, isLoading, isPro, proAccessLoading]);
 
   // Preload adjacent regions in idle time for instant tab switches
   useEffect(() => {

@@ -1,6 +1,7 @@
 import os
 import httpx
 import re
+import requests
 import threading
 import time
 from typing import Any, Optional, Dict, List
@@ -268,6 +269,14 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         )
         self._disk_cache_lock = threading.Lock()
         self._disk_cache_last_mtime: float = 0.0
+        self.collector_patch_endpoint = str(
+            os.getenv(
+                "POLYWEATHER_COLLECTOR_PATCH_ENDPOINT",
+                "http://127.0.0.1:8000/api/internal/collector-patch",
+            )
+        ).strip()
+        self._last_emitted_temperature_patch: Dict[str, tuple[float, str]] = {}
+        self._temperature_patch_lock = threading.Lock()
         self._load_open_meteo_disk_cache()
         logger.info(
             f"Open-Meteo 磁盘缓存路径: {self._disk_cache_path} (max_age={self._disk_cache_max_age_sec}s)"
@@ -338,6 +347,62 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 with lock:
                     for key in stale:
                         cache.pop(key, None)
+
+    def _emit_temperature_patch_if_changed(
+        self,
+        city: str,
+        temp: Any,
+        obs_time: Any = None,
+        *,
+        source: str = "",
+        extra: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        if temp is None or not self.collector_patch_endpoint:
+            return
+        try:
+            temp_value = round(float(temp), 2)
+        except (TypeError, ValueError):
+            return
+
+        obs_time_value = str(obs_time or datetime.now(timezone.utc).isoformat())
+        source_value = str(source or "weather").strip().lower() or "weather"
+        city_value = str(city or "").strip().lower()
+        if not city_value:
+            return
+
+        dedupe_key = f"{city_value}:{source_value}"
+        signature = (temp_value, obs_time_value)
+        with self._temperature_patch_lock:
+            if self._last_emitted_temperature_patch.get(dedupe_key) == signature:
+                return
+            self._last_emitted_temperature_patch[dedupe_key] = signature
+
+        changes: Dict[str, Any] = {
+            "temp": temp_value,
+            "obs_time": obs_time_value,
+            "source": source_value,
+        }
+        if extra:
+            changes.update(extra)
+
+        payload = {"city": city_value, "changes": changes}
+
+        def post_patch() -> None:
+            try:
+                requests.post(
+                    self.collector_patch_endpoint,
+                    json=payload,
+                    timeout=2,
+                )
+            except Exception as exc:
+                logger.debug(
+                    "collector patch POST failed city={} source={}: {}",
+                    city_value,
+                    source_value,
+                    exc,
+                )
+
+        threading.Thread(target=post_patch, daemon=True).start()
         # MADIS cache is a single list, not a keyed dict — expire on age
         with self._madis_cache_lock:
             if self._madis_cache is not None and now - self._madis_cache_ts > self.madis_cache_ttl_sec * 2:
@@ -878,6 +943,13 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         settlement_current = self.fetch_settlement_current(city_lower)
         if settlement_current:
             results["settlement_current"] = settlement_current
+            current = settlement_current.get("current") or {}
+            self._emit_temperature_patch_if_changed(
+                city_lower,
+                current.get("temp"),
+                settlement_current.get("observation_time") or current.get("obs_time"),
+                source=str(settlement_current.get("source") or "settlement"),
+            )
 
         city_meta = self.CITY_REGISTRY.get(str(city_lower or "").strip().lower()) or {}
         settlement_source = str(city_meta.get("settlement_source") or "").strip().lower()
@@ -905,9 +977,15 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         if not mgm_data:
             return
         results["mgm"] = mgm_data
+        mgm_current = mgm_data.get("current") or {}
+        self._emit_temperature_patch_if_changed(
+            city_lower,
+            mgm_current.get("temp"),
+            mgm_data.get("obs_time"),
+            source="mgm",
+        )
         # Log airport obs for high-freq monitoring (Ankara 17128)
         try:
-            mgm_current = mgm_data.get("current") or {}
             DBManager().append_airport_obs(
                 icao=str(istno),
                 city=city_lower,
@@ -966,8 +1044,14 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         ims_data = self.fetch_from_ims(self.IMS_LOD_AIRPORT_STATION)
         if ims_data:
             results["ims"] = ims_data
+            ims_current = ims_data.get("current") or {}
+            self._emit_temperature_patch_if_changed(
+                city_lower,
+                ims_current.get("temp"),
+                ims_data.get("obs_time"),
+                source="ims",
+            )
             try:
-                ims_current = ims_data.get("current") or {}
                 DBManager().append_airport_obs(
                     icao="LLBG",
                     city=city_lower,
@@ -984,8 +1068,14 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         ncm_data = self.fetch_from_ncm()
         if ncm_data:
             results["ncm"] = ncm_data
+            ncm_current = ncm_data.get("current") or {}
+            self._emit_temperature_patch_if_changed(
+                city_lower,
+                ncm_current.get("temp"),
+                ncm_data.get("obs_time"),
+                source="ncm",
+            )
             try:
-                ncm_current = ncm_data.get("current") or {}
                 DBManager().append_airport_obs(
                     icao="OEJN",
                     city=city_lower,
@@ -1002,8 +1092,14 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         aw_data = self.fetch_from_aeroweb()
         if aw_data:
             results["aeroweb"] = aw_data
+            aw_current = aw_data.get("current") or {}
+            self._emit_temperature_patch_if_changed(
+                city_lower,
+                aw_current.get("temp"),
+                aw_data.get("obs_time"),
+                source="aeroweb",
+            )
             try:
-                aw_current = aw_data.get("current") or {}
                 DBManager().append_airport_obs(
                     icao="LFPB",
                     city=city_lower,
@@ -1031,6 +1127,12 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             return
         results["jma_official_nearby"] = official_rows
         results["jma_current"] = official_rows[0]  # primary station for airport_primary
+        self._emit_temperature_patch_if_changed(
+            city_lower,
+            official_rows[0].get("temp"),
+            official_rows[0].get("obs_time"),
+            source="jma_amedas",
+        )
         if "mgm_nearby" not in results:
             results["mgm_nearby"] = official_rows
         results["nearby_source"] = "jma"
@@ -1058,6 +1160,12 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             return
         results["knmi_official_nearby"] = rows
         results["knmi_current"] = rows[0]  # primary station for airport_primary
+        self._emit_temperature_patch_if_changed(
+            city_lower,
+            rows[0].get("temp"),
+            rows[0].get("obs_time"),
+            source="knmi",
+        )
         if "mgm_nearby" not in results:
             results["mgm_nearby"] = rows
         results["nearby_source"] = "knmi"
@@ -1084,6 +1192,12 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             return
         results["fmi_official_nearby"] = rows
         results["fmi_current"] = rows[0]  # primary station for airport_primary
+        self._emit_temperature_patch_if_changed(
+            city_lower,
+            rows[0].get("temp"),
+            rows[0].get("obs_time"),
+            source="fmi",
+        )
         if "mgm_nearby" not in results:
             results["mgm_nearby"] = rows
         results["nearby_source"] = "fmi"
@@ -1110,6 +1224,12 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         if not rows:
             return
         results["hko_obs_nearby"] = rows
+        self._emit_temperature_patch_if_changed(
+            city_lower,
+            rows[0].get("temp"),
+            rows[0].get("obs_time"),
+            source="hko_obs",
+        )
         if "mgm_nearby" not in results:
             results["mgm_nearby"] = rows
         results["nearby_source"] = "hko_obs"
@@ -1136,6 +1256,12 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             return
         results["cowin_obs_nearby"] = rows
         results["cowin_current"] = rows[0]
+        self._emit_temperature_patch_if_changed(
+            city_lower,
+            rows[0].get("temp"),
+            rows[0].get("obs_time"),
+            source="cowin_obs",
+        )
         results["mgm_nearby"] = rows
         results["nearby_source"] = "cowin_obs"
         try:
@@ -1192,6 +1318,12 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         }
         results["mgm_nearby"] = [row]
         results["nearby_source"] = "cwa"
+        self._emit_temperature_patch_if_changed(
+            city_lower,
+            temp,
+            sc.get("observation_time"),
+            source="cwa",
+        )
 
     def _attach_korean_amos_data(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
@@ -1209,6 +1341,13 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                             city_lower, amos_data.get("temp_c"), amos_data.get("temp_source"),
                             len(amos_data.get("runway_obs", {}).get("runway_pairs", []) or []))
                 results["amos"] = amos_data
+                self._emit_temperature_patch_if_changed(
+                    city_lower,
+                    amos_data.get("temp_c"),
+                    amos_data.get("observation_time"),
+                    source="amos",
+                    extra={"amos": amos_data},
+                )
                 try:
                     DBManager().append_airport_obs(
                         icao=amos_data.get("icao") or "",
@@ -1255,6 +1394,13 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             )
             # Reuse the existing `amos` detail shape consumed by dashboard runway panels.
             results["amos"] = amsc_data
+            self._emit_temperature_patch_if_changed(
+                city_lower,
+                amsc_data.get("temp_c"),
+                amsc_data.get("observation_time"),
+                source="amsc_awos",
+                extra={"amos": amsc_data},
+            )
             try:
                 icao = amsc_data.get("icao") or ""
                 obs_time = amsc_data.get("observation_time") or datetime.now().isoformat()
@@ -1332,6 +1478,12 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             if obs["icao"] == icao:
                 # Inject into results so it flows through to airport_primary
                 results["madis_hfmetar_current"] = obs
+                self._emit_temperature_patch_if_changed(
+                    city_lower,
+                    obs.get("temp_c"),
+                    obs.get("obs_time"),
+                    source="madis_hfmetar",
+                )
                 try:
                     DBManager().append_airport_obs(
                         icao=icao,
@@ -1359,6 +1511,12 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             return
 
         results["singapore_mss_current"] = obs
+        self._emit_temperature_patch_if_changed(
+            city_lower,
+            obs.get("temp_c"),
+            obs.get("obs_time"),
+            source="singapore_mss",
+        )
         try:
             DBManager().append_airport_obs(
                 icao="WSSS",
