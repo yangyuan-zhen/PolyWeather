@@ -331,6 +331,27 @@ export function runTests() {
     "Istanbul/MGM high label should be weather station",
   );
 
+  const panamaLabels = __getLiveObservationLabelsForTest(
+    {
+      city: "panama city",
+      airport: "MPMG",
+      metar_context: {
+        source: "metar",
+        station: "MPMG",
+        station_label: "MPMG METAR",
+      },
+    } as any,
+    null,
+  );
+  assert(
+    panamaLabels.runwayHeaderLabel === "机场气象站",
+    "Panama City/MPMG should not be labeled as runway observations when no runway sensor feed exists",
+  );
+  assert(
+    panamaLabels.runwayHighLabel === "机场气象站",
+    "Panama City high label should use airport weather station wording, not runway wording",
+  );
+
   const newYorkWithMadis = __buildTemperatureChartDataForTest(
     {
       city: "new york",
@@ -503,6 +524,40 @@ export function runTests() {
   assert(
     Math.min(...shanghaiDebValues) > 20,
     "DEB curve should not be pulled into an impossible negative range by stale row deb_prediction=0",
+  );
+
+  const qingdaoFullDay = __buildTemperatureChartDataForTest(
+    {
+      city: "qingdao",
+      local_date: "2026-05-26",
+      local_time: "23:30",
+      tz_offset_seconds: 8 * 60 * 60,
+      deb_prediction: 22,
+      runway_plate_history: {
+        "16/34": [
+          { time: "2026-05-25T23:30:00+08:00", temp: 23.8 },
+          { time: "2026-05-26T00:05:00+08:00", temp: 23.5 },
+          { time: "2026-05-26T12:00:00+08:00", temp: 21.6 },
+        ],
+      },
+    } as any,
+    {
+      localTime: "23:30",
+      times: ["00:00", "06:00", "12:00", "18:00", "23:00"],
+      temps: [24, 19, 21.5, 21.5, 20],
+      debPrediction: 22,
+    } as any,
+    "1D",
+  );
+  const qingdaoDayStart = Date.UTC(2026, 4, 26, 0, 0, 0);
+  const qingdaoDayEnd = Date.UTC(2026, 4, 27, 0, 0, 0);
+  assert(
+    qingdaoFullDay.data.every((point) => point.ts >= qingdaoDayStart && point.ts < qingdaoDayEnd),
+    "Full-day chart should clamp observation history to the selected local_date so DEB does not appear broken after cross-day runway history",
+  );
+  assert(
+    qingdaoFullDay.data[0]?.ts === qingdaoDayStart,
+    "Full-day chart should start at local 00:00 when the DEB hourly path has a midnight point",
   );
 
   // ── Runway range band and runway_max test ──

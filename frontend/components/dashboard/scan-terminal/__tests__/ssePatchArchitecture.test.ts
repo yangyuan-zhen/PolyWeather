@@ -104,6 +104,17 @@ export function runTests() {
   assert(chart.includes("nearestSeriesValue"), "temperature chart tooltip must fall back to nearest non-null value for connected sparse lines");
   assert(chart.includes("isHourlyLoading"), "temperature chart must keep a per-panel hourly loading state");
   assert(chart.includes("加载图表") && chart.includes("absolute inset-2"), "temperature chart must render an in-chart loading overlay");
+  assert(chart.includes("hasLoadedHourlyDetailRef"), "temperature chart must distinguish first load from background refreshes");
+  const fallbackRefreshBlock = chart.match(/const refreshFullDetail = \(\) => \{[\s\S]*?\n    \};/)?.[0] || "";
+  assert(
+    !fallbackRefreshBlock.includes("setIsHourlyLoading(true)"),
+    "no-patch fallback refresh should update the chart in the background without showing the loading overlay",
+  );
+  const resyncBlock = chart.match(/useEffect\(\(\) => \{\s*if \(!resyncVersion \|\| !city\) return;[\s\S]*?\}, \[resyncVersion, city, targetResolution\]\);/)?.[0] || "";
+  assert(
+    !resyncBlock.includes("setIsHourlyLoading(true)"),
+    "SSE replay resync should refresh full detail in the background without showing the loading overlay",
+  );
   assert(chart.includes("viewMode"), "temperature chart must expose a view mode for DEB-peak auto view versus full-day view");
   assert(chart.includes("getDebPeakWindowRange"), "temperature chart must derive its default view from the DEB peak window");
   assert(chart.includes("nextTargetResolution"), "temperature chart must derive target resolution without setting state on every render");

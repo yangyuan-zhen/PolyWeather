@@ -12,6 +12,7 @@ import type { CityPatch } from "@/hooks/use-sse-patches";
 const ROLLING_WINDOW_BEFORE_MS = 12 * 60 * 60 * 1000;
 const ROLLING_WINDOW_AFTER_LIVE_MS = 2 * 60 * 60 * 1000;
 const ROLLING_WINDOW_AFTER_FORECAST_MS = 8 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const SETTLEMENT_RUNWAY_PAIRS: Record<string, Array<[string, string]>> = {
   shanghai: [["17L", "35R"]],
@@ -196,6 +197,7 @@ type RunwayHistorySeries = {
 };
 
 type TemperatureBandPoint = { ts: number; high: number; low: number; avg: number };
+type LocalDayBounds = { start: number; end: number };
 
 const MAX_OBS_POINTS = 1440;
 const HOURLY_CACHE_TTL_MS = DASHBOARD_REFRESH_POLICY_MS.metar;
@@ -311,6 +313,45 @@ function getCityLocalUtcTimestamp(
   return null;
 }
 
+function getLocalDayBounds(localDateStr: string): LocalDayBounds | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(localDateStr);
+  if (!match) return null;
+  const start = Date.UTC(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+    0,
+    0,
+    0,
+  );
+  return Number.isFinite(start) ? { start, end: start + DAY_MS } : null;
+}
+
+function isWithinLocalDay(ts: number | null, bounds: LocalDayBounds | null) {
+  return ts !== null && Number.isFinite(ts) && (!bounds || (ts >= bounds.start && ts < bounds.end));
+}
+
+function filterTimelinePointsToLocalDay<T extends { ts: number }>(
+  points: T[],
+  bounds: LocalDayBounds | null,
+) {
+  if (!bounds) return points;
+  return points.filter((point) => isWithinLocalDay(point.ts, bounds));
+}
+
+function filterRunwayHistoryToLocalDay(
+  series: RunwayHistorySeries[],
+  bounds: LocalDayBounds | null,
+) {
+  if (!bounds) return series;
+  return series
+    .map((item) => ({
+      ...item,
+      points: filterTimelinePointsToLocalDay(item.points, bounds),
+    }))
+    .filter((item) => item.points.length > 1);
+}
+
 function formatTimestamp(ts: number): string {
   const d = new Date(ts);
   return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}:${String(d.getUTCSeconds()).padStart(2, "0")}`;
@@ -323,16 +364,21 @@ function normalizeRawObsPoint(point: RawObsPoint): ObsPoint | null {
   return point;
 }
 
-function normObs(points: RawObsPoint[] | null | undefined, tzOffsetSeconds: number, limit = MAX_OBS_POINTS) {
+function normObs(
+  points: RawObsPoint[] | null | undefined,
+  tzOffsetSeconds: number,
+  limit = MAX_OBS_POINTS,
+  referenceLocalDate?: string | null,
+) {
   return (points || [])
     .map(normalizeRawObsPoint)
     .filter((p): p is ObsPoint => p !== null)
     .filter((p) => validNumber(p.temp) !== null && p.time)
-    .map((p) => ({
-      ts: getCityLocalUtcTimestamp(p.time, tzOffsetSeconds)!,
-      value: Number(p.temp),
-    }))
-    .filter((p) => p.ts !== null)
+    .map((p) => {
+      const ts = getCityLocalUtcTimestamp(p.time, tzOffsetSeconds, referenceLocalDate);
+      return ts === null ? null : { ts, value: Number(p.temp) };
+    })
+    .filter((p): p is { ts: number; value: number } => p !== null)
     .slice(-limit);
 }
 
@@ -377,9 +423,10 @@ function getObservationDisplayMetrics(
   settlementPlate?: { maxTemp: number | null } | null,
 ) {
   const tzOffset = row?.tz_offset_seconds ?? 0;
-  const settlementObs = normObs(hourly?.settlementTodayObs || row?.settlement_today_obs || row?.metar_context?.settlement_today_obs, tzOffset);
-  const metarObs = normObs(hourly?.metarTodayObs || row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs, tzOffset);
-  const madisObs = normObs(hourly?.airportPrimaryTodayObs, tzOffset);
+  const localDateStr = row?.local_date || null;
+  const settlementObs = normObs(hourly?.settlementTodayObs || row?.settlement_today_obs || row?.metar_context?.settlement_today_obs, tzOffset, MAX_OBS_POINTS, localDateStr);
+  const metarObs = normObs(hourly?.metarTodayObs || row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs, tzOffset, MAX_OBS_POINTS, localDateStr);
+  const madisObs = normObs(hourly?.airportPrimaryTodayObs, tzOffset, MAX_OBS_POINTS, localDateStr);
   const latestSettlement = latestObservationValue(settlementObs);
   const latestMetar = latestObservationValue(metarObs);
   const latestMadis = latestObservationValue(madisObs);
@@ -627,6 +674,7 @@ function getLiveObservationLabels(
   const hasRealStationNetwork =
     weatherStationCities.has(normalizedKey) ||
     /\b(mgm|turkey_mgm|jma_amedas|fmi|knmi|cowin_obs|ims|ncm|aeroweb|madis_hfmetar|singapore_mss)\b/.test(sourceTokens);
+  const isRunwaySensorCity = runwaySensorCities.has(normalizedKey);
   const isWeatherStation = !runwaySensorCities.has(normalizedKey)
     && !isHKO && !isShenzhen && !isTokyo && !isSingapore && !isParis && !isTaipei
     && hasRealStationNetwork;
@@ -638,7 +686,8 @@ function getLiveObservationLabels(
     : isParis ? "官方机场观测 (15分钟)"
     : isTaipei ? "CWA (10分钟)"
     : isWeatherStation ? "气象站实测"
-    : "跑道实测 (1分钟)";
+    : isRunwaySensorCity ? "跑道实测 (1分钟)"
+    : "机场气象站";
 
   const metarHeaderLabel = (isShenzhen || isHKO) ? "天文台实测 (10分钟)"
     : "METAR 结算 (30分钟)";
@@ -650,7 +699,8 @@ function getLiveObservationLabels(
     : isParis ? "官方机场观测"
     : isTaipei ? "CWA"
     : isWeatherStation ? "气象站"
-    : "跑道实测";
+    : isRunwaySensorCity ? "跑道实测"
+    : "机场气象站";
 
   const metarHighLabel = isShenzhen ? "天文台"
     : isHKO ? "天文台"
@@ -1075,10 +1125,12 @@ function valuesForHourlyTimes(
   values: Array<number | null | undefined>,
   tzOffsetSeconds: number,
   localDateStr: string,
+  bounds: LocalDayBounds | null = null,
 ) {
   const result: Array<number | null> = new Array(size).fill(null);
   (times || []).forEach((time, index) => {
     const ts = getCityLocalUtcTimestamp(time, tzOffsetSeconds, localDateStr);
+    if (!isWithinLocalDay(ts, bounds)) return;
     if (ts === null) return;
     const value = validNumber(values[index]);
     if (value === null) return;
@@ -1094,12 +1146,13 @@ function addHourlyTimesToTimeline(
   values: Array<number | null | undefined> | undefined,
   tzOffsetSeconds: number,
   localDateStr: string,
+  bounds: LocalDayBounds | null = null,
 ) {
   if (!times?.length || !values?.length) return;
   times.forEach((time, index) => {
     if (validNumber(values[index]) === null) return;
     const ts = getCityLocalUtcTimestamp(time, tzOffsetSeconds, localDateStr);
-    if (ts !== null) timeline.add(ts);
+    if (ts !== null && isWithinLocalDay(ts, bounds)) timeline.add(ts);
   });
 }
 
@@ -1110,11 +1163,21 @@ function buildFullDayChartData(
 ): { data: Array<Record<string, any>>; series: EvidenceSeries[] } {
   const tzOffset = row?.tz_offset_seconds ?? 0;
   const localDateStr = row?.local_date || new Date().toISOString().slice(0, 10);
+  const localDayBounds = getLocalDayBounds(localDateStr);
 
-  const settlementObs = normObs(hourly?.settlementTodayObs || row?.settlement_today_obs || row?.metar_context?.settlement_today_obs, tzOffset);
-  const metarObs = normObs(hourly?.metarTodayObs || row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs, tzOffset);
-  const madisObs = normObs(hourly?.airportPrimaryTodayObs, tzOffset);
-  const runwayHistorySeries = buildRunwayHistorySeries(row, hourly, tzOffset, localDateStr);
+  const settlementObs = filterTimelinePointsToLocalDay(
+    normObs(hourly?.settlementTodayObs || row?.settlement_today_obs || row?.metar_context?.settlement_today_obs, tzOffset, MAX_OBS_POINTS, localDateStr),
+    localDayBounds,
+  );
+  const metarObs = filterTimelinePointsToLocalDay(
+    normObs(hourly?.metarTodayObs || row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs, tzOffset, MAX_OBS_POINTS, localDateStr),
+    localDayBounds,
+  );
+  const madisObs = filterTimelinePointsToLocalDay(normObs(hourly?.airportPrimaryTodayObs, tzOffset, MAX_OBS_POINTS, localDateStr), localDayBounds);
+  const runwayHistorySeries = filterRunwayHistoryToLocalDay(
+    buildRunwayHistorySeries(row, hourly, tzOffset, localDateStr),
+    localDayBounds,
+  );
 
   const settlementCityKey = normalizeCityKey(row?.city);
   const isShenzhen = settlementCityKey === 'shenzhen';
@@ -1143,7 +1206,7 @@ function buildFullDayChartData(
     } catch {
       return null;
     }
-  }).filter((v): v is NonNullable<typeof v> => v !== null);
+  }).filter((v): v is NonNullable<typeof v> => v !== null && isWithinLocalDay(v.ts, localDayBounds));
 
   const isHKOCity = settlementCityKey === 'hongkong' || settlementCityKey === 'laufaushan'
     || settlementCityKey === 'shenzhen' || (row?.city || '').toLowerCase().includes('hong kong')
@@ -1169,11 +1232,11 @@ function buildFullDayChartData(
       hourly.localTime || row?.local_time,
       hourly.forecastTodayHigh,
     );
-    addHourlyTimesToTimeline(timelineSet, hourly.times, debPath.debTemps, tzOffset, localDateStr);
+    addHourlyTimesToTimeline(timelineSet, hourly.times, debPath.debTemps, tzOffset, localDateStr, localDayBounds);
   }
   if (hourly?.times?.length && hourly?.modelCurves) {
     Object.values(hourly.modelCurves).forEach((modelTemps) => {
-      addHourlyTimesToTimeline(timelineSet, hourly.times, modelTemps, tzOffset, localDateStr);
+      addHourlyTimesToTimeline(timelineSet, hourly.times, modelTemps, tzOffset, localDateStr, localDayBounds);
     });
   }
 
@@ -1263,7 +1326,7 @@ function buildFullDayChartData(
 
   // ── DEB forecast curve ──
   if (hourly?.times?.length && debPath?.debTemps.length) {
-    const debVals = valuesForHourlyTimes(n, indexByTs, hourly.times, debPath.debTemps, tzOffset, localDateStr);
+    const debVals = valuesForHourlyTimes(n, indexByTs, hourly.times, debPath.debTemps, tzOffset, localDateStr, localDayBounds);
     if (debVals.some((v) => v !== null)) {
       series.push({
         key: "hourly_forecast",
@@ -1282,7 +1345,7 @@ function buildFullDayChartData(
       Object.keys(hourly.modelCurves).forEach((model, idx) => {
         const modelTemps = hourly.modelCurves![model];
         if (!modelTemps?.length) return;
-        const vals = valuesForHourlyTimes(n, indexByTs, hourly.times, modelTemps, tzOffset, localDateStr);
+        const vals = valuesForHourlyTimes(n, indexByTs, hourly.times, modelTemps, tzOffset, localDateStr, localDayBounds);
         if (vals.some((v) => v !== null)) {
           series.push({
             key: `model_curve_${model}`,

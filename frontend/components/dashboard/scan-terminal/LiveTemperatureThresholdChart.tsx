@@ -151,6 +151,7 @@ export function LiveTemperatureThresholdChart({
   const [userToggledKeys, setUserToggledKeys] = useState<Record<string, boolean>>({});
   const [liveTemp, setLiveTemp] = useState<number | null>(null);
   const [isHourlyLoading, setIsHourlyLoading] = useState(false);
+  const hasLoadedHourlyDetailRef = useRef(false);
   const lastPatchAtRef = useRef<number>(Date.now());
   const lastAppliedPatchRevisionRef = useRef<number>(0);
 
@@ -165,6 +166,9 @@ export function LiveTemperatureThresholdChart({
     setZoomRange(null);
     setViewMode("auto");
     setShowRunwayDetails(true);
+    setHourly(seedHourlyForecastFromRow(row));
+    setIsHourlyLoading(Boolean(city));
+    hasLoadedHourlyDetailRef.current = false;
     lastPatchAtRef.current = Date.now();
     lastAppliedPatchRevisionRef.current = 0;
   }, [city]);
@@ -188,13 +192,16 @@ export function LiveTemperatureThresholdChart({
     }
 
     if (cached && Date.now() - cached.ts < HOURLY_CACHE_TTL_MS) {
+      hasLoadedHourlyDetailRef.current = true;
       setHourly(cached.data);
       setIsHourlyLoading(false);
       return;
     }
 
-    setHourly(seedHourlyForecastFromRow(row));
-    setIsHourlyLoading(true);
+    if (!hasLoadedHourlyDetailRef.current) {
+      setHourly(seedHourlyForecastFromRow(row));
+    }
+    setIsHourlyLoading(!hasLoadedHourlyDetailRef.current);
     let cancelled = false;
 
     // Prioritize active slots, stagger/delay background slots to optimize load performance
@@ -204,6 +211,7 @@ export function LiveTemperatureThresholdChart({
       fetchHourlyForecastForCity(city, { resolution: targetResolution })
         .then((data) => {
           if (cancelled || !data) return;
+          hasLoadedHourlyDetailRef.current = true;
           setHourly(data);
         })
         .catch(() => {})
@@ -230,10 +238,10 @@ export function LiveTemperatureThresholdChart({
   useEffect(() => {
     if (!resyncVersion || !city) return;
     let cancelled = false;
-    setIsHourlyLoading(true);
     fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })
       .then((data) => {
         if (cancelled || !data) return;
+        hasLoadedHourlyDetailRef.current = true;
         setHourly(data);
       })
       .catch(() => {})
@@ -252,11 +260,11 @@ export function LiveTemperatureThresholdChart({
 
     const refreshFullDetail = () => {
       lastPatchAtRef.current = Date.now();
-      setIsHourlyLoading(true);
 
       fetchHourlyForecastForCity(city, { ignoreCache: true })
         .then((data) => {
           if (cancelled || !data) return;
+          hasLoadedHourlyDetailRef.current = true;
           setHourly(data);
         })
         .catch(() => {})
@@ -325,9 +333,9 @@ export function LiveTemperatureThresholdChart({
 
   const tzOffset = row?.tz_offset_seconds ?? 0;
   const settlementObs = useMemo(() => {
-    let obs = normObs(hourly?.settlementTodayObs || row?.settlement_today_obs || row?.metar_context?.settlement_today_obs, tzOffset);
+    let obs = normObs(hourly?.settlementTodayObs || row?.settlement_today_obs || row?.metar_context?.settlement_today_obs, tzOffset, undefined, row?.local_date || null);
     if (!obs.length && !hourly?.runwayPlateHistory) {
-      const mObs = normObs(hourly?.metarTodayObs || row?.metar_today_obs || row?.metar_context?.today_obs, tzOffset);
+      const mObs = normObs(hourly?.metarTodayObs || row?.metar_today_obs || row?.metar_context?.today_obs, tzOffset, undefined, row?.local_date || null);
       if (mObs.length > 0) {
         obs = mObs;
       }
