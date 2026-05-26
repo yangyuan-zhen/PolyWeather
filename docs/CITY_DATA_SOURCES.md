@@ -1,6 +1,6 @@
 # 城市实时数据源总览
 
-> 最后更新: 2026-05-25 | 51 城市
+> 最后更新: 2026-05-26 | 51 城市
 
 ## 数据源分级
 
@@ -10,8 +10,8 @@
 |------|------|------|------|
 | seoul | AMOS 跑道传感器 (RKSI) | ~1 min | global.amo.go.kr, 站号 113 |
 | busan | AMOS 跑道传感器 (RKPK) | ~1 min | global.amo.go.kr, 站号 153 |
-| hong kong | HKO 官方 CSV | ~1 min | data.weather.gov.hk, 4 路 CSV |
-| lau fau shan | HKO 官方 CSV | ~1 min | 同上，站号 LFS |
+| hong kong | CoWIN 6087 | ~1 min | cowin.hku.hk, 保良局陳守仁小學，前端图表默认展示 |
+| hong kong | HKO 官方 CSV | ~10 min | data.weather.gov.hk（文件名虽含 1min，实际 10min 一报） |
 | singapore | MSS 官方 API | ~1 min | api.data.gov.sg, 站号 S24 |
 | beijing | AMSC AWOS (ZBAA) | ~1 min | 中国 |
 | shanghai | AMSC AWOS (ZSPD) | ~1 min | 中国 |
@@ -46,6 +46,7 @@
 | istanbul | MGM (17058) | 5-15 min | 土耳其 |
 | helsinki | FMI 开放数据 | 10 min | 芬兰 |
 | amsterdam | KNMI 数据平台 | 10 min | 荷兰 |
+| shenzhen | HKO 官方 CSV (LFS) | ~10 min | 香港天文台流浮山自动站 |
 | taipei | CWA 开放数据 (466920) | ~10 min | 台湾 |
 | tel aviv | IMS Lod (225) | 实时 | 以色列 |
 | paris | AEROWEB 实况 / AROME HD | 实时/15min | 法国 (AROME是15分钟临近预报) |
@@ -57,7 +58,7 @@
 | london | EGLC | Met Office 仅 1 小时更新 |
 | jeddah | OEJN | NCM 数据源目前不可用 |
 | moscow | UUWW | 俄罗斯 METAR 集群 + NOAA WRH 结算 |
-| shenzhen | ZGSZ | 唯一无 AMSC AWOS 的中国城市 |
+| shenzhen | ZGSZ | 已接入 HKO 流浮山 10 分钟数据，见 Tier 3 |
 | munich | EDDM | DWD 延迟约 1 小时 |
 | milan | LIMC | 无已知实时源 |
 | warsaw | EPWA | 含 IMGW 附近站 |
@@ -95,11 +96,12 @@ ankara, istanbul, helsinki, amsterdam, paris
 4. JMA AMeDAS current（东京）
 5. FMI current（赫尔辛基）
 6. KNMI current（阿姆斯特丹）
-7. AEROWEB current（巴黎）
-8. IMS current（特拉维夫）
-9. NCM current（吉达）
-10. Singapore MSS current（新加坡）
-11. 纯 METAR（默认兜底）
+7. CoWIN 6087（香港 1min 参考站）
+8. AEROWEB current（巴黎）
+9. IMS current（特拉维夫）
+10. NCM current（吉达）
+11. Singapore MSS current（新加坡）
+12. 纯 METAR（默认兜底）
 
 ## 对日内偏差修正的影响
 
