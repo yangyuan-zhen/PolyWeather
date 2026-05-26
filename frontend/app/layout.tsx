@@ -18,10 +18,47 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PolyWeather | Weather Intelligence",
+  title: {
+    default: "PolyWeather | Institutional Weather Signal Intelligence",
+    template: "%s | PolyWeather",
+  },
   description:
-    "PolyWeather paid professional terminal for weather-signal intelligence, city decision cards, and subscription-only analytics.",
+    "PolyWeather is a paid professional weather-signal intelligence terminal with METAR evidence, DEB forecast blending, and AI decision cards. Real-time observations for 51 global cities.",
   manifest: "/site.webmanifest",
+  metadataBase: new URL("https://polyweather.top"),
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    siteName: "PolyWeather",
+    title: "PolyWeather | Institutional Weather Signal Intelligence",
+    description:
+      "Paid professional weather-signal intelligence terminal. METAR evidence, DEB forecast blending, AI decision cards. 51 cities, real-time.",
+    url: "https://polyweather.top",
+    images: [
+      {
+        url: "/apple-touch-icon.png",
+        width: 180,
+        height: 180,
+        alt: "PolyWeather",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary",
+    title: "PolyWeather | Weather Signal Intelligence",
+    description:
+      "Paid professional weather-signal intelligence terminal. 51 cities, real-time observations.",
+    images: ["/apple-touch-icon.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    "max-video-preview": -1,
+    "max-image-preview": "large",
+    "max-snippet": -1,
+  },
   icons: {
     icon: [
       { url: "/favicon.ico", type: "image/x-icon" },

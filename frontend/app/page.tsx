@@ -33,8 +33,29 @@ export default async function HomePage({
     const qs = usp.toString();
     redirect(`/auth/callback${qs ? `?${qs}` : ""}`);
   }
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    name: "PolyWeather",
+    description:
+      "Paid professional weather-signal intelligence terminal with METAR evidence, DEB forecast blending, and AI decision cards.",
+    url: "https://polyweather.top",
+    applicationCategory: "BusinessApplication",
+    operatingSystem: "Web",
+    offers: {
+      "@type": "Offer",
+      price: "10.00",
+      priceCurrency: "USD",
+      description: "Monthly subscription",
+    },
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <PreloadTerminalData />
       <InstitutionalLandingPage />
     </>
