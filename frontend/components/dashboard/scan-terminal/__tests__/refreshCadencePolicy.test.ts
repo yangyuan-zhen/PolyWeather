@@ -34,9 +34,12 @@ export function runTests() {
   );
   assert(
     chartSource.includes("DASHBOARD_REFRESH_POLICY_MS.metar") &&
-      !chartSource.includes("setInterval(") &&
       !chartSource.includes("window.setInterval"),
     "selected city detail chart cache should align with 5-minute scan/metar cadence",
+  );
+  assert(
+    chartSource.includes("setInterval(fetchLiveTemp, 60_000)"),
+    "selected city chart should poll live temperature every 60 seconds via lightweight summary endpoint",
   );
   assert(
     chartSource.includes("_hourlyRequestCache") &&

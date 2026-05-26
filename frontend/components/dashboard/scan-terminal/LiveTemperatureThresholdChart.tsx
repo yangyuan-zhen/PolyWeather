@@ -1117,6 +1117,7 @@ export function LiveTemperatureThresholdChart({
   const city = String(row?.city || "").toLowerCase().trim();
   const [timeframe, setTimeframe] = useState<"1D" | "3D">("1D");
   const [userToggledKeys, setUserToggledKeys] = useState<Record<string, boolean>>({});
+  const [liveTemp, setLiveTemp] = useState<number | null>(null);
 
   useEffect(() => {
     setUserToggledKeys({});
@@ -1166,6 +1167,24 @@ export function LiveTemperatureThresholdChart({
       clearTimeout(timer);
     };
   }, [city, row, isActive, slotIndex]);
+
+  // ── 60s lightweight live-temp poll ──
+  useEffect(() => {
+    if (!city) return;
+    const fetchLiveTemp = () => {
+      fetch(`/api/city/${encodeURIComponent(city)}/summary`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((payload) => {
+          if (!payload) return;
+          const temp = validNumber(payload?.current?.temp);
+          if (temp !== null) setLiveTemp(temp);
+        })
+        .catch(() => {});
+    };
+    fetchLiveTemp();
+    const id = setInterval(fetchLiveTemp, 60_000);
+    return () => clearInterval(id);
+  }, [city]);
 
   const { data, series } = useMemo(() => {
     if (timeframe === "3D") {
@@ -1247,6 +1266,7 @@ export function LiveTemperatureThresholdChart({
     () => getObservationDisplayMetrics(row, hourly, settlementPlate),
     [row, hourly, settlementPlate],
   );
+  const displayRunwayTemp = liveTemp ?? currentRunwayTemp;
   const wundergroundDailyHigh = validNumber(hourly?.airportCurrent?.max_so_far ?? hourly?.airportPrimary?.max_so_far) ?? null;
 
   const modelValues = Object.values(row?.model_cluster_sources || {})
@@ -1412,7 +1432,7 @@ export function LiveTemperatureThresholdChart({
               <div className="flex items-center gap-4 text-[11px]">
                 <span className="font-semibold text-slate-500">
                   {isEn ? "Runway" : runwayHeaderLabel}:{" "}
-                  <strong className="text-[#009688] font-mono">{temp(currentRunwayTemp)}</strong>
+                  <strong className="text-[#009688] font-mono">{temp(displayRunwayTemp)}</strong>
                 </span>
                 <span className="text-slate-300">|</span>
                 <span className="font-semibold text-slate-500">
@@ -1454,7 +1474,7 @@ export function LiveTemperatureThresholdChart({
                       {isEn ? "Runway Live (1m)" : `${runwayHeaderLabel}`}
                     </span>
                     <span className="text-2xl font-bold font-mono text-[#009688] mt-1">
-                      {temp(currentRunwayTemp)}
+                      {temp(displayRunwayTemp)}
                     </span>
                   </div>
                   <div className="flex flex-col">
