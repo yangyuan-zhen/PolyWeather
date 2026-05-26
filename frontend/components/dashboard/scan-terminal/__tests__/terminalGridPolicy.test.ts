@@ -41,4 +41,9 @@ export function runTests() {
       selectorSource.includes("grid grid-cols-3"),
     "grid selector must expose at most a 3 by 3 chart layout",
   );
+  assert(
+    dashboardSource.includes("if (!cityInSlot || !rowForSlot)") &&
+      dashboardSource.includes("handleSelectCityForSlot(slotIndex, null);"),
+    "stale saved chart slots must render the empty city picker instead of a row=null Temperature Chart",
+  );
 }

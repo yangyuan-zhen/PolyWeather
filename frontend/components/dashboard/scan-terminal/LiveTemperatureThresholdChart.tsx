@@ -21,6 +21,7 @@ import {
   fetchHourlyForecastForCity,
   getActiveTemperatureSeries,
   getDebPeakWindowRange,
+  getPeakGlowState,
   getLiveObservationLabels,
   getObservationDisplayMetrics,
   getVisibleTemperatureSeries,
@@ -34,6 +35,46 @@ import {
   type HourlyForecast,
 } from "@/components/dashboard/scan-terminal/temperature-chart-logic";
 export { clearCityDetailCache } from "@/components/dashboard/scan-terminal/temperature-chart-logic";
+
+const PEAK_GLOW_PANEL_CLASS = {
+  none: "",
+  watch: "peak-glow-card peak-glow-watch",
+  near_peak: "peak-glow-card peak-glow-near",
+  breakout: "peak-glow-card peak-glow-breakout",
+  cooling: "peak-glow-card peak-glow-cooling",
+} as const;
+
+const PEAK_GLOW_BADGE_CLASS = {
+  none: "",
+  watch: "border-amber-200 bg-amber-50 text-amber-700",
+  near_peak: "border-orange-200 bg-orange-50 text-orange-700",
+  breakout: "border-rose-200 bg-rose-50 text-rose-700",
+  cooling: "border-slate-200 bg-slate-100 text-slate-500",
+} as const;
+
+function peakGlowLabel(state: keyof typeof PEAK_GLOW_PANEL_CLASS, isEn: boolean) {
+  if (state === "watch") return isEn ? "Watch" : "关注";
+  if (state === "near_peak") return isEn ? "Near peak" : "接近峰值";
+  if (state === "breakout") return isEn ? "Breakout" : "突破";
+  if (state === "cooling") return isEn ? "Cooling" : "降温";
+  return "";
+}
+
+function peakGlowTitle(
+  state: keyof typeof PEAK_GLOW_PANEL_CLASS,
+  distanceToDeb: number | null,
+  isEn: boolean,
+) {
+  const label = peakGlowLabel(state, isEn);
+  if (!label) return "";
+  if (distanceToDeb === null) return label;
+  const absDistance = Math.abs(distanceToDeb).toFixed(1);
+  if (state === "breakout" && distanceToDeb <= 0) {
+    return isEn ? `${label}: ${absDistance}° above DEB` : `${label}：高于 DEB ${absDistance}°`;
+  }
+  if (state === "cooling") return isEn ? `${label}: peak likely passed` : `${label}：峰值可能已过`;
+  return isEn ? `${label}: ${absDistance}° below DEB` : `${label}：距 DEB ${absDistance}°`;
+}
 
 function formatCityLocalDate(tzOffsetSeconds: number | null | undefined) {
   const cityOffsetMs = (tzOffsetSeconds ?? 0) * 1000;
@@ -273,6 +314,7 @@ export function LiveTemperatureThresholdChart({
   const chartLocalDate = chartHourly?.localDate || row?.local_date || currentCityLocalDate;
 
   const { data, series } = useMemo(() => buildFullDayChartData(row, chartHourly, isEn), [row, chartHourly, isEn]);
+  const peakGlow = useMemo(() => getPeakGlowState(row, data, series), [row, data, series]);
 
   const autoWindowRange = useMemo(
     () => (viewMode === "auto" ? getDebPeakWindowRange(data, series) : null),
@@ -442,6 +484,17 @@ export function LiveTemperatureThresholdChart({
       </button>
       <span className="text-slate-400 font-normal">·</span>
       <span className="text-slate-500 font-normal">{subtitle}</span>
+      {peakGlow.state !== "none" && (
+        <span
+          className={clsx(
+            "ml-1 rounded border px-1.5 py-0.5 text-[9px] font-black normal-case tracking-normal",
+            PEAK_GLOW_BADGE_CLASS[peakGlow.state],
+          )}
+          title={peakGlowTitle(peakGlow.state, peakGlow.distanceToDeb, isEn)}
+        >
+          {peakGlowLabel(peakGlow.state, isEn)}
+        </span>
+      )}
     </div>
   ) : isEn ? (
     "Temperature Chart"
@@ -559,7 +612,11 @@ export function LiveTemperatureThresholdChart({
   };
 
   return (
-    <Panel title={panelTitle} actions={timeframeActions}>
+    <Panel
+      title={panelTitle}
+      actions={timeframeActions}
+      className={PEAK_GLOW_PANEL_CLASS[peakGlow.state]}
+    >
       <div className="flex h-full min-h-[300px] flex-col">
         <TemperatureStatsBars
           isEn={isEn}
@@ -641,5 +698,6 @@ export const __getActiveTemperatureSeriesForTest = getActiveTemperatureSeries;
 export const __getDebPeakWindowRangeForTest = getDebPeakWindowRange;
 export const __getLiveObservationLabelsForTest = getLiveObservationLabels;
 export const __getObservationDisplayMetricsForTest = getObservationDisplayMetrics;
+export const __getPeakGlowStateForTest = getPeakGlowState;
 export const __shouldPollLiveChartForTest = shouldPollLiveChart;
 export const __mergePatchIntoHourlyForTest = mergePatchIntoHourly;

@@ -3,11 +3,16 @@ from src.utils.telegram_push import (
     HIGH_FREQ_AIRPORT_ICAO,
     _build_airport_status_message,
     _run_high_freq_airport_cycle,
+    _telegram_push_language,
 )
 from pathlib import Path
 
 
-def test_airport_status_message_starts_with_runway_city_and_station_hashtags():
+def test_airport_status_message_defaults_to_bilingual_runway_copy(monkeypatch):
+    monkeypatch.delenv("TELEGRAM_AIRPORT_PUSH_LANGUAGE", raising=False)
+    monkeypatch.delenv("TELEGRAM_PUSH_LANGUAGE", raising=False)
+    monkeypatch.delenv("POLYWEATHER_TELEGRAM_PUSH_LANGUAGE", raising=False)
+
     text = _build_airport_status_message(
         "qingdao",
         {
@@ -32,10 +37,13 @@ def test_airport_status_message_starts_with_runway_city_and_station_hashtags():
     )
 
     first_line = text.splitlines()[0]
-    assert first_line == "#跑道观测 #Qingdao"
+    assert _telegram_push_language() == "both"
+    assert first_line == "#RunwayObs #跑道观测 #Qingdao"
     assert "Qingdao / Jiaodong" in text
     assert "TDZ:23.0" in text
-    assert "DEB" in text and "24.0" in text
+    assert "Runway now / 跑道当前:" in text
+    assert "Today's runway high / 今日跑道高点:" in text
+    assert "DEB: 24.0°C" in text
 
 
 def test_airport_status_hides_non_focus_runways_for_key_airports():
@@ -62,7 +70,7 @@ def test_airport_status_hides_non_focus_runways_for_key_airports():
 
     assert "02L/20R" in text
     assert "02R/20L" in text
-    assert "结算跑道当前：31.2°C" in text
+    assert "Settlement runway now / 结算跑道当前: 31.2°C" in text
 
 
 def test_singapore_is_in_telegram_push_city_lists():

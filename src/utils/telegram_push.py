@@ -19,6 +19,13 @@ from src.database.runtime_state import (
 )
 from src.data_collection.city_registry import CITY_REGISTRY
 from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
+from src.utils.telegram_i18n import (
+    copy_text as _copy,
+    is_bilingual as _is_bilingual,
+    is_zh as _is_zh,
+    normalize_push_language as _normalize_push_language,
+    telegram_push_language as _resolve_telegram_push_language,
+)
 
 # Forum topic routing: maps city_key -> message_thread_id for the push forum group.
 # Created by scripts/create_forum_topics.py, stored in the runtime data dir.
@@ -142,6 +149,14 @@ def _env_float(name: str, default: float) -> float:
         return float(raw)
     except Exception:
         return default
+
+
+def _telegram_push_language() -> str:
+    return _resolve_telegram_push_language(
+        "TELEGRAM_AIRPORT_PUSH_LANGUAGE",
+        "TELEGRAM_PUSH_LANGUAGE",
+        "POLYWEATHER_TELEGRAM_PUSH_LANGUAGE",
+    )
 
 
 def _norm_prob(v: Any) -> Optional[float]:
@@ -631,10 +646,15 @@ WIND_REGIME: Dict[str, Dict[str, Tuple[int, int]]] = {
 # Legacy alias for backward compat with existing _select_focus_runway_obs / _focus_runway_pairs_for_city
 FOCUS_RUNWAY_PAIRS = SETTLEMENT_RUNWAY_PAIRS
 
-_FUNCTION_HASHTAGS = {
+_FUNCTION_HASHTAGS_ZH = {
     "runway": "#跑道观测",
     "airport": "#机场观测",
     "trade": "#交易机会",
+}
+_FUNCTION_HASHTAGS_EN = {
+    "runway": "#RunwayObs",
+    "airport": "#AirportObs",
+    "trade": "#TradeAlert",
 }
 
 
@@ -659,15 +679,27 @@ def _build_telegram_hashtag_line(
     city: Optional[str] = None,
     station: Optional[str] = None,
     extra: Optional[List[str]] = None,
+    language: Optional[str] = None,
 ) -> str:
     tags: List[str] = []
-    primary = _FUNCTION_HASHTAGS.get(kind)
-    if primary:
-        tags.append(primary)
+    tag_maps = (
+        (_FUNCTION_HASHTAGS_EN, _FUNCTION_HASHTAGS_ZH)
+        if _is_bilingual(language)
+        else ((_FUNCTION_HASHTAGS_ZH,) if _is_zh(language) else (_FUNCTION_HASHTAGS_EN,))
+    )
+    for tag_map in tag_maps:
+        primary = tag_map.get(kind)
+        if primary and primary not in tags:
+            tags.append(primary)
     for item in extra or []:
-        tag = _FUNCTION_HASHTAGS.get(item, item)
-        if tag and tag not in tags:
-            tags.append(tag)
+        added = False
+        for tag_map in tag_maps:
+            tag = tag_map.get(item)
+            if tag and tag not in tags:
+                tags.append(tag)
+                added = True
+        if not added and item and item not in tags:
+            tags.append(item)
     city_tag = _city_hashtag(city)
     if city_tag and city_tag not in tags:
         tags.append(city_tag)
@@ -752,7 +784,7 @@ def _is_settlement_runway(city: str, r1: str, r2: str) -> bool:
     return _runway_pair_key(r1, r2) in pair_set
 
 
-def _wind_regime_label(city: str, wind_dir: Optional[int]) -> Optional[str]:
+def _wind_regime_label(city: str, wind_dir: Optional[int], language: Optional[str] = None) -> Optional[str]:
     """Classify wind direction into a thermal regime label."""
     if wind_dir is None:
         return None
@@ -760,9 +792,9 @@ def _wind_regime_label(city: str, wind_dir: Optional[int]) -> Optional[str]:
     sea = regimes.get("sea_breeze")
     warm = regimes.get("warm_advection")
     if sea and sea[0] != sea[1] and sea[0] <= wind_dir <= sea[1]:
-        return "海风降温"
+        return _copy(language, "sea-breeze cooling", "海风降温")
     if warm and warm[0] != warm[1] and warm[0] <= wind_dir <= warm[1]:
-        return "暖平流增强"
+        return _copy(language, "warm advection", "暖平流增强")
     return None
 
 
@@ -789,18 +821,21 @@ def _runway_heat_signal(
     slope_15m: Optional[float],
     wind_dir: Optional[int],
     city: str,
+    language: Optional[str] = None,
 ) -> str:
     """Compute a simple runway heat signal label."""
     if slope_15m is None:
         return ""
-    regime = _wind_regime_label(city, wind_dir)
+    regime = _wind_regime_label(city, wind_dir, language)
+    warm_regime = _copy(language, "warm advection", "暖平流增强")
+    sea_regime = _copy(language, "sea-breeze cooling", "海风降温")
     if slope_15m >= 1.0:
-        return "🚀 冲顶增强" if regime == "暖平流增强" else "🔥 升温中"
+        return _copy(language, "🚀 Peak push strengthening", "🚀 冲顶增强") if regime == warm_regime else _copy(language, "🔥 Warming", "🔥 升温中")
     if slope_15m >= 0.5:
-        return "🔥 升温中"
+        return _copy(language, "🔥 Warming", "🔥 升温中")
     if slope_15m >= -0.2:
-        return "⚠️ 高位观察" if regime == "海风降温" else "⏸️ 高位横盘"
-    return "🧊 过峰风险"
+        return _copy(language, "⚠️ Watch sea-breeze cooling", "⚠️ 高位观察") if regime == sea_regime else _copy(language, "⏸️ Holding near high", "⏸️ 高位横盘")
+    return _copy(language, "🧊 Peak-risk cooling", "🧊 过峰风险")
 
 
 def _focused_runway_max(city: str, city_weather: Dict[str, Any]) -> Optional[float]:
@@ -953,7 +988,9 @@ def _build_airport_status_message(
     source_label: str = "",
     arome_temp: Optional[float] = None,
     aeroweb_available: bool = False,
+    language: Optional[str] = None,
 ) -> str:
+    language = _normalize_push_language(language or _telegram_push_language())
     _AIRPORT_EN = {"seoul": "Incheon", "singapore": "Changi", "busan": "Gimhae", "tokyo": "Haneda",
                    "ankara": "Esenboğa", "helsinki": "Vantaa", "amsterdam": "Schiphol",
                    "istanbul": "Airport", "paris": "Le Bourget",
@@ -1018,8 +1055,8 @@ def _build_airport_status_message(
     # ── Heat model ──
     wind_dir = amos.get("wind_dir") if is_amsc else None
     slope_15m = _compute_slope_15m(amos_icao, display_temp) if is_amsc and display_temp is not None else None
-    heat_signal = _runway_heat_signal(display_temp or 0, slope_15m, wind_dir, city) if is_amsc else ""
-    wind_label = _wind_regime_label(city, wind_dir) if is_amsc and wind_dir is not None else None
+    heat_signal = _runway_heat_signal(display_temp or 0, slope_15m, wind_dir, city, language) if is_amsc else ""
+    wind_label = _wind_regime_label(city, wind_dir, language) if is_amsc and wind_dir is not None else None
 
     max_so_far, max_temp_time = _get_airport_daily_high(city_weather)
     # ── Build message ──
@@ -1029,6 +1066,7 @@ def _build_airport_status_message(
     hashtag_line = _build_telegram_hashtag_line(
         "runway" if has_runway else "airport",
         city=city,
+        language=language,
     )
     icao_display = f"{amos_icao} · " if amos_icao else ""
     settlement_str = f" · ★{settlement_pair[0]}/{settlement_pair[1]}" if settlement_pair else ""
@@ -1055,7 +1093,7 @@ def _build_airport_status_message(
             mid = pts.get("mid_temp")
             end = pts.get("end_temp")
             is_settlement = _is_settlement_runway(city, r1, r2)
-            marker = " ★结算" if is_settlement else ""
+            marker = _copy(language, " ★Settlement", " ★结算") if is_settlement else ""
             tmax = pts.get("target_runway_max")
             if tdz is not None or mid is not None or end is not None:
                 line = f"{r1}/{r2}{marker}  TDZ:{_fmt(tdz)}  MID:{_fmt(mid)}  END:{_fmt(end)}"
@@ -1063,7 +1101,8 @@ def _build_airport_status_message(
                     line += f"  max:{tmax:.1f}"
                 lines.append(line)
             else:
-                lines.append(f"{r1}/{r2}{marker} {t:.1f}°C")
+                temp_symbol = str(city_weather.get("temp_symbol") or "°C").strip()
+                lines.append(f"{r1}/{r2}{marker} {t:.1f}{temp_symbol}")
 
     # Summary stats
     lines.append("")
@@ -1072,36 +1111,43 @@ def _build_airport_status_message(
 
     if city == "paris":
         if aeroweb_available and display_temp is not None:
-            lines.append(f"当前实况：{cur_str}")
+            lines.append(f"{_copy(language, 'Current observation', '当前实况')}: {cur_str}")
         else:
-            lines.append("当前实况：暂无")
+            lines.append(_copy(language, "Current observation: unavailable", "当前实况：暂无"))
     else:
         if has_runway:
-            lines.append(f"结算跑道当前：{cur_str}")
+            current_label = (
+                _copy(language, "Settlement runway now", "结算跑道当前")
+                if settlement_pair
+                else _copy(language, "Runway now", "跑道当前")
+            )
+            lines.append(f"{current_label}: {cur_str}")
         else:
-            lines.append(f"当前：{cur_str}")
+            lines.append(f"{_copy(language, 'Current', '当前')}: {cur_str}")
 
     if city == "paris":
         if aeroweb_available and max_so_far is not None:
-            time_str = f"（{max_temp_time}）" if max_temp_time else ""
-            lines.append(f"日高实况：{max_so_far:.1f}{temp_symbol}{time_str}")
+            time_str = f" ({max_temp_time})" if max_temp_time and not _is_zh(language) else (f"（{max_temp_time}）" if max_temp_time else "")
+            lines.append(f"{_copy(language, 'Observed high', '日高实况')}: {max_so_far:.1f}{temp_symbol}{time_str}")
         elif not aeroweb_available:
             last_temp = _LAST_AEROWEB.get("temp")
             if last_temp is not None:
                 last_time = _LAST_AEROWEB.get("max_time", "")
-                time_str = f"（{last_time}）" if last_time else ""
-                lines.append(f"最近实况：{last_temp:.1f}{temp_symbol}{time_str}")
+                time_str = f" ({last_time})" if last_time and not _is_zh(language) else (f"（{last_time}）" if last_time else "")
+                lines.append(f"{_copy(language, 'Latest observation', '最近实况')}: {last_temp:.1f}{temp_symbol}{time_str}")
     elif max_so_far is not None:
-        time_str = f"（{max_temp_time}）" if max_temp_time else ""
+        time_str = f" ({max_temp_time})" if max_temp_time and not _is_zh(language) else (f"（{max_temp_time}）" if max_temp_time else "")
         if has_runway:
-            lines.append(f"今日跑道高点：{max_so_far:.1f}{temp_symbol}{time_str}")
+            high_label = _copy(language, "Today's runway high", "今日跑道高点")
+            lines.append(f"{high_label}: {max_so_far:.1f}{temp_symbol}{time_str}")
         else:
-            lines.append(f"日高：{max_so_far:.1f}{temp_symbol}{time_str}")
+            high_label = _copy(language, "Today's high", "日高")
+            lines.append(f"{high_label}: {max_so_far:.1f}{temp_symbol}{time_str}")
     if slope_15m is not None:
         sign = "+" if slope_15m >= 0 else ""
-        lines.append(f"15分钟趋势：{sign}{slope_15m:.1f}°C")
+        lines.append(f"{_copy(language, '15m trend', '15分钟趋势')}: {sign}{slope_15m:.1f}°")
     if wind_dir is not None:
-        wind_str = f"风向：{wind_dir}°"
+        wind_str = f"{_copy(language, 'Wind dir', '风向')}: {wind_dir}°"
         if wind_label:
             wind_str += f"  {wind_label}"
         lines.append(wind_str)
@@ -1127,7 +1173,7 @@ def _build_airport_status_message(
                     bj_h = hh + 8
                     if bj_h >= 24:
                         bj_h -= 24
-                    metar_time = f"北京时 {bj_h:02d}:{mm}"
+                    metar_time = f"{_copy(language, 'Beijing time', '北京时')} {bj_h:02d}:{mm}"
                     break
             if metar_temp or metar_time:
                 bits = []
@@ -1135,46 +1181,54 @@ def _build_airport_status_message(
                     bits.append(f"{metar_temp}{temp_symbol}")
                 if metar_time:
                     bits.append(metar_time)
-                lines.append(f"报文: {'  '.join(bits)}")
+                lines.append(f"{_copy(language, 'METAR', '报文')}: {'  '.join(bits)}")
     if deb_pred is not None:
         if city == "paris":
             if aeroweb_available and display_temp is not None:
                 diff = display_temp - deb_pred
                 sign = "+" if diff >= 0 else ""
-                lines.append(f"DEB：{deb_pred:.1f}{temp_symbol}（距实况 {sign}{diff:.1f}°）")
+                suffix = _copy(language, f" (vs obs {sign}{diff:.1f}°)", f"（距实况 {sign}{diff:.1f}°）")
+                lines.append(f"DEB: {deb_pred:.1f}{temp_symbol}{suffix}" if not _is_zh(language) else f"DEB：{deb_pred:.1f}{temp_symbol}{suffix}")
             elif not aeroweb_available:
                 last_temp = _LAST_AEROWEB.get("temp")
                 if last_temp is not None:
                     diff = last_temp - deb_pred
                     sign = "+" if diff >= 0 else ""
-                    lines.append(f"DEB：{deb_pred:.1f}{temp_symbol}（距最近实况 {sign}{diff:.1f}°）")
+                    suffix = _copy(language, f" (vs latest obs {sign}{diff:.1f}°)", f"（距最近实况 {sign}{diff:.1f}°）")
+                    lines.append(f"DEB: {deb_pred:.1f}{temp_symbol}{suffix}" if not _is_zh(language) else f"DEB：{deb_pred:.1f}{temp_symbol}{suffix}")
                 else:
-                    lines.append(f"DEB：{deb_pred:.1f}{temp_symbol}")
+                    lines.append(f"DEB: {deb_pred:.1f}{temp_symbol}" if not _is_zh(language) else f"DEB：{deb_pred:.1f}{temp_symbol}")
             else:
-                lines.append(f"DEB：{deb_pred:.1f}{temp_symbol}")
+                lines.append(f"DEB: {deb_pred:.1f}{temp_symbol}" if not _is_zh(language) else f"DEB：{deb_pred:.1f}{temp_symbol}")
         elif display_temp is not None and display_temp > deb_pred:
-            lines.append(f"DEB：{deb_pred:.1f}{temp_symbol}（已突破 +{display_temp - deb_pred:.1f}°）")
+            suffix = _copy(language, f" (already above +{display_temp - deb_pred:.1f}°)", f"（已突破 +{display_temp - deb_pred:.1f}°）")
+            lines.append(f"DEB: {deb_pred:.1f}{temp_symbol}{suffix}" if not _is_zh(language) else f"DEB：{deb_pred:.1f}{temp_symbol}{suffix}")
         else:
-            lines.append(f"DEB：{deb_pred:.1f}{temp_symbol}")
+            lines.append(f"DEB: {deb_pred:.1f}{temp_symbol}" if not _is_zh(language) else f"DEB：{deb_pred:.1f}{temp_symbol}")
 
     if city == "paris":
         lines.append("")
         if aeroweb_available and display_temp is not None:
-            lines.append(f"📡 AEROWEB 机场实况：{display_temp:.1f}{temp_symbol} · Météo-France")
+            label = _copy(language, "AEROWEB airport obs", "AEROWEB 机场实况")
+            lines.append(f"📡 {label}: {display_temp:.1f}{temp_symbol} · Météo-France")
         else:
-            lines.append("📡 AEROWEB 机场实况：暂不可用")
+            lines.append(_copy(language, "📡 AEROWEB airport obs: unavailable", "📡 AEROWEB 机场实况：暂不可用"))
         if arome_temp is not None:
             if aeroweb_available and display_temp is not None:
                 d = arome_temp - display_temp
                 sign = "+" if d >= 0 else ""
-                lines.append(f"🕐 AROME HD 15分钟临近预报：{arome_temp:.1f}{temp_symbol}（较实况 {sign}{d:.1f}°）")
+                label = _copy(language, "AROME HD 15m nowcast", "AROME HD 15分钟临近预报")
+                suffix = _copy(language, f" (vs obs {sign}{d:.1f}°)", f"（较实况 {sign}{d:.1f}°）")
+                lines.append(f"🕐 {label}: {arome_temp:.1f}{temp_symbol}{suffix}")
             else:
-                lines.append(f"🕐 AROME HD 15分钟临近预报：{arome_temp:.1f}{temp_symbol}")
+                label = _copy(language, "AROME HD 15m nowcast", "AROME HD 15分钟临近预报")
+                lines.append(f"🕐 {label}: {arome_temp:.1f}{temp_symbol}")
         else:
-            lines.append("🕐 AROME HD 15分钟临近预报：--")
+            label = _copy(language, "AROME HD 15m nowcast", "AROME HD 15分钟临近预报")
+            lines.append(f"🕐 {label}: --")
         if not aeroweb_available:
             lines.append("")
-            lines.append("提示：当前仅显示模型参考，不更新实况日高。")
+            lines.append(_copy(language, "Note: showing model reference only; observed high is not updating.", "提示：当前仅显示模型参考，不更新实况日高。"))
     elif source_label:
         lines.append("")
         lines.append(f"📡 {source_label}")
@@ -1186,8 +1240,14 @@ def _build_airport_status_message(
         if len(vals) >= 2:
             lo, hi = vals[0][0], vals[-1][0]
             spread = hi - lo
-            spread_label = "低分歧" if spread <= 2.0 else ("中等分歧" if spread <= 4.0 else "高分歧")
-            lines.append(f"模型区间：{lo:.1f}~{hi:.1f}{temp_symbol}  {spread_label}")
+            if spread <= 2.0:
+                spread_label = _copy(language, "low dispersion", "低分歧")
+            elif spread <= 4.0:
+                spread_label = _copy(language, "moderate dispersion", "中等分歧")
+            else:
+                spread_label = _copy(language, "high dispersion", "高分歧")
+            range_label = _copy(language, "Model range", "模型区间")
+            lines.append(f"{range_label}: {lo:.1f}~{hi:.1f}{temp_symbol}  {spread_label}")
 
     return "\n".join(lines)
 

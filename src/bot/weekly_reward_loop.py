@@ -21,6 +21,7 @@ from src.bot.settings import (
 )
 from src.database.db_manager import DBManager
 from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
+from src.utils.telegram_i18n import copy_text, normalize_push_language, telegram_push_language
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -39,6 +40,14 @@ def _env_int(name: str, default: int, min_value: int = 0) -> int:
     except Exception:
         return default
     return max(min_value, value)
+
+
+def _weekly_reward_language() -> str:
+    return telegram_push_language(
+        "POLYWEATHER_WEEKLY_REWARD_LANGUAGE",
+        "TELEGRAM_PUSH_LANGUAGE",
+        "POLYWEATHER_TELEGRAM_PUSH_LANGUAGE",
+    )
 
 
 def _safe_week_key(dt: datetime) -> str:
@@ -177,10 +186,19 @@ def _render_settle_report(
     skipped: int,
     participation_count: int = 0,
     active_count: int = 0,
+    language: Optional[str] = None,
 ) -> str:
-    lines = [f"🏆 <b>PolyWeather 周榜奖励已结算 ({week_key})</b>", "────────────────────"]
+    language = normalize_push_language(language or _weekly_reward_language())
+    lines = [
+        copy_text(
+            language,
+            f"🏆 <b>PolyWeather weekly rewards settled ({week_key})</b>",
+            f"🏆 <b>PolyWeather 周榜奖励已结算 ({week_key})</b>",
+        ),
+        "────────────────────",
+    ]
     if not winners:
-        lines.append("本周无上榜用户。")
+        lines.append(copy_text(language, "No ranked users this week.", "本周无上榜用户。"))
     else:
         medals = {1: "🥇", 2: "🥈", 3: "🥉"}
         for row in winners:
@@ -188,16 +206,39 @@ def _render_settle_report(
             name = str(row.get("username") or "unknown")[:16]
             points_bonus = int(row.get("points_bonus") or 0)
             pro_days = int(row.get("pro_days") or 0)
-            pro_text = f" + {pro_days}天Pro" if pro_days > 0 else ""
+            pro_text = (
+                copy_text(language, f" + {pro_days}d Pro", f" + {pro_days}天Pro")
+                if pro_days > 0
+                else ""
+            )
             medal = medals.get(rank, f"{rank}.")
-            lines.append(f"{medal} {name}: +{points_bonus} 积分{pro_text}")
+            points_label = copy_text(language, "points", "积分")
+            lines.append(f"{medal} {name}: +{points_bonus} {points_label}{pro_text}")
     if skipped > 0:
-        lines.append(f"（重复发放保护已生效，跳过 {skipped} 条）")
+        lines.append(
+            copy_text(
+                language,
+                f"Duplicate payout guard skipped {skipped} rows.",
+                f"（重复发放保护已生效，跳过 {skipped} 条）",
+            )
+        )
     if participation_count > 0 or active_count > 0:
         lines.append("────────────────────")
-        lines.append(f"🎁 参与奖 +{WEEKLY_PARTICIPATION_BONUS} 积分: {participation_count} 人")
+        lines.append(
+            copy_text(
+                language,
+                f"🎁 Participation bonus +{WEEKLY_PARTICIPATION_BONUS} points: {participation_count} users",
+                f"🎁 参与奖 +{WEEKLY_PARTICIPATION_BONUS} 积分: {participation_count} 人",
+            )
+        )
         if active_count > 0:
-            lines.append(f"🔥 活跃奖 +{WEEKLY_ACTIVE_BONUS} 积分 (周积分≥{WEEKLY_ACTIVE_THRESHOLD}): {active_count} 人")
+            lines.append(
+                copy_text(
+                    language,
+                    f"🔥 Active bonus +{WEEKLY_ACTIVE_BONUS} points (weekly points >= {WEEKLY_ACTIVE_THRESHOLD}): {active_count} users",
+                    f"🔥 活跃奖 +{WEEKLY_ACTIVE_BONUS} 积分 (周积分≥{WEEKLY_ACTIVE_THRESHOLD}): {active_count} 人",
+                )
+            )
     return "\n".join(lines)
 
 

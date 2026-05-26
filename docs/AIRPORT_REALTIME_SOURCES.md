@@ -78,8 +78,10 @@ Seoul / Incheon 16:03
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
+| `TELEGRAM_PUSH_LANGUAGE` | Telegram 自动推送的全局语言，可选 `both`/`en`/`zh` | `both` |
 | `TELEGRAM_AIRPORT_PUSH_ENABLED` | 启用机场推送 | `true` |
 | `TELEGRAM_AIRPORT_PUSH_INTERVAL_SEC` | 循环轮询间隔 | `60` |
+| `TELEGRAM_AIRPORT_PUSH_LANGUAGE` | 机场推送语言覆盖，可选 `both`/`en`/`zh` | `both` |
 | `KNMI_API_KEY` | KNMI API 密钥（阿姆斯特丹必填） | — |
 
 ## 未接入城市

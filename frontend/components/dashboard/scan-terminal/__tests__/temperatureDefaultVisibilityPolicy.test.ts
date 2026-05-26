@@ -4,6 +4,7 @@ import {
   __getDebPeakWindowRangeForTest,
   __getLiveObservationLabelsForTest,
   __getObservationDisplayMetricsForTest,
+  __getPeakGlowStateForTest,
   __getVisibleTemperatureSeriesForTest,
   __isTemperatureSeriesVisibleByDefaultForTest,
   __mergePatchIntoHourlyForTest,
@@ -22,6 +23,69 @@ function runwayKey(rwy: string) {
 }
 
 export function runTests() {
+  const peakGlowSeries = [
+    {
+      key: "hourly_forecast",
+      label: "DEB Forecast",
+      source: "DEB Hourly",
+      color: "#f97316",
+      values: [26, 29, 32, 32, 30],
+    },
+    {
+      key: "madis",
+      label: "METAR",
+      source: "METAR",
+      color: "#0284c7",
+      values: [26.0, 29.0, null, 30.4, null],
+    },
+  ] as any;
+  const peakGlowData = [
+    { ts: Date.UTC(2026, 4, 27, 10, 0), hourly_forecast: 26, madis: 26.0 },
+    { ts: Date.UTC(2026, 4, 27, 11, 0), hourly_forecast: 29, madis: 29.0 },
+    { ts: Date.UTC(2026, 4, 27, 12, 0), hourly_forecast: 32, madis: null },
+    { ts: Date.UTC(2026, 4, 27, 13, 0), hourly_forecast: 32, madis: 30.4 },
+    { ts: Date.UTC(2026, 4, 27, 14, 0), hourly_forecast: 30, madis: null },
+  ] as any;
+
+  assert(
+    __getPeakGlowStateForTest({ temp_symbol: "°C" } as any, peakGlowData, peakGlowSeries).state === "near_peak",
+    "city chart should enter near-peak glow when live temperature is within 2C of DEB and not cooling",
+  );
+  assert(
+    __getPeakGlowStateForTest({ temp_symbol: "°C" } as any, peakGlowData, [
+      peakGlowSeries[0],
+      { ...peakGlowSeries[1], values: [26.0, 29.0, null, 29.2, null] },
+    ] as any).state === "watch",
+    "city chart should enter watch glow when live temperature is within 3C of DEB but not near peak",
+  );
+  assert(
+    __getPeakGlowStateForTest({ temp_symbol: "°C" } as any, peakGlowData, [
+      peakGlowSeries[0],
+      { ...peakGlowSeries[1], values: [26.0, 29.0, null, 32.1, null] },
+    ] as any).state === "breakout",
+    "city chart should use breakout glow when live temperature reaches or exceeds DEB peak",
+  );
+  assert(
+    __getPeakGlowStateForTest({ temp_symbol: "°C" } as any, [
+      { ts: Date.UTC(2026, 4, 27, 10, 0), hourly_forecast: 26, madis: 26.0 },
+      { ts: Date.UTC(2026, 4, 27, 11, 0), hourly_forecast: 30, madis: 30.0 },
+      { ts: Date.UTC(2026, 4, 27, 12, 0), hourly_forecast: 32, madis: 31.8 },
+      { ts: Date.UTC(2026, 4, 27, 13, 0), hourly_forecast: 30, madis: 30.8 },
+      { ts: Date.UTC(2026, 4, 27, 14, 0), hourly_forecast: 27, madis: 30.2 },
+    ] as any, [
+      { ...peakGlowSeries[0], values: [26, 30, 32, 30, 27] },
+      { ...peakGlowSeries[1], values: [26.0, 30.0, 31.8, 30.8, 30.2] },
+    ] as any).state === "cooling",
+    "city chart should stop hot glow and show cooling state after peak when live temperature rolls over",
+  );
+  assert(
+    __getPeakGlowStateForTest({ temp_symbol: "°F" } as any, peakGlowData, [
+      { ...peakGlowSeries[0], values: [79, 84, 90, 90, 86] },
+      { ...peakGlowSeries[1], values: [80, 84, null, 86.2, null] },
+    ] as any).state === "watch",
+    "US Fahrenheit charts should convert Celsius thresholds before deciding peak glow state",
+  );
+
   const guangzhou = {
     city: "guangzhou",
     local_date: "2026-05-25",
@@ -432,6 +496,41 @@ export function runTests() {
   assert(madisSeries, "US MADIS airport-primary observations should render as a dedicated chart series");
   assert(madisSeries.label.includes("MADIS"), "US MADIS series should be labeled as NOAA MADIS instead of plain METAR");
   assert(madisSeries.values.filter((value: number | null) => value !== null).length >= 2, "MADIS series should keep sub-hourly observations");
+
+  const torontoWithLatestAirportReport = __buildTemperatureChartDataForTest(
+    {
+      city: "toronto",
+      local_date: "2026-05-27",
+      local_time: "19:16",
+      tz_offset_seconds: -4 * 60 * 60,
+      airport: "CYYZ",
+      temp_symbol: "°C",
+    } as any,
+    {
+      localTime: "19:16",
+      times: ["10:00", "13:00", "16:00", "19:00"],
+      temps: [23, 26, 27, 26],
+      airportPrimary: {
+        source_code: "metar",
+        source_label: "METAR",
+        temp: 26,
+        obs_time: "2026-05-27T23:16:00Z",
+      },
+      airportPrimaryTodayObs: [
+        ["2026-05-27T21:00:00Z", 27],
+        ["2026-05-27T22:00:00Z", 28],
+        ["2026-05-27T23:00:00Z", 27],
+      ],
+    } as any,
+    "1D",
+  );
+  const latestAirportPoint = torontoWithLatestAirportReport.data.find(
+    (point) => point.label === "19:16:00" && point.madis === 26,
+  );
+  assert(
+    latestAirportPoint,
+    "latest airport/METAR report should be appended to the live chart series even when history stops earlier",
+  );
 
   const newYorkMinuteStream = __buildTemperatureChartDataForTest(
     {

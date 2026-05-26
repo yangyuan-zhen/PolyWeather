@@ -822,8 +822,13 @@ function PolyWeatherTerminal({
                     >
                       {visibleSlots.map((cityInSlot, slotIndex) => {
                         const isSlotActive = activeSlotIndex === slotIndex;
+                        const rowForSlot = cityInSlot
+                          ? filteredRegionRows.find(
+                              (r) => String(r.city || "").toLowerCase() === cityInSlot
+                            ) || null
+                          : null;
 
-                        if (!cityInSlot) {
+                        if (!cityInSlot || !rowForSlot) {
                           return (
                             <div key={slotIndex} className="relative h-full">
                               <EmptySlotCard
@@ -849,10 +854,6 @@ function PolyWeatherTerminal({
                             </div>
                           );
                         }
-
-                        const rowForSlot = filteredRegionRows.find(
-                          (r) => String(r.city || "").toLowerCase() === cityInSlot
-                        ) || null;
 
                         return (
                           <div

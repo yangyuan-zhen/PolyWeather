@@ -187,6 +187,20 @@ type EvidenceSeries = {
   values: Array<number | null>;
 };
 
+type PeakGlowState = "none" | "watch" | "near_peak" | "breakout" | "cooling";
+
+type PeakGlowMeta = {
+  state: PeakGlowState;
+  currentTemp: number | null;
+  debPeak: number | null;
+  distanceToDeb: number | null;
+  trend30m: number | null;
+  trend60m: number | null;
+  observedHigh: number | null;
+  peakStartTs: number | null;
+  peakEndTs: number | null;
+};
+
 type RunwayHistorySeries = {
   key: string;
   label: string;
@@ -435,6 +449,36 @@ function normObs(
     .slice(-limit);
 }
 
+function appendLatestAirportObservation(
+  points: RawObsPoint[] | null | undefined,
+  ...currentSources: Array<AirportCurrentConditions | null | undefined>
+): RawObsPoint[] {
+  const merged = [...(points || [])];
+  const seen = new Set(
+    merged
+      .map(normalizeRawObsPoint)
+      .filter((point): point is ObsPoint => point !== null)
+      .map((point) => `${String(point.time || "")}:${validNumber(point.temp) ?? ""}`),
+  );
+
+  currentSources.forEach((source) => {
+    const temp = validNumber(source?.temp);
+    const time =
+      (source as any)?.obs_time ??
+      (source as any)?.observation_time ??
+      (source as any)?.timestamp ??
+      (source as any)?.time ??
+      null;
+    if (temp === null || !time) return;
+    const key = `${String(time)}:${temp}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push({ time: String(time), temp });
+  });
+
+  return merged;
+}
+
 function seriesStats(values: Array<number | null>) {
   const nums = values.filter((v): v is number => validNumber(v) !== null);
   const latest = nums.length ? nums[nums.length - 1] : null;
@@ -479,7 +523,12 @@ function getObservationDisplayMetrics(
   const localDateStr = resolveChartLocalDate(row, hourly);
   const settlementObs = normObs(hourly?.settlementTodayObs || row?.settlement_today_obs || row?.metar_context?.settlement_today_obs, tzOffset, MAX_OBS_POINTS, localDateStr);
   const metarObs = normObs(hourly?.metarTodayObs || row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs, tzOffset, MAX_OBS_POINTS, localDateStr);
-  const madisObs = normObs(hourly?.airportPrimaryTodayObs, tzOffset, MAX_OBS_POINTS, localDateStr);
+  const madisObs = normObs(
+    appendLatestAirportObservation(hourly?.airportPrimaryTodayObs, hourly?.airportPrimary, hourly?.airportCurrent),
+    tzOffset,
+    MAX_OBS_POINTS,
+    localDateStr,
+  );
   const latestSettlement = latestObservationValue(settlementObs);
   const latestMetar = latestObservationValue(metarObs);
   const latestMadis = latestObservationValue(madisObs);
@@ -1236,7 +1285,15 @@ function buildFullDayChartData(
     normObs(hourly?.metarTodayObs || row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs, tzOffset, MAX_OBS_POINTS, localDateStr),
     localDayBounds,
   );
-  const madisObs = filterTimelinePointsToLocalDay(normObs(hourly?.airportPrimaryTodayObs, tzOffset, MAX_OBS_POINTS, localDateStr), localDayBounds);
+  const madisObs = filterTimelinePointsToLocalDay(
+    normObs(
+      appendLatestAirportObservation(hourly?.airportPrimaryTodayObs, hourly?.airportPrimary, hourly?.airportCurrent),
+      tzOffset,
+      MAX_OBS_POINTS,
+      localDateStr,
+    ),
+    localDayBounds,
+  );
   const runwayHistorySeries = filterRunwayHistoryToLocalDay(
     buildRunwayHistorySeries(row, hourly, tzOffset, localDateStr),
     localDayBounds,
@@ -1535,6 +1592,163 @@ function latestLiveObservationTimestamp(
   return latest;
 }
 
+function chartDeltaForCelsius(row: ScanOpportunityRow | null, deltaC: number) {
+  const symbol = String(row?.temp_symbol || "").toUpperCase();
+  return symbol.includes("F") ? deltaC * 1.8 : deltaC;
+}
+
+function getLiveObservationPoints(
+  data: Array<Record<string, any>>,
+  series: EvidenceSeries[],
+) {
+  const liveSeries = series.filter(isLiveObservationSeries);
+  const points: Array<{ ts: number; temp: number }> = [];
+  data.forEach((row, index) => {
+    const ts = typeof row?.ts === "number" ? row.ts : null;
+    if (ts === null) return;
+    const values = liveSeries
+      .map((item) => validNumber(item.values[index]))
+      .filter((value): value is number => value !== null);
+    if (!values.length) return;
+    points.push({ ts, temp: Math.max(...values) });
+  });
+  return points.sort((left, right) => left.ts - right.ts);
+}
+
+function getDebPeakProfile(
+  row: ScanOpportunityRow | null,
+  data: Array<Record<string, any>>,
+  series: EvidenceSeries[],
+) {
+  const debSeries = series.find((item) => item.key === "hourly_forecast");
+  if (!debSeries) return null;
+  const debPoints = debSeries.values
+    .map((value, index) => {
+      const ts = typeof data[index]?.ts === "number" ? data[index].ts : null;
+      const temp = validNumber(value);
+      return ts === null || temp === null ? null : { index, ts, temp };
+    })
+    .filter((point): point is { index: number; ts: number; temp: number } => point !== null);
+  if (!debPoints.length) return null;
+  const peak = debPoints.reduce((best, point) => (point.temp > best.temp ? point : best), debPoints[0]);
+  let peakIndex = debPoints.findIndex((point) => point.index === peak.index);
+  if (peakIndex < 0) peakIndex = 0;
+
+  const hotThreshold = peak.temp - chartDeltaForCelsius(row, 2);
+  let hotStartIndex = peakIndex;
+  let hotEndIndex = peakIndex;
+  while (hotStartIndex > 0 && debPoints[hotStartIndex - 1].temp >= hotThreshold) {
+    hotStartIndex -= 1;
+  }
+  while (hotEndIndex < debPoints.length - 1 && debPoints[hotEndIndex + 1].temp >= hotThreshold) {
+    hotEndIndex += 1;
+  }
+
+  return {
+    peak,
+    hotStartTs: debPoints[hotStartIndex].ts,
+    hotEndTs: debPoints[hotEndIndex].ts,
+  };
+}
+
+function pointAtOrBefore(
+  points: Array<{ ts: number; temp: number }>,
+  targetTs: number,
+): { ts: number; temp: number } | null {
+  let match: { ts: number; temp: number } | null = null;
+  for (const point of points) {
+    if (point.ts <= targetTs) match = point;
+  }
+  return match;
+}
+
+function getPeakGlowState(
+  row: ScanOpportunityRow | null,
+  data: Array<Record<string, any>>,
+  series: EvidenceSeries[],
+): PeakGlowMeta {
+  const empty: PeakGlowMeta = {
+    state: "none",
+    currentTemp: null,
+    debPeak: null,
+    distanceToDeb: null,
+    trend30m: null,
+    trend60m: null,
+    observedHigh: null,
+    peakStartTs: null,
+    peakEndTs: null,
+  };
+  const livePoints = getLiveObservationPoints(data, series);
+  const latest = livePoints[livePoints.length - 1] || null;
+  const debProfile = getDebPeakProfile(row, data, series);
+  if (!latest || !debProfile) return empty;
+
+  const peakStartTs = debProfile.hotStartTs;
+  const peakEndTs = debProfile.hotEndTs;
+  const previousLivePoints = livePoints.filter((point) => point.ts < latest.ts);
+  const previousHigh = previousLivePoints.length
+    ? Math.max(...previousLivePoints.map((point) => point.temp))
+    : null;
+  const observedHigh = Math.max(...livePoints.map((point) => point.temp));
+  const trend30Base = pointAtOrBefore(livePoints, latest.ts - 30 * 60 * 1000);
+  const trend60Base = pointAtOrBefore(livePoints, latest.ts - 60 * 60 * 1000);
+  const trend30m = trend30Base ? latest.temp - trend30Base.temp : null;
+  const trend60m = trend60Base ? latest.temp - trend60Base.temp : null;
+  const distanceToDeb = debProfile.peak.temp - latest.temp;
+
+  const metaBase = {
+    currentTemp: latest.temp,
+    debPeak: debProfile.peak.temp,
+    distanceToDeb,
+    trend30m,
+    trend60m,
+    observedHigh,
+    peakStartTs,
+    peakEndTs,
+  };
+
+  const nearThreshold = chartDeltaForCelsius(row, 2);
+  const watchThreshold = chartDeltaForCelsius(row, 3);
+  const breakoutNearThreshold = chartDeltaForCelsius(row, 0.5);
+  const flatTrendFloor = -chartDeltaForCelsius(row, 0.2);
+  const coolingDrop = -chartDeltaForCelsius(row, 0.5);
+  const breakoutStep = chartDeltaForCelsius(row, 0.1);
+  const phase = String((row as any)?.window_phase || "").toLowerCase();
+  const afterPeak =
+    phase === "post_peak" ||
+    (peakEndTs !== null && latest.ts > peakEndTs);
+  const isCooling =
+    afterPeak &&
+    ((trend60m !== null && trend60m <= coolingDrop) ||
+      (previousHigh !== null && latest.temp <= previousHigh + coolingDrop));
+  if (isCooling) return { state: "cooling", ...metaBase };
+
+  const isBreakout =
+    latest.temp >= debProfile.peak.temp ||
+    (distanceToDeb <= breakoutNearThreshold &&
+      previousHigh !== null &&
+      latest.temp > previousHigh + breakoutStep);
+  if (isBreakout) return { state: "breakout", ...metaBase };
+
+  if (
+    distanceToDeb <= nearThreshold &&
+    (trend30m === null || trend30m >= flatTrendFloor)
+  ) {
+    return { state: "near_peak", ...metaBase };
+  }
+
+  const isNearPeakTime =
+    peakStartTs !== null &&
+    peakEndTs !== null &&
+    latest.ts <= peakEndTs &&
+    peakStartTs - latest.ts <= 3 * 60 * 60 * 1000;
+  if (distanceToDeb <= watchThreshold || isNearPeakTime) {
+    return { state: "watch", ...metaBase };
+  }
+
+  return { state: "none", ...metaBase };
+}
+
 function getDebPeakWindowRange(
   data: Array<Record<string, any>>,
   series: EvidenceSeries[],
@@ -1645,6 +1859,7 @@ export {
   buildChartDomain,
   buildFullDayChartData,
   getDebPeakWindowRange,
+  getPeakGlowState,
   buildIntDegreeTicks,
   buildModelSummaryCards,
   buildRunwayPlates,
@@ -1664,4 +1879,4 @@ export {
   validNumber,
 };
 
-export type { EvidenceSeries, HourlyForecast };
+export type { EvidenceSeries, HourlyForecast, PeakGlowMeta, PeakGlowState };
