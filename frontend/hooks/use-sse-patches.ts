@@ -49,25 +49,37 @@ function closeEventSource() {
 
 function connectSsePatches() {
   if (typeof window === "undefined" || eventSource) return;
-  closeEventSource();
-  eventSource = new EventSource(resolveBackendApiUrl("/api/events"));
 
-  eventSource.onopen = () => {
-    reconnectAttempt = 0;
-  };
+  const url = resolveBackendApiUrl("/api/events");
+  console.log("[SSE] Attempting to connect to:", url);
 
-  eventSource.onmessage = (event) => {
-    try {
-      applySsePatch(JSON.parse(event.data));
-    } catch {
-      // Ignore malformed frames; the stream stays alive.
-    }
-  };
-
-  eventSource.onerror = () => {
+  try {
     closeEventSource();
+    eventSource = new EventSource(url, { withCredentials: true });
+
+    eventSource.onopen = () => {
+      console.log("[SSE] Connection established successfully to:", url);
+      reconnectAttempt = 0;
+    };
+
+    eventSource.onmessage = (event) => {
+      console.log("[SSE] Received patch message:", event.data);
+      try {
+        applySsePatch(JSON.parse(event.data));
+      } catch (err) {
+        console.error("[SSE] Failed to parse message JSON payload:", err);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error("[SSE] Connection error or stream closed:", err);
+      closeEventSource();
+      scheduleReconnect();
+    };
+  } catch (err) {
+    console.error("[SSE] Exception thrown while instantiating EventSource:", err);
     scheduleReconnect();
-  };
+  }
 }
 
 export function ensureSsePatchConnection() {
@@ -106,6 +118,10 @@ export function getLatestPatchesSnapshot() {
 }
 
 export function useSsePatchVersion() {
+  if (typeof window !== "undefined") {
+    ensureSsePatchConnection();
+  }
+
   useEffect(() => {
     ensureSsePatchConnection();
   }, []);
@@ -122,6 +138,10 @@ export function useSsePatchVersion() {
 
 export function useLatestPatch(city: string | null | undefined) {
   const cityKey = normalizeCityKey(city);
+
+  if (typeof window !== "undefined") {
+    ensureSsePatchConnection();
+  }
 
   useEffect(() => {
     ensureSsePatchConnection();

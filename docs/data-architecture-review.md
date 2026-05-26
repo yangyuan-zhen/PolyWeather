@@ -78,6 +78,8 @@ Polymarket Gamma/CLOB    ─┤
 
 **已修复：TTL 匹配** — `SCAN_TERMINAL_PAYLOAD_TTL_SEC` 30s → 120s，匹配 ThreadPoolExecutor(4)×60 城的实际重算耗时。
 
+**已实现：SSE 增量推送（SSE Patch）与按需刷新** — 引入 FastAPI SSE 广播通道 (`/api/events`)。数据采集端更新时自动向 `/api/internal/collector-patch` 推送最新温度；前端扫描终端订阅该流，不再执行固定的 5 分钟定时轮询，而是根据 Patch 变化即时更新列表；当前选中图表基于 `useLatestPatch` 实现 1 分钟级温度的增量合并与实时曲线绘制。
+
 | # | 问题 | 优先级 |
 |---|------|------|
 | 5 | 缓存键过粗（city::mode），微小变化也触发完整重算 | 🟡 |
@@ -91,6 +93,8 @@ Polymarket Gamma/CLOB    ─┤
 **已修复：Stale-while-revalidate** — `ensureCityDetail` 过期缓存立即返回 + 后台异步刷新，用户不再看到 loading spinner。
 
 **已修复：扫描数据复用** — `preloadCityFromRow()` 从扫描终端行预填充城市详情缓存，选城市后详情面板立即显示。
+
+**已实现：SSE 订阅与 2 分钟无 Patch 兜底机制** — 引入 `useLatestPatch` 与 `useSsePatchVersion` 管理实况数据的准实时合并。若长连接中断或 2 分钟内未收到任何增量 Patch，可见图表自动触发 60s 降级轮询（从 `/api/city/{city}/summary` 获取最新实况，并以 ignoreCache 强刷 full detail）。
 
 ## 六、待办
 

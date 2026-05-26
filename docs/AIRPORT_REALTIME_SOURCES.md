@@ -44,32 +44,24 @@
 - 仅当当前温度距 DEB 预测最高 ≤3°C 时推送
 - 确认过峰值后自动停止
 
-## 前端市场监控 freshness 契约
+## 前端实时同步与 SSE Patch 机制
 
-后端城市详情接口会在 `current.freshness` / `airport_current.freshness` 返回源感知更新时间信息，前端市场监控不再用统一的 `obs_age_min` 判断所有城市。
+为了向用户提供秒级实况响应并降低服务器负载，系统已从定时轮询架构全面迁移至 **Server-Sent Events (SSE) 增量更新（SSE Patch）** 架构。
 
-关键字段：
+### 1. 数据推送链路 (Data Pipeline)
+1. **Collector 采集端触发**：在 `weather_sources.py` 中，当高频实况源（如 AMOS, CoWIN, MADIS 等）采集到温度更新或观测时间变更时，会调用 `_emit_temperature_patch_if_changed` 过滤重复值，并异步向 `/api/internal/collector-patch` 发送 POST 报文。
+2. **FastAPI SSE 广播**：FastAPI 后端的 `sse_router.py` 接收到 Patch 后，将其推入 `sse_manager` 进行全局广播，事件被包装为 `city_patch` 增量包，包含自增的全局 `revision` 和最新的 `changes`。
+3. **BFF 代理流**：浏览器前端通过 BFF (Next.js rewrites) 建立与 `/api/events` 的持久连接，从而无需定时轮询。
 
-```json
-{
-  "source_code": "amos",
-  "source_label": "AMOS",
-  "observed_at": "2026-05-14T11:59:10+00:00",
-  "observed_at_local": "20:59",
-  "native_update_interval_sec": 60,
-  "expected_next_update_at": "2026-05-14T12:00:10+00:00",
-  "freshness_status": "fresh",
-  "freshness_reason": "within_native_fresh_window",
-  "age_sec": 50
-}
-```
-
-前端刷新规则：
-
-- 首次进入市场监控：强制刷新全部城市，绕过 30 分钟前端缓存。
-- 定时轮询：仍以 60s tick 检查，但只刷新已到 `expected_next_update_at`、`delayed`、`stale` 或缺失的城市。
-- BFF 代理：`force_refresh=true` 时使用 `no-store`，避免 Next fetch revalidate 缓存吞掉强刷。
-- 展示：卡片 tooltip 显示源端名称、原生更新间隔和当前 freshness 状态。
+### 2. 前端消费与刷新规则 (Frontend Freshness Rules)
+- **扫描列表免轮询更新**：`use-scan-terminal-query.ts` 通过 `useSsePatchVersion` 钩子订阅全局 SSE 版本。当有任何城市产生更新时，列表将触发按需重绘，之前固定的 5 分钟 `setInterval` 定时轮询已被彻底禁用。
+- **详情图表增量合并**：`LiveTemperatureThresholdChart.tsx` 使用 `useLatestPatch(city)` 钩子订阅当前选中城市的增量 Patch。当收到 Patch 时，前端会将最新温度与时间戳以增量形式直接合并（Merge）入本地的 `hourly` 状态中，避免重新加载完整的 City Detail JSON。
+- **双重降级兜底 (Safe Fallback Guard)**：
+  - **无 Patch 轮询兜底**：为了防止 SSE 连接断开或长时间无 patch 导致界面卡死，所有**可见图表**（即 active 槽位、compact 栅格槽位或 maximized 视图）会启动一个 60 秒的检测定时器。
+  - **触发条件**：若当前可见城市在连续 **2 分钟** 内没有收到任何 SSE patch，前端将自动发起主动请求：
+    1. 调用轻量级的 `/api/city/{city}/summary` 快速拉取最新实况温度。
+    2. 调用 `fetchHourlyForecastForCity(city, { ignoreCache: true })` 强刷完整的城市详情数据，确保数据一致性。
+- **按需加载与 Stagger 优化**：在加载城市详情时，前端会优先加载 Active 状态的图表，而处于 Background/非活动状态的图表则通过 staggered timer (按槽位索引延迟 300ms~1500ms) 异步获取，以分流请求峰值。
 
 ## 消息模板
 
