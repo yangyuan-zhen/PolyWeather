@@ -2,7 +2,6 @@
 
 import clsx from "clsx";
 import { useEffect, useMemo, useState } from "react";
-import { LoadingSignal } from "@/components/dashboard/scan-terminal/LoadingSignal";
 import {
   CartesianGrid,
   Line,
@@ -1155,7 +1154,6 @@ export function LiveTemperatureThresholdChart({
   slotIndex?: number;
 }) {
   const [hourly, setHourly] = useState<HourlyForecast>(null);
-  const [isFetching, setIsFetching] = useState(false);
   const city = String(row?.city || "").toLowerCase().trim();
   const [timeframe, setTimeframe] = useState<"1D" | "3D">("1D");
   const [userToggledKeys, setUserToggledKeys] = useState<Record<string, boolean>>({});
@@ -1181,12 +1179,10 @@ export function LiveTemperatureThresholdChart({
 
     if (cached && Date.now() - cached.ts < HOURLY_CACHE_TTL_MS) {
       setHourly(cached.data);
-      setIsFetching(false);
       return;
     }
 
     setHourly(seedHourlyForecastFromRow(row));
-    setIsFetching(true);
     let cancelled = false;
 
     // Prioritize active slots, stagger/delay background slots to optimize load performance
@@ -1197,11 +1193,8 @@ export function LiveTemperatureThresholdChart({
         .then((data) => {
           if (cancelled || !data) return;
           setHourly(data);
-          setIsFetching(false);
         })
-        .catch(() => {
-          if (!cancelled) setIsFetching(false);
-        });
+        .catch(() => {});
     }, delay);
 
     return () => {
@@ -1488,16 +1481,7 @@ export function LiveTemperatureThresholdChart({
   );
 
   return (
-    <Panel title={panelTitle} actions={timeframeActions} className="relative">
-      {isFetching && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/70 backdrop-blur-sm dark:bg-slate-950/70 rounded-[4px]">
-          <LoadingSignal
-            title={isEn ? "Loading city data..." : "加载城市数据中..."}
-            description={isEn ? `Fetching latest observations for ${row?.city_display_name || row?.city || "this city"}` : `正在获取 ${row?.city_display_name || row?.city || "该城市"} 的最新观测数据`}
-            compact={compact}
-          />
-        </div>
-      )}
+    <Panel title={panelTitle} actions={timeframeActions}>
       <div className="flex h-full min-h-[300px] flex-col">
         {/* Compact stats bar */}
         {compact ? (
