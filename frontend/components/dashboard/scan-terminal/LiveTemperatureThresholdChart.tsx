@@ -594,7 +594,57 @@ function mergePatchIntoHourly(
   };
 
   if (changes.amos && typeof changes.amos === "object") {
-    next.amos = changes.amos as AmosData;
+    const oldAmos = prev?.amos || {};
+    const newAmos = changes.amos as AmosData;
+    next.amos = {
+      ...oldAmos,
+      ...newAmos,
+    } as any;
+  }
+
+  // Preserve runwayPlateHistory in next state
+  if (prev?.runwayPlateHistory) {
+    next.runwayPlateHistory = prev.runwayPlateHistory;
+  }
+
+  // Append new runway observations to history if available in the patch
+  const amosChanges = changes.amos as Record<string, any> | undefined;
+  const obsTimeVal = obsTime || amosChanges?.observation_time || amosChanges?.observation_time_local;
+  const runwayObs = amosChanges?.runway_obs;
+  if (runwayObs && Array.isArray(runwayObs.point_temperatures) && obsTimeVal) {
+    const history: Record<string, Array<Record<string, unknown>>> = {};
+    const sourceHistory = next.runwayPlateHistory || (next.amos as any)?.runway_plate_history || {};
+    
+    // Copy existing history points
+    Object.entries(sourceHistory).forEach(([rwy, pts]) => {
+      if (Array.isArray(pts)) {
+        history[rwy] = [...pts];
+      }
+    });
+
+    // Append new points from point_temperatures
+    runwayObs.point_temperatures.forEach((pt: any) => {
+      const rwy = pt.runway || "";
+      if (!rwy) return;
+      const tempVal = validNumber(pt.target_runway_max) ?? validNumber(pt.tdz_temp) ?? validNumber(pt.end_temp);
+      if (tempVal === null) return;
+
+      const rwyHistory = history[rwy] || [];
+      const exists = rwyHistory.some((p: any) => p.timestamp === obsTimeVal || p.time === obsTimeVal || p.observed_at === obsTimeVal);
+      if (!exists) {
+        rwyHistory.push({
+          timestamp: obsTimeVal,
+          temp_c: tempVal,
+          value: tempVal,
+        });
+        history[rwy] = rwyHistory.slice(-MAX_OBS_POINTS);
+      }
+    });
+
+    next.runwayPlateHistory = history;
+    if (next.amos) {
+      (next.amos as any).runway_plate_history = history;
+    }
   }
 
   if (tempValue !== null) {
