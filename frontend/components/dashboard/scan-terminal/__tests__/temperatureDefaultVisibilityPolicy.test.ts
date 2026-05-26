@@ -270,12 +270,12 @@ export function runTests() {
         source_label: "NOAA MADIS",
       },
       airportPrimaryTodayObs: [
-        ["16:51", 73.9],
-        ["15:51", 73],
-        ["15:47", 71.6],
-        ["15:44", 72],
+        ["2026-05-25T16:51", 73.9],
+        ["2026-05-25T15:51", 73],
+        ["2026-05-25T15:47", 71.6],
+        ["2026-05-25T15:44", 72],
       ],
-      metarTodayObs: [{ time: "16:51", temp: 73.9 }],
+      metarTodayObs: [{ time: "2026-05-25T16:51", temp: 73.9 }],
     } as any,
     "1D",
   );
