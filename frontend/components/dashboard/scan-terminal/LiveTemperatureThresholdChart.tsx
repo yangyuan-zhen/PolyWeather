@@ -1447,10 +1447,11 @@ export function LiveTemperatureThresholdChart({
   const isTokyo = normalizedKey === 'tokyo';
   const isSingapore = normalizedKey === 'singapore';
   const isParis = normalizedKey === 'paris';
+  const isTaipei = normalizedKey === 'taipei';
   const stationSourceCode = hourly?.airportPrimary?.source_code || (row as any)?.station_source_code || '';
   const hasRealStationNetwork = /^(mgm|jma_amedas|fmi|knmi|cowin_obs|ims|ncm|aeroweb|madis_hfmetar|singapore_mss)$/.test(stationSourceCode);
   const isWeatherStation = !runwaySensorCities.has(normalizedKey)
-    && !isHKO && !isShenzhen && !isTokyo && !isSingapore && !isParis
+    && !isHKO && !isShenzhen && !isTokyo && !isSingapore && !isParis && !isTaipei
     && hasRealStationNetwork;
 
   const runwayHeaderLabel = isShenzhen ? '天文台实测 (10分钟)'
@@ -1458,6 +1459,7 @@ export function LiveTemperatureThresholdChart({
     : isTokyo ? '机场气象站 (10分钟)'
     : isSingapore ? '航站楼温度'
     : isParis ? '官方机场观测 (15分钟)'
+    : isTaipei ? 'CWA (10分钟)'
     : isWeatherStation ? '气象站实测'
     : '跑道实测 (1分钟)';
 
@@ -1469,6 +1471,7 @@ export function LiveTemperatureThresholdChart({
     : isTokyo ? '机场气象站'
     : isSingapore ? '航站楼'
     : isParis ? '官方机场观测'
+    : isTaipei ? 'CWA'
     : isWeatherStation ? '气象站'
     : '跑道实测';
 
