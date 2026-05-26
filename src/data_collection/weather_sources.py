@@ -405,7 +405,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         threading.Thread(target=post_patch, daemon=True).start()
         # MADIS cache is a single list, not a keyed dict — expire on age
         with self._madis_cache_lock:
-            if self._madis_cache is not None and now - self._madis_cache_ts > self.madis_cache_ttl_sec * 2:
+            if self._madis_cache is not None and time.time() - self._madis_cache_ts > self.madis_cache_ttl_sec * 2:
                 self._madis_cache = None
                 self._madis_cache_ts = 0.0
 
