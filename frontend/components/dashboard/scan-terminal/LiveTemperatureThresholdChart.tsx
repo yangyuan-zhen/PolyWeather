@@ -295,31 +295,33 @@ export function LiveTemperatureThresholdChart({
     [data, series, viewMode],
   );
   const visibleRange = zoomRange ?? autoWindowRange;
+  const visibleRangeKey = visibleRange ? `${visibleRange[0]}:${visibleRange[1]}` : "full";
 
   const zoomedData = useMemo(() => {
     if (!visibleRange || data.length === 0) return data;
     const [start, end] = visibleRange;
     return data.slice(start, end + 1);
-  }, [data, visibleRange]);
+  }, [data, visibleRangeKey]);
 
-  useEffect(() => {
+  const nextTargetResolution = useMemo(() => {
     if (visibleRange && data.length > 0) {
       const zoomedData = data.slice(visibleRange[0], visibleRange[1] + 1);
       if (zoomedData.length > 0) {
         const startTs = zoomedData[0].ts;
         const endTs = zoomedData[zoomedData.length - 1].ts;
         if (endTs - startTs <= 2 * 60 * 60 * 1000) {
-          setTargetResolution("1m");
-        } else {
-          setTargetResolution("10m");
+          return "1m";
         }
-      } else {
-        setTargetResolution("10m");
       }
-    } else {
-      setTargetResolution("10m");
     }
-  }, [visibleRange, data]);
+    return "10m";
+  }, [data, visibleRangeKey]);
+
+  useEffect(() => {
+    if (targetResolution !== nextTargetResolution) {
+      setTargetResolution(nextTargetResolution);
+    }
+  }, [targetResolution, nextTargetResolution]);
 
   const tzOffset = row?.tz_offset_seconds ?? 0;
   const settlementObs = useMemo(() => {
@@ -786,7 +788,7 @@ export function LiveTemperatureThresholdChart({
         )}
 
         {/* Chart */}
-        <div className="relative min-h-0 flex-1 p-2">
+        <div className="relative min-h-[240px] flex-1 p-2">
           {/* Interactive legend */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-1.5 text-[11px] border-b border-[#e2e8f0] bg-white">
             {chartSeries.length > 1 &&
@@ -832,7 +834,13 @@ export function LiveTemperatureThresholdChart({
               </label>
             )}
           </div>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer
+            width="100%"
+            height="100%"
+            minWidth={1}
+            minHeight={220}
+            initialDimension={{ width: 1, height: 220 }}
+          >
             <ReComposedChart
               data={zoomedData}
               margin={{ top: 16, right: compact ? 20 : 44, left: 4, bottom: 8 }}

@@ -106,6 +106,15 @@ export function runTests() {
   assert(chart.includes("加载图表") && chart.includes("absolute inset-2"), "temperature chart must render an in-chart loading overlay");
   assert(chart.includes("viewMode"), "temperature chart must expose a view mode for DEB-peak auto view versus full-day view");
   assert(chart.includes("getDebPeakWindowRange"), "temperature chart must derive its default view from the DEB peak window");
+  assert(chart.includes("nextTargetResolution"), "temperature chart must derive target resolution without setting state on every render");
+  assert(
+    chart.includes("targetResolution !== nextTargetResolution"),
+    "temperature chart must guard target-resolution state updates to prevent render/update loops",
+  );
+  assert(
+    chart.includes("initialDimension") && chart.includes("minHeight={"),
+    "temperature chart ResponsiveContainer must have stable initial/min dimensions to avoid zero-size resize loops",
+  );
   assert(!chart.includes("3D"), "temperature chart UI must not expose a 3D/future-forecast mode");
   assert(!chart.includes("build3DayChartData"), "temperature chart component must not render future prediction curves");
   assert(
