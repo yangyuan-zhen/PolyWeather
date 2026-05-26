@@ -40,7 +40,7 @@ CITY_REGISTRY = {
         "lat": 55.5915,
         "lon": 37.2615,
         "icao": "UUWW",
-        "settlement_source": "noaa",
+        "settlement_source": "metar",
         "settlement_station_code": "UUWW",
         "settlement_station_label": "Vnukovo International Airport",
         "tz_offset": 10800,
@@ -50,7 +50,7 @@ CITY_REGISTRY = {
         "risk_emoji": "🟡",
         "airport_name": "Vnukovo International Airport",
         "distance_km": 29.0,
-        "warning": "市场现按 NOAA UUWW 整度°C口径结算；以 weather.gov Temp 列在当日全部小时最终完成后的最高整度摄氏值为准。",
+        "warning": "仅 UUWW METAR 单站；无实时国家级站网，看日内趋势时需注意报间相对稳定但更新频率较低。",
     },
     "london": {
         "name": "London",

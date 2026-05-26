@@ -55,7 +55,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
     CITY_METAR_CLUSTERS = {
         "buenos aires": ["SAEZ", "SABE", "SADP", "SADF", "SADL", "SADJ"],
         "istanbul": ["LTFM", "LTBA", "LTFJ"],
-        "moscow": ["UUWW", "UUEE", "UUDD", "UUBW", "UUMO"],
         "london": ["EGLL", "EGLC", "EGKK", "EGSS", "EGGW"],
         "new york": ["KLGA", "KJFK", "KEWR", "KTEB", "KHPN"],
         "los angeles": ["KLAX", "KBUR", "KLGB", "KSNA", "KVNY"],

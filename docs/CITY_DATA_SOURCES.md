@@ -57,7 +57,7 @@
 |------|------|------|
 | london | EGLC | Met Office 仅 1 小时更新 |
 | jeddah | OEJN | NCM 数据源目前不可用 |
-| moscow | UUWW | 俄罗斯 METAR 集群 + NOAA WRH 结算 |
+| moscow | UUWW | 仅 UUWW METAR 单站 |
 | shenzhen | ZGSZ | 已接入 HKO 流浮山 10 分钟数据，见 Tier 3 |
 | munich | EDDM | DWD 延迟约 1 小时 |
 | milan | LIMC | 无已知实时源 |
