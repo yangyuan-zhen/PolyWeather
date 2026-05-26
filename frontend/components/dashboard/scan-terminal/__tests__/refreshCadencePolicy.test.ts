@@ -38,8 +38,8 @@ export function runTests() {
     "selected city detail chart cache should align with 5-minute scan/metar cadence",
   );
   assert(
-    chartSource.includes("setInterval(fetchLiveTemp, 60_000)"),
-    "selected city chart should poll live temperature every 60 seconds via lightweight summary endpoint",
+    chartSource.includes("setInterval(poll, 60_000)"),
+    "selected city chart should poll live temperature and runway curves every 60 seconds",
   );
   assert(
     chartSource.includes("_hourlyRequestCache") &&

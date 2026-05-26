@@ -1211,10 +1211,11 @@ export function LiveTemperatureThresholdChart({
     };
   }, [city, row, isActive, slotIndex]);
 
-  // ── 60s lightweight live-temp poll ──
+  // ── 60s live poll: summary (number) + detail amos/runway (curves) ──
   useEffect(() => {
     if (!city) return;
-    const fetchLiveTemp = () => {
+    const poll = () => {
+      // Lightweight: current temp number
       fetch(`/api/city/${encodeURIComponent(city)}/summary`)
         .then((res) => (res.ok ? res.json() : null))
         .then((payload) => {
@@ -1223,9 +1224,38 @@ export function LiveTemperatureThresholdChart({
           if (temp !== null) setLiveTemp(temp);
         })
         .catch(() => {});
+
+      // Refresh runway curves and station observations
+      fetch(`/api/city/${encodeURIComponent(city)}/detail?depth=full&force_refresh=false`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((json) => {
+          if (!json) return;
+          setHourly((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              amos: json.amos ?? prev.amos,
+              airportPrimary: json.airport_primary ?? prev.airportPrimary,
+              airportCurrent: json.airport_current ?? prev.airportCurrent,
+              airportPrimaryTodayObs: (json as any)?.official?.airport_primary_today_obs
+                || json.airport_primary_today_obs
+                || prev.airportPrimaryTodayObs,
+              runwayPlateHistory: (json as any)?.runway_plate_history
+                || (json.amos as any)?.runway_plate_history
+                || prev.runwayPlateHistory,
+              settlementTodayObs: (json as any).timeseries?.settlement_today_obs
+                || (json as any)?.settlement_today_obs
+                || prev.settlementTodayObs,
+              metarTodayObs: (json as any).timeseries?.metar_today_obs
+                || (json as any)?.metar_today_obs
+                || prev.metarTodayObs,
+            };
+          });
+        })
+        .catch(() => {});
     };
-    fetchLiveTemp();
-    const id = setInterval(fetchLiveTemp, 60_000);
+    poll();
+    const id = setInterval(poll, 60_000);
     return () => clearInterval(id);
   }, [city]);
 
