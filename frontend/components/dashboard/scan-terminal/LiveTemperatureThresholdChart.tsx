@@ -4,7 +4,6 @@ import clsx from "clsx";
 import { useEffect, useMemo, useState } from "react";
 import { LoadingSignal } from "@/components/dashboard/scan-terminal/LoadingSignal";
 import {
-  Brush,
   CartesianGrid,
   Line,
   LineChart as ReLineChart,
@@ -1798,17 +1797,6 @@ export function LiveTemperatureThresholdChart({
                   isAnimationActive={false}
                 />
               ))}
-              {!compact && (timeframe === "1D" || timeframe === "3D") && (
-                <Brush
-                  dataKey="label"
-                  height={18}
-                  stroke="#64748b"
-                  fill="#f8fafc"
-                  travellerWidth={8}
-                  startIndex={0}
-                  endIndex={data.length - 1}
-                />
-              )}
             </ReLineChart>
           </ResponsiveContainer>
         </div>
