@@ -1,6 +1,8 @@
 import {
   __buildTemperatureChartDataForTest,
   __getActiveTemperatureSeriesForTest,
+  __getDebPeakWindowRangeForTest,
+  __getLiveObservationLabelsForTest,
   __getObservationDisplayMetricsForTest,
   __getVisibleTemperatureSeriesForTest,
   __isTemperatureSeriesVisibleByDefaultForTest,
@@ -114,6 +116,51 @@ export function runTests() {
     defaultVisibleSeries.some((item) => item.key === "hourly_forecast"),
     "DEB fusion forecast should be visible by default",
   );
+
+  const debPeakWindowChart = __buildTemperatureChartDataForTest(
+    {
+      city: "beijing",
+      local_date: "2026-05-26",
+      local_time: "12:00",
+      tz_offset_seconds: 8 * 60 * 60,
+      deb_prediction: 35,
+    } as any,
+    {
+      localTime: "12:00",
+      times: [
+        "00:00", "01:00", "02:00", "03:00", "04:00", "05:00",
+        "06:00", "07:00", "08:00", "09:00", "10:00", "11:00",
+        "12:00", "13:00", "14:00", "15:00", "16:00", "17:00",
+        "18:00", "19:00", "20:00", "21:00", "22:00", "23:00",
+      ],
+      temps: [
+        20, 20.5, 21, 21.5, 22, 23,
+        24, 25, 26, 27, 29, 31,
+        32, 33, 34.2, 35, 34.4, 33.3,
+        31.8, 30.2, 28.5, 27, 25.5, 24,
+      ],
+      debPrediction: 35,
+    } as any,
+    "1D",
+  );
+  const debPeakWindowRange = __getDebPeakWindowRangeForTest(
+    debPeakWindowChart.data,
+    debPeakWindowChart.series as any,
+  );
+  assert(debPeakWindowRange, "default chart view should derive an auto high-temperature window from the DEB curve");
+  const debPeakWindowRows = debPeakWindowChart.data.slice(debPeakWindowRange![0], debPeakWindowRange![1] + 1);
+  const debPeakWindowStart = debPeakWindowRows[0].ts;
+  const debPeakWindowEnd = debPeakWindowRows[debPeakWindowRows.length - 1].ts;
+  assert(
+    debPeakWindowStart <= Date.UTC(2026, 4, 26, 11, 0, 0) &&
+      debPeakWindowEnd >= Date.UTC(2026, 4, 26, 19, 0, 0),
+    "DEB peak auto window should cover roughly peak -4h through peak +4h by default",
+  );
+  assert(
+    debPeakWindowEnd - debPeakWindowStart <= 12 * 60 * 60 * 1000,
+    "DEB peak auto window should not expand beyond 12 hours",
+  );
+
   assert(
     __isTemperatureSeriesVisibleByDefaultForTest("paris", "model_curve_AROME HD"),
     "Paris AROME HD should be the only default-visible model curve exception",
@@ -264,6 +311,26 @@ export function runTests() {
   assert(newYorkMetrics.currentRunwayTemp === 73.9, "weather-station header should use detail METAR/current temp before stale row zero");
   assert(newYorkMetrics.observedHighMetar === 73.9, "METAR high header should use detail METAR high before stale row zero");
 
+  const istanbulLabels = __getLiveObservationLabelsForTest(
+    {
+      city: "istanbul",
+      airport: "LTFM",
+      metar_context: {
+        source: "mgm",
+        station_label: "MGM Istanbul Airport",
+      },
+    } as any,
+    null,
+  );
+  assert(
+    istanbulLabels.runwayHeaderLabel === "气象站实测",
+    "Istanbul/MGM should be labeled as weather-station observations, not runway observations",
+  );
+  assert(
+    istanbulLabels.runwayHighLabel === "气象站",
+    "Istanbul/MGM high label should be weather station",
+  );
+
   const newYorkWithMadis = __buildTemperatureChartDataForTest(
     {
       city: "new york",
@@ -319,14 +386,49 @@ export function runTests() {
     } as any,
     "1D",
   );
+  assert(
+    newYorkMinuteStream.data.length < 120,
+    "1D live chart should use real timestamp rows instead of preallocating 1440 empty full-day minute slots",
+  );
   const minuteLabels = newYorkMinuteStream.data
     .filter((point) => point.madis !== null)
     .map((point) => point.label);
   assert(
-    minuteLabels.includes("10:01") &&
-      minuteLabels.includes("10:02") &&
-      minuteLabels.includes("10:03"),
-    "live observation chart should preserve minute-level SSE patch points instead of collapsing them into a 30-minute bucket",
+    minuteLabels.includes("10:01:00") &&
+      minuteLabels.includes("10:02:00") &&
+      minuteLabels.includes("10:03:00"),
+    "live observation chart should preserve real observation timestamps on the x-axis",
+  );
+
+  const longLivedSingleObservation = __buildTemperatureChartDataForTest(
+    {
+      city: "ankara",
+      local_date: "2026-05-26",
+      local_time: "14:28",
+      tz_offset_seconds: 3 * 60 * 60,
+      current_temp: 21.9,
+      current_max_so_far: 21.9,
+      airport: "LTAC",
+    } as any,
+    {
+      localTime: "14:28",
+      times: [],
+      temps: [],
+      airportPrimary: {
+        source_code: "mgm",
+        source_label: "MGM",
+        temp: 21.9,
+        max_so_far: 21.9,
+      },
+      airportPrimaryTodayObs: [["2026-05-26T11:28:00Z", 21.9]],
+    } as any,
+    "1D",
+  );
+  assert(
+    longLivedSingleObservation.series.some(
+      (item) => item.key === "current" && item.values.filter((value: number | null) => value !== null).length >= 2,
+    ),
+    "long-lived chart with only one fresh observation should keep a renderable current reference line instead of an invisible single-point series",
   );
 
   const chengduMergedHourly = __mergePatchIntoHourlyForTest(

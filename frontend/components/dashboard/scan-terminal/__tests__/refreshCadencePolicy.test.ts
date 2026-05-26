@@ -28,6 +28,10 @@ export function runTests() {
     path.join(projectRoot, "components", "dashboard", "scan-terminal", "LiveTemperatureThresholdChart.tsx"),
     "utf8",
   );
+  const chartLogicSource = fs.readFileSync(
+    path.join(projectRoot, "components", "dashboard", "scan-terminal", "temperature-chart-logic.ts"),
+    "utf8",
+  );
 
   assert(
     querySource.includes("useSsePatchVersion") &&
@@ -35,7 +39,7 @@ export function runTests() {
     "scan list should subscribe to SSE patch state instead of running a 5-minute interval",
   );
   assert(
-    chartSource.includes("DASHBOARD_REFRESH_POLICY_MS.metar") &&
+    chartLogicSource.includes("DASHBOARD_REFRESH_POLICY_MS.metar") &&
       !chartSource.includes("window.setInterval"),
     "selected city detail chart cache should align with 5-minute scan/metar cadence",
   );
@@ -59,8 +63,8 @@ export function runTests() {
     "inactive non-compact charts should not run live polling",
   );
   assert(
-    chartSource.includes("_hourlyRequestCache") &&
-      chartSource.includes("seedHourlyForecastFromRow") &&
+    chartLogicSource.includes("_hourlyRequestCache") &&
+      chartLogicSource.includes("seedHourlyForecastFromRow") &&
       chartSource.includes("setHourly(seedHourlyForecastFromRow(row))"),
     "terminal charts should render from row data immediately and dedupe concurrent city detail requests",
   );

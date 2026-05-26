@@ -87,11 +87,27 @@ export function runTests() {
   assert(bffEventsRoute.includes("searchParams"), "Next.js SSE proxy must forward query parameters to FastAPI");
 
   const chart = readFrontendFile("components", "dashboard", "scan-terminal", "LiveTemperatureThresholdChart.tsx");
+  const chartLogicPath = path.join(process.cwd(), "components", "dashboard", "scan-terminal", "temperature-chart-logic.ts");
+  assert(fs.existsSync(chartLogicPath), "temperature chart pure data logic must live in temperature-chart-logic.ts");
+  const chartLogic = fs.readFileSync(chartLogicPath, "utf8");
+  assert(chartLogic.includes("buildFullDayChartData"), "temperature-chart-logic.ts must own full-day chart data generation");
+  assert(chartLogic.includes("mergePatchIntoHourly"), "temperature-chart-logic.ts must own SSE patch merge logic");
+  assert(!chart.includes("function buildFullDayChartData"), "LiveTemperatureThresholdChart.tsx must not define full-day chart data generation inline");
+  assert(!chart.includes("function mergePatchIntoHourly"), "LiveTemperatureThresholdChart.tsx must not define SSE patch merge logic inline");
   assert(chart.includes("useLatestPatch"), "temperature chart must consume useLatestPatch(city)");
   assert(chart.includes("latestPatch"), "temperature chart must react to incoming SSE patches");
   assert(chart.includes("useSseResyncVersion"), "temperature chart must resync full detail when SSE replay is incomplete");
-  assert(chart.includes("runway_points"), "temperature chart must merge v1 runway_points into runway history");
+  assert(chartLogic.includes("runway_points"), "temperature chart must merge v1 runway_points into runway history");
   assert(chart.includes("2 * 60_000"), "temperature chart must wait two minutes without patches before full-fetch fallback");
+  assert(chart.includes("TemperatureTooltipContent"), "temperature chart must use a custom tooltip content component");
+  assert(chart.includes("filterNull={false}"), "temperature chart tooltip must keep null-slot payload so hover works between sparse points");
+  assert(chart.includes("nearestSeriesValue"), "temperature chart tooltip must fall back to nearest non-null value for connected sparse lines");
+  assert(chart.includes("isHourlyLoading"), "temperature chart must keep a per-panel hourly loading state");
+  assert(chart.includes("加载图表") && chart.includes("absolute inset-2"), "temperature chart must render an in-chart loading overlay");
+  assert(chart.includes("viewMode"), "temperature chart must expose a view mode for DEB-peak auto view versus full-day view");
+  assert(chart.includes("getDebPeakWindowRange"), "temperature chart must derive its default view from the DEB peak window");
+  assert(!chart.includes("3D"), "temperature chart UI must not expose a 3D/future-forecast mode");
+  assert(!chart.includes("build3DayChartData"), "temperature chart component must not render future prediction curves");
   assert(
     !chart.includes("setInterval(poll, 60_000)"),
     "temperature chart must not use unconditional 60-second full-detail polling after SSE patch migration",
