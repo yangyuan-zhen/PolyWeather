@@ -29,6 +29,12 @@ from web.services.ops_api import (
 router = APIRouter(tags=["ops"])
 
 
+@router.get("/api/ops/online-users")
+async def ops_online_users():
+    from src.utils.online_tracker import online_count
+    return {"online": online_count()}
+
+
 @router.get("/api/ops/users")
 async def ops_search_users(request: Request, q: str = "", limit: int = 20):
     return search_ops_users(request, q=q, limit=limit)

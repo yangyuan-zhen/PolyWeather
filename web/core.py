@@ -230,6 +230,8 @@ def _bind_optional_supabase_identity(request: Request) -> None:
     request.state.auth_email = identity.email
     request.state.auth_points = identity.points
     request.state.auth_created_at = identity.created_at
+    from src.utils.online_tracker import record_activity
+    record_activity(identity.user_id)
 
 
 def _resolve_auth_points(request: Request) -> int:
@@ -306,6 +308,8 @@ def _assert_entitlement(request: Request) -> None:
 
         request.state.auth_user_id = identity.user_id
         request.state.auth_email = identity.email
+        from src.utils.online_tracker import record_activity
+        record_activity(identity.user_id)
         return
 
     if not _ENTITLEMENT_GUARD_ENABLED:

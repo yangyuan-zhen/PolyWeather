@@ -12,6 +12,7 @@ import {
   Search,
   Table2,
   UserRound,
+  Users,
 } from "lucide-react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CityListItem, ProAccessState, ScanOpportunityRow } from "@/lib/dashboard-types";
@@ -388,6 +389,19 @@ function PolyWeatherTerminal({
   }, [searchInputRef, setSearchQuery]);
   const [navExpanded, setNavExpanded] = useState(false);
   const [activeNavKey, setActiveNavKey] = useState<string>("thresholds");
+  const [onlineCount, setOnlineCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    const fetchOnline = () => {
+      fetch("/api/ops/online-users", { headers: { Accept: "application/json" } })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (d?.online != null) setOnlineCount(d.online); })
+        .catch(() => {});
+    };
+    fetchOnline();
+    const id = setInterval(fetchOnline, 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const [gridCols, setGridCols] = useState<number>(() => {
     return getStoredGridSide("polyweather_terminal_grid_cols");
@@ -659,6 +673,12 @@ function PolyWeatherTerminal({
               <Activity size={13} />
               {t("dashboard", isEn)}
             </div>
+            {onlineCount != null && (
+              <div className="hidden items-center gap-1 text-[10px] font-medium text-slate-400 lg:flex">
+                <Users size={12} />
+                <span>{onlineCount}</span>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <span className="hidden font-mono md:inline text-slate-500">{userLocalTime}</span>
