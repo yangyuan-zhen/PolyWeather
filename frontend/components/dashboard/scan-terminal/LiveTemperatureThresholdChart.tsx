@@ -1486,7 +1486,12 @@ export function LiveTemperatureThresholdChart({
   const displayRunwayTemp = liveTemp ?? currentRunwayTemp;
   const wundergroundDailyHigh = validNumber(hourly?.airportCurrent?.max_so_far ?? hourly?.airportPrimary?.max_so_far) ?? null;
 
-  const modelValues = Object.values(row?.model_cluster_sources || {})
+  const localDateStr = row?.local_date || new Date().toISOString().slice(0, 10);
+  const modelSources = (row?.model_cluster_sources && Object.keys(row.model_cluster_sources).length > 0)
+    ? row.model_cluster_sources
+    : (hourly?.multiModelDaily?.[localDateStr]?.models || null);
+
+  const modelValues = Object.values(modelSources || {})
     .map(validNumber)
     .filter((v): v is number => v !== null);
   const modelMin = modelValues.length ? Math.min(...modelValues) : (row?.cluster_core_low ?? null);

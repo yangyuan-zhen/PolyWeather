@@ -183,6 +183,11 @@ def _build_quick_row(
         tz_offset = _safe_int(city_meta.get("tz"), 0)
     market_region = _market_region_from_tz_offset(tz_offset)
 
+    multi_model_daily = data.get("multi_model_daily") or {}
+    daily_entry = multi_model_daily.get(local_date) if isinstance(multi_model_daily, dict) else {}
+    if not isinstance(daily_entry, dict):
+        daily_entry = {}
+
     id_parts = [city, local_date or "today"]
     if data.get("temp_symbol") == "°F":
         id_parts.append("F")
@@ -201,10 +206,14 @@ def _build_quick_row(
         "current_temp": curr.get("temp"),
         "current_max_so_far": curr.get("max_so_far"),
         "deb_prediction": deb.get("prediction"),
-        "model_cluster_sources": {
-            str(k): v for k, v in multi.get("forecasts", {}).items()
-            if v is not None
-        },
+        "model_cluster_sources": (
+            daily_entry.get("models")
+            if isinstance(daily_entry.get("models"), dict)
+            else {
+                str(k): v for k, v in multi.get("forecasts", {}).items()
+                if v is not None
+            }
+        ),
         "distribution_preview": distribution[:6] if distribution else [],
         "trading_region": market_region["key"],
         "trading_region_label": market_region["label_en"],
