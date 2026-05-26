@@ -1,6 +1,11 @@
 services:
   polyweather:
     container_name: polyweather_bot
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     cpus: ${POLYWEATHER_BOT_CPUS:-0.75}
     env_file: &id001
     - .env
@@ -28,6 +33,11 @@ services:
     - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/app/data
     - ./bot.log:/app/bot.log
   polyweather_frontend:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     container_name: polyweather_frontend
     environment:
       NEXT_PUBLIC_POLYWEATHER_API_BASE_URL: ${NEXT_PUBLIC_POLYWEATHER_API_BASE_URL:-}
@@ -53,6 +63,11 @@ services:
     restart: unless-stopped
   polyweather_web:
     command: python web/app.py
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     container_name: polyweather_web
     env_file: *id001
     healthcheck:
