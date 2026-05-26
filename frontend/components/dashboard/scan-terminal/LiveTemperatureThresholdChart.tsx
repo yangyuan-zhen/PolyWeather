@@ -24,7 +24,7 @@ import type {
 } from "@/lib/dashboard-types";
 import { buildDebBaselinePath } from "@/lib/temperature-chart-paths";
 import { DASHBOARD_REFRESH_POLICY_MS } from "@/lib/refresh-policy";
-import { useLatestPatch, type CityPatch } from "@/hooks/use-sse-patches";
+import { useLatestPatch, useSseResyncVersion, type CityPatch } from "@/hooks/use-sse-patches";
 import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { rowName, temp } from "@/components/dashboard/scan-terminal/utils";
 
@@ -79,6 +79,28 @@ function getVisibleTemperatureSeries(
       return userToggledKeys[item.key];
     }
     return isTemperatureSeriesVisibleByDefault(city, item.key);
+  });
+}
+
+function getActiveTemperatureSeries(
+  city: string,
+  chartSeries: EvidenceSeries[],
+  userToggledKeys: Record<string, boolean>,
+  showRunwayDetails: boolean,
+) {
+  const rawVisible = getVisibleTemperatureSeries(city, chartSeries, userToggledKeys);
+  const hasRunwayMax = rawVisible.some((item) => item.key === "runway_max");
+
+  return rawVisible.filter((item) => {
+    const isIndividualRunway =
+      item.key.startsWith("runway_") && item.key !== "runway_max";
+    if (showRunwayDetails) {
+      return item.key !== "runway_max";
+    }
+    if (!hasRunwayMax) {
+      return true;
+    }
+    return !isIndividualRunway;
   });
 }
 
@@ -194,8 +216,8 @@ type RunwayHistorySeries = {
 
 const MAX_OBS_POINTS = 1440;
 const HOURLY_CACHE_TTL_MS = DASHBOARD_REFRESH_POLICY_MS.metar;
-const FULL_DAY_SLOT_MINUTES = 30;
-const FULL_DAY_SLOTS = 48;
+const FULL_DAY_SLOT_MINUTES = 1;
+const FULL_DAY_SLOTS = (24 * 60) / FULL_DAY_SLOT_MINUTES;
 const SLOT_INTERVAL_MS = FULL_DAY_SLOT_MINUTES * 60 * 1000;
 const _hourlyCache = new Map<string, { ts: number; data: HourlyForecast }>();
 const _hourlyRequestCache = new Map<string, Promise<HourlyForecast>>();
@@ -622,7 +644,12 @@ function mergePatchIntoHourly(
   const amosChanges = changes.amos as Record<string, any> | undefined;
   const obsTimeVal = obsTime || amosChanges?.observation_time || amosChanges?.observation_time_local;
   const runwayObs = amosChanges?.runway_obs;
-  if (runwayObs && Array.isArray(runwayObs.point_temperatures) && obsTimeVal) {
+  const runwayPoints = Array.isArray(changes.runway_points)
+    ? changes.runway_points
+    : runwayObs && Array.isArray(runwayObs.point_temperatures)
+      ? runwayObs.point_temperatures
+      : [];
+  if (runwayPoints.length && obsTimeVal) {
     const history: Record<string, Array<Record<string, unknown>>> = {};
     const sourceHistory = next.runwayPlateHistory || (next.amos as any)?.runway_plate_history || {};
     
@@ -634,10 +661,10 @@ function mergePatchIntoHourly(
     });
 
     // Append new points from point_temperatures
-    runwayObs.point_temperatures.forEach((pt: any) => {
+    runwayPoints.forEach((pt: any) => {
       const rwy = pt.runway || "";
       if (!rwy) return;
-      const tempVal = validNumber(pt.target_runway_max) ?? validNumber(pt.tdz_temp) ?? validNumber(pt.end_temp);
+      const tempVal = validNumber(pt.temp) ?? validNumber(pt.target_runway_max) ?? validNumber(pt.tdz_temp) ?? validNumber(pt.end_temp);
       if (tempVal === null) return;
 
       const rwyHistory = history[rwy] || [];
@@ -653,6 +680,13 @@ function mergePatchIntoHourly(
     });
 
     next.runwayPlateHistory = history;
+    next.amos = {
+      ...(next.amos || {}),
+      runway_obs: {
+        ...((next.amos as any)?.runway_obs || {}),
+        point_temperatures: runwayPoints,
+      },
+    } as any;
     if (next.amos) {
       (next.amos as any).runway_plate_history = history;
     }
@@ -1405,13 +1439,14 @@ export function LiveTemperatureThresholdChart({
   const [hourly, setHourly] = useState<HourlyForecast>(null);
   const city = String(row?.city || "").toLowerCase().trim();
   const latestPatch = useLatestPatch(city);
+  const resyncVersion = useSseResyncVersion();
   const [timeframe, setTimeframe] = useState<"1D" | "3D">("1D");
   const [userToggledKeys, setUserToggledKeys] = useState<Record<string, boolean>>({});
   const [liveTemp, setLiveTemp] = useState<number | null>(null);
   const lastPatchAtRef = useRef<number>(Date.now());
   const lastAppliedPatchRevisionRef = useRef<number>(0);
 
-  const [showRunwayDetails, setShowRunwayDetails] = useState<boolean>(false);
+  const [showRunwayDetails, setShowRunwayDetails] = useState<boolean>(true);
   const [refAreaLeft, setRefAreaLeft] = useState<number | null>(null);
   const [refAreaRight, setRefAreaRight] = useState<number | null>(null);
   const [zoomRange, setZoomRange] = useState<[number, number] | null>(null);
@@ -1420,6 +1455,7 @@ export function LiveTemperatureThresholdChart({
   useEffect(() => {
     setUserToggledKeys({});
     setZoomRange(null);
+    setShowRunwayDetails(true);
     lastPatchAtRef.current = Date.now();
     lastAppliedPatchRevisionRef.current = 0;
   }, [city, timeframe]);
@@ -1479,6 +1515,20 @@ export function LiveTemperatureThresholdChart({
     if (tempValue !== null) setLiveTemp(tempValue);
     setHourly((prev) => mergePatchIntoHourly(prev ?? seedHourlyForecastFromRow(row), latestPatch));
   }, [latestPatch, row]);
+
+  useEffect(() => {
+    if (!resyncVersion || !city) return;
+    let cancelled = false;
+    fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })
+      .then((data) => {
+        if (cancelled || !data) return;
+        setHourly(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [resyncVersion, city, targetResolution]);
 
   // ── SSE fallback: only full-fetch if a visible chart has seen no patch for 2 minutes ──
   useEffect(() => {
@@ -1581,15 +1631,12 @@ export function LiveTemperatureThresholdChart({
   };
 
   const activeSeries = useMemo(() => {
-    const rawVisible = getVisibleTemperatureSeries(city, chartSeries, userToggledKeys);
-    return rawVisible.filter((s) => {
-      const isIndividualRunway = s.key.startsWith("runway_") && s.key !== "runway_max";
-      if (showRunwayDetails) {
-        return s.key !== "runway_max";
-      } else {
-        return !isIndividualRunway;
-      }
-    });
+    return getActiveTemperatureSeries(
+      city,
+      chartSeries,
+      userToggledKeys,
+      showRunwayDetails,
+    );
   }, [chartSeries, userToggledKeys, city, showRunwayDetails]);
 
   const normalizedKey = normalizeCityKey(row?.city);
@@ -1903,7 +1950,7 @@ export function LiveTemperatureThresholdChart({
                   </div>
                   <div className="flex flex-col">
                     <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                      {isEn ? "METAR Settlement (30m) · Daily High" : `${metarHeaderLabel} · 当日最高`}
+                      {isEn ? "METAR Settlement · Daily High" : `${metarHeaderLabel} · 当日最高`}
                     </span>
                     <span className="text-2xl font-bold font-mono text-blue-600 mt-1">
                       {temp(observedHighMetar)}
@@ -2226,5 +2273,7 @@ export function __buildTemperatureChartDataForTest(
 
 export const __isTemperatureSeriesVisibleByDefaultForTest = isTemperatureSeriesVisibleByDefault;
 export const __getVisibleTemperatureSeriesForTest = getVisibleTemperatureSeries;
+export const __getActiveTemperatureSeriesForTest = getActiveTemperatureSeries;
 export const __getObservationDisplayMetricsForTest = getObservationDisplayMetrics;
 export const __shouldPollLiveChartForTest = shouldPollLiveChart;
+export const __mergePatchIntoHourlyForTest = mergePatchIntoHourly;

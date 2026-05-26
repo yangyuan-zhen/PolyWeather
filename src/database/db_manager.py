@@ -340,6 +340,30 @@ class DBManager:
                 "CREATE INDEX IF NOT EXISTS idx_payment_audit_events_created_at ON payment_audit_events(created_at DESC)"
             )
             conn.execute("""
+                CREATE TABLE IF NOT EXISTS observation_patch_events (
+                    revision INTEGER PRIMARY KEY AUTOINCREMENT,
+                    schema_type TEXT NOT NULL,
+                    schema_version INTEGER NOT NULL,
+                    city TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    obs_time TEXT,
+                    payload_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+            """)
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_observation_patch_events_city_revision
+                ON observation_patch_events(city, revision)
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_observation_patch_events_created_at
+                ON observation_patch_events(created_at)
+                """
+            )
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS app_analytics_events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     event_type TEXT NOT NULL,

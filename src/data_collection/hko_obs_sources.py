@@ -11,11 +11,12 @@ import csv
 import os
 import io
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from loguru import logger
 
+# pyrefly: ignore [missing-import]
 from src.utils.metrics import record_source_call
 
 HKO_BASE_URL = os.getenv("HKO_BASE_URL", "").strip() or "https://data.weather.gov.hk/weatherAPI/hko_data/regional-weather"
@@ -34,11 +35,17 @@ HKO_STATIONS = {
 
 
 class HkoObsSourceMixin:
+    session: Any
+    timeout: Any
+    _hko_obs_cache: Dict[str, Any]
+    _hko_obs_cache_lock: Any
+    hko_obs_cache_ttl_sec: Any
+
     def _hko_http_get(self, url: str) -> str:
         getter = getattr(self, "_http_get", None)
         if callable(getter):
             resp = getter(url)
-            return resp.text if hasattr(resp, "text") else resp
+            return str(resp.text) if hasattr(resp, "text") else str(resp)
         resp = self.session.get(url, timeout=self.timeout)
         resp.raise_for_status()
         return resp.text
@@ -49,7 +56,7 @@ class HkoObsSourceMixin:
         use_fahrenheit: bool = False,
     ) -> Optional[Dict[str, Any]]:
         started = time.perf_counter()
-        city_key = str(city or "").strip().lower()
+        city_key = (city or "").strip().lower()
         meta = HKO_STATIONS.get(city_key) or {}
         if not meta:
             return None
@@ -95,11 +102,11 @@ class HkoObsSourceMixin:
 
             result = {
                 "source": "hko_obs",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "station_code": meta["code"],
                 "station_name": meta["label"],
                 "icao": meta["icao"],
-                "obs_time": obs_iso or datetime.utcnow().isoformat(),
+                "obs_time": obs_iso or datetime.now(timezone.utc).isoformat(),
                 "current": {
                     "temp": temp,
                 },
@@ -132,7 +139,7 @@ class HkoObsSourceMixin:
         current = self.fetch_hko_obs_current(city, use_fahrenheit=use_fahrenheit)
         if not current:
             return []
-        meta = HKO_STATIONS.get(str(city or "").strip().lower()) or {}
+        meta = HKO_STATIONS.get((city or "").strip().lower()) or {}
         return [
             {
                 "name": meta.get("label") or "HKO Station",

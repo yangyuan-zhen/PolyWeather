@@ -1,8 +1,10 @@
 import {
   __buildTemperatureChartDataForTest,
+  __getActiveTemperatureSeriesForTest,
   __getObservationDisplayMetricsForTest,
   __getVisibleTemperatureSeriesForTest,
   __isTemperatureSeriesVisibleByDefaultForTest,
+  __mergePatchIntoHourlyForTest,
 } from "@/components/dashboard/scan-terminal/LiveTemperatureThresholdChart";
 
 function assert(condition: unknown, message: string) {
@@ -57,6 +59,7 @@ export function runTests() {
 
   const { series } = __buildTemperatureChartDataForTest(guangzhou, hourly, "1D");
   const defaultVisibleSeries = __getVisibleTemperatureSeriesForTest("guangzhou", series, {});
+  const activeDefaultSeries = __getActiveTemperatureSeriesForTest("guangzhou", series, {}, true);
 
   const settlementRunway = seriesByKey(series, "runway_02L_20R") as any;
   assert(settlementRunway, "settlement runway should use a stable runway-pair key");
@@ -76,6 +79,14 @@ export function runTests() {
   assert(
     __isTemperatureSeriesVisibleByDefaultForTest("guangzhou", "runway_02L_20R"),
     "runway series should be visible by default",
+  );
+  assert(
+    activeDefaultSeries.some((item) => item.key === "runway_02L_20R"),
+    "settlement runway should remain in the active chart series by default",
+  );
+  assert(
+    activeDefaultSeries.some((item) => item.key === "runway_01L_19R"),
+    "auxiliary runway should remain in the active chart series by default",
   );
   assert(
     __isTemperatureSeriesVisibleByDefaultForTest("guangzhou", "settlement"),
@@ -283,6 +294,87 @@ export function runTests() {
   assert(madisSeries, "US MADIS airport-primary observations should render as a dedicated chart series");
   assert(madisSeries.label.includes("MADIS"), "US MADIS series should be labeled as NOAA MADIS instead of plain METAR");
   assert(madisSeries.values.filter((value: number | null) => value !== null).length >= 2, "MADIS series should keep sub-hourly observations");
+
+  const newYorkMinuteStream = __buildTemperatureChartDataForTest(
+    {
+      city: "new york",
+      local_date: "2026-05-25",
+      local_time: "10:04",
+      tz_offset_seconds: -4 * 60 * 60,
+      airport: "KLGA",
+    } as any,
+    {
+      localTime: "10:04",
+      times: ["00:00", "06:00", "12:00", "18:00"],
+      temps: [55, 57, 65, 72],
+      airportPrimary: {
+        source_code: "madis_hfmetar",
+        source_label: "NOAA MADIS",
+      },
+      airportPrimaryTodayObs: [
+        ["2026-05-25T14:01:00Z", 73.1],
+        ["2026-05-25T14:02:00Z", 73.4],
+        ["2026-05-25T14:03:00Z", 73.8],
+      ],
+    } as any,
+    "1D",
+  );
+  const minuteLabels = newYorkMinuteStream.data
+    .filter((point) => point.madis !== null)
+    .map((point) => point.label);
+  assert(
+    minuteLabels.includes("10:01") &&
+      minuteLabels.includes("10:02") &&
+      minuteLabels.includes("10:03"),
+    "live observation chart should preserve minute-level SSE patch points instead of collapsing them into a 30-minute bucket",
+  );
+
+  const chengduMergedHourly = __mergePatchIntoHourlyForTest(
+    {
+      localTime: "05:25",
+      times: ["00:00", "06:00", "12:00", "18:00"],
+      temps: [24, 28, 31, 27],
+      runwayPlateHistory: {
+        "02L/20R": [{ time: "05:20", temp: 24.2 }],
+      },
+    } as any,
+    {
+      type: "city_observation_patch.v1",
+      city: "chengdu",
+      revision: 12,
+      changes: {
+        temp: 24.8,
+        obs_time: "2026-05-26 05:26:00",
+        source: "amsc_awos",
+        runway_points: [
+          {
+            runway: "02L/20R",
+            temp: 25.1,
+            tdz_temp: 24.7,
+            mid_temp: 24.9,
+            end_temp: 25.1,
+            target_runway_max: 25.1,
+          },
+        ],
+      },
+    } as any,
+  );
+  const chengduMergedChart = __buildTemperatureChartDataForTest(
+    {
+      city: "chengdu",
+      local_date: "2026-05-26",
+      local_time: "05:26",
+      tz_offset_seconds: 8 * 60 * 60,
+    } as any,
+    chengduMergedHourly as any,
+    "1D",
+  );
+  const chengduMergedRunway = seriesByKey(chengduMergedChart.series, "runway_02L_20R") as any;
+  assert(chengduMergedRunway, "v1 runway_points patch should update the runway series");
+  assert(
+    chengduMergedRunway.values.some((value: number | null) => value === 25.1),
+    "v1 runway_points patch should append the latest runway max point to the chart",
+  );
 
   const shanghaiDebFromDetail = __buildTemperatureChartDataForTest(
     {

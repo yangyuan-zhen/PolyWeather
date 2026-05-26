@@ -146,11 +146,11 @@ def _is_plausible_city_temp(city: str, value: Any, unit: str = "°C") -> bool:
     temp = _sf(value)
     if temp is None:
         return False
-    meta = CITY_REGISTRY.get(str(city or "").strip().lower(), {}) or {}
+    meta = CITY_REGISTRY.get((city or "").strip().lower(), {}) or {}
     min_c = _sf(meta.get("min_plausible_metar_temp_c"))
     if min_c is None:
         return True
-    min_value = min_c * 9 / 5 + 32 if str(unit or "").upper().endswith("F") else min_c
+    min_value = min_c * 9 / 5 + 32 if (unit or "").upper().endswith("F") else min_c
     return temp >= min_value
 
 
@@ -158,7 +158,7 @@ def _parse_local_hour(local_time_str: Optional[str]) -> Optional[int]:
     if not local_time_str:
         return None
     try:
-        parts = str(local_time_str).strip().split(":")
+        parts = local_time_str.strip().split(":")
         hour = int(parts[0])
         if 0 <= hour <= 23:
             return hour
@@ -204,7 +204,7 @@ def _record_analysis_cache_event(*, city: str, hit: bool, force_refresh: bool) -
     now = datetime.now(timezone.utc).isoformat()
     with _ANALYSIS_CACHE_STATS_LOCK:
         _ANALYSIS_CACHE_STATS["total_requests"] = int(_ANALYSIS_CACHE_STATS.get("total_requests") or 0) + 1
-        _ANALYSIS_CACHE_STATS["last_city"] = str(city or "")
+        _ANALYSIS_CACHE_STATS["last_city"] = city or ""
         if force_refresh:
             _ANALYSIS_CACHE_STATS["force_refresh_requests"] = int(_ANALYSIS_CACHE_STATS.get("force_refresh_requests") or 0) + 1
         if hit:
@@ -243,7 +243,7 @@ def _analysis_ttl_for_city(city: str) -> int:
 
 
 def _analysis_cache_key(city: str, detail_mode: str = "full") -> str:
-    normalized_raw = str(detail_mode or "").strip().lower()
+    normalized_raw = (detail_mode or "").strip().lower()
     if normalized_raw == "panel":
         normalized_mode = "panel"
     elif normalized_raw == "market":
@@ -666,7 +666,7 @@ def _analyze(
     """
     # Check cache – skip when explicitly refreshing observations
     ttl = _analysis_ttl_for_city(city)
-    normalized_detail_mode_raw = str(detail_mode or "full").strip().lower()
+    normalized_detail_mode_raw = (detail_mode or "full").strip().lower()
     if normalized_detail_mode_raw == "panel":
         normalized_detail_mode = "panel"
     elif normalized_detail_mode_raw == "market":
@@ -750,8 +750,9 @@ def _analyze(
                 first_start = nws_periods[0].get("start_time")
                 if first_start:
                     maybe_dt = datetime.fromisoformat(str(first_start))
-                    if maybe_dt.utcoffset() is not None:
-                        utc_offset = int(maybe_dt.utcoffset().total_seconds())
+                    offset_td = maybe_dt.utcoffset()
+                    if offset_td is not None:
+                        utc_offset = int(offset_td.total_seconds())
         except Exception:
             utc_offset = None
     if utc_offset is None:
@@ -770,7 +771,7 @@ def _analyze(
     metar_current_is_today = _metar_is_current_local_day(
         metar,
         local_date=local_date_str,
-        utc_offset=int(utc_offset or 0),
+        utc_offset=utc_offset,
     )
 
     # ── 2. Current conditions (settlement > AMOS runway sensors > METAR > MGM > NMC fallback) ──
@@ -878,12 +879,13 @@ def _analyze(
     if not obs_time_str and current_source == "amos":
         amos_obs_time = amos_data.get("observation_time")
         if amos_obs_time:
-            obs_time_str = _format_observation_time_local(amos_obs_time, int(utc_offset or 0))
+            obs_time_str = _format_observation_time_local(amos_obs_time, utc_offset)
+    nmc_fallback = None
     if not obs_time_str and current_source == "nmc":
         nmc_fallback = _fetch_nmc_current_fallback(city, use_fahrenheit=is_f)
         obs_time_str = _format_observation_time_local(
             nmc_fallback.get("publish_time") or nmc_fallback.get("timestamp"),
-            int(utc_offset or 0),
+            utc_offset,
         )
 
     current_obs_raw = obs_t
@@ -972,9 +974,9 @@ def _analyze(
             if (
                 max_temp_time
                 and max_so_far is not None
-                and str(max_temp_time) != str(obs_time_str)
+                and max_temp_time != obs_time_str
             ):
-                settlement_today_obs.append({"time": str(max_temp_time), "temp": max_so_far})
+                settlement_today_obs.append({"time": max_temp_time, "temp": max_so_far})
 
     metar_today_obs_payload = [
         {"time": t, "temp": v}
@@ -1044,7 +1046,7 @@ def _analyze(
             else cur_temp
         )
         if fallback_high is not None:
-            om_today = float(fallback_high)
+            om_today = fallback_high
             if not forecast_daily:
                 forecast_daily = [{"date": local_date_str, "max_temp": om_today}]
     sunrise = (
@@ -1065,7 +1067,9 @@ def _analyze(
         current_forecasts["Open-Meteo"] = om_today
     for m, v in mm.get("forecasts", {}).items():
         if v is not None and not _is_excluded_model_name(m):
-            current_forecasts[m] = _sf(v)
+            temp_val = _sf(v)
+            if temp_val is not None:
+                current_forecasts[m] = temp_val
     nws_high = _sf(raw.get("nws", {}).get("today_high"))
     if nws_high is not None:
         current_forecasts["NWS"] = nws_high
@@ -1244,8 +1248,8 @@ def _analyze(
     # between the current observed temperature and the model's hourly path.
     # Uses cur_temp / max_so_far already resolved at lines 1052-1095 above.
     _local_hour = _parse_local_hour(local_time_str)
-    peak_first = int(first_peak_h or 14)
-    peak_last_h = int(last_peak_h or 17)
+    peak_first = first_peak_h or 14
+    peak_last_h = last_peak_h or 17
 
     if (
         deb_val is not None
@@ -1377,7 +1381,7 @@ def _analyze(
             taf if isinstance(taf, dict) else {},
             city,
             local_date_str,
-            int(utc_offset or 0),
+            utc_offset,
             first_peak_h,
             last_peak_h,
         )
@@ -1481,6 +1485,8 @@ def _analyze(
     multi_model_daily = {}
     mm_daily_raw = mm.get("daily_forecasts", {})
     for i, d_str in enumerate(dates):
+        d_probs = []
+        d_probs_all = []
         if i == 0:
             day_m = current_forecasts.copy()
             d_val, d_winfo = deb_val, deb_weights
@@ -1534,7 +1540,7 @@ def _analyze(
     # ── Assemble result ──
     runway_plate_history = {}
     icao = risk.get("icao", "")
-    if icao:
+    if isinstance(icao, str) and icao:
         try:
             from src.database.db_manager import DBManager
             raw_runway_obs = DBManager().get_runway_obs_recent(icao, minutes=36 * 60)
@@ -1581,7 +1587,7 @@ def _analyze(
         "display_name": str(city_meta.get("display_name") or city_meta.get("name") or city.title()),
         "lat": lat,
         "lon": lon,
-        "utc_offset_seconds": int(utc_offset or 0),
+        "utc_offset_seconds": utc_offset,
         "temp_symbol": sym,
         "local_time": local_time_str,
         "local_date": local_date_str,
@@ -1779,7 +1785,7 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         except Exception:
             return None
 
-    jobs = {
+    jobs: Dict[str, Any] = {
         "settlement_current": lambda: _weather.fetch_settlement_current(city) or {},
         "open_meteo": lambda: _weather.fetch_from_open_meteo(lat, lon, use_fahrenheit=is_f) or {},
         "multi_model": lambda: _weather.fetch_multi_model(lat, lon, city=city, use_fahrenheit=is_f) or {},
@@ -1832,7 +1838,7 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     metar_current_is_today = _metar_is_current_local_day(
         metar,
         local_date=local_date_str,
-        utc_offset=int(utc_offset or 0),
+        utc_offset=utc_offset,
     )
 
     sc_cur = settlement_current.get("current") or {}
@@ -1922,13 +1928,13 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
                 (datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds() / 60
             )
         except Exception:
-            obs_time_str = str(obs_t)[:16]
+            obs_time_str = obs_t[:16]
     if not obs_time_str and current_source == "nmc":
         if not nmc_fallback:
             nmc_fallback = _fetch_nmc_current_fallback(city, use_fahrenheit=is_f)
         obs_time_str = _format_observation_time_local(
             nmc_fallback.get("publish_time") or nmc_fallback.get("timestamp"),
-            int(utc_offset or 0),
+            utc_offset,
         )
 
     om_daily = (open_meteo.get("daily") or {}) if isinstance(open_meteo, dict) else {}
@@ -1965,14 +1971,16 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             else cur_temp
         )
         if fallback_high is not None:
-            om_today = float(fallback_high)
+            om_today = fallback_high
 
     current_forecasts: Dict[str, float] = {}
     if om_today is not None:
         current_forecasts["Open-Meteo"] = om_today
     for m, v in mm.get("forecasts", {}).items():
         if v is not None and not _is_excluded_model_name(m):
-            current_forecasts[m] = _sf(v)
+            temp_val = _sf(v)
+            if temp_val is not None:
+                current_forecasts[m] = temp_val
     if nws_high is not None:
         current_forecasts["NWS"] = nws_high
     if mgm_high is not None:
@@ -1980,7 +1988,9 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     elif mgm_hourly_high is not None:
         current_forecasts["MGM Hourly"] = mgm_hourly_high
     if hko_forecast is not None:
-        current_forecasts["HKO"] = _sf(hko_forecast)
+        temp_hko = _sf(hko_forecast)
+        if temp_hko is not None:
+            current_forecasts["HKO"] = temp_hko
     current_forecasts = {
         model_name: value
         for model_name, value in current_forecasts.items()
@@ -2011,8 +2021,8 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
                 settlement_today_obs.append({"time": raw_time, "temp": raw_temp})
         if not settlement_today_obs and obs_time_str and cur_temp is not None:
             settlement_today_obs.append({"time": obs_time_str, "temp": cur_temp})
-        if max_temp_time and max_so_far is not None and str(max_temp_time) != str(obs_time_str):
-            settlement_today_obs.append({"time": str(max_temp_time), "temp": max_so_far})
+        if max_temp_time and max_so_far is not None and max_temp_time != obs_time_str:
+            settlement_today_obs.append({"time": max_temp_time, "temp": max_so_far})
 
     metar_today_obs_payload = [
         {"time": obs_time, "temp": obs_temp}
@@ -2042,7 +2052,7 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         "name": city,
         "display_name": str(city_meta.get("display_name") or city_meta.get("name") or city.title()),
         "temp_symbol": sym,
-        "utc_offset_seconds": int(utc_offset or 0),
+        "utc_offset_seconds": utc_offset,
         "local_time": local_time_str,
         "local_date": local_date_str,
         "risk": {

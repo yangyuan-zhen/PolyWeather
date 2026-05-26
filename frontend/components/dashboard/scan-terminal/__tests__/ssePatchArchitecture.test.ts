@@ -21,15 +21,35 @@ export function runTests() {
   const sseManager = fs.readFileSync(sseManagerPath, "utf8");
   assert(sseManager.includes("asyncio.Queue"), "SSE manager must keep asyncio.Queue connections");
   assert(sseManager.includes("broadcast("), "SSE manager must expose broadcast(city, changes)");
+  assert(sseManager.includes("broadcast_event"), "SSE manager must broadcast stored replayable events");
   assert(sseManager.includes("event_stream("), "SSE manager must expose an async event_stream(user_id)");
+  assert(sseManager.includes("_queue_cities"), "SSE manager must track per-connection city subscriptions");
   assert(sseManager.includes("revision"), "SSE patches must carry monotonic revision numbers");
   assert(sseManager.includes("30"), "SSE stream must include a 30-second heartbeat");
   assert(sseManager.includes("data: "), "SSE stream must emit data: JSON frames");
+
+  const schemaPath = path.join(repoRoot, "web", "realtime_patch_schema.py");
+  assert(fs.existsSync(schemaPath), "backend must define a versioned realtime patch schema module");
+  const schema = fs.readFileSync(schemaPath, "utf8");
+  assert(schema.includes("city_observation_patch.v1"), "patch schema must expose city_observation_patch.v1");
+  assert(schema.includes("normalize_observation_patch"), "patch schema must normalize collector payloads");
+  assert(schema.includes("runway_points"), "patch schema must preserve runway point observations");
+
+  const storePath = path.join(repoRoot, "web", "realtime_event_store.py");
+  assert(fs.existsSync(storePath), "backend must define a realtime event replay store");
+  const store = fs.readFileSync(storePath, "utf8");
+  assert(store.includes("observation_patch_events"), "event store must use the SQLite observation_patch_events table");
+  assert(store.includes("replay_events"), "event store must expose replay_events");
+  assert(store.includes("replay_requires_resync"), "event store must detect incomplete replay windows");
 
   const sseRouterPath = path.join(repoRoot, "web", "routers", "sse_router.py");
   assert(fs.existsSync(sseRouterPath), "FastAPI backend must define web/routers/sse_router.py");
   const sseRouter = fs.readFileSync(sseRouterPath, "utf8");
   assert(sseRouter.includes('"/api/events"'), "SSE router must expose GET /api/events");
+  assert(sseRouter.includes("cities"), "SSE route must accept a cities query parameter");
+  assert(sseRouter.includes("since_revision"), "SSE route must accept since_revision for replay");
+  assert(sseRouter.includes("replay_limit"), "SSE route must bound replay batches");
+  assert(sseRouter.includes("resync_required"), "SSE route must emit resync_required when replay is incomplete");
   assert(sseRouter.includes('"/api/internal/collector-patch"'), "SSE router must expose collector patch ingest endpoint");
   assert(sseRouter.includes("StreamingResponse"), "SSE route must return StreamingResponse");
   assert(sseRouter.includes('"text/event-stream"'), "SSE route must use text/event-stream media type");
@@ -53,14 +73,24 @@ export function runTests() {
   const hook = fs.readFileSync(hookPath, "utf8");
   assert(hook.includes("new EventSource"), "frontend patch hook must connect with EventSource");
   assert(hook.includes("/api/events"), "frontend patch hook must subscribe to /api/events");
+  assert(hook.includes("city_observation_patch.v1"), "frontend patch hook must accept v1 observation patch events");
+  assert(hook.includes("subscribedCities"), "frontend patch hook must track the visible city subscription set");
+  assert(hook.includes("since_revision"), "frontend patch hook must reconnect with since_revision");
+  assert(hook.includes("resync_required"), "frontend patch hook must react to server resync_required events");
+  assert(hook.includes("lastRevision"), "frontend patch hook must track the global last processed revision");
   assert(hook.includes("Map<"), "frontend patch hook must keep latest patches in a Map");
   assert(hook.includes("useLatestPatch"), "frontend patch hook must export useLatestPatch(city)");
   assert(hook.includes("revision"), "frontend patch hook must track revisions and skip stale patches");
   assert(hook.includes("setTimeout"), "frontend patch hook must implement explicit reconnect backoff");
 
+  const bffEventsRoute = readFrontendFile("app", "api", "events", "route.ts");
+  assert(bffEventsRoute.includes("searchParams"), "Next.js SSE proxy must forward query parameters to FastAPI");
+
   const chart = readFrontendFile("components", "dashboard", "scan-terminal", "LiveTemperatureThresholdChart.tsx");
   assert(chart.includes("useLatestPatch"), "temperature chart must consume useLatestPatch(city)");
   assert(chart.includes("latestPatch"), "temperature chart must react to incoming SSE patches");
+  assert(chart.includes("useSseResyncVersion"), "temperature chart must resync full detail when SSE replay is incomplete");
+  assert(chart.includes("runway_points"), "temperature chart must merge v1 runway_points into runway history");
   assert(chart.includes("2 * 60_000"), "temperature chart must wait two minutes without patches before full-fetch fallback");
   assert(
     !chart.includes("setInterval(poll, 60_000)"),

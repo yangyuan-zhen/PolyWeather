@@ -251,8 +251,8 @@ def build_city_detail_payload(
         or _build_intraday_meteorology(data),
         "vertical_profile_signal": data.get("vertical_profile_signal") or {},
         "taf": data.get("taf") or {},
-        "runway_plate_history": aggregate_runway_history(data.get("runway_plate_history") or {}, resolution),
-        "runway_band_history": build_runway_band_history(data.get("runway_plate_history") or {}, resolution),
+        "runway_plate_history": aggregate_runway_history(data.get("runway_plate_history") or {}, resolution or "10m"),
+        "runway_band_history": build_runway_band_history(data.get("runway_plate_history") or {}, resolution or "10m"),
 
         "risk": data.get("risk"),
         "settlement_station": data.get("settlement_station") or {},

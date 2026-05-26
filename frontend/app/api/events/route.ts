@@ -13,7 +13,12 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const upstream = await fetch(`${API_BASE.replace(/\/+$/, "")}/api/events`, {
+  const upstreamUrl = new URL(`${API_BASE.replace(/\/+$/, "")}/api/events`);
+  req.nextUrl.searchParams.forEach((value, key) => {
+    upstreamUrl.searchParams.append(key, value);
+  });
+
+  const upstream = await fetch(upstreamUrl.toString(), {
     cache: "no-store",
     headers: {
       Accept: "text/event-stream",
