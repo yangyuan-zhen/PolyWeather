@@ -76,9 +76,12 @@ flowchart LR
 
 保留策略：
 
-- 默认保留 72 小时。
+- 默认保留 6 小时。
+- event log 只用于 SSE 断线 replay，不作为日内历史曲线归档。
+- 完整日内曲线仍由 `/api/city/{name}/detail` 从现有观测存储和 city cache 构建。
+- 6 小时窗口覆盖浏览器短线重连、页面休眠恢复和用户午后交易窗口内的 replay；超过窗口直接触发 HTTP resync。
 - 每次写入后低频触发清理，避免每条事件都扫表。
-- 环境变量：`POLYWEATHER_PATCH_EVENT_RETENTION_HOURS=72`。
+- 环境变量：`POLYWEATHER_PATCH_EVENT_RETENTION_HOURS=6`。
 
 ## Patch Schema v1
 
@@ -284,8 +287,9 @@ npm run build
 当前服务器 2 vCPU / 8 GB / 50 GB 足够第一版 SQLite-first：
 
 - 30 个高频城市，每分钟 1 条事件，约 43,200 条/天。
-- 72 小时保留约 129,600 条事件。
-- payload 控制在 1-3 KB，SQLite 体积预计小于数百 MB。
+- 默认只保留 6 小时，约 10,800 条事件。
+- payload 控制在 1-3 KB，SQLite event log 体积预计维持在几十 MB 内。
+- PM 最高温预测市场不需要把当天所有 patch 都保留在 event log；超过 replay 窗口时用 HTTP detail 重建当前画面。
 
 运行建议：
 
