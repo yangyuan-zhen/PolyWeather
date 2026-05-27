@@ -130,5 +130,8 @@ def test_amos_parser_handles_flattened_html_cells_and_busan_runway_labels():
 
     assert parsed["runway_pairs"] == [("N L", "N R"), ("S R", "S L")]
     assert parsed["temperatures"] == [(None, None), (15.4, 9.0)]
+    assert parsed["point_temperatures"] == [
+        {"runway": "SR/SL", "temp": 15.4, "target_runway_max": 15.4}
+    ]
     assert parsed["pressures_hpa"] == [None, 1018.2]
     assert parsed["wind_speeds"] == [(4.4, 3.6, 5.2), (4.8, 4.0, 5.8)]

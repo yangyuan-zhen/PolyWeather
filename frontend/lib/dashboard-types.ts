@@ -953,9 +953,11 @@ export interface AmosData {
     temperatures?: Array<[number | null, number | null]> | null;
     point_temperatures?: Array<{
       runway?: string | null;
+      temp?: number | null;
       tdz_temp?: number | null;
       mid_temp?: number | null;
       end_temp?: number | null;
+      target_runway_max?: number | null;
     }> | null;
     pressures_hpa?: Array<number | null> | null;
     wind_directions?: Array<[number, number, number] | null> | null;

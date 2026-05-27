@@ -103,6 +103,40 @@ def _amos_is_runway_token(value: str) -> bool:
     )
 
 
+def _amos_normalize_runway_label(value: Any) -> str:
+    return re.sub(r"\s+", "", str(value or "").strip().upper())
+
+
+def _amos_runway_pair_label(pair: Any, index: int) -> str:
+    if isinstance(pair, (list, tuple)) and len(pair) >= 2:
+        left = _amos_normalize_runway_label(pair[0])
+        right = _amos_normalize_runway_label(pair[1])
+        if left and right:
+            return f"{left}/{right}"
+    return f"RWY {index + 1}"
+
+
+def _amos_build_point_temperatures(
+    runway_pairs: list[tuple[str, str]],
+    temperatures: list[tuple[Any, Any]],
+) -> list[dict[str, Any]]:
+    points: list[dict[str, Any]] = []
+    for index, pair in enumerate(runway_pairs):
+        if index >= len(temperatures):
+            continue
+        temp = _amos_safe_float(temperatures[index][0])
+        if temp is None:
+            continue
+        points.append(
+            {
+                "runway": _amos_runway_pair_label(pair, index),
+                "temp": temp,
+                "target_runway_max": temp,
+            }
+        )
+    return points
+
+
 def _amos_parse_cell_table(lines: list[str]) -> Optional[dict[str, Any]]:
     """Parse the actual AMOS HTML table after it has been flattened to cells."""
     runway_rows: list[dict[str, Any]] = []
@@ -200,6 +234,7 @@ def _amos_parse_cell_table(lines: list[str]) -> Optional[dict[str, Any]]:
     return {
         "runway_pairs": runway_pairs,
         "temperatures": temperatures,
+        "point_temperatures": _amos_build_point_temperatures(runway_pairs, temperatures),
         "pressures_hpa": pressures_hpa,
         "wind_directions": wind_directions,
         "wind_speeds": wind_speeds,
@@ -323,6 +358,7 @@ def _amos_parse_runway_table(text: str) -> dict[str, Any]:
     return {
         "runway_pairs": runway_pairs,
         "temperatures": temperatures,
+        "point_temperatures": _amos_build_point_temperatures(runway_pairs, temperatures),
         "pressures_hpa": pressures_hpa,
         "wind_directions": wind_directions,
         "wind_speeds": wind_speeds,

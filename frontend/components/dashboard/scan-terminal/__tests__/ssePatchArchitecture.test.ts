@@ -153,7 +153,8 @@ export function runTests() {
     "SSE replay resync should refresh full detail in the background without showing the loading overlay",
   );
   assert(chart.includes("viewMode"), "temperature chart must expose a view mode for DEB-peak auto view versus full-day view");
-  assert(chart.includes("getDebPeakWindowRange"), "temperature chart must derive its default view from the DEB peak window");
+  assert(chart.includes('useState<"auto" | "full">("full")'), "temperature chart must default every city panel to the all-day view");
+  assert(chart.includes("getDebPeakWindowRange"), "temperature chart must still derive the optional Peak view from the DEB peak window");
   assert(
     chart.includes('isEn ? "Peak" : "高温"') && chart.includes('isEn ? "All Day" : "全天"'),
     "temperature chart view-mode labels must translate 高温/全天 as Peak/All Day",

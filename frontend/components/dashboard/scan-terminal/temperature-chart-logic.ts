@@ -22,6 +22,7 @@ const SETTLEMENT_RUNWAY_PAIRS: Record<string, Array<[string, string]>> = {
   chongqing: [["20R", "02L"]],
   wuhan: [["04", "22"]],
   seoul: [["15R", "33L"]],
+  busan: [["SR", "SL"]],
 };
 
 function normalizeRunwayLabel(value?: string | null) {
@@ -117,18 +118,22 @@ function buildRunwayPlates(
     if (!Array.isArray(pair) || pair.length < 2) return;
     const isSettlement = settlementKeys.has(pairKey(pair));
     
-    const tdz = validNumber(pointTemps[index]?.tdz_temp);
-    const mid = validNumber(pointTemps[index]?.mid_temp);
-    const end = validNumber(pointTemps[index]?.end_temp);
+    const pointTemp = pointTemps[index] as any;
+    const aggregateRunwayTemp = validNumber(pointTemp?.temp) ?? validNumber(pointTemp?.target_runway_max);
+    const tdz = validNumber(pointTemp?.tdz_temp);
+    const mid = validNumber(pointTemp?.mid_temp);
+    const end = validNumber(pointTemp?.end_temp);
+    const isAmosTempDewTuple = String(amos.source || "").toLowerCase() === "amos";
     
-    const historyVals = Array.isArray(runwayTemps[index])
+    const historyVals = !isAmosTempDewTuple && Array.isArray(runwayTemps[index])
       ? (runwayTemps[index] as Array<number | null>).map(validNumber).filter((v): v is number => v !== null)
       : [];
 
+    const aggregateVal = aggregateRunwayTemp !== null ? [aggregateRunwayTemp] : [];
     const tdzVal = tdz !== null ? [tdz] : [];
     const midVal = mid !== null ? [mid] : [];
     const endVal = end !== null ? [end] : [];
-    const allVals = [...historyVals, ...tdzVal, ...midVal, ...endVal];
+    const allVals = [...historyVals, ...aggregateVal, ...tdzVal, ...midVal, ...endVal];
     
     const maxTemp = allVals.length ? Math.max(...allVals) : null;
     const dailyHigh = historyVals.length ? Math.max(...historyVals) : maxTemp;
@@ -606,6 +611,37 @@ function runwayLabelFromPair(rawPair: unknown, index: number) {
   return `RWY ${index + 1}`;
 }
 
+function runwayTemperatureFromPairTuple(rawTemp: unknown) {
+  if (Array.isArray(rawTemp)) return validNumber(rawTemp[0]);
+  return validNumber(rawTemp);
+}
+
+function runwayPatchPointsFromRunwayObs(runwayObs: any) {
+  const directPoints = Array.isArray(runwayObs?.point_temperatures)
+    ? runwayObs.point_temperatures
+    : [];
+  if (directPoints.length) return directPoints;
+
+  const runwayPairs = Array.isArray(runwayObs?.runway_pairs)
+    ? runwayObs.runway_pairs
+    : [];
+  const temperatures = Array.isArray(runwayObs?.temperatures)
+    ? runwayObs.temperatures
+    : [];
+
+  return runwayPairs
+    .map((pair: unknown, index: number) => {
+      const temp = runwayTemperatureFromPairTuple(temperatures[index]);
+      if (temp === null) return null;
+      return {
+        runway: runwayLabelFromPair(pair, index),
+        temp,
+        target_runway_max: temp,
+      };
+    })
+    .filter((point: any): point is { runway: string; temp: number; target_runway_max: number } => point !== null);
+}
+
 type HourlyForecast = {
   forecastTodayHigh?: number | null;
   debPrediction?: number | null;
@@ -874,8 +910,8 @@ function mergePatchIntoHourly(
   const runwayObs = amosChanges?.runway_obs;
   const runwayPoints = Array.isArray(changes.runway_points)
     ? changes.runway_points
-    : runwayObs && Array.isArray(runwayObs.point_temperatures)
-      ? runwayObs.point_temperatures
+    : runwayObs
+      ? runwayPatchPointsFromRunwayObs(runwayObs)
       : [];
   if (runwayPoints.length && obsTimeVal) {
     const history: Record<string, Array<Record<string, unknown>>> = {};
@@ -1014,6 +1050,7 @@ function buildRunwayHistorySeries(
   const runwayPairs = runwayObs?.runway_pairs || [];
   const runwayTemps = runwayObs?.temperatures || [];
   const pointTemps = runwayObs?.point_temperatures || [];
+  const isAmosTempDewTuple = String(amos?.source || "").toLowerCase() === "amos";
   const anchor =
     getCityLocalUtcTimestamp(amos?.observation_time_local || amos?.observation_time || hourly?.localTime || row?.local_time, tzOffset, localDateStr) ??
     getCityLocalUtcTimestamp(row?.local_time, tzOffset, localDateStr);
@@ -1025,14 +1062,20 @@ function buildRunwayHistorySeries(
       if (!Array.isArray(rawTemps)) return null;
       const rwy = runwayLabelFromPair(runwayPairs[index], index);
       const isSettlement = isSettlementRunway(row, rwy);
-      const pointTemp = Array.isArray(pointTemps) ? pointTemps[index] : null;
+      const pointTemp = Array.isArray(pointTemps) ? (pointTemps[index] as any) : null;
+      const aggregateRunwayTemp =
+        validNumber(pointTemp?.temp) ??
+        validNumber(pointTemp?.target_runway_max) ??
+        (isAmosTempDewTuple ? runwayTemperatureFromPairTuple(rawTemps) : null);
       const snapshotValues = [
-        validNumber((pointTemp as any)?.tdz_temp),
-        validNumber((pointTemp as any)?.mid_temp),
-        validNumber((pointTemp as any)?.end_temp),
-        validNumber((pointTemp as any)?.target_runway_max),
+        aggregateRunwayTemp,
+        validNumber(pointTemp?.tdz_temp),
+        validNumber(pointTemp?.mid_temp),
+        validNumber(pointTemp?.end_temp),
       ].filter((value): value is number => value !== null);
-      const samples = rawTemps.map(validNumber).filter((value): value is number => value !== null);
+      const samples = isAmosTempDewTuple
+        ? []
+        : rawTemps.map(validNumber).filter((value): value is number => value !== null);
       const valuesForLine = samples.length > 1
         ? samples
         : snapshotValues.length > 1
@@ -1336,13 +1379,26 @@ function buildFullDayChartData(
   const isAmscSource =
     (hourly?.airportPrimary as any)?.source === "amsc_awos" ||
     String(hourly?.airportPrimary?.source_label || "").toLowerCase().includes("amsc");
+  const isKoreanAmosSource =
+    (settlementCityKey === "seoul" || settlementCityKey === "busan") &&
+    (
+      String(
+        (hourly?.airportPrimary as any)?.source ||
+          hourly?.airportPrimary?.source_code ||
+          hourly?.airportPrimary?.source_label ||
+          hourly?.amos?.source ||
+          "",
+      ).toLowerCase().includes("amos") ||
+      Boolean(hourly?.amos?.runway_obs)
+    );
+  const isRunwaySensorAggregateSource = isAmscSource || isKoreanAmosSource;
   const shouldRenderMetar = metarObs.length > 0 && !observationSetContains(finalMadisObs, metarObs);
 
   const timelineSet = new Set<number>();
   runwayHistorySeries.forEach((rhs) => rhs.points.forEach((point) => timelineSet.add(point.ts)));
   normBandObs.forEach((point) => timelineSet.add(point.ts));
   finalSettlementObs.forEach((point) => timelineSet.add(point.ts));
-  if (!isAmscSource) finalMadisObs.forEach((point) => timelineSet.add(point.ts));
+  if (!isRunwaySensorAggregateSource) finalMadisObs.forEach((point) => timelineSet.add(point.ts));
   if (shouldRenderMetar) metarObs.forEach((point) => timelineSet.add(point.ts));
 
   let debPath: ReturnType<typeof buildDebBaselinePath> | null = null;
@@ -1416,7 +1472,7 @@ function buildFullDayChartData(
   // ── Airport Primary (MADIS / AMSC AWOS) ──
   // Skip this series for AMSC AWOS cities — their data is redundant with
   // runway sensor data and adds a confusing "AMSC AWOS" label to the chart.
-  if (finalMadisObs.length && !isAmscSource) {
+  if (finalMadisObs.length && !isRunwaySensorAggregateSource) {
     const madisVals = valuesAtTimeline(n, indexByTs, finalMadisObs);
     if (madisVals.some((v) => v !== null)) {
       series.push({
@@ -1671,6 +1727,13 @@ function getPeakGlowState(
     trend60m,
     observedHigh,
   };
+
+  const hotWindowRange = getDebPeakWindowRange(data, series);
+  const hotWindowStart =
+    hotWindowRange ? validNumber(data[hotWindowRange[0]]?.ts) : null;
+  if (hotWindowStart !== null && latest.ts < hotWindowStart) {
+    return { state: "none", ...metaBase };
+  }
 
   const nearThreshold = chartDeltaForCelsius(row, 0.5);
   const watchThreshold = chartDeltaForCelsius(row, 1);

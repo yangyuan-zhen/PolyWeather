@@ -1371,13 +1371,31 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     runway_obs = amos_data.get("runway_obs") or {}
                     rw_pairs = runway_obs.get("runway_pairs") or []
                     rw_temps = runway_obs.get("temperatures") or []
+                    point_temps = runway_obs.get("point_temperatures") or []
                     for i, (pair, (t, _d)) in enumerate(zip(rw_pairs, rw_temps)):
-                        if t is not None and i < 4:
+                        point = point_temps[i] if i < len(point_temps) and isinstance(point_temps[i], dict) else {}
+                        runway_label = str(point.get("runway") or "").strip().upper()
+                        if not runway_label and isinstance(pair, (list, tuple)) and len(pair) >= 2:
+                            runway_label = f"{str(pair[0]).replace(' ', '').upper()}/{str(pair[1]).replace(' ', '').upper()}"
+                        point_temp = point.get("temp") if point else None
+                        if point_temp is None and point:
+                            point_temp = point.get("target_runway_max")
+                        if point_temp is None:
+                            point_temp = t
+                        if point_temp is not None and i < 4:
                             DBManager().append_airport_obs(
                                 icao=f"{amos_data.get('icao', '')}_RWY_{i}",
                                 city=city_lower,
-                                temp_c=t,
+                                temp_c=point_temp,
                                 obs_time=amos_data.get("observation_time") or datetime.now().isoformat(),
+                            )
+                        if point_temp is not None and runway_label:
+                            DBManager().append_runway_obs(
+                                icao=amos_data.get("icao") or "",
+                                city=city_lower,
+                                runway=runway_label,
+                                target_runway_max=point_temp,
+                                otime_utc=amos_data.get("observation_time") or datetime.now().isoformat(),
                             )
                 except Exception:
                     logger.exception("airport_obs_log append failed for amos city={}", city_lower)

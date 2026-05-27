@@ -73,6 +73,32 @@ export function runTests() {
     ] as any).state === "watch",
     "US Fahrenheit charts should convert Celsius thresholds against observed highs before deciding peak glow state",
   );
+  assert(
+    __getPeakGlowStateForTest({ temp_symbol: "°C", current_max_so_far: 25.0 } as any, [
+      { ts: Date.UTC(2026, 4, 27, 0, 0), hourly_forecast: 22.0, runway: 25.0 },
+      { ts: Date.UTC(2026, 4, 27, 4, 0), hourly_forecast: 21.6, runway: 24.4 },
+      { ts: Date.UTC(2026, 4, 27, 8, 12), hourly_forecast: 22.1, runway: 25.0 },
+      { ts: Date.UTC(2026, 4, 27, 12, 0), hourly_forecast: 26.8, runway: null },
+      { ts: Date.UTC(2026, 4, 27, 15, 0), hourly_forecast: 28.0, runway: null },
+      { ts: Date.UTC(2026, 4, 27, 18, 0), hourly_forecast: 25.0, runway: null },
+    ] as any, [
+      {
+        key: "runway_20R_02L",
+        label: "20R/02L",
+        source: "Runway",
+        color: "#009688",
+        values: [25.0, 24.4, 25.0, null, null, null],
+      },
+      {
+        key: "hourly_forecast",
+        label: "DEB Forecast",
+        source: "DEB Hourly",
+        color: "#f97316",
+        values: [22.0, 21.6, 22.1, 26.8, 28.0, 25.0],
+      },
+    ] as any).state === "none",
+    "morning observations near the intraday observed high should not trigger peak glow before the forecast hot window",
+  );
 
   const guangzhou = {
     city: "guangzhou",
@@ -450,6 +476,122 @@ export function runTests() {
   assert(
     seriesByKey(shanghaiWithEmptyRunwayHistory.series, runwayKey("35R/17L")),
     "empty runwayPlateHistory should fall back to AMOS runway_obs so runway cities still draw runway curves",
+  );
+
+  const busanWithRunwayHistory = __buildTemperatureChartDataForTest(
+    {
+      city: "busan",
+      local_date: "2026-05-27",
+      local_time: "08:20",
+      tz_offset_seconds: 9 * 60 * 60,
+      temp_symbol: "°C",
+    } as any,
+    {
+      localTime: "08:20",
+      times: ["00:00", "12:00", "18:00", "23:00"],
+      temps: [19.6, 21.1, 20.0, 19.0],
+      airportPrimary: {
+        source_code: "amos",
+        source_label: "AMOS",
+        temp: 21.0,
+        obs_time: "2026-05-26T23:20:00Z",
+      },
+      airportPrimaryTodayObs: [
+        ["2026-05-26T23:19:00Z", 21.0],
+        ["2026-05-26T23:20:00Z", 21.0],
+      ],
+      runwayPlateHistory: {
+        "SR/SL": [
+          { time: "2026-05-26T23:19:00Z", temp: 20.9 },
+          { time: "2026-05-26T23:20:00Z", temp: 21.1 },
+        ],
+      },
+    } as any,
+    "1D",
+  );
+  assert(
+    !seriesByKey(busanWithRunwayHistory.series, "madis"),
+    "Busan should not render the AMOS aggregate airport-primary series when runway sensor data is available",
+  );
+  const busanRunway = seriesByKey(busanWithRunwayHistory.series, runwayKey("SR/SL")) as any;
+  assert(busanRunway, "Busan SR/SL runway history should render as the runway curve");
+  assert(busanRunway.featured === true, "Busan SR/SL should be treated as the settlement runway");
+  assert(busanRunway.label.includes("结算跑道"), "Busan SR/SL should be labeled as the settlement runway");
+
+  const busanMergedHourly = __mergePatchIntoHourlyForTest(
+    {
+      localTime: "08:19",
+      times: ["00:00", "12:00", "18:00", "23:00"],
+      temps: [19.6, 21.1, 20.0, 19.0],
+      runwayPlateHistory: {
+        "SR/SL": [{ time: "2026-05-26T23:19:00Z", temp: 20.9 }],
+      },
+    } as any,
+    {
+      type: "city_observation_patch.v1",
+      city: "busan",
+      revision: 21,
+      changes: {
+        temp: 21.1,
+        obs_time: "2026-05-26T23:20:00Z",
+        source: "amos",
+        amos: {
+          source: "amos",
+          icao: "RKPK",
+          runway_obs: {
+            runway_pairs: [["S R", "S L"]],
+            temperatures: [[21.1, 12.4]],
+          },
+        },
+      },
+    } as any,
+  );
+  const busanMergedChart = __buildTemperatureChartDataForTest(
+    {
+      city: "busan",
+      local_date: "2026-05-27",
+      local_time: "08:20",
+      tz_offset_seconds: 9 * 60 * 60,
+      temp_symbol: "°C",
+    } as any,
+    busanMergedHourly as any,
+    "1D",
+  );
+  const busanMergedRunway = seriesByKey(busanMergedChart.series, runwayKey("SR/SL")) as any;
+  assert(busanMergedRunway, "AMOS runway_obs patch should append Busan SR/SL into runway history");
+  assert(
+    busanMergedRunway.values.some((value: number | null) => value === 21.1),
+    "AMOS runway_obs patch should use the runway temperature, not ignore the SR/SL point",
+  );
+
+  const busanCurrentOnly = __buildTemperatureChartDataForTest(
+    {
+      city: "busan",
+      local_date: "2026-05-27",
+      local_time: "08:20",
+      tz_offset_seconds: 9 * 60 * 60,
+      temp_symbol: "°C",
+    } as any,
+    {
+      localTime: "08:20",
+      times: ["00:00", "12:00", "18:00", "23:00"],
+      temps: [19.6, 21.1, 20.0, 19.0],
+      amos: {
+        source: "amos",
+        observation_time: "2026-05-26T23:20:00Z",
+        runway_obs: {
+          runway_pairs: [["S R", "S L"]],
+          temperatures: [[21.1, 12.4]],
+        },
+      },
+    } as any,
+    "1D",
+  );
+  const busanCurrentRunway = seriesByKey(busanCurrentOnly.series, runwayKey("SR/SL")) as any;
+  const busanCurrentValues = (busanCurrentRunway?.values || []).filter((value: number | null) => value !== null);
+  assert(
+    !busanCurrentValues.includes(12.4),
+    "AMOS temp/dew tuples should not be misread as two runway temperature samples",
   );
 
   const newYorkMetrics = __getObservationDisplayMetricsForTest(

@@ -117,7 +117,7 @@ export function LiveTemperatureThresholdChart({
   const latestPatch = useLatestPatch(city);
   const resyncVersion = useSseResyncVersion();
   const timeframe = "1D";
-  const [viewMode, setViewMode] = useState<"auto" | "full">("auto");
+  const [viewMode, setViewMode] = useState<"auto" | "full">("full");
   const [userToggledKeys, setUserToggledKeys] = useState<Record<string, boolean>>({});
   const [liveTemp, setLiveTemp] = useState<number | null>(null);
   const [isHourlyLoading, setIsHourlyLoading] = useState(false);
