@@ -518,6 +518,43 @@ export function runTests() {
   assert(busanRunway.featured === true, "Busan SR/SL should be treated as the settlement runway");
   assert(busanRunway.label.includes("结算跑道"), "Busan SR/SL should be labeled as the settlement runway");
 
+  const originalGetTimezoneOffset = Date.prototype.getTimezoneOffset;
+  let busanUtcPointLabel: string | null = null;
+  try {
+    Date.prototype.getTimezoneOffset = function () {
+      return -8 * 60;
+    };
+    const busanUtcTimestampChart = __buildTemperatureChartDataForTest(
+      {
+        city: "busan",
+        local_date: "2026-05-27",
+        local_time: "09:58",
+        tz_offset_seconds: 9 * 60 * 60,
+        temp_symbol: "°C",
+      } as any,
+      {
+        localTime: "09:58",
+        times: ["00:00", "12:00", "18:00", "23:00"],
+        temps: [19.6, 21.1, 20.0, 19.0],
+        runwayPlateHistory: {
+          "SR/SL": [
+            { time: "2026-05-27T00:57:00Z", temp: 21.4 },
+            { time: "2026-05-27T00:58:00Z", temp: 21.5 },
+          ],
+        },
+      } as any,
+      "1D",
+    );
+    busanUtcPointLabel =
+      (busanUtcTimestampChart.data.find((point: any) => point[runwayKey("SR/SL")] === 21.5) as any)?.label || null;
+  } finally {
+    Date.prototype.getTimezoneOffset = originalGetTimezoneOffset;
+  }
+  assert(
+    busanUtcPointLabel === "09:58:00",
+    "UTC runway observation timestamps should render at the city-local time regardless of the browser timezone",
+  );
+
   const busanMergedHourly = __mergePatchIntoHourlyForTest(
     {
       localTime: "08:19",

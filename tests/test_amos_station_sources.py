@@ -1,4 +1,8 @@
-from src.data_collection.amos_station_sources import AmosStationSourceMixin, _amos_parse_runway_table
+from src.data_collection.amos_station_sources import (
+    AmosStationSourceMixin,
+    _amos_extract_observation_time,
+    _amos_parse_runway_table,
+)
 
 
 def test_amos_parser_handles_current_public_page_format():
@@ -44,6 +48,15 @@ def test_amos_parser_handles_current_public_page_format():
     assert parsed["wind_speeds"][1] == (5.0, 2.8, 8.3)
     assert parsed["visibility_mor"][0] == 10000
     assert parsed["rvr"][0] == 2000
+
+
+def test_amos_observation_time_uses_page_kst_timestamp_as_utc_iso():
+    html = "[김해공항 (RKPK) 2026년 05월 27일 09:58 KST]"
+
+    obs_utc, obs_local = _amos_extract_observation_time(html, "RKPK")
+
+    assert obs_utc == "2026-05-27T00:58:00Z"
+    assert obs_local == "2026-05-27 09:58:00"
 
 
 def test_amos_get_page_rejects_ignored_query_returning_default_rksi():
