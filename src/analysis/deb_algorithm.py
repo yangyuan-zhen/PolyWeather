@@ -1209,6 +1209,82 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7, dec
     return round(blended_high, 1), " | ".join(weight_str_parts)
 
 
+def calculate_deb_prediction(
+    city_name,
+    current_forecasts,
+    *,
+    lookback_days=7,
+    decay_factor=0.85,
+    bias_lookback_days=30,
+    bias_min_samples=3,
+    raw_calculator=None,
+):
+    """
+    Return the production DEB prediction with versioned recent-bias correction.
+
+    The raw DEB path remains `calculate_dynamic_weights`; this wrapper keeps the
+    raw value in the payload and only adds a conservative city-level signed-bias
+    adjustment when enough settled samples exist.
+    """
+    from src.analysis.deb_evaluation import (
+        DEB_RAW_VERSION,
+        DEB_RECENT_BIAS_CORRECTED_VERSION,
+        build_recent_bias_corrector,
+        flatten_daily_records,
+    )
+
+    calculate_raw = raw_calculator or calculate_dynamic_weights
+    raw_prediction, weights_info = calculate_raw(
+        city_name,
+        current_forecasts,
+        lookback_days=lookback_days,
+        decay_factor=decay_factor,
+    )
+    if raw_prediction is None:
+        return {
+            "prediction": None,
+            "raw_prediction": None,
+            "version": DEB_RAW_VERSION,
+            "weights_info": weights_info,
+            "bias_adjustment": 0.0,
+            "bias_samples": 0,
+        }
+
+    data = load_history(_get_history_file_path())
+    history_rows = flatten_daily_records(data)
+    corrected = build_recent_bias_corrector(
+        history_rows,
+        lookback_days=bias_lookback_days,
+        min_samples=bias_min_samples,
+    ).apply(city_name, raw_prediction)
+    bias_adjustment = float(corrected.get("bias_adjustment") or 0.0)
+    bias_samples = int(corrected.get("samples") or 0)
+    if bias_samples <= 0:
+        return {
+            "prediction": raw_prediction,
+            "raw_prediction": raw_prediction,
+            "version": DEB_RAW_VERSION,
+            "weights_info": weights_info,
+            "bias_adjustment": 0.0,
+            "bias_samples": 0,
+        }
+
+    next_weights_info = weights_info
+    if abs(bias_adjustment) >= 0.05:
+        next_weights_info = (
+            f"{weights_info or 'DEB'} | "
+            f"recent_bias({bias_adjustment:+.1f},n={bias_samples})"
+        )
+    return {
+        "prediction": corrected["corrected_prediction"],
+        "raw_prediction": corrected["raw_prediction"],
+        "version": DEB_RECENT_BIAS_CORRECTED_VERSION,
+        "weights_info": next_weights_info,
+        "bias_adjustment": bias_adjustment,
+        "bias_samples": bias_samples,
+    }
+
+
 def get_deb_accuracy(city_name):
     """
     计算 DEB 融合预测的历史准确率

@@ -2,7 +2,7 @@
 
 本文档记录 PolyWeather 当前开放模型接入、区域覆盖差异，以及 DEB 在新增模型后的计权规则。
 
-最后更新：`2026-04-18`
+最后更新：`2026-05-27`
 
 ## 1. 接入方式
 
@@ -165,10 +165,46 @@ raw current_forecasts
   -> 按模型家族去重
   -> 历史 MAE 统计
   -> MAE 倒数权重
-  -> 输出 blended_high + weights_info
+  -> 输出 raw blended_high
+  -> recent signed-bias correction
+  -> 输出 production prediction + raw_prediction + version
 ```
 
 当 `weights_info` 出现 `家族去重`，表示当前输入模型数量多于 DEB 实际入模数量，系统已先折叠同家族模型。
+
+### 5.1 版本化预测与偏差校正
+
+DEB 原始融合逻辑不推倒重写，`calculate_dynamic_weights(...)` 仍作为 raw baseline。线上生产入口使用 `calculate_deb_prediction(...)` 包装 raw baseline，并在有足够历史样本时追加城市级 recent signed-bias correction。
+
+当前版本：
+
+- `deb_v1_raw`：原始 DEB，最近模型误差倒数加权后的融合值。
+- `deb_v1_recent_bias_corrected`：在 raw DEB 上叠加最近已结算样本的有符号偏差校正。偏差使用 shrinkage，样本少时自动收缩，避免单日异常过拟合。
+
+API `deb` payload 会保留：
+
+- `prediction`：当前生产使用值。
+- `raw_prediction`：未经 recent-bias correction 的原始 DEB。
+- `version`：生产值对应的 DEB 版本。
+- `bias_adjustment` / `bias_samples`：城市级偏差校正幅度与训练样本数。
+- `intraday_adjustment`：网页 full detail 中额外的日内观测路径修正，仅用于当前日实时展示。
+
+版本化回测命令：
+
+```bash
+python scripts/backtest_deb_versions.py \
+  --output-json data/deb_backtest_latest.json \
+  --output-csv data/deb_backtest_latest.csv
+```
+
+本地 `data/polyweather.db` 于 2026-05-27 的回测样本显示：
+
+| 版本 | 样本 | MAE | RMSE | Bias | 结算桶命中率 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `deb_v1_raw` | 1272 | 1.626 | 2.602 | -0.633 | 25.8% |
+| `deb_v1_recent_bias_corrected` | 1272 | 1.499 | 2.542 | +0.263 | 31.4% |
+
+该结果只证明当前历史样本上的离线表现改善；后续仍需要持续用版本化回测追踪不同城市、季节与结算源下的漂移。
 
 ## 6. 前端展示
 
@@ -228,6 +264,7 @@ raw current_forecasts
 
 - `tests/test_multi_model_sources.py`
 - `tests/test_deb_model_family.py`
+- `tests/test_deb_evaluation_upgrade.py`
 
 重点覆盖：
 
@@ -237,3 +274,4 @@ raw current_forecasts
 - DEB 家族去重
 - 历史不足时的去重等权
 - 有历史 MAE 时的去重动态权重
+- DEB raw/corrected 版本化评估、recent-bias correction、JSON/CSV 回测输出

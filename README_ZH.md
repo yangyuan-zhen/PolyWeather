@@ -2,7 +2,7 @@
 
 面向温度结算市场的生产级气象情报系统。
 
-官方看板：[polyweather-pro.vercel.app](https://polyweather-pro.vercel.app/)
+官方看板：[polyweather.top](https://polyweather.top/)
 
 ## 产品截图
 
@@ -154,7 +154,7 @@ curl http://127.0.0.1:8000/metrics
 ### 外部监控栈
 
 ```bash
-./scripts/validate_frontend_cache.sh "https://polyweather-pro.vercel.app"
+./scripts/validate_frontend_cache.sh "https://polyweather.top"
 ```
 
 ### 支付自动补单日志
@@ -187,7 +187,7 @@ curl http://127.0.0.1:8000/api/payments/runtime
 
 ### 运营后台
 
-- 前端入口：`https://polyweather-pro.vercel.app/ops`
+- 前端入口：`https://polyweather.top/ops`
 - 后端需配置：
 
 ```env

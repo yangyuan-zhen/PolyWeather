@@ -2,7 +2,7 @@
 
 Production weather-intelligence stack for temperature settlement markets.
 
-Official dashboard: [polyweather-pro.vercel.app](https://polyweather-pro.vercel.app/)
+Official dashboard: [polyweather.top](https://polyweather.top/)
 中文说明: [README_ZH.md](README_ZH.md)
 
 Public docs center: `/docs/intro` on the main site (bilingual product documentation, including intraday analysis, calibrated probability, model stack, TAF, settlement sources, history, and extension).
@@ -162,7 +162,7 @@ curl http://127.0.0.1:8000/metrics
 ### Frontend cache headers
 
 ```bash
-./scripts/validate_frontend_cache.sh "https://polyweather-pro.vercel.app"
+./scripts/validate_frontend_cache.sh "https://polyweather.top"
 ```
 
 ### Payment auto-reconciliation logs

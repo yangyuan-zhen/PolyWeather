@@ -112,6 +112,9 @@ jobs:
             NEXT_PUBLIC_SITE_URL=${{ secrets.NEXT_PUBLIC_SITE_URL || 'https://polyweather.top' }}
             NEXT_PUBLIC_POLYWEATHER_API_BASE_URL=${{ secrets.NEXT_PUBLIC_POLYWEATHER_API_BASE_URL || '' }}
             NEXT_PUBLIC_POLYWEATHER_LOCAL_FULL_ACCESS=false
+            NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=${{ secrets.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '' }}
+            NEXT_PUBLIC_WALLETCONNECT_POLYGON_RPC_URL=${{ secrets.NEXT_PUBLIC_WALLETCONNECT_POLYGON_RPC_URL || 'https://polygon-bor-rpc.publicnode.com' }}
+            NEXT_PUBLIC_PAYMENT_ALLOWED_HOSTS=${{ secrets.NEXT_PUBLIC_PAYMENT_ALLOWED_HOSTS || 'polyweather.top,www.polyweather.top' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

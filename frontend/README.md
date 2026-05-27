@@ -3,7 +3,7 @@
 PolyWeather Pro 的生产前端工程。
 
 线上地址：
-- [https://polyweather-pro.vercel.app/](https://polyweather-pro.vercel.app/)
+- [https://polyweather.top/](https://polyweather.top/)
 
 ## 技术栈
 
@@ -90,7 +90,7 @@ POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN=
 # 钱包支付
 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
 NEXT_PUBLIC_WALLETCONNECT_POLYGON_RPC_URL=https://polygon-bor-rpc.publicnode.com
-NEXT_PUBLIC_PAYMENT_ALLOWED_HOSTS=polyweather-pro.vercel.app
+NEXT_PUBLIC_PAYMENT_ALLOWED_HOSTS=polyweather.top,www.polyweather.top
 POLYWEATHER_OPS_ADMIN_EMAILS=yhrsc30@gmail.com
 
 # 社群入口
@@ -144,7 +144,7 @@ Ops：
 
 当前前端已内置轻量管理页：
 
-- [https://polyweather-pro.vercel.app/ops](https://polyweather-pro.vercel.app/ops)
+- [https://polyweather.top/ops](https://polyweather.top/ops)
 
 页面当前支持：
 

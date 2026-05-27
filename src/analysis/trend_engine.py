@@ -11,6 +11,7 @@ from typing import List, Optional, Tuple, Dict, Any
 
 from src.analysis.deb_algorithm import (
     calculate_dynamic_weights,
+    calculate_deb_prediction,
     get_deb_accuracy,
     update_daily_record,
     _is_excluded_model_name,
@@ -313,22 +314,32 @@ def analyze_weather_trend(
 
     # === DEB ===
     deb_prediction = None
+    deb_raw_prediction = None
+    deb_version = None
+    deb_bias_adjustment = 0.0
+    deb_bias_samples = 0
     deb_weights = ""
     if city_name and current_forecasts:
-        blended_high, weight_info = calculate_dynamic_weights(
-            city_name, current_forecasts
+        deb_result = calculate_deb_prediction(
+            city_name,
+            current_forecasts,
+            raw_calculator=calculate_dynamic_weights,
         )
-        if blended_high is not None:
-            deb_prediction = blended_high
-            deb_weights = weight_info
+        if deb_result.get("prediction") is not None:
+            deb_prediction = deb_result.get("prediction")
+            deb_raw_prediction = deb_result.get("raw_prediction")
+            deb_version = deb_result.get("version")
+            deb_bias_adjustment = deb_result.get("bias_adjustment") or 0.0
+            deb_bias_samples = deb_result.get("bias_samples") or 0
+            deb_weights = deb_result.get("weights_info") or ""
             insights.insert(
                 0,
-                f"🧬 <b>DEB 融合预测</b>：<b>{blended_high}{temp_symbol}</b> ({weight_info})",
+                f"🧬 <b>DEB 融合预测</b>：<b>{deb_prediction}{temp_symbol}</b> ({deb_weights})",
             )
             ai_features.append(
-                f"🧬 DEB系统已通过历史偏差矫正算出期待点是: {blended_high}{temp_symbol}。"
+                f"🧬 DEB系统已通过历史偏差矫正算出期待点是: {deb_prediction}{temp_symbol}。"
             )
-        _deb_to_save = blended_high
+        _deb_to_save = deb_prediction
 
     # === METAR trend ===
     recent_temps = metar.get("recent_temps", [])
@@ -417,7 +428,7 @@ def analyze_weather_trend(
         # DEB blending uses the already-computed set of model forecasts
                 if ai_features and "DEB系统已通过历史偏差矫正算出期待点是" in ai_features[0]:
                     ai_features[0] = (
-                        f"🧬 DEB系统已通过历史偏差矫正算出期待点是: {blended_high}{temp_symbol}。"
+                        f"🧬 DEB系统已通过历史偏差矫正算出期待点是: {deb_prediction}{temp_symbol}。"
                     )
 
     if trend_direction == "stagnant":
@@ -825,6 +836,10 @@ def analyze_weather_trend(
         "peak_status": peak_status,
         "peak_hours": peak_hours,
         "deb_prediction": deb_prediction,
+        "deb_raw_prediction": deb_raw_prediction,
+        "deb_version": deb_version,
+        "deb_bias_adjustment": deb_bias_adjustment,
+        "deb_bias_samples": deb_bias_samples,
         "deb_weights": deb_weights,
         "current_forecasts": current_forecasts,
         "ens_data": ens_data,

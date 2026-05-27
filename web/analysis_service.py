@@ -24,7 +24,7 @@ from web.core import (
     _sf,
     _weather,
 )
-from src.analysis.deb_algorithm import calculate_dynamic_weights
+from src.analysis.deb_algorithm import calculate_deb_prediction
 from src.analysis.settlement_rounding import apply_city_settlement
 from src.data_collection.country_networks import build_country_network_snapshot
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
@@ -1082,11 +1082,18 @@ def _analyze(
 
     # ── 6. DEB fusion ──
     deb_val, deb_weights = None, ""
+    deb_raw_val, deb_version = None, None
+    deb_bias_adjustment, deb_bias_samples = 0.0, 0
+    deb_intraday_adjustment = 0.0
     if current_forecasts:
-        blended, winfo = calculate_dynamic_weights(city, current_forecasts)
-        if blended is not None:
-            deb_val = blended
-            deb_weights = winfo
+        deb_result = calculate_deb_prediction(city, current_forecasts)
+        if deb_result.get("prediction") is not None:
+            deb_val = deb_result.get("prediction")
+            deb_raw_val = deb_result.get("raw_prediction")
+            deb_version = deb_result.get("version")
+            deb_bias_adjustment = deb_result.get("bias_adjustment") or 0.0
+            deb_bias_samples = deb_result.get("bias_samples") or 0
+            deb_weights = deb_result.get("weights_info") or ""
 
     # ── 7. Ensemble stats ──
     ens_data = {
@@ -1230,6 +1237,10 @@ def _analyze(
         # Use shared DEB if not already set
         if deb_val is None and sd.get("deb_prediction") is not None:
             deb_val = sd["deb_prediction"]
+            deb_raw_val = sd.get("deb_raw_prediction") or deb_val
+            deb_version = sd.get("deb_version")
+            deb_bias_adjustment = sd.get("deb_bias_adjustment") or 0.0
+            deb_bias_samples = sd.get("deb_bias_samples") or 0
             deb_weights = sd.get("deb_weights", "")
 
     except Exception as e:
@@ -1288,10 +1299,11 @@ def _analyze(
             max_correction_clamped = max(-max_correction, min(max_correction, max_so_far_excess * max(0.3, weight)))
 
             blended_correction = hourly_correction * 0.6 + max_correction_clamped * 0.4
+            deb_intraday_adjustment = round(blended_correction, 1)
             deb_val = round(deb_val + blended_correction, 1)
             if mu is not None:
                 mu = round(mu + blended_correction, 1)
-            deb_weights = f"{deb_weights or 'DEB'} + intraday_bias({blended_correction:+.1f})"
+            deb_weights = f"{deb_weights or 'DEB'} + intraday_bias({deb_intraday_adjustment:+.1f})"
 
     # ── 12b. Next 48h hourly block for future-date analysis modal ──
     next_48h_hourly = {
@@ -1490,6 +1502,10 @@ def _analyze(
         if i == 0:
             day_m = current_forecasts.copy()
             d_val, d_winfo = deb_val, deb_weights
+            d_raw_val = deb_raw_val
+            d_version = deb_version
+            d_bias_adjustment = deb_bias_adjustment
+            d_bias_samples = deb_bias_samples
         else:
             day_m = mm_daily_raw.get(d_str, {}).copy()
             if i < len(maxtemps) and maxtemps[i] is not None:
@@ -1505,14 +1521,20 @@ def _analyze(
             }
             
             d_val, d_winfo = None, ""
+            d_raw_val, d_version = None, None
+            d_bias_adjustment, d_bias_samples = 0.0, 0
             d_probs = []
             d_probs_all = []
             if day_m:
                 try:
-                    blended, winfo = calculate_dynamic_weights(city, day_m)
-                    if blended is not None:
-                        d_val = blended
-                        d_winfo = winfo
+                    deb_result = calculate_deb_prediction(city, day_m)
+                    if deb_result.get("prediction") is not None:
+                        d_val = deb_result.get("prediction")
+                        d_raw_val = deb_result.get("raw_prediction")
+                        d_version = deb_result.get("version")
+                        d_bias_adjustment = deb_result.get("bias_adjustment") or 0.0
+                        d_bias_samples = deb_result.get("bias_samples") or 0
+                        d_winfo = deb_result.get("weights_info") or ""
                         
                         # Calculate future probability based on model divergence
                         m_vals = [v for v in day_m.values() if v is not None]
@@ -1532,7 +1554,14 @@ def _analyze(
         if day_m:
             multi_model_daily[d_str] = {
                 "models": day_m,
-                "deb": {"prediction": d_val, "weights_info": d_winfo},
+                "deb": {
+                    "prediction": d_val,
+                    "raw_prediction": d_raw_val,
+                    "version": d_version,
+                    "weights_info": d_winfo,
+                    "bias_adjustment": d_bias_adjustment,
+                    "bias_samples": d_bias_samples,
+                },
                 "probabilities": d_probs if i > 0 else probabilities, # Use today's real prob for today
                 "probabilities_all": d_probs_all if i > 0 else probabilities_all,
             }
@@ -1689,7 +1718,15 @@ def _analyze(
             "forecasts": {k: v for k, v in current_forecasts.items() if v is not None},
         },
         "multi_model_daily": multi_model_daily,
-        "deb": {"prediction": deb_val, "weights_info": deb_weights},
+        "deb": {
+            "prediction": deb_val,
+            "raw_prediction": deb_raw_val,
+            "version": deb_version,
+            "weights_info": deb_weights,
+            "bias_adjustment": deb_bias_adjustment,
+            "bias_samples": deb_bias_samples,
+            "intraday_adjustment": deb_intraday_adjustment,
+        },
         "deviation_monitor": deviation_monitor,
         "ensemble": ens_data,
         "probabilities": {
@@ -1998,10 +2035,18 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     }
 
     deb_val = None
+    deb_raw_val = None
+    deb_version = None
+    deb_bias_adjustment = 0.0
+    deb_bias_samples = 0
     if current_forecasts:
-        blended, _weights_info = calculate_dynamic_weights(city, current_forecasts)
-        if blended is not None:
-            deb_val = blended
+        deb_result = calculate_deb_prediction(city, current_forecasts)
+        if deb_result.get("prediction") is not None:
+            deb_val = deb_result.get("prediction")
+            deb_raw_val = deb_result.get("raw_prediction")
+            deb_version = deb_result.get("version")
+            deb_bias_adjustment = deb_result.get("bias_adjustment") or 0.0
+            deb_bias_samples = deb_result.get("bias_samples") or 0
     if deb_val is None:
         deb_val = om_today
 
@@ -2071,7 +2116,13 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             "obs_age_min": obs_age_min,
             "observation_status": "live" if cur_temp is not None else "missing",
         },
-        "deb": {"prediction": _sf(deb_val)},
+        "deb": {
+            "prediction": _sf(deb_val),
+            "raw_prediction": _sf(deb_raw_val),
+            "version": deb_version,
+            "bias_adjustment": deb_bias_adjustment,
+            "bias_samples": deb_bias_samples,
+        },
         "deviation_monitor": deviation_monitor or {},
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }

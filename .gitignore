@@ -9,6 +9,7 @@ data/*.db
 data/*.db-*
 data/*.db.*
 data/*.json
+data/*backtest*.csv
 data/logs/
 data/historical/
 data/cache/

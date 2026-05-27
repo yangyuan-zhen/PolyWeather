@@ -1,5 +1,6 @@
 from src.analysis.deb_algorithm import (
     _collapse_forecasts_for_deb,
+    calculate_deb_prediction,
     calculate_dynamic_weights,
 )
 
@@ -89,6 +90,42 @@ def test_deb_weighted_path_uses_deduped_family_values(monkeypatch):
     assert blended < 30.0
     assert "ICON-D2" in info
     assert "家族去重" in info
+
+
+def test_calculate_deb_prediction_keeps_raw_and_adds_versioned_bias_correction(monkeypatch):
+    monkeypatch.setattr(
+        "src.analysis.deb_algorithm.load_history",
+        lambda _: {
+            "ankara": {
+                "2026-04-14": {
+                    "actual_high": 22.0,
+                    "deb_prediction": 20.0,
+                    "forecasts": {"ECMWF": 20.0, "GFS": 20.0},
+                },
+                "2026-04-15": {
+                    "actual_high": 23.0,
+                    "deb_prediction": 21.0,
+                    "forecasts": {"ECMWF": 21.0, "GFS": 21.0},
+                },
+                "2026-04-16": {
+                    "actual_high": 25.0,
+                    "deb_prediction": 24.0,
+                    "forecasts": {"ECMWF": 24.0, "GFS": 24.0},
+                },
+            }
+        },
+    )
+
+    result = calculate_deb_prediction(
+        "ankara",
+        {"ECMWF": 24.0, "GFS": 24.0},
+    )
+
+    assert result["raw_prediction"] == 24.0
+    assert result["prediction"] == 25.0
+    assert result["version"] == "deb_v1_recent_bias_corrected"
+    assert result["bias_adjustment"] == 1.0
+    assert result["bias_samples"] == 3
 
 
 def test_compute_hourly_model_errors_basic():
