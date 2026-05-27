@@ -100,80 +100,6 @@ def _load_city_thread_ids() -> dict:
                 with open(path, "r", encoding="utf-8") as f:
                     _city_thread_ids = json.load(f)
                 logger.info("loaded city_thread_ids from {}: {} cities", path, len(_city_thread_ids))
-
-# Forum topic routing: maps city_key -> message_thread_id for the push forum group.
-# Created by scripts/create_forum_topics.py, stored in the runtime data dir.
-_CITY_THREAD_IDS_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "data", "city_thread_ids.json",
-)
-_FORUM_CHAT_ID = "-1003927451869"
-_city_thread_ids: dict = {}
-
-# Shared HTTP session for AROME and auxiliary queries (connection reuse)
-_HTTP_SESSION: Optional[requests_lib.Session] = None
-_HTTP_SESSION_LOCK = threading.Lock()
-
-# Bot send_message rate limiter: max N messages per second across all threads
-_SEND_MSG_LOCK = threading.Lock()
-_SEND_MSG_LAST_TS: float = 0.0
-_SEND_MSG_MIN_INTERVAL_SEC = float(os.getenv("TELEGRAM_SEND_RATE_LIMIT_SEC", "0.05"))
-
-
-def _get_http_session() -> requests_lib.Session:
-    global _HTTP_SESSION
-    if _HTTP_SESSION is None:
-        with _HTTP_SESSION_LOCK:
-            if _HTTP_SESSION is None:
-                _HTTP_SESSION = requests_lib.Session()
-    return _HTTP_SESSION
-
-
-# Reusable executor for airport push cycles (avoids thread pool churn)
-_AIRPORT_EXECUTOR: Optional[ThreadPoolExecutor] = None
-_AIRPORT_EXECUTOR_LOCK = threading.Lock()
-_AIRPORT_EXECUTOR_MAX_WORKERS: int = 0
-
-
-def _get_airport_executor(max_workers: int) -> ThreadPoolExecutor:
-    global _AIRPORT_EXECUTOR, _AIRPORT_EXECUTOR_MAX_WORKERS
-    if _AIRPORT_EXECUTOR is None or _AIRPORT_EXECUTOR_MAX_WORKERS != max_workers:
-        with _AIRPORT_EXECUTOR_LOCK:
-            if _AIRPORT_EXECUTOR is None or _AIRPORT_EXECUTOR_MAX_WORKERS != max_workers:
-                if _AIRPORT_EXECUTOR is not None:
-                    _AIRPORT_EXECUTOR.shutdown(wait=False)
-                _AIRPORT_EXECUTOR = ThreadPoolExecutor(max_workers=max_workers)
-                _AIRPORT_EXECUTOR_MAX_WORKERS = max_workers
-    return _AIRPORT_EXECUTOR
-
-
-def _rate_limited_send(bot: Any, chat_id: str, message: str, **kwargs: Any) -> None:
-    """Throttle bot.send_message calls to avoid hitting Telegram rate limits."""
-    global _SEND_MSG_LAST_TS
-    with _SEND_MSG_LOCK:
-        now = time.time()
-        wait = _SEND_MSG_MIN_INTERVAL_SEC - (now - _SEND_MSG_LAST_TS)
-        if wait > 0:
-            time.sleep(wait)
-        _SEND_MSG_LAST_TS = time.time()
-    bot.send_message(chat_id, message, **kwargs)
-
-
-def _load_city_thread_ids() -> dict:
-    global _city_thread_ids
-    if _city_thread_ids:
-        return _city_thread_ids
-    paths = [
-        _CITY_THREAD_IDS_PATH,
-        "/var/lib/polyweather/city_thread_ids.json",
-        "/app/data/city_thread_ids.json",
-    ]
-    for path in paths:
-        if os.path.isfile(path):
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    _city_thread_ids = json.load(f)
-                logger.info("loaded city_thread_ids from {}: {} cities", path, len(_city_thread_ids))
                 return _city_thread_ids
             except Exception as exc:
                 logger.warning("failed to load city_thread_ids from {}: {}", path, exc)
@@ -271,7 +197,7 @@ def _bucket_value(row: Dict[str, Any]) -> Optional[float]:
         n = _safe_float(row.get(key))
         if n is not None:
             return n
-    label = (row.get("label") or "").strip()
+    label = str(row.get("label") or "").strip()
     m = re.search(r"(-?\d+(?:\.\d+)?)", label)
     if not m:
         return None
@@ -282,7 +208,7 @@ def _bucket_bounds(row: Dict[str, Any]) -> Optional[Tuple[Optional[float], Optio
     value = _bucket_value(row)
     if value is None:
         return None
-    label = (row.get("label") or "").strip().lower()
+    label = str(row.get("label") or "").strip().lower()
     is_upper_tail = any(key in label for key in ("+", "or higher", "or above", "and above"))
     is_lower_tail = any(key in label for key in ("<=", "or lower", "or below", "and below"))
     if is_upper_tail and not is_lower_tail:
@@ -443,7 +369,7 @@ def _severity_ok(alert_payload: Dict[str, Any], min_severity: str, min_trigger_c
     trigger_count = int(alert_payload.get("trigger_count") or 0)
     if trigger_count < min_trigger_count:
         return False
-    severity = (alert_payload.get("severity") or "none").lower()
+    severity = str(alert_payload.get("severity") or "none").lower()
     return SEVERITY_RANK.get(severity, 0) >= SEVERITY_RANK.get(min_severity, 0)
 
 
@@ -458,8 +384,8 @@ def _market_price_cap_ok(
     if not isinstance(primary_market, dict):
         primary_market = {}
     market_slug = (
-        (market.get("selected_slug") or "").strip()
-        or (primary_market.get("slug") or "").strip()
+        str(market.get("selected_slug") or "").strip()
+        or str(primary_market.get("slug") or "").strip()
         or "--"
     )
     active = market.get("market_active")
@@ -478,12 +404,12 @@ def _market_price_cap_ok(
         )
     accepting_orders = _optional_bool(accepting_orders)
     market_tradable = _optional_bool(market.get("market_tradable"))
-    tradable_reason = (
+    tradable_reason = str(
         market.get("market_tradable_reason")
         or primary_market.get("tradable_reason")
         or ""
     ).strip()
-    ended_at = (
+    ended_at = str(
         market.get("market_ended_at_utc")
         or primary_market.get("ended_at_utc")
         or ""
@@ -516,12 +442,12 @@ def _market_price_cap_ok(
     settle_ref = market.get("anchor_settlement")
     if settle_ref is None:
         settle_ref = market.get("open_meteo_settlement")
-    anchor_model = (market.get("anchor_model") or "").strip() or "--"
+    anchor_model = str(market.get("anchor_model") or "").strip() or "--"
     yes_buy = None
     bucket_label = None
     if isinstance(forecast_bucket, dict):
         yes_buy = _norm_prob(forecast_bucket.get("yes_buy"))
-        bucket_label = (forecast_bucket.get("label") or "").strip() or None
+        bucket_label = str(forecast_bucket.get("label") or "").strip() or None
 
     observed_floor = _observed_settlement_floor(alert_payload)
     bucket_bounds = _bucket_bounds(forecast_bucket) if isinstance(forecast_bucket, dict) else None
@@ -556,14 +482,14 @@ def _market_price_cap_ok(
 
 def _trigger_type_key(alert_payload: Dict[str, Any]) -> str:
     trigger_types = sorted(
-        (alert.get("type") or "").strip()
+        str(alert.get("type") or "").strip()
         for alert in (alert_payload.get("triggered_alerts") or [])
         if alert.get("type")
     )
     market = alert_payload.get("market_snapshot") or {}
     if isinstance(market, dict) and market.get("available"):
-        signal = (market.get("signal_label") or "").strip()
-        bucket = (market.get("selected_bucket") or "").strip()
+        signal = str(market.get("signal_label") or "").strip()
+        bucket = str(market.get("selected_bucket") or "").strip()
         if signal:
             trigger_types.append(f"mkt:{signal}:{bucket}")
     return "|".join(trigger_types)
@@ -604,7 +530,7 @@ def _evidence_brief(alert_payload: Dict[str, Any]) -> str:
 
     forecast_bucket = market.get("forecast_bucket") or {}
     if isinstance(forecast_bucket, dict):
-        label = (forecast_bucket.get("label") or "").strip()
+        label = str(forecast_bucket.get("label") or "").strip()
         yes_buy = forecast_bucket.get("yes_buy")
         if label:
             parts.append(f"bucket={label}")
@@ -797,7 +723,7 @@ def _fmt(value: Any) -> str:
 
 
 def _normalize_runway_label(value: Any) -> str:
-    return re.sub(r"[^0-9A-Z]+", "", (value or "").strip().upper())
+    return re.sub(r"[^0-9A-Z]+", "", str(value or "").strip().upper())
 
 
 def _runway_pair_key(r1: Any, r2: Any) -> Tuple[str, str]:
@@ -1067,6 +993,42 @@ def _build_airport_status_message(
     language = _normalize_push_language(language or _telegram_push_language())
     _AIRPORT_EN = {"seoul": "Incheon", "singapore": "Changi", "busan": "Gimhae", "tokyo": "Haneda",
                    "ankara": "Esenboğa", "helsinki": "Vantaa", "amsterdam": "Schiphol",
+                   "istanbul": "Airport", "paris": "Le Bourget",
+                   "hong kong": "Observatory", "shenzhen": "LFS Observatory",
+                   "taipei": "Songshan", "beijing": "Capital", "shanghai": "Pudong",
+                   "guangzhou": "Baiyun", "qingdao": "Jiaodong",
+                   "chengdu": "Shuangliu", "chongqing": "Jiangbei", "wuhan": "Tianhe",
+                   "new york": "LaGuardia", "los angeles": "LAX", "chicago": "O'Hare",
+                   "denver": "Buckley", "atlanta": "Hartsfield", "miami": "Intl",
+                   "san francisco": "SFO", "houston": "Hobby", "dallas": "Love Field",
+                   "austin": "Bergstrom", "seattle": "Sea-Tac",
+                   "tel aviv": "Ben Gurion"}
+    en_name = city.title()
+    ap_name = _AIRPORT_EN.get(city, "")
+    time_suffix = f" · {local_time}" if local_time else ""
+
+    amos = city_weather.get("amos") or {}
+    runway_data = amos.get("runway_obs") or {}
+    runway_pairs = runway_data.get("runway_pairs") or []
+    runway_temps = runway_data.get("temperatures") or []
+    point_temps = runway_data.get("point_temperatures") or []
+    is_amsc = amos.get("source") in ("amsc_awos", "amos")
+    has_runway = bool(runway_pairs and (runway_temps or point_temps))
+    amos_icao = amos.get("icao") or HIGH_FREQ_AIRPORT_ICAO.get(city, "")
+    settlement_pair = _settlement_runway_for_city(city)
+
+    # ── Display temp: settlement runway max first, then airport temp ──
+    settlement_temp: Optional[float] = None
+    display_temp: Optional[float] = None
+    if point_temps:
+        for pt in point_temps:
+            rw = str(pt.get("runway") or "")
+            rw_parts = [p.strip() for p in rw.split("/") if p.strip()]
+            if settlement_pair and len(rw_parts) >= 2 and _runway_pair_key(rw_parts[0], rw_parts[1]) == _runway_pair_key(*settlement_pair):
+                tmax = pt.get("target_runway_max")
+                if tmax is not None:
+                    settlement_temp = float(tmax)
+                break
         if settlement_temp is not None:
             display_temp = settlement_temp
     if display_temp is None:

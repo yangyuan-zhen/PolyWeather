@@ -33,6 +33,10 @@ function normalizeCityKey(value?: string | null) {
   return String(value || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
 }
 
+function hasRecordEntries(value: unknown) {
+  return Boolean(value && typeof value === "object" && Object.keys(value as Record<string, unknown>).length > 0);
+}
+
 function pairKey(pair: [string, string]) {
   return pair.map(normalizeRunwayLabel).sort().join("/");
 }
@@ -50,6 +54,19 @@ function isTemperatureSeriesVisibleByDefault(city: string, seriesKey: string) {
     return normalizeCityKey(city) === "paris" && seriesKey === "model_curve_AROME HD";
   }
   return true;
+}
+
+function prefersHighFrequencyRunwayResolution(
+  row: ScanOpportunityRow | null,
+  hourly: HourlyForecast,
+) {
+  const cityKey = normalizeCityKey(row?.city);
+  if ((SETTLEMENT_RUNWAY_PAIRS[cityKey] || []).length > 0) return true;
+  if (hasRecordEntries((row as any)?.runway_plate_history)) return true;
+  if (hasRecordEntries(hourly?.runwayPlateHistory)) return true;
+  if ((hourly?.runwayBandHistory || []).length > 0) return true;
+  if (((hourly?.amos?.runway_obs as any)?.runway_pairs || []).length > 0) return true;
+  return false;
 }
 
 function getVisibleTemperatureSeries(
@@ -1888,6 +1905,7 @@ export {
   mergePatchIntoHourly,
   normObs,
   normalizeCityKey,
+  prefersHighFrequencyRunwayResolution,
   readSessionCache,
   seedHourlyForecastFromRow,
   seriesStats,

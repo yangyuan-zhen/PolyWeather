@@ -61,9 +61,9 @@ export async function runTests() {
     "selected city chart should consume SSE patches and use a 2-minute no-patch fallback",
   );
   assert(
-    chartSource.includes("fetchHourlyForecastForCity(city, { ignoreCache: true })") &&
+    chartSource.includes("fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })") &&
       chartSource.includes("setHourly(data)"),
-    "visible chart fallback must refresh the full city detail payload when SSE patches stop",
+    "visible chart fallback must refresh the full city detail payload at the current chart resolution when SSE patches stop",
   );
   assert(
     __shouldPollLiveChartForTest({ city: "shanghai", compact: true, isActive: false, isMaximized: false }) === true,

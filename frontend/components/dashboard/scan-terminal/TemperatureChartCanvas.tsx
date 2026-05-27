@@ -114,6 +114,13 @@ export function TemperatureChartCanvas({
   const canRenderChart = chartSize.width > 0 && chartSize.height > 0;
   const chartWidth = Math.max(1, chartSize.width);
   const chartHeight = Math.max(220, chartSize.height);
+  const individualRunwaySeriesCount = chartSeries.filter(
+    (series) => series.key.startsWith("runway_") && series.key !== "runway_max",
+  ).length;
+  const canToggleRunwayDetails =
+    hasRunwayData &&
+    individualRunwaySeriesCount > 1 &&
+    chartSeries.some((series) => series.key === "runway_max");
 
   return (
     <div className="relative flex min-h-[240px] flex-1 flex-col p-2">
@@ -142,7 +149,7 @@ export function TemperatureChartCanvas({
               </button>
             ))}
 
-        {hasRunwayData && (
+        {canToggleRunwayDetails && (
           <label className="inline-flex items-center gap-1.5 ml-auto cursor-pointer text-slate-600 hover:text-slate-800 font-semibold select-none">
             <input
               type="checkbox"

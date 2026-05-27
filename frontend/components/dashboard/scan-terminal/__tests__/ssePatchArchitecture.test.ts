@@ -154,6 +154,10 @@ export function runTests() {
   );
   assert(chart.includes("viewMode"), "temperature chart must expose a view mode for DEB-peak auto view versus full-day view");
   assert(chart.includes('useState<"auto" | "full">("full")'), "temperature chart must default every city panel to the all-day view");
+  assert(
+    chart.includes('setViewMode("full")') && !chart.includes('setViewMode("auto")'),
+    "temperature chart must reset city changes to the all-day view instead of silently switching back to the DEB peak window",
+  );
   assert(chart.includes("getDebPeakWindowRange"), "temperature chart must still derive the optional Peak view from the DEB peak window");
   assert(
     chart.includes('isEn ? "Peak" : "高温"') && chart.includes('isEn ? "All Day" : "全天"'),
@@ -168,6 +172,10 @@ export function runTests() {
     chart.includes("targetResolution !== nextTargetResolution"),
     "temperature chart must guard target-resolution state updates to prevent render/update loops",
   );
+  assert(
+    chart.includes("prefersHighFrequencyRunwayResolution") && chart.includes('return "1m";'),
+    "runway charts must request 1-minute detail resolution so historical runway lines match live SSE patch cadence",
+  );
   assert(!chartCanvas.includes("ResponsiveContainer"), "temperature chart canvas must not mount Recharts through ResponsiveContainer at 0x0");
   assert(chartCanvas.includes("ResizeObserver"), "temperature chart canvas must measure its host with ResizeObserver");
   assert(
@@ -177,6 +185,10 @@ export function runTests() {
   assert(
     chartCanvas.includes("width={chartWidth}") && chartCanvas.includes("height={chartHeight}"),
     "temperature chart canvas must pass explicit positive width/height to Recharts",
+  );
+  assert(
+    chartCanvas.includes("canToggleRunwayDetails") && chartCanvas.includes("individualRunwaySeriesCount > 1"),
+    "single-runway charts must not show the runway-detail toggle because aggregate and individual views are visually redundant",
   );
   assert(!chart.includes("3D"), "temperature chart UI must not expose a 3D/future-forecast mode");
   assert(!chart.includes("build3DayChartData"), "temperature chart component must not render future prediction curves");

@@ -28,6 +28,7 @@ import {
   isTemperatureSeriesVisibleByDefault,
   mergePatchIntoHourly,
   normObs,
+  prefersHighFrequencyRunwayResolution,
   readSessionCache,
   seedHourlyForecastFromRow,
   shouldPollLiveChart,
@@ -130,7 +131,9 @@ export function LiveTemperatureThresholdChart({
   const [refAreaLeft, setRefAreaLeft] = useState<number | null>(null);
   const [refAreaRight, setRefAreaRight] = useState<number | null>(null);
   const [zoomRange, setZoomRange] = useState<[number, number] | null>(null);
-  const [targetResolution, setTargetResolution] = useState<string>("10m");
+  const [targetResolution, setTargetResolution] = useState<string>(() =>
+    prefersHighFrequencyRunwayResolution(row, null) ? "1m" : "10m",
+  );
   const [currentCityLocalDate, setCurrentCityLocalDate] = useState(() =>
     formatCityLocalDate(row?.tz_offset_seconds),
   );
@@ -138,8 +141,9 @@ export function LiveTemperatureThresholdChart({
   useEffect(() => {
     setUserToggledKeys({});
     setZoomRange(null);
-    setViewMode("auto");
+    setViewMode("full");
     setShowRunwayDetails(true);
+    setTargetResolution(prefersHighFrequencyRunwayResolution(row, null) ? "1m" : "10m");
     setHourly(seedHourlyForecastFromRow(row));
     setLiveTemp(null);
     setIsHourlyLoading(Boolean(city));
@@ -246,7 +250,7 @@ export function LiveTemperatureThresholdChart({
     const refreshFullDetail = () => {
       lastPatchAtRef.current = Date.now();
 
-      fetchHourlyForecastForCity(city, { ignoreCache: true })
+      fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })
         .then((data) => {
           if (cancelled || !data) return;
           hasLoadedHourlyDetailRef.current = true;
@@ -279,7 +283,7 @@ export function LiveTemperatureThresholdChart({
       cancelled = true;
       clearInterval(id);
     };
-  }, [city, compact, isActive, isMaximized]);
+  }, [city, compact, isActive, isMaximized, targetResolution]);
 
   useEffect(() => {
     if (!city || !currentCityLocalDate) return;
@@ -323,6 +327,10 @@ export function LiveTemperatureThresholdChart({
   );
   const visibleRange = zoomRange ?? autoWindowRange;
   const visibleRangeKey = visibleRange ? `${visibleRange[0]}:${visibleRange[1]}` : "full";
+  const shouldUseRunwayResolution = useMemo(
+    () => prefersHighFrequencyRunwayResolution(row, chartHourly),
+    [row, chartHourly],
+  );
 
   const zoomedData = useMemo(() => {
     if (!visibleRange || data.length === 0) return data;
@@ -331,6 +339,9 @@ export function LiveTemperatureThresholdChart({
   }, [data, visibleRangeKey]);
 
   const nextTargetResolution = useMemo(() => {
+    if (shouldUseRunwayResolution) {
+      return "1m";
+    }
     if (visibleRange && data.length > 0) {
       const zoomedData = data.slice(visibleRange[0], visibleRange[1] + 1);
       if (zoomedData.length > 0) {
@@ -342,7 +353,7 @@ export function LiveTemperatureThresholdChart({
       }
     }
     return "10m";
-  }, [data, visibleRangeKey]);
+  }, [data, visibleRangeKey, shouldUseRunwayResolution]);
 
   useEffect(() => {
     if (targetResolution !== nextTargetResolution) {
