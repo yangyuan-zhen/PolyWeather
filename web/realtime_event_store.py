@@ -14,6 +14,14 @@ from web.realtime_patch_schema import EVENT_TYPE
 
 DEFAULT_RETENTION_HOURS = 6
 MAX_REPLAY_LIMIT = 2000
+TIME_CONTRACT_KEYS = (
+    "observed_at_utc",
+    "observed_at_local",
+    "city_local_date",
+    "city_timezone",
+    "city_utc_offset_seconds",
+    "source_cadence_sec",
+)
 
 
 def _utc_now() -> datetime:
@@ -41,6 +49,10 @@ def _created_at_to_ms(value: str) -> int:
 
 def _normalize_city_set(cities: Optional[Set[str]]) -> Set[str]:
     return {str(city or "").strip().lower() for city in (cities or set()) if str(city or "").strip()}
+
+
+def _time_contract_from_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    return {key: payload[key] for key in TIME_CONTRACT_KEYS if key in payload}
 
 
 def _retention_hours_from_env() -> int:
@@ -133,6 +145,7 @@ class RealtimeEventStore:
             "city": str(event["city"]),
             "source": str(event["source"]),
             "obs_time": event.get("obs_time"),
+            **_time_contract_from_payload(payload),
             "ts": int(event.get("ts") or _created_at_to_ms(created_at)),
             "payload": payload,
         }
@@ -246,6 +259,7 @@ class RealtimeEventStore:
             "city": str(row["city"]),
             "source": str(row["source"]),
             "obs_time": row["obs_time"],
+            **_time_contract_from_payload(payload),
             "ts": _created_at_to_ms(row["created_at"]),
             "payload": payload,
         }

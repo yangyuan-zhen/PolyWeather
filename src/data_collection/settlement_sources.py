@@ -308,7 +308,7 @@ class SettlementSourceMixin:
             return None
 
     def fetch_cwa_taipei_settlement_current(self) -> Optional[Dict[str, Any]]:
-        cache_key = "cwa:taipei:466920"
+        cache_key = "cwa:466920"
         cached = self._get_settlement_cache(cache_key)
         if cached:
             return cached
@@ -365,6 +365,15 @@ class SettlementSourceMixin:
                 },
                 "unit": "celsius",
             }
+            today_obs = self._update_official_today_obs(
+                source_code="cwa",
+                station_code=payload["station_code"],
+                obs_iso=payload.get("observation_time"),
+                current_temp=payload["current"]["temp"],
+                utc_offset_seconds=28800,
+            )
+            if today_obs:
+                payload["today_obs"] = today_obs
             self._set_settlement_cache(cache_key, payload)
             # Write to airport obs log for high-freq monitoring
             try:

@@ -230,5 +230,5 @@ POLYWEATHER_OPS_ADMIN_EMAILS=yhrsc30@gmail.com
 
 ## 当前版本
 
-- 版本：`v1.7.0`
+- 版本：`v1.8.0`
 - 文档最后更新：`2026-05-23`

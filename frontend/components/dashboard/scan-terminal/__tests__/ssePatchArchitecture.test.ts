@@ -152,6 +152,19 @@ export function runTests() {
     !resyncBlock.includes("setIsHourlyLoading(true)"),
     "SSE replay resync should refresh full detail in the background without showing the loading overlay",
   );
+  assert(
+    chart.includes("visibilitychange") &&
+      chart.includes('document.visibilityState !== "visible"') &&
+      chart.includes("refreshForegroundFullDetail"),
+    "temperature chart must immediately refresh visible charts when the browser tab returns to the foreground",
+  );
+  const foregroundRefreshBlock = chart.match(/const refreshForegroundFullDetail = \(\) => \{[\s\S]*?\n    \};/)?.[0] || "";
+  assert(
+    foregroundRefreshBlock.includes("ignoreCache: true") &&
+      foregroundRefreshBlock.includes("fetchHourlyForecastForCity") &&
+      !foregroundRefreshBlock.includes("setIsHourlyLoading(true)"),
+    "foreground resume refresh should update full detail immediately in the background without showing the loading overlay",
+  );
   assert(chart.includes("viewMode"), "temperature chart must expose a view mode for DEB-peak auto view versus full-day view");
   assert(chart.includes('useState<"auto" | "full">("full")'), "temperature chart must default every city panel to the all-day view");
   assert(
@@ -175,6 +188,19 @@ export function runTests() {
   assert(
     chart.includes("prefersHighFrequencyRunwayResolution") && chart.includes('return "1m";'),
     "runway charts must request 1-minute detail resolution so historical runway lines match live SSE patch cadence",
+  );
+  assert(
+    chart.includes("PROBABILITY_REFRESH_AFTER_PATCH_MS") &&
+      chart.includes("lastProbabilityRefreshAtRef") &&
+      chart.includes("refreshProbabilityOverlayAfterPatch"),
+    "temperature chart must trigger a throttled background probability refresh after live observation patches",
+  );
+  const patchEffectBlock = chart.match(/useEffect\(\(\) => \{\s*if \(!latestPatch[\s\S]*?\}, \[latestPatch, row, city, targetResolution, compact, isActive, isMaximized\]\);/)?.[0] || "";
+  assert(
+    patchEffectBlock.includes("refreshProbabilityOverlayAfterPatch") &&
+      patchEffectBlock.includes("ignoreCache: true") &&
+      !patchEffectBlock.includes("setIsHourlyLoading(true)"),
+    "live patch probability refresh must recompute legacy Gaussian in the background without showing a loading overlay",
   );
   assert(!chartCanvas.includes("ResponsiveContainer"), "temperature chart canvas must not mount Recharts through ResponsiveContainer at 0x0");
   assert(chartCanvas.includes("ResizeObserver"), "temperature chart canvas must measure its host with ResizeObserver");

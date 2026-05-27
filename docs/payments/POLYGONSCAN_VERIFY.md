@@ -1,4 +1,4 @@
-# PolyWeatherCheckout PolygonScan 验证（v1.7.0）
+# PolyWeatherCheckout PolygonScan 验证（v1.8.0）
 
 最后更新：`2026-03-20`
 

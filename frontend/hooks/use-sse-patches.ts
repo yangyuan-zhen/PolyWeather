@@ -18,6 +18,12 @@ type ObservationPatchV1 = {
   city?: string;
   source?: string;
   obs_time?: string | null;
+  observed_at_utc?: string | null;
+  observed_at_local?: string | null;
+  city_local_date?: string | null;
+  city_timezone?: string | null;
+  city_utc_offset_seconds?: number | null;
+  source_cadence_sec?: number | null;
   revision?: number;
   ts?: number;
   payload?: Record<string, unknown>;
@@ -210,6 +216,12 @@ function normalizeV1Patch(patch: ObservationPatchV1): CityPatch | null {
     ...payload,
     source: typeof patch.source === "string" ? patch.source : payload.source,
     obs_time: typeof patch.obs_time === "string" ? patch.obs_time : payload.obs_time,
+    observed_at_utc: typeof patch.observed_at_utc === "string" ? patch.observed_at_utc : payload.observed_at_utc,
+    observed_at_local: typeof patch.observed_at_local === "string" ? patch.observed_at_local : payload.observed_at_local,
+    city_local_date: typeof patch.city_local_date === "string" ? patch.city_local_date : payload.city_local_date,
+    city_timezone: typeof patch.city_timezone === "string" ? patch.city_timezone : payload.city_timezone,
+    city_utc_offset_seconds: typeof patch.city_utc_offset_seconds === "number" ? patch.city_utc_offset_seconds : payload.city_utc_offset_seconds,
+    source_cadence_sec: typeof patch.source_cadence_sec === "number" ? patch.source_cadence_sec : payload.source_cadence_sec,
     schema_type: V1_EVENT_TYPE,
   };
 

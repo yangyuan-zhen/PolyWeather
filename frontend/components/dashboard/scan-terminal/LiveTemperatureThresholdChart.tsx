@@ -53,6 +53,8 @@ const PEAK_GLOW_BADGE_CLASS = {
   cooling: "border-slate-200 bg-slate-100 text-slate-500",
 } as const;
 
+const PROBABILITY_REFRESH_AFTER_PATCH_MS = 60_000;
+
 function peakGlowLabel(state: keyof typeof PEAK_GLOW_PANEL_CLASS, isEn: boolean) {
   if (state === "watch") return isEn ? "Watch" : "关注";
   if (state === "near_peak") return isEn ? "Near peak" : "接近峰值";
@@ -125,6 +127,7 @@ export function LiveTemperatureThresholdChart({
   const hasLoadedHourlyDetailRef = useRef(false);
   const lastPatchAtRef = useRef<number>(Date.now());
   const lastAppliedPatchRevisionRef = useRef<number>(0);
+  const lastProbabilityRefreshAtRef = useRef<number>(0);
   const localDayRolloverFetchDateRef = useRef<string>("");
 
   const [showRunwayDetails, setShowRunwayDetails] = useState<boolean>(true);
@@ -150,6 +153,7 @@ export function LiveTemperatureThresholdChart({
     hasLoadedHourlyDetailRef.current = false;
     lastPatchAtRef.current = Date.now();
     lastAppliedPatchRevisionRef.current = 0;
+    lastProbabilityRefreshAtRef.current = 0;
     localDayRolloverFetchDateRef.current = "";
     setCurrentCityLocalDate(formatCityLocalDate(row?.tz_offset_seconds));
   }, [city]);
@@ -222,7 +226,33 @@ export function LiveTemperatureThresholdChart({
     const tempValue = validNumber(latestPatch.changes.temp);
     if (tempValue !== null) setLiveTemp(tempValue);
     setHourly((prev) => mergePatchIntoHourly(prev ?? seedHourlyForecastFromRow(row), latestPatch));
-  }, [latestPatch, row]);
+
+    const hasObservationChange =
+      tempValue !== null ||
+      Array.isArray(latestPatch.changes.runway_points) ||
+      Boolean(latestPatch.changes.amos);
+    if (!hasObservationChange || !shouldPollLiveChart({ city, compact, isActive, isMaximized })) return;
+
+    const now = Date.now();
+    if (now - lastProbabilityRefreshAtRef.current < PROBABILITY_REFRESH_AFTER_PATCH_MS) return;
+    lastProbabilityRefreshAtRef.current = now;
+
+    let cancelled = false;
+    const refreshProbabilityOverlayAfterPatch = () => {
+      fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })
+        .then((data) => {
+          if (cancelled || !data) return;
+          hasLoadedHourlyDetailRef.current = true;
+          setHourly(data);
+        })
+        .catch(() => {});
+    };
+
+    refreshProbabilityOverlayAfterPatch();
+    return () => {
+      cancelled = true;
+    };
+  }, [latestPatch, row, city, targetResolution, compact, isActive, isMaximized]);
 
   useEffect(() => {
     if (!resyncVersion || !city) return;
@@ -286,6 +316,45 @@ export function LiveTemperatureThresholdChart({
   }, [city, compact, isActive, isMaximized, targetResolution]);
 
   useEffect(() => {
+    if (!shouldPollLiveChart({ city, compact, isActive, isMaximized })) return;
+    let cancelled = false;
+
+    const refreshForegroundFullDetail = () => {
+      lastPatchAtRef.current = Date.now();
+
+      fetch(`/api/city/${encodeURIComponent(city)}/summary`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((payload) => {
+          if (cancelled || !payload) return;
+          const temp = validNumber(payload?.current?.temp);
+          if (temp !== null) setLiveTemp(temp);
+        })
+        .catch(() => {});
+
+      fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })
+        .then((data) => {
+          if (cancelled || !data) return;
+          hasLoadedHourlyDetailRef.current = true;
+          setHourly(data);
+        })
+        .catch(() => {});
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return;
+      refreshForegroundFullDetail();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", refreshForegroundFullDetail);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", refreshForegroundFullDetail);
+    };
+  }, [city, compact, isActive, isMaximized, targetResolution]);
+
+  useEffect(() => {
     if (!city || !currentCityLocalDate) return;
     const loadedLocalDate = hourly?.localDate || row?.local_date || "";
     if (currentCityLocalDate === loadedLocalDate) return;
@@ -318,7 +387,7 @@ export function LiveTemperatureThresholdChart({
   }, [hourly, currentCityLocalDate, row?.local_date]);
   const chartLocalDate = chartHourly?.localDate || row?.local_date || currentCityLocalDate;
 
-  const { data, series } = useMemo(() => buildFullDayChartData(row, chartHourly, isEn), [row, chartHourly, isEn]);
+  const { data, series, probabilityOverlay } = useMemo(() => buildFullDayChartData(row, chartHourly, isEn), [row, chartHourly, isEn]);
   const peakGlow = useMemo(() => getPeakGlowState(row, data, series), [row, data, series]);
 
   const autoWindowRange = useMemo(
@@ -473,10 +542,13 @@ export function LiveTemperatureThresholdChart({
     return list.sort((a, b) => a.threshold - b.threshold);
   }, [row, allRows]);
 
-  const intDegreeTicks = useMemo(() => buildIntDegreeTicks(activeSeries, zoomedData), [activeSeries, zoomedData]);
+  const intDegreeTicks = useMemo(
+    () => buildIntDegreeTicks(activeSeries, zoomedData, probabilityOverlay),
+    [activeSeries, zoomedData, probabilityOverlay],
+  );
   const chartDomain = useMemo(
-    () => buildChartDomain(activeSeries, zoomedData),
-    [activeSeries, zoomedData],
+    () => buildChartDomain(activeSeries, zoomedData, probabilityOverlay),
+    [activeSeries, zoomedData, probabilityOverlay],
   );
 
   const subtitle = row ? (isEn ? "Live & Forecast" : "实测与预测") : "";
@@ -669,6 +741,7 @@ export function LiveTemperatureThresholdChart({
           cityThresholds={cityThresholds}
           chartSeries={chartSeries}
           activeSeries={activeSeries}
+          probabilityOverlay={probabilityOverlay}
           zoomedData={zoomedData}
           chartDomain={chartDomain}
           intDegreeTicks={intDegreeTicks}

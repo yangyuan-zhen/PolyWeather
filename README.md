@@ -214,5 +214,5 @@ curl http://127.0.0.1:8000/api/payments/runtime
 
 ## Version
 
-- Version: `v1.7.0`
+- Version: `v1.8.0`
 - Last Updated: `2026-05-23`

@@ -10,7 +10,7 @@ import {
   __mergePatchIntoHourlyForTest,
 } from "@/components/dashboard/scan-terminal/LiveTemperatureThresholdChart";
 
-function assert(condition: unknown, message: string) {
+function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
@@ -802,6 +802,52 @@ export function runTests() {
     "latest airport/METAR report should be appended to the live chart series even when history stops earlier",
   );
 
+  const torontoCanonicalPatchHourly = __mergePatchIntoHourlyForTest(
+    {
+      localTime: "19:15",
+      localDate: "2026-05-27",
+      times: ["10:00", "13:00", "16:00", "19:00"],
+      temps: [23, 26, 27, 26],
+      airportPrimaryTodayObs: [],
+    } as any,
+    {
+      type: "city_observation_patch.v1",
+      city: "toronto",
+      revision: 13,
+      changes: {
+        temp: 26,
+        source: "metar",
+        observed_at_utc: "2026-05-27T23:16:00Z",
+        observed_at_local: "2026-05-27T19:16:00-04:00",
+        city_local_date: "2026-05-27",
+        city_timezone: "America/Toronto",
+      },
+    } as any,
+  );
+  assert(
+    torontoCanonicalPatchHourly,
+    "v1 canonical patch should merge into hourly forecast",
+  );
+  const torontoCanonicalPatchChart = __buildTemperatureChartDataForTest(
+    {
+      city: "toronto",
+      local_date: "2026-05-27",
+      local_time: "19:16",
+      tz_offset_seconds: -4 * 60 * 60,
+      temp_symbol: "°C",
+    } as any,
+    torontoCanonicalPatchHourly as any,
+    "1D",
+  );
+  assert(
+    torontoCanonicalPatchHourly.localDate === "2026-05-27",
+    "v1 canonical patch should update hourly localDate from city_local_date",
+  );
+  assert(
+    torontoCanonicalPatchChart.data.some((point) => point.label === "19:16:00" && point.madis === 26),
+    "v1 canonical patch observed_at_utc should render at the city-local chart time",
+  );
+
   const newYorkMinuteStream = __buildTemperatureChartDataForTest(
     {
       city: "new york",
@@ -1039,4 +1085,45 @@ export function runTests() {
   assert(bandPoints.length >= 2, "runway_band tuples should be binned into data slots");
   const firstBand = bandPoints[0].runway_band;
   assert(Array.isArray(firstBand) && firstBand[0] === 24.0 && firstBand[1] === 26.0, "runway_band tuple values should match input limits");
+
+  // ── Legacy Gaussian probability overlay test ──
+  const gaussianOverlayChart = __buildTemperatureChartDataForTest(
+    {
+      city: "toronto",
+      local_date: "2026-05-27",
+      local_time: "14:00",
+      tz_offset_seconds: -4 * 60 * 60,
+      temp_symbol: "°C",
+    } as any,
+    {
+      localDate: "2026-05-27",
+      localTime: "14:00",
+      times: ["10:00", "14:00", "18:00"],
+      temps: [24, 27, 23],
+      probabilities: {
+        mu: 27.4,
+        engine: "legacy",
+        distribution_all: [
+          { value: 26, probability: 0.18, range: "[25.5~26.5)" },
+          { value: 27, probability: 0.42, range: "[26.5~27.5)" },
+          { value: 28, probability: 0.31, range: "[27.5~28.5)" },
+        ],
+      },
+    } as any,
+    "1D",
+  ) as any;
+
+  const gaussianOverlay = gaussianOverlayChart.probabilityOverlay;
+  assert(gaussianOverlay, "legacy Gaussian probabilities should be exposed as a chart overlay");
+  assert(gaussianOverlay.muLine?.value === 27.4, "legacy Gaussian μ should become a reference line");
+  assert(
+    gaussianOverlay.bands.some(
+      (band: any) => band.value === 27 && band.lower === 26.5 && band.upper === 27.5 && band.probability === 0.42,
+    ),
+    "legacy Gaussian buckets should become horizontal probability temperature bands",
+  );
+  assert(
+    !gaussianOverlayChart.series.some((series: any) => String(series.key || "").includes("probability")),
+    "legacy Gaussian probability distribution should not be rendered as a time-series line",
+  );
 }

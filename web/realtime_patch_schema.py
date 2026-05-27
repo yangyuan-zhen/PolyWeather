@@ -3,12 +3,36 @@
 from __future__ import annotations
 
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional
+
+from src.data_collection.city_time import (
+    city_local_datetime,
+    get_city_timezone_name,
+    get_city_utc_offset_seconds,
+)
 
 
 SCHEMA_TYPE = "city_observation_patch"
 SCHEMA_VERSION = 1
 EVENT_TYPE = "city_observation_patch.v1"
+SOURCE_CADENCE_SECONDS = {
+    "amos": 60,
+    "amsc_awos": 60,
+    "cowin_obs": 60,
+    "hko_obs": 600,
+    "singapore_mss": 60,
+    "madis_hfmetar": 300,
+    "jma_amedas": 600,
+    "fmi": 600,
+    "knmi": 600,
+    "mgm": 300,
+    "ims": 600,
+    "ncm": 600,
+    "aeroweb": 900,
+    "cwa": 600,
+    "metar": 1800,
+}
 
 
 class PatchValidationError(ValueError):
@@ -40,6 +64,56 @@ def _first_number(*values: Any) -> Optional[float]:
         if number is not None:
             return number
     return None
+
+
+def _format_utc_iso(value: datetime) -> str:
+    return value.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _parse_datetime(value: Any) -> Optional[datetime]:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_observation_time_contract(city: str, source: str, obs_time: Optional[str]) -> Dict[str, Any]:
+    parsed = _parse_datetime(obs_time)
+    if parsed is None:
+        contract: Dict[str, Any] = {}
+        tz_name = get_city_timezone_name(city)
+        if tz_name:
+            contract["city_timezone"] = tz_name
+        cadence = SOURCE_CADENCE_SECONDS.get(source)
+        if cadence is not None:
+            contract["source_cadence_sec"] = cadence
+        return contract
+
+    if parsed.tzinfo is None:
+        offset = get_city_utc_offset_seconds(city, parsed.replace(tzinfo=timezone.utc))
+        local_dt = parsed.replace(tzinfo=timezone(timedelta(seconds=offset)))
+        observed_utc = (parsed - timedelta(seconds=offset)).replace(tzinfo=timezone.utc)
+    else:
+        observed_utc = parsed.astimezone(timezone.utc)
+        local_dt = city_local_datetime(city, observed_utc)
+        offset = int(local_dt.utcoffset().total_seconds()) if local_dt.utcoffset() else 0
+
+    contract = {
+        "observed_at_utc": _format_utc_iso(observed_utc),
+        "observed_at_local": local_dt.replace(microsecond=0).isoformat(),
+        "city_local_date": local_dt.strftime("%Y-%m-%d"),
+        "city_utc_offset_seconds": offset,
+    }
+    tz_name = get_city_timezone_name(city)
+    if tz_name:
+        contract["city_timezone"] = tz_name
+    cadence = SOURCE_CADENCE_SECONDS.get(source)
+    if cadence is not None:
+        contract["source_cadence_sec"] = cadence
+    return contract
 
 
 def _iter_runway_points(raw_points: Any) -> Iterable[Dict[str, Any]]:
@@ -188,6 +262,25 @@ def normalize_observation_patch(patch: Dict[str, Any]) -> Dict[str, Any]:
     if not _has_observation(payload):
         raise PatchValidationError("patch must include temperature, max, runway, or hourly data")
 
+    time_contract = _normalize_observation_time_contract(city, source, obs_time)
+    if time_contract:
+        payload = {
+            **payload,
+            **{
+                key: value
+                for key, value in time_contract.items()
+                if key in {
+                    "observed_at_utc",
+                    "observed_at_local",
+                    "city_local_date",
+                    "city_utc_offset_seconds",
+                    "city_timezone",
+                    "source_cadence_sec",
+                }
+            },
+        }
+        obs_time = str(time_contract.get("observed_at_utc") or obs_time or "").strip() or None
+
     return {
         "type": EVENT_TYPE,
         "schema_type": SCHEMA_TYPE,
@@ -195,6 +288,7 @@ def normalize_observation_patch(patch: Dict[str, Any]) -> Dict[str, Any]:
         "city": city,
         "source": source,
         "obs_time": obs_time,
+        **time_contract,
         "ts": int(time.time() * 1000),
         "payload": payload,
     }

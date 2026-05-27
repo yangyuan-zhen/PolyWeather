@@ -5,6 +5,7 @@ import type {
   ScanOpportunityRow,
   ForecastDay,
   DailyModelForecast,
+  ProbabilityBucket,
 } from "@/lib/dashboard-types";
 import { buildDebBaselinePath } from "@/lib/temperature-chart-paths";
 import { DASHBOARD_REFRESH_POLICY_MS } from "@/lib/refresh-policy";
@@ -207,6 +208,35 @@ type EvidenceSeries = {
   connectNulls?: boolean;
   showDot?: boolean;
   values: Array<number | null>;
+};
+
+type LegacyGaussianProbabilitySource = {
+  mu?: number | null;
+  engine?: string | null;
+  calibration_mode?: string | null;
+  distribution?: ProbabilityBucket[];
+  distribution_all?: ProbabilityBucket[];
+};
+
+type ProbabilityTemperatureBand = {
+  key: string;
+  value: number;
+  lower: number;
+  upper: number;
+  probability: number;
+  label: string;
+  opacity: number;
+};
+
+type ProbabilityMuLine = {
+  value: number;
+  label: string;
+};
+
+type ProbabilityOverlay = {
+  engine: string | null;
+  muLine: ProbabilityMuLine | null;
+  bands: ProbabilityTemperatureBand[];
 };
 
 type PeakGlowState = "none" | "watch" | "near_peak" | "breakout" | "cooling";
@@ -674,6 +704,7 @@ type HourlyForecast = {
   airportPrimary?: AirportCurrentConditions | null;
   forecastDaily?: ForecastDay[];
   multiModelDaily?: Record<string, DailyModelForecast>;
+  probabilities?: LegacyGaussianProbabilitySource | null;
   settlementTodayObs?: ObsPoint[];
   settlementStationLabel?: string | null;
   metarTodayObs?: ObsPoint[];
@@ -697,6 +728,11 @@ function seedHourlyForecastFromRow(row: ScanOpportunityRow | null): HourlyForeca
     airportPrimary: null,
     forecastDaily: [],
     multiModelDaily: {},
+    probabilities: {
+      engine: row.probability_engine || null,
+      distribution: row.distribution_preview || [],
+      distribution_all: row.distribution_full || row.distribution_preview || [],
+    },
     settlementTodayObs: row.settlement_today_obs || row.metar_context?.settlement_today_obs || undefined,
     metarTodayObs: row.metar_today_obs || row.metar_context?.today_obs || row.metar_recent_obs || row.metar_context?.recent_obs || undefined,
     airportPrimaryTodayObs: undefined,
@@ -726,6 +762,7 @@ function parseHourlyForecastFromCityDetail(json: CityDetail | null): HourlyForec
     airportPrimary: json.airport_primary || null,
     forecastDaily: json.forecast?.daily || [],
     multiModelDaily: json.multi_model_daily || {},
+    probabilities: json.probabilities || null,
     settlementTodayObs: (json as any).timeseries?.settlement_today_obs || (json as any)?.settlement_today_obs || undefined,
     settlementStationLabel: (json as any)?.settlement_station?.settlement_station_label || null,
     metarTodayObs: (json as any).timeseries?.metar_today_obs || (json as any)?.metar_today_obs || undefined,
@@ -883,7 +920,8 @@ function mergePatchIntoHourly(
 ): HourlyForecast {
   const changes = patch.changes || {};
   const tempValue = validNumber(changes.temp);
-  const obsTime = typeof changes.obs_time === "string" ? changes.obs_time : null;
+  const observedAtUtc = typeof changes.observed_at_utc === "string" ? changes.observed_at_utc : null;
+  const obsTime = observedAtUtc || (typeof changes.obs_time === "string" ? changes.obs_time : null);
   const source = typeof changes.source === "string" ? changes.source : "";
   const explicitHourlyPatch = changes.hourly && typeof changes.hourly === "object"
     ? changes.hourly as Partial<NonNullable<HourlyForecast>>
@@ -899,12 +937,16 @@ function mergePatchIntoHourly(
       temps: [],
       forecastDaily: [],
       multiModelDaily: {},
+      probabilities: null,
     }),
     ...explicitHourlyPatch,
   };
 
   if (typeof (changes as any).local_date === "string") {
     next.localDate = (changes as any).local_date;
+  }
+  if (typeof (changes as any).city_local_date === "string") {
+    next.localDate = (changes as any).city_local_date;
   }
 
   if (changes.amos && typeof changes.amos === "object") {
@@ -976,7 +1018,7 @@ function mergePatchIntoHourly(
   if (tempValue !== null) {
     next.airportCurrent = {
       ...(next.airportCurrent || {}),
-      obs_time: next.airportCurrent?.obs_time ?? null,
+      obs_time: obsTime || next.airportCurrent?.obs_time || null,
       temp: tempValue,
       max_so_far: Math.max(
         tempValue,
@@ -985,7 +1027,7 @@ function mergePatchIntoHourly(
     };
     next.airportPrimary = {
       ...(next.airportPrimary || {}),
-      obs_time: next.airportPrimary?.obs_time ?? null,
+      obs_time: obsTime || next.airportPrimary?.obs_time || null,
       temp: tempValue,
       max_so_far: Math.max(
         tempValue,
@@ -1327,11 +1369,90 @@ function addHourlyTimesToTimeline(
   });
 }
 
+function probabilityBucketValue(bucket: ProbabilityBucket) {
+  return validNumber(bucket.value ?? (bucket as any).temp ?? (bucket as any).temperature);
+}
+
+function probabilityBucketProbability(bucket: ProbabilityBucket) {
+  const raw = validNumber(bucket.probability ?? (bucket as any).model_probability);
+  if (raw === null) return null;
+  return raw > 1 ? raw / 100 : raw;
+}
+
+function probabilityBucketRange(bucket: ProbabilityBucket, value: number) {
+  const rawRange = String(bucket.range || bucket.bucket || "").trim();
+  const rangeMatch = rawRange.match(/(-?\d+(?:\.\d+)?)\s*~\s*(-?\d+(?:\.\d+)?)/);
+  if (rangeMatch) {
+    const lower = Number(rangeMatch[1]);
+    const upper = Number(rangeMatch[2]);
+    if (Number.isFinite(lower) && Number.isFinite(upper) && upper > lower) {
+      return { lower, upper };
+    }
+  }
+  return {
+    lower: Number((value - 0.5).toFixed(2)),
+    upper: Number((value + 0.5).toFixed(2)),
+  };
+}
+
+function buildLegacyGaussianProbabilityOverlay(
+  row: ScanOpportunityRow | null,
+  hourly: HourlyForecast,
+): ProbabilityOverlay | null {
+  const source = hourly?.probabilities || null;
+  const rowBuckets = ((row as any)?.distribution_full || (row as any)?.distribution_preview || []) as ProbabilityBucket[];
+  const buckets = (
+    source?.distribution_all?.length
+      ? source.distribution_all
+      : source?.distribution?.length
+        ? source.distribution
+        : rowBuckets
+  ) || [];
+
+  const engine = source?.engine || row?.probability_engine || (buckets.length ? "legacy" : null);
+  if (engine && String(engine).toLowerCase() !== "legacy") return null;
+
+  const tempSymbol = row?.temp_symbol || "°C";
+  const bands = buckets
+    .map((bucket, index) => {
+      const value = probabilityBucketValue(bucket);
+      const probability = probabilityBucketProbability(bucket);
+      if (value === null || probability === null || probability <= 0) return null;
+      const { lower, upper } = probabilityBucketRange(bucket, value);
+      return {
+        key: `legacy_probability_${value}_${index}`,
+        value,
+        lower,
+        upper,
+        probability,
+        label: `${value}${tempSymbol} ${Math.round(probability * 100)}%`,
+        opacity: Number(Math.min(0.16, Math.max(0.035, 0.04 + probability * 0.22)).toFixed(3)),
+      };
+    })
+    .filter((band): band is ProbabilityTemperatureBand => band !== null)
+    .sort((a, b) => a.value - b.value);
+
+  const mu = validNumber(source?.mu);
+  const muLine = mu === null
+    ? null
+    : {
+        value: mu,
+        label: `Gaussian μ ${mu.toFixed(1)}${tempSymbol}`,
+      };
+
+  if (!bands.length && !muLine) return null;
+  return {
+    engine: engine || "legacy",
+    muLine,
+    bands,
+  };
+}
+
 function buildFullDayChartData(
   row: ScanOpportunityRow | null,
   hourly: HourlyForecast,
   isEn: boolean,
-): { data: Array<Record<string, any>>; series: EvidenceSeries[] } {
+): { data: Array<Record<string, any>>; series: EvidenceSeries[]; probabilityOverlay: ProbabilityOverlay | null } {
   const tzOffset = row?.tz_offset_seconds ?? 0;
   const localDateStr = resolveChartLocalDate(row, hourly);
   const localDayBounds = getLocalDayBounds(localDateStr);
@@ -1591,7 +1712,9 @@ function buildFullDayChartData(
     return point;
   });
 
-  return { data, series };
+  const probabilityOverlay = buildLegacyGaussianProbabilityOverlay(row, hourly);
+
+  return { data, series, probabilityOverlay };
 }
 
 // ── Model summary cards (daily high point predictions) ─────────────────
@@ -1613,13 +1736,27 @@ function buildModelSummaryCards(row: ScanOpportunityRow | null): EvidenceSeries[
 
 // ── Integer-degree ticks for Y-axis ──────────────────────────────────
 
-function buildIntDegreeTicks(series: EvidenceSeries[], data?: Array<Record<string, string | number | null>>): number[] | null {
+function probabilityOverlayValues(probabilityOverlay?: ProbabilityOverlay | null) {
+  if (!probabilityOverlay) return [];
+  return [
+    ...(probabilityOverlay.muLine ? [probabilityOverlay.muLine.value] : []),
+    ...probabilityOverlay.bands.flatMap((band) => [band.lower, band.upper]),
+  ];
+}
+
+function buildIntDegreeTicks(
+  series: EvidenceSeries[],
+  data?: Array<Record<string, string | number | null>>,
+  probabilityOverlay?: ProbabilityOverlay | null,
+): number[] | null {
   const vals = data?.length
     ? data.flatMap((point) => series.map((s) => point[s.key])).filter((v): v is number => validNumber(v) !== null)
     : series.flatMap((s) => s.values).filter((v): v is number => validNumber(v) !== null);
-  if (!vals.length) return null;
-  const min = Math.floor(Math.min(...vals));
-  const max = Math.ceil(Math.max(...vals));
+  const overlayVals = probabilityOverlayValues(probabilityOverlay);
+  const allVals = [...vals, ...overlayVals];
+  if (!allVals.length) return null;
+  const min = Math.floor(Math.min(...allVals));
+  const max = Math.ceil(Math.max(...allVals));
   const ticks: number[] = [];
   for (let d = min; d <= max; d++) ticks.push(d);
   return ticks.length > 0 ? ticks : null;
@@ -1628,13 +1765,16 @@ function buildIntDegreeTicks(series: EvidenceSeries[], data?: Array<Record<strin
 function buildChartDomain(
   series: EvidenceSeries[],
   data?: Array<Record<string, string | number | null>>,
+  probabilityOverlay?: ProbabilityOverlay | null,
 ): [number, number] | ["auto", "auto"] {
   const vals = data?.length
     ? data.flatMap((point) => series.map((s) => point[s.key])).filter((v): v is number => validNumber(v) !== null)
     : series.flatMap((s) => s.values).filter((v): v is number => validNumber(v) !== null);
-  if (!vals.length) return ["auto", "auto"];
-  const min = Math.min(...vals);
-  const max = Math.max(...vals);
+  const overlayVals = probabilityOverlayValues(probabilityOverlay);
+  const allVals = [...vals, ...overlayVals];
+  if (!allVals.length) return ["auto", "auto"];
+  const min = Math.min(...allVals);
+  const max = Math.max(...allVals);
   const span = Math.max(1, max - min);
   const pad = Math.max(0.5, span * 0.08);
   return [Number((min - pad).toFixed(1)), Number((max + pad).toFixed(1))];
@@ -1913,4 +2053,4 @@ export {
   validNumber,
 };
 
-export type { EvidenceSeries, HourlyForecast, PeakGlowMeta, PeakGlowState };
+export type { EvidenceSeries, HourlyForecast, PeakGlowMeta, PeakGlowState, ProbabilityOverlay };

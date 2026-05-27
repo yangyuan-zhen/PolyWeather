@@ -78,6 +78,31 @@ def test_v1_patch_payload_is_accepted_and_normalized():
     assert event["payload"]["runway_points"][0]["temp"] == 30.2
 
 
+def test_patch_adds_city_local_time_contract_from_observation_time():
+    event = normalize_observation_patch(
+        {
+            "type": "city_observation_patch.v1",
+            "city": "Toronto",
+            "source": "metar",
+            "obs_time": "2026-05-27T23:16:00Z",
+            "payload": {
+                "temp": 26,
+                "station_code": "CYYZ",
+            },
+        }
+    )
+
+    assert event["obs_time"] == "2026-05-27T23:16:00Z"
+    assert event["observed_at_utc"] == "2026-05-27T23:16:00Z"
+    assert event["observed_at_local"] == "2026-05-27T19:16:00-04:00"
+    assert event["city_local_date"] == "2026-05-27"
+    assert event["city_timezone"] == "America/Toronto"
+    assert event["city_utc_offset_seconds"] == -4 * 60 * 60
+    assert event["source_cadence_sec"] == 1800
+    assert event["payload"]["observed_at_utc"] == "2026-05-27T23:16:00Z"
+    assert event["payload"]["observed_at_local"] == "2026-05-27T19:16:00-04:00"
+
+
 def test_invalid_patch_without_city_or_observation_data_is_rejected():
     with pytest.raises(PatchValidationError):
         normalize_observation_patch({"changes": {"temp": 21.0}})

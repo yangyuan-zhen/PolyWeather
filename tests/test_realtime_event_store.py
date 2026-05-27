@@ -40,6 +40,33 @@ def test_event_store_appends_monotonic_revisions_and_replays_by_city(tmp_path):
     assert replay[0]["payload"]["temp"] == 31.5
 
 
+def test_event_store_preserves_time_contract_on_live_and_replay_events(tmp_path):
+    db_path = str(tmp_path / "polyweather.db")
+    DBManager._initialized_paths.clear()
+    store = RealtimeEventStore(db_path=db_path)
+
+    stored = store.append_event(
+        normalize_observation_patch(
+            {
+                "city": "toronto",
+                "changes": {
+                    "temp": 26,
+                    "obs_time": "2026-05-27T23:16:00Z",
+                    "source": "metar",
+                },
+            }
+        )
+    )
+    replayed = store.replay_events(cities={"toronto"}, since_revision=0, limit=10)[0]
+
+    assert stored["observed_at_utc"] == "2026-05-27T23:16:00Z"
+    assert stored["observed_at_local"] == "2026-05-27T19:16:00-04:00"
+    assert stored["city_local_date"] == "2026-05-27"
+    assert replayed["observed_at_utc"] == stored["observed_at_utc"]
+    assert replayed["observed_at_local"] == stored["observed_at_local"]
+    assert replayed["city_timezone"] == "America/Toronto"
+
+
 def test_event_store_cleanup_uses_short_replay_retention(tmp_path):
     db_path = str(tmp_path / "polyweather.db")
     DBManager._initialized_paths.clear()

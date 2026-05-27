@@ -114,6 +114,8 @@ def _build_terminal_row(
         "distribution_bias": scan.get("distribution_bias"),
         "distribution_preview": scan.get("distribution_preview") or row.get("distribution_preview") or [],
         "distribution_full": scan.get("distribution_full") or scan.get("distribution_preview") or row.get("distribution_preview") or [],
+        "probability_engine": scan.get("probability_engine") or (data.get("probabilities") or {}).get("engine"),
+        "probability_calibration_mode": scan.get("probability_calibration_mode") or (data.get("probabilities") or {}).get("calibration_mode"),
         "model_cluster_sources": daily_entry.get("models") if isinstance(daily_entry.get("models"), dict) else data.get("multi_model", {}).get("forecasts"),
         "window_phase": row.get("window_phase") or scan.get("window_phase"),
         "window_score": row.get("window_score") if row.get("window_score") is not None else scan.get("window_score"),
@@ -215,6 +217,9 @@ def _build_quick_row(
             }
         ),
         "distribution_preview": distribution[:6] if distribution else [],
+        "distribution_full": probs.get("distribution_all") or distribution,
+        "probability_engine": probs.get("engine"),
+        "probability_calibration_mode": probs.get("calibration_mode"),
         "trading_region": market_region["key"],
         "trading_region_label": market_region["label_en"],
         "trading_region_label_zh": market_region["label_zh"],
