@@ -140,6 +140,20 @@ export function runTests() {
     "account center must emit signup_completed and dashboard_active so the ops funnel has top-of-funnel data",
   );
   assert(
+    accountCenterSource.includes("isSubscriptionUnknown") &&
+      accountCenterSource.includes("subscriptionStatusLabel") &&
+      !accountCenterSource.includes(
+        'backend?.subscription_active);',
+      ),
+    "account center must distinguish unknown subscription sync state from a confirmed unsubscribed account",
+  );
+  assert(
+    hookSource.includes("backendJson.authenticated === false") &&
+      hookSource.includes("refreshSession()") &&
+      hookSource.includes("retriedBackendJson"),
+    "account snapshot loader must retry with a refreshed Supabase token when local user exists but /api/auth/me reports unauthenticated",
+  );
+  assert(
     subscriptionsPageSource.includes("getSupabaseBrowserClient") &&
       subscriptionsPageSource.includes("refreshSession") &&
       subscriptionsPageSource.includes("Authorization") &&

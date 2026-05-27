@@ -286,7 +286,22 @@ export function AccountCenter() {
     copy.guestUser;
   const initials = (displayName.slice(0, 2) || "PW").toUpperCase();
   const joinedAt = formatTime(user?.created_at, locale);
-  const isSubscribed = Boolean(backend?.subscription_active);
+  const backendAuthenticated = backend?.authenticated === true;
+  const localAuthenticated = Boolean(user?.id);
+  const isSubscriptionUnknown = Boolean(
+    localAuthenticated &&
+      (!backend ||
+        backend.subscription_active == null ||
+        backend.authenticated === false),
+  );
+  const isSubscribed = backend?.subscription_active === true;
+  const subscriptionStatusLabel = isSubscribed
+    ? copy.proMember
+    : isSubscriptionUnknown
+      ? copy.subscriptionChecking
+      : isEn
+        ? "UNSUBSCRIBED"
+        : "未订阅";
   const planCode = String(backend?.subscription_plan_code || "").trim();
   const currentExpiryRaw = String(
     backend?.subscription_expires_at ||
@@ -323,6 +338,8 @@ export function AccountCenter() {
     ? expiryFormatted !== "--"
       ? expiryFormatted
       : displayExpiryRaw || copy.proPendingSync
+    : isSubscriptionUnknown
+      ? copy.subscriptionUnknown
     : copy.noProSubscription;
   const showExpiringSoon = Boolean(
     isSubscribed &&
@@ -337,6 +354,7 @@ export function AccountCenter() {
   const paymentFeatureReady = paymentReadyForRecovery;
   const canOpenCheckoutOverlay = Boolean(
     paymentFeatureReady &&
+      !isSubscriptionUnknown &&
       (!isSubscribed || showExpiringSoon || showExpiredReminder),
   );
   const subscriptionStatusTitle = showExpiredReminder
@@ -533,7 +551,13 @@ export function AccountCenter() {
               {initials}
             </div>
             <div
-              className={`absolute -bottom-2 -right-2 rounded-lg border-4 border-white p-1.5 ${isSubscribed ? "bg-amber-400 text-slate-950" : "bg-slate-100 text-slate-400"}`}
+              className={`absolute -bottom-2 -right-2 rounded-lg border-4 border-white p-1.5 ${
+                isSubscribed
+                  ? "bg-amber-400 text-slate-950"
+                  : isSubscriptionUnknown
+                    ? "bg-blue-100 text-blue-500"
+                    : "bg-slate-100 text-slate-400"
+              }`}
             >
               <Crown size={16} fill="currentColor" />
             </div>
@@ -542,13 +566,15 @@ export function AccountCenter() {
             <div className="flex items-center justify-center md:justify-start gap-3 mb-1">
               <h2 className="text-3xl font-bold text-slate-950">{displayName}</h2>
               <span
-                className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${isSubscribed ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-slate-50 text-slate-500"}`}
+                className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${
+                  isSubscribed
+                    ? "border-blue-200 bg-blue-50 text-blue-700"
+                    : isSubscriptionUnknown
+                      ? "border-blue-200 bg-blue-50 text-blue-600"
+                      : "border-slate-200 bg-slate-50 text-slate-500"
+                }`}
               >
-                {isSubscribed
-                  ? copy.proMember
-                  : isEn
-                    ? "UNSUBSCRIBED"
-                    : "未订阅"}
+                {subscriptionStatusLabel}
               </span>
             </div>
             <p className="mb-4 font-mono text-sm text-slate-500">
@@ -685,19 +711,37 @@ export function AccountCenter() {
               <InfoRow
                 icon={Zap}
                 label={copy.intradayAnalysis}
-                value={isSubscribed ? copy.deepMode : copy.compactVisible}
+                value={
+                  isSubscriptionUnknown
+                    ? copy.subscriptionChecking
+                    : isSubscribed
+                      ? copy.deepMode
+                      : copy.compactVisible
+                }
                 isPrimary={isSubscribed}
               />
               <InfoRow
                 icon={Clock}
                 label={copy.historyFuture}
-                value={isSubscribed ? copy.enabled : copy.locked}
+                value={
+                  isSubscriptionUnknown
+                    ? copy.subscriptionChecking
+                    : isSubscribed
+                      ? copy.enabled
+                      : copy.locked
+                }
                 isPrimary={isSubscribed}
               />
               <InfoRow
                 icon={Bot}
                 label={copy.smartPush}
-                value={isSubscribed ? copy.enabled : copy.locked}
+                value={
+                  isSubscriptionUnknown
+                    ? copy.subscriptionChecking
+                    : isSubscribed
+                      ? copy.enabled
+                      : copy.locked
+                }
                 isPrimary={isSubscribed}
               />
             </section>
@@ -724,7 +768,13 @@ export function AccountCenter() {
               <InfoRow
                 icon={UserCheck}
                 label={copy.authResult}
-                value={backend?.authenticated ? copy.passed : copy.restricted}
+                value={
+                  backendAuthenticated
+                    ? copy.passed
+                    : isSubscriptionUnknown
+                      ? copy.subscriptionChecking
+                      : copy.restricted
+                }
               />
               {queuedExtensionSummary ? (
                 <p className="rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-xs text-cyan-800">

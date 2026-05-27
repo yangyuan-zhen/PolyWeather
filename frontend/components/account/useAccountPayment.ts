@@ -167,7 +167,36 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
         const raw = (await backendResult.text()).slice(0, 260);
         throw new Error(copy.httpError.replace("{status}", String(backendResult.status)).replace("{raw}", raw));
       }
-      const backendJson = (await backendResult.json()) as AuthMeResponse;
+      let backendJson = (await backendResult.json()) as AuthMeResponse;
+      if (
+        retry &&
+        supabaseReady &&
+        userResult.data?.user &&
+        backendJson.authenticated === false
+      ) {
+        try {
+          const {
+            data: { session: refreshedSession },
+          } = await getSupabaseBrowserClient().auth.refreshSession();
+          const refreshedToken = String(
+            refreshedSession?.access_token || "",
+          ).trim();
+          if (refreshedToken) {
+            const retriedBackendResult = await fetch("/api/auth/me", {
+              cache: "no-store",
+              headers: { Authorization: `Bearer ${refreshedToken}` },
+            });
+            if (retriedBackendResult.ok) {
+              const retriedBackendJson =
+                (await retriedBackendResult.json()) as AuthMeResponse;
+              backendJson = retriedBackendJson;
+            }
+          }
+        } catch {
+          // Keep the first response; the UI treats a logged-in local user with
+          // an unauthenticated backend snapshot as a temporary sync state.
+        }
+      }
       setBackend(backendJson);
       setUpdatedAt(new Date().toISOString());
     };

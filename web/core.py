@@ -217,14 +217,31 @@ def _legacy_service_token_valid(request: Request) -> bool:
     return bool(_ENTITLEMENT_TOKEN and token == _ENTITLEMENT_TOKEN)
 
 
+def _bind_forwarded_supabase_identity(request: Request) -> bool:
+    if not _legacy_service_token_valid(request):
+        return False
+    forwarded_user_id = str(
+        request.headers.get(_FORWARDED_SUPABASE_USER_ID_HEADER) or ""
+    ).strip()
+    if not forwarded_user_id:
+        return False
+    request.state.auth_user_id = forwarded_user_id
+    request.state.auth_email = str(
+        request.headers.get(_FORWARDED_SUPABASE_EMAIL_HEADER) or ""
+    ).strip()
+    return True
+
+
 def _bind_optional_supabase_identity(request: Request) -> None:
     if not SUPABASE_ENTITLEMENT.configured:
         return
     access_token = extract_bearer_token(request.headers.get("authorization"))
     if not access_token:
+        _bind_forwarded_supabase_identity(request)
         return
     identity = SUPABASE_ENTITLEMENT.get_identity(access_token)
     if not identity:
+        _bind_forwarded_supabase_identity(request)
         return
     request.state.auth_user_id = identity.user_id
     request.state.auth_email = identity.email
@@ -286,6 +303,7 @@ def _resolve_weekly_profile(request: Request) -> Dict[str, Any]:
 def _assert_entitlement(request: Request) -> None:
     if SUPABASE_ENTITLEMENT.enabled:
         if _legacy_service_token_valid(request):
+            _bind_forwarded_supabase_identity(request)
             return
         if not _SUPABASE_AUTH_REQUIRED:
             _bind_optional_supabase_identity(request)

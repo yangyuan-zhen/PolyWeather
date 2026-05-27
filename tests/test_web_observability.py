@@ -1,6 +1,8 @@
 
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
+import web.core as web_core
 from web.app import app
 import web.routes as routes
 import web.scan_terminal_cache as scan_terminal_cache
@@ -139,6 +141,30 @@ def test_auth_me_does_not_reconcile_on_status_probe(monkeypatch):
     assert payload["subscription_active"] is True
     assert payload["subscription_plan_code"] == "pro_monthly"
     assert reconcile_calls["count"] == 0
+
+
+def test_backend_entitlement_token_binds_forwarded_supabase_identity(monkeypatch):
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "enabled", True)
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "anon_key", "anon-key")
+    monkeypatch.setattr(web_core, "_SUPABASE_AUTH_REQUIRED", True)
+    monkeypatch.setattr(web_core, "_ENTITLEMENT_TOKEN", "backend-token")
+
+    request = Request(
+        {
+            "type": "http",
+            "headers": [
+                (b"x-polyweather-entitlement", b"backend-token"),
+                (b"x-polyweather-auth-user-id", b"user-1"),
+                (b"x-polyweather-auth-email", b"user@example.com"),
+            ],
+        }
+    )
+
+    web_core._assert_entitlement(request)
+
+    assert request.state.auth_user_id == "user-1"
+    assert request.state.auth_email == "user@example.com"
 
 
 def test_ops_memberships_prefers_supabase_auth_email(monkeypatch):
