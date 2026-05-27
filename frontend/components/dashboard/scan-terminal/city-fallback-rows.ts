@@ -61,3 +61,25 @@ export function cityListItemsToScanRows(cities: CityListItem[]): ScanOpportunity
       };
     });
 }
+
+export function mergeScanRowsWithCityFallbackRows(
+  scanRows: ScanOpportunityRow[],
+  fallbackRows: ScanOpportunityRow[],
+): ScanOpportunityRow[] {
+  const merged = [...(scanRows || [])];
+  const seen = new Set<string>();
+
+  for (const row of merged) {
+    const key = normalizeCityKey(row.city || row.city_display_name || row.display_name || "");
+    if (key) seen.add(key);
+  }
+
+  for (const row of fallbackRows || []) {
+    const key = normalizeCityKey(row.city || row.city_display_name || row.display_name || "");
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    merged.push(row);
+  }
+
+  return merged;
+}

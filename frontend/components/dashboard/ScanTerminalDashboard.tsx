@@ -50,7 +50,10 @@ import { KoyfinRowsTable } from "@/components/dashboard/scan-terminal/KoyfinRows
 import { rowName, pct, money, temp, edgeClass } from "@/components/dashboard/scan-terminal/utils";
 import { CitySelectorDropdown } from "@/components/dashboard/scan-terminal/CitySelectorDropdown";
 import { GridLayoutSelector } from "@/components/dashboard/scan-terminal/GridLayoutSelector";
-import { cityListItemsToScanRows } from "@/components/dashboard/scan-terminal/city-fallback-rows";
+import {
+  cityListItemsToScanRows,
+  mergeScanRowsWithCityFallbackRows,
+} from "@/components/dashboard/scan-terminal/city-fallback-rows";
 
 function createEmptyAccess(loading = true): ProAccessState {
   return {
@@ -1107,7 +1110,9 @@ function ScanTerminalScreen() {
   const rows = useMemo(
     () => {
       const scanRows = terminalData?.rows || [];
-      return sortRowsByUserTime(scanRows.length ? scanRows : cityFallbackRows);
+      return sortRowsByUserTime(
+        mergeScanRowsWithCityFallbackRows(scanRows, cityFallbackRows),
+      );
     },
     [cityFallbackRows, terminalData?.rows],
   );
