@@ -11,6 +11,7 @@ from web.core import _is_excluded_model_name
 TURKISH_MGM_CITIES = {"ankara", "istanbul"}
 
 def build_city_summary_payload(data: Dict[str, Any]) -> Dict[str, Any]:
+    deb = data.get("deb") if isinstance(data.get("deb"), dict) else {}
     return {
         "name": data.get("name"),
         "display_name": data.get("display_name"),
@@ -26,7 +27,7 @@ def build_city_summary_payload(data: Dict[str, Any]) -> Dict[str, Any]:
                 "settlement_source_label"
             ),
         },
-        "deb": {"prediction": data.get("deb", {}).get("prediction")},
+        "deb": dict(deb) if deb else {"prediction": None},
         "deviation_monitor": data.get("deviation_monitor") or {},
         "risk": {
             "level": data.get("risk", {}).get("level"),
