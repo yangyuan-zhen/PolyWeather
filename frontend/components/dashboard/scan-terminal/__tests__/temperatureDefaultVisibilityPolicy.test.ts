@@ -601,6 +601,38 @@ export function runTests() {
     "AMOS runway_obs patch should use the runway temperature, not ignore the SR/SL point",
   );
 
+  const busanSnapshotWithLocalAndUtc = __buildTemperatureChartDataForTest(
+    {
+      city: "busan",
+      local_date: "2026-05-27",
+      local_time: "09:58",
+      tz_offset_seconds: 9 * 60 * 60,
+      temp_symbol: "°C",
+    } as any,
+    {
+      localTime: "09:58",
+      times: ["00:00", "12:00", "18:00", "23:00"],
+      temps: [19.6, 21.1, 20.0, 19.0],
+      amos: {
+        source: "amos",
+        observation_time: "2026-05-27T00:58:00Z",
+        observation_time_local: "2026-05-27 09:58:00",
+        runway_obs: {
+          runway_pairs: [["S R", "S L"]],
+          temperatures: [[21.5, 12.4]],
+        },
+      },
+    } as any,
+    "1D",
+  );
+  const busanSnapshotLabels = busanSnapshotWithLocalAndUtc.data
+    .filter((point: any) => point[runwayKey("SR/SL")] === 21.5)
+    .map((point: any) => point.label);
+  assert(
+    busanSnapshotLabels.includes("09:58:00"),
+    "AMOS snapshot fallback should prefer UTC observation_time over naive observation_time_local for chart positioning",
+  );
+
   const busanCurrentOnly = __buildTemperatureChartDataForTest(
     {
       city: "busan",

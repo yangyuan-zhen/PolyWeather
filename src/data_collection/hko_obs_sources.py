@@ -11,7 +11,7 @@ import csv
 import os
 import io
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from loguru import logger
@@ -32,6 +32,19 @@ HKO_STATIONS = {
         "label": "流浮山天文台 1min (HKO)",
     },
 }
+
+
+def _hko_obs_time_to_iso(raw_yyyymmddhhmm: Any) -> Optional[str]:
+    raw = str(raw_yyyymmddhhmm or "").strip()
+    if len(raw) != 12 or not raw.isdigit():
+        return None
+    try:
+        dt = datetime.strptime(raw, "%Y%m%d%H%M").replace(
+            tzinfo=timezone(timedelta(hours=8))
+        )
+        return dt.isoformat()
+    except Exception:
+        return None
 
 
 class HkoObsSourceMixin:
@@ -92,13 +105,7 @@ class HkoObsSourceMixin:
                 return None
 
             temp = round(temp_c * 9 / 5 + 32, 1) if use_fahrenheit else round(temp_c, 1)
-            obs_iso = None
-            if obs_time and len(obs_time) == 12:
-                try:
-                    dt = datetime.strptime(obs_time, "%Y%m%d%H%M")
-                    obs_iso = dt.isoformat()
-                except Exception:
-                    obs_iso = obs_time
+            obs_iso = _hko_obs_time_to_iso(obs_time) or obs_time
 
             result = {
                 "source": "hko_obs",

@@ -23,6 +23,21 @@ COWIN_STATION_ID = int(os.getenv("COWIN_HK_STATION_ID", "6087"))
 COWIN_STATION_LABEL = os.getenv("COWIN_HK_STATION_LABEL", "").strip() or "保良局陳守仁小學 1min (CoWIN)"
 
 
+def _cowin_obs_time_to_iso(value: Any) -> Optional[str]:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt.isoformat().replace("+00:00", "Z")
+
+
 class CowinSourceMixin:
 
     def _cowin_http_get(self, url: str) -> requests.Response:
@@ -95,7 +110,7 @@ class CowinSourceMixin:
                                (time.perf_counter() - started) * 1000.0)
             return None
 
-        obs_time = str(latest.get("obstime") or "").strip()
+        obs_time = _cowin_obs_time_to_iso(latest.get("obstime")) or str(latest.get("obstime") or "").strip()
 
         temp = round(temp_c * 9 / 5 + 32, 1) if use_fahrenheit else round(temp_c, 1)
 

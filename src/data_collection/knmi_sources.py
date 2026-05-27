@@ -8,7 +8,7 @@ Uses netCDF4; requires libhdf5-dev on Linux.
 from __future__ import annotations
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from loguru import logger
@@ -25,6 +25,21 @@ KNMI_STATION = {
         "label": "Schiphol 10min (KNMI)",
     },
 }
+
+
+def _knmi_obs_time_from_filename(filename: Any) -> Optional[str]:
+    import re
+
+    time_match = re.search(r"(\d{12})", str(filename or ""))
+    if not time_match:
+        return None
+    try:
+        obs_dt = datetime.strptime(time_match.group(1), "%Y%m%d%H%M").replace(
+            tzinfo=timezone.utc
+        )
+        return obs_dt.isoformat().replace("+00:00", "Z")
+    except Exception:
+        return None
 
 
 class KnmiSourceMixin:
@@ -185,21 +200,15 @@ class KnmiSourceMixin:
                 temp = round(temp_c * 9 / 5 + 32, 1) if use_fahrenheit else temp_c
 
                 # Extract obs time from filename: KMDS__OPER_P___10M_OBS_L2_202605121150.nc
-                import re
-                obs_time = None
-                time_match = re.search(r"(\d{12})", fname)
-                if time_match:
-                    ts = time_match.group(1)
-                    obs_dt = datetime.strptime(ts, "%Y%m%d%H%M")
-                    obs_time = obs_dt.isoformat()
+                obs_time = _knmi_obs_time_from_filename(fname)
 
                 result = {
                     "source": "knmi",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                     "station_code": stn,
                     "station_name": meta["label"],
                     "icao": meta["icao"],
-                    "obs_time": obs_time or datetime.utcnow().isoformat(),
+                    "obs_time": obs_time or datetime.now(timezone.utc).isoformat(),
                     "current": {
                         "temp": temp,
                     },

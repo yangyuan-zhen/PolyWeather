@@ -3,13 +3,44 @@ from __future__ import annotations
 import hashlib
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 from xml.etree import ElementTree as ET
 
 from loguru import logger
 
 from src.utils.metrics import record_source_call
+
+
+def _aeroweb_obs_time_from_parts(
+    day: Optional[int],
+    hour: Optional[int],
+    minute: Optional[int],
+    *,
+    now_utc: Optional[datetime] = None,
+) -> Optional[str]:
+    if day is None or hour is None or minute is None:
+        return None
+
+    base = now_utc or datetime.now(timezone.utc)
+    if base.tzinfo is None:
+        base = base.replace(tzinfo=timezone.utc)
+    else:
+        base = base.astimezone(timezone.utc)
+
+    def _candidate(year: int, month: int) -> Optional[datetime]:
+        try:
+            return datetime(year, month, int(day), int(hour), int(minute), tzinfo=timezone.utc)
+        except (TypeError, ValueError):
+            return None
+
+    obs_dt = _candidate(base.year, base.month)
+    if obs_dt and obs_dt - base > timedelta(hours=18):
+        previous_month = (base.replace(day=1) - timedelta(days=1)).date()
+        obs_dt = _candidate(previous_month.year, previous_month.month) or obs_dt
+    if not obs_dt:
+        return None
+    return obs_dt.isoformat().replace("+00:00", "Z")
 
 
 class AerowebSourceMixin:
@@ -172,10 +203,7 @@ class AerowebSourceMixin:
             day = _attr_int("day")
             hour = _attr_int("hour")
             minute = _attr_int("minute")
-            obs_time = None
-            if day is not None and hour is not None and minute is not None:
-                now = datetime.utcnow()
-                obs_time = datetime(now.year, now.month, day, hour, minute).isoformat()
+            obs_time = _aeroweb_obs_time_from_parts(day, hour, minute)
 
             result: Dict = {
                 "current": {

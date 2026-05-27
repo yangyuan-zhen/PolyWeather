@@ -1,11 +1,53 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
 from loguru import logger
 
 from src.utils.metrics import record_source_call
+
+
+def _last_sunday(year: int, month: int) -> datetime:
+    if month == 12:
+        last_day = datetime(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        last_day = datetime(year, month + 1, 1) - timedelta(days=1)
+    while last_day.weekday() != 6:
+        last_day -= timedelta(days=1)
+    return last_day
+
+
+def _is_israel_dst(local_dt: datetime) -> bool:
+    start = (_last_sunday(local_dt.year, 3) - timedelta(days=2)).replace(
+        hour=2,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+    end = _last_sunday(local_dt.year, 10).replace(
+        hour=2,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+    return start <= local_dt < end
+
+
+def _ims_obs_time_to_iso(value: str) -> Optional[str]:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        local_dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+    if local_dt.tzinfo is not None:
+        return local_dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    offset_hours = 3 if _is_israel_dst(local_dt) else 2
+    return local_dt.replace(
+        tzinfo=timezone(timedelta(hours=offset_hours))
+    ).isoformat()
 
 
 class ImsSourceMixin:
@@ -40,8 +82,8 @@ class ImsSourceMixin:
                 record_source_call("ims", "station", "empty", _elapsed_ms())
                 return None
 
-            latest_time = max(obs_map.keys())
-            latest = obs_map[latest_time].get(station_id) or {}
+            latest_time_raw = max(obs_map.keys())
+            latest = obs_map[latest_time_raw].get(station_id) or {}
             if not latest:
                 record_source_call("ims", "station", "empty", _elapsed_ms())
                 return None
@@ -65,7 +107,7 @@ class ImsSourceMixin:
             wind_dir = _f("WD")
 
             # Compute max / min so far today from all 10-min slots
-            today_prefix = latest_time[:10]
+            today_prefix = latest_time_raw[:10]
             td_vals = []
             for t, stations in obs_map.items():
                 if t.startswith(today_prefix):
@@ -74,6 +116,7 @@ class ImsSourceMixin:
                         td_vals.append(td)
             max_so_far = round(max(td_vals), 1) if td_vals else None
             min_so_far = round(min(td_vals), 1) if td_vals else None
+            obs_time = _ims_obs_time_to_iso(latest_time_raw) or latest_time_raw
 
             result: Dict = {
                 "current": {
@@ -85,7 +128,7 @@ class ImsSourceMixin:
                     "max_temp_so_far": max_so_far,
                     "min_temp_so_far": min_so_far,
                 },
-                "obs_time": latest_time,
+                "obs_time": obs_time,
                 "station_id": station_id,
                 "station_label": "Lod Airport",
                 "lat": 32.002943,
@@ -96,7 +139,7 @@ class ImsSourceMixin:
             logger.info(
                 "IMS Lod Airport (s{}) {}: temp={}°C RH={}% wind={}km/h max={} min={}",
                 station_id,
-                latest_time,
+                obs_time,
                 temp,
                 rh,
                 wind_kmh,

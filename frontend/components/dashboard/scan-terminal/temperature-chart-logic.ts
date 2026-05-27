@@ -1069,7 +1069,7 @@ function buildRunwayHistorySeries(
   const pointTemps = runwayObs?.point_temperatures || [];
   const isAmosTempDewTuple = String(amos?.source || "").toLowerCase() === "amos";
   const anchor =
-    getCityLocalUtcTimestamp(amos?.observation_time_local || amos?.observation_time || hourly?.localTime || row?.local_time, tzOffset, localDateStr) ??
+    getCityLocalUtcTimestamp(amos?.observation_time || amos?.observation_time_local || hourly?.localTime || row?.local_time, tzOffset, localDateStr) ??
     getCityLocalUtcTimestamp(row?.local_time, tzOffset, localDateStr);
 
   if (!anchor || !Array.isArray(runwayTemps)) return [];

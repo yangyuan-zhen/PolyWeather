@@ -3,6 +3,11 @@
 import { validNumber, type EvidenceSeries } from "@/components/dashboard/scan-terminal/temperature-chart-logic";
 
 type TooltipSeries = Pick<EvidenceSeries, "key" | "label" | "color">;
+type TooltipRow = TooltipSeries & { value: number };
+
+function isRunwayTooltipSeries(seriesKey: string) {
+  return seriesKey.startsWith("runway_");
+}
 
 function nearestSeriesValue(
   data: Array<Record<string, any>>,
@@ -42,14 +47,7 @@ export function TemperatureTooltipContent({
 }) {
   if (!active || !payload?.length || !series.length) return null;
   const activePoint = payload[0]?.payload || {};
-  const activeIndex = data.findIndex((point) => point.ts === activePoint.ts);
-  const rows = series
-    .map((item) => {
-      const directValue = validNumber(activePoint[item.key]);
-      const value = directValue ?? nearestSeriesValue(data, item.key, activeIndex);
-      return value === null ? null : { ...item, value };
-    })
-    .filter((item): item is TooltipSeries & { value: number } => item !== null);
+  const rows = buildTooltipRows(activePoint, data, series);
   if (!rows.length) return null;
 
   return (
@@ -69,3 +67,22 @@ export function TemperatureTooltipContent({
     </div>
   );
 }
+
+function buildTooltipRows(
+  activePoint: Record<string, any>,
+  data: Array<Record<string, any>>,
+  series: TooltipSeries[],
+): TooltipRow[] {
+  const activeIndex = data.findIndex((point) => point.ts === activePoint.ts);
+  return series
+    .map((item) => {
+      const directValue = validNumber(activePoint[item.key]);
+      const value = directValue ?? (
+        isRunwayTooltipSeries(item.key) ? null : nearestSeriesValue(data, item.key, activeIndex)
+      );
+      return value === null ? null : { ...item, value };
+    })
+    .filter((item): item is TooltipRow => item !== null);
+}
+
+export const __buildTemperatureTooltipRowsForTest = buildTooltipRows;

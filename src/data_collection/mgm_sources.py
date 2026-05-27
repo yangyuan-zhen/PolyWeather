@@ -2,12 +2,26 @@ from __future__ import annotations
 
 import os
 import unicodedata
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
 from loguru import logger
 
 from src.utils.metrics import record_source_call
+
+
+def _mgm_obs_time_to_iso(value: object) -> Optional[str]:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone(timedelta(hours=3)))
+        return dt.isoformat()
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 class MgmSourceMixin:
@@ -49,6 +63,8 @@ class MgmSourceMixin:
                     def _valid(v):
                         return v is not None and v > -9000
 
+                    obs_time = _mgm_obs_time_to_iso(latest.get("veriZamani"))
+                    results["obs_time"] = obs_time or latest.get("veriZamani")
                     results["current"] = {
                         "temp": latest.get("sicaklik")
                         if _valid(latest.get("sicaklik"))
@@ -78,7 +94,7 @@ class MgmSourceMixin:
                         "mgm_max_temp": latest.get("maxSicaklik")
                         if _valid(latest.get("maxSicaklik"))
                         else None,
-                        "time": latest.get("veriZamani"),
+                        "time": obs_time or latest.get("veriZamani"),
                         "station_name": latest.get("istasyonAd")
                         or latest.get("adi")
                         or latest.get("merkezAd")
@@ -305,7 +321,7 @@ class MgmSourceMixin:
                             temp = obs.get("sicaklik")
                             wind_speed = obs.get("ruzgarHiz")
                             wind_dir = obs.get("ruzgarYon")
-                            obs_time = obs.get("veriZamani")
+                            obs_time = _mgm_obs_time_to_iso(obs.get("veriZamani")) or obs.get("veriZamani")
                             if temp is not None and temp > -9000:
                                 return ist_no, {
                                     "temp": temp,

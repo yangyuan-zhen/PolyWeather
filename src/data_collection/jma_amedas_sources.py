@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
@@ -20,6 +20,19 @@ JMA_AMEDAS_STATIONS: Dict[str, Dict[str, Any]] = {
         "lon": 139.78,
     },
 }
+
+
+def _jma_obs_time_from_key(value: Any) -> Optional[str]:
+    raw = str(value or "").strip()
+    if len(raw) != 14 or not raw.isdigit():
+        return None
+    try:
+        dt = datetime.strptime(raw, "%Y%m%d%H%M%S").replace(
+            tzinfo=timezone(timedelta(hours=9))
+        )
+        return dt.isoformat()
+    except Exception:
+        return None
 
 
 class JmaAmedasSourceMixin:
@@ -92,15 +105,11 @@ class JmaAmedasSourceMixin:
                 return None
 
             temp = round(temp_c * 9 / 5 + 32, 1) if use_fahrenheit else round(temp_c, 1)
-            obs_time = None
-            try:
-                obs_time = datetime.strptime(str(latest_key), "%Y%m%d%H%M%S").isoformat()
-            except Exception:
-                obs_time = str(latest_key)
+            obs_time = _jma_obs_time_from_key(latest_key) or str(latest_key)
 
             result = {
                 "source": "jma_amedas",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "station_code": station_code,
                 "station_name": meta.get("station_label") or "羽田 10分实况 (JMA)",
                 "obs_time": obs_time,
