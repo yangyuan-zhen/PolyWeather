@@ -192,13 +192,11 @@ type PeakGlowState = "none" | "watch" | "near_peak" | "breakout" | "cooling";
 type PeakGlowMeta = {
   state: PeakGlowState;
   currentTemp: number | null;
-  debPeak: number | null;
-  distanceToDeb: number | null;
+  referenceHigh: number | null;
+  distanceToHigh: number | null;
   trend30m: number | null;
   trend60m: number | null;
   observedHigh: number | null;
-  peakStartTs: number | null;
-  peakEndTs: number | null;
 };
 
 type RunwayHistorySeries = {
@@ -985,7 +983,7 @@ function buildRunwayHistorySeries(
     ((row as any)?.runway_plate_history as Record<string, Array<Record<string, unknown>>> | undefined);
 
   if (directHistory && typeof directHistory === "object") {
-    return Object.entries(directHistory)
+    const directSeries = Object.entries(directHistory)
       .map(([rwy, rawPoints], index) => {
         const normalizedRwy = String(rwy || `RWY ${index + 1}`).trim();
         const points = (Array.isArray(rawPoints) ? rawPoints : [])
@@ -1008,6 +1006,7 @@ function buildRunwayHistorySeries(
         };
       })
       .filter((series) => series.points.length > 1);
+    if (directSeries.length) return directSeries;
   }
 
   const amos = hourly?.amos;
@@ -1310,6 +1309,9 @@ function buildFullDayChartData(
   if (isHKO) {
     finalSettlementObs = madisObs;
     finalMadisObs = settlementObs;
+  } else if (isShenzhen && !settlementObs.length && madisObs.length) {
+    finalSettlementObs = madisObs;
+    finalMadisObs = [];
   }
 
   // ── Runway band & max series ──
@@ -1615,42 +1617,6 @@ function getLiveObservationPoints(
   return points.sort((left, right) => left.ts - right.ts);
 }
 
-function getDebPeakProfile(
-  row: ScanOpportunityRow | null,
-  data: Array<Record<string, any>>,
-  series: EvidenceSeries[],
-) {
-  const debSeries = series.find((item) => item.key === "hourly_forecast");
-  if (!debSeries) return null;
-  const debPoints = debSeries.values
-    .map((value, index) => {
-      const ts = typeof data[index]?.ts === "number" ? data[index].ts : null;
-      const temp = validNumber(value);
-      return ts === null || temp === null ? null : { index, ts, temp };
-    })
-    .filter((point): point is { index: number; ts: number; temp: number } => point !== null);
-  if (!debPoints.length) return null;
-  const peak = debPoints.reduce((best, point) => (point.temp > best.temp ? point : best), debPoints[0]);
-  let peakIndex = debPoints.findIndex((point) => point.index === peak.index);
-  if (peakIndex < 0) peakIndex = 0;
-
-  const hotThreshold = peak.temp - chartDeltaForCelsius(row, 2);
-  let hotStartIndex = peakIndex;
-  let hotEndIndex = peakIndex;
-  while (hotStartIndex > 0 && debPoints[hotStartIndex - 1].temp >= hotThreshold) {
-    hotStartIndex -= 1;
-  }
-  while (hotEndIndex < debPoints.length - 1 && debPoints[hotEndIndex + 1].temp >= hotThreshold) {
-    hotEndIndex += 1;
-  }
-
-  return {
-    peak,
-    hotStartTs: debPoints[hotStartIndex].ts,
-    hotEndTs: debPoints[hotEndIndex].ts,
-  };
-}
-
 function pointAtOrBefore(
   points: Array<{ ts: number; temp: number }>,
   targetTs: number,
@@ -1670,79 +1636,66 @@ function getPeakGlowState(
   const empty: PeakGlowMeta = {
     state: "none",
     currentTemp: null,
-    debPeak: null,
-    distanceToDeb: null,
+    referenceHigh: null,
+    distanceToHigh: null,
     trend30m: null,
     trend60m: null,
     observedHigh: null,
-    peakStartTs: null,
-    peakEndTs: null,
   };
   const livePoints = getLiveObservationPoints(data, series);
   const latest = livePoints[livePoints.length - 1] || null;
-  const debProfile = getDebPeakProfile(row, data, series);
-  if (!latest || !debProfile) return empty;
+  if (!latest) return empty;
 
-  const peakStartTs = debProfile.hotStartTs;
-  const peakEndTs = debProfile.hotEndTs;
   const previousLivePoints = livePoints.filter((point) => point.ts < latest.ts);
   const previousHigh = previousLivePoints.length
     ? Math.max(...previousLivePoints.map((point) => point.temp))
     : null;
-  const observedHigh = Math.max(...livePoints.map((point) => point.temp));
+  const liveHigh = Math.max(...livePoints.map((point) => point.temp));
+  const rowHigh = validNumber(
+    row?.current_max_so_far ??
+      row?.metar_context?.airport_max_so_far ??
+      row?.metar_context?.max_temp,
+  );
+  const observedHigh = rowHigh !== null ? Math.max(liveHigh, rowHigh) : liveHigh;
   const trend30Base = pointAtOrBefore(livePoints, latest.ts - 30 * 60 * 1000);
   const trend60Base = pointAtOrBefore(livePoints, latest.ts - 60 * 60 * 1000);
   const trend30m = trend30Base ? latest.temp - trend30Base.temp : null;
   const trend60m = trend60Base ? latest.temp - trend60Base.temp : null;
-  const distanceToDeb = debProfile.peak.temp - latest.temp;
+  const distanceToHigh = observedHigh - latest.temp;
 
   const metaBase = {
     currentTemp: latest.temp,
-    debPeak: debProfile.peak.temp,
-    distanceToDeb,
+    referenceHigh: observedHigh,
+    distanceToHigh,
     trend30m,
     trend60m,
     observedHigh,
-    peakStartTs,
-    peakEndTs,
   };
 
-  const nearThreshold = chartDeltaForCelsius(row, 2);
-  const watchThreshold = chartDeltaForCelsius(row, 3);
-  const breakoutNearThreshold = chartDeltaForCelsius(row, 0.5);
+  const nearThreshold = chartDeltaForCelsius(row, 0.5);
+  const watchThreshold = chartDeltaForCelsius(row, 1);
   const flatTrendFloor = -chartDeltaForCelsius(row, 0.2);
   const coolingDrop = -chartDeltaForCelsius(row, 0.5);
   const breakoutStep = chartDeltaForCelsius(row, 0.1);
-  const phase = String((row as any)?.window_phase || "").toLowerCase();
-  const afterPeak =
-    phase === "post_peak" ||
-    (peakEndTs !== null && latest.ts > peakEndTs);
   const isCooling =
-    afterPeak &&
+    distanceToHigh >= Math.abs(coolingDrop) &&
     ((trend60m !== null && trend60m <= coolingDrop) ||
       (previousHigh !== null && latest.temp <= previousHigh + coolingDrop));
   if (isCooling) return { state: "cooling", ...metaBase };
 
   const isBreakout =
-    latest.temp >= debProfile.peak.temp ||
-    (distanceToDeb <= breakoutNearThreshold &&
-      previousHigh !== null &&
-      latest.temp > previousHigh + breakoutStep);
+    previousHigh !== null &&
+    latest.temp > previousHigh + breakoutStep;
   if (isBreakout) return { state: "breakout", ...metaBase };
 
   if (
-    distanceToDeb <= nearThreshold &&
+    distanceToHigh <= nearThreshold &&
     (trend30m === null || trend30m >= flatTrendFloor)
   ) {
     return { state: "near_peak", ...metaBase };
   }
 
-  const isNearPeakTime =
-    peakStartTs !== null &&
-    peakEndTs !== null &&
-    latest.ts <= peakEndTs &&
-    peakStartTs - latest.ts <= 3 * 60 * 60 * 1000;
-  if (distanceToDeb <= watchThreshold || isNearPeakTime) {
+  if (distanceToHigh <= watchThreshold) {
     return { state: "watch", ...metaBase };
   }
 

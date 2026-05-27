@@ -62,18 +62,18 @@ function peakGlowLabel(state: keyof typeof PEAK_GLOW_PANEL_CLASS, isEn: boolean)
 
 function peakGlowTitle(
   state: keyof typeof PEAK_GLOW_PANEL_CLASS,
-  distanceToDeb: number | null,
+  distanceToHigh: number | null,
   isEn: boolean,
 ) {
   const label = peakGlowLabel(state, isEn);
   if (!label) return "";
-  if (distanceToDeb === null) return label;
-  const absDistance = Math.abs(distanceToDeb).toFixed(1);
-  if (state === "breakout" && distanceToDeb <= 0) {
-    return isEn ? `${label}: ${absDistance}° above DEB` : `${label}：高于 DEB ${absDistance}°`;
+  if (distanceToHigh === null) return label;
+  const absDistance = Math.abs(distanceToHigh).toFixed(1);
+  if (state === "breakout") {
+    return isEn ? `${label}: new observed high` : `${label}：刷新实测高点`;
   }
   if (state === "cooling") return isEn ? `${label}: peak likely passed` : `${label}：峰值可能已过`;
-  return isEn ? `${label}: ${absDistance}° below DEB` : `${label}：距 DEB ${absDistance}°`;
+  return isEn ? `${label}: ${absDistance}° below observed high` : `${label}：距实测高点 ${absDistance}°`;
 }
 
 function formatCityLocalDate(tzOffsetSeconds: number | null | undefined) {
@@ -141,6 +141,7 @@ export function LiveTemperatureThresholdChart({
     setViewMode("auto");
     setShowRunwayDetails(true);
     setHourly(seedHourlyForecastFromRow(row));
+    setLiveTemp(null);
     setIsHourlyLoading(Boolean(city));
     hasLoadedHourlyDetailRef.current = false;
     lastPatchAtRef.current = Date.now();
@@ -490,7 +491,7 @@ export function LiveTemperatureThresholdChart({
             "ml-1 rounded border px-1.5 py-0.5 text-[9px] font-black normal-case tracking-normal",
             PEAK_GLOW_BADGE_CLASS[peakGlow.state],
           )}
-          title={peakGlowTitle(peakGlow.state, peakGlow.distanceToDeb, isEn)}
+          title={peakGlowTitle(peakGlow.state, peakGlow.distanceToHigh, isEn)}
         >
           {peakGlowLabel(peakGlow.state, isEn)}
         </span>

@@ -25,45 +25,35 @@ function runwayKey(rwy: string) {
 export function runTests() {
   const peakGlowSeries = [
     {
-      key: "hourly_forecast",
-      label: "DEB Forecast",
-      source: "DEB Hourly",
-      color: "#f97316",
-      values: [26, 29, 32, 32, 30],
-    },
-    {
       key: "madis",
       label: "METAR",
       source: "METAR",
       color: "#0284c7",
-      values: [26.0, 29.0, null, 30.4, null],
+      values: [26.0, 30.35, 30.4, null],
     },
   ] as any;
   const peakGlowData = [
     { ts: Date.UTC(2026, 4, 27, 10, 0), hourly_forecast: 26, madis: 26.0 },
-    { ts: Date.UTC(2026, 4, 27, 11, 0), hourly_forecast: 29, madis: 29.0 },
-    { ts: Date.UTC(2026, 4, 27, 12, 0), hourly_forecast: 32, madis: null },
-    { ts: Date.UTC(2026, 4, 27, 13, 0), hourly_forecast: 32, madis: 30.4 },
-    { ts: Date.UTC(2026, 4, 27, 14, 0), hourly_forecast: 30, madis: null },
+    { ts: Date.UTC(2026, 4, 27, 11, 0), hourly_forecast: 29, madis: 30.35 },
+    { ts: Date.UTC(2026, 4, 27, 12, 0), hourly_forecast: 32, madis: 30.4 },
+    { ts: Date.UTC(2026, 4, 27, 13, 0), hourly_forecast: 32, madis: null },
   ] as any;
 
   assert(
-    __getPeakGlowStateForTest({ temp_symbol: "°C" } as any, peakGlowData, peakGlowSeries).state === "near_peak",
-    "city chart should enter near-peak glow when live temperature is within 2C of DEB and not cooling",
+    __getPeakGlowStateForTest({ temp_symbol: "°C", current_max_so_far: 30.5 } as any, peakGlowData, peakGlowSeries).state === "near_peak",
+    "city chart should enter near-peak glow from observed daily high proximity without requiring a DEB curve",
   );
   assert(
-    __getPeakGlowStateForTest({ temp_symbol: "°C" } as any, peakGlowData, [
-      peakGlowSeries[0],
-      { ...peakGlowSeries[1], values: [26.0, 29.0, null, 29.2, null] },
+    __getPeakGlowStateForTest({ temp_symbol: "°C", current_max_so_far: 30.6 } as any, peakGlowData, [
+      { ...peakGlowSeries[0], values: [26.0, 29.75, 29.8, null] },
     ] as any).state === "watch",
-    "city chart should enter watch glow when live temperature is within 3C of DEB but not near peak",
+    "city chart should enter watch glow when live temperature is near the observed daily high but not close enough for near-peak",
   );
   assert(
     __getPeakGlowStateForTest({ temp_symbol: "°C" } as any, peakGlowData, [
-      peakGlowSeries[0],
-      { ...peakGlowSeries[1], values: [26.0, 29.0, null, 32.1, null] },
+      { ...peakGlowSeries[0], values: [26.0, 29.0, 30.4, null] },
     ] as any).state === "breakout",
-    "city chart should use breakout glow when live temperature reaches or exceeds DEB peak",
+    "city chart should use breakout glow when live observations print a new intraday high without referencing DEB",
   );
   assert(
     __getPeakGlowStateForTest({ temp_symbol: "°C" } as any, [
@@ -73,17 +63,15 @@ export function runTests() {
       { ts: Date.UTC(2026, 4, 27, 13, 0), hourly_forecast: 30, madis: 30.8 },
       { ts: Date.UTC(2026, 4, 27, 14, 0), hourly_forecast: 27, madis: 30.2 },
     ] as any, [
-      { ...peakGlowSeries[0], values: [26, 30, 32, 30, 27] },
-      { ...peakGlowSeries[1], values: [26.0, 30.0, 31.8, 30.8, 30.2] },
+      { ...peakGlowSeries[0], values: [26.0, 30.0, 31.8, 30.8, 30.2] },
     ] as any).state === "cooling",
-    "city chart should stop hot glow and show cooling state after peak when live temperature rolls over",
+    "city chart should show cooling state from observed rollover without using the DEB forecast curve",
   );
   assert(
-    __getPeakGlowStateForTest({ temp_symbol: "°F" } as any, peakGlowData, [
-      { ...peakGlowSeries[0], values: [79, 84, 90, 90, 86] },
-      { ...peakGlowSeries[1], values: [80, 84, null, 86.2, null] },
+    __getPeakGlowStateForTest({ temp_symbol: "°F", current_max_so_far: 88 } as any, peakGlowData, [
+      { ...peakGlowSeries[0], values: [80, 86.3, 86.4, null] },
     ] as any).state === "watch",
-    "US Fahrenheit charts should convert Celsius thresholds before deciding peak glow state",
+    "US Fahrenheit charts should convert Celsius thresholds against observed highs before deciding peak glow state",
   );
 
   const guangzhou = {
@@ -349,6 +337,39 @@ export function runTests() {
   assert(seriesByKey(shenzhen.series, "metar"), "Shenzhen/Lau Fau Shan observations should stay as METAR/HKO observations, not runway data");
   assert(!shenzhen.series.some((item) => item.key.startsWith("runway_")), "Shenzhen should not be treated as an AMSC runway city");
 
+  const shenzhenAirportPrimaryHko = __buildTemperatureChartDataForTest(
+    {
+      city: "shenzhen",
+      local_date: "2026-05-27",
+      local_time: "07:55",
+      tz_offset_seconds: 8 * 60 * 60,
+      temp_symbol: "°C",
+    } as any,
+    {
+      localTime: "07:55",
+      times: ["10:00", "14:00", "18:00"],
+      temps: [30.2, 31.8, 30.7],
+      airportPrimary: {
+        source_code: "hko",
+        source_label: "HKO",
+        temp: 29.9,
+        obs_time: "2026-05-26T23:55:00Z",
+      },
+      airportPrimaryTodayObs: [
+        ["2026-05-26T23:15:00Z", 29.5],
+        ["2026-05-26T23:25:00Z", 29.7],
+        ["2026-05-26T23:35:00Z", 29.9],
+      ],
+    } as any,
+    "1D",
+  );
+  const shenzhenHkoSeries = seriesByKey(shenzhenAirportPrimaryHko.series, "settlement") as any;
+  assert(shenzhenHkoSeries?.label === "HKO", "Shenzhen airport-primary HKO history should render as the HKO observation series");
+  assert(
+    shenzhenHkoSeries.values.filter((value: number | null) => value !== null).length >= 2,
+    "Shenzhen HKO observation series should include the airportPrimaryTodayObs curve points",
+  );
+
   const chengduFromAmosSnapshot = __buildTemperatureChartDataForTest(
     {
       city: "chengdu",
@@ -392,6 +413,44 @@ export function runTests() {
   const chengduAuxRunway = seriesByKey(chengduFromAmosSnapshot.series, "runway_02R_20L") as any;
   assert(chengduAuxRunway, "AMOS runway_obs snapshot should create auxiliary runway chart lines");
   assert(chengduAuxRunway.dashed === true, "AMOS snapshot auxiliary runway should be dashed");
+
+  const shanghaiWithEmptyRunwayHistory = __buildTemperatureChartDataForTest(
+    {
+      city: "shanghai",
+      local_date: "2026-05-27",
+      local_time: "07:59",
+      tz_offset_seconds: 8 * 60 * 60,
+      temp_symbol: "°C",
+    } as any,
+    {
+      localTime: "07:59",
+      times: ["10:00", "14:00", "18:00"],
+      temps: [25, 28, 24],
+      runwayPlateHistory: {},
+      amos: {
+        observation_time_local: "2026-05-27 07:59:00",
+        runway_obs: {
+          runway_pairs: [
+            ["35R", "17L"],
+            ["34L", "16R"],
+          ],
+          temperatures: [
+            [25.8],
+            [25.4],
+          ],
+          point_temperatures: [
+            { runway: "35R/17L", tdz_temp: 25.8, mid_temp: null, end_temp: 26.2 },
+            { runway: "34L/16R", tdz_temp: 25.4, mid_temp: null, end_temp: 25.7 },
+          ],
+        },
+      },
+    } as any,
+    "1D",
+  );
+  assert(
+    seriesByKey(shanghaiWithEmptyRunwayHistory.series, runwayKey("35R/17L")),
+    "empty runwayPlateHistory should fall back to AMOS runway_obs so runway cities still draw runway curves",
+  );
 
   const newYorkMetrics = __getObservationDisplayMetricsForTest(
     {
