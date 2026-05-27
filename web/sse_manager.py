@@ -18,6 +18,7 @@ class SseManager:
     def __init__(self) -> None:
         self._queues: DefaultDict[str, set[asyncio.Queue[dict[str, Any]]]] = defaultdict(set)
         self._queue_cities: dict[int, frozenset[str]] = {}
+        self._queue_loops: dict[int, asyncio.AbstractEventLoop] = {}
         self._lock = threading.RLock()
         self._revision = 0
 
@@ -49,6 +50,10 @@ class SseManager:
             if revision > self._revision:
                 self._revision = revision
 
+    def connection_count(self) -> int:
+        with self._lock:
+            return sum(len(queue_set) for queue_set in self._queues.values())
+
     def broadcast(self, city: str, changes: dict[str, Any]) -> dict[str, Any]:
         event = {
             "type": "city_patch",
@@ -69,26 +74,37 @@ class SseManager:
 
         with self._lock:
             queue_items = [
-                (queue, self._queue_cities.get(id(queue), frozenset()))
+                (
+                    queue,
+                    self._queue_cities.get(id(queue), frozenset()),
+                    self._queue_loops.get(id(queue)),
+                )
                 for queue_set in self._queues.values()
                 for queue in queue_set
             ]
 
-        for queue, subscribed_cities in queue_items:
+        for queue, subscribed_cities, loop in queue_items:
             if subscribed_cities and city not in subscribed_cities:
                 continue
+            if loop and loop.is_running():
+                loop.call_soon_threadsafe(self._put_queue_event, queue, event)
+                continue
+            self._put_queue_event(queue, event)
+        return event
+
+    @staticmethod
+    def _put_queue_event(queue: asyncio.Queue[dict[str, Any]], event: dict[str, Any]) -> None:
+        try:
+            queue.put_nowait(event)
+        except asyncio.QueueFull:
+            try:
+                queue.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
             try:
                 queue.put_nowait(event)
             except asyncio.QueueFull:
-                try:
-                    queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    pass
-                try:
-                    queue.put_nowait(event)
-                except asyncio.QueueFull:
-                    pass
-        return event
+                pass
 
     async def event_stream(
         self,
@@ -102,9 +118,11 @@ class SseManager:
         user_key = str(user_id or "anon")
         city_set = frozenset(self._normalize_city_set(cities))
         queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=QUEUE_MAXSIZE)
+        loop = asyncio.get_running_loop()
         with self._lock:
             self._queues[user_key].add(queue)
             self._queue_cities[id(queue)] = city_set
+            self._queue_loops[id(queue)] = loop
             if connected_revision is not None:
                 self._revision = max(self._revision, int(connected_revision or 0))
 
@@ -138,6 +156,7 @@ class SseManager:
             with self._lock:
                 self._queues[user_key].discard(queue)
                 self._queue_cities.pop(id(queue), None)
+                self._queue_loops.pop(id(queue), None)
                 if not self._queues[user_key]:
                     self._queues.pop(user_key, None)
 

@@ -8,6 +8,7 @@ import {
   __getVisibleTemperatureSeriesForTest,
   __isTemperatureSeriesVisibleByDefaultForTest,
   __mergePatchIntoHourlyForTest,
+  __selectDisplayRunwayTempForTest,
 } from "@/components/dashboard/scan-terminal/LiveTemperatureThresholdChart";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -396,6 +397,46 @@ export function runTests() {
     "Shenzhen HKO observation series should include the airportPrimaryTodayObs curve points",
   );
 
+  const hongKongCowinAndHko = __buildTemperatureChartDataForTest(
+    {
+      city: "hong kong",
+      local_date: "2026-05-27",
+      local_time: "10:42",
+      tz_offset_seconds: 8 * 60 * 60,
+      temp_symbol: "°C",
+    } as any,
+    {
+      localTime: "10:42",
+      times: ["00:00", "12:00", "18:00"],
+      temps: [27.2, 30.9, 27.6],
+      airportPrimary: {
+        source_code: "cowin_obs",
+        source_label: "CoWIN 6087",
+        station_label: "保良局陳守仁小學 1min (CoWIN)",
+        temp: 31.3,
+        obs_time: "2026-05-27T02:42:00Z",
+      },
+      airportPrimaryTodayObs: [
+        ["2026-05-27T02:40:00Z", 31.1],
+        ["2026-05-27T02:41:00Z", 31.2],
+        ["2026-05-27T02:42:00Z", 31.3],
+      ],
+      settlementTodayObs: [
+        { time: "2026-05-27T02:30:00Z", temp: 31.0 },
+        { time: "2026-05-27T02:40:00Z", temp: 31.2 },
+      ],
+    } as any,
+    "1D",
+  );
+  const hongKongCowinSeries = seriesByKey(hongKongCowinAndHko.series, "settlement") as any;
+  const hongKongHkoSeries = seriesByKey(hongKongCowinAndHko.series, "madis") as any;
+  assert(hongKongCowinSeries?.label === "CoWIN 6087", "Hong Kong should render CoWIN 6087 as the reference-station curve");
+  assert(
+    hongKongCowinSeries.values.filter((value: number | null) => value !== null).length >= 2,
+    "Hong Kong CoWIN 6087 curve should use airportPrimaryTodayObs history points",
+  );
+  assert(hongKongHkoSeries?.label === "HKO", "Hong Kong HKO settlement observations should remain visible as the HKO curve");
+
   const chengduFromAmosSnapshot = __buildTemperatureChartDataForTest(
     {
       city: "chengdu",
@@ -661,6 +702,49 @@ export function runTests() {
   assert(
     !busanCurrentValues.includes(12.4),
     "AMOS temp/dew tuples should not be misread as two runway temperature samples",
+  );
+
+  const seoulRunwayMetrics = __getObservationDisplayMetricsForTest(
+    {
+      city: "seoul",
+      local_date: "2026-05-27",
+      local_time: "11:45",
+      tz_offset_seconds: 9 * 60 * 60,
+      current_temp: 23.0,
+      temp_symbol: "°C",
+    } as any,
+    {
+      localTime: "11:45",
+      times: ["00:00", "12:00", "18:00", "23:00"],
+      temps: [22.6, 22.6, 22.0, 21.4],
+      runwayPlateHistory: {
+        "15R/33L": [
+          { time: "2026-05-27T02:40:00Z", temp: 23.9 },
+          { time: "2026-05-27T02:45:00Z", temp: 24.3 },
+        ],
+        "16L/34R": [
+          { time: "2026-05-27T02:40:00Z", temp: 24.1 },
+          { time: "2026-05-27T02:45:00Z", temp: 24.7 },
+        ],
+      },
+      amos: {
+        source: "amos",
+        temp_c: 23.0,
+      },
+    } as any,
+    { maxTemp: 23.0 },
+  );
+  assert(
+    seoulRunwayMetrics.currentRunwayTemp === 24.3,
+    "runway header should use the latest settlement runway point instead of AMOS/METAR aggregate temp",
+  );
+  assert(
+    seoulRunwayMetrics.observedHighRunway === 24.3,
+    "runway high should follow settlement runway history before AMOS/METAR aggregate temp",
+  );
+  assert(
+    __selectDisplayRunwayTempForTest(23.0, 24.3, true) === 24.3,
+    "live aggregate temp should not override runway-history current temp when runway data is rendered",
   );
 
   const newYorkMetrics = __getObservationDisplayMetricsForTest(

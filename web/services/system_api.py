@@ -23,7 +23,35 @@ def get_health_payload() -> Dict[str, Any]:
 
 
 async def get_system_status_payload() -> Dict[str, Any]:
-    return await run_in_threadpool(build_system_status_payload)
+    payload = await run_in_threadpool(build_system_status_payload)
+    payload["realtime"] = await run_in_threadpool(_realtime_status_payload)
+    return payload
+
+
+def _realtime_status_payload() -> Dict[str, Any]:
+    try:
+        from web.routers import sse_router
+
+        store = sse_router.event_store
+        status_fn = getattr(store, "status", None)
+        if callable(status_fn):
+            status = dict(status_fn())
+        else:
+            store_name = "degraded_sqlite" if getattr(store, "degraded_from", None) == "redis" else "sqlite"
+            status = {
+                "store": store_name,
+                "latest_revision": int(store.latest_revision()),
+            }
+        connection_count = getattr(sse_router.sse_manager, "connection_count", None)
+        status["sse_connections"] = int(connection_count()) if callable(connection_count) else 0
+        return status
+    except Exception as exc:
+        return {
+            "store": "unknown",
+            "latest_revision": 0,
+            "sse_connections": 0,
+            "error": str(exc),
+        }
 
 
 def get_system_cache_status(request: Request, cities: Optional[str] = None) -> Dict[str, Any]:

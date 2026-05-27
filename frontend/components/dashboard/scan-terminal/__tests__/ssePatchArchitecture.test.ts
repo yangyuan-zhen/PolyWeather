@@ -42,6 +42,20 @@ export function runTests() {
   assert(store.includes("replay_events"), "event store must expose replay_events");
   assert(store.includes("replay_requires_resync"), "event store must detect incomplete replay windows");
 
+  const redisStorePath = path.join(repoRoot, "web", "redis_realtime_event_store.py");
+  assert(fs.existsSync(redisStorePath), "backend must define a Redis Stream realtime event store");
+  const redisStore = fs.readFileSync(redisStorePath, "utf8");
+  assert(redisStore.includes("RedisRealtimeEventStore"), "Redis store must expose RedisRealtimeEventStore");
+  assert(redisStore.includes("XADD") && redisStore.includes("MAXLEN"), "Redis store must append patches to a bounded Redis Stream");
+  assert(redisStore.includes("xread"), "Redis store must support live fanout through Redis Stream reads");
+  assert(redisStore.includes("counter:city_observation_revision"), "Redis store must keep a numeric revision counter for frontend compatibility");
+
+  const storeFactoryPath = path.join(repoRoot, "web", "realtime_event_store_factory.py");
+  assert(fs.existsSync(storeFactoryPath), "backend must define a realtime event store factory");
+  const storeFactory = fs.readFileSync(storeFactoryPath, "utf8");
+  assert(storeFactory.includes("POLYWEATHER_EVENT_STORE"), "event store factory must select sqlite/redis from runtime config");
+  assert(storeFactory.includes("POLYWEATHER_REDIS_REQUIRED"), "event store factory must support strict Redis mode");
+
   const sseRouterPath = path.join(repoRoot, "web", "routers", "sse_router.py");
   assert(fs.existsSync(sseRouterPath), "FastAPI backend must define web/routers/sse_router.py");
   const sseRouter = fs.readFileSync(sseRouterPath, "utf8");
@@ -53,6 +67,9 @@ export function runTests() {
   assert(sseRouter.includes('"/api/internal/collector-patch"'), "SSE router must expose collector patch ingest endpoint");
   assert(sseRouter.includes("StreamingResponse"), "SSE route must return StreamingResponse");
   assert(sseRouter.includes('"text/event-stream"'), "SSE route must use text/event-stream media type");
+  assert(sseRouter.includes("create_realtime_event_store"), "SSE router must use the realtime event store factory");
+  assert(sseRouter.includes("_ensure_live_subscription"), "SSE router must start external live fanout when the store provides it");
+  assert(sseRouter.includes("uses_external_live_fanout"), "Redis-backed ingest must not directly broadcast duplicate local events");
 
   const appFactory = readRepoFile("web", "app_factory.py");
   assert(appFactory.includes("sse_router"), "FastAPI app factory must register the SSE router");

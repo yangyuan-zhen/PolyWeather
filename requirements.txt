@@ -9,3 +9,4 @@ web3
 fastapi
 uvicorn
 websockets
+redis>=5.0.0

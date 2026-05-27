@@ -548,6 +548,35 @@ function maxObservationValue(obs: Array<{ ts: number; value: number }>) {
   return Math.max(...obs.map((point) => point.value));
 }
 
+function getRunwayHistoryObservationMetrics(
+  row: ScanOpportunityRow | null,
+  hourly: HourlyForecast,
+) {
+  const tzOffset = row?.tz_offset_seconds ?? 0;
+  const localDateStr = resolveChartLocalDate(row, hourly);
+  const localDayBounds = getLocalDayBounds(localDateStr);
+  const runwayHistorySeries = buildRunwayHistorySeries(row, hourly, tzOffset, localDateStr, 1)
+    .map((item) => ({
+      ...item,
+      points: filterTimelinePointsToLocalDay(item.points, localDayBounds),
+    }))
+    .filter((item) => item.points.length > 0);
+
+  const settlementSeries = runwayHistorySeries.filter((item) => item.isSettlement);
+  const candidateSeries = settlementSeries.length ? settlementSeries : runwayHistorySeries;
+  const points = candidateSeries.flatMap((item) => item.points);
+  if (!points.length) return { latest: null, high: null };
+
+  const latestTs = Math.max(...points.map((point) => point.ts));
+  const latestValues = points
+    .filter((point) => point.ts === latestTs)
+    .map((point) => point.value);
+  return {
+    latest: latestValues.length ? Math.max(...latestValues) : null,
+    high: Math.max(...points.map((point) => point.value)),
+  };
+}
+
 function hasRenderableLineSeries(series: EvidenceSeries[]) {
   return series.some(
     (item) => item.values.filter((value) => validNumber(value) !== null).length >= 2,
@@ -588,6 +617,7 @@ function getObservationDisplayMetrics(
   const airportCurrentTemp = validNumber(hourly?.airportCurrent?.temp) ?? validNumber(hourly?.airportPrimary?.temp);
   const airportHigh = validNumber(hourly?.airportCurrent?.max_so_far) ?? validNumber(hourly?.airportPrimary?.max_so_far);
   const rowMetarHigh = validNumber(row?.metar_context?.airport_max_so_far ?? row?.metar_context?.max_temp ?? row?.current_max_so_far);
+  const runwayHistoryMetrics = getRunwayHistoryObservationMetrics(row, hourly);
 
   const settlementCityKey = normalizeCityKey(row?.city);
   const isShenzhen = settlementCityKey === 'shenzhen';
@@ -616,14 +646,16 @@ function getObservationDisplayMetrics(
       null;
   } else {
     currentRunwayTemp =
-      validNumber(hourly?.amos?.temp_c) ??
+      runwayHistoryMetrics.latest ??
       settlementPlate?.maxTemp ??
+      validNumber(hourly?.amos?.temp_c) ??
       latestSettlement ??
       latestMetar ??
       airportCurrentTemp ??
       validNumber(row?.current_temp) ??
       null;
     observedHighRunway =
+      runwayHistoryMetrics.high ??
       settlementPlate?.maxTemp ??
       highSettlement ??
       airportHigh ??
@@ -636,6 +668,17 @@ function getObservationDisplayMetrics(
   const observedHighMetar = airportHigh ?? highSettlement ?? highMetar ?? rowMetarHigh ?? null;
 
   return { currentRunwayTemp, observedHighMetar, observedHighRunway };
+}
+
+function selectDisplayRunwayTemp(
+  liveTemp: number | null,
+  currentRunwayTemp: number | null,
+  hasRunwayData: boolean,
+) {
+  if (hasRunwayData && currentRunwayTemp !== null) {
+    return currentRunwayTemp;
+  }
+  return liveTemp ?? currentRunwayTemp;
 }
 
 function isSettlementRunway(row: ScanOpportunityRow | null, rwy: string) {
@@ -1071,6 +1114,7 @@ function buildRunwayHistorySeries(
   hourly: HourlyForecast,
   tzOffset: number,
   localDateStr: string,
+  minPoints = 2,
 ): RunwayHistorySeries[] {
   const directHistory =
     hourly?.runwayPlateHistory ??
@@ -1100,7 +1144,7 @@ function buildRunwayHistorySeries(
           points,
         };
       })
-      .filter((series) => series.points.length > 1);
+      .filter((series) => series.points.length >= minPoints);
     if (directSeries.length) return directSeries;
   }
 
@@ -1153,7 +1197,7 @@ function buildRunwayHistorySeries(
           };
         })
         .filter((point) => validNumber(point.value) !== null);
-      if (values.length <= 1) return null;
+      if (values.length < minPoints) return null;
       return {
         key: runwaySeriesKey(rwy),
         label: `${rwy}${isSettlement ? " 结算跑道" : ""}`,
@@ -2047,6 +2091,7 @@ export {
   normalizeCityKey,
   prefersHighFrequencyRunwayResolution,
   readSessionCache,
+  selectDisplayRunwayTemp,
   seedHourlyForecastFromRow,
   seriesStats,
   shouldPollLiveChart,

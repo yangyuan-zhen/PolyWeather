@@ -443,15 +443,30 @@ def _airport_primary_from_raw(city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
 
     cowin = raw.get("cowin_current") or {}
     if cowin.get("temp") is not None:
+        cowin_station_code = str(
+            cowin.get("istNo")
+            or cowin.get("station_code")
+            or cowin.get("station_id")
+            or ""
+        ).strip()
+        if not cowin_station_code:
+            raw_icao = str(cowin.get("icao") or "").strip().upper()
+            if raw_icao.startswith("COWIN") and raw_icao[5:]:
+                cowin_station_code = raw_icao[5:]
         return _normalize_station_row(
-            station_code=meta.get("icao") or str(cowin.get("icao") or "COWIN6087"),
-            station_label=meta.get("airport_name") or cowin.get("station_label") or meta.get("icao"),
+            station_code=cowin_station_code or "6087",
+            station_label=(
+                cowin.get("station_label")
+                or cowin.get("station_name")
+                or meta.get("airport_name")
+                or "CoWIN 6087"
+            ),
             temp=_safe_float(cowin["temp"]),
             obs_time=str(cowin.get("obs_time") or metar.get("observation_time") or ""),
             source_code="cowin_obs",
             source_label="CoWIN 6087",
             is_official=True,
-            is_airport_station=True,
+            is_airport_station=False,
             is_settlement_anchor=False,
             extra={
                 "max_so_far": _safe_float(current.get("max_temp_so_far")),

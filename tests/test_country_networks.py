@@ -306,6 +306,58 @@ def test_hko_provider_marks_explicit_official_station_as_anchor():
     assert snapshot["official_nearby"][0]["station_code"] == "LFS"
 
 
+def test_hong_kong_cowin_primary_uses_station_6087_history(monkeypatch):
+    from src.database import runtime_state
+
+    requested = {}
+
+    class FakeOfficialIntradayObservationRepository:
+        def load_points(self, *, source_code, station_code, target_date):
+            requested["source_code"] = source_code
+            requested["station_code"] = station_code
+            requested["target_date"] = target_date
+            if source_code == "cowin_obs" and station_code == "6087":
+                return [
+                    {"time": "10:40", "temp": 31.1},
+                    {"time": "10:41", "temp": 31.3},
+                ]
+            return []
+
+    monkeypatch.setattr(
+        runtime_state,
+        "OfficialIntradayObservationRepository",
+        FakeOfficialIntradayObservationRepository,
+    )
+
+    snapshot = build_country_network_snapshot(
+        "hong kong",
+        {
+            "cowin_current": {
+                "temp": 31.3,
+                "obs_time": "2026-05-27T02:41:00Z",
+                "istNo": "6087",
+                "icao": "COWIN6087",
+                "station_label": "保良局陳守仁小學 1min (CoWIN)",
+            },
+            "settlement_current": {
+                "station_code": "HKO",
+                "station_name": "HK Observatory",
+                "observation_time": "2026-05-27T10:40:00+08:00",
+                "current": {"temp": 31.2},
+            },
+        },
+    )
+
+    assert snapshot["airport_primary_current"]["source_code"] == "cowin_obs"
+    assert snapshot["airport_primary_current"]["station_code"] == "6087"
+    assert "陳守仁" in snapshot["airport_primary_current"]["station_label"]
+    assert requested["station_code"] == "6087"
+    assert snapshot["airport_primary_today_obs"] == [
+        {"time": "10:40", "temp": 31.1},
+        {"time": "10:41", "temp": 31.3},
+    ]
+
+
 def test_moscow_provider_uses_realtime_metar_cluster_not_station_archive_rows():
     raw = {
         "metar": {

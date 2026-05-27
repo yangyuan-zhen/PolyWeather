@@ -30,6 +30,7 @@ import {
   normObs,
   prefersHighFrequencyRunwayResolution,
   readSessionCache,
+  selectDisplayRunwayTemp,
   seedHourlyForecastFromRow,
   shouldPollLiveChart,
   validNumber,
@@ -478,7 +479,7 @@ export function LiveTemperatureThresholdChart({
     () => getObservationDisplayMetrics(row, chartHourly, settlementPlate),
     [row, chartHourly, settlementPlate],
   );
-  const displayRunwayTemp = liveTemp ?? currentRunwayTemp;
+  const displayRunwayTemp = selectDisplayRunwayTemp(liveTemp, currentRunwayTemp, hasRunwayData);
   const wundergroundDailyHigh = validNumber(chartHourly?.airportCurrent?.max_so_far ?? chartHourly?.airportPrimary?.max_so_far) ?? null;
 
   const localDateStr = chartLocalDate || new Date().toISOString().slice(0, 10);
@@ -786,3 +787,4 @@ export const __getObservationDisplayMetricsForTest = getObservationDisplayMetric
 export const __getPeakGlowStateForTest = getPeakGlowState;
 export const __shouldPollLiveChartForTest = shouldPollLiveChart;
 export const __mergePatchIntoHourlyForTest = mergePatchIntoHourly;
+export const __selectDisplayRunwayTempForTest = selectDisplayRunwayTemp;

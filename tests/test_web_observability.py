@@ -36,6 +36,10 @@ def test_system_status_returns_summary_shape():
     assert payload['probability']['engine_mode'] == 'legacy'
     assert 'training_data' in payload
     assert 'station_networks' in payload
+    assert 'realtime' in payload
+    assert payload['realtime']['store'] in {'sqlite', 'redis', 'degraded_sqlite'}
+    assert 'latest_revision' in payload['realtime']
+    assert 'sse_connections' in payload['realtime']
     assert 'truth_records' in payload['training_data']
     assert 'training_features' in payload['training_data']
     assert 'city_coverage' in payload['training_data']

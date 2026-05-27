@@ -3,18 +3,22 @@
 from __future__ import annotations
 
 import time
+import threading
 from typing import Any, Optional, Set
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
-from web.realtime_event_store import RealtimeEventStore, MAX_REPLAY_LIMIT
+from web.realtime_event_store import MAX_REPLAY_LIMIT
+from web.realtime_event_store_factory import create_realtime_event_store
 from web.realtime_patch_schema import PatchValidationError, normalize_observation_patch
 from web.sse_manager import sse_manager
 
 
 router = APIRouter(tags=["events"])
-event_store = RealtimeEventStore()
+event_store = create_realtime_event_store()
+_live_subscription_lock = threading.Lock()
+_live_subscription_started = False
 
 
 def _parse_cities_param(cities: str) -> Set[str]:
@@ -31,6 +35,18 @@ def _bounded_replay_limit(value: int) -> int:
     except (TypeError, ValueError):
         limit = 500
     return max(1, min(MAX_REPLAY_LIMIT, limit))
+
+
+def _ensure_live_subscription() -> None:
+    starter = getattr(event_store, "start_live_subscription", None)
+    if not callable(starter):
+        return
+    global _live_subscription_started
+    with _live_subscription_lock:
+        if _live_subscription_started:
+            return
+        starter(sse_manager.broadcast_event)
+        _live_subscription_started = True
 
 
 @router.options("/api/events")
@@ -50,6 +66,7 @@ async def sse_events(
     allowed = origin in {"https://polyweather.top", "https://www.polyweather.top", "http://localhost:3000"}
     city_set = _parse_cities_param(cities)
     limit = _bounded_replay_limit(replay_limit)
+    _ensure_live_subscription()
     latest_revision = event_store.latest_revision()
     replay_events = []
     resync_event = None
@@ -107,10 +124,13 @@ async def ingest_patch(patch: dict[str, Any]):
     except PatchValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    _ensure_live_subscription()
+
     try:
         event = event_store.append_event(normalized)
     except Exception as exc:
         raise HTTPException(status_code=500, detail="event log write failed") from exc
 
-    sse_manager.broadcast_event(event)
+    if not bool(getattr(event_store, "uses_external_live_fanout", False)):
+        sse_manager.broadcast_event(event)
     return {"ok": True, "revision": event["revision"]}

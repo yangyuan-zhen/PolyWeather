@@ -131,3 +131,52 @@ def test_replay_limit_is_bounded():
     assert sse_router._bounded_replay_limit(0) == 1
     assert sse_router._bounded_replay_limit(500) == 500
     assert sse_router._bounded_replay_limit(5000) == 2000
+
+
+def test_ingest_patch_uses_external_fanout_without_direct_broadcast(monkeypatch):
+    class FakeExternalStore:
+        uses_external_live_fanout = True
+
+        def __init__(self):
+            self.started = 0
+
+        def start_live_subscription(self, callback):
+            self.started += 1
+            self.callback = callback
+
+        def append_event(self, event):
+            return {
+                **event,
+                "revision": 12,
+            }
+
+    class FakeManager:
+        def __init__(self):
+            self.broadcasted = []
+
+        def broadcast_event(self, event):
+            self.broadcasted.append(event)
+            return event
+
+    store = FakeExternalStore()
+    manager = FakeManager()
+    monkeypatch.setattr(sse_router, "event_store", store)
+    monkeypatch.setattr(sse_router, "sse_manager", manager)
+    monkeypatch.setattr(sse_router, "_live_subscription_started", False)
+
+    response = TestClient(app).post(
+        "/api/internal/collector-patch",
+        json={
+            "city": "taipei",
+            "changes": {
+                "temp": 34.2,
+                "source": "cwa",
+                "obs_time": "2026-05-27T10:00:00+08:00",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["revision"] == 12
+    assert store.started == 1
+    assert manager.broadcasted == []
