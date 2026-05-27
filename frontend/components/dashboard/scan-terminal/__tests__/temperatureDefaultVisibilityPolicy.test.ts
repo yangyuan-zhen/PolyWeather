@@ -1109,6 +1109,39 @@ export function runTests() {
     "Full-day chart should start at local 00:00 when the DEB hourly path has a midnight point",
   );
 
+  const qingdaoPartialDetailFullDay = __buildTemperatureChartDataForTest(
+    {
+      city: "qingdao",
+      local_date: "2026-05-26",
+      local_time: "11:11",
+      tz_offset_seconds: 8 * 60 * 60,
+      deb_prediction: 22,
+      runway_plate_history: {
+        "16/34": [
+          { time: "2026-05-26T00:05:00+08:00", temp: 23.5 },
+          { time: "2026-05-26T09:28:00+08:00", temp: 19.8 },
+          { time: "2026-05-26T11:11:00+08:00", temp: 19.8 },
+        ],
+      },
+    } as any,
+    {
+      localDate: "2026-05-26",
+      localTime: "11:11",
+      times: ["00:00", "06:00", "09:00", "10:00"],
+      temps: [22, 18.5, 19.1, 19.6],
+      debPrediction: 22,
+    } as any,
+    "1D",
+  );
+  assert(
+    qingdaoPartialDetailFullDay.data[0]?.ts === qingdaoDayStart,
+    "All-day view should keep the local-day start even when Qingdao detail data is partial",
+  );
+  assert(
+    qingdaoPartialDetailFullDay.data.some((point) => point.ts === qingdaoDayEnd - 60 * 60 * 1000),
+    "All-day view should keep an end-of-day axis slot even when Qingdao detail data only reaches the morning",
+  );
+
   const chongqingRolledToNextDay = __buildTemperatureChartDataForTest(
     {
       city: "chongqing",

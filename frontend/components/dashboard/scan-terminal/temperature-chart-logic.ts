@@ -1320,6 +1320,13 @@ function sortedTimeline(timestamps: Iterable<number>) {
   return Array.from(new Set(Array.from(timestamps).filter((ts) => Number.isFinite(ts)))).sort((a, b) => a - b);
 }
 
+function addLocalDayAxisSlots(timeline: Set<number>, bounds: LocalDayBounds | null) {
+  if (!bounds) return;
+  for (let ts = bounds.start; ts < bounds.end; ts += 60 * 60 * 1000) {
+    timeline.add(ts);
+  }
+}
+
 function resolveFullDayFallbackAnchor(
   row: ScanOpportunityRow | null,
   hourly: HourlyForecast,
@@ -1582,6 +1589,7 @@ function buildFullDayChartData(
   finalSettlementObs.forEach((point) => timelineSet.add(point.ts));
   if (!isRunwaySensorAggregateSource) finalMadisObs.forEach((point) => timelineSet.add(point.ts));
   if (shouldRenderMetar) metarObs.forEach((point) => timelineSet.add(point.ts));
+  addLocalDayAxisSlots(timelineSet, localDayBounds);
 
   let debPath: ReturnType<typeof buildDebBaselinePath> | null = null;
   if (hourly?.times?.length && hourly?.temps?.length) {

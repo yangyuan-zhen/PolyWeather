@@ -18,6 +18,8 @@ from web.realtime_patch_schema import EVENT_TYPE
 DEFAULT_STREAM_KEY = "stream:city_observation"
 DEFAULT_COUNTER_KEY = "counter:city_observation_revision"
 DEFAULT_MAXLEN = 50000
+DEFAULT_SOCKET_TIMEOUT_SECONDS = 15.0
+DEFAULT_SOCKET_CONNECT_TIMEOUT_SECONDS = 5.0
 
 APPEND_EVENT_SCRIPT = """
 local revision = redis.call('INCR', KEYS[2])
@@ -60,6 +62,13 @@ def _int_or_zero(value: Any) -> int:
         return 0
 
 
+def _float_env(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name) or default)
+    except (TypeError, ValueError):
+        return default
+
+
 class RedisRealtimeEventStore:
     """Persist replayable observation patch events in a Redis Stream."""
 
@@ -94,8 +103,11 @@ class RedisRealtimeEventStore:
         url = redis_url or os.getenv("POLYWEATHER_REDIS_URL") or "redis://127.0.0.1:6379/0"
         client = redis.Redis.from_url(
             url,
-            socket_timeout=5,
-            socket_connect_timeout=5,
+            socket_timeout=_float_env("POLYWEATHER_REDIS_SOCKET_TIMEOUT_SECONDS", DEFAULT_SOCKET_TIMEOUT_SECONDS),
+            socket_connect_timeout=_float_env(
+                "POLYWEATHER_REDIS_SOCKET_CONNECT_TIMEOUT_SECONDS",
+                DEFAULT_SOCKET_CONNECT_TIMEOUT_SECONDS,
+            ),
             health_check_interval=30,
         )
         client.ping()

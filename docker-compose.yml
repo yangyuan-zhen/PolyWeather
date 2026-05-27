@@ -1,6 +1,24 @@
 services:
+  polyweather_redis:
+    image: redis:7-alpine
+    container_name: polyweather_redis
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy noeviction
+    restart: unless-stopped
+    healthcheck:
+      interval: 10s
+      retries: 5
+      test:
+      - CMD
+      - redis-cli
+      - ping
+      timeout: 5s
+    volumes:
+    - polyweather_redis_data:/data
   polyweather:
     container_name: polyweather_bot
+    depends_on:
+      polyweather_redis:
+        condition: service_healthy
     logging:
       driver: "json-file"
       options:
@@ -52,10 +70,8 @@ services:
       interval: 30s
       retries: 3
       test:
-      - CMD
-      - wget
-      - -qO-
-      - http://localhost:3000
+      - CMD-SHELL
+      - wget -qO- http://$(hostname):3000
       timeout: 5s
     image: ghcr.io/yangyuan-zhen/polyweather-frontend:${IMAGE_TAG:-latest}
     ports:
@@ -63,6 +79,9 @@ services:
     restart: unless-stopped
   polyweather_web:
     command: python web/app.py
+    depends_on:
+      polyweather_redis:
+        condition: service_healthy
     logging:
       driver: "json-file"
       options:
@@ -90,3 +109,5 @@ services:
 x-polyweather-base:
   env_file: *id001
   image: ghcr.io/yangyuan-zhen/polyweather-backend:${IMAGE_TAG:-latest}
+volumes:
+  polyweather_redis_data:
