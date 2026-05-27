@@ -25,6 +25,10 @@ from web.core import (
     _weather,
 )
 from src.analysis.deb_algorithm import calculate_deb_prediction
+from src.analysis.deb_hourly_correction import (
+    build_deb_hourly_path,
+    get_cached_hourly_peak_corrector,
+)
 from src.analysis.settlement_rounding import apply_city_settlement
 from src.data_collection.country_networks import build_country_network_snapshot
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
@@ -1305,6 +1309,21 @@ def _analyze(
                 mu = round(mu + blended_correction, 1)
             deb_weights = f"{deb_weights or 'DEB'} + intraday_bias({deb_intraday_adjustment:+.1f})"
 
+    deb_hourly_path = None
+    if deb_val is not None and today_hourly.get("times") and today_hourly.get("temps"):
+        try:
+            deb_hourly_path = build_deb_hourly_path(
+                city=city,
+                hourly_times=[str(item) for item in today_hourly.get("times") or []],
+                hourly_temps=today_hourly.get("temps") or [],
+                deb_prediction=deb_val,
+                peak_first_h=first_peak_h,
+                peak_last_h=last_peak_h,
+                corrector=get_cached_hourly_peak_corrector(),
+            )
+        except Exception as exc:
+            logger.debug(f"DEB hourly path correction skipped for {city}: {exc}")
+
     # ── 12b. Next 48h hourly block for future-date analysis modal ──
     next_48h_hourly = {
         "times": [],
@@ -1726,6 +1745,8 @@ def _analyze(
             "bias_adjustment": deb_bias_adjustment,
             "bias_samples": deb_bias_samples,
             "intraday_adjustment": deb_intraday_adjustment,
+            "hourly_path": deb_hourly_path,
+            "hourly_correction": (deb_hourly_path or {}).get("correction") if isinstance(deb_hourly_path, dict) else None,
         },
         "deviation_monitor": deviation_monitor,
         "ensemble": ens_data,

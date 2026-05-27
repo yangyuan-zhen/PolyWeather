@@ -1,6 +1,7 @@
 import { getTemperatureChartData } from "@/lib/chart-utils";
 import type { CityDetail } from "@/lib/dashboard-types";
 import { buildDebBaselinePath } from "@/lib/temperature-chart-paths";
+import { buildFullDayChartData } from "@/components/dashboard/scan-terminal/temperature-chart-logic";
 
 function assert(condition: unknown, message: string) {
   if (!condition) throw new Error(message);
@@ -44,6 +45,65 @@ export function runTests() {
   assert(
     chartData?.datasets.debSeries.some((point) => point.labelTime === "10:00" && point.y === 26),
     "temperature chart should keep normalized hourly temperatures shifted by offset",
+  );
+
+  const correctedHourlyPathChart = buildFullDayChartData(
+    {
+      city: "shanghai",
+      local_date: "2026-05-16",
+      local_time: "12:00",
+      temp_symbol: "°C",
+      deb_prediction: 30,
+      tz_offset_seconds: 8 * 3600,
+    } as any,
+    {
+      forecastTodayHigh: 29,
+      debPrediction: 30,
+      localDate: "2026-05-16",
+      localTime: "12:00",
+      times: ["10:00", "12:00", "14:00"],
+      temps: [24, 29, 25],
+      debHourlyPath: {
+        source: "deb_hourly_peak_corrected.v1",
+        times: ["10:00", "12:00", "14:00"],
+        temps: [25.1, 28.0, 26.0],
+      },
+    } as any,
+    true,
+  );
+  const correctedDebSeries = correctedHourlyPathChart.series.find((item) => item.key === "hourly_forecast");
+  const correctedDebValues = correctedHourlyPathChart.data
+    .map((item) => item.hourly_forecast)
+    .filter((value) => value !== null && value !== undefined);
+  assert(correctedDebSeries, "corrected hourly DEB path should still render as DEB Forecast");
+  assert(correctedDebValues.includes(28.0), `chart should use backend deb.hourly_path before rebuilding a shifted curve; got ${correctedDebValues.join(",")}`);
+
+  const correctedDetailChart = getTemperatureChartData(
+    {
+      name: "shanghai",
+      display_name: "Shanghai",
+      local_date: "2026-05-16",
+      local_time: "12:00",
+      temp_symbol: "°C",
+      hourly: {
+        times: ["10:00", "12:00", "14:00"],
+        temps: [24, 29, 25],
+      },
+      forecast: { today_high: 29 },
+      deb: {
+        prediction: 30,
+        hourly_path: {
+          source: "deb_hourly_peak_corrected.v1",
+          times: ["10:00", "12:00", "14:00"],
+          temps: [25.1, 28.0, 26.0],
+        },
+      },
+    } as CityDetail,
+    "zh-CN",
+  );
+  assert(
+    correctedDetailChart?.datasets.debSeries.some((point) => point.labelTime === "12:00" && point.y === 28.0),
+    "detail temperature chart should use backend deb.hourly_path before fallback baseline",
   );
 
   const ankaraChartData = getTemperatureChartData(

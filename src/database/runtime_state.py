@@ -1186,6 +1186,26 @@ class IntradayPathSnapshotRepository:
                 continue
         return out
 
+    def load_recent_rows(self, limit: int = 20000) -> List[Dict[str, Any]]:
+        safe_limit = max(1, int(limit or 1))
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT payload_json
+                FROM intraday_path_snapshots_store
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (safe_limit,),
+            ).fetchall()
+        out: List[Dict[str, Any]] = []
+        for row in reversed(rows):
+            try:
+                out.append(json.loads(row["payload_json"]))
+            except Exception:
+                continue
+        return out
+
 def _top_bucket(snapshot: Optional[List[Dict[str, Any]]]) -> Optional[int]:
     best_value = None
     best_prob = -1.0

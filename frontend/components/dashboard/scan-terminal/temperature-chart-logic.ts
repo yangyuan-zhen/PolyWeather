@@ -5,6 +5,7 @@ import type {
   ScanOpportunityRow,
   ForecastDay,
   DailyModelForecast,
+  DebHourlyPath,
   ProbabilityBucket,
 } from "@/lib/dashboard-types";
 import { buildDebBaselinePath } from "@/lib/temperature-chart-paths";
@@ -735,6 +736,7 @@ function runwayPatchPointsFromRunwayObs(runwayObs: any) {
 type HourlyForecast = {
   forecastTodayHigh?: number | null;
   debPrediction?: number | null;
+  debHourlyPath?: DebHourlyPath | null;
   localDate?: string | null;
   localTime?: string | null;
   times: string[];
@@ -759,6 +761,7 @@ function seedHourlyForecastFromRow(row: ScanOpportunityRow | null): HourlyForeca
   return {
     forecastTodayHigh: null,
     debPrediction: validNumber(row.deb_prediction),
+    debHourlyPath: null,
     localDate: row.local_date || null,
     localTime: row.local_time || null,
     times: [],
@@ -793,6 +796,7 @@ function parseHourlyForecastFromCityDetail(json: CityDetail | null): HourlyForec
   return {
     forecastTodayHigh: json.forecast?.today_high ?? null,
     debPrediction: json.deb?.prediction ?? (json as any)?.overview?.deb_prediction ?? null,
+    debHourlyPath: json.deb?.hourly_path || null,
     localDate: json.local_date || (json as any)?.overview?.local_date || null,
     localTime: json.local_time || null,
     times: hourlySource.times || [],
@@ -1591,16 +1595,27 @@ function buildFullDayChartData(
   if (shouldRenderMetar) metarObs.forEach((point) => timelineSet.add(point.ts));
   addLocalDayAxisSlots(timelineSet, localDayBounds);
 
-  let debPath: ReturnType<typeof buildDebBaselinePath> | null = null;
-  if (hourly?.times?.length && hourly?.temps?.length) {
-    debPath = buildDebBaselinePath(
+  const correctedDebPath = hourly?.debHourlyPath;
+  const correctedDebTimes = Array.isArray(correctedDebPath?.times) ? correctedDebPath?.times || [] : [];
+  const correctedDebTemps = Array.isArray(correctedDebPath?.temps) ? correctedDebPath?.temps || [] : [];
+  let debTimes: string[] = [];
+  let debTemps: Array<number | null | undefined> = [];
+  if (correctedDebTimes.length && correctedDebTemps.length) {
+    debTimes = correctedDebTimes;
+    debTemps = correctedDebTemps;
+  } else if (hourly?.times?.length && hourly?.temps?.length) {
+    const debPath = buildDebBaselinePath(
       hourly.times,
       hourly.temps,
       validNumber(hourly?.debPrediction) ?? row?.deb_prediction,
       hourly.localTime || row?.local_time,
       hourly.forecastTodayHigh,
     );
-    addHourlyTimesToTimeline(timelineSet, hourly.times, debPath.debTemps, tzOffset, localDateStr, localDayBounds);
+    debTimes = hourly.times;
+    debTemps = debPath.debTemps;
+  }
+  if (debTimes.length && debTemps.length) {
+    addHourlyTimesToTimeline(timelineSet, debTimes, debTemps, tzOffset, localDateStr, localDayBounds);
   }
   if (hourly?.times?.length && hourly?.modelCurves) {
     Object.values(hourly.modelCurves).forEach((modelTemps) => {
@@ -1693,8 +1708,8 @@ function buildFullDayChartData(
   }
 
   // ── DEB forecast curve ──
-  if (hourly?.times?.length && debPath?.debTemps.length) {
-    const debVals = valuesForHourlyTimes(n, indexByTs, hourly.times, debPath.debTemps, tzOffset, localDateStr, localDayBounds);
+  if (debTimes.length && debTemps.length) {
+    const debVals = valuesForHourlyTimes(n, indexByTs, debTimes, debTemps, tzOffset, localDateStr, localDayBounds);
     if (debVals.some((v) => v !== null)) {
       series.push({
         key: "hourly_forecast",
@@ -1708,7 +1723,7 @@ function buildFullDayChartData(
     }
 
     // Per-model curves
-    if (hourly.modelCurves) {
+    if (hourly?.times?.length && hourly.modelCurves) {
       const modelColors = ["#2563eb", "#7c3aed", "#059669", "#d97706", "#dc2626", "#0891b2"];
       Object.keys(hourly.modelCurves).forEach((model, idx) => {
         const modelTemps = hourly.modelCurves![model];
@@ -1795,7 +1810,6 @@ function probabilityOverlayValues(probabilityOverlay?: ProbabilityOverlay | null
     ...probabilityOverlay.bands.flatMap((band) => [band.lower, band.upper]),
   ];
 }
-
 function buildIntDegreeTicks(
   series: EvidenceSeries[],
   data?: Array<Record<string, string | number | null>>,

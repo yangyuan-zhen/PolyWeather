@@ -175,13 +175,32 @@ export function getTemperatureChartData(
     detail.forecast?.today_high,
     mgmHourlyMax,
   );
-  const {
+  let {
     debTemps,
     debPast,
     debFuture,
     currentIndex,
     offset,
   } = baseline;
+  const correctedDebPath = detail.deb?.hourly_path;
+  const correctedDebTimes = Array.isArray(correctedDebPath?.times) ? correctedDebPath?.times || [] : [];
+  const correctedDebRawTemps = Array.isArray(correctedDebPath?.temps) ? correctedDebPath?.temps || [] : [];
+  if (correctedDebTimes.length && correctedDebRawTemps.length) {
+    const mappedDebTemps = times.map((time) => {
+      const minute = hmToMinutes(time);
+      if (minute == null) return null;
+      return interpolateSeriesAtMinutes(correctedDebTimes, correctedDebRawTemps, minute);
+    });
+    if (mappedDebTemps.some((value) => value != null)) {
+      debTemps = mappedDebTemps;
+      debPast = debTemps.map((value, index) => (index <= currentIndex ? value : null));
+      debFuture = debTemps.map((value, index) => (index >= currentIndex ? value : null));
+      const correctedOffset = Number(correctedDebPath?.base_offset);
+      if (Number.isFinite(correctedOffset)) {
+        offset = correctedOffset;
+      }
+    }
+  }
   const suppressAnkaraMgmObservation = isTurkishMgmCity(detail);
 
   const observationTag = getRealtimeObservationTag(detail);
