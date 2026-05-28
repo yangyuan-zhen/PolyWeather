@@ -88,6 +88,10 @@ export function runTests() {
     ),
     "utf8",
   );
+  const authMeRouteSource = fs.readFileSync(
+    path.join(projectRoot, "app", "api", "auth", "me", "route.ts"),
+    "utf8",
+  );
   const subscriptionsPageSource = fs.readFileSync(
     path.join(
       projectRoot,
@@ -166,5 +170,11 @@ export function runTests() {
       grantRouteSource.includes("res.status === 404") &&
       grantRouteSource.includes('"status": "active"'),
     "ops subscription grant route must fall back to direct Supabase grant when the VPS backend route is missing",
+  );
+  assert(
+    authMeRouteSource.includes("if ((res.status === 401 || res.status === 403) && auth.authUserId)") &&
+      authMeRouteSource.includes("degraded_reason: `backend_${res.status}`") &&
+      authMeRouteSource.includes("subscription_active: null"),
+    "auth profile proxy must preserve authenticated identity with unknown subscription on backend 401/403 instead of forcing a false paywall",
   );
 }

@@ -51,6 +51,10 @@ import { rowName, pct, money, temp, edgeClass } from "@/components/dashboard/sca
 import { CitySelectorDropdown } from "@/components/dashboard/scan-terminal/CitySelectorDropdown";
 import { GridLayoutSelector } from "@/components/dashboard/scan-terminal/GridLayoutSelector";
 import {
+  mergeAccessStateWithAuthPayload,
+  type AuthProfilePayload,
+} from "@/components/dashboard/scan-terminal/terminal-access-state";
+import {
   cityListItemsToScanRows,
   mergeScanRowsWithCityFallbackRows,
 } from "@/components/dashboard/scan-terminal/city-fallback-rows";
@@ -921,6 +925,21 @@ function ScanTerminalScreen() {
     createEmptyAccess(true),
   );
 
+  const loadAuthProfile = useCallback(
+    async (accessToken?: string | null): Promise<AuthProfilePayload> => {
+      const headers: Record<string, string> = { Accept: "application/json" };
+      const token = String(accessToken || "").trim();
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const response = await fetch("/api/auth/me", {
+        cache: "no-store",
+        headers,
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json() as Promise<AuthProfilePayload>;
+    },
+    [],
+  );
+
   // Listen to Supabase auth events (e.g. token refreshed, signed out)
   useEffect(() => {
     if (!hasSupabasePublicEnv()) return;
@@ -933,31 +952,8 @@ function ScanTerminalScreen() {
           setProAccess(createEmptyAccess(false));
         } else if (event === "TOKEN_REFRESHED" || event === "SIGNED_IN") {
           try {
-            const response = await fetch("/api/auth/me", {
-              cache: "no-store",
-              headers: { Accept: "application/json" },
-            });
-            if (response.ok) {
-              const payload = await response.json();
-              setProAccess({
-                loading: false,
-                authenticated: Boolean(payload.authenticated),
-                userId: payload.user_id ?? null,
-                subscriptionActive: payload.subscription_active === true,
-                subscriptionPlanCode: payload.subscription_plan_code ?? null,
-                subscriptionExpiresAt: payload.subscription_expires_at ?? null,
-                subscriptionTotalExpiresAt:
-                  payload.subscription_total_expires_at ??
-                  payload.subscription_expires_at ??
-                  null,
-                subscriptionQueuedDays: Math.max(
-                  0,
-                  Number(payload.subscription_queued_days ?? 0),
-                ),
-                points: Number(payload.points ?? 0),
-                error: null,
-              });
-            }
+            const payload = await loadAuthProfile(session?.access_token);
+            setProAccess((prev) => mergeAccessStateWithAuthPayload(prev, payload));
           } catch {}
         }
       });
@@ -1034,55 +1030,28 @@ function ScanTerminalScreen() {
         cancelled = true;
       };
     }
-    fetch("/api/auth/me", {
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json() as Promise<{
-          authenticated?: boolean;
-          user_id?: string | null;
-          subscription_active?: boolean | null;
-          subscription_plan_code?: string | null;
-          subscription_expires_at?: string | null;
-          subscription_total_expires_at?: string | null;
-          subscription_queued_days?: number | null;
-          points?: number | null;
-        }>;
-      })
+    const sessionPromise = hasSupabasePublicEnv()
+      ? getSupabaseBrowserClient().auth.getSession()
+      : Promise.resolve({ data: { session: null } });
+
+    sessionPromise
+      .then(({ data: { session } }) => loadAuthProfile(session?.access_token))
       .then((payload) => {
         if (cancelled) return;
-        setProAccess({
-          loading: false,
-          authenticated: Boolean(payload.authenticated),
-          userId: payload.user_id ?? null,
-          subscriptionActive: payload.subscription_active === true,
-          subscriptionPlanCode: payload.subscription_plan_code ?? null,
-          subscriptionExpiresAt: payload.subscription_expires_at ?? null,
-          subscriptionTotalExpiresAt:
-            payload.subscription_total_expires_at ??
-            payload.subscription_expires_at ??
-            null,
-          subscriptionQueuedDays: Math.max(
-            0,
-            Number(payload.subscription_queued_days ?? 0),
-          ),
-          points: Number(payload.points ?? 0),
-          error: null,
-        });
+        setProAccess((prev) => mergeAccessStateWithAuthPayload(prev, payload));
       })
       .catch((error) => {
         if (cancelled) return;
-        setProAccess({
-          ...createEmptyAccess(false),
-          error: String(error),
-        });
+        setProAccess((prev) => (
+          prev.subscriptionActive
+            ? { ...prev, loading: false, error: String(error) }
+            : { ...createEmptyAccess(false), error: String(error) }
+        ));
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadAuthProfile]);
 
   useEffect(() => {
     setSelectedRegionKey("all");

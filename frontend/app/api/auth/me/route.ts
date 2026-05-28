@@ -47,6 +47,23 @@ export async function GET(req: NextRequest) {
     } finally {
       clearTimeout(timeoutId);
     }
+    if ((res.status === 401 || res.status === 403) && auth.authUserId) {
+      const response = NextResponse.json({
+        authenticated: true,
+        user_id: auth.authUserId,
+        email: auth.authEmail || null,
+        subscription_active: null,
+        subscription_plan_code: null,
+        subscription_expires_at: null,
+        subscription_total_expires_at: null,
+        subscription_queued_days: 0,
+        subscription_queued_count: 0,
+        points: 0,
+        degraded_auth_profile: true,
+        degraded_reason: `backend_${res.status}`,
+      });
+      return applyAuthResponseCookies(response, auth.response);
+    }
     if (res.status === 401 || res.status === 403) {
       const response = NextResponse.json({
         authenticated: false,
