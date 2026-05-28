@@ -137,6 +137,32 @@ class TestMuCalculation:
         assert mu is not None
         assert mu >= 33.0, f"μ should be >= actual max (33°C), got {mu}"
 
+    @patch("src.analysis.trend_engine.calculate_dynamic_weights", return_value=(None, ""))
+    @patch("src.analysis.trend_engine.get_deb_accuracy", return_value=None)
+    @patch("src.analysis.trend_engine.update_daily_record")
+    def test_mu_uses_city_local_date_daily_high(self, _udr, _deb_acc, _dw):
+        """Cached daily arrays may include yesterday first; μ must use the city-local target date."""
+        data = _make_weather_data(
+            cur_temp=25.0,
+            max_so_far=25.0,
+            om_today_high=24.0,
+            ens_median=None,
+            ens_p10=None,
+            ens_p90=None,
+            local_time="2026-05-28 09:30",
+            recent_temps=[("09:00", 25.0), ("08:00", 24.0), ("07:00", 23.0)],
+            multi_model={},
+        )
+        data["open-meteo"]["utc_offset"] = 8 * 60 * 60
+        data["open-meteo"]["daily"]["time"] = ["2026-05-27", "2026-05-28"]
+        data["open-meteo"]["daily"]["temperature_2m_max"] = [24.0, 31.0]
+        data["open-meteo"]["hourly"]["time"] = [f"2026-05-28T{h:02d}:00" for h in range(24)]
+
+        _, _, sd = analyze_weather_trend(data, "°C", "wuhan")
+
+        assert sd["current_forecasts"]["Open-Meteo"] == 31.0
+        assert sd["mu"] is not None and sd["mu"] >= 30.0
+
 
 # ─── Tests: Dead Market ───
 

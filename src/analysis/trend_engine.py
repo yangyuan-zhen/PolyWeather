@@ -312,6 +312,26 @@ def analyze_weather_trend(
             pass
     local_hour_frac = local_hour + local_minute / 60
 
+    daily_dates = daily.get("time", []) or []
+    daily_highs = daily.get("temperature_2m_max", []) or []
+    if local_date_str in daily_dates:
+        try:
+            local_day_idx = daily_dates.index(local_date_str)
+            local_day_high = _sf(
+                daily_highs[local_day_idx]
+                if local_day_idx < len(daily_highs)
+                else None
+            )
+            if local_day_high is not None:
+                current_forecasts["Open-Meteo"] = local_day_high
+        except Exception:
+            pass
+        forecast_highs = [h for h in current_forecasts.values() if h is not None]
+        forecast_high = max(forecast_highs) if forecast_highs else None
+        forecast_median = (
+            sorted(forecast_highs)[len(forecast_highs) // 2] if forecast_highs else None
+        )
+
     # === DEB ===
     deb_prediction = None
     deb_raw_prediction = None

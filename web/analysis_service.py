@@ -737,6 +737,7 @@ def _analyze(
         mm_hourly = _weather.fetch_multi_model(lat, lon, city=city, use_fahrenheit=is_f)
         if mm_hourly and mm_hourly.get("hourly_times"):
             mm = {**mm, **mm_hourly}
+    raw["multi_model"] = mm
     risk = CITY_RISK_PROFILES.get(city, {})
     network_snapshot = (
         build_country_network_snapshot(city, raw)

@@ -47,3 +47,9 @@ def test_scan_terminal_backend_timeout_returns_before_next_proxy_abort():
 
     assert 'POLYWEATHER_SCAN_TERMINAL_PROXY_TIMEOUT_MS || "40000"' in route_source
     assert scan_terminal_config.SCAN_TERMINAL_BUILD_TIMEOUT_SEC <= 30
+
+
+def test_probability_engine_uses_enriched_multi_model_snapshot():
+    source = (ROOT / "web" / "analysis_service.py").read_text(encoding="utf-8")
+
+    assert 'raw["multi_model"] = mm' in source
