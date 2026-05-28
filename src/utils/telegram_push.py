@@ -897,14 +897,24 @@ def _wind_regime_label(city: str, wind_dir: Optional[int], language: Optional[st
     return None
 
 
-def _compute_slope_15m(icao: str, current_temp: float) -> Optional[float]:
+def _runway_row_temp_for_city(city: str, row: Dict[str, Any]) -> Optional[float]:
+    endpoint = _settlement_endpoint_for_point(city, row.get("runway"), row)
+    if endpoint is not None:
+        return _safe_float(endpoint.get("temp"))
+    target_runway_max = _safe_float(row.get("target_runway_max"))
+    if target_runway_max is not None:
+        return target_runway_max
+    return _safe_float(row.get("tdz_temp"))
+
+
+def _compute_slope_15m(icao: str, current_temp: float, city: str = "") -> Optional[float]:
     """Estimate 15-minute temperature trend from runway_obs_log."""
     try:
         db = DBManager()
         rows = db.get_runway_obs_recent(icao, minutes=20)
         temps = []
         for r in rows:
-            t = r.get("target_runway_max") or r.get("tdz_temp")
+            t = _runway_row_temp_for_city(city, r)
             if t is not None:
                 temps.append(float(t))
         if len(temps) >= 2:
@@ -1147,7 +1157,7 @@ def _build_airport_status_message(
 
     # ── Heat model ──
     wind_dir = amos.get("wind_dir") if is_amsc else None
-    slope_15m = _compute_slope_15m(amos_icao, display_temp) if is_amsc and display_temp is not None else None
+    slope_15m = _compute_slope_15m(amos_icao, display_temp, city) if is_amsc and display_temp is not None else None
     heat_signal = _runway_heat_signal(display_temp or 0, slope_15m, wind_dir, city, language) if is_amsc else ""
     wind_label = _wind_regime_label(city, wind_dir, language) if is_amsc and wind_dir is not None else None
 
@@ -1192,14 +1202,11 @@ def _build_airport_status_message(
             end = pts.get("end_temp")
             is_settlement = _is_settlement_runway(city, r1, r2)
             marker = f" {_copy(language, '★Settlement', '★结算')}" if is_settlement else ""
-            tmax = pts.get("target_runway_max")
             if tdz is not None or mid is not None or end is not None:
                 line = f"{r1}/{r2}{marker}  TDZ:{_fmt(tdz)}  MID:{_fmt(mid)}  END:{_fmt(end)}"
                 settlement_line_endpoint = _settlement_endpoint_for_point(city, (r1, r2), pts) if is_settlement else None
                 if settlement_line_endpoint is not None:
                     line += f"  settle:{float(settlement_line_endpoint['temp']):.1f}"
-                elif tmax is not None:
-                    line += f"  max:{float(tmax):.1f}"
                 lines.append(line)
             else:
                 temp_symbol = str(city_weather.get("temp_symbol") or "°C").strip()

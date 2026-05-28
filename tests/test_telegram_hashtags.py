@@ -2,6 +2,7 @@ from src.utils.telegram_push import (
     HIGH_FREQ_AIRPORT_CITIES,
     HIGH_FREQ_AIRPORT_ICAO,
     _build_airport_status_message,
+    _compute_slope_15m,
     _run_high_freq_airport_cycle,
     _telegram_push_language,
 )
@@ -43,6 +44,7 @@ def test_airport_status_message_defaults_to_bilingual_runway_copy(monkeypatch):
     assert "TDZ:23.0" in text
     assert "Settlement runway now / 结算跑道当前:" in text
     assert "Today's runway high / 今日跑道高点:" in text
+    assert "max:" not in text
     assert "DEB: 24.0°C" in text
 
 
@@ -98,6 +100,61 @@ def test_airport_status_uses_tdz_when_settlement_target_is_first_runway():
     assert "02L/20R ★Settlement / ★结算  TDZ:24.4  MID:26.1  END:27.9  settle:24.4" in text
     assert "Settlement runway now / 结算跑道当前: 24.4°C" in text
     assert "Settlement runway now / 结算跑道当前: 27.9°C" not in text
+    assert "max:" not in text
+
+
+def test_airport_status_removes_max_when_runway_endpoints_are_shown():
+    text = _build_airport_status_message(
+        "shanghai",
+        {
+            "current": {"temp": 24.0},
+            "airport_current": {"max_so_far": 25.0, "max_temp_time": "07:00"},
+            "amos": {
+                "source": "amsc_awos",
+                "runway_obs": {
+                    "runway_pairs": [("35R", "17L"), ("34L", "16R")],
+                    "temperatures": [(25.2, None), (25.4, None)],
+                    "point_temperatures": [
+                        {"runway": "35R/17L", "tdz_temp": 25.2, "mid_temp": None, "end_temp": 24.6, "target_runway_max": 25.2},
+                        {"runway": "34L/16R", "tdz_temp": 25.4, "mid_temp": None, "end_temp": 24.8, "target_runway_max": 25.4},
+                    ],
+                },
+            },
+        },
+        27.2,
+        "10:58",
+    )
+
+    assert "35R/17L ★Settlement / ★结算  TDZ:25.2  MID:--  END:24.6  settle:25.2" in text
+    assert "34L/16R  TDZ:25.4  MID:--  END:24.8" in text
+    assert "max:" not in text
+
+
+def test_telegram_slope_uses_settlement_endpoint_not_runway_max(monkeypatch):
+    import src.utils.telegram_push as telegram_push
+
+    class FakeDB:
+        def get_runway_obs_recent(self, icao, minutes=20):
+            return [
+                {
+                    "runway": "20R/02L",
+                    "tdz_temp": 33.7,
+                    "mid_temp": 34.1,
+                    "end_temp": 30.8,
+                    "target_runway_max": 34.1,
+                },
+                {
+                    "runway": "20R/02L",
+                    "tdz_temp": 33.8,
+                    "mid_temp": 34.5,
+                    "end_temp": 31.2,
+                    "target_runway_max": 34.5,
+                },
+            ]
+
+    monkeypatch.setattr(telegram_push, "DBManager", lambda: FakeDB())
+
+    assert _compute_slope_15m("ZUCK", 31.2, "chongqing") == 0.4
 
 
 def test_singapore_is_in_telegram_push_city_lists():
