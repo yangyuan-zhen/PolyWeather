@@ -358,6 +358,49 @@ def test_hong_kong_cowin_primary_uses_station_6087_history(monkeypatch):
     ]
 
 
+def test_hong_kong_cowin_primary_prefers_live_intraday_series(monkeypatch):
+    from src.database import runtime_state
+
+    class FakeOfficialIntradayObservationRepository:
+        def load_points(self, *, source_code, station_code, target_date):
+            return [{"time": "09:00", "temp": 30.0}]
+
+    monkeypatch.setattr(
+        runtime_state,
+        "OfficialIntradayObservationRepository",
+        FakeOfficialIntradayObservationRepository,
+    )
+
+    snapshot = build_country_network_snapshot(
+        "hong kong",
+        {
+            "cowin_current": {
+                "temp": 31.3,
+                "obs_time": "2026-05-27T02:41:00Z",
+                "istNo": "6087",
+                "icao": "COWIN6087",
+                "station_label": "保良局陳守仁小學 1min (CoWIN)",
+            },
+            "cowin_today_obs": [
+                {"time": "10:40", "temp": 31.1},
+                {"time": "10:41", "temp": 31.3},
+            ],
+            "settlement_current": {
+                "station_code": "HKO",
+                "station_name": "HK Observatory",
+                "observation_time": "2026-05-27T10:40:00+08:00",
+                "current": {"temp": 31.2},
+            },
+        },
+    )
+
+    assert snapshot["airport_primary_current"]["source_code"] == "cowin_obs"
+    assert snapshot["airport_primary_today_obs"] == [
+        {"time": "10:40", "temp": 31.1},
+        {"time": "10:41", "temp": 31.3},
+    ]
+
+
 def test_moscow_provider_uses_realtime_metar_cluster_not_station_archive_rows():
     raw = {
         "metar": {

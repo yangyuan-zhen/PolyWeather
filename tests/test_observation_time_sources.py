@@ -21,9 +21,9 @@ def test_aeroweb_obs_time_is_utc_aware():
     )
 
 
-def test_cowin_obs_time_uses_utc_window_when_timezone_is_missing():
-    assert _cowin_obs_time_to_iso("2026-05-27T01:15:00") == "2026-05-27T01:15:00Z"
-    assert _cowin_obs_time_to_iso("2026-05-27T09:15:00+08:00") == "2026-05-27T01:15:00Z"
+def test_cowin_obs_time_keeps_hong_kong_timezone_when_timezone_is_missing():
+    assert _cowin_obs_time_to_iso("2026-05-27T09:15:00") == "2026-05-27T09:15:00+08:00"
+    assert _cowin_obs_time_to_iso("2026-05-27T09:15:00+08:00") == "2026-05-27T09:15:00+08:00"
 
 
 def test_hko_one_minute_obs_time_keeps_hong_kong_timezone():

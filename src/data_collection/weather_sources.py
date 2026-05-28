@@ -1266,6 +1266,11 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             return
         results["cowin_obs_nearby"] = rows
         results["cowin_current"] = rows[0]
+        today_obs = self.fetch_cowin_obs_today_series(
+            city_lower, use_fahrenheit=use_fahrenheit
+        )
+        if today_obs:
+            results["cowin_today_obs"] = today_obs
         self._emit_temperature_patch_if_changed(
             city_lower,
             rows[0].get("temp"),
