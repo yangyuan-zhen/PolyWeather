@@ -1,4 +1,8 @@
-from web.analysis_service import _analysis_ttl_for_city, _mgm_hourly_high
+from web.analysis_service import (
+    _analysis_ttl_for_city,
+    _mgm_hourly_high,
+    _runway_history_temp_for_city,
+)
 from web.core import CACHE_TTL
 
 
@@ -22,3 +26,29 @@ def test_mgm_hourly_high_fills_turkish_model_support():
             ]
         }
     ) == 21.5
+
+
+def test_runway_history_temp_uses_settlement_endpoint_for_second_runway():
+    assert _runway_history_temp_for_city(
+        "chongqing",
+        {
+            "runway": "20R/02L",
+            "tdz_temp": 33.8,
+            "mid_temp": 34.5,
+            "end_temp": 31.2,
+            "target_runway_max": 34.5,
+        },
+    ) == 31.2
+
+
+def test_runway_history_temp_uses_settlement_endpoint_for_first_runway():
+    assert _runway_history_temp_for_city(
+        "wuhan",
+        {
+            "runway": "04/22",
+            "tdz_temp": 31.2,
+            "mid_temp": 33.4,
+            "end_temp": 32.6,
+            "target_runway_max": 33.4,
+        },
+    ) == 31.2

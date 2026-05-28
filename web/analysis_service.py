@@ -84,6 +84,26 @@ HIGH_FREQ_AIRPORT_ANALYSIS_CITIES = {
     "wuhan",
 }
 
+AMSC_SETTLEMENT_RUNWAY_PAIRS: Dict[str, tuple[str, str]] = {
+    "shanghai": ("17L", "35R"),
+    "chengdu": ("02L", "20R"),
+    "chongqing": ("20R", "02L"),
+    "guangzhou": ("02L", "20R"),
+    "wuhan": ("04", "22"),
+    "beijing": ("19", "01"),
+    "qingdao": ("16", "34"),
+}
+
+AMSC_SETTLEMENT_RUNWAY_TARGETS: Dict[str, str] = {
+    "shanghai": "35R",
+    "chengdu": "02L",
+    "chongqing": "02L",
+    "guangzhou": "02L",
+    "wuhan": "04",
+    "beijing": "01",
+    "qingdao": "34",
+}
+
 
 def _mgm_hourly_high(mgm: Dict[str, Any]) -> Optional[float]:
     hourly = mgm.get("hourly") if isinstance(mgm, dict) else []
@@ -97,6 +117,55 @@ def _mgm_hourly_high(mgm: Dict[str, Any]) -> Optional[float]:
         if value is not None:
             values.append(value)
     return max(values) if values else None
+
+
+def _normalize_runway_label(value: Any) -> str:
+    return re.sub(r"[^0-9A-Z]+", "", str(value or "").strip().upper())
+
+
+def _split_runway_pair_label(value: Any) -> tuple[str, str]:
+    parts = [_normalize_runway_label(part) for part in str(value or "").split("/") if str(part).strip()]
+    if len(parts) >= 2:
+        return parts[0], parts[1]
+    runway = _normalize_runway_label(value)
+    return runway, runway
+
+
+def _runway_pair_matches(left: tuple[str, str], right: tuple[str, str]) -> bool:
+    return tuple(sorted(left)) == tuple(sorted(right))
+
+
+def _settlement_runway_endpoint_temp(city: str, row: Dict[str, Any]) -> Optional[float]:
+    city_key = (city or "").strip().lower()
+    configured_pair = AMSC_SETTLEMENT_RUNWAY_PAIRS.get(city_key)
+    target = _normalize_runway_label(AMSC_SETTLEMENT_RUNWAY_TARGETS.get(city_key))
+    if not configured_pair or not target:
+        return None
+
+    pair = _split_runway_pair_label(row.get("runway"))
+    configured = tuple(_normalize_runway_label(part) for part in configured_pair)
+    if not _runway_pair_matches(pair, configured):
+        return None
+
+    tdz_temp = _sf(row.get("tdz_temp"))
+    end_temp = _sf(row.get("end_temp"))
+    if target == pair[0]:
+        return tdz_temp if tdz_temp is not None else end_temp
+    if target == pair[1]:
+        return end_temp if end_temp is not None else tdz_temp
+    return None
+
+
+def _runway_history_temp_for_city(city: str, row: Dict[str, Any]) -> Optional[float]:
+    endpoint_temp = _settlement_runway_endpoint_temp(city, row)
+    if endpoint_temp is not None:
+        return endpoint_temp
+    target_runway_max = _sf(row.get("target_runway_max"))
+    if target_runway_max is not None:
+        return target_runway_max
+    return _sf(row.get("tdz_temp"))
+
+
 _ANALYSIS_CACHE_STATS_LOCK = threading.Lock()
 _ANALYSIS_CACHE_STATS: Dict[str, Any] = {
     "total_requests": 0,
@@ -1624,9 +1693,7 @@ def _analyze(
                 rw = r.get("runway")
                 if not rw:
                     continue
-                temp_val = r.get("target_runway_max")
-                if temp_val is None:
-                    temp_val = r.get("tdz_temp")
+                temp_val = _runway_history_temp_for_city(city, r)
                 if temp_val is not None:
                     temp_val = float(temp_val)
                     if is_f:
