@@ -4,10 +4,10 @@ import { buildForceRefreshProxyCachePolicy } from "@/lib/proxy-cache-policy";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 const SCAN_TERMINAL_PROXY_TIMEOUT_MS = Number(
-  process.env.POLYWEATHER_SCAN_TERMINAL_PROXY_TIMEOUT_MS || "28000",
+  process.env.POLYWEATHER_SCAN_TERMINAL_PROXY_TIMEOUT_MS || "40000",
 );
 
-export const maxDuration = 30;
+export const maxDuration = 45;
 
 export async function GET(req: NextRequest) {
   if (!API_BASE) {
