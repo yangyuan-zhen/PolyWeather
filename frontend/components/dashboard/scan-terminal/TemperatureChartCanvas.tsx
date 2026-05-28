@@ -115,7 +115,8 @@ export function TemperatureChartCanvas({
 
   const canRenderChart = chartSize.width > 0 && chartSize.height > 0;
   const chartWidth = Math.max(1, chartSize.width);
-  const chartHeight = Math.max(220, chartSize.height);
+  const minChartHeight = compact ? 120 : 220;
+  const chartHeight = Math.max(minChartHeight, chartSize.height);
   const individualRunwaySeriesCount = chartSeries.filter(
     (series) => series.key.startsWith("runway_") && series.key !== "runway_max",
   ).length;
@@ -125,7 +126,7 @@ export function TemperatureChartCanvas({
     chartSeries.some((series) => series.key === "runway_max");
 
   return (
-    <div className="relative flex min-h-[240px] flex-1 flex-col p-2">
+    <div className={clsx("relative flex flex-1 flex-col p-2", compact ? "min-h-[120px]" : "min-h-[240px]")}>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-1.5 text-[11px] border-b border-[#e2e8f0] bg-white">
         {chartSeries.length > 1 &&
           chartSeries
@@ -187,7 +188,7 @@ export function TemperatureChartCanvas({
           </span>
         )}
       </div>
-      <div ref={chartHostRef} className="relative min-h-[220px] flex-1">
+      <div ref={chartHostRef} className={clsx("relative flex-1", compact ? "min-h-[120px]" : "min-h-[220px]")}>
         {canRenderChart && (
           <ReComposedChart
             width={chartWidth}

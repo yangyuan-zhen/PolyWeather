@@ -702,7 +702,7 @@ export function LiveTemperatureThresholdChart({
       actions={timeframeActions}
       className={PEAK_GLOW_PANEL_CLASS[peakGlow.state]}
     >
-      <div className="flex h-full min-h-[300px] flex-col">
+      <div className={clsx("flex h-full flex-col", compact ? "min-h-0" : "min-h-[300px]")}>
         <TemperatureStatsBars
           isEn={isEn}
           compact={compact}

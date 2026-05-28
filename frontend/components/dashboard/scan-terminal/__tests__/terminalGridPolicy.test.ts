@@ -19,6 +19,10 @@ export function runTests() {
     path.join(projectRoot, "components", "dashboard", "scan-terminal", "LiveTemperatureThresholdChart.tsx"),
     "utf8",
   );
+  const chartCanvasSource = fs.readFileSync(
+    path.join(projectRoot, "components", "dashboard", "scan-terminal", "TemperatureChartCanvas.tsx"),
+    "utf8",
+  );
 
   assert(
     dashboardSource.includes("MAX_TERMINAL_CHARTS = 9"),
@@ -54,5 +58,11 @@ export function runTests() {
     chartSource.includes("setLiveTemp(null);") &&
       chartSource.includes("lastAppliedPatchRevisionRef.current = 0;"),
     "switching city slots must clear the previous live temperature so Fahrenheit values cannot leak into Celsius charts",
+  );
+  assert(
+    chartSource.includes('compact ? "min-h-0" : "min-h-[300px]"') &&
+      chartCanvasSource.includes("const minChartHeight = compact ? 120 : 220") &&
+      chartCanvasSource.includes('compact ? "min-h-[120px]" : "min-h-[220px]"'),
+    "compact grid charts must not force desktop minimum heights that get clipped inside 3x3 terminal slots",
   );
 }

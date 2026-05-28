@@ -36,3 +36,14 @@ def test_scan_terminal_prewarm_is_lazy_by_default():
         "if _scan_terminal_prewarm_enabled():\n            start_scan_terminal_prewarm()",
         "",
     )
+
+
+def test_scan_terminal_backend_timeout_returns_before_next_proxy_abort():
+    import web.services.scan_terminal_config as scan_terminal_config
+
+    route_source = (
+        ROOT / "frontend" / "app" / "api" / "scan" / "terminal" / "route.ts"
+    ).read_text(encoding="utf-8")
+
+    assert 'POLYWEATHER_SCAN_TERMINAL_PROXY_TIMEOUT_MS || "28000"' in route_source
+    assert scan_terminal_config.SCAN_TERMINAL_BUILD_TIMEOUT_SEC <= 24
