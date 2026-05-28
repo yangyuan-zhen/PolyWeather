@@ -18,7 +18,16 @@ if [ -f "$TAG_FILE" ]; then
 fi
 
 export IMAGE_TAG="$NEW_TAG"
-docker compose pull
+pull_ok=0
+for pull_attempt in $(seq 1 6); do
+    docker compose pull && pull_ok=1 && break
+    echo "Image pull failed or tag not ready, retry ${pull_attempt}/6..."
+    sleep 10
+done
+if [ "$pull_ok" != "1" ]; then
+    echo "❌ Image pull failed after retries"
+    exit 1
+fi
 docker compose up -d
 
 # Wait for backend to be ready (retry up to 150s)

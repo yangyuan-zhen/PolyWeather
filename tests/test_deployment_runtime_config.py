@@ -60,3 +60,10 @@ def test_city_detail_peak_window_uses_shared_multi_model_resolver():
 
     assert "from src.analysis.trend_engine import _resolve_peak_hours" in source
     assert "peak_hours = _resolve_peak_hours(" in source
+
+
+def test_deploy_script_retries_image_pull_for_registry_propagation():
+    script = (ROOT / "deploy.sh").read_text(encoding="utf-8")
+
+    assert "for pull_attempt in $(seq 1 6)" in script
+    assert "docker compose pull && pull_ok=1 && break" in script
