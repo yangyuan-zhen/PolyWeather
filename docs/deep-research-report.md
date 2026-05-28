@@ -2,9 +2,9 @@
 
 ## 执行摘要
 
-PolyWeather（仓库：`yangyuan-zhen/PolyWeather`）定位为**面向温度类结算预测市场（如 Polymarket 的温度结算合约）**的”生产级气象情报系统”，核心在于把多源天气观测/预报转化为**结算导向的概率桶（μ + bucket distribution）**；同时提供 Web 仪表盘与 Telegram Bot 两套交互入口，并包含 Polygon 链上 USDC/USDC.e 支付、自动补单与订阅/积分体系。项目 README 现明确仓库代码采用 `AGPL-3.0-only`，同时将品牌、商标、生产私有数据与运营阈值保留在代码许可证之外。
+PolyWeather（仓库：`yangyuan-zhen/PolyWeather`）定位为**面向温度类结算预测市场（如 Polymarket 的温度结算合约）**的”生产级气象情报系统”，核心在于把多源天气观测/预报转化为**结算导向的概率桶（μ + bucket distribution）**；同时提供 Web 仪表盘与 Telegram Bot 两套交互入口，并包含 Polygon 链上 USDC/USDC.e 支付、Ethereum 主网 USDC 直转确认、自动补单与订阅/积分体系。项目 README 现明确仓库代码采用 `AGPL-3.0-only`，同时将品牌、商标、生产私有数据与运营阈值保留在代码许可证之外。
 
-> **2026-05-28 更新（v1.8.1）**：终端图表已切换为 HTTP snapshot + SSE Patch + Redis Stream/SQLite replay 架构；DEB hourly consensus (`deb_hourly_consensus.v1`) 成为峰值窗口和 DEB 曲线展示的优先小时路径；README 产品截图迁移到 `frontend/public/static`。
+> **2026-05-29 更新**：支付 intent 已支持多链 `chain_id`，Polygon 继续承载 checkout 合约，Ethereum 主网 USDC 作为直转确认通道；终端图表继续使用 HTTP snapshot + SSE Patch + Redis Stream/SQLite replay 架构。
 ## 项目概览
 
 PolyWeather 的目标与范围在 README/README_ZH 中定义得较清楚：为温度结算市场提供气象情报（多源采集→融合→概率→对照市场报价），并提供“官方看板（Vercel 前端）+ VPS 后端 + Telegram Bot”。
@@ -15,7 +15,7 @@ DEB（Dynamic Error Balancing）基于过去 N 天模型误差（MAE）倒数加
 趋势/概率引擎在 `trend_engine.py` 中实现：综合“集合预报区间→σ/μ→高温窗口→死盘判定→温度桶概率分布→边界提示”等，用于 bot 展示与 web 结构化数据输出。
 **城市决策层（Scan Terminal / 结构化实况层）**：地图点击城市后加入城市决策卡，前端拉取 full detail、多模型区间、最新 METAR/官方站点/跑道观测，并通过 `/api/city/{name}/detail` 生成城市级结构化数据。终端图表使用 HTTP snapshot + SSE patch + Redis/SQLite replay，最高温中枢优先使用 DEB hourly consensus，再结合多模型中心、日内 pace 和当前实测。
 **市场层（Polymarket 行情对照）**：*[v1.7.0 已移除]* 原先从 Gamma API 发现市场、从 CLOB 读取价格/盘口并计算”模型-市场差”，已于 2026-05-23 随 Polymarket 价格拉取层一并删除。当前 `market_scan` 返回空。
-**商业化与支付**：订阅（`Pro Monthly 10 USDC`）、积分抵扣、Polygon 链上收款合约（USDC/USDC.e），并提供“事件监听 + 周期确认”的自动补单机制。
+**商业化与支付**：订阅（`Pro Monthly 10 USDC`）、积分抵扣、Polygon 链上收款合约（USDC/USDC.e）、Ethereum 主网 USDC 直转确认，并提供“事件监听 + 周期确认”的自动补单机制。
 **支持的数据集/数据源**：项目不是传统“训练数据集+模型训练”的机器学习仓库；其“数据集”本质是外部实时/预报 API 与站点观测数据。对外部数据的使用需要遵守来源方的访问与速率限制，例如 AviationWeather Data API 明确限制请求频率（含每分钟请求上限/建议降低频率与使用缓存文件）。
 **许可证**：仓库根目录 `LICENSE` 当前为 `AGPL-3.0-only`。同时 README 与策略文档明确：品牌、商标、生产私有数据与运营策略不随代码许可证一并授权。
 （插图：项目 README 中包含产品截图，可用于快速理解实时终端与 Telegram 推送形态）
@@ -71,7 +71,7 @@ JSON[Legacy JSON files<br/>migration/export/explicit fallback only]
  HKO[data.weather.gov.hk]
  CWA[opendata.cwa.gov.tw]
  SB[Supabase Auth/REST]
- RPC[Polygon RPC]
+ RPC[Polygon / Ethereum RPC]
  end
 
  subgraph Payments

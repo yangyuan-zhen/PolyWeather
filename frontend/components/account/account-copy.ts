@@ -218,8 +218,8 @@ export function createAccountCopy(isEn: boolean): Record<string, string> {
         ? "Current receiver contract: {address}"
         : "当前收款合约: {address}",
       manualOrderCreated: isEn
-        ? "Manual transfer order created. Please send {amount} USDC to the receiver on Polygon network. Then submit your tx hash below."
-        : "手动转账订单已创建：请在 Polygon 网络转 {amount} USDC 到收款地址。完成后在下方提交 tx hash。",
+        ? "Manual transfer order created. Send {amount} {symbol} on {chain} to {receiver}, then submit your tx hash below."
+        : "手动转账订单已创建：请在 {chain} 转 {amount} {symbol} 到 {receiver}，完成后在下方提交 tx hash。",
       manualOrderRequired: isEn
         ? "Please create a manual transfer order first."
         : "请先创建手动转账订单。",

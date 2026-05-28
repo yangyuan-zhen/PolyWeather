@@ -1,6 +1,11 @@
 from src.payments.contract_checkout import PaymentContractCheckoutService, PaymentIntentRecord
 
 
+ETHEREUM_USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+POLYGON_USDC = "0x3c499c542cef5E3811e1192ce70d8cc03d5c3359"
+RECEIVER = "0xeD2f13Aa5fF033c58FB436E178451Cd07f693f32"
+
+
 def _setup_env(monkeypatch, tmp_path):
     monkeypatch.setenv("POLYWEATHER_PAYMENT_ENABLED", "true")
     monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
@@ -12,6 +17,262 @@ def _setup_env(monkeypatch, tmp_path):
     )
     monkeypatch.setenv("POLYWEATHER_DB_PATH", str(tmp_path / "payments.db"))
     monkeypatch.delenv("POLYWEATHER_PAYMENT_DIRECT_RECEIVER_ADDRESS", raising=False)
+
+
+def _setup_multichain_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("POLYWEATHER_PAYMENT_ENABLED", "true")
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role")
+    monkeypatch.setenv("POLYWEATHER_PAYMENT_RPC_URL", "https://polygon-rpc.example")
+    monkeypatch.setenv(
+        "POLYWEATHER_PAYMENT_RPC_URLS_BY_CHAIN_JSON",
+        '{"1":["https://ethereum-rpc.example"],"137":["https://polygon-rpc.example"]}',
+    )
+    monkeypatch.setenv(
+        "POLYWEATHER_PAYMENT_ACCEPTED_TOKENS_JSON",
+        (
+            "["
+            f'{{"code":"usdc_polygon","symbol":"USDC","name":"USDC on Polygon",'
+            f'"chain_id":137,"chain_code":"polygon","chain_name":"Polygon",'
+            f'"address":"{POLYGON_USDC}","decimals":6,'
+            f'"receiver_contract":"{RECEIVER}","is_default":true}},'
+            f'{{"code":"usdc_ethereum","symbol":"USDC","name":"USDC on Ethereum",'
+            f'"chain_id":1,"chain_code":"ethereum","chain_name":"Ethereum Mainnet",'
+            f'"address":"{ETHEREUM_USDC}","decimals":6,'
+            f'"receiver_contract":"{RECEIVER}",'
+            f'"direct_receiver_address":"{RECEIVER}",'
+            f'"supports_contract_checkout":false,'
+            f'"explorer_tx_url":"https://etherscan.io/tx/{{tx_hash}}"}}'
+            "]"
+        ),
+    )
+    monkeypatch.setenv("POLYWEATHER_DB_PATH", str(tmp_path / "payments.db"))
+    monkeypatch.delenv("POLYWEATHER_PAYMENT_DIRECT_RECEIVER_ADDRESS", raising=False)
+
+
+def test_config_payload_exposes_polygon_and_ethereum_payment_routes(
+    monkeypatch, tmp_path
+):
+    _setup_multichain_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+
+    payload = service.get_config_payload()
+
+    assert payload["default_chain_id"] == 137
+    assert {row["chain_id"] for row in payload["chains"]} == {1, 137}
+    eth_token = next(
+        row for row in payload["tokens"] if row["chain_id"] == 1
+    )
+    assert eth_token["chain_code"] == "ethereum"
+    assert eth_token["address"] == ETHEREUM_USDC.lower()
+    assert eth_token["supports_direct_transfer"] is True
+    assert eth_token["supports_contract_checkout"] is False
+
+
+def test_create_direct_intent_can_target_ethereum_usdc(monkeypatch, tmp_path):
+    _setup_multichain_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    posts = []
+
+    def fake_rest(method, table, **kwargs):
+        if method == "POST" and table == "payment_intents":
+            payload = dict(kwargs["payload"])
+            payload["id"] = "intent-eth-1"
+            payload["tx_hash"] = None
+            posts.append(payload)
+            return [payload]
+        raise AssertionError((method, table, kwargs))
+
+    monkeypatch.setattr(service, "_rest", fake_rest)
+
+    result = service.create_intent(
+        "user-1",
+        "pro_monthly",
+        payment_mode="direct",
+        chain_id=1,
+        token_address=ETHEREUM_USDC,
+    )
+
+    assert posts[0]["chain_id"] == 1
+    assert posts[0]["token_address"] == ETHEREUM_USDC.lower()
+    assert result["direct_payment"]["chain_id"] == 1
+    assert result["direct_payment"]["chain"] == "ethereum"
+    assert result["direct_payment"]["chain_name"] == "Ethereum Mainnet"
+    assert result["direct_payment"]["explorer_tx_url"] == (
+        "https://etherscan.io/tx/{tx_hash}"
+    )
+
+
+def test_pending_confirm_intents_include_supported_non_default_chains(
+    monkeypatch, tmp_path
+):
+    _setup_multichain_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    captured_params = {}
+
+    def fake_rest(method, table, **kwargs):
+        if method == "GET" and table == "payment_intents":
+            captured_params.update(kwargs["params"])
+            return [
+                {
+                    "id": "intent-eth-1",
+                    "user_id": "user-1",
+                    "tx_hash": "0x" + "a" * 64,
+                    "status": "submitted",
+                    "chain_id": 1,
+                    "updated_at": "2026-05-29T00:00:00+00:00",
+                    "created_at": "2026-05-29T00:00:00+00:00",
+                }
+            ]
+        raise AssertionError((method, table, kwargs))
+
+    monkeypatch.setattr(service, "_rest", fake_rest)
+
+    rows = service.list_pending_confirm_intents(limit=5)
+
+    assert "chain_id" not in captured_params
+    assert rows[0]["intent_id"] == "intent-eth-1"
+    assert rows[0]["chain_id"] == 1
+
+
+def test_insert_payment_record_stores_ethereum_chain(monkeypatch, tmp_path):
+    _setup_multichain_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    inserted = {}
+
+    def fake_rest(method, table, **kwargs):
+        if method == "POST" and table == "payments":
+            inserted.update(kwargs["payload"])
+            return [kwargs["payload"]]
+        raise AssertionError((method, table, kwargs))
+
+    monkeypatch.setattr(service, "_rest", fake_rest)
+
+    service._insert_payment_record(
+        user_id="user-1",
+        tx_hash="0x" + "b" * 64,
+        amount_units=10_000_000,
+        token_address=ETHEREUM_USDC,
+        chain_id=1,
+        payload={},
+    )
+
+    assert inserted["chain"] == "ethereum"
+    assert inserted["currency"] == "USDC"
+
+
+def test_confirm_direct_transfer_uses_intent_chain_rpc(monkeypatch, tmp_path):
+    _setup_multichain_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    tx_hash = "0x" + "c" * 64
+    intent = PaymentIntentRecord(
+        intent_id="intent-direct-eth",
+        order_id_hex="0x" + "1" * 64,
+        plan_code="pro_monthly",
+        plan_id=101,
+        chain_id=1,
+        amount_units=10_000_000,
+        amount_usdc="10",
+        token_address=ETHEREUM_USDC.lower(),
+        token_decimals=6,
+        token_symbol="USDC",
+        receiver_address=RECEIVER.lower(),
+        status="submitted",
+        payment_mode="direct",
+        allowed_wallet=None,
+        expires_at="2099-01-01T00:00:00+00:00",
+        tx_hash=tx_hash,
+        metadata={},
+    )
+    confirmed_intent = PaymentIntentRecord(**{**intent.__dict__, "status": "confirmed"})
+    intents = [intent, confirmed_intent]
+    requested_chains = []
+    tx_rows = []
+
+    monkeypatch.setattr(
+        service,
+        "get_intent",
+        lambda user_id, intent_id: intents.pop(0) if intents else confirmed_intent,
+    )
+
+    class _Eth:
+        chain_id = 1
+        block_number = 20
+
+        @staticmethod
+        def get_transaction(_tx_hash):
+            return {
+                "to": ETHEREUM_USDC,
+                "from": "0x9999999999999999999999999999999999999999",
+            }
+
+    class _Web3:
+        eth = _Eth()
+
+        @staticmethod
+        def is_connected():
+            return True
+
+    def fake_get_web3(*args, **kwargs):
+        requested_chains.append(kwargs.get("chain_id") or (args[0] if args else None))
+        return _Web3()
+
+    monkeypatch.setattr(service, "_get_web3", fake_get_web3)
+    monkeypatch.setattr(
+        service,
+        "_wait_receipt",
+        lambda _tx_hash, *args, **kwargs: {
+            "status": 1,
+            "to": ETHEREUM_USDC,
+            "from": "0x9999999999999999999999999999999999999999",
+            "blockNumber": 10,
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "_extract_direct_transfer_event",
+        lambda receipt, local_intent: {
+            "from": "0x9999999999999999999999999999999999999999",
+            "to": local_intent.receiver_address,
+            "token_address": local_intent.token_address,
+            "amount_units": local_intent.amount_units,
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "_consume_points_for_intent",
+        lambda user_id, local_intent: {"applied": False},
+    )
+    monkeypatch.setattr(service, "_select_plan", lambda plan_code: {"duration_days": 30})
+    monkeypatch.setattr(
+        service,
+        "_insert_payment_record",
+        lambda **kwargs: {"chain_id": kwargs["chain_id"], "tx_hash": kwargs["tx_hash"]},
+    )
+    monkeypatch.setattr(
+        service,
+        "_grant_subscription",
+        lambda **kwargs: {"status": "active", "plan_code": kwargs["plan_code"]},
+    )
+    monkeypatch.setattr(service, "_notify_telegram", lambda **kwargs: None)
+
+    def fake_rest(method, table, **kwargs):
+        if method == "GET" and table == "payment_transactions":
+            return []
+        if method == "PATCH" and table == "payment_intents":
+            return [{"id": intent.intent_id, "status": "confirmed"}]
+        if method == "POST" and table == "payment_transactions":
+            tx_rows.append(kwargs["payload"])
+            return [kwargs["payload"]]
+        raise AssertionError((method, table, kwargs))
+
+    monkeypatch.setattr(service, "_rest", fake_rest)
+
+    result = service.confirm_intent_tx("user-1", intent.intent_id, tx_hash)
+
+    assert 1 in requested_chains
+    assert tx_rows[0]["chain_id"] == 1
+    assert result["payment"]["chain_id"] == 1
 
 
 def test_direct_intent_does_not_require_bound_wallet(monkeypatch, tmp_path):
@@ -137,11 +398,11 @@ def test_confirm_direct_transfer_uses_erc20_transfer_without_wallet_binding(monk
         def is_connected():
             return True
 
-    monkeypatch.setattr(service, "_get_web3", lambda: _Web3())
+    monkeypatch.setattr(service, "_get_web3", lambda *args, **kwargs: _Web3())
     monkeypatch.setattr(
         service,
         "_wait_receipt",
-        lambda _tx_hash: {
+        lambda _tx_hash, *args, **kwargs: {
             "status": 1,
             "to": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
             "from": "0x9999999999999999999999999999999999999999",

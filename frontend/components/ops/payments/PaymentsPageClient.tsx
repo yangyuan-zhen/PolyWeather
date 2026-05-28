@@ -61,7 +61,17 @@ export function PaymentsPageClient() {
     value,
   }));
 
-  const COLORS = ["#ef4444", "#f59e0b", "#3b82f6", "#10b981", "#a855f7", "#6366f1", "#ec4899"];
+const COLORS = ["#ef4444", "#f59e0b", "#3b82f6", "#10b981", "#a855f7", "#6366f1", "#ec4899"];
+
+function paymentExplorerUrl(payment: PaymentRecord): string {
+  const txHash = String(payment.tx_hash || "").trim();
+  if (!txHash) return "";
+  const chain = String(payment.chain || "").trim().toLowerCase();
+  const base = chain.includes("eth")
+    ? "https://etherscan.io"
+    : "https://polygonscan.com";
+  return `${base}/tx/${txHash}`;
+}
 
   return (
     <div className="space-y-6">
@@ -210,7 +220,7 @@ export function PaymentsPageClient() {
                       <td className="py-2 pr-4 text-xs">
                         {p.tx_hash ? (
                           <a
-                            href={`https://polygonscan.com/tx/${p.tx_hash}`}
+                            href={paymentExplorerUrl(p)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-blue-400 hover:text-blue-300 font-mono inline-flex items-center gap-1"

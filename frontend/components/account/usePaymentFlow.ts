@@ -8,6 +8,7 @@ import type {
   CreatedIntent,
   EvmProvider,
   IntentStatusResponse,
+  PaymentChainOption,
   PaymentConfig,
   PaymentTokenOption,
   ProviderMode,
@@ -16,7 +17,7 @@ import type {
 import {
   WALLET_TRANSACTION_REQUEST_TIMEOUT_MS,
 } from "./constants";
-import { clearStoredPaymentRecovery, shortAddress } from "./formatters";
+import { chainIdToDisplayName, clearStoredPaymentRecovery, shortAddress } from "./formatters";
 import {
   buildAllowanceCalldata,
   buildApproveCalldata,
@@ -43,6 +44,8 @@ export interface UsePaymentFlowParams {
   setPaymentConfig: React.Dispatch<React.SetStateAction<PaymentConfig | null>>;
   selectedPlanCode: string;
   setSelectedPlanCode: React.Dispatch<React.SetStateAction<string>>;
+  selectedPaymentChainId: number;
+  setSelectedPaymentChainId: React.Dispatch<React.SetStateAction<number | null>>;
   selectedTokenAddress: string;
   setSelectedTokenAddress: React.Dispatch<React.SetStateAction<string>>;
 
@@ -100,7 +103,7 @@ export interface UsePaymentFlowParams {
   loadSnapshot: () => Promise<void>;
   loadPaymentSnapshot: () => Promise<void>;
   waitForReceipt: (txHash: string, provider?: EvmProvider, timeoutMs?: number, pollMs?: number) => Promise<any>;
-  ensureTargetChain: (eth: EvmProvider, targetChainId: number) => Promise<void>;
+  ensureTargetChain: (eth: EvmProvider, targetChainId: number, chain?: PaymentChainOption) => Promise<void>;
 
   // Ref-wrapped cross-hook callbacks
   connectAndBindWalletRef: React.MutableRefObject<((mode?: ProviderMode, options?: ConnectBindOptions) => Promise<boolean>) | null>;
@@ -120,6 +123,8 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
     setPaymentConfig,
     selectedPlanCode,
     setSelectedPlanCode,
+    selectedPaymentChainId,
+    setSelectedPaymentChainId,
     selectedTokenAddress,
     setSelectedTokenAddress,
     boundWallets,
@@ -171,6 +176,42 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
   const effectivePlanList = monthlyPlanList.length ? monthlyPlanList : planList;
   const selectedPlan = effectivePlanList.find((plan) => plan.plan_code === selectedPlanCode) || effectivePlanList[0];
 
+  const availableChainList: PaymentChainOption[] = useMemo(() => {
+    const configured = Array.isArray(paymentConfig?.chains) ? paymentConfig?.chains || [] : [];
+    const clean = configured
+      .map((row) => ({
+        ...row,
+        chain_id: Number(row.chain_id),
+        name: String(row.name || chainIdToDisplayName(Number(row.chain_id))),
+      }))
+      .filter((row) => Number.isFinite(row.chain_id) && row.chain_id > 0);
+    if (clean.length) return clean;
+    const chainIds = new Set<number>();
+    const defaultChainId = Number(paymentConfig?.default_chain_id || paymentConfig?.chain_id || 137);
+    if (Number.isFinite(defaultChainId) && defaultChainId > 0) chainIds.add(defaultChainId);
+    (paymentConfig?.tokens || []).forEach((token) => {
+      const chainId = Number(token.chain_id || defaultChainId);
+      if (Number.isFinite(chainId) && chainId > 0) chainIds.add(chainId);
+    });
+    return Array.from(chainIds).sort((a, b) => a - b).map((chainId) => ({
+      chain_id: chainId,
+      name: chainIdToDisplayName(chainId),
+      is_default: chainId === defaultChainId,
+    }));
+  }, [paymentConfig]);
+
+  const selectedPaymentChain =
+    availableChainList.find((chain) => chain.chain_id === selectedPaymentChainId) ||
+    availableChainList.find((chain) => chain.is_default) ||
+    availableChainList[0];
+  const effectivePaymentChainId = Number(
+    selectedPaymentChain?.chain_id ||
+      selectedPaymentChainId ||
+      paymentConfig?.default_chain_id ||
+      paymentConfig?.chain_id ||
+      137,
+  );
+
   const availableTokenList: PaymentTokenOption[] = useMemo(() => {
     const configured = Array.isArray(paymentConfig?.tokens) ? paymentConfig?.tokens || [] : [];
     const clean = configured
@@ -181,22 +222,32 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
         symbol: String(row.symbol || "USDC"),
         name: String(row.name || row.symbol || "USDC"),
         code: String(row.code || "usdc"),
+        chain_id: Number(row.chain_id || effectivePaymentChainId),
         decimals: Number.isFinite(Number(row.decimals))
           ? Number(row.decimals)
           : Number(paymentConfig?.token_decimals ?? 6),
-      }));
+      }))
+      .filter((row) => Number(row.chain_id) === effectivePaymentChainId);
     if (clean.length) return clean;
     const fallbackAddress = String(paymentConfig?.token_address || "").toLowerCase();
     if (!fallbackAddress.startsWith("0x")) return [];
     return [{
       code: "usdc", symbol: "USDC", name: "USDC", address: fallbackAddress,
+      chain_id: effectivePaymentChainId,
       decimals: Number(paymentConfig?.token_decimals ?? 6),
       receiver_contract: paymentConfig?.receiver_contract, is_default: true,
     }];
-  }, [paymentConfig]);
+  }, [effectivePaymentChainId, paymentConfig]);
 
   const resolvedSelectedTokenAddress = String(
-    selectedTokenAddress || paymentConfig?.default_token_address ||
+    (
+      selectedTokenAddress &&
+      availableTokenList.some((row) => row.address === String(selectedTokenAddress).toLowerCase())
+        ? selectedTokenAddress
+        : ""
+    ) ||
+      availableTokenList.find((row) => row.is_default)?.address ||
+      paymentConfig?.default_token_address ||
       availableTokenList.find((row) => row.is_default)?.address ||
       availableTokenList[0]?.address || paymentConfig?.token_address || "",
   ).toLowerCase();
@@ -225,21 +276,50 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
         if (!selectedPlanCode && configJson.plans?.length) {
           setSelectedPlanCode(configJson.plans[0].plan_code);
         }
+        const chainOptions = Array.isArray(configJson.chains)
+          ? configJson.chains.filter((row) => Number(row?.chain_id) > 0)
+          : [];
+        const defaultChainId = Number(
+          configJson.default_chain_id ||
+            chainOptions.find((row) => row.is_default)?.chain_id ||
+            configJson.chain_id ||
+            137,
+        );
+        const supportedChainIds = new Set(
+          (chainOptions.length ? chainOptions : [{ chain_id: defaultChainId }])
+            .map((row) => Number(row.chain_id))
+            .filter((value) => Number.isFinite(value) && value > 0),
+        );
+        setSelectedPaymentChainId((prev) =>
+          prev && supportedChainIds.has(prev) ? prev : defaultChainId,
+        );
+        const activeChainId =
+          selectedPaymentChainId && supportedChainIds.has(selectedPaymentChainId)
+            ? selectedPaymentChainId
+            : defaultChainId;
         const tokenOptions = Array.isArray(configJson.tokens)
           ? configJson.tokens.filter((row) => typeof row?.address === "string" && String(row.address).startsWith("0x"))
           : [];
+        const tokenOptionsForChain = tokenOptions.filter(
+          (row) => Number(row.chain_id || activeChainId) === activeChainId,
+        );
         const defaultTokenAddress = String(
           configJson.default_token_address ||
+            tokenOptionsForChain.find((row) => row.is_default)?.address ||
+            tokenOptionsForChain[0]?.address ||
             tokenOptions.find((row) => row.is_default)?.address ||
             tokenOptions[0]?.address || configJson.token_address || "",
         ).toLowerCase();
         if (defaultTokenAddress) {
-          setSelectedTokenAddress((prev: string) => prev || defaultTokenAddress);
+          const tokenSet = new Set(tokenOptionsForChain.map((row) => String(row.address).toLowerCase()));
+          setSelectedTokenAddress((prev: string) =>
+            prev && tokenSet.has(String(prev).toLowerCase()) ? prev : defaultTokenAddress,
+          );
         }
       }
       return configJson;
     },
-    [buildAuthedHeaders, selectedPlanCode],
+    [buildAuthedHeaders, selectedPaymentChainId, selectedPlanCode],
   );
 
   // ── pollIntentUntilConfirmed ────────────────────────────
@@ -345,7 +425,30 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
 
       const latestConfig = await fetchLatestPaymentConfig(authHeaders, true);
       if (!latestConfig?.enabled || !latestConfig?.configured) throw new Error(copy.payNotReady);
-      const expectedReceiver = String(latestConfig.receiver_contract || "").toLowerCase();
+      const targetChainId = Number(selectedPaymentChainId || latestConfig.default_chain_id || latestConfig.chain_id || 137);
+      const latestChains = Array.isArray(latestConfig.chains) ? latestConfig.chains : [];
+      const targetChain =
+        latestChains.find((chain) => Number(chain.chain_id) === targetChainId) ||
+        selectedPaymentChain;
+      const latestTokens = Array.isArray(latestConfig.tokens) ? latestConfig.tokens : [];
+      const selectedLatestToken =
+        latestTokens.find(
+          (token) =>
+            Number(token.chain_id || targetChainId) === targetChainId &&
+            String(token.address || "").toLowerCase() === resolvedSelectedTokenAddress,
+        ) ||
+        latestTokens.find(
+          (token) => Number(token.chain_id || targetChainId) === targetChainId && token.is_default,
+        ) ||
+        latestTokens.find((token) => Number(token.chain_id || targetChainId) === targetChainId);
+      if (selectedLatestToken?.supports_contract_checkout === false) {
+        throw new Error(
+          isEn
+            ? `${selectedLatestToken.chain_name || chainIdToDisplayName(targetChainId)} ${selectedLatestToken.symbol || "USDC"} supports manual transfer only.`
+            : `${selectedLatestToken.chain_name || chainIdToDisplayName(targetChainId)} ${selectedLatestToken.symbol || "USDC"} 仅支持手动转账。`,
+        );
+      }
+      const expectedReceiver = String(selectedLatestToken?.receiver_contract || latestConfig.receiver_contract || "").toLowerCase();
       assertExpectedPaymentReceiver(expectedReceiver, "payment receiver contract");
       if (paymentConfig?.receiver_contract && String(paymentConfig.receiver_contract).toLowerCase() !== expectedReceiver) {
         setPaymentInfo(copy.paymentConfigUpdated.replace("{address}", shortAddress(expectedReceiver)));
@@ -353,8 +456,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
         setPaymentInfo(copy.currentReceiver.replace("{address}", shortAddress(expectedReceiver)));
       }
 
-      const targetChainId = Number(latestConfig.chain_id || 137);
-      await ensureTargetChain(eth, targetChainId);
+      await ensureTargetChain(eth, targetChainId, targetChain);
 
       const createRes = await fetch("/api/payments/intents", {
         method: "POST",
@@ -363,7 +465,8 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
           plan_code: selectedPlan?.plan_code || "pro_monthly",
           payment_mode: "strict",
           allowed_wallet: payingWallet,
-          token_address: resolvedSelectedTokenAddress || undefined,
+          chain_id: targetChainId,
+          token_address: String(selectedLatestToken?.address || resolvedSelectedTokenAddress || "").toLowerCase() || undefined,
           use_points: billing.canRedeem && usePoints,
           points_to_consume: billing.canRedeem && usePoints ? billing.pointsUsed : 0,
           metadata: {
@@ -537,6 +640,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
         body: JSON.stringify({
           plan_code: selectedPlan?.plan_code || "pro_monthly",
           payment_mode: "direct",
+          chain_id: effectivePaymentChainId,
           token_address: resolvedSelectedTokenAddress || undefined,
           use_points: billing.canRedeem && usePoints,
           points_to_consume: billing.canRedeem && usePoints ? billing.pointsUsed : 0,
@@ -563,7 +667,14 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
       setManualPayment(direct);
       setPaymentMethodTab("manual");
       setShowOverlay(false);
-      setPaymentInfo(`手动转账订单已创建：请在 Polygon 网络转 ${direct.amount_usdc} ${direct.token_symbol || selectedTokenLabel} 到 ${direct.receiver_address}，请在下方【手动转账】面板中查看详情并复制地址，完成后提交 tx hash。`);
+      const chainName = direct.chain_name || chainIdToDisplayName(direct.chain_id);
+      setPaymentInfo(
+        copy.manualOrderCreated
+          .replace("{amount}", direct.amount_usdc)
+          .replace("{symbol}", direct.token_symbol || selectedTokenLabel)
+          .replace("{chain}", chainName)
+          .replace("{receiver}", shortAddress(direct.receiver_address)),
+      );
       trackAppEvent("checkout_started", {
         entry: "account_center_manual_transfer",
         plan_code: selectedPlan?.plan_code || "pro_monthly",
@@ -700,6 +811,8 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
     validateTxHash,
     handleOverlayCheckout,
     availableTokenList,
+    availableChainList,
+    selectedPaymentChain,
     resolvedSelectedTokenAddress,
     selectedPaymentToken,
     selectedTokenLabel,

@@ -7,6 +7,12 @@ export function chainIdToDisplayName(chainId: number | undefined | null): string
   return "Polygon";
 }
 
+export function chainIdToExplorerBase(chainId: number | undefined | null): string {
+  if (chainId === 1) return "https://etherscan.io";
+  if (chainId === 137) return "https://polygonscan.com";
+  return "";
+}
+
 export function formatTime(value: string | undefined | null, locale: string) {
   if (!value) return "--";
   try {

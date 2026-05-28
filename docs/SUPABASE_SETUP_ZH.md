@@ -1,12 +1,12 @@
 # Supabase + 登录 + 支付接入说明（v1.8.1）
 
-最后更新：`2026-03-14`
+最后更新：`2026-05-29`
 
 ## 1. 目标
 
 - 前端支持 Google 一键登录 + 邮箱注册/登录。
 - 后端支持 Supabase JWT 鉴权。
-- 支持 Polygon 合约支付（USDC / USDC.e）并自动确认开通订阅。
+- 支持 Polygon 合约支付（USDC / USDC.e）和 Ethereum 主网 USDC 直转支付，并自动确认开通订阅。
 
 ## 2. Supabase 控制台配置
 
@@ -66,20 +66,24 @@ SUPABASE_SERVICE_ROLE_KEY=
 SUPABASE_HTTP_TIMEOUT_SEC=8
 
 POLYWEATHER_PAYMENT_ENABLED=true
+# 默认链仍是 Polygon，因为当前 checkout 合约部署在 Polygon。
 POLYWEATHER_PAYMENT_CHAIN_ID=137
 POLYWEATHER_PAYMENT_RPC_URL=https://polygon-bor-rpc.publicnode.com
+POLYWEATHER_PAYMENT_RPC_URLS_BY_CHAIN_JSON={"137":["https://polygon-bor-rpc.publicnode.com"],"1":["https://ethereum-rpc.example"]}
 POLYWEATHER_PAYMENT_RECEIVER_CONTRACT=0x<receiver_contract>
+POLYWEATHER_PAYMENT_DIRECT_RECEIVER_ADDRESS=0x<treasury_or_receiver_wallet>
 POLYWEATHER_PAYMENT_CONFIRMATIONS=2
 POLYWEATHER_PAYMENT_INTENT_TTL_SEC=1800
 POLYWEATHER_PAYMENT_WALLET_CHALLENGE_TTL_SEC=600
 POLYWEATHER_PAYMENT_POLL_INTERVAL_SEC=4
 POLYWEATHER_PAYMENT_MAX_WAIT_SEC=50
 
-# 支持双币种（示例）
-POLYWEATHER_PAYMENT_ACCEPTED_TOKENS_JSON=[{"code":"usdc_e","symbol":"USDC.e","name":"USDC.e (PoS)","address":"0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174","decimals":6,"receiver_contract":"0x<receiver>","is_default":true},{"code":"usdc","symbol":"USDC","name":"Native USDC","address":"0x3c499c542cef5e3811e1192ce70d8cc03d5c3359","decimals":6,"receiver_contract":"0x<receiver>"}]
+# 支持多链多币种（示例）
+# Ethereum 主网 USDC 当前建议只开 direct transfer，不走 Polygon checkout 合约。
+POLYWEATHER_PAYMENT_ACCEPTED_TOKENS_JSON=[{"code":"usdc_polygon","symbol":"USDC","name":"USDC on Polygon","chain_id":137,"chain_code":"polygon","chain_name":"Polygon","address":"0x3c499c542cef5e3811e1192ce70d8cc03d5c3359","decimals":6,"receiver_contract":"0x<receiver_contract>","direct_receiver_address":"0x<treasury_or_receiver_wallet>","is_default":true},{"code":"usdc_e_polygon","symbol":"USDC.e","name":"USDC.e on Polygon","chain_id":137,"chain_code":"polygon","chain_name":"Polygon","address":"0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174","decimals":6,"receiver_contract":"0x<receiver_contract>","direct_receiver_address":"0x<treasury_or_receiver_wallet>"},{"code":"usdc_ethereum","symbol":"USDC","name":"USDC on Ethereum","chain_id":1,"chain_code":"ethereum","chain_name":"Ethereum Mainnet","address":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48","decimals":6,"direct_receiver_address":"0x<treasury_or_receiver_wallet>","supports_contract_checkout":false,"supports_direct_transfer":true,"confirmations":2,"explorer_tx_url":"https://etherscan.io/tx/{tx_hash}"}]
 
 # 套餐（当前只保留月付）
-POLYWEATHER_PAYMENT_PLAN_CATALOG_JSON={"pro_monthly":{"plan_id":101,"amount_usdc":"5","duration_days":30}}
+POLYWEATHER_PAYMENT_PLAN_CATALOG_JSON={"pro_monthly":{"plan_id":101,"amount_usdc":"10","duration_days":30}}
 POLYWEATHER_PAYMENT_ALLOWED_PLAN_CODES=pro_monthly
 
 # 积分抵扣
@@ -100,10 +104,16 @@ POLYWEATHER_PAYMENT_CONFIRM_LOOP_ENABLED=true
    - `POST /api/payments/wallets/challenge`
    - `POST /api/payments/wallets/verify`
 4. 支付流程：
-   - `POST /api/payments/intents`
+   - `POST /api/payments/intents`；多链时前端会带 `chain_id` 和 `token_address`
    - 发链上交易
    - `POST /api/payments/intents/{id}/submit`
    - `POST /api/payments/intents/{id}/confirm`
 5. 若前端显示 pending，轮询：
    - `GET /api/payments/intents/{id}`
 6. 确认订阅：`/api/auth/me` 返回 `subscription_active=true`。
+
+## 6. 多链支付口径
+
+- Polygon 是默认链，仍支持钱包合约支付和手动直转确认。
+- Ethereum 主网 USDC 是正式支付链路，但当前建议只走手动直转：用户选择 Ethereum 后，前端展示收款钱包、金额、代币合约和 Etherscan 链接，用户提交 tx hash 后后端按 `intent.chain_id=1` 查询 Ethereum RPC。
+- 不要只依赖前端文案阻止错链付款；后端必须把每笔 intent 的 `chain_id`、`token_address`、`receiver_address` 落库，并在确认时按该链校验 `Transfer` 事件。

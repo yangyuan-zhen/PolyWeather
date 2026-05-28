@@ -437,6 +437,7 @@ class CreatePaymentIntentRequest(BaseModel):
     payment_mode: str = Field(default="strict")
     allowed_wallet: Optional[str] = None
     token_address: Optional[str] = None
+    chain_id: Optional[int] = None
     use_points: bool = False
     points_to_consume: Optional[int] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)

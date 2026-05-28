@@ -123,6 +123,7 @@ def create_payment_intent(
             payment_mode=body.payment_mode,
             allowed_wallet=body.allowed_wallet,
             token_address=body.token_address,
+            chain_id=body.chain_id,
             use_points=body.use_points,
             points_to_consume=body.points_to_consume,
             metadata=body.metadata,

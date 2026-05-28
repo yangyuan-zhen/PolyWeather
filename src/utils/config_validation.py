@@ -98,10 +98,14 @@ def validate_runtime_env(
             )
 
     if payment_enabled:
-        payment_missing = _missing(["POLYWEATHER_PAYMENT_RPC_URL"])
-        if payment_missing:
+        has_payment_rpc = (
+            _has("POLYWEATHER_PAYMENT_RPC_URL")
+            or _has("POLYWEATHER_PAYMENT_RPC_URLS")
+            or _has("POLYWEATHER_PAYMENT_RPC_URLS_BY_CHAIN_JSON")
+        )
+        if not has_payment_rpc:
             report.errors.append(
-                f"已启用支付，但缺少变量: {', '.join(payment_missing)}"
+                "已启用支付，但缺少变量: POLYWEATHER_PAYMENT_RPC_URL / POLYWEATHER_PAYMENT_RPC_URLS / POLYWEATHER_PAYMENT_RPC_URLS_BY_CHAIN_JSON"
             )
         has_receiver = _has("POLYWEATHER_PAYMENT_RECEIVER_CONTRACT")
         has_tokens_json = _has("POLYWEATHER_PAYMENT_ACCEPTED_TOKENS_JSON")

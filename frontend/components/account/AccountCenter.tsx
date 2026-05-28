@@ -124,6 +124,7 @@ export function AccountCenter() {
     boundWallets,
     walletAddress,
     selectedPlanCode,
+    selectedPaymentChainId,
     selectedTokenAddress,
     selectedWallet,
     providerMode,
@@ -133,6 +134,7 @@ export function AccountCenter() {
 
     // Shared setters
     setSelectedTokenAddress,
+    setSelectedPaymentChainId,
     setSelectedWallet,
     setSelectedInjectedProviderKey,
     setProviderMode,
@@ -149,6 +151,8 @@ export function AccountCenter() {
     selectedPaymentToken,
     selectedTokenLabel,
     availableTokenList,
+    availableChainList,
+    selectedPaymentChain,
     effectivePlanList,
     resolvedSelectedTokenAddress,
     paymentReceiverAddress,
@@ -810,7 +814,7 @@ export function AccountCenter() {
                 errorText={paymentError || undefined}
                 infoText={paymentInfo || undefined}
                 txHash={lastTxHash || undefined}
-                chainId={paymentConfig?.chain_id || 137}
+                chainId={selectedPaymentChainId || paymentConfig?.chain_id || 137}
                 paymentTokenLabel={selectedTokenLabel}
                 faqHref={SUBSCRIPTION_HELP_HREF}
                 telegramGroupUrl=""
@@ -959,7 +963,10 @@ export function AccountCenter() {
                   <InfoRow
                     icon={ExternalLink}
                     label={copy.paymentNetwork}
-                    value={chainIdToDisplayName(paymentConfig?.chain_id)}
+                    value={
+                      selectedPaymentChain?.name ||
+                      chainIdToDisplayName(selectedPaymentChainId)
+                    }
                   />
                   <InfoRow
                     icon={ExternalLink}
@@ -970,6 +977,57 @@ export function AccountCenter() {
                     {copy.paymentGuardHint}
                   </p>
                 </div>
+                {availableChainList.length > 1 && (
+                  <div className="mb-5">
+                    <p className="mb-2 text-[11px] uppercase text-slate-500">
+                      {copy.paymentNetwork}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {availableChainList.map((chain) => {
+                        const active = chain.chain_id === selectedPaymentChainId;
+                        return (
+                          <button
+                            type="button"
+                            key={chain.chain_id}
+                            onClick={() => {
+                              setSelectedPaymentChainId(chain.chain_id);
+                              const nextToken =
+                                paymentConfig?.tokens?.find(
+                                  (token) =>
+                                    Number(token.chain_id || chain.chain_id) ===
+                                      chain.chain_id &&
+                                    token.is_default,
+                                ) ||
+                                paymentConfig?.tokens?.find(
+                                  (token) =>
+                                    Number(token.chain_id || chain.chain_id) ===
+                                    chain.chain_id,
+                                );
+                              if (nextToken?.address) {
+                                setSelectedTokenAddress(
+                                  String(nextToken.address).toLowerCase(),
+                                );
+                              }
+                            }}
+                            disabled={paymentBusy}
+                            className={`rounded-xl border px-3 py-2 text-left transition-all ${
+                              active
+                                ? "border-blue-300 bg-blue-50 text-blue-900"
+                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                            }`}
+                          >
+                            <div className="text-xs font-bold">
+                              {chain.name || chainIdToDisplayName(chain.chain_id)}
+                            </div>
+                            <div className="text-[10px] opacity-80">
+                              {chain.native_currency_symbol || "ETH"} gas
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 {availableTokenList.length > 0 && (
                   <div className="mb-5">
                     <p className="mb-2 text-[11px] uppercase text-slate-500">
@@ -984,7 +1042,7 @@ export function AccountCenter() {
                         return (
                           <button
                             type="button"
-                            key={token.address}
+                            key={`${token.chain_id || selectedPaymentChainId}:${token.address}`}
                             onClick={() =>
                               setSelectedTokenAddress(
                                 token.address,
@@ -1073,7 +1131,7 @@ export function AccountCenter() {
                                 )}
                               </div>
                               <div className="text-[10px]">
-                                {copy.polygonChain}
+                                {chainIdToDisplayName(w.chain_id)}
                               </div>
                               <div className="mt-2 flex justify-end">
                                 <button

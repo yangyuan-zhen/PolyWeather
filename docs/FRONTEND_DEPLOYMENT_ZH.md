@@ -1,6 +1,6 @@
 # 前端部署配置（Vercel）
 
-最后更新：`2026-05-28`
+最后更新：`2026-05-29`
 
 本文只覆盖 `frontend` 目录对应的 Next.js 前端部署。
 
@@ -127,12 +127,15 @@ NEXT_PUBLIC_POLYWEATHER_EAGER_CITY_SUMMARIES=false
 1. 用户点击支付前，前端会重新请求 `/api/payments/config`
 2. 若发现 `receiver_contract` 与页面旧状态不一致，会自动切换到最新地址
 3. 若后端返回的 `tx_payload.to` 与最新 `receiver_contract` 不一致，会直接阻断支付
+4. 多链支付时，前端会展示后端返回的网络列表，并把用户选择的 `chain_id` 传给后端创建 intent
+5. Ethereum 主网 USDC 当前走手动直转确认，前端不会把它当成 Polygon checkout 合约支付
 
 这层防护的目的，是降低以下事故概率：
 
 - 用户使用长期未刷新的旧标签页
 - 命中旧 deployment URL
 - 页面本地状态残留旧收款地址
+- 用户在钱包默认网络（例如 Ethereum）付款，但系统按 Polygon intent 查账
 
 如果你变更过支付收款地址，建议同步执行：
 

@@ -7,6 +7,7 @@ import type {
   Eip6963ProviderDetail,
   EvmProvider,
   InjectedProviderOption,
+  PaymentChainOption,
   ProviderMode,
   ProviderSelection,
 } from "./types";
@@ -190,12 +191,30 @@ export function useWalletBind(params: UseWalletBindParams) {
     }
   };
 
-  const ensureTargetChain = async (eth: EvmProvider, targetChainId: number): Promise<void> => {
+  const ensureTargetChain = async (
+    eth: EvmProvider,
+    targetChainId: number,
+    chain?: PaymentChainOption,
+  ): Promise<void> => {
     const currentChainIdHex = String(
       (await requestWalletWithTimeout<string>(eth, { method: "eth_chainId" }, copy.chainReadError)) || "",
     );
     const targetChainHex = `0x${targetChainId.toString(16)}`;
     if (currentChainIdHex.toLowerCase() === targetChainHex.toLowerCase()) return;
+    const chainName =
+      String(chain?.name || "").trim() ||
+      (targetChainId === 1 ? "Ethereum Mainnet" : targetChainId === 137 ? "Polygon Mainnet" : `Chain ${targetChainId}`);
+    const nativeSymbol =
+      String(chain?.native_currency_symbol || "").trim() ||
+      (targetChainId === 137 ? "POL" : "ETH");
+    const explorerBase = String(chain?.block_explorer_url || "").trim() ||
+      (targetChainId === 1 ? "https://etherscan.io" : targetChainId === 137 ? "https://polygonscan.com" : "");
+    const defaultRpc =
+      targetChainId === 137
+        ? "https://polygon-rpc.com"
+        : targetChainId === 1
+          ? "https://ethereum-rpc.publicnode.com"
+          : "";
     try {
       await requestWalletWithTimeout(
         eth,
@@ -206,24 +225,31 @@ export function useWalletBind(params: UseWalletBindParams) {
       const code = Number(err?.code);
       if (code === 4902 || targetChainId === 137) {
         try {
+          const addParams: Record<string, any> = {
+            chainId: targetChainHex,
+            chainName,
+            nativeCurrency: { name: nativeSymbol, symbol: nativeSymbol, decimals: 18 },
+          };
+          if (defaultRpc) addParams.rpcUrls = [defaultRpc];
+          if (explorerBase) addParams.blockExplorerUrls = [explorerBase];
           await requestWalletWithTimeout(
             eth,
             {
               method: "wallet_addEthereumChain",
-              params: [{
-                chainId: "0x89",
-                chainName: "Polygon Mainnet",
-                nativeCurrency: { name: "POL", symbol: "POL", decimals: 18 },
-                rpcUrls: ["https://polygon-rpc.com"],
-                blockExplorerUrls: ["https://polygonscan.com"],
-              }],
+              params: [addParams],
             },
-            copy.chainAddPolygon,
+            isEn ? `Add ${chainName}` : `添加 ${chainName}`,
           );
           return;
         } catch (addErr: any) { err = addErr; }
       }
-      throw new Error(`${copy.chainSwitchPrompt} (${err?.message || (isEn ? "Network switch failed" : "网络切换失败")})`);
+      throw new Error(
+        `${
+          isEn
+            ? `Please manually switch to ${chainName} in your wallet and try again.`
+            : `请在钱包中手动切换到 ${chainName} 后再试。`
+        } (${err?.message || (isEn ? "Network switch failed" : "网络切换失败")})`,
+      );
     }
   };
 

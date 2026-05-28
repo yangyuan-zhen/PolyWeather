@@ -238,6 +238,13 @@ DEB hourly consensus 是当前图表与峰值窗口的优先小时路径。
 
 ### 支付状态建议
 
+`POST /api/payments/intents` 支持的关键字段：
+
+- `plan_code`：套餐，例如 `pro_monthly`
+- `payment_mode`：`wallet` 或 `direct`
+- `chain_id`：可选；多链支付时前端传用户选择的链，例如 Polygon `137` 或 Ethereum `1`
+- `token_address`：可选；指定该链上的 USDC / USDC.e 合约地址
+
 前端流程建议：
 
 1. `POST /intents`

@@ -1,6 +1,6 @@
 # PolyWeather 支付审计与防护说明
 
-最后更新：`2026-03-21`
+最后更新：`2026-05-29`
 
 ## 1. 当前已落地的防护
 
@@ -19,9 +19,9 @@
 
 ### 事件确认边界
 
-- 后端只认链上 `OrderPaid` 事件。
+- 后端只认链上可验证事件：checkout 合约路径认 `OrderPaid`，直转路径认对应链上 USDC `Transfer`。
 - 前端提交 intent 不会直接视为支付完成。
-- `confirm_loop` 会再次按链上交易与确认数校验 intent。
+- `confirm_loop` 会再次按 intent 的 `chain_id`、`token_address`、收款地址、金额与确认数校验链上交易。
 - 若确认失败，当前会明确把 intent / transaction 落为失败态，而不是长期停留在 `submitted`。
 
 当前已显式识别的失败原因包括：
@@ -29,19 +29,23 @@
 - `receiver_mismatch`
 - `sender_mismatch`
 - `event_mismatch`
+- `token_mismatch`
 - `tx_reverted`
 
 ### RPC 多节点容灾
 
-- 支持 `POLYWEATHER_PAYMENT_RPC_URLS`
+- 支持默认链 `POLYWEATHER_PAYMENT_RPC_URLS`
+- 支持多链 `POLYWEATHER_PAYMENT_RPC_URLS_BY_CHAIN_JSON`
 - 格式示例：
 
 ```env
 POLYWEATHER_PAYMENT_RPC_URLS=https://polygon-rpc.com,https://polygon-bor-rpc.publicnode.com
+POLYWEATHER_PAYMENT_RPC_URLS_BY_CHAIN_JSON={"137":["https://polygon-rpc.com","https://polygon-bor-rpc.publicnode.com"],"1":["https://ethereum-rpc.example"]}
 ```
 
 - 启动时按顺序探活。
 - 当前节点断连或收据查询失败时，会自动切换到下一个可用 RPC。
+- 多链支付确认不会用默认链硬查交易；每笔 intent 会按自己的 `chain_id` 选择 RPC。
 
 ### 事件重放
 
@@ -87,8 +91,24 @@ python scripts/replay_payment_events.py --from-block 10000000 --to-block 1000100
 - 已付款但未开通
 - 打到旧收款地址
 - 交易事件不匹配
+- 用户在钱包默认 Ethereum 网络付款，但旧系统只按 Polygon intent 查账
 
-## 2. 当前合约的授权边界
+## 2. 当前支付链路边界
+
+当前支持两类链路：
+
+1. Polygon checkout 合约
+- 前端钱包支付会先切到 Polygon。
+- 后端创建 intent 后给出合约 `tx_payload`。
+- 确认时校验 `OrderPaid(orderId, payer, planId, amount, token)`。
+
+2. Ethereum 主网 USDC 直转
+- 前端展示 Ethereum 网络、USDC 合约、收款钱包和金额。
+- 用户提交 tx hash 后，后端按 `intent.chain_id=1` 查询 Ethereum RPC。
+- 确认时校验 USDC `Transfer(from, to, amount)` 的 `to`、`token_address` 和金额。
+- 这条链路不依赖 Polygon checkout 合约，适合处理“用户钱包默认网络付款”的真实行为。
+
+## 3. 当前合约的授权边界
 
 合约源码：
 - [PolyWeatherCheckout.sol](/E:/web/PolyWeather/contracts/PolyWeatherCheckout.sol)
@@ -110,7 +130,7 @@ python scripts/replay_payment_events.py --from-block 10000000 --to-block 1000100
 4. 订单边界
 - 同一个 `orderId` 只能成功支付一次
 
-## 3. 重入与重复支付判断
+## 4. 重入与重复支付判断
 
 当前合约的 `pay` 逻辑顺序是：
 
@@ -136,7 +156,7 @@ python scripts/replay_payment_events.py --from-block 10000000 --to-block 1000100
 - **最小可用支付合约**
 - 不是“全功能强防护合约”
 
-## 4. 当前静态审计结论
+## 5. 当前静态审计结论
 
 已提供脚本：
 - [check_payment_contract_security.py](/E:/web/PolyWeather/scripts/check_payment_contract_security.py)
@@ -160,7 +180,7 @@ python scripts/check_payment_contract_security.py
 - 是否使用 SafeERC20
 - 是否在链上绑定套餐价格
 
-## 5. 当前主要剩余风险
+## 6. 当前主要剩余风险
 
 1. 单地址 owner
 - 建议把 `owner` 迁移到多签钱包
@@ -175,7 +195,7 @@ python scripts/check_payment_contract_security.py
 - 当前使用 `IERC20.transferFrom`
 - 升级版合约更建议改为 OpenZeppelin `SafeERC20`
 
-## 6. 推荐操作
+## 7. 推荐操作
 
 ### 每次支付配置变更后
 
@@ -233,7 +253,7 @@ docker compose exec polyweather_web python scripts/reconcile_subscription_by_ema
 - 用户声称已付费但未开通
 - 需要快速确认最近一笔 intent 是否能自动恢复
 
-## 7. 下一版合约建议
+## 8. 下一版合约建议
 
 如果后续升级合约，优先级建议：
 

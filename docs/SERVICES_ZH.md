@@ -1,6 +1,6 @@
 # 外部服务依赖总览
 
-最后更新：`2026-05-28`
+最后更新：`2026-05-29`
 
 项目调用外部天气、鉴权、支付和实时事件服务。原则是：核心链路必须有明确健康检查；可选数据源不可拖垮已可用城市；实时事件层可从 Redis Stream 降级到 SQLite event log。
 
@@ -52,7 +52,8 @@
 | --- | --- | --- |
 | MiMo (xiaomimimo) | 城市分析 AI 评论 | ✅ 当前使用 |
 | DeepSeek | AI fallback | 备用 |
-| Polygon RPC | 链上支付、自动确认 | ✅ |
+| Polygon RPC | checkout 合约支付、Polygon USDC / USDC.e 自动确认 | ✅ |
+| Ethereum RPC | Ethereum 主网 USDC 直转确认 | ✅（启用多链支付时必须） |
 | WalletConnect | 前端钱包连接 | ⚠️ 未配 key 时钱包入口降级 |
 
 ## 运维口径
@@ -61,3 +62,4 @@
 - 本地或单进程兜底：`POLYWEATHER_EVENT_STORE=sqlite`。
 - Redis 只负责短窗口 replay 与多 worker fanout，不是长期天气历史库。
 - DEB hourly consensus 依赖 Open-Meteo 多模型小时曲线；若上游限流，图表应保留已有 snapshot 和实测 patch，不把缺失模型误报为实测缺失。
+- 支付多链确认依赖 `POLYWEATHER_PAYMENT_RPC_URLS_BY_CHAIN_JSON`；如果启用 Ethereum 主网 USDC，必须配置 `chain_id=1` 的 RPC，否则用户提交 Ethereum tx hash 后无法自动确认。

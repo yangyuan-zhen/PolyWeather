@@ -27,7 +27,7 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 - Points system live: earn via group chat, welcome bonus (+20), first-message-of-day bonus (+2), weekly participation rewards.
 - `/city` and `/deb` now free (daily cap 10 each); points redeemable for payment discount (`500 pts = 1 USDC`, max `3 USDC`).
 - Weekly leaderboard rewards restructured: smaller point bonuses for winners (200/100/50), all active users receive participation rewards.
-- Onchain checkout live: Polygon contract checkout (USDC / USDC.e).
+- Onchain checkout live: Polygon contract checkout (USDC / USDC.e) plus Ethereum mainnet USDC direct-transfer confirmation.
 - Auto-reconciliation live: event listener + periodic confirm loop.
 - Ops dashboard live: `/ops` for memberships, leaderboard, manual point grants, and payment incident triage.
 - Lightweight observability live: `/healthz`, `/api/system/status`, `/metrics`.
@@ -102,7 +102,7 @@ flowchart LR
     API --> SSE["SSE /api/events"]
     WX --> SSE
     SSE --> EVENT["Redis Stream / SQLite Event Log"]
-    ANA --> PAY["Payment State (Intent + Event + Confirm Loop)"]
+    ANA --> PAY["Payment State (Multi-chain Intent + Event + Confirm Loop)"]
     ANA --> STATE["SQLite runtime state"]
 ```
 
@@ -197,6 +197,10 @@ docker compose logs -f polyweather | egrep "payment event loop started|payment c
 ```bash
 curl http://127.0.0.1:8000/api/payments/runtime
 ```
+
+### Payment chains
+
+Production payment routes are configured by the backend. Polygon remains the default checkout-contract chain, while Ethereum mainnet USDC can be enabled as a direct-transfer route so users who pay on their wallet default network are still confirmed by `intent.chain_id`.
 
 ## Telegram Commands
 

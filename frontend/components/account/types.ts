@@ -40,7 +40,24 @@ export type PaymentTokenOption = {
   name: string;
   address: string;
   decimals: number;
+  chain_id?: number;
+  chain_code?: string;
+  chain_name?: string;
   receiver_contract?: string;
+  direct_receiver_address?: string;
+  explorer_tx_url?: string;
+  supports_contract_checkout?: boolean;
+  supports_direct_transfer?: boolean;
+  is_default?: boolean;
+};
+
+export type PaymentChainOption = {
+  chain_id: number;
+  code?: string;
+  name?: string;
+  native_currency_symbol?: string;
+  block_explorer_url?: string;
+  explorer_tx_url?: string;
   is_default?: boolean;
 };
 
@@ -54,9 +71,11 @@ export type PaymentConfig = {
   enabled?: boolean;
   configured?: boolean;
   chain_id?: number;
+  default_chain_id?: number;
   token_address?: string;
   token_decimals?: number;
   default_token_address?: string;
+  chains?: PaymentChainOption[];
   tokens?: PaymentTokenOption[];
   receiver_contract?: string;
   confirmations?: number;
@@ -93,6 +112,7 @@ export type CreatedIntent = {
   direct_payment?: {
     chain_id: number;
     chain?: string;
+    chain_name?: string;
     token_symbol?: string;
     token_address: string;
     token_decimals?: number;
@@ -101,6 +121,7 @@ export type CreatedIntent = {
     amount_usdc: string;
     intent_id: string;
     expires_at: string;
+    explorer_tx_url?: string;
   };
 };
 

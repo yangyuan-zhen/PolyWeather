@@ -19,6 +19,8 @@ from src.auth.telegram_group_pricing import TelegramGroupPricing
 from src.database.db_manager import DBManager
 
 DEFAULT_POLYGON_CHAIN_ID = 137
+DEFAULT_ETHEREUM_CHAIN_ID = 1
+DEFAULT_ETHEREUM_USDC_ADDRESS = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
 DEFAULT_USDC_E_ADDRESS = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
 DEFAULT_NATIVE_USDC_ADDRESS = "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359"
 DEFAULT_USDT_ADDRESS = "0xc2132d05d31c914a87c6611c10748aeb04b58e8f"
@@ -217,7 +219,16 @@ class PaymentTokenConfig:
     name: str
     address: str
     decimals: int
+    chain_id: int
+    chain_code: str
+    chain_name: str
     receiver_contract: str
+    direct_receiver_address: str
+    rpc_urls: List[str]
+    explorer_tx_url: str
+    confirmations: Optional[int]
+    supports_contract_checkout: bool
+    supports_direct_transfer: bool
     is_default: bool
 
 
@@ -267,6 +278,12 @@ class PaymentContractCheckoutService:
         legacy_receiver_contract = _normalize_address(
             os.getenv("POLYWEATHER_PAYMENT_RECEIVER_CONTRACT") or ""
         )
+        legacy_direct_receiver_address = (
+            _normalize_address(
+                os.getenv("POLYWEATHER_PAYMENT_DIRECT_RECEIVER_ADDRESS") or ""
+            )
+            or legacy_receiver_contract
+        )
         legacy_token_address = (
             os.getenv("POLYWEATHER_PAYMENT_TOKEN_ADDRESS")
             or DEFAULT_NATIVE_USDC_ADDRESS
@@ -274,33 +291,44 @@ class PaymentContractCheckoutService:
         self.supported_tokens = self._load_supported_tokens(
             os.getenv("POLYWEATHER_PAYMENT_ACCEPTED_TOKENS_JSON") or "",
             fallback_receiver_contract=legacy_receiver_contract,
+            fallback_direct_receiver_address=legacy_direct_receiver_address,
             fallback_token_address=legacy_token_address,
             fallback_token_decimals=self.token_decimals,
         )
-        self.default_token_address = next(
+        self.default_token_key = next(
             (
-                address
-                for address, token in self.supported_tokens.items()
+                key
+                for key, token in self.supported_tokens.items()
                 if bool(token.is_default)
             ),
             "",
         )
-        if not self.default_token_address and self.supported_tokens:
-            self.default_token_address = next(iter(self.supported_tokens.keys()))
-        default_token = self.supported_tokens.get(self.default_token_address)
+        if not self.default_token_key and self.supported_tokens:
+            self.default_token_key = next(iter(self.supported_tokens.keys()))
+        default_token = self.supported_tokens.get(self.default_token_key)
+        self.default_chain_id = int(default_token.chain_id) if default_token else self.chain_id
+        self.default_token_address = default_token.address if default_token else ""
         self.token_address = default_token.address if default_token else ""
         self.receiver_contract = (
             default_token.receiver_contract if default_token else ""
         )
         self.direct_receiver_address = (
-            _normalize_address(
-                os.getenv("POLYWEATHER_PAYMENT_DIRECT_RECEIVER_ADDRESS") or ""
-            )
-            or self.receiver_contract
+            default_token.direct_receiver_address if default_token else ""
         )
         self.token_decimals = (
             int(default_token.decimals) if default_token else int(self.token_decimals)
         )
+        self.rpc_urls_by_chain = self._load_rpc_urls_by_chain(
+            os.getenv("POLYWEATHER_PAYMENT_RPC_URLS_BY_CHAIN_JSON") or "",
+            default_chain_id=self.chain_id,
+            default_rpc_urls=self.rpc_urls,
+        )
+        for token in self.supported_tokens.values():
+            if token.rpc_urls:
+                self.rpc_urls_by_chain.setdefault(int(token.chain_id), [])
+                for rpc_url in token.rpc_urls:
+                    if rpc_url not in self.rpc_urls_by_chain[int(token.chain_id)]:
+                        self.rpc_urls_by_chain[int(token.chain_id)].append(rpc_url)
         self.intent_ttl_sec = max(
             300, _env_int("POLYWEATHER_PAYMENT_INTENT_TTL_SEC", 1800)
         )
@@ -344,6 +372,8 @@ class PaymentContractCheckoutService:
         self._w3_lock = threading.Lock()
         self._w3: Optional[Web3] = None
         self._w3_url: str = ""
+        self._w3_by_chain: Dict[int, Web3] = {}
+        self._w3_url_by_chain: Dict[int, str] = {}
         self._event_topic = Web3.keccak(
             text="OrderPaid(bytes32,address,uint256,address,uint256)"
         ).hex()
@@ -354,14 +384,23 @@ class PaymentContractCheckoutService:
         has_valid_token_routes = bool(
             self.supported_tokens
             and all(
-                token.address and token.receiver_contract
+                token.address
+                and token.direct_receiver_address
+                and (token.receiver_contract or token.supports_direct_transfer)
+                for token in self.supported_tokens.values()
+            )
+        )
+        has_rpc_for_token_chains = bool(
+            self.supported_tokens
+            and all(
+                bool(self.rpc_urls_by_chain.get(int(token.chain_id)))
                 for token in self.supported_tokens.values()
             )
         )
         return bool(
             self.supabase_url
             and self.supabase_service_role_key
-            and bool(self.rpc_urls)
+            and has_rpc_for_token_chains
             and has_valid_token_routes
         )
 
@@ -379,14 +418,119 @@ class PaymentContractCheckoutService:
 
     def _load_rpc_urls(self, raw: str) -> List[str]:
         out: List[str] = []
-        for part in str(raw or "").split(","):
+        if isinstance(raw, list):
+            parts = raw
+        else:
+            parts = str(raw or "").split(",")
+        for part in parts:
             url = str(part or "").strip()
             if url and url not in out:
                 out.append(url)
         return out
 
+    def _load_rpc_urls_by_chain(
+        self,
+        raw: str,
+        *,
+        default_chain_id: int,
+        default_rpc_urls: List[str],
+    ) -> Dict[int, List[str]]:
+        out: Dict[int, List[str]] = {}
+        if default_rpc_urls:
+            out[int(default_chain_id)] = list(default_rpc_urls)
+        text = str(raw or "").strip()
+        if not text:
+            return out
+        try:
+            parsed = json.loads(text)
+        except Exception:
+            return out
+        if not isinstance(parsed, dict):
+            return out
+        for chain_id_raw, value in parsed.items():
+            try:
+                chain_id = int(chain_id_raw)
+            except Exception:
+                continue
+            urls = self._load_rpc_urls(value)
+            if not urls:
+                continue
+            out.setdefault(chain_id, [])
+            for url in urls:
+                if url not in out[chain_id]:
+                    out[chain_id].append(url)
+        return out
+
+    def _token_key(self, chain_id: int, token_address: str) -> str:
+        return f"{int(chain_id)}:{_normalize_address(token_address)}"
+
+    def _chain_code_for(self, chain_id: int) -> str:
+        if int(chain_id) == DEFAULT_ETHEREUM_CHAIN_ID:
+            return "ethereum"
+        if int(chain_id) == DEFAULT_POLYGON_CHAIN_ID:
+            return "polygon"
+        return f"chain_{int(chain_id)}"
+
+    def _chain_name_for(self, chain_id: int) -> str:
+        if int(chain_id) == DEFAULT_ETHEREUM_CHAIN_ID:
+            return "Ethereum Mainnet"
+        if int(chain_id) == DEFAULT_POLYGON_CHAIN_ID:
+            return "Polygon"
+        return f"Chain ID {int(chain_id)}"
+
+    def _native_currency_for(self, chain_id: int) -> str:
+        if int(chain_id) == DEFAULT_ETHEREUM_CHAIN_ID:
+            return "ETH"
+        if int(chain_id) == DEFAULT_POLYGON_CHAIN_ID:
+            return "POL"
+        return "ETH"
+
+    def _explorer_base_for(self, chain_id: int) -> str:
+        if int(chain_id) == DEFAULT_ETHEREUM_CHAIN_ID:
+            return "https://etherscan.io"
+        if int(chain_id) == DEFAULT_POLYGON_CHAIN_ID:
+            return "https://polygonscan.com"
+        return ""
+
+    def _explorer_tx_url_for(self, chain_id: int) -> str:
+        base = self._explorer_base_for(chain_id)
+        return f"{base}/tx/{{tx_hash}}" if base else ""
+
+    def _chain_ids(self) -> List[int]:
+        ids = {int(token.chain_id) for token in self.supported_tokens.values()}
+        ids.update(int(chain_id) for chain_id in self.rpc_urls_by_chain.keys())
+        if self.default_chain_id:
+            ids.add(int(self.default_chain_id))
+        return sorted(ids)
+
+    def _chain_label_for(self, chain_id: int) -> str:
+        return self._chain_code_for(chain_id)
+
+    def _tokens_for_chain(self, chain_id: int) -> List[PaymentTokenConfig]:
+        return [
+            token
+            for token in self.supported_tokens.values()
+            if int(token.chain_id) == int(chain_id)
+        ]
+
+    def _find_token_by_address(
+        self, token_address: str, chain_id: Optional[int] = None
+    ) -> Optional[PaymentTokenConfig]:
+        normalized = _normalize_address(token_address)
+        if not normalized:
+            return None
+        for token in self.supported_tokens.values():
+            if token.address != normalized:
+                continue
+            if chain_id is not None and int(token.chain_id) != int(chain_id):
+                continue
+            return token
+        return None
+
     def _default_token_meta(self, address: str) -> Dict[str, str]:
         normalized = _normalize_address(address)
+        if normalized == _normalize_address(DEFAULT_ETHEREUM_USDC_ADDRESS):
+            return {"code": "usdc", "symbol": "USDC", "name": "USDC"}
         if normalized == _normalize_address(DEFAULT_NATIVE_USDC_ADDRESS):
             return {"code": "usdc", "symbol": "USDC", "name": "Native USDC"}
         if normalized == _normalize_address(DEFAULT_USDT_ADDRESS):
@@ -400,10 +544,21 @@ class PaymentContractCheckoutService:
         self,
         row: Dict[str, Any],
         fallback_receiver_contract: str,
+        fallback_direct_receiver_address: str,
         fallback_token_decimals: int,
     ) -> Optional[PaymentTokenConfig]:
         if not isinstance(row, dict):
             return None
+        try:
+            chain_id = int(row.get("chain_id") or row.get("network_id") or self.chain_id)
+        except Exception:
+            chain_id = int(self.chain_id)
+        chain_code = str(
+            row.get("chain_code") or row.get("network") or self._chain_code_for(chain_id)
+        ).strip().lower()
+        chain_name = str(
+            row.get("chain_name") or row.get("network_name") or self._chain_name_for(chain_id)
+        ).strip()
         address = _normalize_address(
             row.get("address") or row.get("token_address") or row.get("contract")
         )
@@ -415,7 +570,13 @@ class PaymentContractCheckoutService:
             or row.get("contract_address")
             or fallback_receiver_contract
         )
-        if not receiver_contract:
+        direct_receiver_address = _normalize_address(
+            row.get("direct_receiver_address")
+            or row.get("direct_receiver")
+            or fallback_direct_receiver_address
+            or receiver_contract
+        )
+        if not receiver_contract and not direct_receiver_address:
             return None
         default_meta = self._default_token_meta(address)
         code = str(row.get("code") or default_meta["code"]).strip().lower()
@@ -437,13 +598,37 @@ class PaymentContractCheckoutService:
             decimals = int(fallback_token_decimals)
         decimals = max(0, decimals)
         is_default = bool(row.get("is_default"))
+        rpc_urls = self._load_rpc_urls(row.get("rpc_urls") or row.get("rpc_url") or "")
+        explorer_tx_url = str(
+            row.get("explorer_tx_url") or self._explorer_tx_url_for(chain_id)
+        ).strip()
+        try:
+            confirmations_raw = row.get("confirmations")
+            confirmations = (
+                int(confirmations_raw) if confirmations_raw is not None else None
+            )
+        except Exception:
+            confirmations = None
+        supports_direct_transfer = bool(row.get("supports_direct_transfer", True))
+        supports_contract_checkout = bool(
+            row.get("supports_contract_checkout", row.get("supports_contract", chain_id == self.chain_id))
+        )
         return PaymentTokenConfig(
             code=code,
             symbol=symbol,
             name=name,
             address=address,
             decimals=decimals,
+            chain_id=chain_id,
+            chain_code=chain_code or self._chain_code_for(chain_id),
+            chain_name=chain_name or self._chain_name_for(chain_id),
             receiver_contract=receiver_contract,
+            direct_receiver_address=direct_receiver_address or receiver_contract,
+            rpc_urls=rpc_urls,
+            explorer_tx_url=explorer_tx_url,
+            confirmations=confirmations,
+            supports_contract_checkout=supports_contract_checkout,
+            supports_direct_transfer=supports_direct_transfer,
             is_default=is_default,
         )
 
@@ -452,6 +637,7 @@ class PaymentContractCheckoutService:
         raw: str,
         *,
         fallback_receiver_contract: str,
+        fallback_direct_receiver_address: str,
         fallback_token_address: str,
         fallback_token_decimals: int,
     ) -> Dict[str, PaymentTokenConfig]:
@@ -483,11 +669,12 @@ class PaymentContractCheckoutService:
             token = self._to_token_config(
                 row,
                 fallback_receiver_contract=fallback_receiver_contract,
+                fallback_direct_receiver_address=fallback_direct_receiver_address,
                 fallback_token_decimals=fallback_token_decimals,
             )
             if not token:
                 continue
-            out[token.address] = token
+            out[self._token_key(token.chain_id, token.address)] = token
 
         if out:
             return out
@@ -502,47 +689,93 @@ class PaymentContractCheckoutService:
             name=fallback_meta["name"],
             address=fallback_address,
             decimals=max(0, int(fallback_token_decimals)),
+            chain_id=int(self.chain_id),
+            chain_code=self._chain_code_for(self.chain_id),
+            chain_name=self._chain_name_for(self.chain_id),
             receiver_contract=fallback_receiver_contract,
+            direct_receiver_address=fallback_direct_receiver_address
+            or fallback_receiver_contract,
+            rpc_urls=[],
+            explorer_tx_url=self._explorer_tx_url_for(self.chain_id),
+            confirmations=None,
+            supports_contract_checkout=True,
+            supports_direct_transfer=True,
             is_default=True,
         )
-        return {fallback_token.address: fallback_token}
+        return {self._token_key(fallback_token.chain_id, fallback_token.address): fallback_token}
 
     def _resolve_supported_token(
         self,
         token_address: Optional[str] = None,
+        chain_id: Optional[int] = None,
     ) -> PaymentTokenConfig:
+        selected_chain_id = int(chain_id) if chain_id is not None else None
         normalized = _normalize_address(token_address or "")
         if normalized:
-            token = self.supported_tokens.get(normalized)
+            token = self._find_token_by_address(normalized, selected_chain_id)
             if token:
                 return token
             available = ", ".join(
-                f"{item.symbol}:{item.address}"
+                f"{item.chain_code}/{item.symbol}:{item.address}"
                 for item in self.supported_tokens.values()
             )
             raise PaymentCheckoutError(
                 400,
                 f"token_address not supported: {normalized}. available={available}",
             )
-        default_token = self.supported_tokens.get(self.default_token_address)
+        if selected_chain_id is not None:
+            chain_tokens = self._tokens_for_chain(selected_chain_id)
+            default_for_chain = next(
+                (token for token in chain_tokens if bool(token.is_default)),
+                chain_tokens[0] if chain_tokens else None,
+            )
+            if default_for_chain:
+                return default_for_chain
+            raise PaymentCheckoutError(
+                400, f"payment chain_id not supported: {selected_chain_id}"
+            )
+        default_token = self.supported_tokens.get(self.default_token_key)
         if default_token:
             return default_token
         raise PaymentCheckoutError(503, "no supported payment token configured")
 
-    def _token_decimals_for(self, token_address: str) -> int:
-        token = self.supported_tokens.get(_normalize_address(token_address))
+    def _token_decimals_for(
+        self, token_address: str, chain_id: Optional[int] = None
+    ) -> int:
+        token = self._find_token_by_address(token_address, chain_id)
         if token:
             return int(token.decimals)
         return int(self.token_decimals)
 
-    def _token_symbol_for(self, token_address: str) -> str:
-        token = self.supported_tokens.get(_normalize_address(token_address))
+    def _token_symbol_for(
+        self, token_address: str, chain_id: Optional[int] = None
+    ) -> str:
+        token = self._find_token_by_address(token_address, chain_id)
         if token and token.symbol:
             return str(token.symbol)
         normalized = _normalize_address(token_address)
         if normalized:
             return f"{normalized[:6]}...{normalized[-4:]}"
         return "Unknown"
+
+    def _token_config_for_intent(
+        self, intent: PaymentIntentRecord
+    ) -> Optional[PaymentTokenConfig]:
+        return self._find_token_by_address(intent.token_address, intent.chain_id)
+
+    def _confirmations_for_chain(self, chain_id: int) -> int:
+        chain_tokens = self._tokens_for_chain(chain_id)
+        token_confirmations = next(
+            (
+                int(token.confirmations)
+                for token in chain_tokens
+                if token.confirmations is not None and int(token.confirmations) > 0
+            ),
+            None,
+        )
+        if token_confirmations:
+            return max(1, int(token_confirmations))
+        return int(self.confirmations)
 
     def _service_headers(self, prefer: Optional[str] = None) -> Dict[str, str]:
         headers = {
@@ -882,45 +1115,78 @@ class PaymentContractCheckoutService:
             Web3.HTTPProvider(rpc_url, request_kwargs={"timeout": self.timeout_sec})
         )
 
-    def _try_connect_rpc(self, rpc_url: str) -> Optional[Web3]:
+    def _try_connect_rpc(self, rpc_url: str, chain_id: int) -> Optional[Web3]:
         try:
             w3 = self._build_web3(rpc_url)
             if not w3.is_connected():
                 return None
-            if int(w3.eth.chain_id) != int(self.chain_id):
+            if int(w3.eth.chain_id) != int(chain_id):
                 return None
             return w3
         except Exception:
             return None
 
-    def _rotate_rpc(self) -> Optional[Web3]:
-        for rpc_url in self.rpc_urls:
-            w3 = self._try_connect_rpc(rpc_url)
+    def _rotate_rpc(self, chain_id: Optional[int] = None) -> Optional[Web3]:
+        target_chain_id = int(chain_id or self.default_chain_id or self.chain_id)
+        for rpc_url in self.rpc_urls_by_chain.get(target_chain_id, []):
+            w3 = self._try_connect_rpc(rpc_url, target_chain_id)
             if w3 is not None:
-                self._w3 = w3
-                self._w3_url = rpc_url
+                self._w3_by_chain[target_chain_id] = w3
+                self._w3_url_by_chain[target_chain_id] = rpc_url
+                if target_chain_id == int(self.default_chain_id or self.chain_id):
+                    self._w3 = w3
+                    self._w3_url = rpc_url
                 return w3
-        self._w3 = None
-        self._w3_url = ""
+        self._w3_by_chain.pop(target_chain_id, None)
+        self._w3_url_by_chain.pop(target_chain_id, None)
+        if target_chain_id == int(self.default_chain_id or self.chain_id):
+            self._w3 = None
+            self._w3_url = ""
         return None
 
-    def _get_web3(self, force_refresh: bool = False) -> Web3:
+    def _get_web3(
+        self,
+        chain_id: Optional[int] = None,
+        force_refresh: bool = False,
+    ) -> Web3:
+        target_chain_id = int(chain_id or self.default_chain_id or self.chain_id)
         with self._w3_lock:
-            if self._w3 is None or force_refresh:
-                self._rotate_rpc()
-        assert self._w3 is not None
-        return self._w3
+            if self._w3_by_chain.get(target_chain_id) is None or force_refresh:
+                self._rotate_rpc(target_chain_id)
+        w3 = self._w3_by_chain.get(target_chain_id)
+        assert w3 is not None
+        return w3
 
     def get_rpc_runtime_status(self) -> Dict[str, Any]:
-        candidates = list(self.rpc_urls)
+        default_chain_id = int(self.default_chain_id or self.chain_id)
+        candidates = list(self.rpc_urls_by_chain.get(default_chain_id, []))
+        chains = {
+            str(chain_id): {
+                "chain_id": chain_id,
+                "chain_code": self._chain_code_for(chain_id),
+                "chain_name": self._chain_name_for(chain_id),
+                "configured_rpc_count": len(urls),
+                "active_rpc_url": self._w3_url_by_chain.get(chain_id)
+                or (urls[0] if urls else ""),
+                "all_rpc_urls": list(urls),
+            }
+            for chain_id, urls in sorted(self.rpc_urls_by_chain.items())
+        }
         return {
             "configured_rpc_count": len(candidates),
-            "active_rpc_url": self._w3_url or (candidates[0] if candidates else ""),
+            "active_rpc_url": self._w3_url_by_chain.get(default_chain_id)
+            or self._w3_url
+            or (candidates[0] if candidates else ""),
             "all_rpc_urls": candidates,
+            "chains": chains,
         }
 
-    def _get_contract(self, receiver_address: Optional[str] = None):
-        w3 = self._get_web3()
+    def _get_contract(
+        self,
+        receiver_address: Optional[str] = None,
+        chain_id: Optional[int] = None,
+    ):
+        w3 = self._get_web3(chain_id=chain_id)
         contract_address = _normalize_address(
             receiver_address or self.receiver_contract
         )
@@ -932,6 +1198,19 @@ class PaymentContractCheckoutService:
         )
 
     def get_config_payload(self) -> Dict[str, Any]:
+        default_chain_id = int(self.default_chain_id or self.chain_id)
+        chains_payload = [
+            {
+                "chain_id": chain_id,
+                "code": self._chain_code_for(chain_id),
+                "name": self._chain_name_for(chain_id),
+                "native_currency_symbol": self._native_currency_for(chain_id),
+                "block_explorer_url": self._explorer_base_for(chain_id),
+                "explorer_tx_url": self._explorer_tx_url_for(chain_id),
+                "is_default": chain_id == default_chain_id,
+            }
+            for chain_id in self._chain_ids()
+        ]
         tokens_payload = [
             {
                 "code": token.code,
@@ -939,24 +1218,36 @@ class PaymentContractCheckoutService:
                 "name": token.name,
                 "address": token.address,
                 "decimals": int(token.decimals),
+                "chain_id": int(token.chain_id),
+                "chain_code": token.chain_code,
+                "chain_name": token.chain_name,
                 "receiver_contract": token.receiver_contract,
+                "direct_receiver_address": token.direct_receiver_address,
+                "explorer_tx_url": token.explorer_tx_url,
+                "supports_contract_checkout": bool(token.supports_contract_checkout),
+                "supports_direct_transfer": bool(token.supports_direct_transfer),
                 "is_default": bool(
-                    token.is_default or token.address == self.default_token_address
+                    token.is_default
+                    or self._token_key(token.chain_id, token.address)
+                    == self.default_token_key
                 ),
             }
             for token in sorted(
-                self.supported_tokens.values(), key=lambda row: row.code
+                self.supported_tokens.values(),
+                key=lambda row: (int(row.chain_id), row.code),
             )
         ]
         return {
             "enabled": self.enabled,
             "configured": self.configured,
-            "chain_id": self.chain_id,
+            "chain_id": default_chain_id,
+            "default_chain_id": default_chain_id,
             "token_address": self.token_address,
             "token_decimals": self.token_decimals,
             "receiver_contract": self.receiver_contract,
             "direct_receiver_address": self.direct_receiver_address,
             "default_token_address": self.default_token_address or self.token_address,
+            "chains": chains_payload,
             "tokens": tokens_payload,
             "confirmations": self.confirmations,
             "intent_ttl_sec": self.intent_ttl_sec,
@@ -979,10 +1270,11 @@ class PaymentContractCheckoutService:
         }
 
     def _serialize_intent(self, row: Dict[str, Any]) -> PaymentIntentRecord:
+        chain_id = int(row.get("chain_id") or self.chain_id)
         token_address = _normalize_address(
             row.get("token_address") or self.token_address
         )
-        token_decimals = self._token_decimals_for(token_address)
+        token_decimals = self._token_decimals_for(token_address, chain_id)
         amount_units = int(_parse_decimal(row.get("amount_units"), Decimal("0")))
         amount_display = _units_to_decimal(amount_units, token_decimals)
         return PaymentIntentRecord(
@@ -990,12 +1282,12 @@ class PaymentContractCheckoutService:
             order_id_hex=str(row.get("order_id_hex")),
             plan_code=str(row.get("plan_code")),
             plan_id=int(row.get("plan_id") or 0),
-            chain_id=int(row.get("chain_id") or self.chain_id),
+            chain_id=chain_id,
             amount_units=amount_units,
             amount_usdc=_format_decimal(amount_display),
             token_address=token_address,
             token_decimals=token_decimals,
-            token_symbol=self._token_symbol_for(token_address),
+            token_symbol=self._token_symbol_for(token_address, chain_id),
             receiver_address=_normalize_address(
                 row.get("receiver_address") or self.receiver_contract
             ),
@@ -1359,7 +1651,7 @@ class PaymentContractCheckoutService:
         return out
 
     def _build_tx_payload(self, intent: PaymentIntentRecord) -> Dict[str, Any]:
-        contract = self._get_contract(intent.receiver_address)
+        contract = self._get_contract(intent.receiver_address, intent.chain_id)
         tx_data = contract.encode_abi(
             "pay",
             args=[
@@ -1370,7 +1662,7 @@ class PaymentContractCheckoutService:
             ],
         )
         return {
-            "chain_id": self.chain_id,
+            "chain_id": int(intent.chain_id),
             "to": Web3.to_checksum_address(intent.receiver_address),
             "data": tx_data,
             "value": "0x0",
@@ -1389,6 +1681,7 @@ class PaymentContractCheckoutService:
         payment_mode: str = "strict",
         allowed_wallet: Optional[str] = None,
         token_address: Optional[str] = None,
+        chain_id: Optional[int] = None,
         metadata: Optional[Dict[str, Any]] = None,
         use_points: bool = False,
         points_to_consume: Optional[int] = None,
@@ -1398,13 +1691,24 @@ class PaymentContractCheckoutService:
             user_id,
             self._select_plan(plan_code),
         )
-        selected_token = self._resolve_supported_token(token_address)
+        selected_token = self._resolve_supported_token(token_address, chain_id)
+        selected_chain_id = int(selected_token.chain_id)
         mode = str(payment_mode or "strict").strip().lower()
         if mode == "manual":
             mode = "direct"
         if mode not in {"strict", "flex", "direct"}:
             raise PaymentCheckoutError(
                 400, "payment_mode must be strict, flex, or direct"
+            )
+        if mode == "direct" and not selected_token.supports_direct_transfer:
+            raise PaymentCheckoutError(
+                400,
+                f"{selected_token.chain_name} {selected_token.symbol} does not support direct transfer",
+            )
+        if mode != "direct" and not selected_token.supports_contract_checkout:
+            raise PaymentCheckoutError(
+                400,
+                f"{selected_token.chain_name} {selected_token.symbol} supports manual transfer only",
             )
         bound_wallets = [] if mode == "direct" else self.list_wallets(user_id)
         if mode != "direct" and not bound_wallets:
@@ -1439,10 +1743,13 @@ class PaymentContractCheckoutService:
         combined_metadata = dict(metadata or {})
         combined_metadata["token_code"] = str(selected_token.code)
         combined_metadata["token_symbol"] = str(selected_token.symbol)
+        combined_metadata["chain_id"] = selected_chain_id
+        combined_metadata["chain_code"] = selected_token.chain_code
+        combined_metadata["chain_name"] = selected_token.chain_name
         if isinstance(plan.get("telegram_pricing"), dict):
             combined_metadata["telegram_pricing"] = plan["telegram_pricing"]
         receiver_address = (
-            self.direct_receiver_address
+            selected_token.direct_receiver_address
             if mode == "direct"
             else selected_token.receiver_contract
         )
@@ -1480,7 +1787,7 @@ class PaymentContractCheckoutService:
                 "user_id": user_id,
                 "plan_code": plan["plan_code"],
                 "plan_id": plan["plan_id"],
-                "chain_id": self.chain_id,
+                "chain_id": selected_chain_id,
                 "token_address": selected_token.address,
                 "receiver_address": receiver_address,
                 "amount_units": str(amount_units),
@@ -1530,8 +1837,9 @@ class PaymentContractCheckoutService:
         }
         if mode == "direct":
             response["direct_payment"] = {
-                "chain_id": self.chain_id,
-                "chain": "polygon",
+                "chain_id": selected_chain_id,
+                "chain": selected_token.chain_code,
+                "chain_name": selected_token.chain_name,
                 "token_symbol": intent.token_symbol,
                 "token_address": intent.token_address,
                 "token_decimals": int(intent.token_decimals),
@@ -1540,6 +1848,8 @@ class PaymentContractCheckoutService:
                 "amount_usdc": intent.amount_usdc,
                 "intent_id": intent.intent_id,
                 "expires_at": intent.expires_at,
+                "explorer_tx_url": selected_token.explorer_tx_url
+                or self._explorer_tx_url_for(selected_chain_id),
             }
         return response
 
@@ -1578,7 +1888,6 @@ class PaymentContractCheckoutService:
                 "select": "id,user_id,tx_hash,status,updated_at,created_at,chain_id",
                 "status": "eq.submitted",
                 "tx_hash": "not.is.null",
-                "chain_id": f"eq.{self.chain_id}",
                 "order": "updated_at.asc",
                 "limit": str(safe_limit),
             },
@@ -1601,6 +1910,7 @@ class PaymentContractCheckoutService:
                     "intent_id": intent_id,
                     "user_id": user_id,
                     "tx_hash": tx_hash,
+                    "chain_id": int(row.get("chain_id") or self.chain_id),
                     "status": str(row.get("status") or ""),
                     "updated_at": row.get("updated_at"),
                     "created_at": row.get("created_at"),
@@ -1631,7 +1941,6 @@ class PaymentContractCheckoutService:
                     "amount_units,payment_mode,allowed_wallet,chain_id,created_at,updated_at"
                 ),
                 "order_id_hex": f"eq.{normalized_order}",
-                "chain_id": f"eq.{self.chain_id}",
                 "status": "in.(created,submitted,confirmed)",
                 "order": "created_at.desc",
                 "limit": str(safe_limit),
@@ -1658,6 +1967,7 @@ class PaymentContractCheckoutService:
                     "tx_hash": str(row.get("tx_hash") or "").strip().lower(),
                     "order_id_hex": str(row.get("order_id_hex") or "").strip().lower(),
                     "plan_id": int(row.get("plan_id") or 0),
+                    "chain_id": int(row.get("chain_id") or self.chain_id),
                     "token_address": _normalize_address(row.get("token_address")),
                     "amount_units": int(row.get("amount_units") or 0),
                     "payment_mode": str(row.get("payment_mode") or "").strip().lower(),
@@ -1714,7 +2024,7 @@ class PaymentContractCheckoutService:
                 params={"on_conflict": "tx_hash"},
                 payload={
                     "intent_id": intent.intent_id,
-                    "chain_id": self.chain_id,
+                    "chain_id": int(intent.chain_id),
                     "tx_hash": tx_hash_text,
                     "from_address": _normalize_address(from_address) or None,
                     "to_address": _normalize_address(to_address)
@@ -1775,12 +2085,12 @@ class PaymentContractCheckoutService:
                 "checks": {"intent_expired": True},
             }
 
-        w3 = self._get_web3()
+        w3 = self._get_web3(chain_id=intent.chain_id)
         try:
             receipt = w3.eth.get_transaction_receipt(tx_hash_text)
         except Exception:
             try:
-                w3 = self._get_web3(force_refresh=True)
+                w3 = self._get_web3(chain_id=intent.chain_id, force_refresh=True)
                 receipt = w3.eth.get_transaction_receipt(tx_hash_text)
             except Exception:
                 receipt = None
@@ -1991,7 +2301,7 @@ class PaymentContractCheckoutService:
             params={"on_conflict": "tx_hash"},
             payload={
                 "intent_id": intent.intent_id,
-                "chain_id": self.chain_id,
+                "chain_id": int(intent.chain_id),
                 "tx_hash": tx_hash_text,
                 "from_address": from_addr,
                 "to_address": intent.receiver_address,
@@ -2014,26 +2324,26 @@ class PaymentContractCheckoutService:
             else None,
         }
 
-    def _wait_receipt(self, tx_hash: str) -> Any:
+    def _wait_receipt(self, tx_hash: str, chain_id: Optional[int] = None) -> Any:
         import time as _time
 
         start = _now_utc()
         while (_now_utc() - start).total_seconds() < self.max_wait_sec:
             try:
-                w3 = self._get_web3()
+                w3 = self._get_web3(chain_id=chain_id)
                 receipt = w3.eth.get_transaction_receipt(tx_hash)
             except Exception:
                 try:
-                    w3 = self._get_web3(force_refresh=True)
+                    w3 = self._get_web3(chain_id=chain_id, force_refresh=True)
                     receipt = w3.eth.get_transaction_receipt(tx_hash)
                 except Exception:
                     receipt = None
             if receipt and receipt.get("blockNumber"):
                 return receipt
             try:
-                latest_w3 = self._get_web3()
+                latest_w3 = self._get_web3(chain_id=chain_id)
                 if not latest_w3.is_connected():
-                    self._get_web3(force_refresh=True)
+                    self._get_web3(chain_id=chain_id, force_refresh=True)
             except Exception:
                 receipt = None
             _time.sleep(self.poll_interval_sec)
@@ -2042,7 +2352,7 @@ class PaymentContractCheckoutService:
     def _extract_matching_event(
         self, receipt: Any, intent: PaymentIntentRecord
     ) -> Optional[Dict[str, Any]]:
-        contract = self._get_contract(intent.receiver_address)
+        contract = self._get_contract(intent.receiver_address, intent.chain_id)
         try:
             events = contract.events.OrderPaid().process_receipt(receipt)
         except Exception:
@@ -2089,14 +2399,14 @@ class PaymentContractCheckoutService:
         token_addresses: List[str] = []
         if intent.token_address:
             token_addresses.append(_normalize_address(intent.token_address))
-        for addr in self.supported_tokens:
-            normalized = _normalize_address(addr)
+        for token in self._tokens_for_chain(intent.chain_id):
+            normalized = _normalize_address(token.address)
             if normalized and normalized not in token_addresses:
                 token_addresses.append(normalized)
 
         for token_addr in token_addresses:
             try:
-                token_contract = self._get_web3().eth.contract(
+                token_contract = self._get_web3(chain_id=intent.chain_id).eth.contract(
                     address=Web3.to_checksum_address(token_addr),
                     abi=[ERC20_TRANSFER_EVENT_ABI],
                 )
@@ -2116,7 +2426,7 @@ class PaymentContractCheckoutService:
                 receiver = _normalize_address(args.get("to"))
                 amount = int(args.get("value") or 0)
                 if receiver == expected_to and amount >= expected_amount:
-                    token_meta = self._token_symbol_for(token_addr)
+                    token_meta = self._token_symbol_for(token_addr, intent.chain_id)
                     return {
                         "from": payer,
                         "to": receiver,
@@ -2137,10 +2447,12 @@ class PaymentContractCheckoutService:
         amount_units: int,
         token_address: str,
         payload: Dict[str, Any],
+        chain_id: Optional[int] = None,
     ) -> Dict[str, Any]:
-        token_decimals = self._token_decimals_for(token_address)
+        payment_chain_id = int(chain_id or self.default_chain_id or self.chain_id)
+        token_decimals = self._token_decimals_for(token_address, payment_chain_id)
         amount_dec = _units_to_decimal(amount_units, token_decimals)
-        currency = self._token_symbol_for(token_address)
+        currency = self._token_symbol_for(token_address, payment_chain_id)
         rows = self._rest(
             "POST",
             "payments",
@@ -2149,7 +2461,7 @@ class PaymentContractCheckoutService:
                 "user_id": user_id,
                 "amount": str(amount_dec),
                 "currency": currency,
-                "chain": "polygon",
+                "chain": self._chain_label_for(payment_chain_id),
                 "tx_hash": tx_hash,
                 "status": "confirmed",
                 "raw_payload": payload,
@@ -2295,6 +2607,7 @@ class PaymentContractCheckoutService:
                 tx_hash=tx_hash,
                 amount_units=int(intent.amount_units),
                 token_address=intent.token_address,
+                chain_id=intent.chain_id,
                 payload={
                     "tx_hash": tx_hash,
                     "intent_id": intent.intent_id,
@@ -2380,7 +2693,7 @@ class PaymentContractCheckoutService:
                 params={"on_conflict": "tx_hash"},
                 payload={
                     "intent_id": intent.intent_id,
-                    "chain_id": self.chain_id,
+                    "chain_id": int(intent.chain_id),
                     "tx_hash": str(tx_hash).strip().lower(),
                     "from_address": None,
                     "to_address": intent.receiver_address,
@@ -2470,13 +2783,13 @@ class PaymentContractCheckoutService:
             raise PaymentCheckoutError(400, "tx_hash required")
         if not (tx_hash_text.startswith("0x") and len(tx_hash_text) == 66):
             raise PaymentCheckoutError(400, "invalid tx_hash")
-        w3 = self._get_web3()
+        w3 = self._get_web3(chain_id=intent.chain_id)
         if not w3.is_connected():
             raise PaymentCheckoutError(503, "cannot connect payment rpc")
-        if int(w3.eth.chain_id) != int(self.chain_id):
+        if int(w3.eth.chain_id) != int(intent.chain_id):
             raise PaymentCheckoutError(503, "payment rpc chain mismatch")
         # Wait for receipt first to avoid transient RPC lag on eth_getTransaction.
-        receipt = self._wait_receipt(tx_hash_text)
+        receipt = self._wait_receipt(tx_hash_text, chain_id=intent.chain_id)
         if int(receipt.get("status") or 0) != 1:
             self._mark_intent_failed(
                 user_id=user_id,
@@ -2502,9 +2815,11 @@ class PaymentContractCheckoutService:
         block_number = int(receipt.get("blockNumber") or 0)
         latest_block = int(w3.eth.block_number)
         confirmations = max(0, latest_block - block_number + 1) if block_number else 0
-        if confirmations < self.confirmations:
+        required_confirmations = self._confirmations_for_chain(intent.chain_id)
+        if confirmations < required_confirmations:
             raise PaymentCheckoutError(
-                409, f"confirmations not enough: {confirmations}/{self.confirmations}"
+                409,
+                f"confirmations not enough: {confirmations}/{required_confirmations}",
             )
         is_direct = intent.payment_mode == "direct"
         if is_direct:
@@ -2651,7 +2966,7 @@ class PaymentContractCheckoutService:
             payload={
                 "intent_id": intent.intent_id,
                 "tx_hash": tx_hash_text,
-                "chain_id": self.chain_id,
+                "chain_id": int(intent.chain_id),
                 "from_address": tx_from,
                 "to_address": tx_to,
                 "block_number": block_number,
@@ -2680,6 +2995,7 @@ class PaymentContractCheckoutService:
                 tx_hash=tx_hash_text,
                 amount_units=intent.amount_units,
                 token_address=intent.token_address,
+                chain_id=intent.chain_id,
                 payload=payload,
             )
             subscription_row = self._grant_subscription(

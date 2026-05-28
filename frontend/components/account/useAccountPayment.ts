@@ -211,6 +211,7 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
   const [boundWallets, setBoundWallets] = useState<BoundWallet[]>([]);
   const [walletAddress, setWalletAddress] = useState("");
   const [selectedPlanCode, setSelectedPlanCode] = useState("pro_monthly");
+  const [selectedPaymentChainId, setSelectedPaymentChainId] = useState<number | null>(null);
   const [selectedTokenAddress, setSelectedTokenAddress] = useState("");
   const [selectedWallet, setSelectedWallet] = useState("");
   const [providerMode, setProviderMode] = useState<ProviderMode>("auto");
@@ -218,7 +219,7 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
   const [selectedInjectedProviderKey, setSelectedInjectedProviderKey] = useState("");
 
   // ── Chain ID derived from payment config ────────────────
-  const chainId = paymentConfig?.chain_id ?? 137;
+  const chainId = selectedPaymentChainId || paymentConfig?.default_chain_id || paymentConfig?.chain_id || 137;
 
   // ── loadPaymentSnapshot ──────────────────────────────────
   // Defined in master because it sets state across multiple sub-hook domains.
@@ -243,8 +244,35 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
         const tokenOptions = Array.isArray(configJson.tokens)
           ? configJson.tokens.filter((row) => typeof row?.address === "string" && String(row.address).startsWith("0x"))
           : [];
+        const chainOptions = Array.isArray(configJson.chains)
+          ? configJson.chains.filter((row) => Number(row?.chain_id) > 0)
+          : [];
+        const defaultChainId = Number(
+          configJson.default_chain_id ||
+            chainOptions.find((row) => row.is_default)?.chain_id ||
+            configJson.chain_id ||
+            tokenOptions.find((row) => row.is_default)?.chain_id ||
+            137,
+        );
+        const supportedChainIds = new Set(
+          (chainOptions.length ? chainOptions : [{ chain_id: defaultChainId }])
+            .map((row) => Number(row.chain_id))
+            .filter((value) => Number.isFinite(value) && value > 0),
+        );
+        setSelectedPaymentChainId((prev) =>
+          prev && supportedChainIds.has(prev) ? prev : defaultChainId,
+        );
+        const activeChainId =
+          selectedPaymentChainId && supportedChainIds.has(selectedPaymentChainId)
+            ? selectedPaymentChainId
+            : defaultChainId;
+        const tokenOptionsForChain = tokenOptions.filter(
+          (row) => Number(row.chain_id || activeChainId) === activeChainId,
+        );
         const defaultTokenAddress = String(
           configJson.default_token_address ||
+            tokenOptionsForChain.find((row) => row.is_default)?.address ||
+            tokenOptionsForChain[0]?.address ||
             tokenOptions.find((row) => row.is_default)?.address ||
             tokenOptions[0]?.address ||
             configJson.token_address || "",
@@ -283,6 +311,7 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
     backend?.authenticated,
     buildAuthedHeaders,
     selectedPlanCode,
+    selectedPaymentChainId,
     selectedWallet,
     walletAddress,
   ]);
@@ -371,6 +400,8 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
     setPaymentConfig,
     selectedPlanCode,
     setSelectedPlanCode,
+    selectedPaymentChainId: chainId,
+    setSelectedPaymentChainId,
     selectedTokenAddress,
     setSelectedTokenAddress,
     boundWallets,
@@ -451,6 +482,7 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
     boundWallets,
     walletAddress,
     selectedPlanCode,
+    selectedPaymentChainId: chainId,
     selectedTokenAddress,
     selectedWallet,
     providerMode,
@@ -460,6 +492,7 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
 
     // Setters for shared state
     setSelectedTokenAddress,
+    setSelectedPaymentChainId,
     setSelectedWallet,
     setSelectedInjectedProviderKey,
     setProviderMode,
@@ -476,6 +509,8 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
     selectedPaymentToken: paymentFlow.selectedPaymentToken,
     selectedTokenLabel: paymentFlow.selectedTokenLabel,
     availableTokenList: paymentFlow.availableTokenList,
+    availableChainList: paymentFlow.availableChainList,
+    selectedPaymentChain: paymentFlow.selectedPaymentChain,
     effectivePlanList,
     resolvedSelectedTokenAddress: paymentFlow.resolvedSelectedTokenAddress,
     paymentReceiverAddress: paymentFlow.paymentReceiverAddress,

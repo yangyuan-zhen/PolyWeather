@@ -303,11 +303,11 @@ def test_confirm_intent_tx_repairs_side_effect_failure(monkeypatch, tmp_path):
         def is_connected():
             return True
 
-    monkeypatch.setattr(service, "_get_web3", lambda: _Web3())
+    monkeypatch.setattr(service, "_get_web3", lambda *args, **kwargs: _Web3())
     monkeypatch.setattr(
         service,
         "_wait_receipt",
-        lambda _tx_hash: {
+        lambda _tx_hash, *args, **kwargs: {
             "status": 1,
             "to": "0xed2f13aa5ff033c58fb436e178451cd07f693f32",
             "from": "0x1111111111111111111111111111111111111111",
