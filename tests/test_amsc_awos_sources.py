@@ -69,6 +69,65 @@ def test_parse_wind_plate_payload_normalizes_runway_point_temperatures():
     assert pt0["humidity"] == 67.0
 
 
+def test_parse_wind_plate_payload_uses_settlement_runway_endpoint_temperature():
+    payload = {
+        "code": 200,
+        "data": {
+            "04/22": {
+                "RNO": "04/22",
+                "OTIME": "2026-05-14 17:19:00",
+                "TDZ_TEMP": "31.2",
+                "MID_TEMP": "33.4",
+                "END_TEMP": "32.6",
+            },
+            "05/23": {
+                "RNO": "05/23",
+                "OTIME": "2026-05-14 17:19:00",
+                "TDZ_TEMP": "34.8",
+                "MID_TEMP": "35.1",
+                "END_TEMP": "34.2",
+            },
+        },
+    }
+
+    parsed = _amsc_parse_wind_plate_payload(payload, city_key="wuhan", icao="ZHHH")
+
+    assert parsed is not None
+    assert parsed["temp_c"] == 31.2
+    assert parsed["temp_source"] == "settlement_runway_endpoint"
+    assert parsed["settlement_runway"] == "04"
+    assert parsed["settlement_runway_pair"] == "04/22"
+    assert parsed["settlement_runway_position"] == "tdz"
+    settlement_point = parsed["runway_obs"]["point_temperatures"][0]
+    assert settlement_point["is_settlement"] is True
+    assert settlement_point["settlement_runway"] == "04"
+    assert settlement_point["target_runway_max"] == 31.2
+
+
+def test_parse_wind_plate_payload_uses_end_temperature_when_target_is_second_runway():
+    payload = {
+        "code": 200,
+        "data": {
+            "20R/02L": {
+                "RNO": "20R/02L",
+                "OTIME": "2026-05-14 17:19:00",
+                "TDZ_TEMP": "34.4",
+                "MID_TEMP": "35.2",
+                "END_TEMP": "33.7",
+            },
+        },
+    }
+
+    parsed = _amsc_parse_wind_plate_payload(payload, city_key="chongqing", icao="ZUCK")
+
+    assert parsed is not None
+    assert parsed["temp_c"] == 33.7
+    assert parsed["settlement_runway"] == "02L"
+    assert parsed["settlement_runway_pair"] == "20R/02L"
+    assert parsed["settlement_runway_position"] == "end"
+    assert parsed["runway_obs"]["point_temperatures"][0]["target_runway_max"] == 33.7
+
+
 def test_parse_wind_plate_payload_rejects_unauthorized_or_empty_payloads():
     assert _amsc_parse_wind_plate_payload(
         {"errCode": -12010, "errMsg": "无权访问此接口"},

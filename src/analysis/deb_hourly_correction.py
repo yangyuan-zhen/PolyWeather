@@ -280,6 +280,7 @@ def build_deb_hourly_path(
     peak_first_h: Optional[int],
     peak_last_h: Optional[int],
     corrector: HourlyPeakCorrector,
+    base_source: str = "hourly_plus_deb_offset",
 ) -> Dict[str, Any]:
     deb_value = _to_float(deb_prediction)
     numeric_base = [_to_float(value) for value in hourly_temps]
@@ -305,7 +306,7 @@ def build_deb_hourly_path(
         "version": DEB_HOURLY_PEAK_CORRECTED_VERSION,
         "times": applied["times"],
         "temps": applied["temps"],
-        "base_source": "hourly_plus_deb_offset",
+        "base_source": base_source,
         "base_offset": round(offset, 3),
         "correction": {
             "version": applied["version"],

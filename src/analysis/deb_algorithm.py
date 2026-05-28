@@ -1092,6 +1092,27 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7, dec
 
     返回: blended_high (融合预报值), weights_info (权重展示字符串)
     """
+    components = calculate_dynamic_weight_components(
+        city_name,
+        current_forecasts,
+        lookback_days=lookback_days,
+        decay_factor=decay_factor,
+    )
+    forecasts = components.get("forecasts") or {}
+    weights = components.get("weights") or {}
+    if not forecasts or not weights:
+        return components.get("prediction"), components.get("weights_info") or "暂无模型数据"
+    blended_high = sum(forecasts[m] * weights[m] for m in weights if m in forecasts)
+    return round(blended_high, 1), components.get("weights_info") or "权重计算异常"
+
+
+def calculate_dynamic_weight_components(
+    city_name,
+    current_forecasts,
+    lookback_days=7,
+    decay_factor=0.85,
+):
+    """Return DEB forecast representatives and model weights for reuse by hourly paths."""
     project_root = os.path.dirname(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     )
@@ -1105,23 +1126,41 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7, dec
             if v is not None and not _is_excluded_model_name(k)
         ]
     )
-    current_forecasts = _collapse_forecasts_for_deb(current_forecasts)
-    dedup_note = "家族去重" if raw_forecast_count > len(current_forecasts) else ""
+    forecasts = _collapse_forecasts_for_deb(current_forecasts)
+    dedup_note = "家族去重" if raw_forecast_count > len(forecasts) else ""
+    valid_vals = [v for v in forecasts.values() if v is not None]
+    if not valid_vals:
+        return {
+            "prediction": None,
+            "weights": {},
+            "forecasts": {},
+            "maes": {},
+            "weights_info": "暂无模型数据",
+            "days_used": 0,
+            "dedup_note": dedup_note,
+        }
+
+    def _equal_weight_result(note: str, days_used: int):
+        weights = {model: 1.0 / len(forecasts) for model in forecasts}
+        weights_info = f"{note} | {dedup_note}" if dedup_note else note
+        prediction = sum(forecasts[m] * weights[m] for m in weights)
+        return {
+            "prediction": round(prediction, 1),
+            "weights": weights,
+            "forecasts": forecasts,
+            "maes": {},
+            "weights_info": weights_info,
+            "days_used": days_used,
+            "dedup_note": dedup_note,
+        }
 
     if city_name not in data or not data[city_name]:
-        valid_vals = [v for v in current_forecasts.values() if v is not None]
-        if not valid_vals:
-            return None, "暂无模型数据"
-        avg = sum(valid_vals) / len(valid_vals)
-        note = "等权平均(历史数据不足)"
-        if dedup_note:
-            note = f"{note} | {dedup_note}"
-        return round(avg, 1), note
+        return _equal_weight_result("等权平均(历史数据不足)", 0)
 
     city_data = data[city_name]
     sorted_dates = sorted(city_data.keys(), reverse=True)
 
-    errors: dict = {model: [] for model in current_forecasts.keys()}
+    errors: dict = {model: [] for model in forecasts.keys()}
     days_used = 0
     for date_str in sorted_dates:
         if date_str == datetime.now().strftime("%Y-%m-%d"):
@@ -1137,7 +1176,7 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7, dec
 
         decay_weight = decay_factor ** days_used
 
-        for model in current_forecasts.keys():
+        for model in forecasts.keys():
             if model in past_forecasts and past_forecasts[model] is not None:
                 try:
                     pv = float(past_forecasts[model])
@@ -1145,7 +1184,6 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7, dec
                 except (TypeError, ValueError):
                     continue
                 daily_error = abs(pv - av)
-                # Blend with hourly error when available
                 h_err = (
                     past_hourly_error.get(model)
                     if isinstance(past_hourly_error, dict)
@@ -1159,16 +1197,8 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7, dec
             break
 
     if days_used < 2:
-        valid_vals = [v for v in current_forecasts.values() if v is not None]
-        if not valid_vals:
-            return None, f"暂无有效模型数据(由于仅{days_used}天历史)"
-        avg = sum(valid_vals) / len(valid_vals)
-        note = f"等权平均(由于仅{days_used}天历史)"
-        if dedup_note:
-            note = f"{note} | {dedup_note}"
-        return round(avg, 1), note
+        return _equal_weight_result(f"等权平均(由于仅{days_used}天历史)", days_used)
 
-    # 计算加权 MAE（时间衰减）
     maes = {}
     for model, err_weighted in errors.items():
         if err_weighted:
@@ -1180,25 +1210,27 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7, dec
         else:
             maes[model] = 2.0
 
-    # 计算权重（用 MAE 的倒数，误差越小权重越大；加 0.1 防止除以0）
     inverse_errors = {
         m: 1.0 / (mae + 0.1)
         for m, mae in maes.items()
-        if current_forecasts.get(m) is not None
+        if forecasts.get(m) is not None
     }
 
     total_inv = sum(inverse_errors.values())
     if total_inv == 0:
-        return None, "权重计算异常"
+        return {
+            "prediction": None,
+            "weights": {},
+            "forecasts": forecasts,
+            "maes": maes,
+            "weights_info": "权重计算异常",
+            "days_used": days_used,
+            "dedup_note": dedup_note,
+        }
 
     weights = {m: inv / total_inv for m, inv in inverse_errors.items()}
+    blended_high = sum(forecasts[m] * weights[m] for m in weights)
 
-    # 计算加权最高温
-    blended_high = 0.0
-    for m in weights.keys():
-        blended_high += current_forecasts[m] * weights[m]
-
-    # 格式化权重信息，挑选前权重最高的2-3个模型展示
     sorted_models = sorted(weights.items(), key=lambda x: x[1], reverse=True)
     weight_str_parts = []
     for m, w in sorted_models[:3]:
@@ -1206,7 +1238,15 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7, dec
     if dedup_note:
         weight_str_parts.append(dedup_note)
 
-    return round(blended_high, 1), " | ".join(weight_str_parts)
+    return {
+        "prediction": round(blended_high, 1),
+        "weights": weights,
+        "forecasts": forecasts,
+        "maes": maes,
+        "weights_info": " | ".join(weight_str_parts),
+        "days_used": days_used,
+        "dedup_note": dedup_note,
+    }
 
 
 def calculate_deb_prediction(

@@ -25,6 +25,7 @@ from web.core import (
     _weather,
 )
 from src.analysis.deb_algorithm import calculate_deb_prediction
+from src.analysis.deb_hourly_consensus import build_deb_hourly_consensus_path
 from src.analysis.deb_hourly_correction import (
     build_deb_hourly_path,
     get_cached_hourly_peak_corrector,
@@ -1091,6 +1092,7 @@ def _analyze(
     deb_raw_val, deb_version = None, None
     deb_bias_adjustment, deb_bias_samples = 0.0, 0
     deb_intraday_adjustment = 0.0
+    deb_hourly_consensus = None
     if current_forecasts:
         deb_result = calculate_deb_prediction(city, current_forecasts)
         if deb_result.get("prediction") is not None:
@@ -1100,6 +1102,14 @@ def _analyze(
             deb_bias_adjustment = deb_result.get("bias_adjustment") or 0.0
             deb_bias_samples = deb_result.get("bias_samples") or 0
             deb_weights = deb_result.get("weights_info") or ""
+            deb_hourly_consensus = build_deb_hourly_consensus_path(
+                city=city,
+                hourly_times=mm.get("hourly_times") or [],
+                hourly_forecasts=mm.get("hourly_forecasts") or {},
+                daily_forecasts=current_forecasts,
+                deb_prediction=deb_val,
+                local_date=local_date_str,
+            )
 
     # ── 7. Ensemble stats ──
     ens_data = {
@@ -1188,7 +1198,16 @@ def _analyze(
             h_lifted_index = [None for _ in parsed_obs]
             h_boundary_layer_height = [None for _ in parsed_obs]
 
-    peak_hours = _resolve_peak_hours(raw, local_date_str, h_times, h_temps, om_today)
+    peak_source = raw
+    if deb_hourly_consensus:
+        peak_source = {
+            **raw,
+            "deb": {
+                **(raw.get("deb") or {}),
+                "hourly_consensus": deb_hourly_consensus,
+            },
+        }
+    peak_hours = _resolve_peak_hours(peak_source, local_date_str, h_times, h_temps, om_today)
 
     first_peak_h = int(peak_hours[0].split(":")[0]) if peak_hours else 13
     last_peak_h = int(peak_hours[-1].split(":")[0]) if peak_hours else 15
@@ -1242,6 +1261,8 @@ def _analyze(
             deb_bias_adjustment = sd.get("deb_bias_adjustment") or 0.0
             deb_bias_samples = sd.get("deb_bias_samples") or 0
             deb_weights = sd.get("deb_weights", "")
+        if deb_hourly_consensus is None and sd.get("deb_hourly_consensus"):
+            deb_hourly_consensus = sd.get("deb_hourly_consensus")
 
     except Exception as e:
         logger.warning(f"Structured analysis skipped for {city}: {e}")
@@ -1306,16 +1327,27 @@ def _analyze(
             deb_weights = f"{deb_weights or 'DEB'} + intraday_bias({deb_intraday_adjustment:+.1f})"
 
     deb_hourly_path = None
-    if deb_val is not None and today_hourly.get("times") and today_hourly.get("temps"):
+    deb_base_source = "hourly_plus_deb_offset"
+    deb_base_times = [str(item) for item in today_hourly.get("times") or []]
+    deb_base_temps = today_hourly.get("temps") or []
+    if isinstance(deb_hourly_consensus, dict):
+        consensus_times = deb_hourly_consensus.get("times") or []
+        consensus_temps = deb_hourly_consensus.get("temps") or []
+        if consensus_times and consensus_temps:
+            deb_base_source = "deb_hourly_consensus"
+            deb_base_times = [str(item) for item in consensus_times]
+            deb_base_temps = consensus_temps
+    if deb_val is not None and deb_base_times and deb_base_temps:
         try:
             deb_hourly_path = build_deb_hourly_path(
                 city=city,
-                hourly_times=[str(item) for item in today_hourly.get("times") or []],
-                hourly_temps=today_hourly.get("temps") or [],
+                hourly_times=deb_base_times,
+                hourly_temps=deb_base_temps,
                 deb_prediction=deb_val,
                 peak_first_h=first_peak_h,
                 peak_last_h=last_peak_h,
                 corrector=get_cached_hourly_peak_corrector(),
+                base_source=deb_base_source,
             )
         except Exception as exc:
             logger.debug(f"DEB hourly path correction skipped for {city}: {exc}")
@@ -1741,6 +1773,7 @@ def _analyze(
             "bias_adjustment": deb_bias_adjustment,
             "bias_samples": deb_bias_samples,
             "intraday_adjustment": deb_intraday_adjustment,
+            "hourly_consensus": deb_hourly_consensus,
             "hourly_path": deb_hourly_path,
             "hourly_correction": (deb_hourly_path or {}).get("correction") if isinstance(deb_hourly_path, dict) else None,
         },

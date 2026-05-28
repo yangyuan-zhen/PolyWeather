@@ -67,3 +67,13 @@ def test_deploy_script_retries_image_pull_for_registry_propagation():
 
     assert "for pull_attempt in $(seq 1 6)" in script
     assert "docker compose pull && pull_ok=1 && break" in script
+
+
+def test_city_detail_builds_deb_hourly_consensus_before_peak_window():
+    source = (ROOT / "web" / "analysis_service.py").read_text(encoding="utf-8")
+
+    assert "from src.analysis.deb_hourly_consensus import build_deb_hourly_consensus_path" in source
+    assert "deb_hourly_consensus = build_deb_hourly_consensus_path(" in source
+    assert '"hourly_consensus": deb_hourly_consensus' in source
+    assert 'deb_base_source = "deb_hourly_consensus"' in source
+    assert "base_source=deb_base_source" in source

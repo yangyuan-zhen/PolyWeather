@@ -206,6 +206,41 @@ class TestMuCalculation:
         assert sd["peak_status"] == "before"
         assert sd["mu"] is not None and sd["mu"] >= 29.0
 
+    @patch("src.analysis.trend_engine.calculate_dynamic_weights", return_value=(None, ""))
+    @patch("src.analysis.trend_engine.get_deb_accuracy", return_value=None)
+    @patch("src.analysis.trend_engine.update_daily_record")
+    def test_deb_hourly_consensus_takes_priority_for_peak_window(
+        self, _udr, _deb_acc, _dw
+    ):
+        """The peak window should follow the independent DEB hourly path before raw model medians."""
+        data = _make_weather_data(
+            cur_temp=25.0,
+            max_so_far=25.0,
+            om_today_high=31.0,
+            ens_median=None,
+            ens_p10=None,
+            ens_p90=None,
+            local_time="2026-03-04 10:00",
+            multi_model_hourly={
+                "hourly_times": [f"2026-03-04T{h:02d}:00" for h in range(24)],
+                "hourly_forecasts": {
+                    "ECMWF": [24.0 if h != 12 else 31.0 for h in range(24)],
+                    "GFS": [24.0 if h != 12 else 31.0 for h in range(24)],
+                },
+            },
+        )
+        data["deb"] = {
+            "hourly_consensus": {
+                "times": ["09:00", "15:00", "16:00"],
+                "temps": [24.0, 30.0, 30.0],
+            }
+        }
+
+        _, _, sd = analyze_weather_trend(data, "°C", "test_city")
+
+        assert sd["peak_hours"] == ["15:00", "16:00"]
+        assert sd["peak_status"] == "before"
+
 
 # ─── Tests: Dead Market ───
 

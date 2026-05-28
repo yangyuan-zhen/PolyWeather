@@ -16,6 +16,7 @@ from src.analysis.deb_algorithm import (
     update_daily_record,
     _is_excluded_model_name,
 )
+from src.analysis.deb_hourly_consensus import build_deb_hourly_consensus_path
 from src.analysis.settlement_rounding import apply_city_settlement, is_exact_settlement_city
 from src.data_collection.city_registry import CITY_REGISTRY
 from src.data_collection.city_risk_profiles import get_city_risk_profile
@@ -81,6 +82,29 @@ def _resolve_peak_hours(
     open_meteo_peak: Optional[Any] = None,
 ) -> List[str]:
     """Resolve the local high-temperature window, preferring multi-model hourly consensus."""
+    deb = weather_data.get("deb") if isinstance(weather_data, dict) else {}
+    if isinstance(deb, dict):
+        consensus = deb.get("hourly_consensus")
+        if isinstance(consensus, dict):
+            c_times = consensus.get("times") or []
+            c_temps = consensus.get("temps") or []
+            hourly_values: List[Tuple[str, float]] = []
+            for raw_time, raw_temp in zip(c_times, c_temps):
+                t_str = str(raw_time or "")
+                if "T" in t_str and not t_str.startswith(local_date_str):
+                    continue
+                time_part = t_str.split("T", 1)[1][:5] if "T" in t_str else t_str[:5]
+                try:
+                    hour = int(time_part[:2])
+                except Exception:
+                    continue
+                value = _sf(raw_temp)
+                if value is not None and 8 <= hour <= 19:
+                    hourly_values.append((time_part, value))
+            peak_hours = _peak_hours_from_hourly_values(hourly_values)
+            if peak_hours:
+                return peak_hours
+
     multi_model = weather_data.get("multi_model") if isinstance(weather_data, dict) else {}
     if isinstance(multi_model, dict):
         hourly_times = multi_model.get("hourly_times") or []
@@ -420,6 +444,7 @@ def analyze_weather_trend(
     # === DEB ===
     deb_prediction = None
     deb_raw_prediction = None
+    deb_hourly_consensus = None
     deb_version = None
     deb_bias_adjustment = 0.0
     deb_bias_samples = 0
@@ -506,10 +531,30 @@ def analyze_weather_trend(
     is_cooling = trend_direction == "falling"
 
     om_today = _sf(current_forecasts.get("Open-Meteo"))
+    if city_name and deb_prediction is not None:
+        mm = weather_data.get("multi_model") or {}
+        if isinstance(mm, dict):
+            deb_hourly_consensus = build_deb_hourly_consensus_path(
+                city=city_name,
+                hourly_times=mm.get("hourly_times") or [],
+                hourly_forecasts=mm.get("hourly_forecasts") or {},
+                daily_forecasts=current_forecasts,
+                deb_prediction=deb_prediction,
+                local_date=local_date_str,
+            )
 
     # === Peak hours ===
+    peak_weather_data = weather_data
+    if deb_hourly_consensus:
+        peak_weather_data = {
+            **weather_data,
+            "deb": {
+                **(weather_data.get("deb") or {}),
+                "hourly_consensus": deb_hourly_consensus,
+            },
+        }
     peak_hours = _resolve_peak_hours(
-        weather_data,
+        peak_weather_data,
         local_date_str,
         times,
         temps,
@@ -942,6 +987,7 @@ def analyze_weather_trend(
         "peak_hours": peak_hours,
         "deb_prediction": deb_prediction,
         "deb_raw_prediction": deb_raw_prediction,
+        "deb_hourly_consensus": deb_hourly_consensus,
         "deb_version": deb_version,
         "deb_bias_adjustment": deb_bias_adjustment,
         "deb_bias_samples": deb_bias_samples,

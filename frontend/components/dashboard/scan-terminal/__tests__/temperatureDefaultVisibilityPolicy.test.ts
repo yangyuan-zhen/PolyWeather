@@ -310,6 +310,7 @@ export function runTests() {
     ["chengdu", "02L/20R"],
     ["chongqing", "20R/02L"],
     ["wuhan", "04/22"],
+    ["qingdao", "16/34"],
     ["seoul", "15R/33L"],
   ] as const;
   settlementRunwayCases.forEach(([city, settlementRwy]) => {

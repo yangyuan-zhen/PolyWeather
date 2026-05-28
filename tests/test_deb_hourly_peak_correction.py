@@ -103,7 +103,26 @@ def test_build_deb_hourly_path_anchors_corrected_curve_to_deb_prediction():
     )
 
     assert path["source"] == DEB_HOURLY_PEAK_CORRECTED_VERSION
+    assert path["base_source"] == "hourly_plus_deb_offset"
     assert max(path["temps"]) == 29.0
     assert path["temps"][1] == 29.0
     assert path["temps"][0] < 25.5
     assert path["correction"]["samples"] == 6
+
+
+def test_build_deb_hourly_path_preserves_consensus_base_source():
+    corrector = build_hourly_peak_corrector([], min_samples=2)
+
+    path = build_deb_hourly_path(
+        city="wuhan",
+        hourly_times=["09:00", "15:00"],
+        hourly_temps=[24.0, 30.0],
+        deb_prediction=30.0,
+        peak_first_h=15,
+        peak_last_h=15,
+        corrector=corrector,
+        base_source="deb_hourly_consensus",
+    )
+
+    assert path["base_source"] == "deb_hourly_consensus"
+    assert path["temps"] == [24.0, 30.0]
