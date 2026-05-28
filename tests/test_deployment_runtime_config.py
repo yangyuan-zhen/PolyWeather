@@ -46,4 +46,4 @@ def test_scan_terminal_backend_timeout_returns_before_next_proxy_abort():
     ).read_text(encoding="utf-8")
 
     assert 'POLYWEATHER_SCAN_TERMINAL_PROXY_TIMEOUT_MS || "28000"' in route_source
-    assert scan_terminal_config.SCAN_TERMINAL_BUILD_TIMEOUT_SEC <= 24
+    assert scan_terminal_config.SCAN_TERMINAL_BUILD_TIMEOUT_SEC <= 20

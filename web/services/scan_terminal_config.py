@@ -33,7 +33,7 @@ SCAN_TERMINAL_BUILD_TIMEOUT_SEC = _env_int(
     "POLYWEATHER_SCAN_TERMINAL_BUILD_TIMEOUT_SEC",
     20,
     min_value=8,
-    max_value=24,
+    max_value=20,
 )
 SCAN_TERMINAL_MAX_WORKERS = _env_int(
     "POLYWEATHER_SCAN_TERMINAL_MAX_WORKERS",
