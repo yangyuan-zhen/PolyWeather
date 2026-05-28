@@ -370,12 +370,12 @@
   white-space: normal;
 }
 
-.root :global(.scan-ai-city-stack) {
+.root :global(.scan-city-stack) {
   display: grid;
   gap: 18px;
 }
 
-.root :global(.scan-ai-city-card) {
+.root :global(.scan-city-card) {
   overflow: hidden;
   border: 1px solid rgba(77, 163, 255, 0.35);
   border-radius: 18px;
@@ -390,13 +390,13 @@
     background 0.18s ease;
 }
 
-.root :global(.scan-ai-city-card.removing) {
+.root :global(.scan-city-card.removing) {
   pointer-events: none;
   opacity: 0;
   transform: translateX(44px);
 }
 
-.root :global(.scan-ai-city-hero) {
+.root :global(.scan-city-hero) {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -408,35 +408,35 @@
   border-bottom: 1px solid rgba(159, 178, 199, 0.12);
 }
 
-.root :global(.scan-ai-city-hero-left) {
+.root :global(.scan-city-hero-left) {
   min-width: 0;
   flex: 1;
 }
 
-.root :global(.scan-ai-city-kicker) {
+.root :global(.scan-city-kicker) {
   color: var(--color-accent-primary);
   font-size: 12px;
   font-weight: 800;
 }
 
-.root :global(.scan-ai-city-hero h3) {
+.root :global(.scan-city-hero h3) {
   margin: 4px 0 8px;
   color: var(--color-text-primary);
   font-size: 22px;
   line-height: 1.15;
 }
 
-.root :global(.scan-ai-city-mobile-priority) {
+.root :global(.scan-city-mobile-priority) {
   display: none;
 }
 
-.root :global(.scan-ai-city-pills) {
+.root :global(.scan-city-pills) {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.root :global(.scan-ai-city-pills span) {
+.root :global(.scan-city-pills span) {
   border: 1px solid rgba(159, 178, 199, 0.14);
   border-radius: 10px;
   background: rgba(11, 18, 32, 0.58);
@@ -446,14 +446,14 @@
   padding: 7px 10px;
 }
 
-.root :global(.scan-ai-city-status-tags) {
+.root :global(.scan-city-status-tags) {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
   margin: -2px 0 10px;
 }
 
-.root :global(.scan-ai-city-status-tag) {
+.root :global(.scan-city-status-tag) {
   border: 1px solid rgba(159, 178, 199, 0.16);
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.62);
@@ -464,35 +464,35 @@
   padding: 5px 9px;
 }
 
-.root :global(.scan-ai-city-status-tag.green) {
+.root :global(.scan-city-status-tag.green) {
   border-color: rgba(34, 197, 94, 0.34);
   background: rgba(34, 197, 94, 0.12);
   color: #86efac;
 }
 
-.root :global(.scan-ai-city-status-tag.blue) {
+.root :global(.scan-city-status-tag.blue) {
   border-color: rgba(77, 163, 255, 0.36);
   background: rgba(77, 163, 255, 0.13);
   color: #9ecbff;
 }
 
-.root :global(.scan-ai-city-status-tag.amber) {
+.root :global(.scan-city-status-tag.amber) {
   border-color: rgba(245, 158, 11, 0.38);
   background: rgba(245, 158, 11, 0.13);
   color: #fcd34d;
 }
 
-.root :global(.scan-ai-city-status-tag.red) {
+.root :global(.scan-city-status-tag.red) {
   border-color: rgba(248, 113, 113, 0.4);
   background: rgba(239, 68, 68, 0.13);
   color: #fca5a5;
 }
 
-.root :global(.scan-ai-city-status-tag.muted) {
+.root :global(.scan-city-status-tag.muted) {
   color: #94a3b8;
 }
 
-.root :global(.scan-ai-city-freshness) {
+.root :global(.scan-city-freshness) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -503,7 +503,7 @@
   font-weight: 700;
 }
 
-.root :global(.scan-ai-city-freshness strong) {
+.root :global(.scan-city-freshness strong) {
   color: #7d92b2;
   font-size: 10px;
   font-weight: 800;
@@ -512,7 +512,7 @@
   margin-right: 2px;
 }
 
-.root :global(.scan-ai-city-freshness span) {
+.root :global(.scan-city-freshness span) {
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -522,37 +522,37 @@
   font-size: 11px;
 }
 
-.root :global(.scan-ai-city-freshness b) {
+.root :global(.scan-city-freshness b) {
   color: #d6e2f0;
   font-style: normal;
   font-weight: 900;
 }
 
-.root :global(.scan-ai-city-freshness em) {
+.root :global(.scan-city-freshness em) {
   color: var(--color-text-secondary);
   font-style: normal;
 }
 
-.root :global(.scan-ai-city-freshness span.fresh em),
-.root :global(.scan-ai-city-freshness span.green em) {
+.root :global(.scan-city-freshness span.fresh em),
+.root :global(.scan-city-freshness span.green em) {
   color: #86efac;
 }
 
-.root :global(.scan-ai-city-freshness span.loading em),
-.root :global(.scan-ai-city-freshness span.blue em) {
+.root :global(.scan-city-freshness span.loading em),
+.root :global(.scan-city-freshness span.blue em) {
   color: #9ecbff;
 }
 
-.root :global(.scan-ai-city-freshness span.stale em),
-.root :global(.scan-ai-city-freshness span.amber em) {
+.root :global(.scan-city-freshness span.stale em),
+.root :global(.scan-city-freshness span.amber em) {
   color: #fcd34d;
 }
 
-.root :global(.scan-ai-city-freshness span.red em) {
+.root :global(.scan-city-freshness span.red em) {
   color: #fca5a5;
 }
 
-.root :global(.scan-ai-city-hero-side) {
+.root :global(.scan-city-hero-side) {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -560,13 +560,13 @@
   flex-shrink: 0;
 }
 
-.root :global(.scan-ai-city-metrics) {
+.root :global(.scan-city-metrics) {
   display: grid;
   grid-template-columns: repeat(3, auto);
   gap: 10px;
 }
 
-.root :global(.scan-ai-city-metrics > span) {
+.root :global(.scan-city-metrics > span) {
   display: grid;
   gap: 3px;
   min-width: 88px;
@@ -577,12 +577,12 @@
   background: rgba(11, 18, 32, 0.42);
 }
 
-.root :global(.scan-ai-city-metrics > span.primary) {
+.root :global(.scan-city-metrics > span.primary) {
   border-color: rgba(77, 163, 255, 0.28);
   background: rgba(77, 163, 255, 0.09);
 }
 
-.root :global(.scan-ai-city-metrics small) {
+.root :global(.scan-city-metrics small) {
   color: var(--color-text-muted);
   font-size: 10px;
   font-weight: 800;
@@ -590,26 +590,26 @@
   text-transform: uppercase;
 }
 
-.root :global(.scan-ai-city-metrics b) {
+.root :global(.scan-city-metrics b) {
   color: var(--color-text-primary);
   font-size: 20px;
   font-weight: 900;
   line-height: 1.1;
 }
 
-.root :global(.scan-ai-city-metrics > span.primary b) {
+.root :global(.scan-city-metrics > span.primary b) {
   color: #9ecbff;
 }
 
-.root :global(.scan-ai-city-actions) {
+.root :global(.scan-city-actions) {
   display: inline-flex;
   justify-content: flex-end;
   gap: 8px;
 }
 
-.root :global(.scan-ai-city-icon-button),
-.root :global(.scan-ai-city-collapse),
-.root :global(.scan-ai-city-price-button) {
+.root :global(.scan-city-icon-button),
+.root :global(.scan-city-collapse),
+.root :global(.scan-city-price-button) {
   min-height: 36px;
   display: inline-flex;
   align-items: center;
@@ -624,70 +624,70 @@
   transition: background 0.18s ease, border-color 0.18s ease;
 }
 
-.root :global(.scan-ai-city-icon-button) {
+.root :global(.scan-city-icon-button) {
   width: 36px;
   justify-content: center;
   padding: 0;
 }
 
-.root :global(.scan-ai-city-icon-button.danger) {
+.root :global(.scan-city-icon-button.danger) {
   border-color: rgba(239, 68, 68, 0.34);
   background: rgba(239, 68, 68, 0.1);
   color: #fca5a5;
 }
 
-.root :global(.scan-ai-city-icon-button.danger:hover) {
+.root :global(.scan-city-icon-button.danger:hover) {
   border-color: rgba(239, 68, 68, 0.52);
   background: rgba(239, 68, 68, 0.14);
   color: #ff9aa4;
 }
 
-.root :global(.scan-ai-city-icon-button:disabled) {
+.root :global(.scan-city-icon-button:disabled) {
   cursor: wait;
   opacity: 0.68;
 }
 
-.root :global(.scan-ai-city-icon-button .spin) {
+.root :global(.scan-city-icon-button .spin) {
   animation: spin 1s linear infinite;
 }
 
-.root :global(.scan-ai-city-collapse) {
+.root :global(.scan-city-collapse) {
   padding: 8px 10px;
 }
 
-.root :global(.scan-ai-city-card.collapsed .scan-ai-city-collapse svg) {
+.root :global(.scan-city-card.collapsed .scan-city-collapse svg) {
   transform: rotate(-90deg);
 }
 
 
-.root :global(.scan-ai-city-price-button) {
+.root :global(.scan-city-price-button) {
   padding: 9px 12px;
 }
 
-.root :global(.scan-ai-city-icon-button:hover),
-.root :global(.scan-ai-city-collapse:hover),
-.root :global(.scan-ai-city-price-button:hover) {
+.root :global(.scan-city-icon-button:hover),
+.root :global(.scan-city-collapse:hover),
+.root :global(.scan-city-price-button:hover) {
   background: rgba(77, 163, 255, 0.18);
   border-color: rgba(111, 183, 255, 0.58);
 }
 
-.root :global(.scan-ai-city-price-button:disabled) {
+.root :global(.scan-city-price-button:disabled) {
   cursor: wait;
   opacity: 0.62;
 }
 
-.root :global(.scan-ai-city-body) {
+.root :global(.scan-city-body) {
   padding: 18px 18px 36px;
   max-height: none;
   overflow: visible;
   overscroll-behavior: contain;
 }
 
-.root :global(.scan-ai-city-body::-webkit-scrollbar) {
+.root :global(.scan-city-body::-webkit-scrollbar) {
   width: 8px;
 }
 
-.root :global(.scan-ai-city-body::-webkit-scrollbar-thumb) {
+.root :global(.scan-city-body::-webkit-scrollbar-thumb) {
   border-radius: 999px;
   background: rgba(77, 163, 255, 0.28);
 }
@@ -859,14 +859,14 @@
   font-size: 15px;
 }
 
-.root :global(.scan-ai-city-analysis-grid) {
+.root :global(.scan-city-analysis-grid) {
   display: grid;
   grid-template-columns: minmax(420px, 1.4fr) minmax(280px, 0.8fr);
   gap: 14px;
   margin-top: 14px;
 }
 
-.root :global(.scan-ai-city-section) {
+.root :global(.scan-city-section) {
   border: 1px solid rgba(159, 178, 199, 0.12);
   border-radius: 16px;
   background: rgba(11, 18, 32, 0.38);
@@ -911,7 +911,7 @@
   line-height: 1.4;
 }
 
-.root :global(.scan-ai-city-section-title) {
+.root :global(.scan-city-section-title) {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -921,16 +921,16 @@
   margin-bottom: 12px;
 }
 
-.root :global(.scan-ai-city-ai-read) {
+.root :global(.scan-city-ai-read) {
   overflow: hidden;
 }
 
 
-.root :global(.scan-ai-city-ai-read summary::-webkit-details-marker) {
+.root :global(.scan-city-ai-read summary::-webkit-details-marker) {
   display: none;
 }
 
-.root :global(.scan-ai-city-ai-read summary::after) {
+.root :global(.scan-city-ai-read summary::after) {
   width: 18px;
   height: 18px;
   display: inline-grid;
@@ -944,15 +944,15 @@
   transition: transform 0.18s ease;
 }
 
-.root :global(.scan-ai-city-ai-read[open] summary::after) {
+.root :global(.scan-city-ai-read[open] summary::after) {
   transform: rotate(180deg);
 }
 
-.root :global(.scan-ai-city-section-body) {
+.root :global(.scan-city-section-body) {
   margin-top: 2px;
 }
 
-.root :global(.scan-ai-city-section p) {
+.root :global(.scan-city-section p) {
   margin: 0 0 10px;
   color: var(--color-text-secondary);
   font-size: 13px;
@@ -1101,17 +1101,17 @@
   font-size: 12px;
 }
 
-.root :global(.scan-ai-city-chart) {
+.root :global(.scan-city-chart) {
   height: 260px;
 }
 
-.root :global(.scan-ai-city-chart canvas) {
+.root :global(.scan-city-chart canvas) {
   display: block;
   width: 100%;
   height: 100%;
 }
 
-.root :global(.scan-ai-city-chart-placeholder) {
+.root :global(.scan-city-chart-placeholder) {
   display: grid;
   height: 100%;
   place-items: center;
@@ -1123,7 +1123,7 @@
   font-weight: 800;
 }
 
-.root :global(.scan-ai-city-chart-legend) {
+.root :global(.scan-city-chart-legend) {
   display: flex;
   gap: 14px;
   margin-top: 10px;
@@ -1132,20 +1132,20 @@
   font-weight: 800;
 }
 
-.root :global(.scan-ai-city-chart-legend span) {
+.root :global(.scan-city-chart-legend span) {
   display: inline-flex;
   align-items: center;
   gap: 7px;
 }
 
-.root :global(.scan-ai-city-chart-legend i) {
+.root :global(.scan-city-chart-legend i) {
   width: 18px;
   height: 3px;
   border-radius: 999px;
   background: rgba(100, 116, 139, 0.72);
 }
 
-.root :global(.scan-ai-city-chart-legend i.forecast) {
+.root :global(.scan-city-chart-legend i.forecast) {
   background: repeating-linear-gradient(
     90deg,
     rgba(100, 116, 139, 0.72) 0 6px,
@@ -1153,27 +1153,27 @@
   );
 }
 
-.root :global(.scan-ai-city-chart-legend i.calibrated) {
+.root :global(.scan-city-chart-legend i.calibrated) {
   background: #38bdf8;
 }
 
-.root :global(.scan-ai-city-chart-legend i.observation) {
+.root :global(.scan-city-chart-legend i.observation) {
   width: 8px;
   height: 8px;
   background: #22c55e;
 }
 
-.root :global(.scan-ai-city-section.models) {
+.root :global(.scan-city-section.models) {
   margin-top: 14px;
 }
 
-.root :global(.scan-ai-city-section.models .models-section) {
+.root :global(.scan-city-section.models .models-section) {
   padding: 0;
   border: 0;
   background: transparent;
 }
 
-.root :global(.scan-ai-city-section-head) {
+.root :global(.scan-city-section-head) {
   display: flex;
   justify-content: space-between;
   gap: 14px;
@@ -1181,7 +1181,7 @@
   margin-bottom: 12px;
 }
 
-.root :global(.scan-ai-city-section.market) {
+.root :global(.scan-city-section.market) {
   margin-top: 14px;
 }
 
@@ -1206,14 +1206,14 @@
 }
 
 .root :global(.scan-ai-market-bucket span),
-.root :global(.scan-ai-city-muted),
-.root :global(.scan-ai-city-loading) {
+.root :global(.scan-city-muted),
+.root :global(.scan-city-loading) {
   color: var(--color-text-secondary);
   font-size: 12px;
   font-weight: 700;
 }
 
-.root :global(.scan-ai-city-loading) {
+.root :global(.scan-city-loading) {
   padding: 28px;
 }
 

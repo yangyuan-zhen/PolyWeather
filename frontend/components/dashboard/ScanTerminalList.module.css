@@ -477,7 +477,7 @@
   text-align: right;
 }
 
-.root :global(.scan-ai-city-jumpbar) {
+.root :global(.scan-city-jumpbar) {
   display: flex;
   gap: 8px;
   margin: 0 0 12px;
@@ -490,11 +490,11 @@
   scrollbar-width: none;
 }
 
-.root :global(.scan-ai-city-jumpbar::-webkit-scrollbar) {
+.root :global(.scan-city-jumpbar::-webkit-scrollbar) {
   display: none;
 }
 
-.root :global(.scan-ai-city-jumpbar button) {
+.root :global(.scan-city-jumpbar button) {
   flex: 0 0 auto;
   min-height: 32px;
   padding: 0 12px;
@@ -508,13 +508,13 @@
   white-space: nowrap;
 }
 
-.root :global(.scan-ai-city-jumpbar button:hover) {
+.root :global(.scan-city-jumpbar button:hover) {
   border-color: rgba(111, 183, 255, 0.62);
   background: rgba(77, 163, 255, 0.18);
 }
 
 
-.root :global(.scan-ai-city-card:not(.collapsed)) {
+.root :global(.scan-city-card:not(.collapsed)) {
   overflow: visible;
 }
 
@@ -522,19 +522,19 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ── City Jumpbar Light Mode Overrides ── */
-:global(html.light) .root :global(.scan-ai-city-jumpbar) {
+:global(html.light) .root :global(.scan-city-jumpbar) {
   background: #ffffff;
   border-color: #d8e0ec;
   box-shadow: var(--shadow-elevation-1);
 }
 
-:global(html.light) .root :global(.scan-ai-city-jumpbar button) {
+:global(html.light) .root :global(.scan-city-jumpbar button) {
   background: var(--color-bg-input);
   border-color: var(--color-border-default);
   color: var(--color-text-secondary);
 }
 
-:global(html.light) .root :global(.scan-ai-city-jumpbar button:hover) {
+:global(html.light) .root :global(.scan-city-jumpbar button:hover) {
   background: #e2e8f0;
   border-color: var(--color-border-hover);
   color: var(--color-text-primary);

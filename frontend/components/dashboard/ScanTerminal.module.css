@@ -1026,41 +1026,41 @@
   color: #64748b;
 }
 
-.root :global(.scan-terminal.light .scan-ai-city-card),
-.root :global(.scan-terminal.light .scan-ai-city-hero) {
+.root :global(.scan-terminal.light .scan-city-card),
+.root :global(.scan-terminal.light .scan-city-hero) {
   background: var(--bg-card);
   border-color: var(--border-glass);
 }
 
-.root :global(.scan-terminal.light .scan-ai-city-section),
+.root :global(.scan-terminal.light .scan-city-section),
 .root :global(.scan-terminal.light .scan-ai-decision-band),
 .root :global(.scan-terminal.light .scan-ai-market-decision),
 .root :global(.scan-terminal.light .scan-ai-market-decision-stats small),
 .root :global(.scan-terminal.light .scan-ai-decision-metrics span),
 .root :global(.scan-terminal.light .scan-ai-market-bucket),
-.root :global(.scan-terminal.light .scan-ai-city-pills span),
-.root :global(.scan-terminal.light .scan-ai-city-freshness span),
-.root :global(.scan-terminal.light .scan-ai-city-metrics > span) {
+.root :global(.scan-terminal.light .scan-city-pills span),
+.root :global(.scan-terminal.light .scan-city-freshness span),
+.root :global(.scan-terminal.light .scan-city-metrics > span) {
   background: var(--bg-secondary);
   border-color: var(--border-glass);
 }
 
-.root :global(.scan-terminal.light .scan-ai-city-metrics > span.primary) {
+.root :global(.scan-terminal.light .scan-city-metrics > span.primary) {
   background: #dbeafe;
   border-color: rgba(59, 130, 246, 0.28);
 }
 
-.root :global(.scan-terminal.light .scan-ai-city-metrics > span.primary b) {
+.root :global(.scan-terminal.light .scan-city-metrics > span.primary b) {
   color: #1d4ed8;
 }
 
-.root :global(.scan-terminal.light .scan-ai-city-metrics small) {
+.root :global(.scan-terminal.light .scan-city-metrics small) {
   color: #64748b;
 }
 
 .root :global(.scan-terminal.light .scan-ai-workspace-head strong),
-.root :global(.scan-terminal.light .scan-ai-city-hero h3),
-.root :global(.scan-terminal.light .scan-ai-city-metrics b),
+.root :global(.scan-terminal.light .scan-city-hero h3),
+.root :global(.scan-terminal.light .scan-city-metrics b),
 .root :global(.scan-terminal.light .scan-ai-decision-band strong),
 .root :global(.scan-terminal.light .scan-ai-decision-metrics b),
 .root :global(.scan-terminal.light .scan-ai-market-bucket strong),
@@ -1071,18 +1071,18 @@
 }
 
 .root :global(.scan-terminal.light .scan-ai-workspace-head p),
-.root :global(.scan-terminal.light .scan-ai-city-section p),
+.root :global(.scan-terminal.light .scan-city-section p),
 .root :global(.scan-terminal.light .scan-ai-decision-band p),
-.root :global(.scan-terminal.light .scan-ai-city-pills span),
-.root :global(.scan-terminal.light .scan-ai-city-freshness),
+.root :global(.scan-terminal.light .scan-city-pills span),
+.root :global(.scan-terminal.light .scan-city-freshness),
 .root :global(.scan-terminal.light .scan-ai-decision-metrics span),
 .root :global(.scan-terminal.light .scan-ai-market-bucket span),
 .root :global(.scan-terminal.light .scan-ai-market-decision span),
 .root :global(.scan-terminal.light .scan-ai-market-decision p),
 .root :global(.scan-terminal.light .scan-ai-market-decision-stats small),
-.root :global(.scan-terminal.light .scan-ai-city-muted),
-.root :global(.scan-terminal.light .scan-ai-city-loading),
-.root :global(.scan-terminal.light .scan-ai-city-chart-legend),
+.root :global(.scan-terminal.light .scan-city-muted),
+.root :global(.scan-terminal.light .scan-city-loading),
+.root :global(.scan-terminal.light .scan-city-chart-legend),
 .root :global(.scan-terminal.light .scan-ai-weather-bullets) {
   color: var(--text-muted);
 }
@@ -1092,7 +1092,7 @@
   color: #64748b;
 }
 
-.root :global(.scan-terminal.light .scan-ai-city-chart-placeholder) {
+.root :global(.scan-terminal.light .scan-city-chart-placeholder) {
   border-color: #cbd5e1;
   background: #f8fafc;
   color: #64748b;
@@ -1152,25 +1152,25 @@
 }
 
 .root :global(.scan-terminal.light .scan-ai-summary-card),
-.root :global(.scan-terminal.light .scan-ai-city-card) {
+.root :global(.scan-terminal.light .scan-city-card) {
   background: rgba(255, 255, 255, 0.92);
   border-color: rgba(148, 163, 184, 0.28);
 }
 
 .root :global(.scan-terminal.light .scan-ai-summary-card strong),
-.root :global(.scan-terminal.light .scan-ai-city-head strong),
+.root :global(.scan-terminal.light .scan-city-head strong),
 .root :global(.scan-terminal.light .scan-ai-contract b) {
   color: var(--text-primary);
 }
 
 .root :global(.scan-terminal.light .scan-ai-summary-card p),
-.root :global(.scan-terminal.light .scan-ai-city-head p),
+.root :global(.scan-terminal.light .scan-city-head p),
 .root :global(.scan-terminal.light .scan-ai-contract p),
 .root :global(.scan-terminal.light .scan-ai-contract small) {
   color: var(--text-muted);
 }
 
-.root :global(.scan-terminal.light .scan-ai-city-head) {
+.root :global(.scan-terminal.light .scan-city-head) {
   background: #f8fafc;
 }
 
@@ -1334,57 +1334,57 @@
 }
 
 /* ── AI city card light overrides ── */
-:global(html.light) .root :global(.scan-terminal.light .scan-ai-city-card),
-:global(html.light) .root :global(.scan-terminal.light .scan-ai-city-section),
+:global(html.light) .root :global(.scan-terminal.light .scan-city-card),
+:global(html.light) .root :global(.scan-terminal.light .scan-city-section),
 :global(html.light) .root :global(.scan-terminal.light .scan-ai-decision-band),
 :global(html.light) .root :global(.scan-terminal.light .scan-ai-market-decision),
 :global(html.light) .root :global(.scan-terminal.light .scan-ai-decision-metrics span),
-:global(html.light) .root :global(.scan-terminal.light .scan-ai-city-pills span),
-:global(html.light) .root :global(.scan-terminal.light .scan-ai-city-freshness span),
-:global(html.light) .root :global(.scan-terminal.light .scan-ai-city-metrics > span),
+:global(html.light) .root :global(.scan-terminal.light .scan-city-pills span),
+:global(html.light) .root :global(.scan-terminal.light .scan-city-freshness span),
+:global(html.light) .root :global(.scan-terminal.light .scan-city-metrics > span),
 :global(html.light) .root :global(.scan-terminal.light .scan-mobile-decision-metrics span),
 :global(html.light) .root :global(.scan-terminal.light .scan-mobile-decision-reason) {
   background: #eef7ff;
   border-color: rgba(37, 99, 235, 0.16);
 }
 
-:global(html.light) .root :global(.scan-terminal.light .scan-ai-city-metrics > span.primary) {
+:global(html.light) .root :global(.scan-terminal.light .scan-city-metrics > span.primary) {
   background: #dbeafe;
   border-color: rgba(59, 130, 246, 0.34);
 }
 
-:global(html.light) .root :global(.scan-terminal.light .scan-ai-city-metrics b) {
+:global(html.light) .root :global(.scan-terminal.light .scan-city-metrics b) {
   color: var(--text-primary);
 }
 
-:global(html.light) .root :global(.scan-terminal.light .scan-ai-city-metrics > span.primary b) {
+:global(html.light) .root :global(.scan-terminal.light .scan-city-metrics > span.primary b) {
   color: #1d4ed8;
 }
 
-:global(html.light) .root :global(.scan-terminal.light .scan-ai-city-metrics small) {
+:global(html.light) .root :global(.scan-terminal.light .scan-city-metrics small) {
   color: #64748b;
 }
 
-:global(html.light) .root :global(.scan-terminal.light .scan-ai-city-card p),
-:global(html.light) .root :global(.scan-terminal.light .scan-ai-city-card li),
-:global(html.light) .root :global(.scan-terminal.light .scan-ai-city-card small),
-:global(html.light) .root :global(.scan-terminal.light .scan-ai-city-card span:not(.scan-ai-city-kicker)) {
+:global(html.light) .root :global(.scan-terminal.light .scan-city-card p),
+:global(html.light) .root :global(.scan-terminal.light .scan-city-card li),
+:global(html.light) .root :global(.scan-terminal.light .scan-city-card small),
+:global(html.light) .root :global(.scan-terminal.light .scan-city-card span:not(.scan-city-kicker)) {
   color: var(--text-secondary);
 }
 
-:global(html.light) .root :global(.scan-terminal.light .scan-ai-city-status-tag.green) {
+:global(html.light) .root :global(.scan-terminal.light .scan-city-status-tag.green) {
   color: #047857;
 }
 
-:global(html.light) .root :global(.scan-terminal.light .scan-ai-city-status-tag.blue) {
+:global(html.light) .root :global(.scan-terminal.light .scan-city-status-tag.blue) {
   color: #1d4ed8;
 }
 
-:global(html.light) .root :global(.scan-terminal.light .scan-ai-city-status-tag.amber) {
+:global(html.light) .root :global(.scan-terminal.light .scan-city-status-tag.amber) {
   color: #b45309;
 }
 
-:global(html.light) .root :global(.scan-terminal.light .scan-ai-city-status-tag.red) {
+:global(html.light) .root :global(.scan-terminal.light .scan-city-status-tag.red) {
   color: #b91c1c;
 }
 
@@ -1398,7 +1398,7 @@
 }
 
 :global(html.light) .root :global(.scan-terminal.light .scan-upgrade-announcement-copy strong),
-:global(html.light) .root :global(.scan-terminal.light .scan-ai-city-mobile-priority b),
+:global(html.light) .root :global(.scan-terminal.light .scan-city-mobile-priority b),
 :global(html.light) .root :global(.scan-terminal.light .scan-mobile-decision-metrics b),
 :global(html.light) .root :global(.scan-terminal.light .scan-mobile-decision-reason),
 :global(html.light) .root :global(.scan-terminal.light .scan-mobile-decision-head h3),
@@ -1408,7 +1408,7 @@
 
 :global(html.light) .root :global(.scan-terminal.light .scan-upgrade-announcement-copy p),
 :global(html.light) .root :global(.scan-terminal.light .scan-upgrade-announcement li),
-:global(html.light) .root :global(.scan-terminal.light .scan-ai-city-mobile-priority small),
+:global(html.light) .root :global(.scan-terminal.light .scan-city-mobile-priority small),
 :global(html.light) .root :global(.scan-terminal.light .scan-mobile-decision-metrics small),
 :global(html.light) .root :global(.scan-terminal.light .scan-ai-market-mobile-line span) {
   color: var(--text-secondary);
@@ -1419,7 +1419,7 @@
 }
 
 :global(html.light) .root :global(.scan-terminal.light .scan-upgrade-announcement li),
-:global(html.light) .root :global(.scan-terminal.light .scan-ai-city-mobile-priority span),
+:global(html.light) .root :global(.scan-terminal.light .scan-city-mobile-priority span),
 :global(html.light) .root :global(.scan-terminal.light .scan-ai-decision-why),
 :global(html.light) .root :global(.scan-terminal.light .scan-ai-market-mobile-line) {
   background: #eef7ff;
@@ -1431,7 +1431,7 @@
 }
 
 /* ── Section titles ── */
-:global(html.light) .root :global(.scan-terminal.light .scan-ai-city-section-title) {
+:global(html.light) .root :global(.scan-terminal.light .scan-city-section-title) {
   color: #1d4ed8;
 }
 
@@ -1448,11 +1448,11 @@
 }
 
 /* ── Scrollbar light overrides ── */
-:global(html.light) .root :global(.scan-terminal.light .scan-ai-city-body) {
+:global(html.light) .root :global(.scan-terminal.light .scan-city-body) {
   scrollbar-color: rgba(37, 99, 235, 0.18) transparent;
 }
 
-:global(html.light) .root :global(.scan-ai-city-body::-webkit-scrollbar-thumb) {
+:global(html.light) .root :global(.scan-city-body::-webkit-scrollbar-thumb) {
   background: rgba(37, 99, 235, 0.22);
 }
 

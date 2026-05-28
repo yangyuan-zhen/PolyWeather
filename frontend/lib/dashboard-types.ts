@@ -640,74 +640,12 @@ export interface ScanOpportunityRow {
   ai_confidence?: string | null;
   ai_reason_zh?: string | null;
   ai_reason_en?: string | null;
-  ai_model_cluster_note?: string | null;
-  ai_city_thesis_zh?: string | null;
-  ai_city_thesis_en?: string | null;
-  ai_city_confidence?: string | null;
-  ai_city_model_cluster_note?: string | null;
-  ai_predicted_max?: number | null;
-  ai_predicted_low?: number | null;
-  ai_predicted_high?: number | null;
-  ai_forecast_unit?: string | null;
-  ai_forecast_confidence?: string | null;
-  ai_peak_window_zh?: string | null;
-  ai_peak_window_en?: string | null;
-  ai_airport_metar_read_zh?: string | null;
-  ai_airport_metar_read_en?: string | null;
-  ai_forecast_reason_zh?: string | null;
-  ai_forecast_reason_en?: string | null;
-  ai_forecast_match?: "core" | "edge" | "outside" | "watch" | string | null;
-  ai_forecast_match_reason_zh?: string | null;
-  ai_forecast_match_reason_en?: string | null;
-  ai_watchlist_reason_zh?: string | null;
-  ai_watchlist_reason_en?: string | null;
   v4_metar_decision?: "approve" | "veto" | "downgrade" | "watchlist" | string | null;
   v4_metar_reason_zh?: string | null;
   v4_metar_reason_en?: string | null;
 }
 
 export interface PrimarySignal extends ScanOpportunityRow {}
-
-export interface ScanAiWatchlistItem {
-  row_id: string;
-  reason?: string | null;
-  reason_zh?: string | null;
-  reason_en?: string | null;
-}
-
-export interface ScanAiReview {
-  status?: "ready" | "disabled" | "missing_key" | "failed" | "no_rows" | "no_snapshot" | "snapshot_mismatch" | string;
-  stage?: "completed" | "fallback" | string | null;
-  model?: string | null;
-  cached?: boolean;
-  generated_at?: string | null;
-  snapshot_id?: string | null;
-  input_rows?: number | null;
-  sent_rows?: number | null;
-  sent_cities?: number | null;
-  sent_contracts?: number | null;
-  duration_ms?: number | null;
-  timeout_sec?: number | null;
-  cache_ttl_sec?: number | null;
-  provider?: string | null;
-  base_url?: string | null;
-  finish_reason?: string | null;
-  usage?: {
-    prompt_tokens?: number | null;
-    completion_tokens?: number | null;
-    total_tokens?: number | null;
-    prompt_cache_hit_tokens?: number | null;
-    prompt_cache_miss_tokens?: number | null;
-  } | null;
-  reason?: string | null;
-  summary_zh?: string | null;
-  summary_en?: string | null;
-  watchlist?: ScanAiWatchlistItem[] | null;
-  recommended_count?: number | null;
-  vetoed_count?: number | null;
-  downgraded_count?: number | null;
-  watchlist_count?: number | null;
-}
 
 export interface ScanTerminalResponse {
   generated_at: string;
@@ -733,7 +671,6 @@ export interface ScanTerminalResponse {
   };
   top_signal?: PrimarySignal | null;
   rows: ScanOpportunityRow[];
-  ai_scan?: ScanAiReview | null;
 }
 
 export interface IntradayMeteorologySignal {

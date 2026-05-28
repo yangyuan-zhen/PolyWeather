@@ -169,6 +169,5 @@ export const config = {
     "/api/payments/:path*",
     "/api/system/:path*",
     "/api/city/:path*/detail:path*",
-    "/api/scan/terminal/ai:path*",
   ],
 };

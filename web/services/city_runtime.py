@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import time
 from datetime import datetime
-from typing import Any, Dict, Iterator, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from loguru import logger
@@ -58,49 +58,6 @@ from web.core import (
 router = APIRouter()
 _CACHE_DB = DBManager()
 
-
-def build_scan_terminal_ai_payload(
-    raw_filters: Optional[Dict[str, Any]] = None,
-    *,
-    snapshot_id: Optional[str] = None,
-) -> Dict[str, Any]:
-    return {
-        "available": False,
-        "status": "disabled",
-        "reason": "scan AI has been removed",
-        "snapshot_id": snapshot_id,
-        "rows": [],
-    }
-
-
-def build_scan_city_ai_forecast_payload(
-    city: str,
-    *,
-    force_refresh: bool = False,
-    locale: str = "zh-CN",
-) -> Dict[str, Any]:
-    return {
-        "available": False,
-        "status": "disabled",
-        "reason": "city AI has been removed",
-        "city": city,
-        "locale": locale,
-        "force_refresh": force_refresh,
-    }
-
-
-def stream_scan_city_ai_forecast_payload(
-    city: str,
-    *,
-    force_refresh: bool = False,
-    locale: str = "zh-CN",
-) -> Iterator[str]:
-    payload = build_scan_city_ai_forecast_payload(
-        city,
-        force_refresh=force_refresh,
-        locale=locale,
-    )
-    yield f"data: {payload}\n\n"
 
 _DEB_RECENT_LOOKBACK = 7
 _DEB_RECENT_MIN_SAMPLES = 3

@@ -517,20 +517,20 @@
   margin: 0;
 }
 
-.root :global(.scan-ai-city-list) {
+.root :global(.scan-city-list) {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.root :global(.scan-ai-city-card) {
+.root :global(.scan-city-card) {
   border: 1px solid rgba(68, 100, 150, 0.2);
   border-radius: 18px;
   overflow: hidden;
   background: rgba(10, 24, 42, 0.82);
 }
 
-.root :global(.scan-ai-city-head) {
+.root :global(.scan-city-head) {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -539,13 +539,13 @@
   background: rgba(15, 34, 57, 0.9);
 }
 
-.root :global(.scan-ai-city-head strong) {
+.root :global(.scan-city-head strong) {
   color: #f2f8ff;
   font-size: 17px;
   font-weight: 900;
 }
 
-.root :global(.scan-ai-city-head p) {
+.root :global(.scan-city-head p) {
   margin: 6px 0 0;
   color: #9fb4d2;
   font-size: 13px;
@@ -553,7 +553,7 @@
   line-height: 1.45;
 }
 
-.root :global(.scan-ai-city-head span) {
+.root :global(.scan-city-head span) {
   flex: 0 0 auto;
   padding: 5px 9px;
   border-radius: 999px;

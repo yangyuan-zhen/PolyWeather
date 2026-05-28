@@ -6,6 +6,16 @@ from web.scan_terminal_payloads import (
     build_stale_scan_terminal_payload,
 )
 from web.scan_terminal_ranker import build_ranked_scan_terminal_result
+from web.routers.scan import router as scan_router
+
+
+def test_scan_router_does_not_expose_terminal_ai_endpoint():
+    routes = {
+        getattr(route, "path", None): getattr(route, "methods", set())
+        for route in scan_router.routes
+    }
+
+    assert "/api/scan/terminal/ai" not in routes
 
 
 def test_normalize_scan_terminal_filters_clamps_and_swaps_bounds():
@@ -148,5 +158,4 @@ def test_metar_gate_vetoes_yes_when_observed_breaks_above_bucket():
     assert row["v4_metar_decision"] == "veto"
     assert row["ai_decision"] == "veto"
     assert "越过目标桶上沿" in row["ai_reason_zh"]
-
 

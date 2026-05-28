@@ -134,7 +134,7 @@
 
 2. **Tab 下划线指示器不够明显**：`2px` 高度 + `opacity: 0.8` 的蓝色下划线容易被忽略。
 
-3. **按钮层级不够清晰**：`.scan-primary-button`（蓝紫渐变）、`.scan-ai-button`（青绿渐变）、`.scan-ai-city-icon-button`（蓝色边框半透明）、`.scan-theme-button`（无边框无背景）四种视觉权重混在一起，用户难以判断优先级。
+3. **按钮层级不够清晰**：`.scan-primary-button`（蓝紫渐变）、`.scan-ai-button`（青绿渐变）、`.scan-city-icon-button`（蓝色边框半透明）、`.scan-theme-button`（无边框无背景）四种视觉权重混在一起，用户难以判断优先级。
 
 4. **空状态/加载状态设计不一致**：
    - 地图加载有精美的云/雷达/热力动画
@@ -233,7 +233,7 @@
    - Tab 切换缺少 `role="tablist"`/`role="tab"`/`aria-selected`
    - 折叠按钮缺少 `aria-expanded`
 
-2. **焦点指示器不可见**：自定义按钮（如 `scan-theme-button`、`scan-ai-city-icon-button`）没有 focus-visible 样式
+2. **焦点指示器不可见**：自定义按钮（如 `scan-theme-button`、`scan-city-icon-button`）没有 focus-visible 样式
 
 3. **颜色不是唯一的信息传达方式**：风险等级、Market decision 的色彩编码缺少对应的文字标签或图标补充
 

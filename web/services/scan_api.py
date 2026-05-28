@@ -4,31 +4,10 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from fastapi import HTTPException, Request
+from fastapi import Request
 from fastapi.concurrency import run_in_threadpool
 
 import web.routes as legacy_routes
-
-
-def _boolish(value: Any) -> bool:
-    return str(value or "false").lower() in {"1", "true", "yes", "on"}
-
-
-async def _json_body_or_empty(request: Request) -> Dict[str, Any]:
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
-    if not isinstance(body, dict):
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
-    return body
-
-
-def _extract_required_city(body: Dict[str, Any]) -> str:
-    city = str(body.get("city") or "").strip()
-    if not city:
-        raise HTTPException(status_code=400, detail="city is required")
-    return city
 
 
 async def get_scan_terminal_payload(
@@ -67,18 +46,6 @@ async def get_scan_terminal_payload(
         legacy_routes.build_scan_terminal_payload,
         filters,
         force_refresh=force_refresh,
-    )
-
-
-async def get_scan_terminal_ai_payload(request: Request) -> Dict[str, Any]:
-    legacy_routes._assert_entitlement(request)
-    body = await _json_body_or_empty(request)
-    filters = body.get("filters") if isinstance(body.get("filters"), dict) else {}
-    snapshot_id = str(body.get("snapshot_id") or "").strip() or None
-    return await run_in_threadpool(
-        legacy_routes.build_scan_terminal_ai_payload,
-        filters,
-        snapshot_id=snapshot_id,
     )
 
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.analysis.metar_narrator import describe_metar_report
 from src.analysis.trend_engine import analyze_weather_trend
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
 from src.data_collection.city_risk_profiles import get_city_risk_profile
@@ -578,23 +577,5 @@ def build_city_query_report(
         for line in feature_str.split("\n"):
             if line.strip():
                 msg_lines.append(f"- {line.strip()}")
-    metar_narrative = describe_metar_report(
-        raw_metar=str(amos_raw_metar or primary_current.get("raw_metar") or metar_current.get("raw_metar") or ""),
-        temp_symbol=temp_symbol,
-        fallback={
-            "icao": metar.get("icao"),
-            "station_name": metar.get("station_name"),
-            "temp": cur_temp,
-            "wind_speed_kt": _sf(primary_current.get("wind_speed_kt")),
-            "wind_dir": _sf(primary_current.get("wind_dir")),
-            "altimeter": _sf(primary_current.get("altimeter")),
-            "wx_desc": primary_current.get("wx_desc"),
-            "clouds": primary_current.get("clouds", []),
-        },
-    )
-    if metar_narrative:
-        msg_lines.append("\n🛰️ <b>机场报文解读</b>:")
-        msg_lines.append(metar_narrative)
-
     msg_lines.append(f"\n💸 本次消耗 <b>{city_query_cost}</b> 积分。")
     return "\n".join(msg_lines)

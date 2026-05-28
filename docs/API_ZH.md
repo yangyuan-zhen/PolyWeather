@@ -31,8 +31,6 @@ flowchart LR
 | `/api/city/{name}/summary` | GET | 轻量摘要 |
 | `/api/city/{name}/detail` | GET | 聚合详情（含 market_scan） |
 | `/api/history/{name}` | GET | 历史对账 |
-| `/api/scan/terminal/ai-city` | POST | 城市决策卡 AI 解读（非流式 JSON） |
-| `/api/scan/terminal/ai-city/stream` | POST | 城市决策卡 AI 解读（SSE 流式） |
 
 ### `GET /api/city/{name}/detail`
 
@@ -60,40 +58,6 @@ flowchart LR
 - `peak.first_h / peak.last_h / peak.status`
 - `vertical_profile_signal.heating_setup / suppression_risk / trigger_risk / mixing_strength`
 - `taf.signal.peak_window / suppression_level / disruption_level / markers`
-
-### `POST /api/scan/terminal/ai-city/stream`
-
-城市决策卡使用该接口生成“AI 机场报文解读”。前端默认请求 SSE 流，流式展示机场报文解读片段，最终以 `final` 事件返回完整 payload。
-
-请求体：
-
-```json
-{
-  "city": "Buenos Aires",
-  "force_refresh": false,
-  "locale": "zh-CN"
-}
-```
-
-SSE 事件：
-
-- `progress`：阶段性状态，例如开始调用 AI、切换非流式重试。
-- `preview`：可显示的预览文本。
-- `delta`：模型流式文本增量，前端会从中提取机场报文解读片段。
-- `final`：完整 `AiCityForecastPayload`。
-
-重点字段：
-
-- `status`：通常为 `ready`；超时或降级时会带 `reason / reason_zh / reason_en`。
-- `cached`：是否命中后端 AI 缓存。
-- `degraded`：是否为降级结果。前端不会把 degraded 结果写入长期 localStorage，但会保留页面内存态，避免切换选项卡后空白。
-- `city_forecast.predicted_max`：AI 给出的预计最高温中枢候选。
-- `city_forecast.range_low / range_high`：AI 给出的天气区间。
-- `city_forecast.final_judgment_zh / final_judgment_en`：最终判断。
-- `city_forecast.metar_read_zh / metar_read_en`：机场报文解读。
-- `city_forecast.reasoning_zh / reasoning_en`：把 METAR、DEB、多模型集群与日内风险合并后的推理。
-- `city_forecast.model_cluster_note_zh / model_cluster_note_en`：模型集群说明。
-- `city_forecast.risks_zh / risks_en`：后续上修或下修触发条件。
 
 ### 城市决策卡市场层口径
 

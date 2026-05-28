@@ -12,7 +12,7 @@ from loguru import logger
 
 from web.analysis_service import _analyze
 from web.core import CITIES
-from web.services.scan_ai_config import (
+from web.services.scan_terminal_config import (
     SCAN_TERMINAL_BUILD_TIMEOUT_SEC,
     SCAN_TERMINAL_MAX_WORKERS,
     SCAN_TERMINAL_PAYLOAD_TTL_SEC,

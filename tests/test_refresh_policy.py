@@ -18,9 +18,9 @@ def test_refresh_policy_cadences_are_layered():
 def test_backend_defaults_use_refresh_policy():
     import src.data_collection.weather_sources as weather_sources
     import web.services.city_runtime as city_runtime
-    import web.services.scan_ai_config as scan_ai_config
+    import web.services.scan_terminal_config as scan_terminal_config
 
-    assert scan_ai_config.SCAN_TERMINAL_PAYLOAD_TTL_SEC == SCAN_ROWS_REFRESH_SEC
+    assert scan_terminal_config.SCAN_TERMINAL_PAYLOAD_TTL_SEC == SCAN_ROWS_REFRESH_SEC
     assert city_runtime.CITY_FULL_CACHE_TTL_SEC == OBSERVATION_REFRESH_SEC
     assert city_runtime.CITY_PANEL_CACHE_TTL_SEC == SCAN_ROWS_REFRESH_SEC
     assert city_runtime.CITY_MARKET_CACHE_TTL_SEC == SCAN_ROWS_REFRESH_SEC

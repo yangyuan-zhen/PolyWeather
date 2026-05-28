@@ -155,15 +155,15 @@
   padding: 11px 12px;
 }
 
-.root :global(.scan-mobile-decision-card .scan-ai-city-status-tags),
-.root :global(.scan-mobile-decision-card .scan-ai-city-freshness),
+.root :global(.scan-mobile-decision-card .scan-city-status-tags),
+.root :global(.scan-mobile-decision-card .scan-city-freshness),
 .root :global(.scan-mobile-decision-card .scan-ai-market-mobile-line),
 .root :global(.scan-mobile-decision-folds) {
   margin-right: 14px;
   margin-left: 14px;
 }
 
-.root :global(.scan-mobile-decision-card .scan-ai-city-freshness) {
+.root :global(.scan-mobile-decision-card .scan-city-freshness) {
   grid-template-columns: 1fr;
   max-width: none;
   margin-top: 0;
@@ -204,13 +204,13 @@
   margin-bottom: 10px;
 }
 
-.root :global(.scan-mobile-fold .scan-ai-city-section.models) {
+.root :global(.scan-mobile-fold .scan-city-section.models) {
   border: 0;
   background: transparent;
   padding: 0;
 }
 
-.root :global(.scan-ai-city-collapse svg) {
+.root :global(.scan-city-collapse svg) {
   transition: transform 0.18s ease;
 }
 
@@ -300,7 +300,7 @@
   .root :global(.scan-forecast-city-head),
   .root :global(.scan-forecast-row-main),
   .root :global(.scan-ai-brief-grid),
-  .root :global(.scan-ai-city-analysis-grid),
+  .root :global(.scan-city-analysis-grid),
   .root :global(.scan-ai-decision-band),
   .root :global(.scan-ai-evidence-line) {
     grid-template-columns: 1fr;
@@ -309,8 +309,8 @@
   .root :global(.scan-ai-workspace-head),
   .root :global(.scan-mobile-city-list-head),
   .root :global(.scan-opportunity-hero),
-  .root :global(.scan-ai-city-hero),
-  .root :global(.scan-ai-city-section-head) {
+  .root :global(.scan-city-hero),
+  .root :global(.scan-city-section-head) {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -321,7 +321,7 @@
 
   .root :global(.scan-ai-workspace-head p),
   .root :global(.scan-mobile-city-list-head p),
-  .root :global(.scan-ai-city-hero-side) {
+  .root :global(.scan-city-hero-side) {
     text-align: left;
     justify-items: start;
   }
@@ -424,23 +424,23 @@
     padding: 6px 8px;
   }
 
-  .root :global(.scan-ai-city-hero) {
+  .root :global(.scan-city-hero) {
     padding: 16px;
   }
 
-  .root :global(.scan-ai-city-hero h3) {
+  .root :global(.scan-city-hero h3) {
     margin-bottom: 10px;
     font-size: 24px;
   }
 
-  .root :global(.scan-ai-city-mobile-priority) {
+  .root :global(.scan-city-mobile-priority) {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
     margin: 0 0 12px;
   }
 
-  .root :global(.scan-ai-city-mobile-priority span) {
+  .root :global(.scan-city-mobile-priority span) {
     display: grid;
     gap: 4px;
     border: 1px solid rgba(77, 163, 255, 0.18);
@@ -449,23 +449,23 @@
     padding: 9px;
   }
 
-  .root :global(.scan-ai-city-mobile-priority small) {
+  .root :global(.scan-city-mobile-priority small) {
     color: var(--color-text-secondary);
     font-size: 10px;
     font-weight: 900;
   }
 
-  .root :global(.scan-ai-city-mobile-priority b) {
+  .root :global(.scan-city-mobile-priority b) {
     color: #f3f8ff;
     font-size: 13px;
     line-height: 1.15;
   }
 
-  .root :global(.scan-ai-city-pills) {
+  .root :global(.scan-city-pills) {
     display: none;
   }
 
-  .root :global(.scan-ai-city-freshness) {
+  .root :global(.scan-city-freshness) {
     grid-template-columns: 1fr;
   }
 
@@ -505,7 +505,7 @@
     margin-top: 10px;
   }
 
-  .root :global(.scan-ai-city-ai-read:not([open])) {
+  .root :global(.scan-city-ai-read:not([open])) {
     padding-bottom: 4px;
   }
 

@@ -6,7 +6,6 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from web.services.scan_api import (
-    get_scan_terminal_ai_payload,
     get_scan_terminal_overview_payload,
     get_scan_terminal_payload,
 )
@@ -52,11 +51,6 @@ async def scan_terminal(
             "Cache-Control": "public, s-maxage=30, stale-while-revalidate=120",
         },
     )
-
-
-@router.post("/api/scan/terminal/ai")
-async def scan_terminal_ai(request: Request):
-    return await get_scan_terminal_ai_payload(request)
 
 
 @router.post("/api/scan/terminal/overview")

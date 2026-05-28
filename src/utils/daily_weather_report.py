@@ -284,14 +284,11 @@ def _build_ai_prompt(
 
 
 def _call_ai(prompt: str) -> Optional[str]:
-    api_key = os.getenv("POLYWEATHER_SCAN_AI_API_KEY", "")
+    api_key = os.getenv("DAILY_REPORT_AI_API_KEY", "")
     base_url = os.getenv(
-        "POLYWEATHER_SCAN_AI_BASE_URL", "https://token-plan-cn.xiaomimimo.com/v1"
+        "DAILY_REPORT_AI_BASE_URL", "https://token-plan-cn.xiaomimimo.com/v1"
     )
-    model = os.getenv(
-        "DAILY_REPORT_AI_MODEL",
-        os.getenv("POLYWEATHER_SCAN_AI_MODEL", "mimo-v2.5-pro"),
-    )
+    model = os.getenv("DAILY_REPORT_AI_MODEL", "mimo-v2.5-pro")
 
     if not api_key:
         logger.warning("daily_weather_report: AI API key not configured")
