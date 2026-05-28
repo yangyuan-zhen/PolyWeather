@@ -25,6 +25,7 @@ def _make_weather_data(
     local_time="2026-03-04 14:30",
     recent_temps=None,
     multi_model=None,
+    multi_model_hourly=None,
     recent_obs=None,
 ):
     """Build a minimal weather_data dict for testing."""
@@ -60,7 +61,7 @@ def _make_weather_data(
             "p10": ens_p10,
             "p90": ens_p90,
         },
-        "multi_model": {"forecasts": multi_model or {}},
+        "multi_model": {"forecasts": multi_model or {}, **(multi_model_hourly or {})},
         "nws": {},
     }
     return data
@@ -153,15 +154,57 @@ class TestMuCalculation:
             recent_temps=[("09:00", 25.0), ("08:00", 24.0), ("07:00", 23.0)],
             multi_model={},
         )
-        data["open-meteo"]["utc_offset"] = 8 * 60 * 60
         data["open-meteo"]["daily"]["time"] = ["2026-05-27", "2026-05-28"]
         data["open-meteo"]["daily"]["temperature_2m_max"] = [24.0, 31.0]
         data["open-meteo"]["hourly"]["time"] = [f"2026-05-28T{h:02d}:00" for h in range(24)]
 
-        _, _, sd = analyze_weather_trend(data, "°C", "wuhan")
+        _, _, sd = analyze_weather_trend(data, "°C", "test_city")
 
         assert sd["current_forecasts"]["Open-Meteo"] == 31.0
         assert sd["mu"] is not None and sd["mu"] >= 30.0
+
+    @patch("src.analysis.trend_engine.calculate_dynamic_weights", return_value=(None, ""))
+    @patch("src.analysis.trend_engine.get_deb_accuracy", return_value=None)
+    @patch("src.analysis.trend_engine.update_daily_record")
+    def test_multi_model_peak_window_prevents_early_open_meteo_bust(
+        self, _udr, _deb_acc, _dw
+    ):
+        """If Open-Meteo peaks early but multi-models peak later, μ must not anchor to morning actuals."""
+        hourly_times = [f"2026-03-04T{h:02d}:00" for h in range(24)]
+        data = _make_weather_data(
+            cur_temp=25.0,
+            max_so_far=25.0,
+            om_today_high=31.5,
+            ens_median=None,
+            ens_p10=None,
+            ens_p90=None,
+            local_time="2026-03-04 09:50",
+            recent_temps=[("09:00", 25.0), ("08:00", 24.5), ("07:00", 24.0)],
+            multi_model={
+                "ECMWF": 30.8,
+                "GFS": 32.0,
+                "ICON": 28.8,
+                "GEM": 29.8,
+            },
+            multi_model_hourly={
+                "hourly_times": hourly_times,
+                "hourly_forecasts": {
+                    "ECMWF": [24, 24, 24, 24, 24, 24, 24, 25, 26, 27, 28, 29, 30, 30.5, 30.8, 30.8, 30.4, 29, 28, 27, 26, 25, 24, 24],
+                    "GFS": [24, 24, 24, 24, 24, 24, 24, 25, 26, 27, 29, 30, 31, 31.5, 32.0, 32.0, 31.2, 30, 28, 27, 26, 25, 24, 24],
+                    "ICON": [23, 23, 23, 23, 23, 23, 23, 24, 25, 26, 27, 28, 28.5, 28.8, 28.8, 28.8, 28.4, 28, 27, 26, 25, 24, 23, 23],
+                    "GEM": [24, 24, 24, 24, 24, 24, 24, 25, 26, 27, 28, 29, 29.5, 29.8, 29.8, 29.8, 29.4, 29, 28, 27, 26, 25, 24, 24],
+                },
+            },
+        )
+        data["open-meteo"]["hourly"]["time"] = hourly_times
+        data["open-meteo"]["hourly"]["temperature_2m"] = [
+            23, 23, 23, 23, 23, 24, 25, 27, 30, 31.5, 29, 28, 27, 26, 25, 24, 24, 23, 23, 22, 22, 22, 22, 22
+        ]
+
+        _, _, sd = analyze_weather_trend(data, "°C", "test_city")
+
+        assert sd["peak_status"] == "before"
+        assert sd["mu"] is not None and sd["mu"] >= 29.0
 
 
 # ─── Tests: Dead Market ───

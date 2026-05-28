@@ -53,3 +53,10 @@ def test_probability_engine_uses_enriched_multi_model_snapshot():
     source = (ROOT / "web" / "analysis_service.py").read_text(encoding="utf-8")
 
     assert 'raw["multi_model"] = mm' in source
+
+
+def test_city_detail_peak_window_uses_shared_multi_model_resolver():
+    source = (ROOT / "web" / "analysis_service.py").read_text(encoding="utf-8")
+
+    assert "from src.analysis.trend_engine import _resolve_peak_hours" in source
+    assert "peak_hours = _resolve_peak_hours(" in source

@@ -30,6 +30,7 @@ from src.analysis.deb_hourly_correction import (
     get_cached_hourly_peak_corrector,
 )
 from src.analysis.settlement_rounding import apply_city_settlement
+from src.analysis.trend_engine import _resolve_peak_hours
 from src.data_collection.country_networks import build_country_network_snapshot
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
 from src.data_collection.city_time import get_city_utc_offset_seconds
@@ -1187,13 +1188,7 @@ def _analyze(
             h_lifted_index = [None for _ in parsed_obs]
             h_boundary_layer_height = [None for _ in parsed_obs]
 
-    peak_hours = []
-    if h_times and h_temps and om_today is not None:
-        for ts, tmp in zip(h_times, h_temps):
-            if ts.startswith(local_date_str) and abs(tmp - om_today) <= 0.2:
-                hr = int(ts.split("T")[1][:2])
-                if 8 <= hr <= 19:
-                    peak_hours.append(ts.split("T")[1][:5])
+    peak_hours = _resolve_peak_hours(raw, local_date_str, h_times, h_temps, om_today)
 
     first_peak_h = int(peak_hours[0].split(":")[0]) if peak_hours else 13
     last_peak_h = int(peak_hours[-1].split(":")[0]) if peak_hours else 15
