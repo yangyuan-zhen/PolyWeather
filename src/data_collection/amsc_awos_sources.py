@@ -33,9 +33,23 @@ AMSC_AWOS_AIRPORTS: Dict[str, Dict[str, str]] = {
     "qingdao": {"icao": "ZSQD", "label": "Qingdao Jiaodong"},
 }
 
+AMSC_SETTLEMENT_RUNWAY_TARGETS: Dict[str, str] = {
+    "shanghai": "35R",
+    "chengdu": "02L",
+    "chongqing": "02L",
+    "guangzhou": "02L",
+    "wuhan": "04",
+    "beijing": "01",
+    "qingdao": "34",
+}
+
 
 def _amsc_supported_city_codes() -> Dict[str, str]:
     return {city: meta["icao"] for city, meta in AMSC_AWOS_AIRPORTS.items()}
+
+
+def _amsc_normalize_runway(value: Any) -> str:
+    return str(value or "").strip().upper().replace(" ", "")
 
 
 def _amsc_safe_float(value: Any) -> Optional[float]:
@@ -54,11 +68,41 @@ def _amsc_safe_float(value: Any) -> Optional[float]:
 
 
 def _amsc_split_runway_pair(label: str) -> tuple[str, str]:
-    parts = [part.strip() for part in str(label or "").split("/") if part.strip()]
+    parts = [_amsc_normalize_runway(part) for part in str(label or "").split("/") if part.strip()]
     if len(parts) >= 2:
         return parts[0], parts[1]
-    runway = str(label or "").strip() or "--"
+    runway = _amsc_normalize_runway(label) or "--"
     return runway, runway
+
+
+def _amsc_settlement_endpoint(
+    city_key: str,
+    runway_pair: tuple[str, str],
+    *,
+    tdz_temp: Optional[float],
+    end_temp: Optional[float],
+) -> Optional[Dict[str, Any]]:
+    target = _amsc_normalize_runway(AMSC_SETTLEMENT_RUNWAY_TARGETS.get(city_key))
+    if not target:
+        return None
+    first = _amsc_normalize_runway(runway_pair[0])
+    second = _amsc_normalize_runway(runway_pair[1])
+    if target == first:
+        temp = tdz_temp if tdz_temp is not None else end_temp
+        position = "tdz" if tdz_temp is not None else "end_fallback"
+    elif target == second:
+        temp = end_temp if end_temp is not None else tdz_temp
+        position = "end" if end_temp is not None else "tdz_fallback"
+    else:
+        return None
+    if temp is None:
+        return None
+    return {
+        "runway": target,
+        "pair": f"{first}/{second}",
+        "position": position,
+        "temp": temp,
+    }
 
 
 def _amsc_wind_dir(*candidates: Any) -> Optional[int]:
@@ -138,8 +182,24 @@ def _amsc_parse_wind_plate_payload(
         if raw_metar is None and raw_row.get("METAR"):
             raw_metar = str(raw_row.get("METAR"))
 
-        runway_pairs.append(_amsc_split_runway_pair(runway_label))
-        best_temp = tdz if tdz is not None else max(points)
+        runway_pair = _amsc_split_runway_pair(runway_label)
+        settlement_endpoint = _amsc_settlement_endpoint(
+            city_key,
+            runway_pair,
+            tdz_temp=tdz,
+            end_temp=end,
+        )
+        runway_pairs.append(runway_pair)
+        target_temp = (
+            settlement_endpoint["temp"]
+            if settlement_endpoint is not None
+            else max(points)
+        )
+        best_temp = (
+            settlement_endpoint["temp"]
+            if settlement_endpoint is not None
+            else tdz if tdz is not None else max(points)
+        )
         runway_temps.append((best_temp, None))
         valid_values.extend(points)
 
@@ -167,21 +227,29 @@ def _amsc_parse_wind_plate_payload(
             raw_row.get("TDZ_HUMID") or raw_row.get("END_HUMID") or raw_row.get("MID_HUMID")
         )
 
-        target_max = max(points)
-        point_temperatures.append(
-            {
-                "runway": runway_label,
-                "tdz_temp": tdz,
-                "mid_temp": mid,
-                "end_temp": end,
-                "target_runway_max": target_max,
-                "wind_dir": wind_dir,
-                "wind_speed": wind_speed,
-                "rvr": rvr,
-                "mor": mor,
-                "humidity": humidity,
-            }
-        )
+        point = {
+            "runway": f"{runway_pair[0]}/{runway_pair[1]}",
+            "temp": target_temp,
+            "tdz_temp": tdz,
+            "mid_temp": mid,
+            "end_temp": end,
+            "target_runway_max": target_temp,
+            "wind_dir": wind_dir,
+            "wind_speed": wind_speed,
+            "rvr": rvr,
+            "mor": mor,
+            "humidity": humidity,
+        }
+        if settlement_endpoint is not None:
+            point.update(
+                {
+                    "is_settlement": True,
+                    "settlement_runway": settlement_endpoint["runway"],
+                    "settlement_runway_position": settlement_endpoint["position"],
+                    "settlement_runway_temp": settlement_endpoint["temp"],
+                }
+            )
+        point_temperatures.append(point)
 
     if not valid_values or not runway_pairs:
         return None
@@ -189,11 +257,28 @@ def _amsc_parse_wind_plate_payload(
     max_temp = round(max(valid_values), 1)
     min_temp = round(min(valid_values), 1)
     avg_temp = round(sum(valid_values) / len(valid_values), 1)
+    settlement_point = next(
+        (
+            point
+            for point in point_temperatures
+            if point.get("is_settlement") and point.get("settlement_runway_temp") is not None
+        ),
+        None,
+    )
+    display_temp = (
+        round(float(settlement_point["settlement_runway_temp"]), 1)
+        if settlement_point is not None
+        else max_temp
+    )
 
     return {
-        "temp": max_temp,
-        "temp_c": max_temp,
-        "temp_source": "runway_max",
+        "temp": display_temp,
+        "temp_c": display_temp,
+        "temp_source": "settlement_runway_endpoint" if settlement_point else "runway_max",
+        "settlement_runway": settlement_point.get("settlement_runway") if settlement_point else None,
+        "settlement_runway_pair": settlement_point.get("runway") if settlement_point else None,
+        "settlement_runway_position": settlement_point.get("settlement_runway_position") if settlement_point else None,
+        "settlement_runway_temp": display_temp if settlement_point else None,
         "runway_temps": runway_temps,
         "runway_temp_range": (min_temp, max_temp),
         "runway_temp_avg": avg_temp,

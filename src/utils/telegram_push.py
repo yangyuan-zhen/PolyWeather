@@ -619,7 +619,18 @@ SETTLEMENT_RUNWAY_PAIRS: Dict[str, Set[Tuple[str, str]]] = {
     "chengdu": {("02L", "20R")},
     "chongqing": {("02L", "20R")},
     "wuhan": {("04", "22")},
+    "qingdao": {("16", "34")},
     "seoul": {("15R", "33L")},
+}
+
+SETTLEMENT_RUNWAY_TARGETS: Dict[str, str] = {
+    "shanghai": "35R",
+    "chengdu": "02L",
+    "chongqing": "02L",
+    "guangzhou": "02L",
+    "wuhan": "04",
+    "beijing": "01",
+    "qingdao": "34",
 }
 
 # All cities with active runway observation data (AMSC AWOS / AMOS).
@@ -736,6 +747,94 @@ def _focus_runway_pairs_for_city(city: str) -> Set[Tuple[str, str]]:
     return {_runway_pair_key(a, b) for a, b in FOCUS_RUNWAY_PAIRS.get(city, set())}
 
 
+def _settlement_runway_target_for_city(city: str) -> str:
+    city_key = (city or "").strip().lower()
+    return _normalize_runway_label(SETTLEMENT_RUNWAY_TARGETS.get(city_key))
+
+
+def _runway_pair_from_point(pair: Any, point: Any) -> Tuple[str, str]:
+    if isinstance(point, dict):
+        rw = str(point.get("runway") or "")
+        parts = [_normalize_runway_label(p) for p in rw.split("/") if p.strip()]
+        if len(parts) >= 2:
+            return parts[0], parts[1]
+    try:
+        r1, r2 = pair
+        return _normalize_runway_label(r1), _normalize_runway_label(r2)
+    except Exception:
+        return "", ""
+
+
+def _settlement_endpoint_for_point(
+    city: str,
+    pair: Any,
+    point: Any,
+) -> Optional[Dict[str, Any]]:
+    if not isinstance(point, dict):
+        point = {}
+    r1, r2 = _runway_pair_from_point(pair, point)
+    if not r1 or not r2 or not _is_settlement_runway(city, r1, r2):
+        return None
+
+    target = _settlement_runway_target_for_city(city)
+    if target:
+        direct_temp = _safe_float(point.get("settlement_runway_temp"))
+        direct_runway = _normalize_runway_label(point.get("settlement_runway"))
+        if direct_temp is not None and (not direct_runway or direct_runway == target):
+            return {
+                "temp": direct_temp,
+                "pair": f"{r1}/{r2}",
+                "runway": target,
+                "position": point.get("settlement_runway_position") or "settlement",
+                "label": "settle",
+            }
+
+        tdz = _safe_float(point.get("tdz_temp"))
+        end = _safe_float(point.get("end_temp"))
+        if target == r1:
+            temp = tdz if tdz is not None else end
+            position = "tdz" if tdz is not None else "end_fallback"
+        elif target == r2:
+            temp = end if end is not None else tdz
+            position = "end" if end is not None else "tdz_fallback"
+        else:
+            return None
+        if temp is None:
+            return None
+        return {
+            "temp": temp,
+            "pair": f"{r1}/{r2}",
+            "runway": target,
+            "position": position,
+            "label": "settle",
+        }
+
+    tmax = _safe_float(point.get("target_runway_max"))
+    if tmax is None:
+        return None
+    return {
+        "temp": tmax,
+        "pair": f"{r1}/{r2}",
+        "runway": "",
+        "position": "max",
+        "label": "max",
+    }
+
+
+def _settlement_endpoint_from_obs(
+    city: str,
+    runway_pairs: List[Any],
+    point_temps: Optional[List[Any]] = None,
+) -> Optional[Dict[str, Any]]:
+    points = point_temps or []
+    for i, pair in enumerate(runway_pairs or []):
+        point = points[i] if i < len(points) else {}
+        endpoint = _settlement_endpoint_for_point(city, pair, point)
+        if endpoint is not None:
+            return endpoint
+    return None
+
+
 def _select_focus_runway_obs(
     city: str,
     runway_pairs: List[Any],
@@ -849,6 +948,9 @@ def _focused_runway_max(city: str, city_weather: Dict[str, Any]) -> Optional[flo
         runway_temps,
         runway_obs.get("point_temperatures") or [],
     )
+    endpoint = _settlement_endpoint_from_obs(city, runway_pairs, _points)
+    if endpoint is not None:
+        return float(endpoint["temp"])
     del runway_pairs
     valid = [float(t) for (t, _d) in runway_temps if t is not None]
     return max(valid) if valid else None
@@ -1016,21 +1118,12 @@ def _build_airport_status_message(
     has_runway = bool(runway_pairs and (runway_temps or point_temps))
     amos_icao = amos.get("icao") or HIGH_FREQ_AIRPORT_ICAO.get(city, "")
     settlement_pair = _settlement_runway_for_city(city)
+    settlement_endpoint = _settlement_endpoint_from_obs(city, runway_pairs, point_temps)
 
-    # ── Display temp: settlement runway max first, then airport temp ──
-    settlement_temp: Optional[float] = None
+    # ── Display temp: settlement endpoint first, then airport temp ──
     display_temp: Optional[float] = None
-    if point_temps:
-        for pt in point_temps:
-            rw = str(pt.get("runway") or "")
-            rw_parts = [p.strip() for p in rw.split("/") if p.strip()]
-            if settlement_pair and len(rw_parts) >= 2 and _runway_pair_key(rw_parts[0], rw_parts[1]) == _runway_pair_key(*settlement_pair):
-                tmax = pt.get("target_runway_max")
-                if tmax is not None:
-                    settlement_temp = float(tmax)
-                break
-        if settlement_temp is not None:
-            display_temp = settlement_temp
+    if settlement_endpoint is not None:
+        display_temp = float(settlement_endpoint["temp"])
     if display_temp is None:
         if point_temps:
             valid_tmax = [float(p.get("target_runway_max")) for p in point_temps if p.get("target_runway_max") is not None]
@@ -1069,7 +1162,12 @@ def _build_airport_status_message(
         language=language,
     )
     icao_display = f"{amos_icao} · " if amos_icao else ""
-    settlement_str = f" · ★{settlement_pair[0]}/{settlement_pair[1]}" if settlement_pair else ""
+    settlement_pair_label = (
+        str(settlement_endpoint.get("pair"))
+        if settlement_endpoint is not None and settlement_endpoint.get("pair")
+        else (f"{settlement_pair[0]}/{settlement_pair[1]}" if settlement_pair else "")
+    )
+    settlement_str = f" · ★{settlement_pair_label}" if settlement_pair_label else ""
     header = f"{icao_display}{en_name} / {ap_name}{settlement_str}{time_suffix}" if ap_name else f"{icao_display}{en_name}{settlement_str}{time_suffix}"
     lines.append(hashtag_line)
     lines.append("")
@@ -1093,12 +1191,15 @@ def _build_airport_status_message(
             mid = pts.get("mid_temp")
             end = pts.get("end_temp")
             is_settlement = _is_settlement_runway(city, r1, r2)
-            marker = _copy(language, " ★Settlement", " ★结算") if is_settlement else ""
+            marker = f" {_copy(language, '★Settlement', '★结算')}" if is_settlement else ""
             tmax = pts.get("target_runway_max")
             if tdz is not None or mid is not None or end is not None:
                 line = f"{r1}/{r2}{marker}  TDZ:{_fmt(tdz)}  MID:{_fmt(mid)}  END:{_fmt(end)}"
-                if tmax is not None:
-                    line += f"  max:{tmax:.1f}"
+                settlement_line_endpoint = _settlement_endpoint_for_point(city, (r1, r2), pts) if is_settlement else None
+                if settlement_line_endpoint is not None:
+                    line += f"  settle:{float(settlement_line_endpoint['temp']):.1f}"
+                elif tmax is not None:
+                    line += f"  max:{float(tmax):.1f}"
                 lines.append(line)
             else:
                 temp_symbol = str(city_weather.get("temp_symbol") or "°C").strip()
@@ -1402,14 +1503,18 @@ def _process_airport_city(
     runway_obs = (amos.get("runway_obs") or {})
     runway_pairs = runway_obs.get("runway_pairs") or []
     runway_temps = runway_obs.get("temperatures") or []
-    runway_pairs, runway_temps, _point_temps = _select_focus_runway_obs(
+    runway_pairs, runway_temps, point_temps = _select_focus_runway_obs(
         city, runway_pairs, runway_temps,
         runway_obs.get("point_temperatures") or [],
     )
-    if runway_temps:
-        valid_temps = [t for (t, _d) in runway_temps if t is not None]
-        if valid_temps:
-            station_temp = max(valid_temps)
+    if runway_pairs and (runway_temps or point_temps):
+        endpoint = _settlement_endpoint_from_obs(city, runway_pairs, point_temps)
+        if endpoint is not None:
+            station_temp = float(endpoint["temp"])
+        else:
+            valid_temps = [t for (t, _d) in runway_temps if t is not None]
+            if valid_temps:
+                station_temp = max(valid_temps)
         amos_obs_time = amos.get("observation_time") or ""
         if amos_obs_time:
             current_obs_time = amos_obs_time

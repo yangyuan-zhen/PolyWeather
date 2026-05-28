@@ -23,8 +23,19 @@ const SETTLEMENT_RUNWAY_PAIRS: Record<string, Array<[string, string]>> = {
   chengdu: [["02L", "20R"]],
   chongqing: [["20R", "02L"]],
   wuhan: [["04", "22"]],
+  qingdao: [["16", "34"]],
   seoul: [["15R", "33L"]],
   busan: [["SR", "SL"]],
+};
+
+const SETTLEMENT_RUNWAY_TARGETS: Record<string, string> = {
+  shanghai: "35R",
+  beijing: "01",
+  guangzhou: "02L",
+  chengdu: "02L",
+  chongqing: "02L",
+  wuhan: "04",
+  qingdao: "34",
 };
 
 function normalizeRunwayLabel(value?: string | null) {
@@ -41,6 +52,21 @@ function hasRecordEntries(value: unknown) {
 
 function pairKey(pair: [string, string]) {
   return pair.map(normalizeRunwayLabel).sort().join("/");
+}
+
+function settlementEndpointTempForPair(
+  cityKey: string,
+  pair: [string, string],
+  tdz: number | null,
+  end: number | null,
+) {
+  const target = normalizeRunwayLabel(SETTLEMENT_RUNWAY_TARGETS[cityKey]);
+  if (!target) return null;
+  const first = normalizeRunwayLabel(pair[0]);
+  const second = normalizeRunwayLabel(pair[1]);
+  if (target === first) return tdz ?? end;
+  if (target === second) return end ?? tdz;
+  return null;
 }
 
 function runwaySeriesKey(rwy: string) {
@@ -138,10 +164,16 @@ function buildRunwayPlates(
     const isSettlement = settlementKeys.has(pairKey(pair));
     
     const pointTemp = pointTemps[index] as any;
-    const aggregateRunwayTemp = validNumber(pointTemp?.temp) ?? validNumber(pointTemp?.target_runway_max);
     const tdz = validNumber(pointTemp?.tdz_temp);
     const mid = validNumber(pointTemp?.mid_temp);
     const end = validNumber(pointTemp?.end_temp);
+    const endpointTemp = isSettlement
+      ? settlementEndpointTempForPair(cityKey, pair, tdz, end)
+      : null;
+    const aggregateRunwayTemp =
+      endpointTemp ??
+      validNumber(pointTemp?.temp) ??
+      validNumber(pointTemp?.target_runway_max);
     const isAmosTempDewTuple = String(amos.source || "").toLowerCase() === "amos";
     
     const historyVals = !isAmosTempDewTuple && Array.isArray(runwayTemps[index])
@@ -152,7 +184,9 @@ function buildRunwayPlates(
     const tdzVal = tdz !== null ? [tdz] : [];
     const midVal = mid !== null ? [mid] : [];
     const endVal = end !== null ? [end] : [];
-    const allVals = [...historyVals, ...aggregateVal, ...tdzVal, ...midVal, ...endVal];
+    const allVals = isSettlement && endpointTemp !== null
+      ? [...historyVals, endpointTemp]
+      : [...historyVals, ...aggregateVal, ...tdzVal, ...midVal, ...endVal];
     
     const maxTemp = allVals.length ? Math.max(...allVals) : null;
     const dailyHigh = historyVals.length ? Math.max(...historyVals) : maxTemp;
@@ -1167,18 +1201,29 @@ function buildRunwayHistorySeries(
   return runwayTemps
     .map((rawTemps, index) => {
       if (!Array.isArray(rawTemps)) return null;
-      const rwy = runwayLabelFromPair(runwayPairs[index], index);
+      const rawPair = runwayPairs[index];
+      const rwy = runwayLabelFromPair(rawPair, index);
       const isSettlement = isSettlementRunway(row, rwy);
       const pointTemp = Array.isArray(pointTemps) ? (pointTemps[index] as any) : null;
+      const pair = Array.isArray(rawPair) && rawPair.length >= 2
+        ? [String(rawPair[0]), String(rawPair[1])] as [string, string]
+        : rwy.split("/").length >= 2
+          ? [rwy.split("/")[0], rwy.split("/")[1]] as [string, string]
+          : [rwy, rwy] as [string, string];
+      const tdz = validNumber(pointTemp?.tdz_temp);
+      const mid = validNumber(pointTemp?.mid_temp);
+      const end = validNumber(pointTemp?.end_temp);
+      const endpointTemp = isSettlement
+        ? settlementEndpointTempForPair(normalizeCityKey(row?.city), pair, tdz, end)
+        : null;
       const aggregateRunwayTemp =
+        endpointTemp ??
         validNumber(pointTemp?.temp) ??
         validNumber(pointTemp?.target_runway_max) ??
         (isAmosTempDewTuple ? runwayTemperatureFromPairTuple(rawTemps) : null);
       const snapshotValues = [
         aggregateRunwayTemp,
-        validNumber(pointTemp?.tdz_temp),
-        validNumber(pointTemp?.mid_temp),
-        validNumber(pointTemp?.end_temp),
+        ...(isSettlement && endpointTemp !== null ? [] : [tdz, mid, end]),
       ].filter((value): value is number => value !== null);
       const samples = isAmosTempDewTuple
         ? []

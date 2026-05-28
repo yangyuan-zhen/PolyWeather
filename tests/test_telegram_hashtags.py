@@ -41,7 +41,7 @@ def test_airport_status_message_defaults_to_bilingual_runway_copy(monkeypatch):
     assert first_line == "#RunwayObs #跑道观测 #Qingdao"
     assert "Qingdao / Jiaodong" in text
     assert "TDZ:23.0" in text
-    assert "Runway now / 跑道当前:" in text
+    assert "Settlement runway now / 结算跑道当前:" in text
     assert "Today's runway high / 今日跑道高点:" in text
     assert "DEB: 24.0°C" in text
 
@@ -55,10 +55,10 @@ def test_airport_status_hides_non_focus_runways_for_key_airports():
             "amos": {
                 "source": "amsc_awos",
                 "runway_obs": {
-                    "runway_pairs": [("02L", "20R"), ("02R", "20L")],
+                    "runway_pairs": [("20R", "02L"), ("02R", "20L")],
                     "temperatures": [(31.1, None), (34.9, None)],
                     "point_temperatures": [
-                        {"runway": "02L/20R", "tdz_temp": 31.0, "mid_temp": 31.1, "end_temp": 31.2, "target_runway_max": 31.2, "wind_dir": None, "wind_speed": None, "rvr": None, "mor": None, "humidity": None},
+                        {"runway": "20R/02L", "tdz_temp": 33.8, "mid_temp": 34.5, "end_temp": 31.2, "target_runway_max": 34.5, "wind_dir": None, "wind_speed": None, "rvr": None, "mor": None, "humidity": None},
                         {"runway": "02R/20L", "tdz_temp": 34.8, "mid_temp": 34.9, "end_temp": 35.0, "target_runway_max": 35.0, "wind_dir": None, "wind_speed": None, "rvr": None, "mor": None, "humidity": None},
                     ],
                 },
@@ -68,9 +68,36 @@ def test_airport_status_hides_non_focus_runways_for_key_airports():
         "13:00",
     )
 
-    assert "02L/20R" in text
+    assert "20R/02L" in text
     assert "02R/20L" in text
     assert "Settlement runway now / 结算跑道当前: 31.2°C" in text
+    assert "max:34.5" not in text
+
+
+def test_airport_status_uses_tdz_when_settlement_target_is_first_runway():
+    text = _build_airport_status_message(
+        "chengdu",
+        {
+            "current": {"temp": 28.0},
+            "airport_current": {"max_so_far": 30.0, "max_temp_time": "13:00"},
+            "amos": {
+                "source": "amsc_awos",
+                "runway_obs": {
+                    "runway_pairs": [("02L", "20R")],
+                    "temperatures": [(27.9, None)],
+                    "point_temperatures": [
+                        {"runway": "02L/20R", "tdz_temp": 24.4, "mid_temp": 26.1, "end_temp": 27.9, "target_runway_max": 27.9, "wind_dir": None, "wind_speed": None, "rvr": None, "mor": None, "humidity": None},
+                    ],
+                },
+            },
+        },
+        32.0,
+        "13:00",
+    )
+
+    assert "02L/20R ★Settlement / ★结算  TDZ:24.4  MID:26.1  END:27.9  settle:24.4" in text
+    assert "Settlement runway now / 结算跑道当前: 24.4°C" in text
+    assert "Settlement runway now / 结算跑道当前: 27.9°C" not in text
 
 
 def test_singapore_is_in_telegram_push_city_lists():

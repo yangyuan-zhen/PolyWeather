@@ -438,37 +438,39 @@ export function runTests() {
   );
   assert(hongKongHkoSeries?.label === "HKO", "Hong Kong HKO settlement observations should remain visible as the HKO curve");
 
-  const chengduFromAmosSnapshot = __buildTemperatureChartDataForTest(
-    {
-      city: "chengdu",
-      local_date: "2026-05-26",
-      local_time: "05:25",
-      tz_offset_seconds: 8 * 60 * 60,
-      airport: "ZUUU",
-    } as any,
-    {
-      localTime: "05:25",
-      times: ["00:00", "06:00", "12:00", "18:00"],
-      temps: [24, 28, 31, 27],
-      amos: {
-        observation_time: "2026-05-25T21:25:00+00:00",
-        observation_time_local: "2026-05-26 05:25:00",
-        runway_obs: {
-          runway_pairs: [
-            ["02L", "20R"],
-            ["02R", "20L"],
-          ],
-          temperatures: [
-            [24.4, null],
-            [24.2, null],
-          ],
-          point_temperatures: [
-            { runway: "02L/20R", tdz_temp: 24.4, mid_temp: null, end_temp: 24.8 },
-            { runway: "02R/20L", tdz_temp: 24.2, mid_temp: null, end_temp: 24.6 },
-          ],
-        },
+  const chengduRow = {
+    city: "chengdu",
+    local_date: "2026-05-26",
+    local_time: "05:25",
+    tz_offset_seconds: 8 * 60 * 60,
+    airport: "ZUUU",
+  } as any;
+  const chengduSnapshotHourly = {
+    localTime: "05:25",
+    times: ["00:00", "06:00", "12:00", "18:00"],
+    temps: [24, 28, 31, 27],
+    amos: {
+      observation_time: "2026-05-25T21:25:00+00:00",
+      observation_time_local: "2026-05-26 05:25:00",
+      runway_obs: {
+        runway_pairs: [
+          ["02L", "20R"],
+          ["02R", "20L"],
+        ],
+        temperatures: [
+          [24.4, null],
+          [24.2, null],
+        ],
+        point_temperatures: [
+          { runway: "02L/20R", tdz_temp: 24.4, mid_temp: null, end_temp: 24.8 },
+          { runway: "02R/20L", tdz_temp: 24.2, mid_temp: null, end_temp: 24.6 },
+        ],
       },
-    } as any,
+    },
+  } as any;
+  const chengduFromAmosSnapshot = __buildTemperatureChartDataForTest(
+    chengduRow,
+    chengduSnapshotHourly,
     "1D",
   );
 
@@ -477,6 +479,14 @@ export function runTests() {
   assert(chengduSettlementRunway.color === "#009688", "AMOS snapshot settlement runway should use highlight cyan");
   assert(chengduSettlementRunway.featured === true, "AMOS snapshot settlement runway should be featured");
   assert(!chengduSettlementRunway.dashed, "AMOS snapshot settlement runway should be solid");
+  const chengduEndpointMetrics = __getObservationDisplayMetricsForTest(
+    chengduRow,
+    chengduSnapshotHourly,
+  );
+  assert(
+    chengduEndpointMetrics.currentRunwayTemp === 24.4,
+    "Chengdu 02L settlement should use TDZ temperature from 02L/20R, not runway max/end temperature",
+  );
 
   const chengduAuxRunway = seriesByKey(chengduFromAmosSnapshot.series, "runway_02R_20L") as any;
   assert(chengduAuxRunway, "AMOS runway_obs snapshot should create auxiliary runway chart lines");

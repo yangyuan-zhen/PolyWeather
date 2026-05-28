@@ -46,8 +46,11 @@ def test_parse_wind_plate_payload_normalizes_runway_point_temperatures():
     assert parsed["source_label"] == "AMSC AWOS Beijing Capital (ZBAA)"
     assert parsed["observation_source_zh"] == "AMSC AWOS 跑道观测气温"
     assert parsed["icao"] == "ZBAA"
-    assert parsed["temp_c"] == 21.0
-    assert parsed["temp_source"] == "runway_max"
+    assert parsed["temp_c"] == 20.2
+    assert parsed["temp_source"] == "settlement_runway_endpoint"
+    assert parsed["settlement_runway"] == "01"
+    assert parsed["settlement_runway_pair"] == "19/01"
+    assert parsed["settlement_runway_position"] == "end"
     assert parsed["runway_temp_range"] == (20.2, 21.0)
     assert parsed["observation_time"] == "2026-05-14T17:19:00+00:00"
     assert parsed["observation_time_local"] == "2026-05-15 01:19:00"
@@ -67,6 +70,10 @@ def test_parse_wind_plate_payload_normalizes_runway_point_temperatures():
     assert pt0["rvr"] is None
     assert pt0["mor"] is None
     assert pt0["humidity"] == 67.0
+    settlement_pt = runway_obs["point_temperatures"][2]
+    assert settlement_pt["runway"] == "19/01"
+    assert settlement_pt["is_settlement"] is True
+    assert settlement_pt["target_runway_max"] == 20.2
 
 
 def test_parse_wind_plate_payload_uses_settlement_runway_endpoint_temperature():
@@ -154,5 +161,6 @@ def test_fetch_amsc_official_current_uses_domestic_city_whitelist(monkeypatch):
 
     assert data is not None
     assert data["icao"] == "ZBAA"
+    assert data["temp_c"] == 20.2
     assert data["runway_temp_range"] == (20.2, 21.0)
     assert FakeCollector().fetch_amsc_awos_current("new york") is None
