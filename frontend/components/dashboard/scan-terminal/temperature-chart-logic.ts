@@ -77,6 +77,11 @@ function runwaySeriesKey(rwy: string) {
     .join("_")}`;
 }
 
+function runwaySeriesLabel(rwy: string, isSettlement: boolean, isEn: boolean) {
+  if (!isSettlement) return rwy;
+  return `${rwy} ${isEn ? "Settlement Runway" : "结算跑道"}`;
+}
+
 function isTemperatureSeriesVisibleByDefault(city: string, seriesKey: string) {
   if (seriesKey.startsWith("model_curve_")) {
     return normalizeCityKey(city) === "paris" && seriesKey === "model_curve_AROME HD";
@@ -1153,6 +1158,7 @@ function buildRunwayHistorySeries(
   tzOffset: number,
   localDateStr: string,
   minPoints = 2,
+  isEn = false,
 ): RunwayHistorySeries[] {
   const directHistory =
     hourly?.runwayPlateHistory ??
@@ -1175,7 +1181,7 @@ function buildRunwayHistorySeries(
         const isSettlement = isSettlementRunway(row, normalizedRwy);
         return {
           key: runwaySeriesKey(normalizedRwy),
-          label: `${normalizedRwy}${isSettlement ? (row ? " 结算跑道" : " Settlement") : ""}`,
+          label: runwaySeriesLabel(normalizedRwy, isSettlement, isEn),
           rwy: normalizedRwy,
           isSettlement,
           color: isSettlement ? "#009688" : RUNWAY_LINE_COLORS[index % RUNWAY_LINE_COLORS.length],
@@ -1249,7 +1255,7 @@ function buildRunwayHistorySeries(
       if (values.length < minPoints) return null;
       return {
         key: runwaySeriesKey(rwy),
-        label: `${rwy}${isSettlement ? " 结算跑道" : ""}`,
+        label: runwaySeriesLabel(rwy, isSettlement, isEn),
         rwy,
         isSettlement,
         color: isSettlement ? "#009688" : RUNWAY_LINE_COLORS[index % RUNWAY_LINE_COLORS.length],
@@ -1575,7 +1581,7 @@ function buildFullDayChartData(
     localDayBounds,
   );
   const runwayHistorySeries = filterRunwayHistoryToLocalDay(
-    buildRunwayHistorySeries(row, hourly, tzOffset, localDateStr),
+    buildRunwayHistorySeries(row, hourly, tzOffset, localDateStr, 2, isEn),
     localDayBounds,
   );
 

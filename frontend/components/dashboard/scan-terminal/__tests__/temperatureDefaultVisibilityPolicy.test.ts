@@ -342,6 +342,33 @@ export function runTests() {
     assert(!highlighted.dashed, `${city} settlement runway should be solid`);
     const auxiliary = seriesByKey(chart.series, "runway_99_00") as any;
     assert(auxiliary?.dashed === true, `${city} auxiliary runway should be dashed`);
+
+    const englishChart = __buildTemperatureChartDataForTest(
+      {
+        city,
+        local_date: "2026-05-25",
+        local_time: "10:00",
+        tz_offset_seconds: 8 * 60 * 60,
+        runway_plate_history: {
+          [settlementRwy]: [
+            { time: "00:05", temp: 25.1 },
+            { time: "00:35", temp: 25.3 },
+          ],
+        },
+      } as any,
+      { localTime: "10:00", times: ["00:00", "00:30"], temps: [25, 26] } as any,
+      "1D",
+      true,
+    );
+    const englishSettlement = seriesByKey(englishChart.series, runwayKey(settlementRwy)) as any;
+    assert(
+      englishSettlement?.label.includes("Settlement Runway"),
+      `${city} English settlement runway label should be translated`,
+    );
+    assert(
+      !englishSettlement?.label.includes("结算跑道"),
+      `${city} English settlement runway label should not leak Chinese`,
+    );
   });
 
   const shenzhen = __buildTemperatureChartDataForTest(
