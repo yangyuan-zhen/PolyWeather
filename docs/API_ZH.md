@@ -1,6 +1,6 @@
-# PolyWeather API 文档（v1.8.0）
+# PolyWeather API 文档（v1.8.1）
 
-最后更新：`2026-04-27`
+最后更新：`2026-05-28`
 
 本文档描述当前对外可用 API 口径（`web/app.py` + `web/routes.py` + `frontend/app/api/*`）。
 
@@ -17,7 +17,9 @@ flowchart LR
     FE["Browser / Dashboard"] --> BFF["Next.js Route Handlers (/api/*)"]
     BFF --> API["FastAPI (/web/app.py + /web/routes.py)"]
     API --> WX["Weather Collector"]
-    API --> ANA["DEB + Trend + Probability + Market Scan"]
+    API --> ANA["DEB + Hourly Consensus + Probability + Market Scan"]
+    API --> SSE["Realtime SSE (/api/events)"]
+    SSE --> EVENT["Redis Stream / SQLite Event Log"]
     API --> PAY["Payment Intent + Event + Confirm Loops"]
     API --> OBS["healthz / system status / metrics"]
 ```
@@ -31,6 +33,27 @@ flowchart LR
 | `/api/city/{name}/summary` | GET | 轻量摘要 |
 | `/api/city/{name}/detail` | GET | 聚合详情（含 market_scan） |
 | `/api/history/{name}` | GET | 历史对账 |
+| `/api/events` | GET | SSE 实时观测事件流 |
+| `/api/internal/collector-patch` | POST | 采集器内部写入实时观测 patch |
+
+### `GET /api/events`
+
+浏览器实时图表入口，使用 `text/event-stream`。
+
+参数：
+
+- `cities=shanghai,hong kong`：可选，逗号分隔城市列表；为空表示订阅全部城市。
+- `since_revision=<int>`：可选，断线重连后从指定 revision 之后 replay。
+- `replay_limit=<int>`：可选，默认 `500`，后端会做上限保护。
+
+事件：
+
+- `connected`：连接建立，包含当前 `latest_revision`。
+- `city_observation_patch.v1`：标准实时观测 patch，包含城市、序列、温度、观测 UTC 时间、城市时区、revision。
+- `resync_required`：replay 窗口不足或事件存储不可用，前端应回到 HTTP snapshot 重建画面。
+- `heartbeat`：保活。
+
+生产环境推荐 `POLYWEATHER_EVENT_STORE=redis`，以 Redis Stream 保存短窗口事件并支持多 worker fanout；本地或单进程可使用 SQLite event log。
 
 ### `GET /api/city/{name}/detail`
 
@@ -51,6 +74,7 @@ flowchart LR
 - `probabilities.engine / calibration_mode / calibration_version`
 - `probabilities.raw_mu / raw_sigma / calibrated_mu / calibrated_sigma`
 - `probabilities.shadow_distribution`
+- `deb.hourly_consensus / deb.hourly_path.base_source`
 - `intraday_meteorology.headline / confidence`
 - `intraday_meteorology.base_case_bucket / upside_bucket / downside_bucket`
 - `intraday_meteorology.next_observation_time`
@@ -90,7 +114,7 @@ flowchart LR
 
 #### 2. `probabilities`
 
-概率层基于 legacy 高斯分桶，以 DEB 融合预测 μ 和 ensemble spread σ 生成 1°C 粒度概率分布。
+概率层基于 legacy 高斯分桶，以 DEB 融合预测 `mu` 和 ensemble spread `sigma` 生成 1°C 粒度概率分布。前端图表将 legacy 高斯展示为水平概率温度带和 `mu` 参考线，不把概率分布渲染成时间序列曲线。
 
 概率字段：
 
@@ -98,6 +122,22 @@ flowchart LR
 - `mu`：DEB 融合预测中心值
 - `distribution`：当天合约桶概率分布
 - `distribution_all`：包含外围桶的完整分布
+
+#### 2.1 `deb.hourly_consensus`
+
+DEB hourly consensus 是当前图表与峰值窗口的优先小时路径。
+
+重点字段：
+
+- `version`：当前为 `deb_hourly_consensus.v1`
+- `base_source`：`multi_model_hourly_deb_weights`
+- `times` / `temps`：城市当地日的小时路径
+- `model_weights`：DEB 权重折叠后的模型权重
+
+说明：
+
+- 该路径是预测曲线，不是实测来源。
+- 图表默认展示全天；“高温”视图仅根据该路径推导 peak-centric 窗口。
 
 #### 3. `detail_depth`
 
@@ -255,6 +295,8 @@ flowchart LR
 - `summary?force_refresh=true`：`Cache-Control: no-store`
 - 详情接口与支付接口：`no-store`
 - `METAR` / `TAF` / settlement current 由后端各自维护短 TTL 缓存
+- 实时事件层：`POLYWEATHER_EVENT_STORE=redis` 时使用 Redis Stream；未启用 Redis 时使用 SQLite `observation_patch_events` 作为 replay fallback
+- 前端终端图表：HTTP detail 仍是完整 snapshot，SSE patch 只做增量观测追加；长连接断开或后台恢复时前端会按 `since_revision` replay 或强刷 detail
 - 前端打开今日日内分析时，如果 full detail 或 market scan 正在同步，会先显示刷新锁，不展示可交互的旧内容
 - 城市决策卡 AI 解读前端缓存键为 `city + local_date + locale + METAR signature`；signature 优先使用原始 METAR，缺失时回退到报文时间、观测时间和温度
 - 城市决策卡 AI 解读使用两层前端缓存：页面内存缓存保存 loading / 流式进度 / 最终 payload，`localStorage` 保存最终成功 payload，默认 TTL 1 小时

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.8.1 - 2026-05-28
+
+### 文档与发布
+- README / README_ZH 改用 `frontend/public/static/web.png` 与 `frontend/public/static/tel.png` 作为产品截图，并移除旧 `docs/images` README 截图引用。
+- 同步版本源到 `1.8.1`，刷新 API、Supabase、技术债、PolygonScan 验证等文档标题版本。
+- 更新前端、实时事件、数据源、模型栈与服务文档，补齐 Redis Stream + SSE Patch、DEB hourly consensus、城市当地时间图表、legacy 高斯图表叠加、跑道/CoWIN 曲线和中英文 Telegram 推送口径。
+
+### 当前线上口径确认
+- 生产实时层为“HTTP snapshot + SSE patch + replayable event store”；前端只消费 `/api/events`，不直接连接 Redis。
+- `deb_hourly_consensus.v1` 是峰值窗口与 DEB 曲线展示的优先小时路径；DEB 不作为实测来源。
+- AMSC/AMOS 跑道曲线和香港 CoWIN 6087 参考站曲线按城市当地时间展示，结算跑道高亮，辅助跑道弱化。
+
+
 ## 1.8.0 - 2026-05-27
 
 ### 新增与重构

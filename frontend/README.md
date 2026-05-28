@@ -9,7 +9,7 @@ PolyWeather Pro 的生产前端工程。
 
 - Next.js App Router
 - React + Tailwind
-- Leaflet + Chart.js
+- Leaflet + Recharts
 - Supabase Auth
 - WalletConnect + 浏览器 EVM 钱包
 
@@ -23,6 +23,11 @@ PolyWeather Pro 的生产前端工程。
 
 - 主站 Dashboard 支持地图、城市详情、今日日内分析和账户中心
 - `/docs` 已提供公开双语产品文档中心，解释日内分析、校准概率、模型栈、TAF 和结算来源
+- 终端图表默认展示全天，可切换高温窗口；所有横轴与 tooltip 时间按城市当地时间渲染
+- 可见终端图表通过 SSE patch 无痛增量刷新，后台切回前台时主动补齐最新 detail，不用 loading 遮罩覆盖已有曲线
+- AMSC/AMOS 跑道城市默认展示结算跑道曲线并高亮，辅助跑道弱化展示；单跑道机场不重复展示聚合线
+- 香港默认展示 CoWIN 6087 参考站 1 分钟曲线，并保留 HKO 10 分钟官方气象层
+- legacy 高斯概率在图表上展示为概率温度带和 `mu` 参考线，不作为时间序列曲线
 - 今日日内分析支持：
   - `锚点状态`
   - `当前节奏`
@@ -185,6 +190,8 @@ Ops：
 - 支付相关路由：`no-store`
 - 当 detail 缓存只返回单模型或单日 forecast 时，前端会自动强刷完整 detail，并在补齐前显示同步提示 / 占位卡
 - 今日日内分析打开时如果正在切换城市、日期或 detail 深度，弹窗会阻断旧内容点击并显示刷新锁
+- 终端图表订阅 `/api/events?cities=...&since_revision=...&replay_limit=500`，接收 `city_observation_patch.v1`；无 patch 超过 2 分钟时，可见图表才触发 60 秒兜底刷新
+- 前端只消费 HTTP snapshot + SSE patch，不直接感知 Redis；Redis Stream / SQLite event log 都由后端统一封装
 
 ## Vercel 节流建议
 
@@ -199,4 +206,4 @@ Ops：
 
 详见根目录策略文档：`docs/OPEN_CORE_POLICY.md`
 
-最后更新：`2026-05-23`
+最后更新：`2026-05-28`

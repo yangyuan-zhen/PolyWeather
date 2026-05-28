@@ -2,7 +2,7 @@
 
 本文档记录 PolyWeather 当前开放模型接入、区域覆盖差异，以及 DEB 在新增模型后的计权规则。
 
-最后更新：`2026-05-27`
+最后更新：`2026-05-28`
 
 ## 1. 接入方式
 
@@ -172,7 +172,33 @@ raw current_forecasts
 
 当 `weights_info` 出现 `家族去重`，表示当前输入模型数量多于 DEB 实际入模数量，系统已先折叠同家族模型。
 
-### 5.1 版本化预测与偏差校正
+### 5.1 DEB hourly consensus
+
+当前图表和峰值窗口优先使用 `deb_hourly_consensus.v1`。
+
+入口：
+
+- `src/analysis/deb_hourly_consensus.py`
+- `web/analysis_service.py`
+- `src/analysis/trend_engine.py`
+
+处理逻辑：
+
+```text
+multi_model hourly curves
+  -> 按 DEB 可用模型和家族去重口径选择候选
+  -> 使用 DEB 权重生成逐小时 consensus
+  -> 输出 deb.hourly_consensus
+  -> 图表 DEB Forecast 与 peak-window 逻辑优先读取该路径
+```
+
+关键口径：
+
+- `deb_hourly_consensus.v1` 是预测曲线，不是实测曲线。
+- 它只用于日内形状、峰值窗口和 DEB Forecast 展示；视觉预警和“接近峰值”状态必须优先读取实测/跑道/官方站点当前值与今日实测高点。
+- 如果多模型小时路径缺失，系统才回退旧的 `hourly_plus_deb_offset`。
+
+### 5.2 版本化预测与偏差校正
 
 DEB 原始融合逻辑不推倒重写，`calculate_dynamic_weights(...)` 仍作为 raw baseline。线上生产入口使用 `calculate_deb_prediction(...)` 包装 raw baseline，并在有足够历史样本时追加城市级 recent signed-bias correction。
 
@@ -213,6 +239,7 @@ python scripts/backtest_deb_versions.py \
 - `multi_model`
 - `multi_model_daily`
 - `source_forecasts.open_meteo_multi_model.model_metadata`
+- `deb.hourly_consensus`
 
 显示分组：
 
@@ -232,6 +259,13 @@ python scripts/backtest_deb_versions.py \
 - horizon
 
 区域模型不覆盖时不显示空模型。
+
+终端图表默认：
+
+- 展示“全天”视图，按城市当地日 00:00-23:59 和真实观测时间绘制。
+- 可选“高温”视图，窗口由 `deb_hourly_consensus.v1` 的峰值区域推导。
+- DEB Forecast 使用橙色预测曲线；实测/跑道/官方站点曲线独立展示，不把 DEB 当成实测。
+- legacy 高斯概率显示为水平温度带和 `mu` 参考线，不参与时间序列曲线。
 
 ### 6.1 “来源 Open-Meteo”是什么意思
 

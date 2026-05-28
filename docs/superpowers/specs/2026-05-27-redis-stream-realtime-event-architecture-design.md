@@ -3,6 +3,7 @@
 > 日期: 2026-05-27
 > 范围: PolyWeather 网站图表实时观测事件层
 > 目标服务器: 2 vCPU / 8 GB RAM / 50 GB 系统盘
+> 实施状态: 2026-05-28 已落地为 `v1.8.1`
 
 ## 背景
 
@@ -29,7 +30,7 @@
 - 前端协议保持 `city_observation_patch.v1`，不让浏览器感知 Redis。
 - 继续使用 numeric `revision`，兼容现有前端 `since_revision` 逻辑。
 - 支持按城市订阅、断线 replay、多 worker fanout。
-- 事件只保留短窗口，默认 24 小时；生产不建议超过 24 小时。
+- 事件只保留短窗口；当前默认按 Redis Stream `MAXLEN` 控制，建议以约 24 小时 replay 为目标，不做 72 小时保留。
 
 ## 非目标
 

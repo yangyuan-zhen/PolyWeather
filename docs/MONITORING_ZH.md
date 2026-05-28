@@ -1,6 +1,6 @@
 # 外部监控与告警说明
 
-最后更新：`2026-04-18`
+最后更新：`2026-05-28`
 
 ## 1. 目标
 
@@ -11,6 +11,7 @@
 - Relay 把告警推到运营频道
 - Grafana 展示趋势面板
 - 巡检脚本补健康检查
+- 关注 `/api/events` 长连接与 realtime event store 是否正常 replay
 
 ## 2. 组件
 
@@ -89,6 +90,14 @@ POLYWEATHER_MONITORING_ALERT_CHAT_IDS=
 - Source Requests by Outcome
 - Source Error Rate (15m)
 
+实时事件层建议额外观察：
+
+- Redis Stream latest revision
+- Redis 连接状态
+- SQLite fallback 是否被启用
+- SSE active connection count
+- `resync_required` 出现频率
+
 ## 7. 巡检脚本
 
 手动巡检：
@@ -102,6 +111,7 @@ python scripts/check_ops_health.py --base-url http://127.0.0.1:8000
 - `/healthz`
 - `/api/system/status`
 - `/metrics`
+- `/api/events`（手动验证时查看 `connected` / `heartbeat` / replay 事件）
 
 任何一项失败都会非零退出，适合挂到 crontab 或 systemd timer。
 
@@ -130,6 +140,11 @@ python scripts/check_ops_health.py --base-url http://127.0.0.1:8000
   - 多日预报是否只返回当天单卡
   - 日内分析 full detail / market scan 是否仍在同步
   - 右侧详情面板是否正在用同步占位卡提示用户
+- 实时事件状态：
+  - event store 类型（Redis / SQLite）
+  - latest revision
+  - Redis 是否连通
+  - 是否处于 `degraded_from=redis` fallback
 
 这意味着：
 
@@ -180,3 +195,4 @@ npm run build
 - 更细粒度支付指标
 - 按城市/来源拆分的业务 SLA
 - 按城市拆分的前端补齐耗时与 stale-detail 告警
+- Redis Stream 长度、内存与 replay gap 告警

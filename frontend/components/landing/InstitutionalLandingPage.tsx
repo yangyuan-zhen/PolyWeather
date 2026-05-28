@@ -3,40 +3,20 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  Activity,
   ArrowRight,
-  BarChart3,
   Check,
   CheckCircle2,
-  CloudSun,
   Gauge,
   LineChart,
   LockKeyhole,
   Radar,
   ShieldCheck,
-  TrendingUp,
 } from "lucide-react";
 import { I18nProvider, useI18n } from "@/hooks/useI18n";
 import {
   getSupabaseBrowserClient,
   hasSupabasePublicEnv,
 } from "@/lib/supabase/client";
-
-const RAW_MARKET_ROWS_EN = [
-  ["New York", "91.8°F", "+2.4", "High Anomaly", "Approve Temp"],
-  ["Austin", "103.1°F", "+1.1", "Normal", "Observe"],
-  ["Seoul", "83.4°F", "-0.7", "Low Anomaly", "Veto Anomaly"],
-  ["Tokyo", "88.2°F", "+1.8", "High Anomaly", "Approve Temp"],
-  ["London", "72.6°F", "-0.2", "Normal", "Observe"],
-];
-
-const RAW_MARKET_ROWS_ZH = [
-  ["纽约", "91.8°F", "+2.4", "高偏差", "符合高温"],
-  ["奥斯汀", "103.1°F", "+1.1", "正常", "持续观察"],
-  ["首尔", "83.4°F", "-0.7", "低偏差", "否决偏差"],
-  ["东京", "88.2°F", "+1.8", "高偏差", "符合高温"],
-  ["伦敦", "72.6°F", "-0.2", "正常", "持续观察"],
-];
 
 const COVERAGE_EN = [
   "Live airport observations",
@@ -94,7 +74,6 @@ function InstitutionalLandingScreen() {
     });
   }, []);
 
-  const marketRows = isEn ? RAW_MARKET_ROWS_EN : RAW_MARKET_ROWS_ZH;
   const coverage = isEn ? COVERAGE_EN : COVERAGE_ZH;
   const platformCards = isEn
     ? [
@@ -131,10 +110,6 @@ function InstitutionalLandingScreen() {
           body: "除公开介绍和账户管理外，气象决策台仅向付费活跃订阅用户开放。",
         },
       ];
-
-  const modelLabels = isEn
-    ? ["DEB Blend", "Live METAR", "Model Consensus"]
-    : ["DEB 融合预测", "METAR 机场实测", "模型多方共识"];
 
   return (
     <div className="min-h-screen bg-[#f4f7fb] text-slate-950">
@@ -263,86 +238,26 @@ function InstitutionalLandingScreen() {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-slate-300 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.16)]">
+          <div className="overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.16)] animate-fade-up [animation-delay:650ms] opacity-0">
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
               <div className="flex items-center gap-2 text-sm font-bold">
-                <BarChart3 size={16} className="text-blue-700" />
-                {isEn ? "Weather Intelligence Console" : "气象决策分析台"}
+                <LineChart size={16} className="text-blue-700" />
+                {isEn ? "Realtime Terminal" : "实时终端"}
               </div>
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
                 <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                {isEn ? "Live" : "实时数据"}
+                {isEn ? "Real product screenshot" : "真实产品截图"}
               </div>
             </div>
-            <div className="grid gap-3 p-3 lg:grid-cols-[1fr_0.85fr]">
-              <div className="rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-4 py-2.5">
-                  <strong className="text-sm text-slate-800">{isEn ? "Temperature Metrics" : "温度决策指标"}</strong>
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    {isEn ? "Observed / Deviation / Decision" : "实测 / 偏差 / 决策"}
-                  </span>
-                </div>
-                <div className="divide-y divide-slate-100">
-                  {marketRows.map((row) => (
-                    <div
-                      key={row[0]}
-                      className="grid grid-cols-[1.1fr_0.8fr_0.6fr_0.7fr_0.9fr] items-center gap-2 px-3 py-3 text-sm"
-                    >
-                      <span className="font-semibold">{row[0]}</span>
-                      <span className="font-mono text-slate-700">{row[1]}</span>
-                      <span
-                        className={
-                          row[2].startsWith("+")
-                            ? "font-mono font-bold text-emerald-700"
-                            : "font-mono font-bold text-red-600"
-                        }
-                      >
-                        {row[2]}
-                      </span>
-                      <span className="text-xs font-bold text-slate-500">
-                        {row[3]}
-                      </span>
-                      <span className="rounded bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700">
-                        {row[4]}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-3">
-                <div className="rounded-xl border border-slate-200 p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <strong className="text-sm">{isEn ? "Model Stack" : "模型堆栈"}</strong>
-                    <LineChart size={16} className="text-blue-700" />
-                  </div>
-                  <div className="space-y-3">
-                    {modelLabels.map((label, index) => (
-                      <div key={label}>
-                        <div className="mb-1 flex justify-between text-xs font-semibold text-slate-500">
-                          <span>{label}</span>
-                          <span>{[82, 67, 74][index]}%</span>
-                        </div>
-                        <div className="h-2 rounded-full bg-slate-100">
-                          <div
-                            className="h-2 rounded-full bg-blue-600"
-                            style={{ width: `${[82, 67, 74][index]}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                  <div className="mb-2 flex items-center gap-2 text-sm font-bold text-emerald-800">
-                    <TrendingUp size={16} className="animate-pulse" />
-                    {isEn ? "Current Anomaly / Action" : "当前异常与决策"}
-                  </div>
-                  <p className="text-sm leading-relaxed text-emerald-900/90 font-medium">
-                    {isEn
-                      ? "New York high-temperature target shows a positive observation deviation with confirmed airport evidence."
-                      : "纽约高温阈值监测出现显著的正向观测偏差，机场天气实况已验证确认。"}
-                  </p>
-                </div>
+            <div className="bg-slate-50 p-2 sm:p-3">
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <img
+                  src="/static/web.png"
+                  alt={isEn ? "PolyWeather realtime terminal screenshot" : "PolyWeather 实时终端截图"}
+                  className="block h-auto w-full object-contain"
+                  loading="eager"
+                  decoding="async"
+                />
               </div>
             </div>
           </div>
@@ -420,8 +335,8 @@ function InstitutionalLandingScreen() {
                   </h3>
                   <p className="mt-3 text-sm text-slate-500 leading-relaxed">
                     {isEn
-                      ? "Full access to the institutional weather intelligence workspace. Live METAR, DEB forecasts, probability distribution, AI decision cards, and real-time alerts."
-                      : "完整访问机构级天气决策分析台。实时 METAR、DEB 预报、概率分布、AI 决策卡片、实时通知。"}
+                      ? "Full access to the institutional weather intelligence workspace. Live METAR, DEB forecasts, probability distribution, realtime terminal charts, and alerts."
+                      : "完整访问机构级天气决策分析台。实时 METAR、DEB 预报、概率分布、实时终端图表、实时通知。"}
                   </p>
                   <div className="mt-6 flex items-baseline">
                     <span className="text-5xl font-black tracking-tight text-slate-900">

@@ -9,19 +9,19 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 
 ## Product Screenshots
 
-### Global Dashboard
+### Realtime Terminal
 
-![PolyWeather global dashboard](docs/images/demo_map.png)
+![PolyWeather realtime terminal](frontend/public/static/web.png)
 
-### City Analysis (Ankara)
+### Telegram Runway Alerts
 
-![PolyWeather Ankara analysis](docs/images/demo_ankara.png)
+![PolyWeather Telegram runway alerts](frontend/public/static/tel.png)
 
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=yangyuan-zhen/PolyWeather&type=Date)](https://star-history.com/#yangyuan-zhen/PolyWeather&Date)
 
-## Product Status (2026-05-23)
+## Product Status (2026-05-28)
 
 - Subscription live: `Pro Monthly 10 USDC`.
 - Points system live: earn via group chat, welcome bonus (+20), first-message-of-day bonus (+2), weekly participation rewards.
@@ -31,12 +31,21 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 - Auto-reconciliation live: event listener + periodic confirm loop.
 - Ops dashboard live: `/ops` for memberships, leaderboard, manual point grants, and payment incident triage.
 - Lightweight observability live: `/healthz`, `/api/system/status`, `/metrics`.
+- Realtime terminal live: visible city charts subscribe through `/api/events?cities=...&since_revision=...`, receive `city_observation_patch.v1` SSE patches, and replay short gaps from Redis Stream in production or SQLite fallback in local/single-node mode.
+- Chart refresh is observation-driven: live patches merge into the current chart without a loading overlay; only visible charts run a 60s no-patch fallback, and returning from a background browser tab triggers a foreground catch-up refresh.
+- Temperature charts default to All Day, keep an optional Peak window derived from the DEB hourly path, and render all timestamps in the selected city's local time.
+- The chart core has been split into focused logic/canvas/state modules; Recharts now receives explicit measured dimensions to avoid 0x0 rendering and disappearing curves.
+- DEB hourly consensus (`deb_hourly_consensus.v1`) is now the preferred hourly forecast path for peak-window detection and chart overlays; DEB remains a forecast curve, never an observation source.
+- Legacy Gaussian probability is rendered as horizontal probability bands and a `mu` reference line on the chart, rather than as a fake time-series curve.
+- Settlement runway curves are visible by default for AMSC/AMOS cities; the configured settlement runway is highlighted and auxiliary runways are shown as secondary context.
+- Hong Kong uses CoWIN station `6087` (Po Leung Kuk Choi Kai Yau School) as the 1-minute reference-station curve, with HKO 10-minute observations kept as the official meteorological layer.
+- Telegram airport/runway pushes are bilingual by default and use settlement-endpoint runway temperatures for slope/current/summary copy.
 - Runtime state, cache, and core offline training/backfill flows now use SQLite as the primary path; legacy JSON/JSONL files remain only for migration, export, and explicit fallback input.
 - EMOS/CRPS calibration is wired and trainable, but production should stay on `legacy` or `emos_shadow`; `emos_primary` is only for candidates that pass local offline evaluation and manual rollout.
 - Intraday analysis is now positioned as a professional meteorology read: headline, confidence, base/upside/downside paths, next observation point, evidence chain, failure modes, and confirmation rules.
 - Intraday modal now blocks stale cached detail during refresh, so users do not briefly trade off old city/date data before full detail arrives.
-- City decision cards now include the AI airport read: METAR, DEB, model cluster, and the AI expected-high center are resolved before mapping the result to temperature buckets.
-- AI airport reads now use in-page memory cache, browser `localStorage`, and backend short-TTL cache; returning from another dashboard tab restores existing stream text or final results before any new request is needed.
+- Terminal city cards now combine settlement observations, DEB hourly consensus, model cluster context, calibrated probability, and market-bucket mapping without blocking the chart on AI text generation.
+- Terminal data uses page memory cache, browser `localStorage`, backend short-TTL cache, SSE patch replay, and foreground refresh so returning from another tab restores the latest visible chart state quickly.
 - Market bucket matching now uses the full `all_buckets` surface and strict exact / range / or-higher / or-lower direction checks, reducing bad matches to unreasonable tail buckets.
 - The card label “model-market difference” means `model probability - market-implied probability`; positive values indicate weather probability above market pricing, while negative values indicate the YES is already priced more fully.
 - Calibrated model probability is now the primary probability panel. It shows the active production probability engine (legacy Gaussian or EMOS), while model consensus remains a secondary reference.
@@ -62,8 +71,9 @@ See: [AGPL-3.0 & Commercial Boundary](docs/OPEN_CORE_POLICY.md)
 
 - Aggregates observations and forecasts for 51 monitored cities.
 - Uses DEB (Dynamic Error Balancing) to blend multi-model highs.
+- Builds a DEB-weighted hourly consensus path for peak-window logic and chart display.
 - Generates settlement-oriented calibrated probability buckets (`mu` + bucket distribution) via legacy Gaussian or EMOS/CRPS calibration.
-- Adds city decision cards that combine AI airport reads, expected-high centers, full market-bucket mapping, and model-market difference in one view.
+- Adds city decision cards that combine live observations, expected-high centers, full market-bucket mapping, and model-market difference in one view.
 - Reuses one analysis core across web dashboard and Telegram bot.
 - Adds payment audit trails, replay tooling, and incident visibility in ops.
 - Adds peak-window-oriented intraday analysis with meteorology headline, path buckets, evidence chain, invalidation rules, and confirmation rules.
@@ -88,7 +98,10 @@ flowchart LR
     WX --> AMOS["AMOS runway sensors (Korea)"]
     WX --> HKO["HKO / CWA / NOAA / Official settlement sources"]
 
-    API --> ANA["DEB + Trend + Probability + Market Scan"]
+    API --> ANA["DEB + Hourly Consensus + Probability + Market Scan"]
+    API --> SSE["SSE /api/events"]
+    WX --> SSE
+    SSE --> EVENT["Redis Stream / SQLite Event Log"]
     ANA --> PAY["Payment State (Intent + Event + Confirm Loop)"]
     ANA --> STATE["SQLite runtime state"]
 ```
@@ -125,6 +138,8 @@ npm run dev
 - `TAF` is used as an airport-side confirmation layer, not as the main temperature model.
 - Calibrated probability uses legacy Gaussian (default) or EMOS/CRPS when evaluated; model vote counts remain an explanatory consensus line, not the final probability.
 - Browser extension remains a lightweight monitoring + basic-bias product, while the site holds the full analysis experience.
+- Realtime terminal charts use SSE patches plus replayable event storage; full HTTP detail remains the authoritative snapshot.
+- Chart observations are shown in the city's local time, not the browser timezone.
 
 ## Runtime Data (Recommended on VPS)
 
@@ -134,7 +149,13 @@ Use external runtime storage to avoid SQLite/git conflicts:
 POLYWEATHER_RUNTIME_DATA_DIR=/var/lib/polyweather
 POLYWEATHER_DB_PATH=/var/lib/polyweather/polyweather.db
 POLYWEATHER_STATE_STORAGE_MODE=sqlite
+POLYWEATHER_EVENT_STORE=redis
+POLYWEATHER_REDIS_URL=redis://polyweather_redis:6379/0
+POLYWEATHER_REDIS_STREAM_MAXLEN=50000
+POLYWEATHER_REDIS_REQUIRED=true
 ```
+
+For local development or a strict single-process fallback, keep `POLYWEATHER_EVENT_STORE=sqlite`.
 
 ## EMOS Local Training
 
@@ -214,5 +235,5 @@ curl http://127.0.0.1:8000/api/payments/runtime
 
 ## Version
 
-- Version: `v1.8.0`
-- Last Updated: `2026-05-23`
+- Version: `v1.8.1`
+- Last Updated: `2026-05-28`

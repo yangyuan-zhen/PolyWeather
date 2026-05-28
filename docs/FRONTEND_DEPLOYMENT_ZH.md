@@ -1,5 +1,7 @@
 # 前端部署配置（Vercel）
 
+最后更新：`2026-05-28`
+
 本文只覆盖 `frontend` 目录对应的 Next.js 前端部署。
 
 ## 一、部署目标
@@ -15,6 +17,12 @@
 1. 浏览器 -> Vercel 上的 Next.js 前端
 2. Next `/api/*` -> `POLYWEATHER_API_BASE_URL`
 3. FastAPI 后端 -> 分析 / 支付 / 鉴权服务
+
+实时图表同样走 Next Route Handler / rewrite：
+
+1. 浏览器 `EventSource` -> `/api/events?cities=...&since_revision=...`
+2. Next 转发到 FastAPI `/api/events`
+3. FastAPI 从 Redis Stream / SQLite event log replay 后进入 live SSE
 
 ## 二、Vercel 项目设置
 
@@ -193,6 +201,7 @@ Vercel 部署前至少确认：
 4. 如果启用鉴权，Supabase redirect URL 已包含前端域名
 5. `GET /api/payments/config` 返回的是当前最新地址，而不是旧收款合约
 6. 如果启用了 `/ops`，确认 `POLYWEATHER_OPS_ADMIN_EMAILS` 已在 Vercel 与后端同时配置
+7. 确认 `/api/events` 没有被 CDN 缓存或压缩成普通 JSON；它必须保持 `text/event-stream`
 
 ## 九、常见问题
 

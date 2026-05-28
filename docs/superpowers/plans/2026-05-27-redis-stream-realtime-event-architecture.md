@@ -4,6 +4,8 @@
 
 **Goal:** Add Redis Stream as the production realtime event store and live fanout source while preserving the existing SSE patch protocol.
 
+**Implementation status (2026-05-28):** completed in `v1.8.1`. Production uses Redis Stream when `POLYWEATHER_EVENT_STORE=redis`; SQLite remains the local/fallback event log. Browser API and frontend contract stayed on `/api/events` + `city_observation_patch.v1`.
+
 **Architecture:** Keep `city_observation_patch.v1` and numeric `revision` as the browser contract. Add a Redis-backed event store beside the existing SQLite store, select it through an event-store factory, and let Redis-backed deployments fan out live events through a Redis subscriber loop instead of direct in-process ingest broadcast.
 
 **Tech Stack:** FastAPI, redis-py, Redis Stream, SQLite fallback, pytest, existing frontend EventSource hook.
@@ -16,21 +18,21 @@
 - Create: `tests/test_redis_realtime_event_store.py`
 - Create: `web/redis_realtime_event_store.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Cover append, replay by city, replay gap, and fallback-independent event shape.
 
-- [ ] **Step 2: Verify tests fail**
+- [x] **Step 2: Verify tests fail**
 
 Run: `python -m pytest tests/test_redis_realtime_event_store.py -q`
 
 Expected: fails because `web.redis_realtime_event_store` does not exist.
 
-- [ ] **Step 3: Implement Redis store**
+- [x] **Step 3: Implement Redis store**
 
 Add `RedisRealtimeEventStore` with `append_event`, `latest_revision`, `replay_events`, `replay_requires_resync`, and idempotent `start_live_subscription`.
 
-- [ ] **Step 4: Verify tests pass**
+- [x] **Step 4: Verify tests pass**
 
 Run: `python -m pytest tests/test_redis_realtime_event_store.py -q`
 
@@ -41,19 +43,19 @@ Run: `python -m pytest tests/test_redis_realtime_event_store.py -q`
 - Modify: `web/routers/sse_router.py`
 - Test: `tests/test_sse_replay.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Cover `POLYWEATHER_EVENT_STORE=redis` selecting Redis, SQLite fallback when Redis is not configured, and Redis ingest not doing direct local broadcast.
 
-- [ ] **Step 2: Verify tests fail**
+- [x] **Step 2: Verify tests fail**
 
 Run: `python -m pytest tests/test_sse_replay.py tests/test_realtime_event_store_factory.py -q`
 
-- [ ] **Step 3: Implement factory and router integration**
+- [x] **Step 3: Implement factory and router integration**
 
 Use Redis store when configured; otherwise keep existing SQLite store. Ingest broadcasts directly only for stores that do not provide external live fanout.
 
-- [ ] **Step 4: Verify tests pass**
+- [x] **Step 4: Verify tests pass**
 
 Run: `python -m pytest tests/test_sse_replay.py tests/test_realtime_event_store_factory.py -q`
 
@@ -63,11 +65,11 @@ Run: `python -m pytest tests/test_sse_replay.py tests/test_realtime_event_store_
 - Modify: `requirements.txt`
 - Modify: `docs/superpowers/specs/2026-05-27-redis-stream-realtime-event-architecture-design.md`
 
-- [ ] **Step 1: Add redis-py dependency**
+- [x] **Step 1: Add redis-py dependency**
 
 Add `redis>=5.0.0` to `requirements.txt`.
 
-- [ ] **Step 2: Add final config notes**
+- [x] **Step 2: Add final config notes**
 
 Ensure the design doc names the runtime env vars used by code.
 
@@ -76,7 +78,7 @@ Ensure the design doc names the runtime env vars used by code.
 **Files:**
 - No production edits unless tests reveal a gap.
 
-- [ ] **Step 1: Run backend realtime tests**
+- [x] **Step 1: Run backend realtime tests**
 
 Run:
 
@@ -84,7 +86,7 @@ Run:
 python -m pytest tests/test_realtime_patch_schema.py tests/test_realtime_event_store.py tests/test_redis_realtime_event_store.py tests/test_realtime_event_store_factory.py tests/test_sse_replay.py -q
 ```
 
-- [ ] **Step 2: Run broader frontend/backend checks**
+- [x] **Step 2: Run broader frontend/backend checks**
 
 Run:
 
@@ -95,7 +97,7 @@ npm run typecheck
 npm run build
 ```
 
-- [ ] **Step 3: Inspect diff**
+- [x] **Step 3: Inspect diff**
 
 Run:
 
