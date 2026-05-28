@@ -444,7 +444,17 @@ export function LiveTemperatureThresholdChart({
   }, [row, chartHourly, tzOffset, chartLocalDate]);
 
   const runwayPlates = useMemo(() => buildRunwayPlates(chartHourly?.amos, row, settlementObs), [chartHourly?.amos, row, settlementObs]);
-  const hasRunwayData = runwayPlates.length > 0;
+  const hasRunwaySeries = useMemo(
+    () =>
+      series.some(
+        (item) =>
+          item.key.startsWith("runway_") &&
+          item.key !== "runway_max" &&
+          item.values.some((value) => validNumber(value) !== null),
+      ),
+    [series],
+  );
+  const hasRunwayData = runwayPlates.length > 0 || hasRunwaySeries;
   const settlementPlate = useMemo(() => runwayPlates.find((p) => p.isSettlement), [runwayPlates]);
 
   const chartSeries = useMemo(() => {

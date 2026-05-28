@@ -10,6 +10,7 @@ import {
   __mergePatchIntoHourlyForTest,
   __selectDisplayRunwayTempForTest,
 } from "@/components/dashboard/scan-terminal/LiveTemperatureThresholdChart";
+import { __buildTemperatureTooltipRowsForTest } from "@/components/dashboard/scan-terminal/TemperatureTooltipContent";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -368,6 +369,23 @@ export function runTests() {
     assert(
       !englishSettlement?.label.includes("结算跑道"),
       `${city} English settlement runway label should not leak Chinese`,
+    );
+    const englishRunwayPoint = englishChart.data.find(
+      (point: any) => point[runwayKey(settlementRwy)] !== null && point[runwayKey(settlementRwy)] !== undefined,
+    );
+    const tooltipRows = __buildTemperatureTooltipRowsForTest(
+      englishRunwayPoint as any,
+      englishChart.data,
+      englishChart.series,
+    );
+    const tooltipRunway = tooltipRows.find((item) => item.key === runwayKey(settlementRwy));
+    assert(
+      tooltipRunway?.label.includes("Settlement Runway"),
+      `${city} English tooltip runway label should be translated`,
+    );
+    assert(
+      !tooltipRunway?.label.includes("结算跑道"),
+      `${city} English tooltip runway label should not leak Chinese`,
     );
   });
 
@@ -783,6 +801,36 @@ export function runTests() {
   assert(
     __selectDisplayRunwayTempForTest(23.0, 24.3, true) === 24.3,
     "live aggregate temp should not override runway-history current temp when runway data is rendered",
+  );
+
+  const wuhanRunwayMetrics = __getObservationDisplayMetricsForTest(
+    {
+      city: "wuhan",
+      local_date: "2026-05-27",
+      local_time: "13:54",
+      tz_offset_seconds: 8 * 60 * 60,
+      current_temp: 25.0,
+      temp_symbol: "°C",
+    } as any,
+    {
+      localTime: "13:54",
+      times: ["00:00", "12:00", "18:00", "23:00"],
+      temps: [22.0, 30.0, 29.0, 25.0],
+      runwayPlateHistory: {
+        "04/22": [
+          { time: "13:52", temp: 28.6 },
+          { time: "13:54", temp: 28.8 },
+        ],
+      },
+    } as any,
+  );
+  assert(
+    wuhanRunwayMetrics.currentRunwayTemp === 28.8,
+    "runway header metrics should use the latest settlement runway history point",
+  );
+  assert(
+    __selectDisplayRunwayTempForTest(25.0, wuhanRunwayMetrics.currentRunwayTemp, false) === 28.8,
+    "runway header should prefer runway-history current temp even when the latest detail payload lacks runway_obs snapshot",
   );
 
   const newYorkMetrics = __getObservationDisplayMetricsForTest(

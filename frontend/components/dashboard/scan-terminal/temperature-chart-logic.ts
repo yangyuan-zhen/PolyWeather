@@ -713,12 +713,10 @@ function getObservationDisplayMetrics(
 function selectDisplayRunwayTemp(
   liveTemp: number | null,
   currentRunwayTemp: number | null,
-  hasRunwayData: boolean,
+  _hasRunwayData: boolean,
 ) {
-  if (hasRunwayData && currentRunwayTemp !== null) {
-    return currentRunwayTemp;
-  }
-  return liveTemp ?? currentRunwayTemp;
+  if (currentRunwayTemp !== null) return currentRunwayTemp;
+  return liveTemp;
 }
 
 function isSettlementRunway(row: ScanOpportunityRow | null, rwy: string) {
