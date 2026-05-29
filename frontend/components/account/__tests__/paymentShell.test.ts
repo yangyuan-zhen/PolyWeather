@@ -184,9 +184,10 @@ export function runTests() {
   );
   assert(
     accountCenterSource.includes("data-testid=\"payment-management-grid\"") &&
-      accountCenterSource.includes("lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]") &&
-      accountCenterSource.includes("data-testid=\"payment-guard-grid\""),
-    "payment management must split plans/referrals from payment controls and compact guard details into grids",
+      accountCenterSource.includes('hasTelegramPanel ? "" : "lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]"') &&
+      accountCenterSource.includes("data-testid=\"payment-guard-grid\"") &&
+      accountCenterSource.includes('hasTelegramPanel ? "" : "sm:grid-cols-2"'),
+    "payment management must only split into internal columns when it is not already sharing the row with a Telegram panel",
   );
   assert(
     !appAnalyticsSource.includes('NEXT_PUBLIC_POLYWEATHER_APP_ANALYTICS === "true"') &&

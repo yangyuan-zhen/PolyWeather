@@ -1046,7 +1046,9 @@ export function AccountCenter() {
                 ) : null}
                 <div
                   data-testid="payment-management-grid"
-                  className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] lg:items-start"
+                  className={`grid gap-6 lg:items-start ${
+                    hasTelegramPanel ? "" : "lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]"
+                  }`}
                 >
                   <div className="space-y-5">
                     <div>
@@ -1153,7 +1155,10 @@ export function AccountCenter() {
                         </div>
                       </div>
                     </div>
-                    <div data-testid="payment-guard-grid" className="grid gap-3 sm:grid-cols-2">
+                    <div
+                      data-testid="payment-guard-grid"
+                      className={`grid gap-3 ${hasTelegramPanel ? "" : "sm:grid-cols-2"}`}
+                    >
                       <InfoRow
                         icon={Mail}
                         label={copy.paymentAccount}
