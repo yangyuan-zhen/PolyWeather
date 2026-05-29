@@ -174,6 +174,21 @@ export function runTests() {
     "payment wallet tab must warn users that Polygon POL gas is required in addition to USDC",
   );
   assert(
+    !accountCenterSource.includes("md:w-96"),
+    "account payment management must not use a narrow fixed sidebar that creates an overlong column",
+  );
+  assert(
+    accountCenterSource.includes("items-start") &&
+      accountCenterSource.includes("xl:grid-cols-[minmax(0,0.9fr)_minmax(620px,1.1fr)]"),
+    "account secondary sections must align cards to the top and give payment management a wider responsive column",
+  );
+  assert(
+    accountCenterSource.includes("data-testid=\"payment-management-grid\"") &&
+      accountCenterSource.includes("lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]") &&
+      accountCenterSource.includes("data-testid=\"payment-guard-grid\""),
+    "payment management must split plans/referrals from payment controls and compact guard details into grids",
+  );
+  assert(
     !appAnalyticsSource.includes('NEXT_PUBLIC_POLYWEATHER_APP_ANALYTICS === "true"') &&
       !analyticsRouteSource.includes('NEXT_PUBLIC_POLYWEATHER_APP_ANALYTICS === "true"'),
     "app analytics must be enabled by default so ops funnel can collect data without a fragile production env flag",
