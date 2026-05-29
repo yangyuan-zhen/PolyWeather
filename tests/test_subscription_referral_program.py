@@ -177,3 +177,133 @@ def test_referral_reward_respects_monthly_ten_invite_cap(monkeypatch):
     assert result["awarded"] is False
     assert result["reason"] == "monthly_cap_reached"
     assert not any(call["table"] == "subscriptions" for call in writes)
+
+
+def test_signup_trial_falls_back_to_entitlement_events_without_trial_tables(monkeypatch):
+    monkeypatch.setenv("POLYWEATHER_AUTH_ENABLED", "true")
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "anon")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role")
+    service = SupabaseEntitlementService()
+    calls = []
+
+    def fake_rest(method, table, **kwargs):
+        calls.append({"method": method, "table": table, **kwargs})
+        if method == "GET" and table == "user_wallets":
+            return []
+        if table in {"trial_claims", "trial_claim_wallets"}:
+            raise RuntimeError("table missing")
+        if method == "GET" and table == "entitlement_events":
+            return []
+        if method == "POST" and table in {"subscriptions", "entitlement_events"}:
+            return [kwargs.get("payload") or {}]
+        raise AssertionError((method, table, kwargs))
+
+    monkeypatch.setattr(service, "_rest", fake_rest)
+
+    result = service.ensure_signup_trial("user-1", "user@example.com")
+
+    assert result["created"] is True
+    event_actions = [
+        call["payload"]["action"]
+        for call in calls
+        if call["method"] == "POST" and call["table"] == "entitlement_events"
+    ]
+    assert "signup_trial_claimed" in event_actions
+    assert "signup_trial_granted" in event_actions
+
+
+def test_apply_referral_code_falls_back_to_profiles_and_events(monkeypatch):
+    monkeypatch.setenv("POLYWEATHER_AUTH_ENABLED", "true")
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "anon")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role")
+    service = SupabaseEntitlementService()
+    referrer_id = "00000000-0000-0000-0000-0000000000aa"
+    referred_id = "00000000-0000-0000-0000-0000000000bb"
+    events = []
+
+    def fake_rest(method, table, **kwargs):
+        if method == "GET" and table == "subscriptions":
+            return []
+        if table in {"referral_codes", "referral_attributions", "referral_rewards"}:
+            raise RuntimeError("table missing")
+        if method == "GET" and table == "profiles":
+            return [{"id": referrer_id, "email": "referrer@example.com"}]
+        if method == "GET" and table == "entitlement_events":
+            user_filter = str((kwargs.get("params") or {}).get("user_id") or "")
+            user_id = user_filter[3:] if user_filter.startswith("eq.") else user_filter
+            return [event for event in events if event.get("user_id") == user_id]
+        if method == "POST" and table == "entitlement_events":
+            payload = kwargs.get("payload") or {}
+            events.append(payload)
+            return [payload]
+        raise AssertionError((method, table, kwargs))
+
+    monkeypatch.setattr(service, "_rest", fake_rest)
+    referral_code = service.ensure_referral_code(referrer_id)["code"]
+
+    result = service.apply_referral_code(referred_id, referral_code)
+
+    assert result["ok"] is True
+    assert result["referral"]["applied_code"] == referral_code
+    assert any(event["action"] == "referral_attribution_created" for event in events)
+
+
+def test_referral_reward_falls_back_to_entitlement_events_without_referral_tables(monkeypatch):
+    monkeypatch.setenv("POLYWEATHER_AUTH_ENABLED", "true")
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "anon")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role")
+    service = SupabaseEntitlementService()
+    referrer_id = "00000000-0000-0000-0000-0000000000aa"
+    referred_id = "00000000-0000-0000-0000-0000000000bb"
+    events = [
+        {
+            "id": 1,
+            "user_id": referred_id,
+            "action": "referral_attribution_created",
+            "payload": {
+                "id": "event-1",
+                "code": "PWTEST",
+                "referrer_user_id": referrer_id,
+                "referred_user_id": referred_id,
+                "status": "pending",
+            },
+            "created_at": "2026-05-29T00:00:00+00:00",
+        }
+    ]
+    writes = []
+
+    def fake_rest(method, table, **kwargs):
+        if table in {"referral_attributions", "referral_rewards"}:
+            raise RuntimeError("table missing")
+        if method == "GET" and table == "entitlement_events":
+            user_filter = str((kwargs.get("params") or {}).get("user_id") or "")
+            user_id = user_filter[3:] if user_filter.startswith("eq.") else user_filter
+            return [event for event in events if event.get("user_id") == user_id]
+        if method == "GET" and table == "subscriptions":
+            return []
+        if method == "POST" and table in {"subscriptions", "entitlement_events"}:
+            payload = kwargs.get("payload") or {}
+            writes.append({"table": table, "payload": payload})
+            if table == "entitlement_events":
+                events.append(payload)
+            return [payload]
+        raise AssertionError((method, table, kwargs))
+
+    monkeypatch.setattr(service, "_rest", fake_rest)
+
+    result = service.settle_referral_reward(
+        referred_user_id=referred_id,
+        payment_intent_id="intent-1",
+        tx_hash="0x" + "3" * 64,
+    )
+
+    assert result["awarded"] is True
+    assert any(call["table"] == "subscriptions" for call in writes)
+    assert any(
+        call["table"] == "entitlement_events"
+        and call["payload"]["action"] == "referral_reward_granted"
+        for call in writes
+    )
