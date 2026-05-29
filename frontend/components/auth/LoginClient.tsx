@@ -126,7 +126,7 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
       const supabase = getSupabaseBrowserClient();
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
         redirectTo: `${siteOrigin}/auth/callback?next=${encodeURIComponent(
-          "/account",
+          `/auth/reset-password?next=${encodeURIComponent(nextPath || "/account")}`,
         )}`,
       });
       if (error) {
