@@ -67,12 +67,28 @@ def _runner() -> None:
         return
 
     interval_sec = _env_int("POLYWEATHER_PAYMENT_CONFIRM_LOOP_INTERVAL_SEC", 20, 5)
+    idle_interval_sec = _env_int(
+        "POLYWEATHER_PAYMENT_CONFIRM_LOOP_IDLE_INTERVAL_SEC",
+        300,
+        interval_sec,
+    )
+    idle_interval_sec = max(interval_sec, idle_interval_sec)
+    idle_after_empty_cycles = _env_int(
+        "POLYWEATHER_PAYMENT_CONFIRM_LOOP_IDLE_AFTER_EMPTY_CYCLES",
+        3,
+        1,
+    )
     batch_size = _env_int("POLYWEATHER_PAYMENT_CONFIRM_LOOP_BATCH_SIZE", 20, 1)
     batch_size = min(batch_size, 200)
 
     logger.info(
-        "payment confirm loop started interval={}s batch={} chain_id={} confirmations={}",
+        (
+            "payment confirm loop started active_interval={}s idle_interval={}s "
+            "idle_after_empty_cycles={} batch={} chain_id={} confirmations={}"
+        ),
         interval_sec,
+        idle_interval_sec,
+        idle_after_empty_cycles,
         batch_size,
         PAYMENT_CHECKOUT.chain_id,
         PAYMENT_CHECKOUT.confirmations,
@@ -81,13 +97,17 @@ def _runner() -> None:
         "confirm_loop_started",
         {
             "interval_sec": interval_sec,
+            "idle_interval_sec": idle_interval_sec,
+            "idle_after_empty_cycles": idle_after_empty_cycles,
             "batch_size": batch_size,
             "chain_id": PAYMENT_CHECKOUT.chain_id,
             "confirmations": PAYMENT_CHECKOUT.confirmations,
         },
     )
 
+    empty_cycles = 0
     while True:
+        sleep_sec = interval_sec
         try:
             intents = PAYMENT_CHECKOUT.list_pending_confirm_intents(limit=batch_size)
             scanned = len(intents)
@@ -149,10 +169,17 @@ def _runner() -> None:
                     failed,
                 )
                 _append_audit_event("confirm_loop_cycle", cycle_summary)
+            if scanned:
+                empty_cycles = 0
+            else:
+                empty_cycles += 1
+                if empty_cycles >= idle_after_empty_cycles:
+                    sleep_sec = idle_interval_sec
         except Exception as exc:
+            empty_cycles = 0
             logger.warning(f"payment confirm cycle failed: {exc}")
             _append_audit_event("confirm_loop_error", {"error": str(exc)})
-        time.sleep(interval_sec)
+        time.sleep(sleep_sec)
 
 
 def start_payment_confirm_loop():

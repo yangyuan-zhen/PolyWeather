@@ -229,9 +229,19 @@ class StartupCoordinator:
 
     def _start_payment_confirm_loop(self) -> LoopStatus:
         enabled = _env_bool("POLYWEATHER_PAYMENT_CONFIRM_LOOP_ENABLED", True)
+        interval_sec = max(
+            5, _env_int("POLYWEATHER_PAYMENT_CONFIRM_LOOP_INTERVAL_SEC", 20)
+        )
+        idle_interval_sec = max(
+            interval_sec,
+            _env_int("POLYWEATHER_PAYMENT_CONFIRM_LOOP_IDLE_INTERVAL_SEC", 300),
+        )
         details = {
-            "interval_sec": max(
-                5, _env_int("POLYWEATHER_PAYMENT_CONFIRM_LOOP_INTERVAL_SEC", 20)
+            "interval_sec": interval_sec,
+            "idle_interval_sec": idle_interval_sec,
+            "idle_after_empty_cycles": max(
+                1,
+                _env_int("POLYWEATHER_PAYMENT_CONFIRM_LOOP_IDLE_AFTER_EMPTY_CYCLES", 3),
             ),
             "batch_size": max(
                 1, min(200, _env_int("POLYWEATHER_PAYMENT_CONFIRM_LOOP_BATCH_SIZE", 20))
