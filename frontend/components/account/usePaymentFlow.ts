@@ -170,10 +170,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
 
   // ── Derived payment values ──────────────────────────────
   const planList = paymentConfig?.plans || [];
-  const monthlyPlanList = planList.filter(
-    (plan) => String(plan.plan_code || "").trim().toLowerCase() === "pro_monthly",
-  );
-  const effectivePlanList = monthlyPlanList.length ? monthlyPlanList : planList;
+  const effectivePlanList = planList;
   const selectedPlan = effectivePlanList.find((plan) => plan.plan_code === selectedPlanCode) || effectivePlanList[0];
 
   const availableChainList: PaymentChainOption[] = useMemo(() => {

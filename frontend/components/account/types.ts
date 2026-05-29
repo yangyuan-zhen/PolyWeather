@@ -10,12 +10,28 @@ export type AuthMeResponse = {
   subscription_required?: boolean;
   subscription_active?: boolean | null;
   subscription_plan_code?: string | null;
+  subscription_source?: string | null;
+  subscription_is_trial?: boolean | null;
   subscription_starts_at?: string | null;
   subscription_expires_at?: string | null;
   subscription_total_expires_at?: string | null;
   subscription_queued_days?: number | null;
   subscription_queued_count?: number | null;
   telegram_pricing?: TelegramPricing | null;
+  referral?: ReferralSummary | null;
+};
+
+export type ReferralSummary = {
+  code?: string;
+  discount_usdc?: string;
+  discounted_monthly_amount_usdc?: string;
+  reward_days?: number;
+  monthly_reward_limit?: number;
+  monthly_reward_days_limit?: number;
+  monthly_reward_count?: number;
+  monthly_reward_days?: number;
+  applied_code?: string;
+  attribution_status?: string;
 };
 
 export type TelegramPricing = {

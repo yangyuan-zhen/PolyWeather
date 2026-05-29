@@ -319,35 +319,58 @@ function InstitutionalLandingScreen() {
             </h2>
             <p className="mx-auto mt-4 max-w-2xl text-base text-slate-500">
               {isEn
-                ? "One plan. Full access. No hidden fees."
-                : "一个方案，全部功能，无隐藏费用。"}
+                ? "Start with a 3-day trial, then choose monthly or quarterly Pro access."
+                : "新用户可先领 3 天免费试用，再选择月付或季度 Pro。"}
             </p>
 
-            <div className="mx-auto mt-16 max-w-lg">
-              <div className="relative flex flex-col rounded-3xl border-2 border-blue-500/80 bg-white p-8 shadow-[0_20px_60px_rgba(37,99,235,0.12)] text-left animate-fade-up opacity-0 transition-transform hover:-translate-y-1 hover:shadow-[0_30px_80px_rgba(37,99,235,0.2)] duration-500" style={{ animationDelay: "500ms", animationFillMode: "forwards" }}>
+            <div className="mx-auto mt-16 grid max-w-5xl gap-4 text-left md:grid-cols-3">
+              <div className="relative flex flex-col rounded-2xl border border-slate-200 bg-slate-50 p-6 shadow-sm animate-fade-up opacity-0" style={{ animationDelay: "420ms", animationFillMode: "forwards" }}>
+                <div className="mb-4 inline-flex w-fit rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                  {isEn ? "Trial" : "试用"}
+                </div>
+                <h3 className="text-2xl font-black text-slate-900">
+                  {isEn ? "3-day free trial" : "3 天免费试用"}
+                </h3>
+                <p className="mt-3 text-sm leading-relaxed text-slate-500">
+                  {isEn
+                    ? "New users receive one signup trial for core product workflows. Paid Telegram group, high-frequency refresh, batch alerts, and API access require Pro."
+                    : "新用户首次注册/登录后自动开通一次 3 天免费试用，可体验核心产品；付费 Telegram 群、高频刷新、批量提醒与 API 需 Pro。"}
+                </p>
+                <Link
+                  href="/auth/login?next=%2Fterminal&mode=signup"
+                  className="mt-auto inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-700 bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-700"
+                >
+                  {isEn ? "Start trial" : "开始试用"}
+                  <ArrowRight size={15} />
+                </Link>
+              </div>
+
+              <div className="relative flex flex-col rounded-2xl border-2 border-blue-500/80 bg-white p-6 shadow-[0_20px_60px_rgba(37,99,235,0.12)] animate-fade-up opacity-0 transition-transform hover:-translate-y-1 hover:shadow-[0_30px_80px_rgba(37,99,235,0.18)] duration-500" style={{ animationDelay: "500ms", animationFillMode: "forwards" }}>
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-1.5 text-xs font-bold uppercase tracking-widest text-white shadow-md">
                   {isEn ? "Pro Workspace" : "专业决策分析台"}
                 </div>
 
                 <div>
                   <h3 className="text-2xl font-black text-slate-900 tracking-tight">
-                    PolyWeather Pro
+                    {isEn ? "Pro Monthly" : "Pro 月付"}
                   </h3>
                   <p className="mt-3 text-sm text-slate-500 leading-relaxed">
                     {isEn
-                      ? "Full access to the institutional weather intelligence workspace. Live METAR, DEB forecasts, probability distribution, realtime terminal charts, and alerts."
-                      : "完整访问机构级天气决策分析台。实时 METAR、DEB 预报、概率分布、实时终端图表、实时通知。"}
+                      ? "Full Pro access for 30 days, including paid Telegram group eligibility."
+                      : "完整 Pro 权限 30 天，包含付费 Telegram 群准入资格。"}
                   </p>
                   <div className="mt-6 flex items-baseline">
                     <span className="text-5xl font-black tracking-tight text-slate-900">
-                      $10
+                      29.9
                     </span>
                     <span className="ml-1 text-sm font-semibold text-slate-500">
-                      / {isEn ? "month" : "月"}
+                      USDC / 30 天
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-slate-400">
-                    {isEn ? "Billed monthly. Cancel anytime." : "按月计费，随时可取消。"}
+                    {isEn
+                      ? "Referral first-month price: 26.9 USDC."
+                      : "使用邀请码首月 26.9 USDC。"}
                   </p>
 
                   <div className="mt-8 border-t border-slate-100 pt-6">
@@ -369,7 +392,7 @@ function InstitutionalLandingScreen() {
                     href="/account"
                     className="group flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 py-3.5 text-center text-sm font-bold text-white shadow-lg shadow-slate-900/20 transition-all hover:scale-[1.02] hover:shadow-slate-900/30 hover:from-blue-600 hover:to-indigo-600 duration-300 active:scale-[0.98]"
                   >
-                    <span>{isEn ? "Subscribe for $10/month" : "立即订阅 $10/月"}</span>
+                    <span>{isEn ? "Subscribe monthly" : "订阅月付 Pro"}</span>
                     <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
                   </Link>
                   <p className="mt-4 text-center text-xs text-slate-400">
@@ -378,6 +401,40 @@ function InstitutionalLandingScreen() {
                       : "需先登录。通过 Polygon 链 USDC 支付。"}
                   </p>
                 </div>
+              </div>
+
+              <div className="relative flex flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm animate-fade-up opacity-0" style={{ animationDelay: "580ms", animationFillMode: "forwards" }}>
+                <div className="mb-4 inline-flex w-fit rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">
+                  {isEn ? "Quarterly" : "季度"}
+                </div>
+                <h3 className="text-2xl font-black text-slate-900">
+                  {isEn ? "Pro Quarterly" : "Pro 季度"}
+                </h3>
+                <p className="mt-3 text-sm leading-relaxed text-slate-500">
+                  {isEn
+                    ? "90 days of Pro access at a lower effective monthly cost."
+                    : "90 天 Pro 权限，适合稳定使用，折算月成本更低。"}
+                </p>
+                <div className="mt-6 flex items-baseline">
+                  <span className="text-5xl font-black tracking-tight text-slate-900">
+                    79.9
+                  </span>
+                  <span className="ml-1 text-sm font-semibold text-slate-500">
+                    USDC / 90 天
+                  </span>
+                </div>
+                <div className="mt-6 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-800">
+                  {isEn
+                    ? "Invite reward: invited user pays Pro, referrer gets +3 days Pro."
+                    : "邀请奖励：被邀请人成功付费后，邀请人 +3 天 Pro。"}
+                </div>
+                <Link
+                  href="/account"
+                  className="mt-auto inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
+                >
+                  {isEn ? "Choose quarterly" : "选择季度 Pro"}
+                  <ArrowRight size={15} />
+                </Link>
               </div>
             </div>
           </div>

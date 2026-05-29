@@ -548,7 +548,7 @@ def test_payment_runtime_state_and_audit_event_roundtrip(tmp_path):
     assert events[0]["payload"]["events"] == 2
 
 
-def test_paid_subscription_starts_after_active_trial(monkeypatch, tmp_path):
+def test_paid_subscription_replaces_active_trial_immediately(monkeypatch, tmp_path):
     _payment_env(monkeypatch, tmp_path)
     service = PaymentContractCheckoutService()
     now = datetime.now(timezone.utc)
@@ -586,8 +586,8 @@ def test_paid_subscription_starts_after_active_trial(monkeypatch, tmp_path):
 
     starts_at = datetime.fromisoformat(str(row["starts_at"]))
     expires_at = datetime.fromisoformat(str(row["expires_at"]))
-    assert starts_at == trial_expires
-    assert expires_at == trial_expires + timedelta(days=30)
+    assert starts_at.date() == datetime.now(timezone.utc).date()
+    assert expires_at == starts_at + timedelta(days=30)
 
 
 def test_confirm_side_effect_repair_does_not_treat_trial_as_paid(monkeypatch, tmp_path):
@@ -1123,7 +1123,7 @@ def test_tx_hash_unused_check_selects_only_intent_id(monkeypatch, tmp_path):
     assert calls[0]["params"]["select"] == "intent_id"
 
 
-def test_grant_subscription_starts_after_trial_when_only_trial_is_active(monkeypatch, tmp_path):
+def test_grant_subscription_keeps_unknown_active_subscription_extension(monkeypatch, tmp_path):
     monkeypatch.setenv("POLYWEATHER_PAYMENT_ENABLED", "true")
     monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role")
@@ -1140,7 +1140,7 @@ def test_grant_subscription_starts_after_trial_when_only_trial_is_active(monkeyp
 
     def _fake_rest(method, table, **kwargs):
         if method == "GET" and table == "subscriptions":
-            assert kwargs["params"]["select"] == "starts_at,expires_at"
+            assert kwargs["params"]["select"] == "starts_at,expires_at,plan_code,source"
             return [
                 {
                     "starts_at": (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),

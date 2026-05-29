@@ -116,10 +116,31 @@ export function useBilling(params: UseBillingParams) {
 
   // ── Billing ──────────────────────────────────────────────
   const billing = useMemo(() => {
-    const parsedPlanAmount = Number(
-      backend?.telegram_pricing?.amount_usdc ?? selectedPlan?.amount_usdc ?? 10,
+    const listAmountRaw = Number(selectedPlan?.amount_usdc ?? 29.9);
+    const listAmount =
+      Number.isFinite(listAmountRaw) && listAmountRaw > 0 ? listAmountRaw : 29.9;
+    const selectedPlanCode = String(selectedPlan?.plan_code || "").toLowerCase();
+    const referral = backend?.referral;
+    const referralPending = Boolean(
+      referral?.applied_code ||
+        String(referral?.attribution_status || "").toLowerCase() === "pending",
     );
-    const planAmount = Number.isFinite(parsedPlanAmount) && parsedPlanAmount > 0 ? parsedPlanAmount : 10;
+    const referralDiscountRaw = Number(referral?.discount_usdc ?? 0);
+    const referralDiscount = Number.isFinite(referralDiscountRaw)
+      ? Math.max(0, referralDiscountRaw)
+      : 0;
+    const discountedMonthlyRaw = Number(
+      referral?.discounted_monthly_amount_usdc ?? 0,
+    );
+    const referralApplies =
+      selectedPlanCode === "pro_monthly" &&
+      referralPending &&
+      backend?.subscription_active !== true;
+    const planAmount = referralApplies
+      ? Number.isFinite(discountedMonthlyRaw) && discountedMonthlyRaw > 0
+        ? discountedMonthlyRaw
+        : Math.max(0, listAmount - referralDiscount)
+      : listAmount;
 
     const pointsCfg = paymentConfig?.points_redemption || {};
     const pointsEnabled = pointsCfg.enabled !== false;
@@ -145,6 +166,9 @@ export function useBilling(params: UseBillingParams) {
 
     return {
       planAmount,
+      listAmount,
+      referralApplied: referralApplies,
+      referralDiscountAmount: referralApplies ? listAmount - planAmount : 0,
       pointsEnabled,
       pointsPerUsdc,
       maxDiscountUsdc,
@@ -155,7 +179,9 @@ export function useBilling(params: UseBillingParams) {
     };
   }, [
     paymentConfig?.points_redemption,
-    backend?.telegram_pricing?.amount_usdc,
+    backend?.referral,
+    backend?.subscription_active,
+    selectedPlan?.plan_code,
     selectedPlan?.amount_usdc,
     totalPoints,
     usePoints,

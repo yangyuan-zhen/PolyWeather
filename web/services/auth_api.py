@@ -8,7 +8,7 @@ from fastapi import HTTPException, Request
 
 from src.auth.telegram_group_pricing import TelegramGroupPricing
 from src.database.db_manager import DBManager
-from web.core import TelegramLoginRequest
+from web.core import ReferralApplyRequest, TelegramLoginRequest
 import web.routes as legacy_routes
 
 
@@ -18,6 +18,14 @@ def _require_auth_identity_without_subscription_gate(request: Request) -> Dict[s
     return legacy_routes._require_supabase_identity(request)
 
 
+def _subscription_row_is_trial(row: Any) -> bool:
+    if not isinstance(row, dict):
+        return False
+    plan_code = str(row.get("plan_code") or "").strip().lower()
+    source = str(row.get("source") or "").strip().lower()
+    return "trial" in plan_code or "trial" in source
+
+
 def get_auth_me_payload(request: Request) -> Dict[str, Any]:
     request.state.skip_subscription_gate = True
     legacy_routes._assert_entitlement(request)
@@ -25,24 +33,36 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
         legacy_routes._bind_optional_supabase_identity(request)
 
     user_id = getattr(request.state, "auth_user_id", None)
+    email = getattr(request.state, "auth_email", None)
     subscription_required = bool(
         legacy_routes.SUPABASE_ENTITLEMENT.enabled
         and legacy_routes.SUPABASE_ENTITLEMENT.require_subscription
     )
     subscription_active = None
     subscription_plan_code = None
+    subscription_source = None
+    subscription_is_trial = False
     subscription_starts_at = None
     subscription_expires_at = None
     subscription_total_expires_at = None
     subscription_queued_days = 0
     subscription_queued_count = 0
+    referral = None
 
     if legacy_routes.SUPABASE_ENTITLEMENT.enabled and user_id:
         try:
-            subscription_window = legacy_routes.SUPABASE_ENTITLEMENT.get_subscription_window(
-                user_id,
-                respect_requirement=False,
-            )
+            legacy_routes.SUPABASE_ENTITLEMENT.ensure_signup_trial(user_id, email)
+            try:
+                subscription_window = legacy_routes.SUPABASE_ENTITLEMENT.get_subscription_window(
+                    user_id,
+                    respect_requirement=False,
+                    bypass_cache=True,
+                )
+            except TypeError:
+                subscription_window = legacy_routes.SUPABASE_ENTITLEMENT.get_subscription_window(
+                    user_id,
+                    respect_requirement=False,
+                )
             latest_subscription = None
             latest_known_subscription = None
             subscription_window_known = isinstance(subscription_window, dict)
@@ -83,16 +103,21 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
                 )
             if isinstance(latest_subscription, dict):
                 subscription_plan_code = latest_subscription.get("plan_code")
+                subscription_source = latest_subscription.get("source")
+                subscription_is_trial = _subscription_row_is_trial(latest_subscription)
                 subscription_starts_at = latest_subscription.get("starts_at")
                 subscription_expires_at = latest_subscription.get("expires_at")
             elif isinstance(latest_known_subscription, dict):
                 subscription_plan_code = latest_known_subscription.get("plan_code")
+                subscription_source = latest_known_subscription.get("source")
+                subscription_is_trial = _subscription_row_is_trial(latest_known_subscription)
                 subscription_starts_at = latest_known_subscription.get("starts_at")
                 subscription_expires_at = latest_known_subscription.get("expires_at")
             if isinstance(subscription_window, dict):
                 subscription_total_expires_at = subscription_window.get("total_expires_at")
                 subscription_queued_days = int(subscription_window.get("queued_days") or 0)
                 subscription_queued_count = int(subscription_window.get("queued_count") or 0)
+            referral = legacy_routes.SUPABASE_ENTITLEMENT.get_referral_summary(user_id)
         except HTTPException:
             raise
         except Exception:
@@ -100,11 +125,14 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
                 raise HTTPException(status_code=403, detail="Subscription required")
             subscription_active = None
             subscription_plan_code = None
+            subscription_source = None
+            subscription_is_trial = False
             subscription_starts_at = None
             subscription_expires_at = None
             subscription_total_expires_at = None
             subscription_queued_days = 0
             subscription_queued_count = 0
+            referral = None
 
     points = legacy_routes._resolve_auth_points(request)
     weekly_profile = legacy_routes._resolve_weekly_profile(request)
@@ -128,7 +156,7 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
     return {
         "authenticated": bool(user_id),
         "user_id": user_id,
-        "email": getattr(request.state, "auth_email", None),
+        "email": email,
         "points": points,
         "weekly_points": weekly_profile["weekly_points"],
         "weekly_rank": weekly_profile["weekly_rank"],
@@ -149,13 +177,27 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
         "subscription_required": subscription_required,
         "subscription_active": subscription_active,
         "subscription_plan_code": subscription_plan_code,
+        "subscription_source": subscription_source,
+        "subscription_is_trial": subscription_is_trial,
         "subscription_starts_at": subscription_starts_at,
         "subscription_expires_at": subscription_expires_at,
         "subscription_total_expires_at": subscription_total_expires_at,
         "subscription_queued_days": subscription_queued_days,
         "subscription_queued_count": subscription_queued_count,
         "telegram_pricing": telegram_pricing,
+        "referral": referral,
     }
+
+
+def apply_referral_code(request: Request, body: ReferralApplyRequest) -> Dict[str, Any]:
+    identity = _require_auth_identity_without_subscription_gate(request)
+    try:
+        return legacy_routes.SUPABASE_ENTITLEMENT.apply_referral_code(
+            identity["user_id"],
+            body.code,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def login_with_telegram(request: Request, body: TelegramLoginRequest) -> Dict[str, Any]:

@@ -84,6 +84,8 @@ export function AccountCenter() {
   const [updatedAt, setUpdatedAt] = useState<string>("");
   const [user, setUser] = useState<User | null>(null);
   const [backend, setBackend] = useState<AuthMeResponse | null>(null);
+  const [referralCodeInput, setReferralCodeInput] = useState("");
+  const [referralApplying, setReferralApplying] = useState(false);
 
   const supabaseReady = hasSupabasePublicEnv();
   const walletConnectEnabled = Boolean(WALLETCONNECT_PROJECT_ID);
@@ -135,6 +137,7 @@ export function AccountCenter() {
     // Shared setters
     setSelectedTokenAddress,
     setSelectedPaymentChainId,
+    setSelectedPlanCode,
     setSelectedWallet,
     setSelectedInjectedProviderKey,
     setProviderMode,
@@ -299,8 +302,16 @@ export function AccountCenter() {
         backend.authenticated === false),
   );
   const isSubscribed = backend?.subscription_active === true;
+  const subscriptionSource = String(backend?.subscription_source || "").trim();
+  const isTrialSubscription = Boolean(
+    backend?.subscription_is_trial === true ||
+      String(backend?.subscription_plan_code || "").toLowerCase().includes("trial") ||
+      subscriptionSource.toLowerCase().includes("trial"),
+  );
   const subscriptionStatusLabel = isSubscribed
-    ? copy.proMember
+    ? isTrialSubscription
+      ? copy.trialBadge
+      : copy.proMember
     : isSubscriptionUnknown
       ? copy.subscriptionChecking
       : isEn
@@ -325,7 +336,7 @@ export function AccountCenter() {
   const hasQueuedExtension = Boolean(
     isSubscribed && queuedExtensionDays > 0,
   );
-  const canAccessPaidTelegramGroup = Boolean(isSubscribed);
+  const canAccessPaidTelegramGroup = Boolean(isSubscribed && !isTrialSubscription);
   const telegramBound =
     Number(backend?.telegram_pricing?.telegram_id || 0) > 0;
   const displayExpiryRaw = isSubscribed
@@ -384,6 +395,21 @@ export function AccountCenter() {
   const expiryLabel = hasQueuedExtension
     ? copy.accessUntil
     : copy.renewalDate;
+  const displayPlanList = effectivePlanList.length
+    ? effectivePlanList
+    : [
+        { plan_code: "pro_monthly", plan_id: 101, amount_usdc: "29.9", duration_days: 30 },
+        { plan_code: "pro_quarterly", plan_id: 102, amount_usdc: "79.9", duration_days: 90 },
+      ];
+  const referral = backend?.referral;
+  const referralCode = String(referral?.code || "").trim();
+  const appliedReferralCode = String(referral?.applied_code || "").trim();
+  const canApplyReferralCode = Boolean(
+    isAuthenticated &&
+      !isSubscribed &&
+      !appliedReferralCode &&
+      referralCodeInput.trim(),
+  );
 
   // ── Payment overlay tracking effect ──────────────────────
   useEffect(() => {
@@ -431,6 +457,55 @@ export function AccountCenter() {
       window.setTimeout(() => setCopied(false), 2000);
     });
   };
+
+  const applyReferralCode = useCallback(async () => {
+    const code = referralCodeInput.trim();
+    if (!code || referralApplying) return;
+    setReferralApplying(true);
+    setPaymentError("");
+    setPaymentInfo("");
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (supabaseReady) {
+        const {
+          data: { session },
+        } = await getSupabaseBrowserClient().auth.getSession();
+        const token = String(session?.access_token || "").trim();
+        if (token) headers.Authorization = `Bearer ${token}`;
+      }
+      const res = await fetch("/api/auth/referral/apply", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ code }),
+      });
+      if (!res.ok) {
+        const raw = (await res.text()).slice(0, 240);
+        throw new Error(raw || copy.referralApplyFailed);
+      }
+      setPaymentInfo(copy.referralApplied);
+      setReferralCodeInput("");
+      await loadSnapshot();
+      await loadPaymentSnapshot();
+    } catch (error) {
+      setPaymentError(
+        error instanceof Error ? error.message : copy.referralApplyFailed,
+      );
+    } finally {
+      setReferralApplying(false);
+    }
+  }, [
+    copy.referralApplied,
+    copy.referralApplyFailed,
+    loadPaymentSnapshot,
+    loadSnapshot,
+    referralApplying,
+    referralCodeInput,
+    setPaymentError,
+    setPaymentInfo,
+    supabaseReady,
+  ]);
 
   // ── Render ────────────────────────────────────────────
 
@@ -826,6 +901,31 @@ export function AccountCenter() {
         {/* Telegram Bot Section & Payment Details */}
         {showSecondarySections ? (
           <div className="lg:col-span-12 grid grid-cols-1 md:flex gap-6">
+            {isTrialSubscription && (
+              <section className="group relative flex-1 overflow-hidden rounded-2xl border border-amber-200 bg-amber-50 p-8 shadow-sm">
+                <Bot
+                  size={140}
+                  className="absolute -right-8 -bottom-8 -rotate-12 text-amber-100"
+                />
+                <div className="relative z-10">
+                  <h3 className="mb-2 flex items-center gap-2 text-lg font-bold text-amber-800">
+                    <Bot size={22} /> {copy.telegramBind}
+                  </h3>
+                  <p className="text-sm leading-6 text-amber-900">
+                    {copy.trialPaidGroupLocked}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowOverlay(true)}
+                    disabled={!canOpenCheckoutOverlay}
+                    className="mt-5 inline-flex items-center gap-2 rounded-xl border border-amber-700 bg-amber-600 px-4 py-3 text-xs font-bold text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Crown size={14} />
+                    {copy.upgradePro}
+                  </button>
+                </div>
+              </section>
+            )}
             {canAccessPaidTelegramGroup && (
               <section className="group relative flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
                 <Bot
@@ -907,7 +1007,7 @@ export function AccountCenter() {
             {/* Payment Details / Wallet Management */}
             <section
               className={`flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-8 shadow-sm ${
-                canAccessPaidTelegramGroup ? "w-full md:w-96" : "w-full"
+                canAccessPaidTelegramGroup || isTrialSubscription ? "w-full md:w-96" : "w-full"
               }`}
             >
               <div>
@@ -943,6 +1043,110 @@ export function AccountCenter() {
                     )}
                   </div>
                 ) : null}
+                <div className="mb-5">
+                  <p className="mb-2 text-[11px] uppercase text-slate-500">
+                    {copy.proPlan}
+                  </p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {displayPlanList.map((plan) => {
+                      const code = String(plan.plan_code || "");
+                      const active = code === selectedPlanCode;
+                      const isQuarterly = code === "pro_quarterly";
+                      return (
+                        <button
+                          type="button"
+                          key={code}
+                          onClick={() => setSelectedPlanCode(code)}
+                          disabled={paymentBusy}
+                          className={`rounded-xl border px-3 py-3 text-left transition-all ${
+                            active
+                              ? "border-blue-300 bg-blue-50 text-blue-900"
+                              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2 text-xs font-bold">
+                            <span>
+                              {isQuarterly ? copy.quarterlyPlan : copy.monthlyPlan}
+                            </span>
+                            <span>{plan.amount_usdc} USDC</span>
+                          </div>
+                          <div className="mt-1 text-[10px] opacity-80">
+                            {code} · {plan.duration_days} 天
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {appliedReferralCode && selectedPlanCode === "pro_monthly" ? (
+                    <p className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-800">
+                      {copy.referralDiscountHint}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <p className="text-xs font-bold uppercase text-slate-700">
+                      {copy.referralTitle}
+                    </p>
+                    <span className="text-[10px] text-slate-500">
+                      {copy.referralInviteLimit}
+                    </span>
+                  </div>
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <div>
+                      <p className="mb-1 text-[10px] uppercase text-slate-500">
+                        {copy.referralMyCode}
+                      </p>
+                      <div className="flex gap-2">
+                        <code className="min-w-0 flex-1 truncate rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-blue-700">
+                          {referralCode || "--"}
+                        </code>
+                        {referralCode ? (
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(referralCode)}
+                            className="rounded-xl border border-blue-700 bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-700"
+                          >
+                            {copied ? <CheckCircle2 size={15} /> : <Copy size={15} />}
+                          </button>
+                        ) : null}
+                      </div>
+                      <p className="mt-2 text-[11px] leading-5 text-slate-500">
+                        {copy.referralRewardHint}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="mb-1 text-[10px] uppercase text-slate-500">
+                        {copy.referralApplyLabel}
+                      </p>
+                      {appliedReferralCode ? (
+                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
+                          {appliedReferralCode}
+                        </div>
+                      ) : (
+                        <div className="flex gap-2">
+                          <input
+                            value={referralCodeInput}
+                            onChange={(event) => setReferralCodeInput(event.target.value)}
+                            placeholder={copy.referralApplyPlaceholder}
+                            className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void applyReferralCode()}
+                            disabled={!canApplyReferralCode || referralApplying}
+                            className="rounded-xl border border-slate-900 bg-slate-900 px-3 text-xs font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {referralApplying ? "..." : copy.referralApplyButton}
+                          </button>
+                        </div>
+                      )}
+                      <p className="mt-2 text-[11px] leading-5 text-slate-500">
+                        {copy.referralDiscountHint}
+                      </p>
+                    </div>
+                  </div>
+                </div>
                 <div className="mb-5 space-y-3">
                   <InfoRow
                     icon={Mail}

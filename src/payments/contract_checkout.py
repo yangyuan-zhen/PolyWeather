@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 import requests
 from eth_account import Account
 from eth_account.messages import encode_defunct
+from loguru import logger
 from web3 import Web3
 
 from src.auth.supabase_entitlement import SUPABASE_ENTITLEMENT
@@ -90,8 +91,11 @@ ERC20_TRANSFER_EVENT_ABI = {
 }
 
 DEFAULT_PLAN_CATALOG: Dict[str, Dict[str, Any]] = {
-    "pro_monthly": {"plan_id": 101, "amount_usdc": "10", "duration_days": 30},
+    "pro_monthly": {"plan_id": 101, "amount_usdc": "29.9", "duration_days": 30},
+    "pro_quarterly": {"plan_id": 102, "amount_usdc": "79.9", "duration_days": 90},
 }
+
+REFERRAL_FIRST_MONTH_DISCOUNT_USDC = Decimal("3")
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -195,13 +199,13 @@ def _parse_plan_catalog(raw: str) -> Dict[str, Dict[str, Any]]:
 def _parse_allowed_plan_codes(raw: str) -> List[str]:
     text = str(raw or "").strip()
     if not text:
-        return ["pro_monthly"]
+        return ["pro_monthly", "pro_quarterly"]
     out: List[str] = []
     for part in text.split(","):
         code = str(part or "").strip().lower()
         if code and code not in out:
             out.append(code)
-    return out or ["pro_monthly"]
+    return out or ["pro_monthly", "pro_quarterly"]
 
 
 @dataclass
@@ -362,6 +366,10 @@ class PaymentContractCheckoutService:
             self.plan_catalog = {first_code: self.plan_catalog[first_code]}
         self.notify_telegram = _env_bool(
             "POLYWEATHER_PAYMENT_TELEGRAM_NOTIFY_ENABLED", True
+        )
+        self.telegram_payment_pricing_enabled = _env_bool(
+            "POLYWEATHER_PAYMENT_TELEGRAM_PRICING_ENABLED",
+            False,
         )
         self.points_enabled = _env_bool("POLYWEATHER_PAYMENT_POINTS_ENABLED", True)
         self.points_per_usdc = max(
@@ -1650,6 +1658,55 @@ class PaymentContractCheckoutService:
         out["telegram_pricing"] = price_payload
         return out
 
+    def _get_pending_referral_attribution(self, user_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            row = SUPABASE_ENTITLEMENT.get_pending_referral_attribution(user_id)
+            return dict(row) if isinstance(row, dict) else None
+        except Exception:
+            return None
+
+    def _has_prior_paid_subscription(self, user_id: str) -> bool:
+        try:
+            return bool(SUPABASE_ENTITLEMENT.has_paid_subscription(user_id))
+        except Exception:
+            return False
+
+    def _apply_referral_pricing(
+        self,
+        user_id: str,
+        plan: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        out = dict(plan)
+        attribution = self._get_pending_referral_attribution(user_id)
+        if not attribution or self._has_prior_paid_subscription(user_id):
+            return out
+
+        out["referral_attribution"] = {
+            "id": attribution.get("id"),
+            "code": str(attribution.get("code") or "").strip().upper(),
+            "referrer_user_id": str(attribution.get("referrer_user_id") or "").strip(),
+            "referred_user_id": user_id,
+        }
+        if str(out.get("plan_code") or "").strip().lower() != "pro_monthly":
+            return out
+
+        base_amount = _parse_decimal(out.get("amount_usdc_decimal"), Decimal("0"))
+        discount = min(REFERRAL_FIRST_MONTH_DISCOUNT_USDC, base_amount)
+        discounted = base_amount - discount
+        if discount <= 0 or discounted <= 0:
+            return out
+
+        out["amount_before_discount_usdc_decimal"] = base_amount
+        out["amount_usdc_decimal"] = discounted
+        out["amount_usdc"] = _format_decimal(discounted)
+        out["referral_discount"] = {
+            "discount_usdc": _format_decimal(discount),
+            "amount_before_discount_usdc": _format_decimal(base_amount),
+            "amount_after_discount_usdc": _format_decimal(discounted),
+            "reason": "first_month_referral",
+        }
+        return out
+
     def _build_tx_payload(self, intent: PaymentIntentRecord) -> Dict[str, Any]:
         contract = self._get_contract(intent.receiver_address, intent.chain_id)
         tx_data = contract.encode_abi(
@@ -1687,10 +1744,10 @@ class PaymentContractCheckoutService:
         points_to_consume: Optional[int] = None,
     ) -> Dict[str, Any]:
         self._ensure_enabled()
-        plan = self._apply_telegram_group_pricing(
-            user_id,
-            self._select_plan(plan_code),
-        )
+        selected_plan = self._select_plan(plan_code)
+        if self.telegram_payment_pricing_enabled:
+            selected_plan = self._apply_telegram_group_pricing(user_id, selected_plan)
+        plan = self._apply_referral_pricing(user_id, selected_plan)
         selected_token = self._resolve_supported_token(token_address, chain_id)
         selected_chain_id = int(selected_token.chain_id)
         mode = str(payment_mode or "strict").strip().lower()
@@ -1728,6 +1785,10 @@ class PaymentContractCheckoutService:
         elif target_wallet:
             self._require_user_wallet(user_id, target_wallet)
         plan_amount_usdc = plan["amount_usdc_decimal"]
+        amount_before_discount_usdc = plan.get(
+            "amount_before_discount_usdc_decimal",
+            plan_amount_usdc,
+        )
         redemption = self._build_points_redemption(
             user_id=user_id,
             plan_amount_usdc=plan_amount_usdc,
@@ -1748,13 +1809,17 @@ class PaymentContractCheckoutService:
         combined_metadata["chain_name"] = selected_token.chain_name
         if isinstance(plan.get("telegram_pricing"), dict):
             combined_metadata["telegram_pricing"] = plan["telegram_pricing"]
+        if isinstance(plan.get("referral_attribution"), dict):
+            combined_metadata["referral_attribution"] = plan["referral_attribution"]
+        if isinstance(plan.get("referral_discount"), dict):
+            combined_metadata["referral_discount"] = plan["referral_discount"]
         receiver_address = (
             selected_token.direct_receiver_address
             if mode == "direct"
             else selected_token.receiver_contract
         )
         combined_metadata["amount_before_discount_usdc"] = _format_decimal(
-            plan_amount_usdc
+            amount_before_discount_usdc
         )
         combined_metadata["amount_after_discount_usdc"] = _format_decimal(
             final_amount_usdc
@@ -1813,7 +1878,9 @@ class PaymentContractCheckoutService:
                 "plan_code": plan["plan_code"],
                 "plan_id": plan["plan_id"],
                 "duration_days": plan["duration_days"],
-                "amount_before_discount_usdc": _format_decimal(plan_amount_usdc),
+                "amount_before_discount_usdc": _format_decimal(
+                    amount_before_discount_usdc
+                ),
                 "amount_after_discount_usdc": _format_decimal(final_amount_usdc),
             },
             "token": {
@@ -2487,13 +2554,14 @@ class PaymentContractCheckoutService:
         duration_days: int,
         tx_hash: str,
         payload: Dict[str, Any],
+        source: str = "payment",
     ) -> Dict[str, Any]:
         now = _now_utc()
         latest_rows = self._rest(
             "GET",
             "subscriptions",
             params={
-                "select": "starts_at,expires_at",
+                "select": "starts_at,expires_at,plan_code,source",
                 "user_id": f"eq.{user_id}",
                 "status": "eq.active",
                 "order": "expires_at.desc",
@@ -2506,6 +2574,8 @@ class PaymentContractCheckoutService:
         if isinstance(latest_rows, list):
             for row in latest_rows:
                 if not isinstance(row, dict):
+                    continue
+                if self._subscription_row_is_trial(row):
                     continue
                 try:
                     starts_at = datetime.fromisoformat(
@@ -2540,7 +2610,7 @@ class PaymentContractCheckoutService:
             "status": "active",
             "starts_at": _to_iso(starts),
             "expires_at": _to_iso(expires),
-            "source": "payment_contract",
+            "source": str(source or "payment").strip() or "payment",
             "created_at": _to_iso(now),
             "updated_at": _to_iso(now),
         }
@@ -2602,6 +2672,31 @@ class PaymentContractCheckoutService:
         source = str(row.get("source") or "").strip().lower()
         return "trial" in plan_code or "trial" in source
 
+    def _settle_referral_reward_for_intent(
+        self,
+        user_id: str,
+        intent: PaymentIntentRecord,
+        tx_hash: str,
+    ) -> Dict[str, Any]:
+        metadata = dict(intent.metadata or {})
+        if not isinstance(metadata.get("referral_attribution"), dict):
+            return {}
+        try:
+            result = SUPABASE_ENTITLEMENT.settle_referral_reward(
+                referred_user_id=user_id,
+                payment_intent_id=intent.intent_id,
+                tx_hash=tx_hash,
+            )
+            return dict(result) if isinstance(result, dict) else {}
+        except Exception as exc:
+            logger.warning(
+                "referral reward settlement failed user_id={} intent_id={}: {}",
+                user_id,
+                intent.intent_id,
+                exc,
+            )
+            return {"awarded": False, "reason": "settlement_error"}
+
     def _ensure_confirm_side_effects(
         self,
         user_id: str,
@@ -2624,9 +2719,15 @@ class PaymentContractCheckoutService:
                 },
             )
         subscription_row = self._ensure_confirmed_subscription(user_id, intent, tx_hash)
+        referral_reward = self._settle_referral_reward_for_intent(
+            user_id,
+            intent,
+            tx_hash,
+        )
         return {
             "payment": payment_row,
             "subscription": subscription_row,
+            "referral_reward": referral_reward,
         }
 
     def _attempt_confirm_repair(
@@ -2779,6 +2880,7 @@ class PaymentContractCheckoutService:
                 "already_confirmed": True,
                 "payment": repaired.get("payment"),
                 "subscription": repaired.get("subscription"),
+                "referral_reward": repaired.get("referral_reward"),
             }
         if intent.status in {"cancelled", "expired"}:
             raise PaymentCheckoutError(409, f"intent status is {intent.status}")
@@ -2964,6 +3066,7 @@ class PaymentContractCheckoutService:
                     "duplicate_tx_hash": tx_hash_text,
                     "payment": repaired.get("payment"),
                     "subscription": repaired.get("subscription"),
+                    "referral_reward": repaired.get("referral_reward"),
                 }
             raise PaymentCheckoutError(
                 409, f"intent status is {refreshed.status}, cannot confirm"
@@ -2999,6 +3102,7 @@ class PaymentContractCheckoutService:
         plan = self._select_plan(intent.plan_code)
         payment_row = {}
         subscription_row = {}
+        referral_reward = {}
         try:
             payment_row = self._insert_payment_record(
                 user_id=user_id,
@@ -3015,6 +3119,12 @@ class PaymentContractCheckoutService:
                 tx_hash=tx_hash_text,
                 payload=payload,
             )
+            intent.metadata = confirmed_metadata
+            referral_reward = self._settle_referral_reward_for_intent(
+                user_id,
+                intent,
+                tx_hash_text,
+            )
         except PaymentCheckoutError as exc:
             repaired = self._attempt_confirm_repair(
                 user_id=user_id,
@@ -3025,6 +3135,7 @@ class PaymentContractCheckoutService:
             )
             payment_row = repaired.get("payment") or payment_row
             subscription_row = repaired.get("subscription") or subscription_row
+            referral_reward = repaired.get("referral_reward") or referral_reward
             if not subscription_row:
                 raise
         self._notify_telegram(
@@ -3046,6 +3157,7 @@ class PaymentContractCheckoutService:
             "transaction": tx_payload,
             "payment": payment_row,
             "subscription": subscription_row,
+            "referral_reward": referral_reward,
             "points_redemption": points_result,
             "tx": payload,
         }

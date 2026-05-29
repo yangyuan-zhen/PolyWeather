@@ -57,6 +57,31 @@ export function createAccountCopy(isEn: boolean): Record<string, string> {
         : "城市实测温度群",
       copyCommand: isEn ? "Copy fallback command" : "复制兜底命令",
       paymentMgmt: isEn ? "Payment Management" : "支付管理",
+      proPlan: isEn ? "Pro Plan" : "Pro 套餐",
+      monthlyPlan: isEn ? "Monthly" : "月付",
+      quarterlyPlan: isEn ? "Quarterly" : "季度",
+      trialBadge: isEn ? "3-day trial" : "3天试用",
+      trialPaidGroupLocked: isEn
+        ? "Trial users can use the core product experience, but the paid Telegram group is available to full Pro subscriptions only."
+        : "3天试用用户可体验核心产品，但无法进入付费 Telegram 群；付费群仅对正式 Pro 开放。",
+      referralTitle: isEn ? "Referral Code" : "邀请码",
+      referralMyCode: isEn ? "My invite code" : "我的邀请码",
+      referralApplyLabel: isEn ? "Use invite code" : "使用邀请码",
+      referralApplyPlaceholder: isEn ? "Enter invite code" : "输入邀请码",
+      referralApplyButton: isEn ? "Apply" : "应用",
+      referralApplied: isEn
+        ? "Referral code applied. Your first monthly payment is now discounted."
+        : "邀请码已应用，首月 Pro 将按邀请价结算。",
+      referralApplyFailed: isEn ? "Failed to apply referral code" : "邀请码应用失败",
+      referralDiscountHint: isEn
+        ? "Invite discount: first monthly Pro is 26.9 USDC."
+        : "邀请首月价：Pro 月付 26.9 USDC。",
+      referralRewardHint: isEn
+        ? "When an invited user pays for Pro, you receive +3 days Pro."
+        : "被邀请人成功付费后，邀请人获得 +3 天 Pro。",
+      referralInviteLimit: isEn
+        ? "Monthly referral reward cap: 10 paid invites, up to +30 days Pro."
+        : "每月最多 10 个有效付费邀请奖励，最高 +30 天 Pro。",
       paymentToken: isEn ? "Payment Token" : "支付币种",
       paymentAccount: isEn ? "Subscription Account" : "订阅归属账号",
       paymentWallet: isEn ? "Paying Wallet" : "付款钱包",
@@ -246,8 +271,8 @@ export function createAccountCopy(isEn: boolean): Record<string, string> {
       verifyUnknown: isEn ? "Unknown error" : "未知错误",
       // ── Telegram bind messages ────────────────────────────────────────
       telegramVerifySuccess: isEn
-        ? "Telegram group membership verified. Current membership price: {amount} U."
-        : "Telegram 群成员验证成功，当前会员价 {amount}U。",
+        ? "Telegram group membership verified. Checkout follows the selected Pro plan."
+        : "Telegram 群成员验证成功，结算金额以当前选择的 Pro 套餐为准。",
       telegramBindClickHint: isEn
         ? "Open the Telegram Bot, click Start, and confirm binding. Then refresh this page to request group entry."
         : "已打开 Telegram Bot，请在 Bot 内点击 Start 并确认绑定；完成后刷新本页再申请入群。",

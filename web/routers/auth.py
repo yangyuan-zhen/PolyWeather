@@ -2,8 +2,9 @@
 
 from fastapi import APIRouter, Request
 
-from web.core import TelegramBindTokenRequest, TelegramLoginRequest
+from web.core import ReferralApplyRequest, TelegramBindTokenRequest, TelegramLoginRequest
 from web.services.auth_api import (
+    apply_referral_code,
     bind_telegram_by_token,
     create_telegram_bot_bind_link,
     get_auth_me_payload,
@@ -31,3 +32,8 @@ async def auth_telegram_bind_by_token(request: Request, body: TelegramBindTokenR
 @router.post("/api/auth/telegram/bot-bind-link")
 async def auth_telegram_bot_bind_link(request: Request):
     return create_telegram_bot_bind_link(request)
+
+
+@router.post("/api/auth/referral/apply")
+async def auth_referral_apply(request: Request, body: ReferralApplyRequest):
+    return apply_referral_code(request, body)

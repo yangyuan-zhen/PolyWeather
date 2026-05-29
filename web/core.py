@@ -466,6 +466,10 @@ class ConfirmPaymentTxRequest(BaseModel):
     tx_hash: Optional[str] = None
 
 
+class ReferralApplyRequest(BaseModel):
+    code: str = Field(..., min_length=3, max_length=32)
+
+
 class TelegramLoginRequest(BaseModel):
     id: int
     first_name: Optional[str] = None

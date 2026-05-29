@@ -303,7 +303,7 @@ def test_direct_intent_does_not_require_bound_wallet(monkeypatch, tmp_path):
     assert result["intent"]["allowed_wallet"] is None
     assert "direct_payment" in result
     assert result["direct_payment"]["receiver_address"] == "0xed2f13aa5ff033c58fb436e178451cd07f693f32"
-    assert result["direct_payment"]["amount_usdc"] in ("5", "10")
+    assert result["direct_payment"]["amount_usdc"] == "29.9"
     assert posts[0]["payment_mode"] == "direct"
 
 

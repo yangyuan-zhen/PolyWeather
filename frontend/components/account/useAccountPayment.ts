@@ -320,10 +320,7 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
   ]);
 
   // ── Selected plan (derived, shared across sub-hooks) ───
-  const monthlyPlanList = (paymentConfig?.plans || []).filter(
-    (p) => String(p.plan_code || "").trim().toLowerCase() === "pro_monthly",
-  );
-  const effectivePlanList = monthlyPlanList.length ? monthlyPlanList : (paymentConfig?.plans || []);
+  const effectivePlanList = paymentConfig?.plans || [];
   const selectedPlan = effectivePlanList.find((p) => p.plan_code === selectedPlanCode) || effectivePlanList[0];
 
   // ── useWalletBind ──────────────────────────────────────
@@ -496,6 +493,7 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
     // Setters for shared state
     setSelectedTokenAddress,
     setSelectedPaymentChainId,
+    setSelectedPlanCode,
     setSelectedWallet,
     setSelectedInjectedProviderKey,
     setProviderMode,
