@@ -549,6 +549,8 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
       const txHashNorm = String(txHash || "").toLowerCase();
       setLastTxHash(txHashNorm);
       setLastPaymentStartedAt(Date.now());
+      setPaymentInfo(`交易已提交: ${shortAddress(txHashNorm)}，等待链上回执...`);
+      await waitForReceipt(txHashNorm, eth);
 
       const submitRes = await fetch(`/api/payments/intents/${intentId}/submit`, {
         method: "POST", headers: authHeaders, body: JSON.stringify({ tx_hash: txHashNorm, from_address: payingWallet }),

@@ -1356,8 +1356,8 @@ export function AccountCenter() {
                               }
                               disabled={
                                 paymentBusy ||
-                                (txValidation.checked &&
-                                  !txValidation.valid)
+                                !(txValidation.checked &&
+                                  txValidation.valid === true)
                               }
                               className="w-full rounded-xl border border-emerald-700 bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition-all hover:bg-emerald-700 disabled:opacity-50"
                             >

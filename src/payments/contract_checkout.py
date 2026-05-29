@@ -2282,6 +2282,19 @@ class PaymentContractCheckoutService:
         else:
             self._require_user_wallet(user_id, from_addr)
 
+        try:
+            validation = self.validate_intent_tx(user_id, intent.intent_id, tx_hash_text)
+        except Exception as exc:
+            raise PaymentCheckoutError(
+                400,
+                f"payment_tx_validation_failed: {exc}",
+            ) from exc
+        if not bool(validation.get("valid")):
+            reason = str(validation.get("reason") or "payment_tx_invalid").strip()
+            detail = str(validation.get("detail") or reason).strip()
+            message = reason if detail == reason else f"{reason}: {detail}"
+            raise PaymentCheckoutError(400, message)
+
         now_iso = _to_iso(now)
         self._rest(
             "PATCH",

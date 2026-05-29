@@ -342,12 +342,123 @@ def test_direct_submit_tx_does_not_require_from_address(monkeypatch, tmp_path):
         raise AssertionError((method, table, kwargs))
 
     monkeypatch.setattr(service, "_rest", fake_rest)
+    monkeypatch.setattr(
+        service,
+        "validate_intent_tx",
+        lambda *args, **kwargs: {"valid": True, "checks": {"tx_mined": True}},
+    )
 
     result = service.submit_intent_tx("user-1", "intent-direct-1", "0x" + "2" * 64, "")
 
     assert result["status"] == "submitted"
     assert result["from_address"] is None
     assert submitted["tx_hash"] == "0x" + "2" * 64
+
+
+def test_submit_rejects_direct_tx_until_validation_passes(monkeypatch, tmp_path):
+    _setup_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    tx_hash = "0x" + "7" * 64
+
+    monkeypatch.setattr(
+        service,
+        "get_intent",
+        lambda user_id, intent_id: service._serialize_intent(
+            {
+                "id": intent_id,
+                "plan_code": "pro_monthly",
+                "plan_id": 101,
+                "chain_id": 137,
+                "token_address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+                "receiver_address": "0xeD2f13Aa5fF033c58FB436E178451Cd07f693f32",
+                "amount_units": "5000000",
+                "payment_mode": "direct",
+                "allowed_wallet": None,
+                "order_id_hex": "0x" + "1" * 64,
+                "status": "created",
+                "expires_at": "2099-01-01T00:00:00+00:00",
+                "tx_hash": None,
+                "metadata": {},
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "validate_intent_tx",
+        lambda *args, **kwargs: {
+            "valid": False,
+            "reason": "tx_not_mined",
+            "detail": "tx has not been mined yet",
+        },
+    )
+
+    def fake_rest(method, table, **kwargs):
+        if method == "GET" and table == "payment_transactions":
+            return []
+        raise AssertionError(f"submit must not mutate {table} before validation passes")
+
+    monkeypatch.setattr(service, "_rest", fake_rest)
+
+    try:
+        service.submit_intent_tx("user-1", "intent-direct-pending", tx_hash, "")
+    except Exception as exc:
+        assert getattr(exc, "status_code", None) == 400
+        assert "tx_not_mined" in getattr(exc, "detail", "")
+    else:
+        raise AssertionError("expected tx_not_mined rejection")
+
+
+def test_submit_rejects_mined_direct_tx_when_receiver_mismatches(monkeypatch, tmp_path):
+    _setup_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    tx_hash = "0x" + "8" * 64
+
+    monkeypatch.setattr(
+        service,
+        "get_intent",
+        lambda user_id, intent_id: service._serialize_intent(
+            {
+                "id": intent_id,
+                "plan_code": "pro_monthly",
+                "plan_id": 101,
+                "chain_id": 137,
+                "token_address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+                "receiver_address": "0xeD2f13Aa5fF033c58FB436E178451Cd07f693f32",
+                "amount_units": "5000000",
+                "payment_mode": "direct",
+                "allowed_wallet": None,
+                "order_id_hex": "0x" + "1" * 64,
+                "status": "created",
+                "expires_at": "2099-01-01T00:00:00+00:00",
+                "tx_hash": None,
+                "metadata": {},
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "validate_intent_tx",
+        lambda *args, **kwargs: {
+            "valid": False,
+            "reason": "receiver_mismatch",
+            "detail": "Transfer went to 0xd216..., expected 0xed2f...",
+        },
+    )
+
+    def fake_rest(method, table, **kwargs):
+        if method == "GET" and table == "payment_transactions":
+            return []
+        raise AssertionError(f"submit must not mutate {table} after receiver mismatch")
+
+    monkeypatch.setattr(service, "_rest", fake_rest)
+
+    try:
+        service.submit_intent_tx("user-1", "intent-direct-wrong", tx_hash, "")
+    except Exception as exc:
+        assert getattr(exc, "status_code", None) == 400
+        assert "receiver_mismatch" in getattr(exc, "detail", "")
+    else:
+        raise AssertionError("expected receiver mismatch rejection")
 
 
 

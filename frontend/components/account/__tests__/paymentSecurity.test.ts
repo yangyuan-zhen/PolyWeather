@@ -72,6 +72,23 @@ export function runTests() {
     "AccountCenter must validate backend-returned manual payment receiver before displaying it",
   );
   assert(
+    /!\(\s*txValidation\.checked\s*&&\s*txValidation\.valid === true\s*\)/.test(
+      accountCenterSource,
+    ),
+    "manual payment submit button must require checked && valid === true",
+  );
+  assert(
+    paymentFlowSource.includes("validateTxHash") &&
+      paymentFlowSource.includes("/validate"),
+    "manual payment flow must validate tx hashes with the backend before submission",
+  );
+  assert(
+    paymentFlowSource.includes("await waitForReceipt(txHashNorm, eth)") &&
+      paymentFlowSource.indexOf("await waitForReceipt(txHashNorm, eth)") <
+        paymentFlowSource.indexOf("const submitRes = await fetch(`/api/payments/intents/${intentId}/submit`"),
+    "wallet payment flow must wait for the payment tx receipt before submitting tx hash to the backend",
+  );
+  assert(
     accountCenterSource.includes("EXPECTED_PAYMENT_RECEIVER_ADDRESS") ||
       hookSource.includes("EXPECTED_PAYMENT_RECEIVER_ADDRESS") ||
       paymentFlowSource.includes("EXPECTED_PAYMENT_RECEIVER_ADDRESS"),
