@@ -627,6 +627,43 @@ function isMgmAirportPrimary(hourly: HourlyForecast) {
   return sourceTokens.some((value) => value === "mgm" || value.includes("turkey_mgm"));
 }
 
+function canonicalAirportPrimarySourceLabel(hourly: HourlyForecast) {
+  const primary = hourly?.airportPrimary;
+  const tokens = [
+    primary?.source_code,
+    (primary as any)?.source,
+  ].map((value) => String(value || "").trim().toLowerCase());
+  if (tokens.some((value) => value === "mgm" || value.includes("turkey_mgm"))) return "MGM";
+  if (tokens.some((value) => value.includes("jma"))) return "JMA";
+  if (tokens.some((value) => value.includes("fmi"))) return "FMI";
+  if (tokens.some((value) => value.includes("knmi"))) return "KNMI";
+  if (tokens.some((value) => value.includes("ims"))) return "IMS";
+  if (tokens.some((value) => value.includes("ncm"))) return "NCM";
+  if (tokens.some((value) => value.includes("aeroweb"))) return "AeroWeb";
+  if (tokens.some((value) => value.includes("singapore_mss") || value === "mss")) return "MSS";
+  if (tokens.some((value) => value.includes("madis") || value.includes("noaa"))) return "NOAA MADIS";
+  return "";
+}
+
+function isGenericAirportPrimaryLabel(label: string) {
+  const normalized = label.trim().toLowerCase();
+  return (
+    !normalized ||
+    normalized === "metar" ||
+    normalized === "madis" ||
+    normalized === "noaa madis"
+  );
+}
+
+function airportPrimarySeriesLabel(hourly: HourlyForecast, isHKO: boolean) {
+  if (isHKO) return "HKO";
+  const canonicalLabel = canonicalAirportPrimarySourceLabel(hourly);
+  if (canonicalLabel === "MGM") return canonicalLabel;
+  const payloadLabel = String(hourly?.airportPrimary?.source_label || "").trim();
+  if (payloadLabel && !isGenericAirportPrimaryLabel(payloadLabel)) return payloadLabel;
+  return canonicalLabel || payloadLabel || "NOAA MADIS";
+}
+
 function airportPrimaryObservationPoints(hourly: HourlyForecast) {
   return appendLatestAirportObservation(
     hourly?.airportPrimaryTodayObs,
@@ -1800,7 +1837,7 @@ function buildFullDayChartData(
     if (madisVals.some((v) => v !== null)) {
       series.push({
         key: "madis",
-        label: isHKO ? "HKO" : (hourly?.airportPrimary?.source_label || "NOAA MADIS"),
+        label: airportPrimarySeriesLabel(hourly, isHKO),
         source: isHKO ? "HKO" : (hourly?.airportPrimary?.station_code || row?.airport || "MADIS"),
         color: "#0284c7",
         dashed: isHKO ? true : false,

@@ -1332,6 +1332,46 @@ export function runTests() {
     "MGM series should not mix METAR airportCurrent points into the MGM airport-station line",
   );
 
+  const ankaraMgmWithMetarLabel = __buildTemperatureChartDataForTest(
+    {
+      city: "ankara",
+      local_date: "2026-05-29",
+      local_time: "18:48",
+      tz_offset_seconds: 3 * 60 * 60,
+      current_temp: 14,
+      airport: "LTAC",
+    } as any,
+    {
+      localTime: "18:48",
+      times: [],
+      temps: [],
+      airportPrimary: {
+        source_code: "mgm",
+        source_label: "METAR",
+        temp: 14,
+        obs_time: "2026-05-29T15:48:00Z",
+      },
+      airportCurrent: {
+        source_code: "metar",
+        source_label: "METAR",
+        temp: 17,
+        obs_time: "18:20",
+      },
+      airportPrimaryTodayObs: [
+        { time: "2026-05-29T15:00:00Z", temp: 14 },
+        { time: "2026-05-29T15:30:00Z", temp: 15 },
+      ],
+      metarTodayObs: [
+        { time: "2026-05-29T15:20:00Z", temp: 17 },
+      ],
+    } as any,
+    "1D",
+  );
+  const ankaraMgmSeries = seriesByKey(ankaraMgmWithMetarLabel.series as any, "madis") as any;
+  const ankaraMetarSeries = seriesByKey(ankaraMgmWithMetarLabel.series as any, "metar") as any;
+  assert(ankaraMgmSeries?.label === "MGM", "Ankara MGM airport-primary series should be labeled MGM even if payload source_label says METAR");
+  assert(ankaraMetarSeries?.label === "METAR", "Ankara METAR backup series should keep the METAR label");
+
   const chengduMergedHourly = __mergePatchIntoHourlyForTest(
     {
       localTime: "05:25",

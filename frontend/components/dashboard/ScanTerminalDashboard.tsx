@@ -55,6 +55,7 @@ import {
   mergeAccessStateWithAuthPayload,
   type AuthProfilePayload,
 } from "@/components/dashboard/scan-terminal/terminal-access-state";
+import { loadTerminalAuthProfile } from "@/components/dashboard/scan-terminal/terminal-auth-bootstrap";
 import {
   cityListItemsToScanRows,
   mergeScanRowsWithCityFallbackRows,
@@ -1034,12 +1035,15 @@ function ScanTerminalScreen() {
         cancelled = true;
       };
     }
-    const sessionPromise = hasSupabasePublicEnv()
-      ? getSupabaseBrowserClient().auth.getSession()
-      : Promise.resolve({ data: { session: null } });
-
-    sessionPromise
-      .then(({ data: { session } }) => loadAuthProfile(session?.access_token))
+    const supabaseEnabled = hasSupabasePublicEnv();
+    loadTerminalAuthProfile({
+      getSession: () =>
+        supabaseEnabled
+          ? getSupabaseBrowserClient().auth.getSession()
+          : Promise.resolve({ data: { session: null } }),
+      hasSupabasePublicEnv: supabaseEnabled,
+      loadAuthProfile,
+    })
       .then((payload) => {
         if (cancelled) return;
         setProAccess((prev) => mergeAccessStateWithAuthPayload(prev, payload));
