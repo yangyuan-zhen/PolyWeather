@@ -29,10 +29,12 @@ from src.data_collection.singapore_mss_sources import SingaporeMssSourceMixin
 from src.data_collection.ims_sources import ImsSourceMixin
 from src.data_collection.ncm_sources import NcmSourceMixin
 from src.data_collection.aeroweb_sources import AerowebSourceMixin
+from src.data_collection.wunderground_sources import WundergroundHistoricalMixin
+from src.data_collection.city_time import get_city_utc_offset_seconds
 from src.database.db_manager import DBManager
 
 
-class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, JmaAmedasSourceMixin, NwsOpenMeteoSourceMixin, AmosStationSourceMixin, AmscAwosSourceMixin, FmiSourceMixin, KnmiSourceMixin, HkoObsSourceMixin, CowinSourceMixin, MadisSourceMixin, SingaporeMssSourceMixin, ImsSourceMixin, NcmSourceMixin, AerowebSourceMixin):
+class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, JmaAmedasSourceMixin, NwsOpenMeteoSourceMixin, AmosStationSourceMixin, AmscAwosSourceMixin, FmiSourceMixin, KnmiSourceMixin, HkoObsSourceMixin, CowinSourceMixin, MadisSourceMixin, SingaporeMssSourceMixin, ImsSourceMixin, NcmSourceMixin, AerowebSourceMixin, WundergroundHistoricalMixin):
     """
     Multi-source weather data collector
 
@@ -227,6 +229,17 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         self.settlement_cache_ttl_sec = min(self.settlement_cache_ttl_sec, OBSERVATION_REFRESH_SEC)
         self._settlement_cache: Dict[str, Dict] = {}
         self._settlement_cache_lock = threading.Lock()
+        self.wunderground_historical_cache_ttl_sec = max(
+            30,
+            int(
+                os.getenv(
+                    "WUNDERGROUND_HISTORICAL_CACHE_TTL_SEC",
+                    str(OBSERVATION_REFRESH_SEC),
+                )
+            ),
+        )
+        self._wunderground_historical_cache: Dict[str, Dict] = {}
+        self._wunderground_historical_cache_lock = threading.Lock()
         self.fmi_cache_ttl_sec = int(
             os.getenv("FMI_CACHE_TTL_SEC", "120")
         )
@@ -337,6 +350,11 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             (self._knmi_cache, self._knmi_cache_lock, float(self.knmi_cache_ttl_sec * 2)),
             (self._hko_obs_cache, self._hko_obs_cache_lock, float(self.hko_obs_cache_ttl_sec * 2)),
             (self._cowin_obs_cache, self._cowin_obs_cache_lock, float(self.cowin_obs_cache_ttl_sec * 5)),
+            (
+                self._wunderground_historical_cache,
+                self._wunderground_historical_cache_lock,
+                float(self.wunderground_historical_cache_ttl_sec * 2),
+            ),
         ]:
             stale = [
                 key
@@ -921,6 +939,13 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     or normalized
                 )
                 self._settlement_cache.pop(f"cwa:{station_code.lower()}", None)
+        location_id = self._wunderground_location_id(normalized)
+        if location_id:
+            prefix = f"wu:{location_id}:"
+            with self._wunderground_historical_cache_lock:
+                for key in list(self._wunderground_historical_cache.keys()):
+                    if key.startswith(prefix):
+                        self._wunderground_historical_cache.pop(key, None)
 
     def _uses_fahrenheit(self, city_lower: str) -> bool:
         return city_lower in self.US_CITIES
@@ -971,6 +996,29 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             cwa_forecast = self.fetch_cwa_taipei_forecast()
             if cwa_forecast is not None:
                 results["cwa_forecast"] = cwa_forecast
+
+    def _attach_wunderground_historical(
+        self,
+        results: Dict,
+        city_lower: str,
+        use_fahrenheit: bool,
+    ) -> None:
+        try:
+            utc_offset = get_city_utc_offset_seconds(city_lower)
+            payload = self.fetch_wunderground_historical(
+                city_lower,
+                use_fahrenheit=use_fahrenheit,
+                utc_offset=utc_offset,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Wunderground historical attach failed city={} error={}",
+                city_lower,
+                exc,
+            )
+            return
+        if payload:
+            results["wunderground_current"] = payload
 
     def _attach_turkish_mgm_data(
         self,
@@ -1666,6 +1714,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             )
         self._log_temperature_unit(city, use_fahrenheit)
         self._attach_settlement_sources(results, city_lower)
+        self._attach_wunderground_historical(results, city_lower, use_fahrenheit)
 
         if lat and lon:
             # When force_refresh_observations_only is set (airport push loop),

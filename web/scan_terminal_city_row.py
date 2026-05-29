@@ -96,6 +96,7 @@ def _build_terminal_row(
         "temp_symbol": data.get("temp_symbol"),
         "current_temp": current.get("temp"),
         "current_max_so_far": current.get("max_so_far"),
+        "wunderground_current": data.get("wunderground_current") or {},
         "metar_context": metar_context,
         "metar_today_obs": metar_context.get("today_obs") or [],
         "metar_recent_obs": metar_context.get("recent_obs") or [],
@@ -207,6 +208,7 @@ def _build_quick_row(
         "risk_level": risk.get("level"),
         "current_temp": curr.get("temp"),
         "current_max_so_far": curr.get("max_so_far"),
+        "wunderground_current": data.get("wunderground_current") or {},
         "deb_prediction": deb.get("prediction"),
         "model_cluster_sources": (
             daily_entry.get("models")

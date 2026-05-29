@@ -28,6 +28,7 @@ def build_city_summary_payload(data: Dict[str, Any]) -> Dict[str, Any]:
             ),
         },
         "deb": dict(deb) if deb else {"prediction": None},
+        "wunderground_current": data.get("wunderground_current") or {},
         "deviation_monitor": data.get("deviation_monitor") or {},
         "risk": {
             "level": data.get("risk", {}).get("level"),
@@ -212,6 +213,7 @@ def build_city_detail_payload(
             ),
             "airport_primary": data.get("airport_primary") or {},
             "airport_primary_today_obs": data.get("airport_primary_today_obs") or [],
+            "wunderground_current": data.get("wunderground_current") or {},
             "official_nearby": data.get("official_nearby") or [],
             "official_network_source": data.get("official_network_source"),
             "official_network_status": data.get("official_network_status") or {},
@@ -224,6 +226,7 @@ def build_city_detail_payload(
             "metar_recent_obs": data.get("metar_recent_obs") or [],
             "metar_today_obs": data.get("metar_today_obs") or [],
             "settlement_today_obs": data.get("settlement_today_obs") or [],
+            "wunderground_today_obs": (data.get("wunderground_current") or {}).get("today_obs") or [],
             "hourly": data.get("hourly") or {},
             "mgm_hourly": (data.get("mgm") or {}).get("hourly", []),
             "forecast_daily": (data.get("forecast") or {}).get("daily", []),
@@ -266,6 +269,7 @@ def build_city_detail_payload(
         "center_station_candidate": data.get("center_station_candidate"),
         "airport_vs_network_delta": data.get("airport_vs_network_delta"),
         "airport_current": data.get("airport_current") or {},
+        "wunderground_current": data.get("wunderground_current") or {},
         "amos": data.get("amos") or {},
         "nearby_source": data.get("nearby_source")
         or (

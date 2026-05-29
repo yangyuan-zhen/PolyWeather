@@ -790,6 +790,7 @@ def _analyze(
     taf = raw.get("taf", {})
     mgm = raw.get("mgm") or {}
     settlement_current = raw.get("settlement_current") or {}
+    wunderground_current = raw.get("wunderground_current") or {}
     ens_raw = raw.get("ensemble", {})
     mm = raw.get("multi_model", {})
     if not isinstance(om, dict):
@@ -800,6 +801,8 @@ def _analyze(
         mgm = {}
     if not isinstance(settlement_current, dict):
         settlement_current = {}
+    if not isinstance(wunderground_current, dict):
+        wunderground_current = {}
     if not isinstance(ens_raw, dict):
         ens_raw = {}
     if not isinstance(mm, dict):
@@ -1795,6 +1798,7 @@ def _analyze(
             "last_observation_local_date": metar.get("observation_local_date") if metar else None,
             "current_local_date": local_date_str,
         },
+        "wunderground_current": wunderground_current,
         "settlement_station": network_snapshot.get("settlement_station") or {},
         "airport_primary": airport_primary_current,
         "airport_primary_today_obs": network_snapshot.get("airport_primary_today_obs") or [],
@@ -1941,6 +1945,11 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
 
     jobs: Dict[str, Any] = {
         "settlement_current": lambda: _weather.fetch_settlement_current(city) or {},
+        "wunderground_current": lambda: _weather.fetch_wunderground_historical(
+            city,
+            use_fahrenheit=is_f,
+            utc_offset=default_utc_offset,
+        ) or {},
         "open_meteo": lambda: _weather.fetch_from_open_meteo(lat, lon, use_fahrenheit=is_f) or {},
         "multi_model": lambda: _weather.fetch_multi_model(lat, lon, city=city, use_fahrenheit=is_f) or {},
     }
@@ -1969,8 +1978,11 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             fetched[key] = future.result()
 
     settlement_current = fetched.get("settlement_current") or {}
+    wunderground_current = fetched.get("wunderground_current") or {}
     open_meteo = fetched.get("open_meteo") or {}
     mm = fetched.get("multi_model") or {}
+    if not isinstance(wunderground_current, dict):
+        wunderground_current = {}
     utc_offset = open_meteo.get("utc_offset")
     if utc_offset is None:
         utc_offset = default_utc_offset
@@ -2233,6 +2245,7 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             "obs_age_min": obs_age_min,
             "observation_status": "live" if cur_temp is not None else "missing",
         },
+        "wunderground_current": wunderground_current,
         "deb": {
             "prediction": _sf(deb_val),
             "raw_prediction": _sf(deb_raw_val),

@@ -5,6 +5,7 @@ import {
   __getLiveObservationLabelsForTest,
   __getObservationDisplayMetricsForTest,
   __getPeakGlowStateForTest,
+  __getWundergroundDailyHighForTest,
   __getVisibleTemperatureSeriesForTest,
   __isTemperatureSeriesVisibleByDefaultForTest,
   __mergePatchIntoHourlyForTest,
@@ -100,6 +101,22 @@ export function runTests() {
       },
     ] as any).state === "none",
     "morning observations near the intraday observed high should not trigger peak glow before the forecast hot window",
+  );
+
+  assert(
+    __getWundergroundDailyHighForTest({
+      wundergroundCurrent: { max_so_far: 26 },
+      airportCurrent: { max_so_far: 27 },
+      airportPrimary: { max_so_far: 27 },
+    } as any) === 26,
+    "WU display should use Wunderground historical.json high before airport/METAR highs",
+  );
+  assert(
+    __getWundergroundDailyHighForTest({
+      airportCurrent: { max_so_far: 27 },
+      airportPrimary: { max_so_far: 27 },
+    } as any) === null,
+    "WU display should not fall back to airport/METAR highs when historical.json is missing",
   );
 
   const guangzhou = {

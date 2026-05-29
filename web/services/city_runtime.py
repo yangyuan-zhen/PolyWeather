@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import time
+from copy import deepcopy
 from datetime import datetime
 from typing import Optional
 
@@ -53,6 +54,7 @@ from web.core import (
     _resolve_auth_points,  # noqa: F401 - compatibility export for tests and transitional routers
     _resolve_weekly_profile,  # noqa: F401 - compatibility export for tests and transitional routers
     _sf,
+    _weather,
 )
 
 router = APIRouter()
@@ -327,6 +329,52 @@ def _refresh_city_full_cache(city: str, force_refresh: bool = False) -> dict:
         source_fingerprint=f"{city}:full",
     )
     return payload
+
+
+def _overlay_wunderground_current(payload: dict, wunderground: dict) -> dict:
+    if not isinstance(payload, dict) or not isinstance(wunderground, dict) or not wunderground:
+        return payload
+    next_payload = deepcopy(payload)
+    next_payload["wunderground_current"] = dict(wunderground)
+
+    official = next_payload.get("official")
+    if isinstance(official, dict):
+        official["wunderground_current"] = dict(wunderground)
+
+    timeseries = next_payload.get("timeseries")
+    if isinstance(timeseries, dict):
+        timeseries["wunderground_today_obs"] = list(wunderground.get("today_obs") or [])
+
+    return next_payload
+
+
+def _overlay_latest_wunderground_current(city: str, payload: dict) -> dict:
+    if not isinstance(payload, dict):
+        return payload
+    city_key = str(city or payload.get("name") or payload.get("city") or "").strip().lower()
+    if city_key not in CITIES:
+        return deepcopy(payload)
+    try:
+        utc_offset = int(
+            payload.get("utc_offset_seconds")
+            or (payload.get("overview") or {}).get("utc_offset_seconds")
+            or get_city_utc_offset_seconds(city_key)
+            or 0
+        )
+    except Exception:
+        utc_offset = get_city_utc_offset_seconds(city_key)
+    try:
+        latest_wu = _weather.fetch_wunderground_historical(
+            city_key,
+            use_fahrenheit=bool(CITIES[city_key].get("f")),
+            utc_offset=utc_offset,
+        )
+    except Exception as exc:
+        logger.warning("latest WU overlay failed city={} error={}", city_key, exc)
+        return deepcopy(payload)
+    if not isinstance(latest_wu, dict) or not latest_wu:
+        return deepcopy(payload)
+    return _overlay_wunderground_current(payload, latest_wu)
 
 
 

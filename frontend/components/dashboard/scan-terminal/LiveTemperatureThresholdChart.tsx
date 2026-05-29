@@ -89,6 +89,10 @@ function formatCityLocalDate(tzOffsetSeconds: number | null | undefined) {
   return `${y}-${m}-${d}`;
 }
 
+function getWundergroundDailyHigh(hourly: HourlyForecast) {
+  return validNumber(hourly?.wundergroundCurrent?.max_so_far) ?? null;
+}
+
 // ── Main component ─────────────────────────────────────────────────────
 
 export function LiveTemperatureThresholdChart({
@@ -490,7 +494,7 @@ export function LiveTemperatureThresholdChart({
     [row, chartHourly, settlementPlate],
   );
   const displayRunwayTemp = selectDisplayRunwayTemp(liveTemp, currentRunwayTemp, hasRunwayData);
-  const wundergroundDailyHigh = validNumber(chartHourly?.airportCurrent?.max_so_far ?? chartHourly?.airportPrimary?.max_so_far) ?? null;
+  const wundergroundDailyHigh = getWundergroundDailyHigh(chartHourly);
 
   const localDateStr = chartLocalDate || new Date().toISOString().slice(0, 10);
   const modelSources = (row?.model_cluster_sources && Object.keys(row.model_cluster_sources).length > 0)
@@ -795,6 +799,7 @@ export const __getDebPeakWindowRangeForTest = getDebPeakWindowRange;
 export const __getLiveObservationLabelsForTest = getLiveObservationLabels;
 export const __getObservationDisplayMetricsForTest = getObservationDisplayMetrics;
 export const __getPeakGlowStateForTest = getPeakGlowState;
+export const __getWundergroundDailyHighForTest = getWundergroundDailyHigh;
 export const __shouldPollLiveChartForTest = shouldPollLiveChart;
 export const __mergePatchIntoHourlyForTest = mergePatchIntoHourly;
 export const __selectDisplayRunwayTempForTest = selectDisplayRunwayTemp;

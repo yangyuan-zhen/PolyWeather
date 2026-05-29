@@ -784,6 +784,7 @@ type HourlyForecast = {
   amos?: AmosData | null;
   airportCurrent?: AirportCurrentConditions | null;
   airportPrimary?: AirportCurrentConditions | null;
+  wundergroundCurrent?: AirportCurrentConditions | null;
   forecastDaily?: ForecastDay[];
   multiModelDaily?: Record<string, DailyModelForecast>;
   probabilities?: LegacyGaussianProbabilitySource | null;
@@ -809,6 +810,7 @@ function seedHourlyForecastFromRow(row: ScanOpportunityRow | null): HourlyForeca
     amos: null,
     airportCurrent: null,
     airportPrimary: null,
+    wundergroundCurrent: (row as any)?.wunderground_current || null,
     forecastDaily: [],
     multiModelDaily: {},
     probabilities: {
@@ -844,6 +846,7 @@ function parseHourlyForecastFromCityDetail(json: CityDetail | null): HourlyForec
     amos: json.amos || null,
     airportCurrent: json.airport_current || null,
     airportPrimary: json.airport_primary || null,
+    wundergroundCurrent: (json as any).wunderground_current || (json as any)?.official?.wunderground_current || null,
     forecastDaily: json.forecast?.daily || [],
     multiModelDaily: json.multi_model_daily || {},
     probabilities: json.probabilities || null,

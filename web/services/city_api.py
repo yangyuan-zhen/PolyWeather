@@ -11,6 +11,14 @@ from loguru import logger
 import web.routes as legacy_routes
 
 
+async def _overlay_cached_wunderground(city: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    return await run_in_threadpool(
+        legacy_routes._overlay_latest_wunderground_current,
+        city,
+        payload,
+    )
+
+
 def _build_cities_payload() -> Dict[str, Any]:
     out = []
     deb_recent_index = legacy_routes._build_recent_deb_performance_index()
@@ -86,7 +94,7 @@ async def get_city_detail_payload(
         if cached_entry:
             if not legacy_routes._city_cache_is_fresh(cached_entry, legacy_routes.CITY_FULL_CACHE_TTL_SEC):
                 return await run_in_threadpool(legacy_routes._refresh_city_full_cache, city, False)
-            return cached_entry.get("payload") or {}
+            return await _overlay_cached_wunderground(city, cached_entry.get("payload") or {})
         return await run_in_threadpool(legacy_routes._refresh_city_full_cache, city, False)
     if detail_mode == "panel":
         if force_refresh:
@@ -95,7 +103,7 @@ async def get_city_detail_payload(
         if cached_entry:
             if not legacy_routes._city_cache_is_fresh(cached_entry, legacy_routes.CITY_PANEL_CACHE_TTL_SEC):
                 return await run_in_threadpool(legacy_routes._refresh_city_panel_cache, city, False)
-            return cached_entry.get("payload") or {}
+            return await _overlay_cached_wunderground(city, cached_entry.get("payload") or {})
         return await run_in_threadpool(legacy_routes._refresh_city_panel_cache, city, False)
     if detail_mode == "nearby":
         if force_refresh:
@@ -104,7 +112,7 @@ async def get_city_detail_payload(
         if cached_entry:
             if not legacy_routes._city_cache_is_fresh(cached_entry, legacy_routes.CITY_NEARBY_CACHE_TTL_SEC):
                 return await run_in_threadpool(legacy_routes._refresh_city_nearby_cache, city, False)
-            return cached_entry.get("payload") or {}
+            return await _overlay_cached_wunderground(city, cached_entry.get("payload") or {})
         return await run_in_threadpool(legacy_routes._refresh_city_nearby_cache, city, False)
     if detail_mode == "market":
         if force_refresh:
@@ -113,7 +121,7 @@ async def get_city_detail_payload(
         if cached_entry:
             if not legacy_routes._market_analysis_cache_is_fresh(cached_entry):
                 return await run_in_threadpool(legacy_routes._refresh_city_market_cache, city, False)
-            return cached_entry.get("payload") or {}
+            return await _overlay_cached_wunderground(city, cached_entry.get("payload") or {})
         return await run_in_threadpool(legacy_routes._refresh_city_market_cache, city, False)
     return await run_in_threadpool(legacy_routes._analyze, city, force_refresh, False, detail_mode)
 
@@ -131,7 +139,7 @@ async def get_city_summary_payload(
     if cached_entry:
         if not legacy_routes._city_cache_is_fresh(cached_entry, legacy_routes.CITY_SUMMARY_CACHE_TTL_SEC):
             return await run_in_threadpool(legacy_routes._refresh_city_summary_cache, city, False)
-        return cached_entry.get("payload") or {}
+        return await _overlay_cached_wunderground(city, cached_entry.get("payload") or {})
     return await run_in_threadpool(legacy_routes._refresh_city_summary_cache, city, False)
 
 
@@ -154,7 +162,7 @@ async def get_city_detail_aggregate_payload(
             if not legacy_routes._city_cache_is_fresh(cached_entry, legacy_routes.CITY_FULL_CACHE_TTL_SEC):
                 data = await run_in_threadpool(legacy_routes._refresh_city_full_cache, city, False)
             else:
-                data = cached_entry.get("payload") or {}
+                data = await _overlay_cached_wunderground(city, cached_entry.get("payload") or {})
         else:
             data = await run_in_threadpool(legacy_routes._refresh_city_full_cache, city, False)
 

@@ -130,6 +130,13 @@ export interface AirportCurrentConditions {
   last_observation_local_date?: string | null;
   current_local_date?: string | null;
   freshness?: ObservationFreshness | null;
+  source?: string | null;
+  location_id?: string | null;
+  local_date?: string | null;
+  temp_symbol?: string | null;
+  api_units?: string | null;
+  observation_count?: number | null;
+  today_obs?: Array<{ time?: string; temp?: number | null }>;
 }
 
 export interface NearbyStation {
@@ -242,6 +249,7 @@ export interface CitySummary {
   deb?: {
     prediction?: number | null;
   };
+  wunderground_current?: AirportCurrentConditions;
   deviation_monitor?: DeviationMonitor;
   risk?: {
     level?: RiskLevel;
@@ -502,6 +510,7 @@ export interface ScanOpportunityRow {
   temp_symbol?: string | null;
   current_temp?: number | null;
   current_max_so_far?: number | null;
+  wunderground_current?: AirportCurrentConditions;
   metar_context?: {
     source?: string | null;
     station?: string | null;
@@ -730,6 +739,7 @@ export interface CityDetail {
   };
   airport_current?: AirportCurrentConditions;
   airport_primary?: AirportCurrentConditions;
+  wunderground_current?: AirportCurrentConditions;
   airport_primary_today_obs?: Array<{
     time?: string;
     temp?: number | null;
