@@ -105,6 +105,29 @@ AMSC_SETTLEMENT_RUNWAY_TARGETS: Dict[str, str] = {
 }
 
 
+def _should_build_country_network_snapshot(
+    city: str,
+    raw: Dict[str, Any],
+    *,
+    is_panel_mode: bool,
+    is_market_mode: bool,
+) -> bool:
+    if is_market_mode:
+        return False
+    if not is_panel_mode:
+        return True
+
+    city_lower = str(city or "").strip().lower()
+    if city_lower not in TURKISH_MGM_CITIES:
+        return False
+
+    return bool(
+        (raw or {}).get("mgm")
+        or (raw or {}).get("mgm_today_obs")
+        or (raw or {}).get("mgm_nearby")
+    )
+
+
 def _mgm_hourly_high(mgm: Dict[str, Any]) -> Optional[float]:
     hourly = mgm.get("hourly") if isinstance(mgm, dict) else []
     if not isinstance(hourly, list):
@@ -492,6 +515,7 @@ def _build_intraday_meteorology(data: Dict[str, Any]) -> Dict[str, Any]:
         "medium",
         "high",
     }
+
     structural_cap = False
     if taf_signal.get("available") or taf_suppression:
         available_layers += 1
@@ -815,7 +839,12 @@ def _analyze(
     risk = CITY_RISK_PROFILES.get(city, {})
     network_snapshot = (
         build_country_network_snapshot(city, raw)
-        if not is_panel_mode and not is_market_mode
+        if _should_build_country_network_snapshot(
+            city,
+            raw,
+            is_panel_mode=is_panel_mode,
+            is_market_mode=is_market_mode,
+        )
         else {}
     )
 
@@ -2298,4 +2327,3 @@ def _build_city_market_scan_payload(
         "selected_date": target_date or local_date,
         "fetched_at": data.get("updated_at"),
     }
-

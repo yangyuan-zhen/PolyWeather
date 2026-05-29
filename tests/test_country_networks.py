@@ -6,7 +6,11 @@ from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
 from src.data_collection.city_time import CITY_TIME_ZONES, get_city_utc_offset_seconds
 from src.data_collection import metar_sources
 from src.data_collection.metar_sources import MetarSourceMixin
-from web.analysis_service import _build_city_detail_payload, _build_intraday_meteorology
+from web.analysis_service import (
+    _build_city_detail_payload,
+    _build_intraday_meteorology,
+    _should_build_country_network_snapshot,
+)
 from web.core import CITIES
 
 
@@ -164,6 +168,46 @@ def test_turkey_mgm_primary_today_obs_uses_mgm_airport_history_not_metar():
 
     assert snapshot["airport_primary_current"]["source_code"] == "mgm"
     assert snapshot["airport_primary_today_obs"] == [{"time": "14:56", "temp": 17.3}]
+
+
+def test_panel_mode_still_builds_turkey_mgm_airport_snapshot():
+    raw = {
+        "mgm": {
+            "obs_time": "2026-05-29T11:56:00Z",
+            "current": {"temp": 17.3},
+        }
+    }
+
+    assert (
+        _should_build_country_network_snapshot(
+            "ankara", raw, is_panel_mode=True, is_market_mode=False
+        )
+        is True
+    )
+    assert (
+        _should_build_country_network_snapshot(
+            "istanbul", raw, is_panel_mode=True, is_market_mode=False
+        )
+        is True
+    )
+    assert (
+        _should_build_country_network_snapshot(
+            "guangzhou", raw, is_panel_mode=True, is_market_mode=False
+        )
+        is False
+    )
+    assert (
+        _should_build_country_network_snapshot(
+            "ankara", raw, is_panel_mode=False, is_market_mode=False
+        )
+        is True
+    )
+    assert (
+        _should_build_country_network_snapshot(
+            "ankara", raw, is_panel_mode=True, is_market_mode=True
+        )
+        is False
+    )
 
 
 def test_nearby_station_timing_marks_stale_rows_unusable_for_network_signal():
