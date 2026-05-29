@@ -117,7 +117,7 @@ def _should_build_country_network_snapshot(
     if not is_panel_mode:
         return True
 
-    city_lower = str(city or "").strip().lower()
+    city_lower = (city or "").strip().lower()
     if city_lower not in TURKISH_MGM_CITIES:
         return False
 
@@ -147,7 +147,7 @@ def _normalize_runway_label(value: Any) -> str:
 
 
 def _split_runway_pair_label(value: Any) -> tuple[str, str]:
-    parts = [_normalize_runway_label(part) for part in str(value or "").split("/") if str(part).strip()]
+    parts = [_normalize_runway_label(part) for part in str(value or "").split("/") if part.strip()]
     if len(parts) >= 2:
         return parts[0], parts[1]
     runway = _normalize_runway_label(value)
@@ -166,7 +166,10 @@ def _settlement_runway_endpoint_temp(city: str, row: Dict[str, Any]) -> Optional
         return None
 
     pair = _split_runway_pair_label(row.get("runway"))
-    configured = tuple(_normalize_runway_label(part) for part in configured_pair)
+    configured = (
+        _normalize_runway_label(configured_pair[0]),
+        _normalize_runway_label(configured_pair[1]),
+    )
     if not _runway_pair_matches(pair, configured):
         return None
 
@@ -1676,8 +1679,9 @@ def _analyze(
             if day_m:
                 try:
                     deb_result = calculate_deb_prediction(city, day_m)
-                    if deb_result.get("prediction") is not None:
-                        d_val = deb_result.get("prediction")
+                    d_prediction = _sf(deb_result.get("prediction"))
+                    if d_prediction is not None:
+                        d_val = d_prediction
                         d_raw_val = deb_result.get("raw_prediction")
                         d_version = deb_result.get("version")
                         d_bias_adjustment = deb_result.get("bias_adjustment") or 0.0
@@ -1727,7 +1731,6 @@ def _analyze(
                     continue
                 temp_val = _runway_history_temp_for_city(city, r)
                 if temp_val is not None:
-                    temp_val = float(temp_val)
                     if is_f:
                         temp_val = round(temp_val * 9.0 / 5.0 + 32.0, 1)
                     else:

@@ -1,5 +1,6 @@
 import threading
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from src.data_collection.country_networks import build_country_network_snapshot
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
@@ -19,6 +20,14 @@ class _DummyMetarSource(MetarSourceMixin):
     CITY_TO_ICAO = {key: value["icao"] for key, value in CITY_REGISTRY.items() if value.get("icao")}
     metar_cache_ttl_sec = 600
     metar_fast_cache_ttl_sec = 60
+
+    def __init__(self):
+        self._metar_cache = {}
+        self._metar_cache_lock = threading.Lock()
+        self.metar_timeout_sec = 0.0
+        self.metar_latest_timeout_sec = 0.0
+        self.timeout = 0.0
+        self._http_get: Any = None
 
 
 def test_new_city_registry_entries_are_wired():
@@ -59,7 +68,9 @@ def test_paris_registry_uses_le_bourget_anchor():
     assert paris["icao"] == "LFPB"
     assert paris["settlement_source"] == "aeroweb"
     assert paris["settlement_station_code"] == "LFPB"
-    assert "bonneuil-en-france/LFPB" in paris["settlement_url"]
+    settlement_url = paris.get("settlement_url")
+    assert isinstance(settlement_url, str)
+    assert "bonneuil-en-france/LFPB" in settlement_url
     assert CITIES["paris"]["lat"] == paris["lat"]
     assert CITIES["paris"]["settlement_source"] == "aeroweb"
     assert _DummyMetarSource.CITY_TO_ICAO["paris"] == "LFPB"
@@ -76,12 +87,12 @@ def test_turkey_metar_uses_fast_cache_ttl():
 def test_metar_marks_previous_local_day_report_stale(monkeypatch):
     class FixedDateTime(datetime):
         @classmethod
-        def now(cls, tz=None):
+        def now(cls, tz=None):  # type: ignore
             value = datetime(2026, 4, 21, 12, 0, tzinfo=timezone.utc)
             return value if tz is None else value.astimezone(tz)
 
         @classmethod
-        def utcnow(cls):
+        def utcnow(cls):  # type: ignore
             return datetime(2026, 4, 21, 12, 0)
 
     class FakeResponse:
@@ -112,6 +123,7 @@ def test_metar_marks_previous_local_day_report_stale(monkeypatch):
 
     result = source.fetch_metar("karachi", utc_offset=18000)
 
+    assert result is not None
     assert result["stale_for_today"] is True
     assert result["observation_local_date"] == "2026-04-20"
     assert result["current_local_date"] == "2026-04-21"

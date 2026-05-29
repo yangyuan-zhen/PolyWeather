@@ -86,9 +86,23 @@ function isTemperatureSeriesVisibleByDefault(city: string, seriesKey: string) {
   if (seriesKey.startsWith("model_curve_")) {
     return normalizeCityKey(city) === "paris" && seriesKey === "model_curve_AROME HD";
   }
-  if (seriesKey === "metar" || seriesKey === "madis") {
+  if (seriesKey === "metar") {
     const cityKey = normalizeCityKey(city);
-    return cityKey === "hongkong" || cityKey === "laufaushan" || cityKey === "shenzhen";
+    return (
+      cityKey !== "hongkong" &&
+      cityKey !== "laufaushan" &&
+      cityKey !== "shenzhen"
+    );
+  }
+  if (seriesKey === "madis") {
+    const cityKey = normalizeCityKey(city);
+    return (
+      cityKey === "hongkong" ||
+      cityKey === "laufaushan" ||
+      cityKey === "shenzhen" ||
+      cityKey === "ankara" ||
+      cityKey === "istanbul"
+    );
   }
   return true;
 }

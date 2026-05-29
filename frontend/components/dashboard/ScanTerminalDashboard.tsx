@@ -4,13 +4,13 @@ import clsx from "clsx";
 import Link from "next/link";
 import {
   Activity,
+  BookOpenCheck,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   GraduationCap,
   Menu,
   Search,
-  Table2,
   UserRound,
   Users,
 } from "lucide-react";
@@ -45,6 +45,7 @@ import { scanRootClass } from "@/components/dashboard/scan-root-styles";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
 import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { TrainingDashboard } from "@/components/dashboard/scan-terminal/TrainingDashboard";
+import { UsageGuideDashboard } from "@/components/dashboard/scan-terminal/UsageGuideDashboard";
 import { LiveTemperatureThresholdChart, clearCityDetailCache } from "@/components/dashboard/scan-terminal/LiveTemperatureThresholdChart";
 import { KoyfinRowsTable } from "@/components/dashboard/scan-terminal/KoyfinRowsTable";
 import { rowName, pct, money, temp, edgeClass } from "@/components/dashboard/scan-terminal/utils";
@@ -100,7 +101,7 @@ const TERM = {
   liq: { en: "Liq", zh: "流动性" },
   signal: { en: "Signal", zh: "信号" },
   searchPlaceholder: { en: "Search city, threshold, station, or signal", zh: "搜索城市、阈值、站点或信号" },
-  weatherThresholds: { en: "Weather Thresholds", zh: "天气阈值" },
+  weatherThresholds: { en: "Weather Decisions", zh: "天气决策" },
   selectedThresholdMonitor: { en: "Selected Threshold Monitor", zh: "选中阈值监控" },
   probabilityDistribution: { en: "Probability Distribution", zh: "概率分布" },
   signalList: { en: "Signal List", zh: "信号列表" },
@@ -465,8 +466,9 @@ function PolyWeatherTerminal({
   };
 
   const NAV_ITEMS = [
-    { key: "thresholds", Icon: Table2, labelEn: "Thresholds", labelZh: "天气阈值" },
+    { key: "thresholds", Icon: Activity, labelEn: "Decision", labelZh: "天气决策" },
     { key: "training", Icon: GraduationCap, labelEn: "Training", labelZh: "训练数据" },
+    { key: "guide", Icon: BookOpenCheck, labelEn: "Guide", labelZh: "使用指南" },
   ];
 
   useEffect(() => {
@@ -719,6 +721,8 @@ function PolyWeatherTerminal({
         <main className="min-h-0 flex-1 overflow-hidden flex flex-col p-2 bg-[#eef2f6]">
           {activeNavKey === "training" ? (
             <TrainingDashboard isEn={isEn} />
+          ) : activeNavKey === "guide" ? (
+            <UsageGuideDashboard isEn={isEn} />
           ) : (
             <>
               {/* Mobile layout */}
