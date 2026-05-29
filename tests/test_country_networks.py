@@ -146,6 +146,26 @@ def test_turkey_mgm_provider_returns_official_nearby_rows():
     assert snapshot["official_network_status"]["usable_row_count"] == 1
 
 
+def test_turkey_mgm_primary_today_obs_uses_mgm_airport_history_not_metar():
+    raw = {
+        "metar": {
+            "observation_time": "2026-05-29T11:50:00Z",
+            "today_obs": [{"time": "14:50", "temp": 17.0}],
+            "current": {"temp": 17.0},
+        },
+        "mgm": {
+            "obs_time": "2026-05-29T11:56:00Z",
+            "current": {"temp": 17.3},
+        },
+        "mgm_today_obs": [{"time": "14:56", "temp": 17.3}],
+    }
+
+    snapshot = build_country_network_snapshot("ankara", raw)
+
+    assert snapshot["airport_primary_current"]["source_code"] == "mgm"
+    assert snapshot["airport_primary_today_obs"] == [{"time": "14:56", "temp": 17.3}]
+
+
 def test_nearby_station_timing_marks_stale_rows_unusable_for_network_signal():
     anchor_time = datetime.now(timezone.utc).replace(microsecond=0)
     fresh_time = anchor_time + timedelta(minutes=20)

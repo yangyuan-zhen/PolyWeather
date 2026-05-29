@@ -1212,7 +1212,10 @@ def build_country_network_snapshot(city: str, raw: Dict[str, Any]) -> Dict[str, 
         "stale_row_count": stale_count,
         "unknown_timing_count": unknown_count,
     }
-    airport_primary_today_obs = ((raw.get("metar") or {}).get("today_obs") or [])
+    if provider.provider_code == "turkey_mgm":
+        airport_primary_today_obs = raw.get("mgm_today_obs") or []
+    else:
+        airport_primary_today_obs = ((raw.get("metar") or {}).get("today_obs") or [])
     if airport_primary.get("source_code") == "cowin_obs":
         live_points = raw.get("cowin_today_obs") or []
         if live_points:

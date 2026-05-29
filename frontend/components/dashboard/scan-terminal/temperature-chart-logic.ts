@@ -86,6 +86,10 @@ function isTemperatureSeriesVisibleByDefault(city: string, seriesKey: string) {
   if (seriesKey.startsWith("model_curve_")) {
     return normalizeCityKey(city) === "paris" && seriesKey === "model_curve_AROME HD";
   }
+  if (seriesKey === "metar" || seriesKey === "madis") {
+    const cityKey = normalizeCityKey(city);
+    return cityKey === "hongkong" || cityKey === "laufaushan" || cityKey === "shenzhen";
+  }
   return true;
 }
 
@@ -606,6 +610,24 @@ function appendLatestAirportObservation(
   return merged;
 }
 
+function isMgmAirportPrimary(hourly: HourlyForecast) {
+  const primary = hourly?.airportPrimary;
+  const sourceTokens = [
+    primary?.source_code,
+    primary?.source_label,
+    (primary as any)?.source,
+  ].map((value) => String(value || "").toLowerCase());
+  return sourceTokens.some((value) => value === "mgm" || value.includes("turkey_mgm"));
+}
+
+function airportPrimaryObservationPoints(hourly: HourlyForecast) {
+  return appendLatestAirportObservation(
+    hourly?.airportPrimaryTodayObs,
+    hourly?.airportPrimary,
+    ...(isMgmAirportPrimary(hourly) ? [] : [hourly?.airportCurrent]),
+  );
+}
+
 function seriesStats(values: Array<number | null>) {
   const nums = values.filter((v): v is number => validNumber(v) !== null);
   const latest = nums.length ? nums[nums.length - 1] : null;
@@ -680,7 +702,7 @@ function getObservationDisplayMetrics(
   const settlementObs = normObs(hourly?.settlementTodayObs || row?.settlement_today_obs || row?.metar_context?.settlement_today_obs, tzOffset, MAX_OBS_POINTS, localDateStr);
   const metarObs = normObs(hourly?.metarTodayObs || row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs, tzOffset, MAX_OBS_POINTS, localDateStr);
   const madisObs = normObs(
-    appendLatestAirportObservation(hourly?.airportPrimaryTodayObs, hourly?.airportPrimary, hourly?.airportCurrent),
+    airportPrimaryObservationPoints(hourly),
     tzOffset,
     MAX_OBS_POINTS,
     localDateStr,
@@ -1611,7 +1633,7 @@ function buildFullDayChartData(
   );
   const madisObs = filterTimelinePointsToLocalDay(
     normObs(
-      appendLatestAirportObservation(hourly?.airportPrimaryTodayObs, hourly?.airportPrimary, hourly?.airportCurrent),
+      airportPrimaryObservationPoints(hourly),
       tzOffset,
       MAX_OBS_POINTS,
       localDateStr,

@@ -42,12 +42,25 @@ export default async function HomePage({
     url: "https://polyweather.top",
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web",
-    offers: {
-      "@type": "Offer",
-      price: "10.00",
-      priceCurrency: "USD",
-      description: "Monthly subscription",
-    },
+    offers: [
+      {
+        "@type": "Offer",
+        name: "Pro monthly",
+        price: "29.90",
+        priceCurrency: "USD",
+        description:
+          "Pro subscription for 30 days. Referral users pay 26.90 USD-equivalent USDC for the first month.",
+        availability: "https://schema.org/InStock",
+      },
+      {
+        "@type": "Offer",
+        name: "Pro quarterly",
+        price: "79.90",
+        priceCurrency: "USD",
+        description: "Pro subscription for 90 days.",
+        availability: "https://schema.org/InStock",
+      },
+    ],
   };
 
   return (

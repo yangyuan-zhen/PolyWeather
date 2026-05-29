@@ -4,13 +4,17 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
+  Bell,
   Check,
   CheckCircle2,
+  Clock3,
+  CloudSun,
+  Database,
   Gauge,
   LineChart,
-  LockKeyhole,
   Radar,
   ShieldCheck,
+  Users,
 } from "lucide-react";
 import { I18nProvider, useI18n } from "@/hooks/useI18n";
 import {
@@ -23,7 +27,7 @@ const COVERAGE_EN = [
   "DEB blend forecast",
   "Model-implied distribution",
   "Intraday observation windows",
-  "AI weather evidence",
+  "Deviation checks and risk thresholds",
   "Paid Telegram alerts",
 ];
 
@@ -32,29 +36,78 @@ const COVERAGE_ZH = [
   "DEB 智能融合预报",
   "模型隐含分布预测",
   "日内分段观测窗口",
-  "AI 气象证据链解读",
-  "付费电报实时通知",
+  "偏差校验与风控阈值",
+  "付费 Telegram 实时通知",
 ];
 
 const PRO_FEATURES_EN = [
-  "Real-time METAR observations & runway sensor data",
-  "Real-time METAR observations & alerts",
-  "DEB blend forecast model",
-  "Model-implied distribution analysis",
-  "Intraday observation windows & deviation metrics",
-  "Paid Telegram alerts & Webhook API",
-  "24/7 priority professional support",
+  "METAR airport observations and runway-level reference data",
+  "DEB blend forecast with model-spread context",
+  "Model-implied distribution and probability estimates",
+  "Intraday windows, deviation metrics, and settlement context",
+  "Paid Telegram group eligibility and alert workflows",
+  "Priority support for subscription and access issues",
 ];
 
 const PRO_FEATURES_ZH = [
-  "实时 METAR 机场实测与跑道传感器数据",
-  "实时 METAR 机场实测与预警",
-  "DEB 智能融合预测模型",
-  "模型隐含分布预测与估算",
-  "日内观测窗口与偏差度量指标",
-  "付费电报群通知与 API 接口推送",
-  "7×24小时专业技术与客服支持",
+  "METAR 机场实测与跑道级参考数据",
+  "DEB 智能融合预报与模型分歧背景",
+  "模型隐含分布预测与概率估算",
+  "日内观测窗口、偏差度量与结算背景",
+  "付费 Telegram 群准入与提醒工作流",
+  "订阅与准入问题优先支持",
 ];
+
+function WeatherWorkflowIllustration({ isEn }: { isEn: boolean }) {
+  const cards = isEn
+    ? [
+        { label: "Airport obs", value: "24.2C", color: "bg-emerald-100 text-emerald-800" },
+        { label: "DEB forecast", value: "25.0C", color: "bg-sky-100 text-sky-800" },
+        { label: "Risk", value: "Watch", color: "bg-amber-100 text-amber-800" },
+      ]
+    : [
+        { label: "机场实测", value: "24.2C", color: "bg-emerald-100 text-emerald-800" },
+        { label: "DEB 预报", value: "25.0C", color: "bg-sky-100 text-sky-800" },
+        { label: "风险状态", value: "观察", color: "bg-amber-100 text-amber-800" },
+      ];
+
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-x-0 top-16 z-0 mx-auto hidden h-[520px] max-w-6xl overflow-hidden md:block"
+    >
+      <div className="absolute left-8 top-14 h-24 w-24 rotate-[-7deg] rounded-lg border-2 border-slate-900 bg-[#fff3b0] shadow-[6px_6px_0_rgba(15,23,42,0.12)]" />
+      <div className="absolute right-14 top-10 h-20 w-28 rotate-[6deg] rounded-lg border-2 border-slate-900 bg-[#dff8ea] shadow-[6px_6px_0_rgba(15,23,42,0.12)]" />
+      <div className="absolute left-20 bottom-16 h-16 w-24 rotate-[8deg] rounded-lg border-2 border-slate-900 bg-[#e4efff] shadow-[6px_6px_0_rgba(15,23,42,0.12)]" />
+
+      <div className="absolute left-1/2 top-64 w-[420px] -translate-x-1/2 rounded-lg border-2 border-slate-900 bg-white/80 shadow-[10px_10px_0_rgba(15,23,42,0.10)]">
+        <div className="flex h-10 items-center gap-2 border-b-2 border-slate-900 px-4">
+          <span className="h-2.5 w-2.5 rounded-full bg-[#ff6b6b]" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[#ffd166]" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[#06d6a0]" />
+          <span className="ml-3 h-3 w-32 rounded bg-slate-200" />
+        </div>
+        <div className="grid gap-3 p-5">
+          {cards.map((card) => (
+            <div key={card.label} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
+              <span className="text-sm font-semibold text-slate-700">{card.label}</span>
+              <span className={`rounded-md px-2 py-1 text-xs font-bold ${card.color}`}>{card.value}</span>
+            </div>
+          ))}
+          <div className="mt-1 flex h-24 items-end gap-2 rounded-md border border-slate-200 bg-white px-4 py-3">
+            {[34, 44, 31, 56, 64, 48, 70, 62, 78, 66].map((height, index) => (
+              <span
+                key={index}
+                className="flex-1 rounded-t bg-slate-900/80"
+                style={{ height: `${height}%` }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function InstitutionalLandingScreen() {
   const { locale, toggleLocale } = useI18n();
@@ -75,111 +128,120 @@ function InstitutionalLandingScreen() {
   }, []);
 
   const coverage = isEn ? COVERAGE_EN : COVERAGE_ZH;
+
   const platformCards = isEn
     ? [
         {
           icon: Radar,
           title: "Live Evidence",
-          body: "Airport observations and official station data are structured for deviation-aware decisions.",
+          body: "Airport observations, model spreads, and deviation checks stay in one calm workspace.",
         },
         {
           icon: Gauge,
-          title: "Decision Workflow",
-          body: "City cards combine model forecast, current deviation, risk, and target threshold context.",
+          title: "Daily Review",
+          body: "Scan the city board, compare forecasts, and keep the current decision context visible.",
         },
         {
           icon: ShieldCheck,
-          title: "Paid Access",
-          body: "The product workspace is locked until the user has an active subscription.",
+          title: "Access Control",
+          body: "Trial users get the same product experience as Pro, except the paid Telegram group link stays hidden.",
         },
       ]
     : [
         {
           icon: Radar,
           title: "实况证据",
-          body: "针对机场 METAR 与官方站点数据进行结构化整理，专为气象决策设计。",
+          body: "机场观测、模型分歧与偏差校验放在一个安静清晰的工作台里。",
         },
         {
           icon: Gauge,
-          title: "决策工作流",
-          body: "城市决策卡片依赖了气象预报、实测气温、偏差系数及目标阈值条件。",
+          title: "每日复盘",
+          body: "快速扫描城市面板、比较预报路径，并保留当前判断上下文。",
         },
         {
           icon: ShieldCheck,
-          title: "付费准入",
-          body: "除公开介绍和账户管理外，气象决策台仅向付费活跃订阅用户开放。",
+          title: "权益分层",
+          body: "试用期权益和 Pro 一致，唯一例外是不显示付费 Telegram 群链接。",
         },
       ];
 
+  const heroStats = isEn
+    ? [
+        { label: "Trial", value: "3 days" },
+        { label: "Monthly", value: "29.9 USDC" },
+        { label: "Quarterly", value: "79.9 USDC" },
+        { label: "Referral", value: "26.9 USDC" },
+      ]
+    : [
+        { label: "试用", value: "3 天" },
+        { label: "月付", value: "29.9 USDC" },
+        { label: "季度", value: "79.9 USDC" },
+        { label: "邀请首月", value: "26.9 USDC" },
+      ];
+
   return (
-    <div className="min-h-screen bg-[#f4f7fb] text-slate-950">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link href="/" className="flex items-center hover:opacity-90">
-            <img src="/logo.png" alt="PolyWeather" className="h-8 w-auto object-contain" />
+    <div className="min-h-screen bg-[#fbfbfa] text-slate-950 antialiased">
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-[#fbfbfa]/90 backdrop-blur-xl">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
+          <Link href="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
+            <img src="/logo.png" alt="PolyWeather" className="h-7 w-auto object-contain" />
           </Link>
-          <nav className="hidden items-center gap-7 text-sm font-semibold text-slate-600 md:flex">
+
+          <nav className="hidden items-center gap-7 text-sm font-medium text-slate-500 md:flex">
             <a href="#platform" className="hover:text-slate-950">
-              {isEn ? "Platform" : "平台简介"}
+              {isEn ? "Platform" : "平台"}
             </a>
             <a href="#coverage" className="hover:text-slate-950">
-              {isEn ? "Data Coverage" : "数据覆盖"}
+              {isEn ? "Data" : "数据"}
             </a>
             <a href="#pricing" className="hover:text-slate-950">
-              {isEn ? "Pricing" : "价格说明"}
+              {isEn ? "Pricing" : "定价"}
             </a>
           </nav>
-          <div className="flex items-center gap-3">
+
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-300 bg-white p-1 text-xs font-bold text-slate-500 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
               onClick={toggleLocale}
+              className="inline-flex h-9 cursor-pointer items-center gap-1 rounded-md border border-slate-200 bg-white px-1 text-xs font-semibold text-slate-500 shadow-sm hover:border-slate-300"
             >
-              <span className={`px-2 py-1 rounded-md transition-colors ${!isEn ? "bg-blue-50 text-blue-700 font-bold" : "hover:text-slate-800"}`}>中文</span>
-              <span className={`px-2 py-1 rounded-md transition-colors ${isEn ? "bg-blue-50 text-blue-700 font-bold" : "hover:text-slate-800"}`}>EN</span>
+              <span className={`rounded px-2 py-1 ${!isEn ? "bg-slate-900 text-white" : ""}`}>中</span>
+              <span className={`rounded px-2 py-1 ${isEn ? "bg-slate-900 text-white" : ""}`}>EN</span>
             </button>
+
             {!authChecked ? (
-              <div className="h-9 w-24 animate-pulse rounded-lg bg-slate-100" />
+              <div className="h-9 w-24 animate-pulse rounded-md bg-slate-200" />
             ) : isAuthenticated ? (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <Link
                   href="/terminal"
-                  className="inline-flex items-center gap-2 rounded-lg border border-blue-700 bg-blue-600 px-3 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
+                  className="inline-flex h-9 items-center gap-2 rounded-md bg-slate-950 px-3 text-sm font-semibold text-white hover:bg-slate-800"
                 >
-                  {isEn ? "Enter Product" : "进入产品"}
-                  <ArrowRight size={15} />
+                  {isEn ? "Open" : "进入"}
+                  <ArrowRight size={14} />
                 </Link>
                 <Link
                   href="/account"
-                  className="grid h-9 w-9 place-items-center rounded-full bg-slate-200 text-slate-900 border border-slate-300 hover:bg-slate-300 transition-colors"
-                  title={isEn ? "Account Settings" : "账户设置"}
+                  className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-slate-300 hover:text-slate-950"
+                  title={isEn ? "Account" : "账户"}
                 >
-                  <svg className="h-5 w-5 text-slate-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                  </svg>
+                  <Users size={15} />
                 </Link>
               </div>
             ) : (
               <>
                 <Link
                   href="/auth/login?next=%2Fterminal"
-                  className="hidden rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-400 hover:text-slate-950 sm:inline-flex"
+                  className="hidden h-9 items-center rounded-md px-3 text-sm font-semibold text-slate-600 hover:text-slate-950 sm:inline-flex"
                 >
                   {isEn ? "Log in" : "登录"}
                 </Link>
                 <Link
                   href="/auth/login?next=%2Fterminal&mode=signup"
-                  className="hidden rounded-lg bg-slate-950 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 sm:inline-flex"
+                  className="inline-flex h-9 items-center gap-2 rounded-md bg-slate-950 px-3 text-sm font-semibold text-white hover:bg-slate-800"
                 >
-                  {isEn ? "Sign Up" : "注册"}
-                </Link>
-                <Link
-                  href="/auth/login?next=%2Fterminal"
-                  className="inline-flex items-center gap-2 rounded-lg border border-blue-700 bg-blue-600 px-3 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
-                >
-                  {isEn ? "Enter Product" : "进入产品"}
-                  <ArrowRight size={15} />
+                  {isEn ? "Start" : "开始使用"}
+                  <ArrowRight size={14} />
                 </Link>
               </>
             )}
@@ -188,249 +250,226 @@ function InstitutionalLandingScreen() {
       </header>
 
       <main>
-        <section className="mx-auto grid min-h-[calc(100vh-64px)] max-w-7xl items-center gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
-          <div className="animate-fade-in">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-200/60 bg-blue-50/80 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide text-blue-700 shadow-sm backdrop-blur-sm animate-fade-up [animation-delay:150ms] opacity-0">
-              <LockKeyhole size={14} className="text-blue-600" />
-              {isEn ? "Paid professional dashboard" : "付费专业气象决策台"}
-            </div>
-            <h1 className="max-w-3xl text-4xl font-black leading-[1.1] tracking-tight text-slate-900 sm:text-5xl lg:text-[4rem] lg:leading-[1.05] animate-fade-up [animation-delay:300ms] opacity-0">
-              {isEn ? (
-                <>
-                  Institutional weather intelligence for{" "}
-                  <span className="inline-block text-transparent bg-clip-text bg-[linear-gradient(to_right,#2563eb,#8b5cf6,#2563eb)] bg-[length:200%_auto] animate-gradient">
-                    professional teams.
-                  </span>
-                </>
-              ) : (
-                <>
-                  面向专业团队的机构级{" "}
-                  <span className="inline-block text-transparent bg-clip-text bg-[linear-gradient(to_right,#2563eb,#8b5cf6,#2563eb)] bg-[length:200%_auto] animate-gradient pb-2">
-                    天气决策台
-                  </span>
-                </>
-              )}
-            </h1>
-            <p className="mt-6 max-w-2xl text-base leading-relaxed text-slate-500 sm:text-lg animate-fade-up [animation-delay:450ms] opacity-0">
-              {isEn
-                ? "PolyWeather turns live METAR observations, DEB forecast blends, model probabilities, and deviation verification logic into one professional decision workspace."
-                : "PolyWeather 将 METAR 机场实测、DEB 智能融合预报、模型概率及偏差校验逻辑整合于一体，打造气象风险管理专业决策环境。"}
-            </p>
-            <div className="mt-10 flex flex-col gap-4 sm:flex-row animate-fade-up [animation-delay:600ms] opacity-0">
-              <Link
-                href={authChecked && isAuthenticated ? "/terminal" : "/auth/login?next=%2Fterminal"}
-                className="group inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-blue-700 bg-blue-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition-all hover:bg-blue-700 hover:shadow-blue-600/30 hover:-translate-y-0.5"
-              >
-                {isEn ? "Enter product" : "进入产品决策台"}
-                <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
-              </Link>
-              <Link
-                href="/account"
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-6 py-3 text-sm font-bold text-slate-800 shadow-sm transition-all hover:border-slate-400 hover:bg-slate-50 hover:text-slate-950 hover:-translate-y-0.5"
-              >
-                {isEn ? "Subscribe / Manage account" : "订阅服务 / 管理账户"}
-              </Link>
-            </div>
-            <p className="mt-5 text-xs font-medium text-slate-400 animate-fade-up [animation-delay:750ms] opacity-0">
-              {isEn
-                ? "No free product access. Subscription is required before the terminal opens."
-                : "无免费公开产品通道。在使用决策台前必须先登录并开通订阅。"}
-            </p>
-          </div>
-
-          <div className="overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.16)] animate-fade-up [animation-delay:650ms] opacity-0">
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-              <div className="flex items-center gap-2 text-sm font-bold">
-                <LineChart size={16} className="text-blue-700" />
-                {isEn ? "Realtime Terminal" : "实时终端"}
-              </div>
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                {isEn ? "Real product screenshot" : "真实产品截图"}
-              </div>
-            </div>
-            <div className="bg-slate-50 p-2 sm:p-3">
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <img
-                  src="/static/web.png"
-                  alt={isEn ? "PolyWeather realtime terminal screenshot" : "PolyWeather 实时终端截图"}
-                  className="block h-auto w-full object-contain"
-                  loading="eager"
-                  decoding="async"
-                />
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="platform" className="border-y border-slate-200 bg-white">
-          <div className="mx-auto grid max-w-7xl gap-4 px-4 py-10 sm:px-6 md:grid-cols-3 lg:px-8">
-            {platformCards.map(({ body, icon: Icon, title }, i) => (
-              <article
-                key={title}
-                className="rounded-xl border border-slate-200 bg-slate-50 p-5 animate-fade-up opacity-0 transition-all hover:-translate-y-1 hover:shadow-md hover:border-slate-300 duration-300"
-                style={{ animationDelay: `${200 + i * 150}ms`, animationFillMode: "forwards" }}
-              >
-                <Icon className="mb-4 text-blue-700" size={22} />
-                <h2 className="text-lg font-bold">{title}</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-600">{body}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section id="coverage" className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 overflow-hidden">
-          <div className="mb-7 flex flex-col justify-between gap-3 md:flex-row md:items-end animate-fade-up opacity-0" style={{ animationDelay: "300ms", animationFillMode: "forwards" }}>
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-blue-700">
-                {isEn ? "Data Coverage" : "数据覆盖范围"}
+        <section className="relative overflow-hidden border-b border-slate-200 px-4 pb-16 pt-20 sm:px-6 sm:pt-24">
+          <WeatherWorkflowIllustration isEn={isEn} />
+          <div className="relative z-10 mx-auto max-w-6xl">
+            <div className="mx-auto max-w-3xl text-center">
+              <h1 className="text-5xl font-black leading-[1.04] tracking-tight text-slate-950 sm:text-6xl lg:text-7xl">
+                PolyWeather
+              </h1>
+              <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-slate-600 sm:text-xl">
+                {isEn
+                  ? "A calmer way to read airport weather, model forecasts, and intraday risk before the market moves."
+                  : "用更轻松的方式阅读机场天气、模型预报和日内风险，在市场变化前完成判断。"}
               </p>
-              <h2 className="mt-3 text-3xl font-black sm:text-4xl">
-                {isEn ? "Everything weather intelligence users need in one place." : "气象决策分析人员所需的一切，在此集结。"}
+              <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+                <Link
+                  href={authChecked && isAuthenticated ? "/terminal" : "/auth/login?next=%2Fterminal"}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-slate-950 px-5 text-sm font-bold text-white shadow-sm hover:bg-slate-800"
+                >
+                  {isEn ? "Open product" : "进入产品"}
+                  <ArrowRight size={15} />
+                </Link>
+                <Link
+                  href="/account"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm hover:border-slate-300 hover:text-slate-950"
+                >
+                  {isEn ? "Subscribe / account" : "订阅 / 账户"}
+                </Link>
+              </div>
+              <p className="mt-4 text-sm text-slate-500">
+                {isEn
+                  ? "Start with a one-time 3-day trial. Trial access matches Pro except for the paid Telegram group link."
+                  : "新用户可先领一次 3 天试用。试用期权益和 Pro 一致，除了不显示付费 Telegram 群链接。"}
+              </p>
+            </div>
+
+            <div className="mx-auto mt-14 max-w-5xl rounded-lg border border-slate-200 bg-white p-2 shadow-[0_24px_70px_rgba(15,23,42,0.12)]">
+              <div className="flex h-9 items-center gap-2 border-b border-slate-200 px-3">
+                <span className="h-2.5 w-2.5 rounded-full bg-[#ff6b6b]" />
+                <span className="h-2.5 w-2.5 rounded-full bg-[#ffd166]" />
+                <span className="h-2.5 w-2.5 rounded-full bg-[#06d6a0]" />
+                <span className="ml-2 text-xs font-semibold text-slate-400">polyweather.app/terminal</span>
+              </div>
+              <img
+                src="/static/web.png"
+                alt={isEn ? "PolyWeather terminal preview" : "PolyWeather 终端预览"}
+                className="mt-2 aspect-[16/9] w-full rounded-md border border-slate-100 object-cover object-top"
+              />
+            </div>
+
+            <div className="mx-auto mt-8 grid max-w-5xl gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {heroStats.map((item) => (
+                <div key={item.label} className="rounded-lg border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                  <div className="font-mono text-lg font-black text-slate-950">{item.value}</div>
+                  <div className="mt-1 text-xs font-medium text-slate-500">{item.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="platform" className="border-b border-slate-200 bg-white px-4 py-20 sm:px-6">
+          <div className="mx-auto max-w-6xl">
+            <div className="mx-auto max-w-2xl text-center">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+                {isEn ? "Platform" : "平台能力"}
+              </p>
+              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+                {isEn ? "Like a tidy workspace for weather decisions." : "像整理好的工作区一样阅读天气决策。"}
               </h2>
             </div>
-            <p className="max-w-xl text-sm leading-relaxed text-slate-500">
-              {isEn
-                ? "Built for repeat professional use: dense tables, clear status chips, restrained color, and fast entry into paid workflows."
-                : "专为高频专业决策设计：高数据密度、直观的状态徽标、严谨的数据呈现，助您快速进入分析流。"}
-            </p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {coverage.map((item, i) => (
-              <div
-                key={item}
-                className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm font-semibold shadow-sm animate-fade-up opacity-0 transition-all hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5 duration-300"
-                style={{ animationDelay: `${400 + i * 100}ms`, animationFillMode: "forwards" }}
-              >
-                <CheckCircle2 size={17} className="text-emerald-600" />
-                {item}
-              </div>
-            ))}
+
+            <div className="mt-12 grid gap-4 md:grid-cols-3">
+              {platformCards.map(({ body, icon: Icon, title }) => (
+                <article key={title} className="rounded-lg border border-slate-200 bg-[#fbfbfa] p-6 shadow-sm">
+                  <div className="mb-5 inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-800">
+                    <Icon size={19} />
+                  </div>
+                  <h3 className="text-lg font-black text-slate-950">{title}</h3>
+                  <p className="mt-3 text-sm leading-7 text-slate-600">{body}</p>
+                </article>
+              ))}
+            </div>
           </div>
         </section>
 
-        <section id="pricing" className="border-t border-slate-200 bg-white py-20">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">
-              {isEn ? "PRICING" : "价格方案"}
-            </p>
-            <h2 className="mt-3 text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
-              {isEn ? "Simple, transparent pricing" : "简单透明的定价"}
-            </h2>
-            <p className="mx-auto mt-4 max-w-2xl text-base text-slate-500">
-              {isEn
-                ? "Start with a 3-day trial, then choose monthly or quarterly Pro access."
-                : "新用户可先领 3 天免费试用，再选择月付或季度 Pro。"}
-            </p>
+        <section id="coverage" className="border-b border-slate-200 bg-[#fbfbfa] px-4 py-20 sm:px-6">
+          <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+                {isEn ? "Data Coverage" : "数据覆盖"}
+              </p>
+              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+                {isEn ? "Keep the signal clear and the page approachable." : "信号清楚，页面也可以亲和。"}
+              </h2>
+            </div>
 
-            <div className="mx-auto mt-16 grid max-w-5xl gap-4 text-left md:grid-cols-3">
-              <div className="relative flex flex-col rounded-2xl border border-slate-200 bg-slate-50 p-6 shadow-sm animate-fade-up opacity-0" style={{ animationDelay: "420ms", animationFillMode: "forwards" }}>
-                <div className="mb-4 inline-flex w-fit rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+            <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {coverage.map((item, index) => (
+                  <div key={item} className="flex items-center gap-3 rounded-md border border-slate-100 bg-[#fbfbfa] px-4 py-3">
+                    <span className={`grid h-8 w-8 place-items-center rounded-md ${
+                      index % 3 === 0
+                        ? "bg-sky-100 text-sky-700"
+                        : index % 3 === 1
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-amber-100 text-amber-700"
+                    }`}>
+                      {index % 3 === 0 ? <CloudSun size={16} /> : index % 3 === 1 ? <LineChart size={16} /> : <Bell size={16} />}
+                    </span>
+                    <span className="text-sm font-semibold text-slate-700">{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="pricing" className="bg-white px-4 py-20 sm:px-6">
+          <div className="mx-auto max-w-6xl">
+            <div className="mx-auto max-w-2xl text-center">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+                {isEn ? "Pricing" : "定价"}
+              </p>
+              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+                {isEn ? "Try first, upgrade when it becomes part of your workflow." : "先试用，确认进入工作流后再开通 Pro。"}
+              </h2>
+              <p className="mt-4 text-base leading-8 text-slate-600">
+                {isEn
+                  ? "New users receive one 3-day trial. Monthly and quarterly Pro unlock the full entitlement set."
+                  : "新用户可领取一次 3 天试用，月付与季度 Pro 解锁完整权益。"}
+              </p>
+            </div>
+
+            <div className="mt-12 grid gap-4 md:grid-cols-3">
+              <div className="flex flex-col rounded-lg border border-slate-200 bg-[#fbfbfa] p-6 shadow-sm">
+                <div className="flex items-center gap-2 text-sm font-bold text-emerald-700">
+                  <Clock3 size={16} />
                   {isEn ? "Trial" : "试用"}
                 </div>
-                <h3 className="text-2xl font-black text-slate-900">
+                <h3 className="mt-5 text-2xl font-black text-slate-950">
                   {isEn ? "3-day free trial" : "3 天免费试用"}
                 </h3>
-                <p className="mt-3 text-sm leading-relaxed text-slate-500">
+                <p className="mt-3 flex-1 text-sm leading-7 text-slate-600">
                   {isEn
-                    ? "New users receive one signup trial for core product workflows. Paid Telegram group, high-frequency refresh, batch alerts, and API access require Pro."
-                    : "新用户首次注册/登录后自动开通一次 3 天免费试用，可体验核心产品；付费 Telegram 群、高频刷新、批量提醒与 API 需 Pro。"}
+                    ? "Automatically granted once after signup. Trial access matches Pro, except trial accounts do not see the paid Telegram group link."
+                    : "注册后自动开通一次，体验核心产品；试用期权益和 Pro 一致，除了不显示付费 Telegram 群链接。"}
                 </p>
                 <Link
                   href="/auth/login?next=%2Fterminal&mode=signup"
-                  className="mt-auto inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-700 bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-700"
+                  className="mt-8 inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white text-sm font-bold text-slate-700 shadow-sm hover:border-slate-300 hover:text-slate-950"
                 >
                   {isEn ? "Start trial" : "开始试用"}
                   <ArrowRight size={15} />
                 </Link>
               </div>
 
-              <div className="relative flex flex-col rounded-2xl border-2 border-blue-500/80 bg-white p-6 shadow-[0_20px_60px_rgba(37,99,235,0.12)] animate-fade-up opacity-0 transition-transform hover:-translate-y-1 hover:shadow-[0_30px_80px_rgba(37,99,235,0.18)] duration-500" style={{ animationDelay: "500ms", animationFillMode: "forwards" }}>
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-1.5 text-xs font-bold uppercase tracking-widest text-white shadow-md">
-                  {isEn ? "Pro Workspace" : "专业决策分析台"}
+              <div className="relative flex flex-col rounded-lg border-2 border-slate-950 bg-white p-6 shadow-[8px_8px_0_rgba(15,23,42,0.12)]">
+                <div className="absolute right-4 top-4 rounded-md bg-[#fff3b0] px-2 py-1 text-xs font-black text-slate-900">
+                  {isEn ? "Popular" : "常用"}
                 </div>
-
-                <div>
-                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">
-                    {isEn ? "Pro Monthly" : "Pro 月付"}
-                  </h3>
-                  <p className="mt-3 text-sm text-slate-500 leading-relaxed">
-                    {isEn
-                      ? "Full Pro access for 30 days, including paid Telegram group eligibility."
-                      : "完整 Pro 权限 30 天，包含付费 Telegram 群准入资格。"}
-                  </p>
-                  <div className="mt-6 flex items-baseline">
-                    <span className="text-5xl font-black tracking-tight text-slate-900">
-                      29.9
-                    </span>
-                    <span className="ml-1 text-sm font-semibold text-slate-500">
-                      USDC / 30 天
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-slate-400">
-                    {isEn
-                      ? "Referral first-month price: 26.9 USDC."
-                      : "使用邀请码首月 26.9 USDC。"}
-                  </p>
-
-                  <div className="mt-8 border-t border-slate-100 pt-6">
-                    <ul className="space-y-4">
-                      {(isEn ? PRO_FEATURES_EN : PRO_FEATURES_ZH).map((feature) => (
-                        <li key={feature} className="flex items-start gap-3">
-                          <Check size={16} className="mt-0.5 shrink-0 text-blue-600" />
-                          <span className="text-sm text-slate-700 font-semibold leading-normal">
-                            {feature}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                <div className="flex items-center gap-2 text-sm font-bold text-sky-700">
+                  <Database size={16} />
+                  {isEn ? "Pro" : "Pro"}
                 </div>
-
-                <div className="mt-8">
-                  <Link
-                    href="/account"
-                    className="group flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 py-3.5 text-center text-sm font-bold text-white shadow-lg shadow-slate-900/20 transition-all hover:scale-[1.02] hover:shadow-slate-900/30 hover:from-blue-600 hover:to-indigo-600 duration-300 active:scale-[0.98]"
-                  >
-                    <span>{isEn ? "Subscribe monthly" : "订阅月付 Pro"}</span>
-                    <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
-                  </Link>
-                  <p className="mt-4 text-center text-xs text-slate-400">
-                    {isEn
-                      ? "Login required. Payment via USDC on Polygon."
-                      : "需先登录。通过 Polygon 链 USDC 支付。"}
-                  </p>
+                <h3 className="mt-5 text-2xl font-black text-slate-950">
+                  {isEn ? "Pro Monthly" : "Pro 月付"}
+                </h3>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  {isEn
+                    ? "Full Pro access for 30 days, including paid Telegram group eligibility."
+                    : "完整 Pro 权限 30 天，包含付费 Telegram 群准入资格。"}
+                </p>
+                <div className="mt-7 flex items-baseline gap-2">
+                  <span className="font-mono text-5xl font-black text-slate-950">29.9</span>
+                  <span className="text-sm font-semibold text-slate-500">USDC / 30 天</span>
                 </div>
+                <p className="mt-2 text-xs font-semibold text-slate-500">
+                  {isEn ? "Referral first month: 26.9 USDC" : "使用邀请码首月 26.9 USDC"}
+                </p>
+                <ul className="mt-7 space-y-3 border-t border-slate-200 pt-6">
+                  {(isEn ? PRO_FEATURES_EN : PRO_FEATURES_ZH).map((feature) => (
+                    <li key={feature} className="flex items-start gap-3">
+                      <Check size={15} className="mt-0.5 shrink-0 text-slate-500" />
+                      <span className="text-sm leading-6 text-slate-700">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/account"
+                  className="mt-8 inline-flex h-11 items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-bold text-white hover:bg-slate-800"
+                >
+                  {isEn ? "Subscribe monthly" : "订阅月付 Pro"}
+                  <ArrowRight size={15} />
+                </Link>
               </div>
 
-              <div className="relative flex flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm animate-fade-up opacity-0" style={{ animationDelay: "580ms", animationFillMode: "forwards" }}>
-                <div className="mb-4 inline-flex w-fit rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">
+              <div className="flex flex-col rounded-lg border border-slate-200 bg-[#fbfbfa] p-6 shadow-sm">
+                <div className="flex items-center gap-2 text-sm font-bold text-amber-700">
+                  <LineChart size={16} />
                   {isEn ? "Quarterly" : "季度"}
                 </div>
-                <h3 className="text-2xl font-black text-slate-900">
+                <h3 className="mt-5 text-2xl font-black text-slate-950">
                   {isEn ? "Pro Quarterly" : "Pro 季度"}
                 </h3>
-                <p className="mt-3 text-sm leading-relaxed text-slate-500">
+                <p className="mt-3 flex-1 text-sm leading-7 text-slate-600">
                   {isEn
-                    ? "90 days of Pro access at a lower effective monthly cost."
-                    : "90 天 Pro 权限，适合稳定使用，折算月成本更低。"}
+                    ? "90 days of Pro access for users with steady usage. Lower cost per month."
+                    : "90 天 Pro 权限，适合稳定使用的个人和团队，折算月成本更低。"}
                 </p>
-                <div className="mt-6 flex items-baseline">
-                  <span className="text-5xl font-black tracking-tight text-slate-900">
-                    79.9
-                  </span>
-                  <span className="ml-1 text-sm font-semibold text-slate-500">
-                    USDC / 90 天
-                  </span>
+                <div className="mt-7 flex items-baseline gap-2">
+                  <span className="font-mono text-5xl font-black text-slate-950">79.9</span>
+                  <span className="text-sm font-semibold text-slate-500">USDC / 90 天</span>
                 </div>
-                <div className="mt-6 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-800">
+                <div className="mt-5 rounded-md border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600">
                   {isEn
-                    ? "Invite reward: invited user pays Pro, referrer gets +3 days Pro."
-                    : "邀请奖励：被邀请人成功付费后，邀请人 +3 天 Pro。"}
+                    ? "Invite reward: referrer gets +3 days Pro when invitee subscribes."
+                    : "邀请奖励：被邀请人付费后，邀请人 +3 天 Pro。"}
                 </div>
                 <Link
                   href="/account"
-                  className="mt-auto inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
+                  className="mt-8 inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white text-sm font-bold text-slate-700 shadow-sm hover:border-slate-300 hover:text-slate-950"
                 >
                   {isEn ? "Choose quarterly" : "选择季度 Pro"}
                   <ArrowRight size={15} />

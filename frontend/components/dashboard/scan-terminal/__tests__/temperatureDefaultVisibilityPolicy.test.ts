@@ -192,8 +192,34 @@ export function runTests() {
     "settlement/HKO observations should be visible by default",
   );
   assert(
-    __isTemperatureSeriesVisibleByDefaultForTest("guangzhou", "metar"),
-    "METAR observations should be visible by default",
+    !__isTemperatureSeriesVisibleByDefaultForTest("guangzhou", "metar"),
+    "METAR observations should be hidden by default outside Hong Kong and Shenzhen",
+  );
+  assert(
+    !activeDefaultSeries.some((item) => item.key === "metar"),
+    "non-Hong Kong/Shenzhen airport METAR observations should not affect the active chart series by default",
+  );
+  assert(
+    __getVisibleTemperatureSeriesForTest("guangzhou", series, { metar: true }).some(
+      (item) => item.key === "metar",
+    ),
+    "users should still be able to enable the hidden airport METAR series from the legend",
+  );
+  assert(
+    __isTemperatureSeriesVisibleByDefaultForTest("hong kong", "metar"),
+    "Hong Kong METAR/HKO observations should remain visible by default",
+  );
+  assert(
+    __isTemperatureSeriesVisibleByDefaultForTest("Lau Fau Shan", "madis"),
+    "Lau Fau Shan HKO observations should remain visible by default",
+  );
+  assert(
+    __isTemperatureSeriesVisibleByDefaultForTest("shenzhen", "madis"),
+    "Shenzhen HKO observations should remain visible by default",
+  );
+  assert(
+    !__isTemperatureSeriesVisibleByDefaultForTest("new york", "madis"),
+    "non-Hong Kong/Shenzhen airport-primary observations should be hidden by default",
   );
   assert(
     !__isTemperatureSeriesVisibleByDefaultForTest("guangzhou", "model_curve_ECMWF"),
@@ -1160,6 +1186,50 @@ export function runTests() {
       (item) => item.key === "current" && item.values.filter((value: number | null) => value !== null).length >= 2,
     ),
     "long-lived chart with only one fresh observation should keep a renderable current reference line instead of an invisible single-point series",
+  );
+
+  const istanbulMgmOnlySeries = __buildTemperatureChartDataForTest(
+    {
+      city: "istanbul",
+      local_date: "2026-05-29",
+      local_time: "15:10",
+      tz_offset_seconds: 3 * 60 * 60,
+      current_temp: 18,
+      current_max_so_far: 18,
+      airport: "LTFM",
+    } as any,
+    {
+      localTime: "15:10",
+      times: [],
+      temps: [],
+      airportPrimary: {
+        source_code: "mgm",
+        source_label: "MGM",
+        temp: 18.2,
+        obs_time: "2026-05-29T12:10:00Z",
+      },
+      airportCurrent: {
+        source_code: "metar",
+        source_label: "METAR",
+        temp: 17,
+        obs_time: "14:50",
+      },
+      airportPrimaryTodayObs: [
+        { time: "2026-05-29T12:00:00Z", temp: 18 },
+        { time: "2026-05-29T12:05:00Z", temp: 18.1 },
+      ],
+    } as any,
+    "1D",
+  );
+  const istanbulMgmSeries = seriesByKey(istanbulMgmOnlySeries.series as any, "madis") as any;
+  assert(istanbulMgmSeries?.label === "MGM", "Istanbul airport-primary series should be labeled MGM");
+  assert(
+    istanbulMgmSeries.values.some((value: number | null) => value === 18.2),
+    "MGM series should append the latest MGM airport-primary observation",
+  );
+  assert(
+    !istanbulMgmSeries.values.some((value: number | null) => value === 17),
+    "MGM series should not mix METAR airportCurrent points into the MGM airport-station line",
   );
 
   const chengduMergedHourly = __mergePatchIntoHourlyForTest(

@@ -1042,6 +1042,18 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             mgm_data.get("obs_time"),
             source="mgm",
         )
+        try:
+            today_obs = self._update_official_today_obs(
+                source_code="mgm",
+                station_code=str(istno),
+                obs_iso=mgm_data.get("obs_time"),
+                current_temp=mgm_current.get("temp"),
+                utc_offset_seconds=get_city_utc_offset_seconds(city_lower),
+            )
+            if today_obs:
+                results["mgm_today_obs"] = today_obs
+        except Exception:
+            logger.exception("mgm today observation update failed for city={}", city_lower)
         # Log airport obs for high-freq monitoring (Ankara 17128)
         try:
             DBManager().append_airport_obs(
