@@ -92,6 +92,26 @@ export function runTests() {
     path.join(projectRoot, "app", "api", "auth", "me", "route.ts"),
     "utf8",
   );
+  const paymentConfigRouteSource = fs.readFileSync(
+    path.join(projectRoot, "app", "api", "payments", "config", "route.ts"),
+    "utf8",
+  );
+  const paymentRuntimeRouteSource = fs.readFileSync(
+    path.join(projectRoot, "app", "api", "payments", "runtime", "route.ts"),
+    "utf8",
+  );
+  const backendAuthSource = fs.readFileSync(
+    path.join(projectRoot, "lib", "backend-auth.ts"),
+    "utf8",
+  );
+  const opsAdminSource = fs.readFileSync(
+    path.join(projectRoot, "lib", "ops-admin.ts"),
+    "utf8",
+  );
+  const supabaseServerSource = fs.readFileSync(
+    path.join(projectRoot, "lib", "supabase", "server.ts"),
+    "utf8",
+  );
   const subscriptionsPageSource = fs.readFileSync(
     path.join(
       projectRoot,
@@ -99,6 +119,26 @@ export function runTests() {
       "ops",
       "subscriptions",
       "SubscriptionsPageClient.tsx",
+    ),
+    "utf8",
+  );
+  const membershipsPageSource = fs.readFileSync(
+    path.join(
+      projectRoot,
+      "components",
+      "ops",
+      "memberships",
+      "MembershipsPageClient.tsx",
+    ),
+    "utf8",
+  );
+  const opsOverviewSource = fs.readFileSync(
+    path.join(
+      projectRoot,
+      "components",
+      "ops",
+      "overview",
+      "OverviewPageClient.tsx",
     ),
     "utf8",
   );
@@ -158,6 +198,11 @@ export function runTests() {
     "account snapshot loader must retry with a refreshed Supabase token when local user exists but /api/auth/me reports unauthenticated",
   );
   assert(
+    !hookSource.includes(".auth.getUser()") &&
+      hookSource.includes(".auth.getSession()"),
+    "account snapshot loader must use the local Supabase session instead of calling getUser before /api/auth/me validates the bearer",
+  );
+  assert(
     subscriptionsPageSource.includes("getSupabaseBrowserClient") &&
       subscriptionsPageSource.includes("refreshSession") &&
       subscriptionsPageSource.includes("Authorization") &&
@@ -166,15 +211,104 @@ export function runTests() {
     "ops manual subscription grant/extend must send the Supabase bearer token to avoid 401 when route cookies are stale",
   );
   assert(
+    membershipsPageSource.includes("opsApi.membershipsOverview") &&
+      !membershipsPageSource.includes('fetch("/api/ops/memberships/growth?days=90"') &&
+      !membershipsPageSource.includes("Promise.all"),
+    "ops memberships page must load memberships and growth through one overview proxy request to avoid duplicate Supabase session/subscription reads",
+  );
+  assert(
+    opsOverviewSource.includes("opsApi.membershipsOverview(200, 30)") &&
+      !opsOverviewSource.includes("opsApi.memberships()") &&
+      !opsOverviewSource.includes("opsApi.membershipsGrowth(30)"),
+    "ops overview page must reuse membershipsOverview for table and growth data instead of issuing separate membership/growth proxy requests",
+  );
+  assert(
     grantRouteSource.includes("grantSubscriptionDirectly") &&
       grantRouteSource.includes("res.status === 404") &&
-      grantRouteSource.includes('"status": "active"'),
-    "ops subscription grant route must fall back to direct Supabase grant when the VPS backend route is missing",
+      grantRouteSource.includes('"status": "active"') &&
+      grantRouteSource.includes("/rest/v1/profiles") &&
+      grantRouteSource.includes("select=id&email=eq.") &&
+      grantRouteSource.indexOf("/rest/v1/profiles") <
+        grantRouteSource.indexOf("/auth/v1/admin/users") &&
+      grantRouteSource.includes('Prefer: "return=minimal"'),
+    "ops subscription grant route must fall back to direct Supabase grant and resolve users via indexed profiles before Auth Admin",
   );
   assert(
     authMeRouteSource.includes("if ((res.status === 401 || res.status === 403) && auth.authUserId)") &&
       authMeRouteSource.includes("degraded_reason: `backend_${res.status}`") &&
       authMeRouteSource.includes("subscription_active: null"),
     "auth profile proxy must preserve authenticated identity with unknown subscription on backend 401/403 instead of forcing a false paywall",
+  );
+  assert(
+    (authMeRouteSource.match(/buildBackendRequestHeaders\(req\)/g) || []).length === 1 &&
+      authMeRouteSource.includes("let auth: Awaited<ReturnType<typeof buildBackendRequestHeaders>> | null = null"),
+    "auth profile proxy must build backend auth headers once and reuse them on timeout/error fallback",
+  );
+  assert(
+    authMeRouteSource.includes("hasSupabaseServerEnv()") &&
+      authMeRouteSource.includes("!auth.authUserId") &&
+      authMeRouteSource.includes('req.headers.get("authorization")') &&
+      authMeRouteSource.indexOf("authenticated: false") <
+        authMeRouteSource.indexOf("await fetch(`${API_BASE}/api/auth/me`"),
+    "auth profile proxy must return unauthenticated locally for no-session Supabase requests instead of forwarding the backend entitlement token",
+  );
+  assert(
+    backendAuthSource.includes("if (incomingAuth) {") &&
+      backendAuthSource.indexOf("if (incomingAuth) {") <
+        backendAuthSource.indexOf("const supabase = createSupabaseRouteClient"),
+    "backend proxy must forward caller bearer tokens before creating a Supabase route client to avoid duplicate getUser calls",
+  );
+  assert(
+    backendAuthSource.includes("headers.set(FORWARDED_SUPABASE_USER_ID_HEADER") &&
+      backendAuthSource.includes("headers.set(FORWARDED_SUPABASE_EMAIL_HEADER") &&
+      backendAuthSource.indexOf("headers.set(FORWARDED_SUPABASE_USER_ID_HEADER") >
+        backendAuthSource.indexOf("const sessionUser = session?.user"),
+    "backend proxy must forward Supabase session user id/email with the backend token so Python can skip duplicate /auth/v1/user validation",
+  );
+  assert(
+    backendAuthSource.includes("function hasSupabaseSessionCookie") &&
+      backendAuthSource.includes("String(cookie.value || \"\").trim()") &&
+      backendAuthSource.includes("if (!hasSupabaseSessionCookie(request))") &&
+      backendAuthSource.indexOf("if (!hasSupabaseSessionCookie(request))") <
+        backendAuthSource.indexOf("const supabase = createSupabaseRouteClient"),
+    "backend proxy must skip Supabase route client/session reads when no auth cookie is present",
+  );
+  assert(
+    !backendAuthSource.includes(".auth.getUser()") &&
+      backendAuthSource.includes(".auth.getSession()"),
+    "backend proxy must not call Supabase getUser before forwarding a bearer token that the backend validates again",
+  );
+  assert(
+    supabaseServerSource.includes("export function hasSupabaseSessionCookieValues") &&
+      supabaseServerSource.includes('name === "supabase-auth-token"') &&
+      supabaseServerSource.includes('name.startsWith("sb-")') &&
+      supabaseServerSource.indexOf("if (!hasSupabaseSessionCookieValues") <
+        supabaseServerSource.indexOf("const supabase = createSupabaseServerClient"),
+    "Supabase server helpers must expose one cookie detector and skip refresh getUser calls when no session cookie exists",
+  );
+  assert(
+    supabaseServerSource.includes(".auth.getClaims()") &&
+      !supabaseServerSource.includes(".auth.getUser()"),
+    "Supabase middleware refresh must validate JWTs with getClaims so asymmetric JWT projects avoid per-request /auth/v1/user reads",
+  );
+  assert(
+    opsAdminSource.includes("hasSupabaseSessionCookieValues") &&
+      opsAdminSource.indexOf("if (!hasSupabaseSessionCookieValues") <
+        opsAdminSource.indexOf("const supabase = createSupabaseServerClient"),
+    "ops admin page gate must redirect before creating a Supabase client/getUser call when no session cookie exists",
+  );
+  assert(
+    opsAdminSource.includes(".auth.getClaims()") &&
+      !opsAdminSource.includes(".auth.getUser()") &&
+      opsAdminSource.includes("claims?.email"),
+    "ops admin page gate must use verified JWT claims instead of a per-page getUser auth lookup",
+  );
+  assert(
+    paymentConfigRouteSource.includes("includeSupabaseIdentity: false"),
+    "payment config proxy must not read Supabase session cookies for public cached config",
+  );
+  assert(
+    paymentRuntimeRouteSource.includes("includeSupabaseIdentity: false"),
+    "payment runtime proxy must not read Supabase session cookies because backend entitlement token already protects the runtime status payload",
   );
 }

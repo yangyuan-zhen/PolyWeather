@@ -41,12 +41,9 @@ export function MembershipsPageClient() {
   const load = async () => {
     setLoading(true);
     try {
-      const [mData, gData] = await Promise.all([
-        opsApi.memberships(),
-        fetch("/api/ops/memberships/growth?days=90", { cache: "no-store" }).then(r => r.ok ? r.json() : null),
-      ]);
-      setMemberships((mData as unknown as { memberships?: MembershipEntry[] }).memberships ?? []);
-      setGrowth((gData as { daily?: GrowthPoint[] })?.daily ?? []);
+      const data = await opsApi.membershipsOverview(200, 90);
+      setMemberships((data as unknown as { memberships?: MembershipEntry[] }).memberships ?? []);
+      setGrowth((data as { daily?: GrowthPoint[] })?.daily ?? []);
     } catch { /* */ }
     setLoading(false);
   };

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import {
   buildCityDetailProxyCachePolicy,
   buildForceRefreshProxyCachePolicy,
@@ -22,4 +24,32 @@ export function runTests() {
 
   const scanForced = buildForceRefreshProxyCachePolicy("true", 10);
   assert.equal(scanForced.fetchMode, "no-store");
+
+  const overviewProxySource = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      "app",
+      "api",
+      "scan",
+      "terminal",
+      "overview",
+      "route.ts",
+    ),
+    "utf8",
+  );
+  assert.match(
+    overviewProxySource,
+    /buildBackendRequestHeaders\(req,\s*\{\s*includeSupabaseIdentity:\s*false,\s*\}\)/s,
+    "scan terminal overview proxy must not read Supabase sessions for public overview payloads",
+  );
+
+  const priorityWarmProxySource = fs.readFileSync(
+    path.join(process.cwd(), "lib", "system-priority-proxy.ts"),
+    "utf8",
+  );
+  assert.match(
+    priorityWarmProxySource,
+    /buildBackendRequestHeaders\(req,\s*\{\s*includeSupabaseIdentity:\s*false,\s*\}\)/s,
+    "priority warm proxy must not read Supabase sessions for backend-token warm hints",
+  );
 }

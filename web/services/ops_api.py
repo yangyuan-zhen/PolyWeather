@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any, Dict
 
 from fastapi import HTTPException, Request
+import requests as _requests
 
 from src.database.db_manager import DBManager
 from web.core import GrantPointsRequest
@@ -29,19 +31,46 @@ def get_ops_weekly_leaderboard(request: Request, limit: int = 20) -> Dict[str, A
     return {"leaderboard": db.get_weekly_leaderboard(limit=limit)}
 
 
-def list_ops_memberships(request: Request, limit: int = 200) -> Dict[str, Any]:
-    _require_ops(request)
-    db = DBManager()
-    if getattr(legacy_routes.PAYMENT_CHECKOUT, "enabled", False):
-        try:
-            legacy_routes.PAYMENT_CHECKOUT.reconcile_recent_intents(
-                limit=min(max(int(limit or 200), 20), 200)
-            )
-        except Exception:
-            pass
-    subscriptions = legacy_routes.SUPABASE_ENTITLEMENT.list_active_subscriptions(
-        limit=limit
+def _list_active_subscriptions_with_windows(
+    limit: int,
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], bool]:
+    active_window_query = getattr(
+        legacy_routes.SUPABASE_ENTITLEMENT,
+        "list_active_subscription_windows",
+        None,
     )
+    if not callable(active_window_query):
+        return [], {}, False
+    try:
+        active_window_payload = active_window_query(limit=limit)
+    except Exception:
+        return [], {}, False
+    if not isinstance(active_window_payload, dict):
+        return [], {}, False
+
+    active_window_subscriptions = active_window_payload.get("subscriptions")
+    active_window_windows = active_window_payload.get("windows")
+    if not isinstance(active_window_subscriptions, list):
+        return [], {}, False
+    if not active_window_subscriptions and not (
+        isinstance(active_window_windows, dict) and active_window_windows
+    ):
+        return [], {}, False
+
+    subscriptions = [
+        item for item in active_window_subscriptions if isinstance(item, dict)
+    ]
+    subscription_windows = (
+        active_window_windows if isinstance(active_window_windows, dict) else {}
+    )
+    return subscriptions, subscription_windows, True
+
+
+def _build_membership_rows(
+    db: DBManager,
+    subscriptions: list[dict[str, Any]],
+    subscription_windows: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
     subscription_user_ids = [str(item.get("user_id") or "") for item in subscriptions]
     user_map = db.get_users_by_supabase_user_ids(subscription_user_ids)
     unresolved_user_ids = [
@@ -56,18 +85,17 @@ def list_ops_memberships(request: Request, limit: int = 200) -> Dict[str, Any]:
     auth_user_map = legacy_routes.SUPABASE_ENTITLEMENT.get_auth_users(
         unresolved_user_ids
     )
+    if not subscription_windows:
+        subscription_windows = legacy_routes.SUPABASE_ENTITLEMENT.list_subscription_windows(
+            subscription_user_ids,
+            bypass_cache=True,
+        )
     deduped: dict[str, dict] = {}
     for item in subscriptions:
         user_id = str(item.get("user_id") or "").strip().lower()
         local_user = user_map.get(user_id, {})
         auth_user = auth_user_map.get(user_id, {})
-        subscription_window = (
-            legacy_routes.SUPABASE_ENTITLEMENT.get_subscription_window(
-                user_id,
-                respect_requirement=False,
-                bypass_cache=True,
-            )
-        )
+        subscription_window = subscription_windows.get(user_id, {})
         current_expires_at = item.get("expires_at")
         total_expires_at = (
             subscription_window.get("total_expires_at")
@@ -112,22 +140,20 @@ def list_ops_memberships(request: Request, limit: int = 200) -> Dict[str, Any]:
         current_expires = str(row.get("expires_at") or "")
         if existing is None or current_expires > existing_expires:
             deduped[user_id] = row
-    rows = sorted(
+    return sorted(
         deduped.values(),
         key=lambda item: str(item.get("expires_at") or ""),
     )
-    return {"memberships": rows}
 
 
-def get_ops_memberships_growth(request: Request, days: int = 90) -> dict[str, Any]:
-    _require_ops(request)
+def _build_membership_growth(
+    subscriptions: list[dict[str, Any]],
+    days: int,
+) -> dict[str, Any]:
     from collections import defaultdict
     from datetime import datetime, timedelta
 
     safe_days = max(7, min(365, int(days or 90)))
-    subscriptions = legacy_routes.SUPABASE_ENTITLEMENT.list_active_subscriptions(
-        limit=5000
-    )
     now = datetime.utcnow()
     cutoff = now - timedelta(days=safe_days)
 
@@ -176,6 +202,78 @@ def get_ops_memberships_growth(request: Request, days: int = 90) -> dict[str, An
         cursor += timedelta(days=1)
 
     return {"days": safe_days, "daily": daily}
+
+
+def list_ops_memberships(request: Request, limit: int = 200) -> Dict[str, Any]:
+    _require_ops(request)
+    db = DBManager()
+    reconcile_enabled = (
+        str(os.getenv("POLYWEATHER_OPS_MEMBERSHIPS_RECONCILE_ENABLED") or "")
+        .strip()
+        .lower()
+        in {"1", "true", "yes", "on"}
+    )
+    if reconcile_enabled and getattr(legacy_routes.PAYMENT_CHECKOUT, "enabled", False):
+        try:
+            legacy_routes.PAYMENT_CHECKOUT.reconcile_recent_intents(
+                limit=min(max(int(limit or 200), 20), 200)
+            )
+        except Exception:
+            pass
+    subscriptions, subscription_windows, used_active_window_query = (
+        _list_active_subscriptions_with_windows(limit)
+    )
+    if not used_active_window_query:
+        subscriptions = legacy_routes.SUPABASE_ENTITLEMENT.list_active_subscriptions(
+            limit=limit
+        )
+    return {
+        "memberships": _build_membership_rows(
+            db,
+            subscriptions,
+            subscription_windows,
+        )
+    }
+
+
+def get_ops_memberships_growth(request: Request, days: int = 90) -> dict[str, Any]:
+    _require_ops(request)
+
+    subscriptions, _, used_active_window_query = _list_active_subscriptions_with_windows(
+        limit=5000
+    )
+    if not used_active_window_query:
+        subscriptions = legacy_routes.SUPABASE_ENTITLEMENT.list_active_subscriptions(
+            limit=5000
+        )
+    return _build_membership_growth(subscriptions, days)
+
+
+def get_ops_memberships_overview(
+    request: Request,
+    limit: int = 200,
+    days: int = 90,
+) -> dict[str, Any]:
+    _require_ops(request)
+    db = DBManager()
+    safe_limit = max(1, min(int(limit or 200), 1000))
+    query_limit = max(safe_limit, 5000)
+    subscriptions, subscription_windows, used_active_window_query = (
+        _list_active_subscriptions_with_windows(limit=query_limit)
+    )
+    if not used_active_window_query:
+        subscriptions = legacy_routes.SUPABASE_ENTITLEMENT.list_active_subscriptions(
+            limit=query_limit
+        )
+    membership_subscriptions = subscriptions[:safe_limit]
+    return {
+        "memberships": _build_membership_rows(
+            db,
+            membership_subscriptions,
+            subscription_windows,
+        ),
+        **_build_membership_growth(subscriptions, days),
+    }
 
 
 def list_ops_payment_incidents(
@@ -415,6 +513,59 @@ def update_ops_config(request: Request, key: str, value: str) -> dict[str, Any]:
 # ── Subscriptions ───────────────────────────────────────────────────
 
 
+def _supabase_service_headers(
+    service_role_key: str,
+    *,
+    prefer: str | None = None,
+) -> dict[str, str]:
+    headers = {
+        "apikey": service_role_key,
+        "Authorization": f"Bearer {service_role_key}",
+        "Content-Type": "application/json",
+    }
+    if prefer:
+        headers["Prefer"] = prefer
+    return headers
+
+
+def _lookup_supabase_user_id_by_email(
+    supabase_url: str,
+    service_role_key: str,
+    email: str,
+) -> str:
+    normalized_email = str(email or "").strip().lower()
+    if not normalized_email:
+        return ""
+    base = str(supabase_url or "").strip().rstrip("/")
+    headers = _supabase_service_headers(service_role_key)
+
+    profile_resp = _requests.get(
+        f"{base}/rest/v1/profiles",
+        headers=headers,
+        params={
+            "select": "id",
+            "email": f"eq.{normalized_email}",
+            "limit": "1",
+        },
+        timeout=10,
+    )
+    if profile_resp.ok:
+        profiles = profile_resp.json() if profile_resp.content else []
+        if isinstance(profiles, list) and profiles:
+            user_id = str((profiles[0] or {}).get("id") or "").strip()
+            if user_id:
+                return user_id
+
+    user_resp = _requests.get(
+        f"{base}/auth/v1/admin/users",
+        headers=headers,
+        params={"filter": f"email.eq.{normalized_email}"},
+        timeout=10,
+    )
+    users = user_resp.json().get("users", []) if user_resp.ok else []
+    return str(users[0].get("id") or "").strip() if users else ""
+
+
 def grant_ops_subscription(
     request: Request,
     email: str,
@@ -423,9 +574,7 @@ def grant_ops_subscription(
     deduct_points: int = 0,
 ) -> dict[str, Any]:
     _require_ops(request)
-    import os
     from datetime import datetime, timedelta
-    import requests as _requests
 
     supabase_url = str(os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
     service_role_key = str(os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
@@ -444,22 +593,11 @@ def grant_ops_subscription(
     if not normalized_email:
         raise HTTPException(status_code=400, detail="email is required")
 
-    headers = {
-        "apikey": service_role_key,
-        "Authorization": f"Bearer {service_role_key}",
-        "Content-Type": "application/json",
-        "Prefer": "return=representation",
-    }
-
-    # Look up user by email
-    user_resp = _requests.get(
-        f"{supabase_url}/auth/v1/admin/users",
-        headers=headers,
-        params={"filter": f"email.eq.{normalized_email}"},
-        timeout=10,
+    user_id = _lookup_supabase_user_id_by_email(
+        supabase_url,
+        service_role_key,
+        normalized_email,
     )
-    users = user_resp.json().get("users", []) if user_resp.ok else []
-    user_id = users[0].get("id") if users else None
     if not user_id:
         raise HTTPException(
             status_code=404, detail=f"user not found: {normalized_email}"
@@ -481,7 +619,7 @@ def grant_ops_subscription(
 
     resp = _requests.post(
         f"{supabase_url}/rest/v1/subscriptions",
-        headers=headers,
+        headers=_supabase_service_headers(service_role_key, prefer="return=minimal"),
         json=payload,
         timeout=10,
     )
@@ -489,6 +627,7 @@ def grant_ops_subscription(
         raise HTTPException(
             status_code=500, detail=f"Supabase insert failed: {resp.text[:200]}"
         )
+    legacy_routes.SUPABASE_ENTITLEMENT.invalidate_subscription_cache(user_id)
 
     result: dict[str, Any] = {
         "ok": True,
@@ -516,9 +655,7 @@ def extend_ops_subscription(
     additional_days: int = 30,
 ) -> dict[str, Any]:
     _require_ops(request)
-    import os
     from datetime import datetime, timedelta
-    import requests as _requests
 
     supabase_url = str(os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
     service_role_key = str(os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
@@ -530,20 +667,26 @@ def extend_ops_subscription(
     if not normalized_email:
         raise HTTPException(status_code=400, detail="email is required")
 
-    headers = {
-        "apikey": service_role_key,
-        "Authorization": f"Bearer {service_role_key}",
-        "Content-Type": "application/json",
-        "Prefer": "return=representation",
-    }
+    headers = _supabase_service_headers(service_role_key)
+
+    user_id = _lookup_supabase_user_id_by_email(
+        supabase_url,
+        service_role_key,
+        normalized_email,
+    )
+    if not user_id:
+        raise HTTPException(
+            status_code=404, detail=f"user not found: {normalized_email}"
+        )
 
     # Find latest active subscription
     subs_resp = _requests.get(
         f"{supabase_url}/rest/v1/subscriptions",
         headers=headers,
         params={
-            "select": "*",
-            "email": f"eq.{normalized_email}",
+            "select": "id,expires_at",
+            "user_id": f"eq.{user_id}",
+            "status": "eq.active",
             "order": "expires_at.desc",
             "limit": "1",
         },
@@ -565,11 +708,12 @@ def extend_ops_subscription(
 
     patch_resp = _requests.patch(
         f"{supabase_url}/rest/v1/subscriptions?id=eq.{sub['id']}",
-        headers=headers,
+        headers=_supabase_service_headers(service_role_key, prefer="return=minimal"),
         json={"expires_at": new_expiry},
         timeout=10,
     )
     if patch_resp.ok:
+        legacy_routes.SUPABASE_ENTITLEMENT.invalidate_subscription_cache(user_id)
         return {
             "ok": True,
             "email": normalized_email,
@@ -587,8 +731,6 @@ def get_ops_user_subscriptions(
 ) -> dict[str, Any]:
     """Return ALL subscription rows for a user (by email), regardless of status."""
     _require_ops(request)
-    import os
-    import requests as _requests
 
     supabase_url = str(os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
     service_role_key = str(os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
@@ -599,21 +741,13 @@ def get_ops_user_subscriptions(
     if not normalized_email:
         raise HTTPException(status_code=400, detail="email is required")
 
-    headers = {
-        "apikey": service_role_key,
-        "Authorization": f"Bearer {service_role_key}",
-        "Content-Type": "application/json",
-    }
+    headers = _supabase_service_headers(service_role_key)
 
-    # Resolve user_id from email via auth admin API
-    user_resp = _requests.get(
-        f"{supabase_url}/auth/v1/admin/users",
-        headers=headers,
-        params={"filter": f"email.eq.{normalized_email}"},
-        timeout=10,
+    user_id = _lookup_supabase_user_id_by_email(
+        supabase_url,
+        service_role_key,
+        normalized_email,
     )
-    users = user_resp.json().get("users", []) if user_resp.ok else []
-    user_id = users[0].get("id") if users else None
     if not user_id:
         raise HTTPException(
             status_code=404, detail=f"user not found: {normalized_email}"
@@ -1134,11 +1268,13 @@ def get_ops_telegram_audit(request: Request) -> Dict[str, Any]:
     anomalies = []
     valid_members = []
 
-    from web.services.ops_api import legacy_routes
-
-    active_subs = legacy_routes.SUPABASE_ENTITLEMENT.list_active_subscriptions(
+    active_subs, _, used_active_window_query = _list_active_subscriptions_with_windows(
         limit=5000
     )
+    if not used_active_window_query:
+        active_subs = legacy_routes.SUPABASE_ENTITLEMENT.list_active_subscriptions(
+            limit=5000
+        )
     active_subs_map = {}
     for sub in active_subs:
         uid = str(sub.get("user_id") or "").strip().lower()

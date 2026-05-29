@@ -151,14 +151,17 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
     setErrorText("");
     const attempt = async (retry: boolean): Promise<void> => {
       const userPromise = supabaseReady
-        ? getSupabaseBrowserClient().auth.getUser()
-        : Promise.resolve({ data: { user: null as User | null } });
+        ? getSupabaseBrowserClient()
+            .auth.getSession()
+            .then(({ data: { session } }) => session?.user ?? null)
+            .catch(() => null as User | null)
+        : Promise.resolve(null as User | null);
       const authHeadersPromise = buildAuthedHeaders(false);
       const backendPromise = authHeadersPromise.then((headers) =>
         fetch("/api/auth/me", { cache: "no-store", headers }),
       );
-      const [userResult, backendResult] = await Promise.all([userPromise, backendPromise]);
-      setUser(userResult.data?.user ?? null);
+      const [localUser, backendResult] = await Promise.all([userPromise, backendPromise]);
+      setUser(localUser);
       if (!backendResult.ok) {
         if (retry && backendResult.status === 401) {
           await new Promise((r) => setTimeout(r, 1200));
@@ -171,7 +174,7 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
       if (
         retry &&
         supabaseReady &&
-        userResult.data?.user &&
+        localUser &&
         backendJson.authenticated === false
       ) {
         try {

@@ -69,6 +69,14 @@ class SupabaseEntitlementService:
         self._identity_cache_lock = threading.Lock()
         self._sub_cache: Dict[str, Dict[str, object]] = {}
         self._sub_cache_lock = threading.Lock()
+        self._latest_subscription_cache: Dict[str, Dict[str, object]] = {}
+        self._latest_subscription_cache_lock = threading.Lock()
+        self._active_subscription_bool_cache: Dict[str, Dict[str, object]] = {}
+        self._active_subscription_bool_cache_lock = threading.Lock()
+        self._active_subscriptions_cache: Dict[str, object] = {}
+        self._active_subscriptions_cache_lock = threading.Lock()
+        self._auth_users_cache: Dict[str, Dict[str, object]] = {}
+        self._auth_users_cache_lock = threading.Lock()
 
     def invalidate_subscription_cache(self, user_id: str) -> None:
         key = str(user_id or "").strip()
@@ -76,6 +84,12 @@ class SupabaseEntitlementService:
             return
         with self._sub_cache_lock:
             self._sub_cache.pop(key, None)
+        with self._latest_subscription_cache_lock:
+            self._latest_subscription_cache.pop(key, None)
+        with self._active_subscription_bool_cache_lock:
+            self._active_subscription_bool_cache.pop(key, None)
+        with self._active_subscriptions_cache_lock:
+            self._active_subscriptions_cache.clear()
 
     @property
     def configured(self) -> bool:
@@ -89,6 +103,9 @@ class SupabaseEntitlementService:
 
     def _entitlement_events_endpoint(self) -> str:
         return f"{self.supabase_url}/rest/v1/entitlement_events"
+
+    def _profiles_endpoint(self) -> str:
+        return f"{self.supabase_url}/rest/v1/profiles"
 
     def _request_headers_for_user(self, access_token: str) -> Dict[str, str]:
         return {
@@ -116,8 +133,7 @@ class SupabaseEntitlementService:
             cached = self._identity_cache.get(access_token)
             if cached and now_ts - float(cached.get("ts") or 0) < self.cache_ttl_sec:
                 identity = cached.get("identity")
-                if isinstance(identity, SupabaseIdentity):
-                    return identity
+                return identity if isinstance(identity, SupabaseIdentity) else None
 
         if not self.configured:
             return None
@@ -129,10 +145,21 @@ class SupabaseEntitlementService:
                 timeout=self.timeout_sec,
             )
             if response.status_code != 200:
+                if response.status_code in {401, 403}:
+                    with self._identity_cache_lock:
+                        self._identity_cache[access_token] = {
+                            "identity": None,
+                            "ts": now_ts,
+                        }
                 return None
             data = response.json() if response.content else {}
             user_id = str(data.get("id") or "").strip()
             if not user_id:
+                with self._identity_cache_lock:
+                    self._identity_cache[access_token] = {
+                        "identity": None,
+                        "ts": now_ts,
+                    }
                 return None
             
             # Extract points from user_metadata
@@ -176,17 +203,26 @@ class SupabaseEntitlementService:
                 if isinstance(row, dict):
                     return row
                 return None
+        with self._active_subscription_bool_cache_lock:
+            cached_bool = self._active_subscription_bool_cache.get(user_id)
+            if (
+                cached_bool
+                and now_ts - float(cached_bool.get("ts") or 0) < self.sub_cache_ttl_sec
+                and cached_bool.get("active") is False
+            ):
+                return None
 
         try:
             now = datetime.now(timezone.utc)
             now_iso = now.isoformat()
             params = {
-                "select": "id,user_id,status,plan_code,starts_at,expires_at",
+                "select": "plan_code,source,starts_at,expires_at",
                 "user_id": f"eq.{user_id}",
                 "status": "eq.active",
+                "starts_at": f"lte.{now_iso}",
                 "expires_at": f"gt.{now_iso}",
                 "order": "expires_at.desc",
-                "limit": "20",
+                "limit": "1",
             }
             response = requests.get(
                 self._subscription_endpoint(),
@@ -205,13 +241,12 @@ class SupabaseEntitlementService:
             else:
                 data = response.json() if response.content else []
                 rows = [item for item in data if isinstance(item, dict)] if isinstance(data, list) else []
-                row = self._pick_latest_current_subscription(rows, now=now)
+                row = rows[0] if rows else None
 
             with self._sub_cache_lock:
                 self._sub_cache[user_id] = {
                     "active": bool(row),
                     "row": row,
-                    "rows": rows,
                     "ts": now_ts,
                 }
             return row
@@ -238,16 +273,12 @@ class SupabaseEntitlementService:
                     rows = cached.get("rows")
                     if isinstance(rows, list):
                         return [row for row in rows if isinstance(row, dict)]
-                    row = cached.get("row")
-                    if isinstance(row, dict):
-                        return [row]
-                    return []
 
         try:
             now = datetime.now(timezone.utc)
             now_iso = now.isoformat()
             params = {
-                "select": "id,user_id,status,plan_code,starts_at,expires_at,source,created_at,updated_at",
+                "select": "plan_code,source,starts_at,expires_at",
                 "user_id": f"eq.{user_id}",
                 "status": "eq.active",
                 "expires_at": f"gt.{now_iso}",
@@ -290,9 +321,15 @@ class SupabaseEntitlementService:
     ) -> Optional[Dict[str, object]]:
         if not user_id or not self.service_role_key:
             return None
+        now_ts = time.time()
+        with self._latest_subscription_cache_lock:
+            cached = self._latest_subscription_cache.get(user_id)
+            if cached and now_ts - float(cached.get("ts") or 0) < self.sub_cache_ttl_sec:
+                row = cached.get("row")
+                return row if isinstance(row, dict) else None
         try:
             params = {
-                "select": "id,user_id,status,plan_code,starts_at,expires_at,source,created_at,updated_at",
+                "select": "plan_code,starts_at,expires_at",
                 "user_id": f"eq.{user_id}",
                 "order": "created_at.desc",
                 "limit": "1",
@@ -312,7 +349,13 @@ class SupabaseEntitlementService:
                 return None
             data = response.json() if response.content else []
             row = data[0] if isinstance(data, list) and data else None
-            return row if isinstance(row, dict) else None
+            result = row if isinstance(row, dict) else None
+            with self._latest_subscription_cache_lock:
+                self._latest_subscription_cache[user_id] = {
+                    "row": result,
+                    "ts": now_ts,
+                }
+            return result
         except Exception as exc:
             logger.warning(f"supabase subscription history query error user_id={user_id}: {exc}")
             return None
@@ -359,7 +402,68 @@ class SupabaseEntitlementService:
         return None
 
     def _query_active_subscription(self, user_id: str) -> bool:
-        return self._query_latest_active_subscription(user_id) is not None
+        if not user_id:
+            return False
+        if not self.service_role_key:
+            logger.warning("SUPABASE_SERVICE_ROLE_KEY is missing")
+            return False
+
+        now_ts = time.time()
+        with self._sub_cache_lock:
+            cached_detail = self._sub_cache.get(user_id)
+            if cached_detail and now_ts - float(cached_detail.get("ts") or 0) < self.sub_cache_ttl_sec:
+                rows = cached_detail.get("rows")
+                if isinstance(rows, list):
+                    return self._pick_latest_current_subscription(
+                        [row for row in rows if isinstance(row, dict)]
+                    ) is not None
+                if "row" in cached_detail:
+                    return isinstance(cached_detail.get("row"), dict)
+
+        with self._active_subscription_bool_cache_lock:
+            cached = self._active_subscription_bool_cache.get(user_id)
+            if cached and now_ts - float(cached.get("ts") or 0) < self.sub_cache_ttl_sec:
+                return bool(cached.get("active"))
+
+        try:
+            now = datetime.now(timezone.utc)
+            now_iso = now.isoformat()
+            params = {
+                "select": "expires_at",
+                "user_id": f"eq.{user_id}",
+                "status": "eq.active",
+                "starts_at": f"lte.{now_iso}",
+                "expires_at": f"gt.{now_iso}",
+                "order": "expires_at.desc",
+                "limit": "1",
+            }
+            response = requests.get(
+                self._subscription_endpoint(),
+                headers=self._request_headers_for_service_role(),
+                params=params,
+                timeout=self.timeout_sec,
+            )
+            if response.status_code != 200:
+                logger.warning(
+                    "supabase active subscription bool query failed user_id={} status={}",
+                    user_id,
+                    response.status_code,
+                )
+                active = False
+            else:
+                data = response.json() if response.content else []
+                rows = [row for row in data if isinstance(row, dict)] if isinstance(data, list) else []
+                active = bool(rows)
+
+            with self._active_subscription_bool_cache_lock:
+                self._active_subscription_bool_cache[user_id] = {
+                    "active": bool(active),
+                    "ts": now_ts,
+                }
+            return bool(active)
+        except Exception as exc:
+            logger.warning(f"supabase active subscription bool query error user_id={user_id}: {exc}")
+            return False
 
     def get_latest_active_subscription(
         self,
@@ -385,9 +489,14 @@ class SupabaseEntitlementService:
         if respect_requirement and not self.require_subscription:
             return {}
         rows = self._query_active_subscription_rows(user_id, bypass_cache=bypass_cache)
+        return self._subscription_window_from_rows(rows)
+
+    def _subscription_window_from_rows(
+        self,
+        rows: List[Dict[str, object]],
+    ) -> Dict[str, object]:
         if not rows:
             return {}
-
         now = datetime.now(timezone.utc)
         current = self._pick_latest_current_subscription(rows, now=now)
         total_expiry: Optional[datetime] = None
@@ -422,6 +531,153 @@ class SupabaseEntitlementService:
             "rows": rows,
         }
 
+    def list_subscription_windows(
+        self,
+        user_ids: List[str],
+        bypass_cache: bool = False,
+    ) -> Dict[str, Dict[str, object]]:
+        keys: List[str] = []
+        for item in user_ids or []:
+            key = str(item or "").strip().lower()
+            if key and key not in keys:
+                keys.append(key)
+        if not keys:
+            return {}
+
+        out: Dict[str, Dict[str, object]] = {}
+        if not bypass_cache:
+            missing: List[str] = []
+            now_ts = time.time()
+            with self._sub_cache_lock:
+                for key in keys:
+                    cached = self._sub_cache.get(key)
+                    if cached and now_ts - float(cached.get("ts") or 0) < self.sub_cache_ttl_sec:
+                        rows = cached.get("rows")
+                        if isinstance(rows, list):
+                            out[key] = self._subscription_window_from_rows(
+                                [row for row in rows if isinstance(row, dict)]
+                            )
+                            continue
+                    missing.append(key)
+            keys = missing
+            if not keys:
+                return out
+
+        if not self.service_role_key:
+            logger.warning("SUPABASE_SERVICE_ROLE_KEY is missing")
+            return out
+
+        try:
+            now = datetime.now(timezone.utc)
+            now_iso = now.isoformat()
+            params = {
+                "select": "user_id,plan_code,source,starts_at,expires_at",
+                "user_id": f"in.({','.join(keys)})",
+                "status": "eq.active",
+                "expires_at": f"gt.{now_iso}",
+                "order": "user_id.asc,expires_at.desc",
+                "limit": str(max(1, min(len(keys) * 20, 1000))),
+            }
+            response = requests.get(
+                self._subscription_endpoint(),
+                headers=self._request_headers_for_service_role(),
+                params=params,
+                timeout=self.timeout_sec,
+            )
+            if response.status_code != 200:
+                logger.warning(
+                    "supabase subscription window batch query failed users={} status={}",
+                    len(keys),
+                    response.status_code,
+                )
+                return out
+
+            data = response.json() if response.content else []
+            rows = [row for row in data if isinstance(row, dict)] if isinstance(data, list) else []
+            grouped: Dict[str, List[Dict[str, object]]] = {key: [] for key in keys}
+            for row in rows:
+                key = str(row.get("user_id") or "").strip().lower()
+                if key in grouped:
+                    grouped[key].append(row)
+
+            now_ts = time.time()
+            with self._sub_cache_lock:
+                for key, user_rows in grouped.items():
+                    current_row = self._pick_latest_current_subscription(user_rows, now=now)
+                    self._sub_cache[key] = {
+                        "active": bool(current_row),
+                        "row": current_row,
+                        "rows": user_rows,
+                        "ts": now_ts,
+                    }
+                    out[key] = self._subscription_window_from_rows(user_rows)
+            return out
+        except Exception as exc:
+            logger.warning(f"supabase subscription window batch query error users={len(keys)}: {exc}")
+            return out
+
+    def list_active_subscription_windows(self, limit: int = 200) -> Dict[str, object]:
+        if not self.service_role_key:
+            logger.warning("SUPABASE_SERVICE_ROLE_KEY is missing")
+            return {"subscriptions": [], "windows": {}}
+        safe_limit = max(1, min(int(limit or 200), 1000))
+        try:
+            now = datetime.now(timezone.utc)
+            now_iso = now.isoformat()
+            params = {
+                "select": "user_id,plan_code,source,starts_at,expires_at",
+                "status": "eq.active",
+                "expires_at": f"gt.{now_iso}",
+                "order": "user_id.asc,expires_at.desc",
+                "limit": str(max(1, min(safe_limit * 20, 5000))),
+            }
+            response = requests.get(
+                self._subscription_endpoint(),
+                headers=self._request_headers_for_service_role(),
+                params=params,
+                timeout=self.timeout_sec,
+            )
+            if response.status_code != 200:
+                logger.warning(
+                    "supabase active subscription window query failed status={}",
+                    response.status_code,
+                )
+                return {"subscriptions": [], "windows": {}}
+            data = response.json() if response.content else []
+            rows = [row for row in data if isinstance(row, dict)] if isinstance(data, list) else []
+            grouped: Dict[str, List[Dict[str, object]]] = {}
+            for row in rows:
+                key = str(row.get("user_id") or "").strip().lower()
+                if key:
+                    grouped.setdefault(key, []).append(row)
+
+            windows: Dict[str, Dict[str, object]] = {}
+            current_rows: List[Dict[str, object]] = []
+            now_ts = time.time()
+            with self._sub_cache_lock:
+                for key, user_rows in grouped.items():
+                    current_row = self._pick_latest_current_subscription(user_rows, now=now)
+                    self._sub_cache[key] = {
+                        "active": bool(current_row),
+                        "row": current_row,
+                        "rows": user_rows,
+                        "ts": now_ts,
+                    }
+                    windows[key] = self._subscription_window_from_rows(user_rows)
+                    if isinstance(current_row, dict):
+                        current_rows.append(current_row)
+            current_rows.sort(key=lambda row: str(row.get("expires_at") or ""))
+            current_rows = current_rows[:safe_limit]
+            with self._active_subscriptions_cache_lock:
+                self._active_subscriptions_cache[str(safe_limit)] = {
+                    "rows": current_rows,
+                    "ts": now_ts,
+                }
+            return {"subscriptions": current_rows, "windows": windows}
+        except Exception as exc:
+            logger.warning(f"supabase active subscription window query error: {exc}")
+            return {"subscriptions": [], "windows": {}}
+
     def has_active_subscription(
         self,
         user_id: str,
@@ -435,12 +691,20 @@ class SupabaseEntitlementService:
         if not self.service_role_key:
             logger.warning("SUPABASE_SERVICE_ROLE_KEY is missing")
             return []
+        safe_limit = max(1, min(int(limit or 200), 1000))
+        cache_key = str(safe_limit)
+        now_ts = time.time()
+        with self._active_subscriptions_cache_lock:
+            cached = self._active_subscriptions_cache.get(cache_key)
+            if isinstance(cached, dict) and now_ts - float(cached.get("ts") or 0) < self.sub_cache_ttl_sec:
+                rows = cached.get("rows")
+                if isinstance(rows, list):
+                    return [row for row in rows if isinstance(row, dict)]
         try:
             now = datetime.now(timezone.utc)
-            safe_limit = max(1, min(int(limit or 200), 1000))
             now_iso = now.isoformat()
             params = {
-                "select": "id,user_id,status,plan_code,starts_at,expires_at",
+                "select": "user_id,plan_code,starts_at,expires_at",
                 "status": "eq.active",
                 "expires_at": f"gt.{now_iso}",
                 "order": "expires_at.asc",
@@ -461,11 +725,17 @@ class SupabaseEntitlementService:
             data = response.json() if response.content else []
             if not isinstance(data, list):
                 return []
-            return [
+            rows = [
                 row
                 for row in data
                 if isinstance(row, dict) and self._is_subscription_started(row, now=now)
             ]
+            with self._active_subscriptions_cache_lock:
+                self._active_subscriptions_cache[cache_key] = {
+                    "rows": rows,
+                    "ts": now_ts,
+                }
+            return rows
         except Exception as exc:
             logger.warning(f"supabase active subscriptions query error: {exc}")
             return []
@@ -484,6 +754,29 @@ class SupabaseEntitlementService:
             return {}
 
         out: Dict[str, Dict[str, object]] = {}
+        now_ts = time.time()
+        missing_keys: List[str] = []
+        with self._auth_users_cache_lock:
+            for key in keys:
+                cached = self._auth_users_cache.get(key)
+                if cached and now_ts - float(cached.get("ts") or 0) < self.sub_cache_ttl_sec:
+                    user = cached.get("user")
+                    if isinstance(user, dict):
+                        out[key] = dict(user)
+                        continue
+                missing_keys.append(key)
+        keys = missing_keys
+        if not keys:
+            return out
+
+        profile_users = self._get_profile_users(keys)
+        if profile_users:
+            self._remember_auth_users(profile_users)
+            out.update(profile_users)
+        keys = [key for key in keys if key not in out]
+        if not keys:
+            return out
+
         for user_id in keys:
             try:
                 response = requests.get(
@@ -506,9 +799,69 @@ class SupabaseEntitlementService:
                     "email": str(payload.get("email") or "").strip(),
                     "created_at": payload.get("created_at"),
                 }
+                self._remember_auth_users({user_id: out[user_id]})
             except Exception as exc:
                 logger.warning(f"supabase admin user query error user_id={user_id}: {exc}")
         return out
+
+    def _remember_auth_users(self, users: Dict[str, Dict[str, object]]) -> None:
+        if not users:
+            return
+        now_ts = time.time()
+        with self._auth_users_cache_lock:
+            for raw_key, user in users.items():
+                key = str(raw_key or "").strip().lower()
+                if key and isinstance(user, dict):
+                    self._auth_users_cache[key] = {
+                        "user": dict(user),
+                        "ts": now_ts,
+                    }
+            if len(self._auth_users_cache) > 4096:
+                oldest_keys = sorted(
+                    self._auth_users_cache,
+                    key=lambda key: float(
+                        self._auth_users_cache[key].get("ts") or 0.0
+                    ),
+                )
+                for key in oldest_keys[: len(self._auth_users_cache) - 4096]:
+                    self._auth_users_cache.pop(key, None)
+
+    def _get_profile_users(self, user_ids: List[str]) -> Dict[str, Dict[str, object]]:
+        if not user_ids or not self.service_role_key:
+            return {}
+        try:
+            response = requests.get(
+                self._profiles_endpoint(),
+                headers=self._request_headers_for_service_role(),
+                params={
+                    "select": "id,email,created_at",
+                    "id": f"in.({','.join(user_ids)})",
+                    "limit": str(max(1, min(len(user_ids), 1000))),
+                },
+                timeout=self.timeout_sec,
+            )
+            if response.status_code != 200:
+                logger.warning(
+                    "supabase profile users batch query failed users={} status={}",
+                    len(user_ids),
+                    response.status_code,
+                )
+                return {}
+            data = response.json() if response.content else []
+            rows = [row for row in data if isinstance(row, dict)] if isinstance(data, list) else []
+            out: Dict[str, Dict[str, object]] = {}
+            for row in rows:
+                user_id = str(row.get("id") or "").strip().lower()
+                if not user_id:
+                    continue
+                out[user_id] = {
+                    "email": str(row.get("email") or "").strip(),
+                    "created_at": row.get("created_at"),
+                }
+            return out
+        except Exception as exc:
+            logger.warning(f"supabase profile users batch query error users={len(user_ids)}: {exc}")
+            return {}
 
 
 SUPABASE_ENTITLEMENT = SupabaseEntitlementService()

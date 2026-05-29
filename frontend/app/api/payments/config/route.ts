@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   return proxyBackendJsonGet(req, {
     cacheControl: "public, max-age=0, s-maxage=300, stale-while-revalidate=900",
     detailLimit: 350,
-    includeSupabaseIdentity: true,
+    includeSupabaseIdentity: false,
     publicMessage: "Failed to fetch payment config",
     revalidateSeconds: 300,
     url: `${API_BASE}/api/payments/config`,

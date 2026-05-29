@@ -381,6 +381,46 @@ def test_join_request_approves_trial_user_with_queued_paid_subscription(monkeypa
     assert bot.approved_join_requests == [{"chat_id": -100123, "user_id": 12345}]
 
 
+def test_join_request_uses_subscription_window_without_latest_fallback(monkeypatch):
+    monkeypatch.setenv("POLYWEATHER_TELEGRAM_GROUP_ID", "-100123")
+    bot = DummyBot()
+    db = SimpleNamespace(list_supabase_user_ids_for_telegram=lambda telegram_id: ["user-1"])
+    io_layer = SimpleNamespace(
+        build_welcome_text=lambda: "WELCOME",
+        build_points_rank_text=lambda _user: "TOP",
+        db=db,
+    )
+
+    def _fail_latest(*_args, **_kwargs):
+        raise AssertionError("subscription window rows should avoid latest subscription fallback")
+
+    entitlement = SimpleNamespace(
+        get_subscription_window=lambda user_id, respect_requirement=False: {
+            "rows": [
+                {"plan_code": "signup_trial_3d", "source": "signup_trial"},
+            ]
+        },
+        get_latest_active_subscription=_fail_latest,
+    )
+    handler = BasicCommandHandler(
+        bot=bot,
+        io_layer=io_layer,
+        runtime_status_provider=lambda: RuntimeStatus(
+            started_at="2026-03-12 00:00:00 UTC",
+            loops=[],
+            command_access_mode="group_member",
+            protected_commands=["/city", "/deb"],
+            required_group_chat_id="-100123",
+        ),
+        entitlement_service=entitlement,
+    )
+
+    result = handler.handle_chat_join_request(_join_request())
+
+    assert result == "pending:no_active_subscription"
+    assert bot.approved_join_requests == []
+
+
 def test_join_request_can_decline_ineligible_user_when_configured(monkeypatch):
     monkeypatch.setenv("POLYWEATHER_TELEGRAM_GROUP_ID", "-100123")
     monkeypatch.setenv("POLYWEATHER_TELEGRAM_JOIN_INELIGIBLE_ACTION", "decline")

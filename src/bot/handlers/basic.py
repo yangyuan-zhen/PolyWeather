@@ -457,6 +457,7 @@ class BasicCommandHandler:
                 for row in rows:
                     if self._subscription_row_is_paid(row):
                         return True
+                return False
         if hasattr(self.entitlement_service, "get_latest_active_subscription"):
             row = self.entitlement_service.get_latest_active_subscription(
                 supabase_user_id,

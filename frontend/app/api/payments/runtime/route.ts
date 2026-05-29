@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     conditionalResponse: false,
     detailLimit: 500,
     fetchCache: "no-store",
-    includeSupabaseIdentity: true,
+    includeSupabaseIdentity: false,
     publicMessage: "Failed to fetch payment runtime",
     url: `${API_BASE}/api/payments/runtime`,
   });

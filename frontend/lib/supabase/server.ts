@@ -17,6 +17,20 @@ export function hasSupabaseServerEnv() {
   return Boolean(url && anonKey);
 }
 
+export function hasSupabaseSessionCookieValues(
+  cookies: { name: string; value: string }[],
+) {
+  return cookies.some((cookie) => {
+    const name = cookie.name.toLowerCase();
+    const value = String(cookie.value || "").trim();
+    if (!value) return false;
+    return (
+      name === "supabase-auth-token" ||
+      (name.startsWith("sb-") && name.includes("-auth-token"))
+    );
+  });
+}
+
 export function createSupabaseServerClient(
   cookieAdapter: CookieAdapter,
 ) {
@@ -79,12 +93,17 @@ export async function refreshMiddlewareSession(request: NextRequest) {
     return { response, user: null };
   }
 
+  const supabaseCookies = request.cookies.getAll().map((item) => ({
+    name: item.name,
+    value: item.value,
+  }));
+  if (!hasSupabaseSessionCookieValues(supabaseCookies)) {
+    return { response, user: null };
+  }
+
   const supabase = createSupabaseServerClient({
     getAll() {
-      return request.cookies.getAll().map((item) => ({
-        name: item.name,
-        value: item.value,
-      }));
+      return supabaseCookies;
     },
     setAll(cookiesToSet) {
       for (const cookie of cookiesToSet) {
@@ -103,11 +122,18 @@ export async function refreshMiddlewareSession(request: NextRequest) {
 
   try {
     const {
-      data: { user },
-    } = await supabase.auth.getUser();
+      data,
+      error,
+    } = await supabase.auth.getClaims();
+    if (error || !data?.claims?.sub) {
+      return { response, user: null };
+    }
+    const user = {
+      id: String(data.claims.sub || ""),
+      email: String(data.claims.email || ""),
+    };
     return { response, user };
   } catch {
     return { response, user: null };
   }
 }
-

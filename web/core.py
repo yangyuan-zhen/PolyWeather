@@ -303,8 +303,10 @@ def _resolve_weekly_profile(request: Request) -> Dict[str, Any]:
 def _assert_entitlement(request: Request) -> None:
     if SUPABASE_ENTITLEMENT.enabled:
         if _legacy_service_token_valid(request):
-            _bind_forwarded_supabase_identity(request)
-            return
+            if _bind_forwarded_supabase_identity(request):
+                return
+            if not extract_bearer_token(request.headers.get("authorization")):
+                return
         if not _SUPABASE_AUTH_REQUIRED:
             _bind_optional_supabase_identity(request)
             return
@@ -321,11 +323,19 @@ def _assert_entitlement(request: Request) -> None:
         identity = SUPABASE_ENTITLEMENT.get_identity(access_token)
         if not identity:
             raise HTTPException(status_code=401, detail="Unauthorized")
-        if not SUPABASE_ENTITLEMENT.has_active_subscription(identity.user_id):
+        skip_subscription_gate = bool(
+            getattr(request.state, "skip_subscription_gate", False)
+        )
+        if (
+            not skip_subscription_gate
+            and not SUPABASE_ENTITLEMENT.has_active_subscription(identity.user_id)
+        ):
             raise HTTPException(status_code=403, detail="Subscription required")
 
         request.state.auth_user_id = identity.user_id
         request.state.auth_email = identity.email
+        request.state.auth_points = identity.points
+        request.state.auth_created_at = identity.created_at
         from src.utils.online_tracker import record_activity
         record_activity(identity.user_id)
         return

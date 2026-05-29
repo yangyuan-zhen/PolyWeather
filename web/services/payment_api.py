@@ -27,6 +27,7 @@ def _raise_payment_error(exc: Exception) -> None:
 
 
 def _require_payment_identity(request: Request) -> Dict[str, Any]:
+    request.state.skip_subscription_gate = True
     legacy_routes._assert_entitlement(request)
     identity = legacy_routes._require_supabase_identity(request)
     user_id = str(identity.get("user_id") or "").strip()
@@ -36,7 +37,6 @@ def _require_payment_identity(request: Request) -> Dict[str, Any]:
 
 
 def get_payment_config(request: Request) -> Dict[str, Any]:
-    legacy_routes._assert_entitlement(request)
     try:
         return legacy_routes.PAYMENT_CHECKOUT.get_config_payload()
     except legacy_routes.PaymentCheckoutError as exc:

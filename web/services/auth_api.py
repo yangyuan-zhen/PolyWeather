@@ -12,9 +12,17 @@ from web.core import TelegramLoginRequest
 import web.routes as legacy_routes
 
 
-def get_auth_me_payload(request: Request) -> Dict[str, Any]:
+def _require_auth_identity_without_subscription_gate(request: Request) -> Dict[str, str]:
+    request.state.skip_subscription_gate = True
     legacy_routes._assert_entitlement(request)
-    legacy_routes._bind_optional_supabase_identity(request)
+    return legacy_routes._require_supabase_identity(request)
+
+
+def get_auth_me_payload(request: Request) -> Dict[str, Any]:
+    request.state.skip_subscription_gate = True
+    legacy_routes._assert_entitlement(request)
+    if not str(getattr(request.state, "auth_user_id", "") or "").strip():
+        legacy_routes._bind_optional_supabase_identity(request)
 
     user_id = getattr(request.state, "auth_user_id", None)
     subscription_required = bool(
@@ -31,25 +39,48 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
 
     if legacy_routes.SUPABASE_ENTITLEMENT.enabled and user_id:
         try:
-            latest_subscription = (
-                legacy_routes.SUPABASE_ENTITLEMENT.get_latest_active_subscription(
-                    user_id,
-                    respect_requirement=False,
-                )
+            subscription_window = legacy_routes.SUPABASE_ENTITLEMENT.get_subscription_window(
+                user_id,
+                respect_requirement=False,
             )
+            latest_subscription = None
+            latest_known_subscription = None
+            subscription_window_known = isinstance(subscription_window, dict)
+            if isinstance(subscription_window, dict):
+                current_subscription = subscription_window.get("current")
+                if isinstance(current_subscription, dict):
+                    latest_subscription = current_subscription
+                rows = subscription_window.get("rows")
+                if not latest_subscription and isinstance(rows, list):
+                    latest_known_subscription = next(
+                        (row for row in rows if isinstance(row, dict)),
+                        None,
+                    )
+            if (
+                not latest_subscription
+                and not latest_known_subscription
+                and not subscription_window_known
+                and not subscription_required
+            ):
+                latest_subscription = (
+                    legacy_routes.SUPABASE_ENTITLEMENT.get_latest_active_subscription(
+                        user_id,
+                        respect_requirement=False,
+                    )
+                )
 
-            latest_known_subscription = latest_subscription
+            subscription_active = bool(latest_subscription)
+            if subscription_required and not subscription_active:
+                raise HTTPException(status_code=403, detail="Subscription required")
+
+            if not latest_known_subscription:
+                latest_known_subscription = latest_subscription
             if not latest_known_subscription:
                 latest_known_subscription = (
                     legacy_routes.SUPABASE_ENTITLEMENT.get_latest_subscription_any_status(
                         user_id
                     )
                 )
-            subscription_window = legacy_routes.SUPABASE_ENTITLEMENT.get_subscription_window(
-                user_id,
-                respect_requirement=False,
-            )
-            subscription_active = bool(latest_subscription)
             if isinstance(latest_subscription, dict):
                 subscription_plan_code = latest_subscription.get("plan_code")
                 subscription_starts_at = latest_subscription.get("starts_at")
@@ -62,7 +93,11 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
                 subscription_total_expires_at = subscription_window.get("total_expires_at")
                 subscription_queued_days = int(subscription_window.get("queued_days") or 0)
                 subscription_queued_count = int(subscription_window.get("queued_count") or 0)
+        except HTTPException:
+            raise
         except Exception:
+            if subscription_required:
+                raise HTTPException(status_code=403, detail="Subscription required")
             subscription_active = None
             subscription_plan_code = None
             subscription_starts_at = None
@@ -124,8 +159,7 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
 
 
 def login_with_telegram(request: Request, body: TelegramLoginRequest) -> Dict[str, Any]:
-    legacy_routes._assert_entitlement(request)
-    identity = legacy_routes._require_supabase_identity(request)
+    identity = _require_auth_identity_without_subscription_gate(request)
     pricing = TelegramGroupPricing()
     if not pricing.configured:
         raise HTTPException(status_code=503, detail="telegram login is not configured")
@@ -156,8 +190,7 @@ def login_with_telegram(request: Request, body: TelegramLoginRequest) -> Dict[st
 
 def bind_telegram_by_token(request: Request, body) -> Dict[str, Any]:
     """Bind Telegram identity using a one-time token from the bot /bind command."""
-    legacy_routes._assert_entitlement(request)
-    identity = legacy_routes._require_supabase_identity(request)
+    identity = _require_auth_identity_without_subscription_gate(request)
 
     token = str(getattr(body, "token", "") or "").strip()
     if not token:
@@ -196,8 +229,7 @@ def bind_telegram_by_token(request: Request, body) -> Dict[str, Any]:
 
 def create_telegram_bot_bind_link(request: Request) -> Dict[str, Any]:
     """Create a one-time web-to-bot bind deep link for the authenticated account."""
-    legacy_routes._assert_entitlement(request)
-    identity = legacy_routes._require_supabase_identity(request)
+    identity = _require_auth_identity_without_subscription_gate(request)
 
     db = DBManager()
     token = db.create_web_bind_token(

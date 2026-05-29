@@ -4,6 +4,7 @@ import {
   buildBackendRequestHeaders,
 } from "@/lib/backend-auth";
 import { buildProxyExceptionResponse } from "@/lib/api-proxy";
+import { requireOpsProxyAuth } from "@/lib/ops-proxy-auth";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -17,6 +18,9 @@ export async function GET(req: NextRequest) {
 
   try {
     const auth = await buildBackendRequestHeaders(req);
+    const authError = requireOpsProxyAuth(req, auth);
+    if (authError) return authError;
+
     const res = await fetch(`${API_BASE}/api/ops/online-users`, {
       headers: auth.headers,
       cache: "no-store",

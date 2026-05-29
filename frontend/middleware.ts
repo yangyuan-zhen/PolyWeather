@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  hasSupabaseSessionCookieValues,
   hasSupabaseServerEnv,
   refreshMiddlewareSession,
 } from "@/lib/supabase/server";
@@ -33,7 +34,9 @@ function isPublicApi(pathname: string) {
     pathname === "/api/auth/me" ||
     pathname === "/api/analytics/events" ||
     pathname === "/api/cities" ||
+    pathname === "/api/payments/config" ||
     pathname === "/api/scan/terminal" ||
+    pathname === "/api/system/status" ||
     pathname === "/api/vitals" ||
     /^\/api\/city\/[^/]+$/i.test(pathname) ||
     /^\/api\/city\/[^/]+\/summary$/i.test(pathname) ||
@@ -45,10 +48,31 @@ function isPublicApi(pathname: string) {
 function shouldRefreshOptionalSupabaseSession(pathname: string) {
   return (
     pathname.startsWith("/account") ||
-    pathname.startsWith("/ops") ||
-    pathname.startsWith("/api/ops/") ||
-    pathname.startsWith("/api/payments/") ||
-    pathname === "/api/system/status"
+    pathname.startsWith("/ops")
+  );
+}
+
+function hasSupabaseSessionCookie(request: NextRequest) {
+  return hasSupabaseSessionCookieValues(
+    request.cookies.getAll().map((cookie) => ({
+      name: cookie.name,
+      value: cookie.value,
+    })),
+  );
+}
+
+function redirectToLogin(request: NextRequest, pathname: string) {
+  const loginUrl = request.nextUrl.clone();
+  loginUrl.pathname = "/auth/login";
+  loginUrl.search = "";
+  loginUrl.searchParams.set("next", pathname);
+  return NextResponse.redirect(loginUrl);
+}
+
+function unauthorizedSupabaseSessionResponse() {
+  return NextResponse.json(
+    { error: "Unauthorized", detail: "Supabase session required" },
+    { status: 401 },
   );
 }
 
@@ -69,6 +93,10 @@ async function handleTerminalGate(request: NextRequest): Promise<NextResponse> {
     return NextResponse.next();
   }
 
+  if (!hasSupabaseSessionCookie(request)) {
+    return redirectToLogin(request, pathname);
+  }
+
   const { response, user } = await refreshMiddlewareSession(request);
 
   if (user) {
@@ -77,17 +105,20 @@ async function handleTerminalGate(request: NextRequest): Promise<NextResponse> {
   }
 
   // Layer 1: Not logged in → redirect to /auth/login?next=/terminal
-  const loginUrl = request.nextUrl.clone();
-  loginUrl.pathname = "/auth/login";
-  loginUrl.search = "";
-  loginUrl.searchParams.set("next", pathname);
-  return NextResponse.redirect(loginUrl);
+  return redirectToLogin(request, pathname);
 }
 
 async function handleSupabaseAuthGate(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (isPublicPage(pathname) || isPublicApi(pathname)) {
     return NextResponse.next();
+  }
+
+  if (!hasSupabaseSessionCookie(request)) {
+    if (pathname.startsWith("/api/")) {
+      return unauthorizedSupabaseSessionResponse();
+    }
+    return redirectToLogin(request, pathname);
   }
 
   const { response, user } = await refreshMiddlewareSession(request);
@@ -97,17 +128,10 @@ async function handleSupabaseAuthGate(request: NextRequest) {
   }
 
   if (pathname.startsWith("/api/")) {
-    return NextResponse.json(
-      { error: "Unauthorized", detail: "Supabase session required" },
-      { status: 401 },
-    );
+    return unauthorizedSupabaseSessionResponse();
   }
 
-  const loginUrl = request.nextUrl.clone();
-  loginUrl.pathname = "/auth/login";
-  loginUrl.search = "";
-  loginUrl.searchParams.set("next", pathname);
-  return NextResponse.redirect(loginUrl);
+  return redirectToLogin(request, pathname);
 }
 
 async function handleSupabaseOptionalSession(request: NextRequest) {
@@ -117,6 +141,10 @@ async function handleSupabaseOptionalSession(request: NextRequest) {
     isPublicApi(pathname) ||
     !shouldRefreshOptionalSupabaseSession(pathname)
   ) {
+    return NextResponse.next();
+  }
+
+  if (!hasSupabaseSessionCookie(request)) {
     return NextResponse.next();
   }
 

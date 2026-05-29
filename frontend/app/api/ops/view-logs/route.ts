@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { applyAuthResponseCookies, buildBackendRequestHeaders } from "@/lib/backend-auth";
 import { buildProxyExceptionResponse } from "@/lib/api-proxy";
+import { requireOpsProxyAuth } from "@/lib/ops-proxy-auth";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -8,6 +9,9 @@ export async function GET(req: NextRequest) {
   if (!API_BASE) return NextResponse.json({ error: "API_BASE not configured" }, { status: 500 });
   try {
     const auth = await buildBackendRequestHeaders(req);
+    const authError = requireOpsProxyAuth(req, auth);
+    if (authError) return authError;
+
     const url = new URL(`${API_BASE}/api/ops/logs`);
     const level = req.nextUrl.searchParams.get("level");
     const lines = req.nextUrl.searchParams.get("lines");

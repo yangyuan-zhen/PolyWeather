@@ -22,6 +22,7 @@
 在 Supabase SQL Editor 执行：
 
 - `scripts/supabase/schema.sql`
+- 既有生产项目遇到 Disk IO Budget 告警时，再执行 `scripts/supabase/io_budget_indexes.sql`
 
 会创建支付与订阅相关表：
 
@@ -32,6 +33,15 @@
 - `wallet_link_challenges`
 - `payment_intents`
 - `payment_transactions`
+
+### 3.1 Disk IO 告警处理
+
+如果 Supabase 提示项目正在耗尽 Disk IO Budget，先在 SQL Editor 执行：
+
+1. `scripts/supabase/io_budget_indexes.sql`
+2. `scripts/supabase/disk_io_diagnostics.sql`
+
+第一个脚本会把热查询索引收敛为更低写放大的部分索引，移除已被唯一约束覆盖或无热路径使用的冗余索引，并对相关表执行 `ANALYZE`。第二个脚本用于查看表扫描、dead tuples、索引命中和 `pg_stat_statements` 中的高读块 SQL。生产执行后，继续观察 Supabase daily/hourly Disk IO 图表，确认请求延迟和 IO wait 是否下降。
 
 ## 4. 环境变量
 

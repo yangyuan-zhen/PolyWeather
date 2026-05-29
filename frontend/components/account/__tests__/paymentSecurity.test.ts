@@ -107,6 +107,75 @@ export function runTests() {
       !middlewareSource.includes("return NextResponse.next();\n    }\n  }\n\n  const response = NextResponse.next"),
     "middleware must not treat the mere presence of a bearer token as authenticated",
   );
+  assert(
+    middlewareSource.includes("function hasSupabaseSessionCookie") &&
+      middlewareSource.includes("request.cookies.getAll()") &&
+      middlewareSource.includes("hasSupabaseSessionCookieValues"),
+    "middleware must detect non-empty Supabase session cookies locally via the shared helper before refreshing auth",
+  );
+  assert(
+    middlewareSource.includes("redirectToLogin(request, pathname)") &&
+      middlewareSource.indexOf("if (!hasSupabaseSessionCookie(request))") <
+        middlewareSource.indexOf("await refreshMiddlewareSession(request)"),
+    "middleware must redirect no-cookie page requests without calling Supabase auth",
+  );
+  assert(
+    middlewareSource.includes("unauthorizedSupabaseSessionResponse()"),
+    "middleware must reject no-cookie protected API requests without calling Supabase auth",
+  );
+  for (const route of [
+    "app/api/ops/analytics/funnel/route.ts",
+    "app/api/ops/config/route.ts",
+    "app/api/ops/health-check/route.ts",
+    "app/api/ops/leaderboard/weekly/route.ts",
+    "app/api/ops/memberships/route.ts",
+    "app/api/ops/memberships/growth/route.ts",
+    "app/api/ops/memberships/overview/route.ts",
+    "app/api/ops/online-users/route.ts",
+    "app/api/ops/payments/incidents/route.ts",
+    "app/api/ops/payments/incidents/[eventId]/resolve/route.ts",
+    "app/api/ops/subscriptions/extend/route.ts",
+    "app/api/ops/subscriptions/grant/route.ts",
+    "app/api/ops/telegram/members-audit/route.ts",
+    "app/api/ops/training/accuracy/route.ts",
+    "app/api/ops/truth-history/route.ts",
+    "app/api/ops/users/route.ts",
+    "app/api/ops/users/grant-points/route.ts",
+    "app/api/ops/view-logs/route.ts",
+  ]) {
+    const routeSource = fs.readFileSync(path.join(projectRoot, route), "utf8");
+    assert(
+      routeSource.includes("requireOpsProxyAuth(req, auth)") &&
+        routeSource.indexOf("requireOpsProxyAuth(req, auth)") >
+          routeSource.indexOf("buildBackendRequestHeaders(req"),
+      `${route} must reject requests without Supabase identity before forwarding the backend entitlement token`,
+    );
+  }
+  assert(
+    middlewareSource.includes('pathname === "/api/payments/config"'),
+    "middleware must treat public payment config as public API so cached config requests do not refresh Supabase sessions",
+  );
+  const optionalRefreshFunction = middlewareSource.slice(
+    middlewareSource.indexOf("function shouldRefreshOptionalSupabaseSession"),
+    middlewareSource.indexOf("function hasSupabaseSessionCookie"),
+  );
+  assert(
+    !optionalRefreshFunction.includes('pathname.startsWith("/api/ops/")') &&
+      !optionalRefreshFunction.includes('pathname.startsWith("/api/payments/")'),
+    "optional Supabase middleware refresh must not pre-read sessions for API routes that already build backend auth headers",
+  );
+  const optionalRefreshIndex = middlewareSource.indexOf(
+    "function shouldRefreshOptionalSupabaseSession",
+  );
+  const systemStatusPublicIndex = middlewareSource.indexOf(
+    'pathname === "/api/system/status"',
+  );
+  assert(
+    systemStatusPublicIndex >= 0 &&
+      optionalRefreshIndex >= 0 &&
+      systemStatusPublicIndex < optionalRefreshIndex,
+    "middleware must treat public system status as public API instead of optional Supabase session refresh",
+  );
 
   for (const route of paymentRoutes) {
     const routeSource = fs.readFileSync(path.join(projectRoot, route), "utf8");

@@ -186,14 +186,15 @@ def test_confirm_direct_transfer_uses_intent_chain_rpc(monkeypatch, tmp_path):
     )
     confirmed_intent = PaymentIntentRecord(**{**intent.__dict__, "status": "confirmed"})
     intents = [intent, confirmed_intent]
+    get_intent_calls = []
     requested_chains = []
     tx_rows = []
 
-    monkeypatch.setattr(
-        service,
-        "get_intent",
-        lambda user_id, intent_id: intents.pop(0) if intents else confirmed_intent,
-    )
+    def fake_get_intent(user_id, intent_id):
+        get_intent_calls.append((user_id, intent_id))
+        return intents.pop(0) if intents else confirmed_intent
+
+    monkeypatch.setattr(service, "get_intent", fake_get_intent)
 
     class _Eth:
         chain_id = 1
@@ -260,7 +261,9 @@ def test_confirm_direct_transfer_uses_intent_chain_rpc(monkeypatch, tmp_path):
         if method == "GET" and table == "payment_transactions":
             return []
         if method == "PATCH" and table == "payment_intents":
-            return [{"id": intent.intent_id, "status": "confirmed"}]
+            assert kwargs["prefer"] == "return=representation"
+            assert kwargs["params"]["select"] == "id"
+            return [{"id": intent.intent_id}]
         if method == "POST" and table == "payment_transactions":
             tx_rows.append(kwargs["payload"])
             return [kwargs["payload"]]
@@ -273,6 +276,7 @@ def test_confirm_direct_transfer_uses_intent_chain_rpc(monkeypatch, tmp_path):
     assert 1 in requested_chains
     assert tx_rows[0]["chain_id"] == 1
     assert result["payment"]["chain_id"] == 1
+    assert get_intent_calls == [("user-1", intent.intent_id)]
 
 
 def test_direct_intent_does_not_require_bound_wallet(monkeypatch, tmp_path):
@@ -344,7 +348,7 @@ def test_direct_submit_tx_does_not_require_from_address(monkeypatch, tmp_path):
     monkeypatch.setattr(service, "_rest", fake_rest)
     monkeypatch.setattr(
         service,
-        "validate_intent_tx",
+        "_validate_loaded_intent_tx",
         lambda *args, **kwargs: {"valid": True, "checks": {"tx_mined": True}},
     )
 
@@ -384,7 +388,7 @@ def test_submit_rejects_direct_tx_until_validation_passes(monkeypatch, tmp_path)
     )
     monkeypatch.setattr(
         service,
-        "validate_intent_tx",
+        "_validate_loaded_intent_tx",
         lambda *args, **kwargs: {
             "valid": False,
             "reason": "tx_not_mined",
@@ -437,7 +441,7 @@ def test_submit_rejects_mined_direct_tx_when_receiver_mismatches(monkeypatch, tm
     )
     monkeypatch.setattr(
         service,
-        "validate_intent_tx",
+        "_validate_loaded_intent_tx",
         lambda *args, **kwargs: {
             "valid": False,
             "reason": "receiver_mismatch",
@@ -543,7 +547,7 @@ def test_confirm_direct_transfer_uses_erc20_transfer_without_wallet_binding(monk
         if method == "PATCH" and table == "payment_intents":
             return [{"id": intent.intent_id, "status": "confirmed"}]
         if method == "POST" and table == "payment_transactions":
-            return [kwargs["payload"]]
+            return []
         raise AssertionError((method, table, kwargs))
 
     monkeypatch.setattr(service, "_rest", fake_rest)
@@ -552,8 +556,14 @@ def test_confirm_direct_transfer_uses_erc20_transfer_without_wallet_binding(monk
     result = service.confirm_intent_tx("user-1", intent.intent_id, tx_hash)
 
     assert result["subscription"]["status"] == "active"
+    assert result["transaction"]["tx_hash"] == tx_hash
     assert result["tx"]["event"]["amount_units"] == 5000000
-    assert any(call[1] == "payment_transactions" for call in rest_calls)
+    transaction_write = next(
+        call
+        for call in rest_calls
+        if call[0] == "POST" and call[1] == "payment_transactions"
+    )
+    assert transaction_write[2]["prefer"] == "resolution=merge-duplicates,return=minimal"
 
 def test_submit_rejects_tx_hash_used_by_another_intent(monkeypatch, tmp_path):
     _setup_env(monkeypatch, tmp_path)

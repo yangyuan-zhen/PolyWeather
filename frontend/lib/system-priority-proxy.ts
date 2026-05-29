@@ -34,7 +34,9 @@ export async function forwardPriorityWarmHint(req: NextRequest) {
   }
 
   try {
-    const auth = await buildBackendRequestHeaders(req);
+    const auth = await buildBackendRequestHeaders(req, {
+      includeSupabaseIdentity: false,
+    });
     const res = await fetch(
       `${API_BASE}/api/system/priority-warm${
         params.size ? `?${params.toString()}` : ""

@@ -12,6 +12,14 @@ create table if not exists public.profiles (
   updated_at timestamptz not null default now()
 );
 
+create index if not exists idx_profiles_email
+  on public.profiles(email)
+  include (id);
+
+create index if not exists idx_profiles_id_lookup
+  on public.profiles(id)
+  include (email, created_at);
+
 create table if not exists public.subscriptions (
   id bigserial primary key,
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -25,7 +33,18 @@ create table if not exists public.subscriptions (
 );
 
 create index if not exists idx_subscriptions_user_status_expiry
-  on public.subscriptions(user_id, status, expires_at desc);
+  on public.subscriptions(user_id, expires_at desc)
+  include (id, starts_at, plan_code, source)
+  where status = 'active';
+
+create index if not exists idx_subscriptions_status_expiry
+  on public.subscriptions(expires_at asc)
+  include (user_id, starts_at, plan_code)
+  where status = 'active';
+
+create index if not exists idx_subscriptions_user_created
+  on public.subscriptions(user_id, created_at desc)
+  include (id, status, plan_code, source, starts_at, expires_at, updated_at);
 
 create table if not exists public.payments (
   id bigserial primary key,
@@ -39,6 +58,10 @@ create table if not exists public.payments (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+create index if not exists idx_payments_created_at
+  on public.payments(created_at desc)
+  include (id, user_id, amount, currency, chain, tx_hash, status);
 
 create table if not exists public.entitlement_events (
   id bigserial primary key,
@@ -65,7 +88,13 @@ create table if not exists public.user_wallets (
 );
 
 create index if not exists idx_user_wallets_user_chain
-  on public.user_wallets(user_id, chain_id, status, is_primary desc, verified_at desc);
+  on public.user_wallets(user_id, chain_id, is_primary desc, verified_at desc)
+  include (id, address)
+  where status = 'active';
+
+create index if not exists idx_user_wallets_chain_address_owner
+  on public.user_wallets(chain_id, address)
+  include (user_id, status);
 
 create table if not exists public.wallet_link_challenges (
   id bigserial primary key,
@@ -78,9 +107,6 @@ create table if not exists public.wallet_link_challenges (
   consumed_at timestamptz,
   created_at timestamptz not null default now()
 );
-
-create index if not exists idx_wallet_link_challenges_lookup
-  on public.wallet_link_challenges(user_id, chain_id, address, nonce, created_at desc);
 
 create table if not exists public.payment_intents (
   id uuid primary key default gen_random_uuid(),
@@ -103,11 +129,26 @@ create table if not exists public.payment_intents (
   updated_at timestamptz not null default now()
 );
 
-create index if not exists idx_payment_intents_user_status
-  on public.payment_intents(user_id, status, created_at desc);
+create index if not exists idx_payment_intents_status_updated
+  on public.payment_intents(status, updated_at desc)
+  include (user_id)
+  where status in ('submitted', 'confirmed');
+
+create index if not exists idx_payment_intents_user_status_updated
+  on public.payment_intents(user_id, status, updated_at desc);
+
+create index if not exists idx_payment_intents_submitted_tx_updated
+  on public.payment_intents(updated_at asc)
+  include (id, user_id, tx_hash, chain_id)
+  where status = 'submitted' and tx_hash is not null;
+
+create index if not exists idx_payment_intents_user_created
+  on public.payment_intents(user_id, created_at desc);
 
 create index if not exists idx_payment_intents_tx_hash
-  on public.payment_intents(tx_hash);
+  on public.payment_intents(tx_hash)
+  include (id, user_id)
+  where tx_hash is not null;
 
 create table if not exists public.payment_transactions (
   id bigserial primary key,
@@ -127,6 +168,10 @@ create table if not exists public.payment_transactions (
 
 create index if not exists idx_payment_transactions_intent
   on public.payment_transactions(intent_id, created_at desc);
+
+create index if not exists idx_payment_transactions_tx_hash_intent
+  on public.payment_transactions(tx_hash)
+  include (intent_id);
 
 create or replace function public.sync_profile_from_auth()
 returns trigger

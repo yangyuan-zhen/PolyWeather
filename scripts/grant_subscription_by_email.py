@@ -49,6 +49,22 @@ def _select_exact_user_id(payload: object, email: str) -> str:
 def _lookup_user_id_by_email(email: str) -> str:
     from src.payments.contract_checkout import PAYMENT_CHECKOUT
 
+    normalized_email = str(email or "").strip().lower()
+    profile_rows = PAYMENT_CHECKOUT._rest(  # noqa: SLF001
+        "GET",
+        "profiles",
+        params={
+            "select": "id",
+            "email": f"eq.{normalized_email}",
+            "limit": "1",
+        },
+        allowed_status=[200],
+    )
+    if isinstance(profile_rows, list) and profile_rows:
+        user_id = str((profile_rows[0] or {}).get("id") or "").strip()
+        if user_id:
+            return user_id
+
     payload = PAYMENT_CHECKOUT._auth_admin_request(  # noqa: SLF001
         "GET",
         f"/admin/users?email={email}",
@@ -117,7 +133,7 @@ def main() -> int:
             "GET",
             "subscriptions",
             params={
-                "select": "id,expires_at,status,plan_code,starts_at,source,created_at",
+                "select": "id,plan_code,source,starts_at,expires_at",
                 "user_id": f"eq.{user_id}",
                 "status": "eq.active",
                 "order": "expires_at.desc",
@@ -169,37 +185,38 @@ def main() -> int:
         expires_at = starts_at + timedelta(days=days)
 
         if isinstance(upcoming, dict) and str(upcoming.get("id") or "").strip():
-            updated = PAYMENT_CHECKOUT._rest(  # noqa: SLF001
+            subscription_payload = {
+                "starts_at": starts_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
+                "updated_at": now.isoformat(),
+            }
+            PAYMENT_CHECKOUT._rest(  # noqa: SLF001
                 "PATCH",
                 "subscriptions",
                 params={"id": f"eq.{upcoming['id']}"},
-                payload={
-                    "starts_at": starts_at.isoformat(),
-                    "expires_at": expires_at.isoformat(),
-                    "updated_at": now.isoformat(),
-                },
-                prefer="return=representation",
+                payload=subscription_payload,
+                prefer="return=minimal",
                 allowed_status=[200],
             )
-            subscription = updated[0] if isinstance(updated, list) and updated else {}
+            subscription = {**upcoming, **subscription_payload}
         else:
-            created = PAYMENT_CHECKOUT._rest(  # noqa: SLF001
+            subscription = {
+                "user_id": user_id,
+                "plan_code": plan_code,
+                "status": "active",
+                "starts_at": starts_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
+                "source": actor,
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+            }
+            PAYMENT_CHECKOUT._rest(  # noqa: SLF001
                 "POST",
                 "subscriptions",
-                payload={
-                    "user_id": user_id,
-                    "plan_code": plan_code,
-                    "status": "active",
-                    "starts_at": starts_at.isoformat(),
-                    "expires_at": expires_at.isoformat(),
-                    "source": actor,
-                    "created_at": now.isoformat(),
-                    "updated_at": now.isoformat(),
-                },
-                prefer="return=representation",
+                payload=subscription,
+                prefer="return=minimal",
                 allowed_status=[201],
             )
-            subscription = created[0] if isinstance(created, list) and created else {}
 
         PAYMENT_CHECKOUT._rest(  # noqa: SLF001
             "POST",
@@ -219,7 +236,7 @@ def main() -> int:
                 },
                 "created_at": now.isoformat(),
             },
-            prefer="return=representation",
+            prefer="return=minimal",
             allowed_status=[201],
         )
         SUPABASE_ENTITLEMENT.invalidate_subscription_cache(user_id)

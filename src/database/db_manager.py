@@ -4,6 +4,7 @@ import hashlib
 import json
 import secrets
 import threading
+import time
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, Set
 
@@ -14,6 +15,10 @@ from loguru import logger
 class DBManager:
     _init_lock = threading.Lock()
     _initialized_paths: Set[str] = set()
+    _points_sync_lock = threading.Lock()
+    _points_sync_cache: Dict[str, Dict[str, Any]] = {}
+    _profile_sync_lock = threading.Lock()
+    _profile_sync_cache: Dict[str, Dict[str, Any]] = {}
 
     def __init__(self, db_path: Optional[str] = None):
         self.db_path = self._resolve_db_path(db_path)
@@ -67,7 +72,135 @@ class DBManager:
             return ""
         return f"{supabase_url}/auth/v1/admin/users"
 
-    def _sync_points_to_supabase_user_metadata(self, telegram_id: int) -> bool:
+    def _profile_sync_min_interval_sec(self) -> float:
+        raw = str(
+            os.getenv("POLYWEATHER_SUPABASE_PROFILE_SYNC_MIN_INTERVAL_SEC", "3600")
+            or ""
+        ).strip()
+        try:
+            return max(0.0, float(raw))
+        except ValueError:
+            return 3600.0
+
+    def _profile_sync_cache_key(self, supabase_user_id: str) -> str:
+        endpoint = self._supabase_profiles_endpoint()
+        return f"{endpoint}:{str(supabase_user_id or '').strip().lower()}"
+
+    def _should_skip_profile_sync(
+        self,
+        *,
+        supabase_user_id: str,
+        telegram_id: Optional[int],
+        telegram_username: Optional[str],
+        force: bool = False,
+    ) -> bool:
+        if force:
+            return False
+        min_interval = self._profile_sync_min_interval_sec()
+        if min_interval <= 0:
+            return False
+        payload_key = {
+            "telegram_id": int(telegram_id) if telegram_id is not None else None,
+            "telegram_username": str(telegram_username or "").strip() or None,
+        }
+        cache_key = self._profile_sync_cache_key(supabase_user_id)
+        now_ts = time.monotonic()
+        with self._profile_sync_lock:
+            cached = self._profile_sync_cache.get(cache_key)
+            if not isinstance(cached, dict):
+                return False
+            cached_payload = cached.get("payload")
+            cached_ts = float(cached.get("ts") or 0.0)
+            return cached_payload == payload_key and now_ts - cached_ts < min_interval
+
+    def _remember_profile_sync(
+        self,
+        *,
+        supabase_user_id: str,
+        telegram_id: Optional[int],
+        telegram_username: Optional[str],
+    ) -> None:
+        cache_key = self._profile_sync_cache_key(supabase_user_id)
+        payload_key = {
+            "telegram_id": int(telegram_id) if telegram_id is not None else None,
+            "telegram_username": str(telegram_username or "").strip() or None,
+        }
+        with self._profile_sync_lock:
+            self._profile_sync_cache[cache_key] = {
+                "payload": payload_key,
+                "ts": time.monotonic(),
+            }
+            if len(self._profile_sync_cache) > 4096:
+                oldest_key = min(
+                    self._profile_sync_cache,
+                    key=lambda key: float(
+                        self._profile_sync_cache[key].get("ts") or 0.0
+                    ),
+                )
+                self._profile_sync_cache.pop(oldest_key, None)
+
+    def _points_sync_cache_key(self, telegram_id: int) -> str:
+        return f"{os.path.abspath(self.db_path)}:{int(telegram_id)}"
+
+    def _points_sync_min_interval_sec(self) -> float:
+        raw = str(
+            os.getenv("POLYWEATHER_SUPABASE_POINTS_SYNC_MIN_INTERVAL_SEC", "60")
+            or ""
+        ).strip()
+        try:
+            return max(0.0, float(raw))
+        except Exception:
+            return 60.0
+
+    def _should_skip_points_metadata_sync(
+        self,
+        *,
+        telegram_id: int,
+        points: int,
+        force: bool,
+    ) -> bool:
+        if force:
+            return False
+        cache_key = self._points_sync_cache_key(telegram_id)
+        now_ts = time.monotonic()
+        min_interval = self._points_sync_min_interval_sec()
+        with self._points_sync_lock:
+            cached = self._points_sync_cache.get(cache_key)
+            if not cached:
+                return False
+            cached_points = int(cached.get("points") or 0)
+            cached_ts = float(cached.get("ts") or 0.0)
+            if cached_points == int(points):
+                return True
+            return min_interval > 0 and (now_ts - cached_ts) < min_interval
+
+    def _remember_points_metadata_sync(
+        self,
+        *,
+        telegram_id: int,
+        points: int,
+    ) -> None:
+        cache_key = self._points_sync_cache_key(telegram_id)
+        with self._points_sync_lock:
+            self._points_sync_cache[cache_key] = {
+                "points": int(points),
+                "ts": time.monotonic(),
+            }
+            if len(self._points_sync_cache) > 4096:
+                oldest_key = min(
+                    self._points_sync_cache,
+                    key=lambda key: float(
+                        self._points_sync_cache[key].get("ts") or 0.0
+                    ),
+                )
+                self._points_sync_cache.pop(oldest_key, None)
+
+    def _sync_points_to_supabase_user_metadata(
+        self,
+        telegram_id: int,
+        *,
+        force: bool = False,
+    ) -> bool:
         supabase_url = str(os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
         if not supabase_url:
             return False
@@ -104,6 +237,13 @@ class DBManager:
             if pts_row:
                 points = max(0, int(pts_row["points"] or 0))
 
+        if self._should_skip_points_metadata_sync(
+            telegram_id=int(telegram_id),
+            points=points,
+            force=force,
+        ):
+            return False
+
         try:
             resp = requests.patch(
                 f"{endpoint}/{supabase_user_id}",
@@ -120,6 +260,10 @@ class DBManager:
                     (resp.text or "")[:200],
                 )
                 return False
+            self._remember_points_metadata_sync(
+                telegram_id=int(telegram_id),
+                points=points,
+            )
             return True
         except Exception as exc:
             logger.warning(
@@ -136,11 +280,19 @@ class DBManager:
         supabase_user_id: str,
         telegram_id: Optional[int],
         telegram_username: Optional[str],
+        force: bool = False,
     ) -> bool:
         normalized_uid = str(supabase_user_id or "").strip().lower()
         endpoint = self._supabase_profiles_endpoint()
         headers = self._supabase_service_headers()
         if not normalized_uid or not endpoint or not headers:
+            return False
+        if self._should_skip_profile_sync(
+            supabase_user_id=normalized_uid,
+            telegram_id=telegram_id,
+            telegram_username=telegram_username,
+            force=force,
+        ):
             return False
 
         payload = {
@@ -164,6 +316,11 @@ class DBManager:
                     (response.text or "")[:240],
                 )
                 return False
+            self._remember_profile_sync(
+                supabase_user_id=normalized_uid,
+                telegram_id=telegram_id,
+                telegram_username=telegram_username,
+            )
             return True
         except Exception as exc:
             logger.warning(
@@ -1274,7 +1431,7 @@ class DBManager:
                 (after, telegram_id),
             )
             conn.commit()
-            self._sync_points_to_supabase_user_metadata(telegram_id)
+            self._sync_points_to_supabase_user_metadata(telegram_id, force=True)
             return {
                 "ok": True,
                 "telegram_id": telegram_id,
@@ -1326,7 +1483,7 @@ class DBManager:
                 (after, telegram_id),
             )
             conn.commit()
-            self._sync_points_to_supabase_user_metadata(telegram_id)
+            self._sync_points_to_supabase_user_metadata(telegram_id, force=True)
             return {
                 "ok": True,
                 "telegram_id": telegram_id,
@@ -1471,6 +1628,7 @@ class DBManager:
                     supabase_user_id=normalized_uid,
                     telegram_id=int(telegram_id),
                     telegram_username=str((user_row["username"] if user_row else "") or "").strip(),
+                    force=True,
                 )
                 return {"ok": True, "reason": "already_bound_same"}
 
@@ -1496,6 +1654,7 @@ class DBManager:
                 supabase_user_id=normalized_uid,
                 telegram_id=int(telegram_id),
                 telegram_username=str((user_row["username"] if user_row else "") or "").strip(),
+                force=True,
             )
             return {"ok": True, "reason": "bound"}
 
@@ -1551,6 +1710,7 @@ class DBManager:
                     supabase_user_id=user_id,
                     telegram_id=None,
                     telegram_username=None,
+                    force=True,
                 )
             return {"ok": True, "reason": "unbound", "previous_supabase_user_id": current_uid}
 
@@ -1940,7 +2100,7 @@ class DBManager:
                 (new_balance, telegram_id),
             )
             conn.commit()
-            self._sync_points_to_supabase_user_metadata(telegram_id)
+            self._sync_points_to_supabase_user_metadata(telegram_id, force=True)
             return {"ok": True, "balance": new_balance, "spent": amount}
 
     def spend_points_by_supabase_user_id(self, supabase_user_id: str, amount: int) -> Dict[str, Any]:
@@ -1978,7 +2138,7 @@ class DBManager:
                 (new_balance, telegram_id),
             )
             conn.commit()
-            self._sync_points_to_supabase_user_metadata(telegram_id)
+            self._sync_points_to_supabase_user_metadata(telegram_id, force=True)
             return {"ok": True, "balance": new_balance, "spent": amount}
 
     def set_premium(self, telegram_id: int, plan: str, months: int = 1):
@@ -2290,7 +2450,10 @@ class DBManager:
             )
             conn.commit()
             if bonus > 0:
-                self._sync_points_to_supabase_user_metadata(int(telegram_id))
+                self._sync_points_to_supabase_user_metadata(
+                    int(telegram_id),
+                    force=True,
+                )
             return True
 
     def append_airport_obs(

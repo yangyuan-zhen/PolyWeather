@@ -1,6 +1,10 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient, hasSupabaseServerEnv } from "@/lib/supabase/server";
+import {
+  createSupabaseServerClient,
+  hasSupabaseServerEnv,
+  hasSupabaseSessionCookieValues,
+} from "@/lib/supabase/server";
 
 function parseAdminEmails() {
   return String(process.env.POLYWEATHER_OPS_ADMIN_EMAILS || "")
@@ -16,12 +20,17 @@ export async function requireOpsAdmin(nextPath = "/ops") {
   }
 
   const cookieStore = await cookies();
+  const supabaseCookies = cookieStore.getAll().map((item) => ({
+    name: item.name,
+    value: item.value,
+  }));
+  if (!hasSupabaseSessionCookieValues(supabaseCookies)) {
+    redirect(`/auth/login?next=${encodeURIComponent(nextPath)}`);
+  }
+
   const supabase = createSupabaseServerClient({
     getAll() {
-      return cookieStore.getAll().map((item) => ({
-        name: item.name,
-        value: item.value,
-      }));
+      return supabaseCookies;
     },
     setAll() {
       // Server components cannot persist refreshed cookies. Route handlers keep
@@ -30,10 +39,11 @@ export async function requireOpsAdmin(nextPath = "/ops") {
   });
 
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data,
+    error,
+  } = await supabase.auth.getClaims();
 
-  const email = String(user?.email || "").trim().toLowerCase();
+  const email = error ? "" : String(data?.claims?.email || "").trim().toLowerCase();
   if (!email) {
     redirect(`/auth/login?next=${encodeURIComponent(nextPath)}`);
   }

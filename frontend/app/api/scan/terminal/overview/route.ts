@@ -37,7 +37,9 @@ export async function POST(req: NextRequest) {
   const timeoutId = setTimeout(() => controller.abort(), OVERVIEW_PROXY_TIMEOUT_MS);
 
   try {
-    auth = await buildBackendRequestHeaders(req);
+    auth = await buildBackendRequestHeaders(req, {
+      includeSupabaseIdentity: false,
+    });
     const headers = new Headers(auth.headers);
     headers.set("Content-Type", "application/json");
     headers.set("Accept", "application/json");

@@ -4,6 +4,7 @@ import {
   buildBackendRequestHeaders,
 } from "@/lib/backend-auth";
 import { buildProxyExceptionResponse } from "@/lib/api-proxy";
+import { requireOpsProxyAuth } from "@/lib/ops-proxy-auth";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -41,6 +42,23 @@ async function findSupabaseUserIdByEmail(email: string) {
   if (!supabaseUrl || !serviceRoleKey) {
     throw new Error("Supabase service role is not configured on Vercel");
   }
+  const profileRes = await fetch(
+    `${supabaseUrl}/rest/v1/profiles?select=id&email=eq.${encodeURIComponent(email)}&limit=1`,
+    {
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        Accept: "application/json",
+      },
+      cache: "no-store",
+    },
+  );
+  const profileData = (await profileRes.json().catch(() => [])) as Array<{ id?: string }>;
+  if (profileRes.ok) {
+    const profileUserId = String(profileData?.[0]?.id || "").trim();
+    if (profileUserId) return { supabaseUrl, serviceRoleKey, userId: profileUserId };
+  }
+
   const res = await fetch(
     `${supabaseUrl}/auth/v1/admin/users?filter=${encodeURIComponent(`email.eq.${email}`)}`,
     {
@@ -109,7 +127,7 @@ async function grantSubscriptionDirectly(req: NextRequest, bodyText: string, aut
         apikey: serviceRoleKey,
         Authorization: `Bearer ${serviceRoleKey}`,
         "Content-Type": "application/json",
-        Prefer: "return=representation",
+        Prefer: "return=minimal",
       },
       body: JSON.stringify(payload),
       cache: "no-store",
@@ -138,6 +156,9 @@ async function grantSubscriptionDirectly(req: NextRequest, bodyText: string, aut
 export async function POST(req: NextRequest) {
   try {
     const auth = await buildBackendRequestHeaders(req);
+    const authError = requireOpsProxyAuth(req, auth);
+    if (authError) return authError;
+
     const body = await req.text();
     if (!API_BASE) {
       return grantSubscriptionDirectly(req, body, auth.authEmail);

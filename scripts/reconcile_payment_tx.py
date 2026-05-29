@@ -50,31 +50,48 @@ def _list_recent_intents(user_id: str, limit: int = 20) -> List[Dict[str, Any]]:
 
 
 def _find_intent_by_tx(user_id: str, tx_hash: str) -> Optional[Dict[str, Any]]:
-    rows = _list_recent_intents(user_id, limit=50)
     tx_norm = str(tx_hash or "").strip().lower()
-    for row in rows:
-        if str(row.get("tx_hash") or "").strip().lower() == tx_norm:
-            return row
-    return None
-
-
-def _find_intent_by_order_id(user_id: str, order_id_hex: str) -> Optional[Dict[str, Any]]:
+    if not tx_norm:
+        return None
     rows = PAYMENT_CHECKOUT._rest(
         "GET",
         "payment_intents",
         params={
-            "select": (
-                "id,user_id,plan_code,status,tx_hash,order_id_hex,"
-                "amount_units,token_address,created_at,updated_at"
-            ),
-            "user_id": f"eq.{user_id}",
-            "order_id_hex": f"eq.{order_id_hex.lower()}",
-            "order": "created_at.desc",
-            "limit": "5",
+            "select": "id,user_id",
+            "tx_hash": f"eq.{tx_norm}",
+            "limit": "1",
         },
         allowed_status=[200],
     )
-    return rows[0] if isinstance(rows, list) and rows else None
+    row = rows[0] if isinstance(rows, list) and rows else None
+    if not isinstance(row, dict):
+        return None
+    if str(row.get("user_id") or "").strip() != str(user_id or "").strip():
+        return None
+    return row
+
+
+def _find_intent_by_order_id(user_id: str, order_id_hex: str) -> Optional[Dict[str, Any]]:
+    normalized_user_id = str(user_id or "").strip()
+    normalized_order_id = str(order_id_hex or "").strip().lower()
+    if not normalized_user_id or not normalized_order_id:
+        return None
+    rows = PAYMENT_CHECKOUT._rest(
+        "GET",
+        "payment_intents",
+        params={
+            "select": "id,user_id",
+            "order_id_hex": f"eq.{normalized_order_id}",
+            "limit": "1",
+        },
+        allowed_status=[200],
+    )
+    row = rows[0] if isinstance(rows, list) and rows else None
+    if not isinstance(row, dict):
+        return None
+    if str(row.get("user_id") or "").strip() != normalized_user_id:
+        return None
+    return row
 
 
 def _decode_pay_call(tx_hash: str) -> Optional[Dict[str, Any]]:

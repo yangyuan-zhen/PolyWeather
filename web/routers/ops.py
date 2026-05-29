@@ -8,6 +8,7 @@ from web.services.ops_api import (
     get_ops_analytics_funnel,
     get_ops_config,
     get_ops_memberships_growth,
+    get_ops_memberships_overview,
     get_ops_health_check,
     get_ops_logs,
     get_ops_truth_history,
@@ -53,6 +54,15 @@ async def ops_memberships(request: Request, limit: int = 200):
 @router.get("/api/ops/memberships/growth")
 async def ops_memberships_growth(request: Request, days: int = 90):
     return get_ops_memberships_growth(request, days=days)
+
+
+@router.get("/api/ops/memberships/overview")
+async def ops_memberships_overview(
+    request: Request,
+    limit: int = 200,
+    days: int = 90,
+):
+    return get_ops_memberships_overview(request, limit=limit, days=days)
 
 
 @router.get("/api/ops/payments/incidents")

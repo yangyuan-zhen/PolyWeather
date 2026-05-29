@@ -21,6 +21,517 @@ def _payment_env(monkeypatch, tmp_path):
     monkeypatch.delenv("POLYWEATHER_PAYMENT_DIRECT_RECEIVER_ADDRESS", raising=False)
 
 
+def test_wallet_challenge_insert_uses_minimal_return(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    calls = []
+
+    def _fake_rest(method, table, **kwargs):
+        calls.append({"method": method, "table": table, **kwargs})
+        return []
+
+    monkeypatch.setattr(service, "_rest", _fake_rest)
+
+    result = service.create_wallet_challenge(
+        "user-1",
+        "0x1111111111111111111111111111111111111111",
+    )
+
+    assert result["address"] == "0x1111111111111111111111111111111111111111"
+    assert calls[0]["table"] == "wallet_link_challenges"
+    assert calls[0]["prefer"] == "return=minimal"
+
+
+def test_entitlement_event_insert_uses_minimal_return(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    calls = []
+
+    def _fake_rest(method, table, **kwargs):
+        calls.append({"method": method, "table": table, **kwargs})
+        if method == "GET" and table == "subscriptions":
+            return []
+        if method == "POST" and table == "subscriptions":
+            return [kwargs.get("payload") or {}]
+        return []
+
+    monkeypatch.setattr(service, "_rest", _fake_rest)
+
+    service._grant_subscription(
+        user_id="user-1",
+        plan_code="pro_monthly",
+        duration_days=30,
+        tx_hash="0x" + "1" * 64,
+        payload={"kind": "test"},
+    )
+
+    entitlement_event = next(call for call in calls if call["table"] == "entitlement_events")
+    assert entitlement_event["prefer"] == "return=minimal"
+
+
+def test_subscription_insert_uses_minimal_return_and_local_payload(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    calls = []
+
+    def _fake_rest(method, table, **kwargs):
+        calls.append({"method": method, "table": table, **kwargs})
+        if method == "GET" and table == "subscriptions":
+            return []
+        if method == "POST" and table == "subscriptions":
+            return []
+        if method == "POST" and table == "entitlement_events":
+            return []
+        raise AssertionError((method, table, kwargs))
+
+    monkeypatch.setattr(service, "_rest", _fake_rest)
+
+    result = service._grant_subscription(
+        user_id="user-1",
+        plan_code="pro_monthly",
+        duration_days=30,
+        tx_hash="0x" + "1" * 64,
+        payload={"kind": "test"},
+    )
+
+    subscription_write = next(
+        call for call in calls if call["method"] == "POST" and call["table"] == "subscriptions"
+    )
+    assert subscription_write["prefer"] == "return=minimal"
+    assert result == subscription_write["payload"]
+    assert result["user_id"] == "user-1"
+    assert result["plan_code"] == "pro_monthly"
+    assert result["status"] == "active"
+
+
+def test_wallet_binding_writes_use_minimal_return(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    address = "0x1111111111111111111111111111111111111111"
+    calls = []
+
+    monkeypatch.setattr(
+        "src.payments.contract_checkout.Account.recover_message",
+        lambda *args, **kwargs: address,
+    )
+
+    def _fake_rest(method, table, **kwargs):
+        calls.append({"method": method, "table": table, **kwargs})
+        if method == "GET" and table == "wallet_link_challenges":
+            return [
+                {
+                    "id": "challenge-1",
+                    "user_id": "user-1",
+                    "address": address,
+                    "nonce": "nonce-1",
+                    "message": "message",
+                    "expires_at": "2099-01-01T00:00:00+00:00",
+                    "consumed_at": None,
+                }
+            ]
+        if method == "GET" and table == "user_wallets":
+            return []
+        return []
+
+    monkeypatch.setattr(service, "_rest", _fake_rest)
+
+    result = service.verify_wallet_binding("user-1", address, "nonce-1", "0xsig")
+
+    assert result.address == address
+    writes = [call for call in calls if call["method"] in {"POST", "PATCH"}]
+    assert writes[0]["table"] == "user_wallets"
+    assert writes[0]["prefer"] == "resolution=merge-duplicates,return=minimal"
+    assert writes[1]["table"] == "wallet_link_challenges"
+    assert writes[1]["prefer"] == "return=minimal"
+
+
+def test_require_user_wallet_selects_only_status(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    calls = []
+
+    def _fake_rest(method, table, **kwargs):
+        calls.append({"method": method, "table": table, **kwargs})
+        return [{"status": "active"}]
+
+    monkeypatch.setattr(service, "_rest", _fake_rest)
+
+    result = service._require_user_wallet(
+        "user-1",
+        "0x1111111111111111111111111111111111111111",
+    )
+
+    assert result == {"status": "active"}
+    assert calls[0]["params"]["select"] == "status"
+
+
+def test_list_wallets_omits_status_from_active_wallet_query(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    calls = []
+
+    def _fake_rest(method, table, **kwargs):
+        calls.append({"method": method, "table": table, **kwargs})
+        return [
+            {
+                "chain_id": 137,
+                "address": "0x1111111111111111111111111111111111111111",
+                "is_primary": True,
+                "verified_at": "2099-01-01T00:00:00+00:00",
+            }
+        ]
+
+    monkeypatch.setattr(service, "_rest", _fake_rest)
+
+    wallets = service.list_wallets("user-1")
+
+    assert calls[0]["params"]["select"] == "chain_id,address,is_primary,verified_at"
+    assert wallets[0].status == "active"
+
+
+def test_wallet_binding_existing_lookup_selects_only_owner_status(
+    monkeypatch,
+    tmp_path,
+):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    address = "0x1111111111111111111111111111111111111111"
+    calls = []
+
+    monkeypatch.setattr(
+        "src.payments.contract_checkout.Account.recover_message",
+        lambda *args, **kwargs: address,
+    )
+
+    def _fake_rest(method, table, **kwargs):
+        calls.append({"method": method, "table": table, **kwargs})
+        if method == "GET" and table == "wallet_link_challenges":
+            return [
+                {
+                    "id": "challenge-1",
+                    "user_id": "user-1",
+                    "address": address,
+                    "nonce": "nonce-1",
+                    "message": "message",
+                    "expires_at": "2099-01-01T00:00:00+00:00",
+                    "consumed_at": None,
+                }
+            ]
+        if method == "GET" and table == "user_wallets":
+            return []
+        return []
+
+    monkeypatch.setattr(service, "_rest", _fake_rest)
+
+    service.verify_wallet_binding("user-1", address, "nonce-1", "0xsig")
+
+    existing_lookup = [
+        call
+        for call in calls
+        if call["method"] == "GET"
+        and call["table"] == "user_wallets"
+        and "address" in call["params"]
+    ][0]
+    assert existing_lookup["params"]["select"] == "user_id,status"
+
+    challenge_lookup = [
+        call
+        for call in calls
+        if call["method"] == "GET"
+        and call["table"] == "wallet_link_challenges"
+    ][0]
+    assert challenge_lookup["params"]["select"] == "id,message,expires_at"
+    assert "order" not in challenge_lookup["params"]
+
+
+def test_wallet_unbind_writes_use_minimal_return(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    calls = []
+
+    monkeypatch.setattr(service, "_require_user_wallet", lambda *args, **kwargs: {})
+
+    def _fake_rest(method, table, **kwargs):
+        calls.append({"method": method, "table": table, **kwargs})
+        if method == "GET" and table == "user_wallets" and kwargs["params"].get("is_primary") == "eq.true":
+            return []
+        if method == "GET" and table == "user_wallets":
+            return [{"id": "wallet-2", "address": "0x2222222222222222222222222222222222222222"}]
+        return []
+
+    monkeypatch.setattr(service, "_rest", _fake_rest)
+
+    result = service.unbind_wallet("user-1", "0x1111111111111111111111111111111111111111")
+
+    assert result["new_primary"] == "0x2222222222222222222222222222222222222222"
+    writes = [call for call in calls if call["method"] == "PATCH"]
+    assert [call["prefer"] for call in writes] == ["return=minimal", "return=minimal"]
+
+
+def test_submit_intent_status_patch_uses_minimal_return(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    calls = []
+
+    monkeypatch.setattr(
+        service,
+        "get_intent",
+        lambda user_id, intent_id: service._serialize_intent(
+            {
+                "id": intent_id,
+                "plan_code": "pro_monthly",
+                "plan_id": 101,
+                "chain_id": 137,
+                "token_address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+                "receiver_address": "0xeD2f13Aa5fF033c58FB436E178451Cd07f693f32",
+                "amount_units": "5000000",
+                "payment_mode": "direct",
+                "allowed_wallet": None,
+                "order_id_hex": "0x" + "1" * 64,
+                "status": "created",
+                "expires_at": "2099-01-01T00:00:00+00:00",
+                "tx_hash": None,
+                "metadata": {},
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "_validate_loaded_intent_tx",
+        lambda *args, **kwargs: {"valid": True, "checks": {"tx_mined": True}},
+    )
+
+    def _fake_rest(method, table, **kwargs):
+        calls.append({"method": method, "table": table, **kwargs})
+        if method == "GET" and table == "payment_transactions":
+            return []
+        if method == "POST" and table == "payment_transactions":
+            return []
+        return []
+
+    monkeypatch.setattr(service, "_rest", _fake_rest)
+
+    result = service.submit_intent_tx("user-1", "intent-1", "0x" + "2" * 64, "")
+
+    assert result["status"] == "submitted"
+    intent_patch = next(call for call in calls if call["method"] == "PATCH")
+    assert intent_patch["table"] == "payment_intents"
+    assert intent_patch["prefer"] == "return=minimal"
+    transaction_write = next(
+        call
+        for call in calls
+        if call["method"] == "POST" and call["table"] == "payment_transactions"
+    )
+    assert transaction_write["prefer"] == "resolution=merge-duplicates,return=minimal"
+    assert result["transaction"]["tx_hash"] == "0x" + "2" * 64
+
+
+def test_submit_intent_tx_reuses_loaded_intent_for_validation(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    intent = service._serialize_intent(
+        {
+            "id": "intent-1",
+            "plan_code": "pro_monthly",
+            "plan_id": 101,
+            "chain_id": 137,
+            "token_address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+            "receiver_address": "0xeD2f13Aa5fF033c58FB436E178451Cd07f693f32",
+            "amount_units": "5000000",
+            "payment_mode": "direct",
+            "allowed_wallet": None,
+            "order_id_hex": "0x" + "1" * 64,
+            "status": "created",
+            "expires_at": "2099-01-01T00:00:00+00:00",
+            "tx_hash": None,
+            "metadata": {},
+        }
+    )
+    calls = {"get_intent": 0}
+    rest_calls = []
+
+    class _FakeEth:
+        def get_transaction_receipt(self, tx_hash):
+            return {"status": 1, "to": intent.receiver_address, "blockNumber": 123}
+
+    class _FakeWeb3:
+        eth = _FakeEth()
+
+    def _fake_get_intent(user_id, intent_id):
+        calls["get_intent"] += 1
+        return intent
+
+    def _fake_rest(method, table, **kwargs):
+        rest_calls.append({"method": method, "table": table, **kwargs})
+        if method == "GET" and table == "payment_transactions":
+            return []
+        if method == "POST" and table == "payment_transactions":
+            return [kwargs["payload"]]
+        return []
+
+    monkeypatch.setattr(service, "get_intent", _fake_get_intent)
+    monkeypatch.setattr(service, "_get_web3", lambda *args, **kwargs: _FakeWeb3())
+    monkeypatch.setattr(
+        service,
+        "_extract_direct_transfer_event",
+        lambda receipt, loaded_intent: {
+            "from": "0x2222222222222222222222222222222222222222",
+            "to": loaded_intent.receiver_address,
+            "amount_units": int(loaded_intent.amount_units),
+        },
+    )
+    monkeypatch.setattr(service, "_rest", _fake_rest)
+
+    result = service.submit_intent_tx("user-1", "intent-1", "0x" + "2" * 64, "")
+
+    assert result["status"] == "submitted"
+    assert calls["get_intent"] == 1
+    assert [call["table"] for call in rest_calls].count("payment_transactions") == 2
+
+
+def test_failed_intent_writes_use_minimal_return(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    calls = []
+    intent = PaymentIntentRecord(
+        intent_id="intent-1",
+        order_id_hex="0x" + "1" * 64,
+        plan_code="pro_monthly",
+        plan_id=101,
+        chain_id=137,
+        amount_units=5_000_000,
+        amount_usdc="5",
+        token_address="0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+        token_decimals=6,
+        token_symbol="USDC",
+        receiver_address="0xed2f13aa5ff033c58fb436e178451cd07f693f32",
+        status="submitted",
+        payment_mode="direct",
+        allowed_wallet=None,
+        expires_at="2099-01-01T00:00:00+00:00",
+        tx_hash=None,
+        metadata={},
+    )
+
+    def _fake_rest(method, table, **kwargs):
+        calls.append({"method": method, "table": table, **kwargs})
+        return []
+
+    monkeypatch.setattr(service, "_rest", _fake_rest)
+
+    service._mark_intent_failed(
+        user_id="user-1",
+        intent=intent,
+        tx_hash="0x" + "3" * 64,
+        reason="test_failure",
+        detail="test",
+    )
+
+    assert calls[0]["table"] == "payment_intents"
+    assert calls[0]["prefer"] == "return=minimal"
+    assert calls[1]["table"] == "payment_transactions"
+    assert calls[1]["prefer"] == "resolution=merge-duplicates,return=minimal"
+
+
+def test_duplicate_transaction_write_uses_minimal_return(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    calls = []
+    intent = PaymentIntentRecord(
+        intent_id="intent-1",
+        order_id_hex="0x" + "1" * 64,
+        plan_code="pro_monthly",
+        plan_id=101,
+        chain_id=137,
+        amount_units=5_000_000,
+        amount_usdc="5",
+        token_address="0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+        token_decimals=6,
+        token_symbol="USDC",
+        receiver_address="0xed2f13aa5ff033c58fb436e178451cd07f693f32",
+        status="confirmed",
+        payment_mode="direct",
+        allowed_wallet=None,
+        expires_at="2099-01-01T00:00:00+00:00",
+        tx_hash="0x" + "2" * 64,
+        metadata={},
+    )
+
+    def _fake_rest(method, table, **kwargs):
+        calls.append({"method": method, "table": table, **kwargs})
+        return []
+
+    monkeypatch.setattr(service, "_rest", _fake_rest)
+
+    result = service._record_duplicate_transaction(
+        intent=intent,
+        tx_hash="0x" + "3" * 64,
+        from_address="0x2222222222222222222222222222222222222222",
+        status="refund_required",
+    )
+
+    assert result == {}
+    assert calls[0]["table"] == "payment_transactions"
+    assert calls[0]["prefer"] == "resolution=merge-duplicates,return=minimal"
+
+
+def test_payment_record_upsert_uses_minimal_return(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    calls = []
+
+    def _fake_rest(method, table, **kwargs):
+        calls.append({"method": method, "table": table, **kwargs})
+        return []
+
+    monkeypatch.setattr(service, "_rest", _fake_rest)
+
+    result = service._insert_payment_record(
+        user_id="user-1",
+        tx_hash="0x" + "4" * 64,
+        amount_units=5_000_000,
+        token_address="0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+        chain_id=137,
+        payload={"kind": "test"},
+    )
+
+    assert calls[0]["table"] == "payments"
+    assert calls[0]["prefer"] == "resolution=merge-duplicates,return=minimal"
+    assert result["tx_hash"] == "0x" + "4" * 64
+    assert result["status"] == "confirmed"
+    assert result["amount"] == "5"
+
+
+def test_create_intent_insert_uses_minimal_return_and_local_payload(
+    monkeypatch, tmp_path
+):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    calls = []
+
+    def _fake_rest(method, table, **kwargs):
+        calls.append({"method": method, "table": table, **kwargs})
+        if method == "POST" and table == "payment_intents":
+            return []
+        raise AssertionError((method, table, kwargs))
+
+    monkeypatch.setattr(service, "_rest", _fake_rest)
+
+    result = service.create_intent(
+        "00000000-0000-0000-0000-000000000001",
+        "pro_monthly",
+        payment_mode="direct",
+    )
+
+    intent_write = calls[0]
+    payload = intent_write["payload"]
+    assert intent_write["prefer"] == "return=minimal"
+    assert payload["id"] == result["intent"]["intent_id"]
+    assert payload["order_id_hex"] == result["intent"]["order_id_hex"]
+    assert result["intent"]["status"] == "created"
+    assert result["direct_payment"]["amount_units"] == str(payload["amount_units"])
+
+
 def test_payment_runtime_state_and_audit_event_roundtrip(tmp_path):
     db_path = tmp_path / "payments.db"
     db = DBManager(str(db_path))
@@ -246,6 +757,121 @@ def test_reconcile_latest_intent_confirms_submitted_first(monkeypatch, tmp_path)
     assert result["action"] == "confirmed_submitted_intent"
 
 
+def test_reconcile_latest_intent_reuses_confirmed_row_after_repair(monkeypatch, tmp_path):
+    monkeypatch.setenv("POLYWEATHER_PAYMENT_ENABLED", "true")
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role")
+    monkeypatch.setenv("POLYWEATHER_PAYMENT_RPC_URL", "https://rpc-1.example")
+    monkeypatch.setenv(
+        "POLYWEATHER_PAYMENT_ACCEPTED_TOKENS_JSON",
+        '[{"code":"usdc_e","address":"0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174","decimals":6,"receiver_contract":"0xeD2f13Aa5fF033c58FB436E178451Cd07f693f32","is_default":true}]',
+    )
+    monkeypatch.setenv("POLYWEATHER_DB_PATH", str(tmp_path / "payments.db"))
+
+    service = PaymentContractCheckoutService()
+    monkeypatch.setattr(
+        service,
+        "_rest",
+        lambda method, table, **kwargs: [
+            {
+                "id": "intent-1",
+                "plan_code": "pro_monthly",
+                "plan_id": 101,
+                "chain_id": 137,
+                "token_address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+                "receiver_address": "0xeD2f13Aa5fF033c58FB436E178451Cd07f693f32",
+                "amount_units": "5000000",
+                "payment_mode": "strict",
+                "allowed_wallet": "0x1111111111111111111111111111111111111111",
+                "order_id_hex": "0x" + "1" * 64,
+                "status": "confirmed",
+                "expires_at": "2099-01-01T00:00:00+00:00",
+                "tx_hash": "0x" + "2" * 64,
+                "metadata": {},
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        service,
+        "get_intent",
+        lambda user_id, intent_id: (_ for _ in ()).throw(
+            AssertionError("confirmed repair should reuse loaded row")
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "_ensure_confirm_side_effects",
+        lambda user_id, local_intent, tx_hash: {
+            "payment": {"tx_hash": tx_hash},
+            "subscription": {"plan_code": local_intent.plan_code},
+        },
+    )
+
+    result = service.reconcile_latest_intent("user-1")
+
+    assert result["ok"] is True
+    assert result["action"] == "reconciled_confirmed_intent"
+    assert result["intent"]["intent_id"] == "intent-1"
+
+
+def test_reconcile_latest_intent_without_candidates_does_not_clear_subscription_cache(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv("POLYWEATHER_PAYMENT_ENABLED", "true")
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role")
+    monkeypatch.setenv("POLYWEATHER_PAYMENT_RPC_URL", "https://rpc-1.example")
+    monkeypatch.setenv(
+        "POLYWEATHER_PAYMENT_ACCEPTED_TOKENS_JSON",
+        '[{"code":"usdc_e","address":"0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174","decimals":6,"receiver_contract":"0xeD2f13Aa5fF033c58FB436E178451Cd07f693f32","is_default":true}]',
+    )
+    monkeypatch.setenv("POLYWEATHER_DB_PATH", str(tmp_path / "payments.db"))
+
+    service = PaymentContractCheckoutService()
+    monkeypatch.setattr(
+        service,
+        "_rest",
+        lambda method, table, **kwargs: [
+            {
+                "id": "intent-created",
+                "plan_code": "pro_monthly",
+                "plan_id": 101,
+                "chain_id": 137,
+                "token_address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+                "receiver_address": "0xeD2f13Aa5fF033c58FB436E178451Cd07f693f32",
+                "amount_units": "5000000",
+                "payment_mode": "strict",
+                "allowed_wallet": "0x1111111111111111111111111111111111111111",
+                "order_id_hex": "0x" + "1" * 64,
+                "status": "created",
+                "expires_at": "2099-01-01T00:00:00+00:00",
+                "tx_hash": None,
+                "metadata": {},
+            }
+        ],
+    )
+
+    invalidations = []
+    monkeypatch.setattr(
+        "src.payments.contract_checkout.SUPABASE_ENTITLEMENT.invalidate_subscription_cache",
+        lambda user_id: invalidations.append(user_id),
+    )
+    monkeypatch.setattr(
+        "src.payments.contract_checkout.SUPABASE_ENTITLEMENT.get_latest_active_subscription",
+        lambda user_id, respect_requirement=False: {
+            "plan_code": "pro_monthly",
+            "expires_at": "2099-01-01T00:00:00+00:00",
+        },
+    )
+
+    result = service.reconcile_latest_intent("user-1")
+
+    assert result["ok"] is True
+    assert result["action"] == "checked_without_repair"
+    assert invalidations == []
+
+
 def test_confirm_intent_tx_repairs_side_effect_failure(monkeypatch, tmp_path):
     monkeypatch.setenv("POLYWEATHER_PAYMENT_ENABLED", "true")
     monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
@@ -386,6 +1012,117 @@ def test_reconcile_recent_intents_dedupes_users(monkeypatch, tmp_path):
     assert seen == ["user-1", "user-2"]
 
 
+def test_reconcile_recent_intents_selects_only_user_ids(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    calls = []
+
+    def _fake_rest(method, table, **kwargs):
+        calls.append({"method": method, "table": table, **kwargs})
+        return [{"user_id": "user-1"}, {"user_id": "user-1"}, {"user_id": "user-2"}]
+
+    seen = []
+    monkeypatch.setattr(service, "_rest", _fake_rest)
+    monkeypatch.setattr(
+        service,
+        "reconcile_latest_intent",
+        lambda user_id: seen.append(user_id) or {"ok": True, "subscription": {"user_id": user_id}},
+    )
+
+    result = service.reconcile_recent_intents(limit=10)
+
+    assert calls[0]["params"]["select"] == "user_id"
+    assert seen == ["user-1", "user-2"]
+    assert result["processed_users"] == 2
+
+
+def test_pending_confirm_intents_selects_only_confirm_loop_fields(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    calls = []
+
+    def _fake_rest(method, table, **kwargs):
+        calls.append({"method": method, "table": table, **kwargs})
+        return [
+            {
+                "id": "intent-1",
+                "user_id": "user-1",
+                "chain_id": 137,
+                "tx_hash": "0x" + "2" * 64,
+            }
+        ]
+
+    monkeypatch.setattr(service, "_rest", _fake_rest)
+
+    result = service.list_pending_confirm_intents(limit=20)
+
+    assert result == [
+        {
+            "intent_id": "intent-1",
+            "user_id": "user-1",
+            "chain_id": 137,
+            "tx_hash": "0x" + "2" * 64,
+        }
+    ]
+    assert calls[0]["params"]["select"] == "id,user_id,tx_hash,chain_id"
+
+
+def test_open_intents_by_order_id_selects_only_event_loop_fields(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    calls = []
+
+    def _fake_rest(method, table, **kwargs):
+        calls.append({"method": method, "table": table, **kwargs})
+        return [
+            {
+                "id": "intent-1",
+                "user_id": "user-1",
+                "status": "submitted",
+                "tx_hash": "0x" + "2" * 64,
+                "plan_id": 101,
+                "token_address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+                "amount_units": "5000000",
+            }
+        ]
+
+    monkeypatch.setattr(service, "_rest", _fake_rest)
+
+    result = service.list_open_intents_by_order_id("0x" + "1" * 64)
+
+    assert result == [
+        {
+            "intent_id": "intent-1",
+            "user_id": "user-1",
+            "status": "submitted",
+            "tx_hash": "0x" + "2" * 64,
+            "plan_id": 101,
+            "token_address": "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+            "amount_units": 5000000,
+        }
+    ]
+    assert (
+        calls[0]["params"]["select"]
+        == "id,user_id,status,tx_hash,plan_id,token_address,amount_units"
+    )
+
+
+def test_tx_hash_unused_check_selects_only_intent_id(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    calls = []
+
+    def _fake_rest(method, table, **kwargs):
+        calls.append({"method": method, "table": table, **kwargs})
+        return [{"intent_id": "intent-1"}]
+
+    monkeypatch.setattr(service, "_rest", _fake_rest)
+
+    service._ensure_tx_hash_unused("0x" + "1" * 64, "intent-1")
+
+    assert calls[0]["params"]["select"] == "intent_id"
+
+
 def test_grant_subscription_starts_after_trial_when_only_trial_is_active(monkeypatch, tmp_path):
     monkeypatch.setenv("POLYWEATHER_PAYMENT_ENABLED", "true")
     monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
@@ -403,12 +1140,9 @@ def test_grant_subscription_starts_after_trial_when_only_trial_is_active(monkeyp
 
     def _fake_rest(method, table, **kwargs):
         if method == "GET" and table == "subscriptions":
+            assert kwargs["params"]["select"] == "starts_at,expires_at"
             return [
                 {
-                    "id": 1,
-                    "status": "active",
-                    "plan_code": "signup_trial_3d",
-                    "source": "signup_trial",
                     "starts_at": (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),
                     "expires_at": trial_end.isoformat(),
                 }

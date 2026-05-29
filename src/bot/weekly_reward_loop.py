@@ -169,7 +169,7 @@ def _grant_bonus_subscription_days(
         }
         ins = requests.post(
             f"{base}/rest/v1/subscriptions",
-            headers={**headers, "Prefer": "return=representation"},
+            headers={**headers, "Prefer": "return=minimal"},
             json=create_payload,
             timeout=timeout_sec,
         )

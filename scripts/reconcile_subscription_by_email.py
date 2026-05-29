@@ -16,6 +16,21 @@ def _lookup_user_id_by_email(email: str) -> str:
     from src.payments.contract_checkout import PAYMENT_CHECKOUT, PaymentCheckoutError
 
     normalized_email = str(email or "").strip().lower()
+    profile_rows = PAYMENT_CHECKOUT._rest(  # noqa: SLF001
+        "GET",
+        "profiles",
+        params={
+            "select": "id",
+            "email": f"eq.{normalized_email}",
+            "limit": "1",
+        },
+        allowed_status=[200],
+    )
+    if isinstance(profile_rows, list) and profile_rows:
+        user_id = str((profile_rows[0] or {}).get("id") or "").strip()
+        if user_id:
+            return user_id
+
     payload = PAYMENT_CHECKOUT._auth_admin_request(  # noqa: SLF001
         "GET",
         f"/admin/users?email={email}",

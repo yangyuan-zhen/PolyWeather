@@ -6,7 +6,7 @@ export const BACKEND_ENTITLEMENT_HEADER = "x-polyweather-entitlement";
 export const FORWARDED_SUPABASE_USER_ID_HEADER = "x-polyweather-auth-user-id";
 export const FORWARDED_SUPABASE_EMAIL_HEADER = "x-polyweather-auth-email";
 
-type HeaderBuildResult = {
+export type BackendHeaderBuildResult = {
   headers: HeadersInit;
   response: NextResponse | null;
   authUserId?: string | null;
@@ -26,10 +26,22 @@ function extractBearerToken(headerValue: string | null) {
   return "";
 }
 
+function hasSupabaseSessionCookie(request: NextRequest) {
+  return request.cookies.getAll().some((cookie) => {
+    const name = cookie.name.toLowerCase();
+    const value = String(cookie.value || "").trim();
+    if (!value) return false;
+    return (
+      name === "supabase-auth-token" ||
+      (name.startsWith("sb-") && name.includes("-auth-token"))
+    );
+  });
+}
+
 export async function buildBackendRequestHeaders(
   request: NextRequest,
   options?: HeaderBuildOptions,
-): Promise<HeaderBuildResult> {
+): Promise<BackendHeaderBuildResult> {
   const headers = new Headers({
     Accept: "application/json",
   });
@@ -39,31 +51,19 @@ export async function buildBackendRequestHeaders(
   }
 
   const incomingAuth = extractBearerToken(request.headers.get("authorization"));
+  if (incomingAuth) {
+    headers.set("Authorization", `Bearer ${incomingAuth}`);
+    return { headers, response: null, authUserId: null, authEmail: null };
+  }
+
   const includeSupabaseIdentity = options?.includeSupabaseIdentity !== false;
   if (hasSupabaseServerEnv() && includeSupabaseIdentity) {
+    if (!hasSupabaseSessionCookie(request)) {
+      return { headers, response: null, authUserId: null, authEmail: null };
+    }
+
     const passthroughResponse = new NextResponse(null, { status: 200 });
     const supabase = createSupabaseRouteClient(request, passthroughResponse);
-    
-    // Always call getUser() to ensure token is validated and refreshed if expired
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    const forwardedUserId = String(user?.id || "").trim();
-    const forwardedEmail = String(user?.email || "").trim();
-    if (forwardedUserId) {
-      headers.set(FORWARDED_SUPABASE_USER_ID_HEADER, forwardedUserId);
-    }
-    if (forwardedEmail) {
-      headers.set(FORWARDED_SUPABASE_EMAIL_HEADER, forwardedEmail);
-    }
-
-    if (incomingAuth) {
-      headers.set("Authorization", `Bearer ${incomingAuth}`);
-      return { headers, response: passthroughResponse, authUserId: forwardedUserId || null, authEmail: forwardedEmail || null };
-    }
-
-    // Call getSession() to get the updated access token (after getUser() has refreshed it if needed)
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -72,12 +72,18 @@ export async function buildBackendRequestHeaders(
       // Fallback to cookie-backed session when request does not carry bearer.
       headers.set("Authorization", `Bearer ${accessToken}`);
     }
+    const sessionUser = session?.user;
+    const forwardedUserId = String(sessionUser?.id || "").trim();
+    const forwardedEmail = String(sessionUser?.email || "").trim();
+    if (forwardedUserId) {
+      headers.set(FORWARDED_SUPABASE_USER_ID_HEADER, forwardedUserId);
+    }
+    if (forwardedEmail) {
+      headers.set(FORWARDED_SUPABASE_EMAIL_HEADER, forwardedEmail);
+    }
     return { headers, response: passthroughResponse, authUserId: forwardedUserId || null, authEmail: forwardedEmail || null };
   }
 
-  if (incomingAuth) {
-    headers.set("Authorization", `Bearer ${incomingAuth}`);
-  }
   return { headers, response: null, authUserId: null, authEmail: null };
 }
 
@@ -94,7 +100,7 @@ export function applyAuthResponseCookies(
   return target;
 }
 
-export function requireBackendAuthUser(auth: HeaderBuildResult) {
+export function requireBackendAuthUser(auth: BackendHeaderBuildResult) {
   if (auth.authUserId) return null;
   return applyAuthResponseCookies(
     NextResponse.json(

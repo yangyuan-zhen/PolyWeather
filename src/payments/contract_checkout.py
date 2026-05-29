@@ -4,6 +4,7 @@ import json
 import os
 import secrets
 import threading
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, ROUND_FLOOR
@@ -1307,7 +1308,7 @@ class PaymentContractCheckoutService:
             "GET",
             "user_wallets",
             params={
-                "select": "chain_id,address,status,is_primary,verified_at",
+                "select": "chain_id,address,is_primary,verified_at",
                 "user_id": f"eq.{user_id}",
                 "chain_id": f"eq.{self.chain_id}",
                 "status": "eq.active",
@@ -1323,7 +1324,7 @@ class PaymentContractCheckoutService:
                 WalletBindingRecord(
                     chain_id=int(row.get("chain_id") or self.chain_id),
                     address=_normalize_address(row.get("address") or ""),
-                    status=str(row.get("status") or "active"),
+                    status="active",
                     is_primary=bool(row.get("is_primary")),
                     verified_at=row.get("verified_at"),
                 )
@@ -1338,7 +1339,7 @@ class PaymentContractCheckoutService:
             "GET",
             "user_wallets",
             params={
-                "select": "id,user_id,address,chain_id,status,is_primary",
+                "select": "status",
                 "user_id": f"eq.{user_id}",
                 "chain_id": f"eq.{self.chain_id}",
                 "address": f"eq.{normalized}",
@@ -1381,7 +1382,7 @@ class PaymentContractCheckoutService:
                 "message": message,
                 "expires_at": _to_iso(expires),
             },
-            prefer="return=representation",
+            prefer="return=minimal",
             allowed_status=[201],
         )
         return {
@@ -1414,13 +1415,12 @@ class PaymentContractCheckoutService:
             "GET",
             "wallet_link_challenges",
             params={
-                "select": "id,user_id,address,nonce,message,expires_at,consumed_at",
+                "select": "id,message,expires_at",
                 "user_id": f"eq.{user_id}",
                 "chain_id": f"eq.{self.chain_id}",
                 "address": f"eq.{normalized}",
                 "nonce": f"eq.{nonce_text}",
                 "consumed_at": "is.null",
-                "order": "created_at.desc",
                 "limit": "1",
             },
             allowed_status=[200],
@@ -1455,7 +1455,7 @@ class PaymentContractCheckoutService:
             "GET",
             "user_wallets",
             params={
-                "select": "id,user_id,address,status,is_primary",
+                "select": "user_id,status",
                 "chain_id": f"eq.{self.chain_id}",
                 "address": f"eq.{normalized}",
                 "limit": "1",
@@ -1501,7 +1501,7 @@ class PaymentContractCheckoutService:
                 "verified_at": now_iso,
                 "updated_at": now_iso,
             },
-            prefer="resolution=merge-duplicates,return=representation",
+            prefer="resolution=merge-duplicates,return=minimal",
             allowed_status=[200, 201],
         )
         self._rest(
@@ -1509,7 +1509,7 @@ class PaymentContractCheckoutService:
             "wallet_link_challenges",
             params={"id": f"eq.{challenge.get('id')}"},
             payload={"consumed_at": now_iso},
-            prefer="return=representation",
+            prefer="return=minimal",
             allowed_status=[200],
         )
         return WalletBindingRecord(
@@ -1543,7 +1543,7 @@ class PaymentContractCheckoutService:
                 "is_primary": False,
                 "updated_at": now_iso,
             },
-            prefer="return=representation",
+            prefer="return=minimal",
             allowed_status=[200],
         )
 
@@ -1591,7 +1591,7 @@ class PaymentContractCheckoutService:
                         "user_wallets",
                         params={"id": f"eq.{candidate_id}"},
                         payload={"is_primary": True, "updated_at": now_iso},
-                        prefer="return=representation",
+                        prefer="return=minimal",
                         allowed_status=[200],
                     )
                     new_primary = candidate_addr
@@ -1780,32 +1780,32 @@ class PaymentContractCheckoutService:
         order_id_hex = "0x" + secrets.token_hex(32)
         now = _now_utc()
         expires_at = now + timedelta(seconds=self.intent_ttl_sec)
-        rows = self._rest(
+        intent_payload = {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "plan_code": plan["plan_code"],
+            "plan_id": plan["plan_id"],
+            "chain_id": selected_chain_id,
+            "token_address": selected_token.address,
+            "receiver_address": receiver_address,
+            "amount_units": str(amount_units),
+            "payment_mode": mode,
+            "allowed_wallet": target_wallet or None,
+            "order_id_hex": order_id_hex,
+            "status": "created",
+            "expires_at": _to_iso(expires_at),
+            "metadata": combined_metadata,
+            "created_at": _to_iso(now),
+            "updated_at": _to_iso(now),
+        }
+        self._rest(
             "POST",
             "payment_intents",
-            payload={
-                "user_id": user_id,
-                "plan_code": plan["plan_code"],
-                "plan_id": plan["plan_id"],
-                "chain_id": selected_chain_id,
-                "token_address": selected_token.address,
-                "receiver_address": receiver_address,
-                "amount_units": str(amount_units),
-                "payment_mode": mode,
-                "allowed_wallet": target_wallet or None,
-                "order_id_hex": order_id_hex,
-                "status": "created",
-                "expires_at": _to_iso(expires_at),
-                "metadata": combined_metadata,
-                "created_at": _to_iso(now),
-                "updated_at": _to_iso(now),
-            },
-            prefer="return=representation",
+            payload=intent_payload,
+            prefer="return=minimal",
             allowed_status=[201],
         )
-        if not isinstance(rows, list) or not rows:
-            raise PaymentCheckoutError(500, "failed to create payment intent")
-        intent = self._serialize_intent(rows[0])
+        intent = self._serialize_intent(intent_payload)
         response = {
             "intent": intent.__dict__,
             "tx_payload": None if mode == "direct" else self._build_tx_payload(intent),
@@ -1885,7 +1885,7 @@ class PaymentContractCheckoutService:
             "GET",
             "payment_intents",
             params={
-                "select": "id,user_id,tx_hash,status,updated_at,created_at,chain_id",
+                "select": "id,user_id,tx_hash,chain_id",
                 "status": "eq.submitted",
                 "tx_hash": "not.is.null",
                 "order": "updated_at.asc",
@@ -1911,9 +1911,6 @@ class PaymentContractCheckoutService:
                     "user_id": user_id,
                     "tx_hash": tx_hash,
                     "chain_id": int(row.get("chain_id") or self.chain_id),
-                    "status": str(row.get("status") or ""),
-                    "updated_at": row.get("updated_at"),
-                    "created_at": row.get("created_at"),
                 }
             )
         return out
@@ -1937,8 +1934,7 @@ class PaymentContractCheckoutService:
             "payment_intents",
             params={
                 "select": (
-                    "id,user_id,status,tx_hash,order_id_hex,plan_id,token_address,"
-                    "amount_units,payment_mode,allowed_wallet,chain_id,created_at,updated_at"
+                    "id,user_id,status,tx_hash,plan_id,token_address,amount_units"
                 ),
                 "order_id_hex": f"eq.{normalized_order}",
                 "status": "in.(created,submitted,confirmed)",
@@ -1965,15 +1961,9 @@ class PaymentContractCheckoutService:
                     "user_id": user_id,
                     "status": status,
                     "tx_hash": str(row.get("tx_hash") or "").strip().lower(),
-                    "order_id_hex": str(row.get("order_id_hex") or "").strip().lower(),
                     "plan_id": int(row.get("plan_id") or 0),
-                    "chain_id": int(row.get("chain_id") or self.chain_id),
                     "token_address": _normalize_address(row.get("token_address")),
                     "amount_units": int(row.get("amount_units") or 0),
-                    "payment_mode": str(row.get("payment_mode") or "").strip().lower(),
-                    "allowed_wallet": _normalize_address(row.get("allowed_wallet")),
-                    "created_at": row.get("created_at"),
-                    "updated_at": row.get("updated_at"),
                 }
             )
         return out
@@ -1986,7 +1976,7 @@ class PaymentContractCheckoutService:
             "GET",
             "payment_transactions",
             params={
-                "select": "intent_id,tx_hash,status",
+                "select": "intent_id",
                 "tx_hash": f"eq.{tx_hash_text}",
                 "limit": "5",
             },
@@ -2018,7 +2008,7 @@ class PaymentContractCheckoutService:
             return {}
         now_iso = _to_iso(_now_utc())
         try:
-            rows = self._rest(
+            self._rest(
                 "POST",
                 "payment_transactions",
                 params={"on_conflict": "tx_hash"},
@@ -2040,10 +2030,10 @@ class PaymentContractCheckoutService:
                     },
                     "updated_at": now_iso,
                 },
-                prefer="resolution=merge-duplicates,return=representation",
+                prefer="resolution=merge-duplicates,return=minimal",
                 allowed_status=[200, 201],
             )
-            return rows[0] if isinstance(rows, list) and rows else {}
+            return {}
         except Exception:
             return {}
 
@@ -2060,6 +2050,13 @@ class PaymentContractCheckoutService:
         """
         self._ensure_enabled()
         intent = self.get_intent(user_id, intent_id)
+        return self._validate_loaded_intent_tx(intent, tx_hash)
+
+    def _validate_loaded_intent_tx(
+        self,
+        intent: PaymentIntentRecord,
+        tx_hash: str,
+    ) -> Dict[str, Any]:
         tx_hash_text = str(tx_hash or "").strip().lower()
         if not (tx_hash_text.startswith("0x") and len(tx_hash_text) == 66):
             return {
@@ -2266,7 +2263,7 @@ class PaymentContractCheckoutService:
                 "payment_intents",
                 params={"id": f"eq.{intent.intent_id}", "user_id": f"eq.{user_id}"},
                 payload={"status": "expired", "updated_at": _to_iso(now)},
-                prefer="return=representation",
+                prefer="return=minimal",
                 allowed_status=[200],
             )
             raise PaymentCheckoutError(409, "payment intent expired")
@@ -2283,7 +2280,7 @@ class PaymentContractCheckoutService:
             self._require_user_wallet(user_id, from_addr)
 
         try:
-            validation = self.validate_intent_tx(user_id, intent.intent_id, tx_hash_text)
+            validation = self._validate_loaded_intent_tx(intent, tx_hash_text)
         except Exception as exc:
             raise PaymentCheckoutError(
                 400,
@@ -2305,26 +2302,25 @@ class PaymentContractCheckoutService:
                 "tx_hash": tx_hash_text,
                 "updated_at": now_iso,
             },
-            prefer="return=representation",
+            prefer="return=minimal",
             allowed_status=[200],
         )
-        tx_rows = self._rest(
+        tx_payload = {
+            "intent_id": intent.intent_id,
+            "chain_id": int(intent.chain_id),
+            "tx_hash": tx_hash_text,
+            "from_address": from_addr,
+            "to_address": intent.receiver_address,
+            "payment_method": "direct" if intent.payment_mode == "direct" else "wallet",
+            "status": "submitted",
+            "updated_at": now_iso,
+        }
+        self._rest(
             "POST",
             "payment_transactions",
             params={"on_conflict": "tx_hash"},
-            payload={
-                "intent_id": intent.intent_id,
-                "chain_id": int(intent.chain_id),
-                "tx_hash": tx_hash_text,
-                "from_address": from_addr,
-                "to_address": intent.receiver_address,
-                "payment_method": "direct"
-                if intent.payment_mode == "direct"
-                else "wallet",
-                "status": "submitted",
-                "updated_at": now_iso,
-            },
-            prefer="resolution=merge-duplicates,return=representation",
+            payload=tx_payload,
+            prefer="resolution=merge-duplicates,return=minimal",
             allowed_status=[200, 201],
         )
         return {
@@ -2332,9 +2328,7 @@ class PaymentContractCheckoutService:
             "status": "submitted",
             "tx_hash": tx_hash_text,
             "from_address": from_addr,
-            "transaction": tx_rows[0]
-            if isinstance(tx_rows, list) and tx_rows
-            else None,
+            "transaction": tx_payload,
         }
 
     def _wait_receipt(self, tx_hash: str, chain_id: Optional[int] = None) -> Any:
@@ -2466,24 +2460,25 @@ class PaymentContractCheckoutService:
         token_decimals = self._token_decimals_for(token_address, payment_chain_id)
         amount_dec = _units_to_decimal(amount_units, token_decimals)
         currency = self._token_symbol_for(token_address, payment_chain_id)
-        rows = self._rest(
+        payment_payload = {
+            "user_id": user_id,
+            "amount": str(amount_dec),
+            "currency": currency,
+            "chain": self._chain_label_for(payment_chain_id),
+            "tx_hash": tx_hash,
+            "status": "confirmed",
+            "raw_payload": payload,
+            "updated_at": _to_iso(_now_utc()),
+        }
+        self._rest(
             "POST",
             "payments",
             params={"on_conflict": "tx_hash"},
-            payload={
-                "user_id": user_id,
-                "amount": str(amount_dec),
-                "currency": currency,
-                "chain": self._chain_label_for(payment_chain_id),
-                "tx_hash": tx_hash,
-                "status": "confirmed",
-                "raw_payload": payload,
-                "updated_at": _to_iso(_now_utc()),
-            },
-            prefer="resolution=merge-duplicates,return=representation",
+            payload=payment_payload,
+            prefer="resolution=merge-duplicates,return=minimal",
             allowed_status=[200, 201],
         )
-        return rows[0] if isinstance(rows, list) and rows else {}
+        return payment_payload
 
     def _grant_subscription(
         self,
@@ -2498,7 +2493,7 @@ class PaymentContractCheckoutService:
             "GET",
             "subscriptions",
             params={
-                "select": "id,expires_at,status,plan_code,source,starts_at",
+                "select": "starts_at,expires_at",
                 "user_id": f"eq.{user_id}",
                 "status": "eq.active",
                 "order": "expires_at.desc",
@@ -2539,20 +2534,21 @@ class PaymentContractCheckoutService:
             except Exception:
                 pass
         expires = starts + timedelta(days=max(1, duration_days))
-        sub_rows = self._rest(
+        subscription_payload = {
+            "user_id": user_id,
+            "plan_code": plan_code,
+            "status": "active",
+            "starts_at": _to_iso(starts),
+            "expires_at": _to_iso(expires),
+            "source": "payment_contract",
+            "created_at": _to_iso(now),
+            "updated_at": _to_iso(now),
+        }
+        self._rest(
             "POST",
             "subscriptions",
-            payload={
-                "user_id": user_id,
-                "plan_code": plan_code,
-                "status": "active",
-                "starts_at": _to_iso(starts),
-                "expires_at": _to_iso(expires),
-                "source": "payment_contract",
-                "created_at": _to_iso(now),
-                "updated_at": _to_iso(now),
-            },
-            prefer="return=representation",
+            payload=subscription_payload,
+            prefer="return=minimal",
             allowed_status=[201],
         )
         self._rest(
@@ -2566,11 +2562,11 @@ class PaymentContractCheckoutService:
                 "payload": {"tx_hash": tx_hash, **payload},
                 "created_at": _to_iso(now),
             },
-            prefer="return=representation",
+            prefer="return=minimal",
             allowed_status=[201],
         )
         SUPABASE_ENTITLEMENT.invalidate_subscription_cache(user_id)
-        return sub_rows[0] if isinstance(sub_rows, list) and sub_rows else {}
+        return subscription_payload
 
     def _ensure_confirmed_subscription(
         self,
@@ -2578,7 +2574,6 @@ class PaymentContractCheckoutService:
         intent: PaymentIntentRecord,
         tx_hash: str,
     ) -> Optional[Dict[str, Any]]:
-        SUPABASE_ENTITLEMENT.invalidate_subscription_cache(user_id)
         latest_subscription = SUPABASE_ENTITLEMENT.get_latest_active_subscription(
             user_id,
             respect_requirement=False,
@@ -2696,7 +2691,7 @@ class PaymentContractCheckoutService:
                 "metadata": metadata,
                 "updated_at": now_iso,
             },
-            prefer="return=representation",
+            prefer="return=minimal",
             allowed_status=[200],
         )
         if tx_hash:
@@ -2713,7 +2708,7 @@ class PaymentContractCheckoutService:
                     "status": "failed",
                     "updated_at": now_iso,
                 },
-                prefer="resolution=merge-duplicates,return=representation",
+                prefer="resolution=merge-duplicates,return=minimal",
                 allowed_status=[200, 201],
             )
         self._db.append_payment_audit_event(
@@ -2931,6 +2926,7 @@ class PaymentContractCheckoutService:
             "PATCH",
             "payment_intents",
             params={
+                "select": "id",
                 "id": f"eq.{intent.intent_id}",
                 "user_id": f"eq.{user_id}",
                 "status": "in.(created,submitted,failed)",
@@ -2972,24 +2968,25 @@ class PaymentContractCheckoutService:
             raise PaymentCheckoutError(
                 409, f"intent status is {refreshed.status}, cannot confirm"
             )
-        tx_rows = self._rest(
+        tx_payload = {
+            "intent_id": intent.intent_id,
+            "tx_hash": tx_hash_text,
+            "chain_id": int(intent.chain_id),
+            "from_address": tx_from,
+            "to_address": tx_to,
+            "block_number": block_number,
+            "payment_method": "direct" if is_direct else "wallet",
+            "status": "confirmed",
+            "raw_receipt": json.loads(Web3.to_json(receipt)),
+            "raw_tx": json.loads(Web3.to_json(tx)) if tx is not None else None,
+            "updated_at": now_iso,
+        }
+        self._rest(
             "POST",
             "payment_transactions",
             params={"on_conflict": "tx_hash"},
-            payload={
-                "intent_id": intent.intent_id,
-                "tx_hash": tx_hash_text,
-                "chain_id": int(intent.chain_id),
-                "from_address": tx_from,
-                "to_address": tx_to,
-                "block_number": block_number,
-                "payment_method": "direct" if is_direct else "wallet",
-                "status": "confirmed",
-                "raw_receipt": json.loads(Web3.to_json(receipt)),
-                "raw_tx": json.loads(Web3.to_json(tx)) if tx is not None else None,
-                "updated_at": now_iso,
-            },
-            prefer="resolution=merge-duplicates,return=representation",
+            payload=tx_payload,
+            prefer="resolution=merge-duplicates,return=minimal",
             allowed_status=[200, 201],
         )
         payload = {
@@ -3036,12 +3033,17 @@ class PaymentContractCheckoutService:
             amount_usdc=intent.amount_usdc,
             tx_hash=tx_hash_text,
         )
-        refreshed = self.get_intent(user_id, intent.intent_id)
+        refreshed = PaymentIntentRecord(
+            **{
+                **intent.__dict__,
+                "status": "confirmed",
+                "tx_hash": tx_hash_text,
+                "metadata": confirmed_metadata,
+            }
+        )
         return {
             "intent": refreshed.__dict__,
-            "transaction": tx_rows[0]
-            if isinstance(tx_rows, list) and tx_rows
-            else None,
+            "transaction": tx_payload,
             "payment": payment_row,
             "subscription": subscription_row,
             "points_redemption": points_result,
@@ -3091,11 +3093,10 @@ class PaymentContractCheckoutService:
                     repaired = self._ensure_confirm_side_effects(
                         user_id, intent, tx_hash_text
                     )
-                    refreshed = self.get_intent(user_id, intent.intent_id)
                     return {
                         "ok": True,
                         "action": "reconciled_confirmed_intent",
-                        "intent": refreshed.__dict__,
+                        "intent": intent.__dict__,
                         "payment": repaired.get("payment"),
                         "subscription": repaired.get("subscription"),
                     }
@@ -3109,7 +3110,6 @@ class PaymentContractCheckoutService:
                     }
                 )
 
-        SUPABASE_ENTITLEMENT.invalidate_subscription_cache(user_id)
         latest_subscription = SUPABASE_ENTITLEMENT.get_latest_active_subscription(
             user_id,
             respect_requirement=False,
@@ -3128,7 +3128,7 @@ class PaymentContractCheckoutService:
             "GET",
             "payment_intents",
             params={
-                "select": "id,user_id,status,updated_at",
+                "select": "user_id",
                 "status": "in.(submitted,confirmed)",
                 "order": "updated_at.desc",
                 "limit": str(safe_limit),

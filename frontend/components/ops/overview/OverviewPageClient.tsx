@@ -44,16 +44,15 @@ export function OverviewPageClient() {
   const load = async () => {
     setLoading(true);
     try {
-      const [s, m, f, g] = await Promise.all([
+      const [s, m, f] = await Promise.all([
         opsApi.systemStatus() as Promise<SystemStatusPayload>,
-        opsApi.memberships() as Promise<MembershipsPayload>,
+        opsApi.membershipsOverview(200, 30) as Promise<MembershipsPayload & { daily?: { date: string; trial: number; paid: number; total: number; cumulative: number }[] }>,
         opsApi.funnel(30),
-        opsApi.membershipsGrowth(30),
       ]);
       setStatus(s);
       setMemberships((m as MembershipsPayload).memberships ?? []);
       setFunnel(f);
-      setGrowth(g?.daily ?? []);
+      setGrowth(m?.daily ?? []);
     } catch { /* */ }
     setLoading(false);
   };
