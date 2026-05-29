@@ -226,8 +226,45 @@ export function runTests() {
     "Shenzhen HKO observations should remain visible by default",
   );
   assert(
-    !__isTemperatureSeriesVisibleByDefaultForTest("new york", "madis"),
-    "non-Hong Kong/Shenzhen airport-primary observations should be hidden by default",
+    __isTemperatureSeriesVisibleByDefaultForTest("new york", "madis"),
+    "airport-primary weather-station observations should be visible by default",
+  );
+
+  const amsterdamKnmi = __buildTemperatureChartDataForTest(
+    {
+      city: "amsterdam",
+      local_date: "2026-05-29",
+      local_time: "17:03",
+      tz_offset_seconds: 2 * 60 * 60,
+      airport: "EHAM",
+    } as any,
+    {
+      localTime: "17:03",
+      times: ["00:00", "06:00", "12:00", "18:00"],
+      temps: [19, 18, 27, 20],
+      airportPrimary: {
+        source_code: "knmi",
+        source_label: "KNMI",
+        temp: 19.0,
+        obs_time: "2026-05-29T15:03:00Z",
+      },
+      airportPrimaryTodayObs: [
+        { time: "2026-05-29T13:00:00Z", temp: 26.2 },
+        { time: "2026-05-29T14:00:00Z", temp: 24.5 },
+        { time: "2026-05-29T15:00:00Z", temp: 19.9 },
+      ],
+    } as any,
+    "1D",
+  );
+  const amsterdamDefaultSeries = __getActiveTemperatureSeriesForTest(
+    "amsterdam",
+    amsterdamKnmi.series as any,
+    {},
+    true,
+  );
+  assert(
+    amsterdamDefaultSeries.some((item: any) => item.key === "madis" && item.label === "KNMI"),
+    "Amsterdam KNMI weather-station curve should be visible by default",
   );
 
   const ankaraMgmWithMetarBackup = __buildTemperatureChartDataForTest(

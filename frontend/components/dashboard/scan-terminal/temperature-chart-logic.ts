@@ -95,14 +95,7 @@ function isTemperatureSeriesVisibleByDefault(city: string, seriesKey: string) {
     );
   }
   if (seriesKey === "madis") {
-    const cityKey = normalizeCityKey(city);
-    return (
-      cityKey === "hongkong" ||
-      cityKey === "laufaushan" ||
-      cityKey === "shenzhen" ||
-      cityKey === "ankara" ||
-      cityKey === "istanbul"
-    );
+    return true;
   }
   return true;
 }
