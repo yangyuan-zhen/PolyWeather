@@ -58,53 +58,14 @@ const PRO_FEATURES_ZH = [
   "订阅与准入问题优先支持",
 ];
 
-function WeatherWorkflowIllustration({ isEn }: { isEn: boolean }) {
-  const cards = isEn
-    ? [
-        { label: "Airport obs", value: "24.2C", color: "bg-emerald-100 text-emerald-800" },
-        { label: "DEB forecast", value: "25.0C", color: "bg-sky-100 text-sky-800" },
-        { label: "Risk", value: "Watch", color: "bg-amber-100 text-amber-800" },
-      ]
-    : [
-        { label: "机场实测", value: "24.2C", color: "bg-emerald-100 text-emerald-800" },
-        { label: "DEB 预报", value: "25.0C", color: "bg-sky-100 text-sky-800" },
-        { label: "风险状态", value: "观察", color: "bg-amber-100 text-amber-800" },
-      ];
-
+function WeatherWorkflowIllustration() {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none absolute inset-x-0 top-16 z-0 mx-auto hidden h-[520px] max-w-6xl overflow-hidden md:block"
+      className="pointer-events-none absolute inset-x-0 top-16 z-0 mx-auto hidden h-[240px] max-w-6xl overflow-hidden md:block"
     >
       <div className="absolute left-8 top-14 h-24 w-24 rotate-[-7deg] rounded-lg border-2 border-slate-900 bg-[#fff3b0] shadow-[6px_6px_0_rgba(15,23,42,0.12)]" />
       <div className="absolute right-14 top-10 h-20 w-28 rotate-[6deg] rounded-lg border-2 border-slate-900 bg-[#dff8ea] shadow-[6px_6px_0_rgba(15,23,42,0.12)]" />
-      <div className="absolute left-20 bottom-16 h-16 w-24 rotate-[8deg] rounded-lg border-2 border-slate-900 bg-[#e4efff] shadow-[6px_6px_0_rgba(15,23,42,0.12)]" />
-
-      <div className="absolute left-1/2 top-64 w-[420px] -translate-x-1/2 rounded-lg border-2 border-slate-900 bg-white/80 shadow-[10px_10px_0_rgba(15,23,42,0.10)]">
-        <div className="flex h-10 items-center gap-2 border-b-2 border-slate-900 px-4">
-          <span className="h-2.5 w-2.5 rounded-full bg-[#ff6b6b]" />
-          <span className="h-2.5 w-2.5 rounded-full bg-[#ffd166]" />
-          <span className="h-2.5 w-2.5 rounded-full bg-[#06d6a0]" />
-          <span className="ml-3 h-3 w-32 rounded bg-slate-200" />
-        </div>
-        <div className="grid gap-3 p-5">
-          {cards.map((card) => (
-            <div key={card.label} className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
-              <span className="text-sm font-semibold text-slate-700">{card.label}</span>
-              <span className={`rounded-md px-2 py-1 text-xs font-bold ${card.color}`}>{card.value}</span>
-            </div>
-          ))}
-          <div className="mt-1 flex h-24 items-end gap-2 rounded-md border border-slate-200 bg-white px-4 py-3">
-            {[34, 44, 31, 56, 64, 48, 70, 62, 78, 66].map((height, index) => (
-              <span
-                key={index}
-                className="flex-1 rounded-t bg-slate-900/80"
-                style={{ height: `${height}%` }}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -251,7 +212,7 @@ function InstitutionalLandingScreen() {
 
       <main>
         <section className="relative overflow-hidden border-b border-slate-200 px-4 pb-16 pt-20 sm:px-6 sm:pt-24">
-          <WeatherWorkflowIllustration isEn={isEn} />
+          <WeatherWorkflowIllustration />
           <div className="relative z-10 mx-auto max-w-6xl">
             <div className="mx-auto max-w-3xl text-center">
               <h1 className="text-5xl font-black leading-[1.04] tracking-tight text-slate-950 sm:text-6xl lg:text-7xl">
