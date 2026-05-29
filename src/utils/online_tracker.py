@@ -24,7 +24,9 @@ def _cleanup_stale() -> None:
 
 def _start_cleanup() -> None:
     _cleanup_stale()
-    threading.Timer(_cleanup_interval_sec, _start_cleanup).start()
+    timer = threading.Timer(_cleanup_interval_sec, _start_cleanup)
+    timer.daemon = True
+    timer.start()
 
 
 _start_cleanup()

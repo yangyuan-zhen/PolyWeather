@@ -115,26 +115,63 @@ function getVisibleTemperatureSeries(
   });
 }
 
-function getActiveTemperatureSeries(
+function isIndividualRunwaySeriesKey(seriesKey: string) {
+  return seriesKey.startsWith("runway_") && seriesKey !== "runway_max";
+}
+
+function isSettlementRunwaySeriesKey(city: string, seriesKey: string) {
+  if (!isIndividualRunwaySeriesKey(seriesKey)) return false;
+  const cityKey = normalizeCityKey(city);
+  const settlementPairs = SETTLEMENT_RUNWAY_PAIRS[cityKey] || [];
+  if (!settlementPairs.length) return false;
+  const normalized = seriesKey
+    .replace(/^runway_/, "")
+    .split("_")
+    .map(normalizeRunwayLabel)
+    .filter(Boolean)
+    .sort()
+    .join("/");
+  return settlementPairs.some((pair) => pairKey(pair) === normalized);
+}
+
+function getTemperatureSeriesForRunwayDetailsMode(
   city: string,
-  chartSeries: EvidenceSeries[],
-  userToggledKeys: Record<string, boolean>,
+  series: EvidenceSeries[],
   showRunwayDetails: boolean,
 ) {
-  const rawVisible = getVisibleTemperatureSeries(city, chartSeries, userToggledKeys);
-  const hasRunwayMax = rawVisible.some((item) => item.key === "runway_max");
+  const hasRunwayMax = series.some((item) => item.key === "runway_max");
+  const hasSettlementRunway = series.some((item) =>
+    isSettlementRunwaySeriesKey(city, item.key),
+  );
 
-  return rawVisible.filter((item) => {
-    const isIndividualRunway =
-      item.key.startsWith("runway_") && item.key !== "runway_max";
+  return series.filter((item) => {
+    const isIndividualRunway = isIndividualRunwaySeriesKey(item.key);
     if (showRunwayDetails) {
       return item.key !== "runway_max";
+    }
+    if (hasSettlementRunway) {
+      if (item.key === "runway_max") return false;
+      return !isIndividualRunway || isSettlementRunwaySeriesKey(city, item.key);
     }
     if (!hasRunwayMax) {
       return true;
     }
     return !isIndividualRunway;
   });
+}
+
+function getActiveTemperatureSeries(
+  city: string,
+  chartSeries: EvidenceSeries[],
+  userToggledKeys: Record<string, boolean>,
+  showRunwayDetails: boolean,
+) {
+  const modeSeries = getTemperatureSeriesForRunwayDetailsMode(
+    city,
+    chartSeries,
+    showRunwayDetails,
+  );
+  return getVisibleTemperatureSeries(city, modeSeries, userToggledKeys);
 }
 
 function buildRunwayPlates(
@@ -2156,6 +2193,7 @@ export {
   buildRunwayPlates,
   fetchHourlyForecastForCity,
   getActiveTemperatureSeries,
+  getTemperatureSeriesForRunwayDetailsMode,
   getLiveObservationLabels,
   getObservationDisplayMetrics,
   getVisibleTemperatureSeries,

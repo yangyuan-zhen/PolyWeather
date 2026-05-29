@@ -15,7 +15,11 @@ import {
 } from "recharts";
 import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 import { TemperatureTooltipContent } from "@/components/dashboard/scan-terminal/TemperatureTooltipContent";
-import type { EvidenceSeries, ProbabilityOverlay } from "@/components/dashboard/scan-terminal/temperature-chart-logic";
+import {
+  getTemperatureSeriesForRunwayDetailsMode,
+  type EvidenceSeries,
+  type ProbabilityOverlay,
+} from "@/components/dashboard/scan-terminal/temperature-chart-logic";
 
 type CityThreshold = {
   threshold: number;
@@ -120,23 +124,25 @@ export function TemperatureChartCanvas({
   const individualRunwaySeriesCount = chartSeries.filter(
     (series) => series.key.startsWith("runway_") && series.key !== "runway_max",
   ).length;
+  const collapsedRunwaySeries = getTemperatureSeriesForRunwayDetailsMode(
+    row?.city || "",
+    chartSeries,
+    false,
+  );
   const canToggleRunwayDetails =
     hasRunwayData &&
     individualRunwaySeriesCount > 1 &&
-    chartSeries.some((series) => series.key === "runway_max");
+    collapsedRunwaySeries.length < chartSeries.length;
 
   return (
     <div className={clsx("relative flex flex-1 flex-col p-2", compact ? "min-h-[120px]" : "min-h-[240px]")}>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-1.5 text-[11px] border-b border-[#e2e8f0] bg-white">
         {chartSeries.length > 1 &&
-          chartSeries
-            .filter((s) => {
-              const isIndividualRunway = s.key.startsWith("runway_") && s.key !== "runway_max";
-              if (showRunwayDetails) {
-                return s.key !== "runway_max";
-              }
-              return !isIndividualRunway;
-            })
+          getTemperatureSeriesForRunwayDetailsMode(
+            row?.city || "",
+            chartSeries,
+            showRunwayDetails,
+          )
             .map((s) => (
               <button
                 key={s.key}

@@ -850,6 +850,64 @@ export function runTests() {
     "runway header should prefer runway-history current temp even when the latest detail payload lacks runway_obs snapshot",
   );
 
+  const wuhanRunwayChart = __buildTemperatureChartDataForTest(
+    {
+      city: "wuhan",
+      local_date: "2026-05-27",
+      local_time: "13:54",
+      tz_offset_seconds: 8 * 60 * 60,
+      temp_symbol: "°C",
+    } as any,
+    {
+      localTime: "13:54",
+      times: ["00:00", "12:00", "18:00", "23:00"],
+      temps: [22.0, 30.0, 29.0, 25.0],
+      runwayPlateHistory: {
+        "04/22": [
+          { time: "13:52", temp: 24.0 },
+          { time: "13:54", temp: 24.2 },
+        ],
+        "05L/23R": [
+          { time: "13:52", temp: 25.0 },
+          { time: "13:54", temp: 25.5 },
+        ],
+      },
+      runwayBandHistory: [
+        { time: "2026-05-27T13:52:00+08:00", low_temp: 24.0, high_temp: 25.0, avg_temp: 24.5 },
+        { time: "2026-05-27T13:54:00+08:00", low_temp: 24.2, high_temp: 25.5, avg_temp: 24.9 },
+      ],
+    } as any,
+    "1D",
+  );
+  const wuhanCollapsedRunwaySeries = __getActiveTemperatureSeriesForTest(
+    "wuhan",
+    wuhanRunwayChart.series,
+    {},
+    false,
+  );
+  assert(
+    wuhanCollapsedRunwaySeries.some((item: any) => item.key === runwayKey("04/22")),
+    "collapsed runway view should keep the settlement runway series",
+  );
+  assert(
+    !wuhanCollapsedRunwaySeries.some((item: any) => item.key === runwayKey("05L/23R")),
+    "collapsed runway view should hide auxiliary runway detail series",
+  );
+  assert(
+    !wuhanCollapsedRunwaySeries.some((item: any) => item.key === "runway_max"),
+    "collapsed runway view should not replace the settlement runway with runway max",
+  );
+  const wuhanCollapsedWithSettlementHidden = __getActiveTemperatureSeriesForTest(
+    "wuhan",
+    wuhanRunwayChart.series,
+    { [runwayKey("04/22")]: false },
+    false,
+  );
+  assert(
+    !wuhanCollapsedWithSettlementHidden.some((item: any) => item.key === "runway_max"),
+    "hiding the settlement runway should not reveal runway max in collapsed runway view",
+  );
+
   const newYorkMetrics = __getObservationDisplayMetricsForTest(
     {
       city: "new york",
