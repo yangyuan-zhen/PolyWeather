@@ -102,4 +102,20 @@ export function runTests() {
         dashboardSource.indexOf('event === "TOKEN_REFRESHED"'),
     "terminal auth listener must hydrate access from Supabase INITIAL_SESSION events during first navigation from the landing page",
   );
+  assert(
+    dashboardSource.includes("useDeferredValue") &&
+      dashboardSource.includes("deferredSearchQuery") &&
+      dashboardSource.includes("[rows, deferredSearchQuery]"),
+    "terminal search must defer expensive row filtering so typing stays responsive",
+  );
+  assert(
+    dashboardSource.includes('trackAppEvent("enter_terminal"') &&
+      dashboardSource.includes('entry: "terminal"'),
+    "terminal must emit enter_terminal when an entitled user reaches the dashboard",
+  );
+  assert(
+    chartCanvasSource.includes("memo(") &&
+      chartCanvasSource.includes("TemperatureChartCanvasComponent"),
+    "temperature chart canvas must be memoized so unrelated terminal state does not remount Recharts",
+  );
 }

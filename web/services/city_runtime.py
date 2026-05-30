@@ -66,6 +66,13 @@ _DEB_RECENT_MIN_SAMPLES = 3
 _daily_record_repo = DailyRecordRepository()
 
 TRACKABLE_ANALYTICS_EVENTS = {
+    "landing_view",
+    "enter_terminal",
+    "login_start",
+    "signup_success",
+    "trial_created",
+    "payment_start",
+    "payment_success",
     "signup_completed",
     "dashboard_active",
     "paywall_feature_clicked",

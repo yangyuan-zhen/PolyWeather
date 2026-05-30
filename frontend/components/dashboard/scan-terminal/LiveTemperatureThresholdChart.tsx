@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 import { useLatestPatch, useSseResyncVersion } from "@/hooks/use-sse-patches";
 import { Panel } from "@/components/dashboard/scan-terminal/Panel";
@@ -465,12 +465,12 @@ export function LiveTemperatureThresholdChart({
     return series;
   }, [series]);
 
-  const isSeriesVisible = (sKey: string) => {
+  const isSeriesVisible = useCallback((sKey: string) => {
     if (userToggledKeys[sKey] !== undefined) {
       return userToggledKeys[sKey];
     }
     return isTemperatureSeriesVisibleByDefault(city, sKey);
-  };
+  }, [city, userToggledKeys]);
 
   const activeSeries = useMemo(() => {
     return getActiveTemperatureSeries(
@@ -568,6 +568,62 @@ export function LiveTemperatureThresholdChart({
 
   const subtitle = row ? (isEn ? "Live & Forecast" : "实测与预测") : "";
 
+  const handleZoomReset = useCallback(() => {
+    setZoomRange(null);
+  }, []);
+
+  const handleViewModeChange = useCallback((mode: "auto" | "full") => {
+    setViewMode(mode);
+    setZoomRange(null);
+  }, []);
+
+  const handleMouseDown = useCallback((e: any) => {
+    if (compact || !e) return;
+    if (typeof e.activeTooltipIndex === "number") {
+      setRefAreaLeft(e.activeTooltipIndex);
+      setRefAreaRight(e.activeTooltipIndex);
+    }
+  }, [compact]);
+
+  const handleMouseMove = useCallback((e: any) => {
+    if (compact || !e || refAreaLeft === null) return;
+    if (typeof e.activeTooltipIndex === "number") {
+      setRefAreaRight(e.activeTooltipIndex);
+    }
+  }, [compact, refAreaLeft]);
+
+  const handleMouseUp = useCallback(() => {
+    if (refAreaLeft === null || refAreaRight === null) {
+      setRefAreaLeft(null);
+      setRefAreaRight(null);
+      return;
+    }
+
+    let leftIdx = refAreaLeft;
+    let rightIdx = refAreaRight;
+
+    if (leftIdx > rightIdx) {
+      [leftIdx, rightIdx] = [rightIdx, leftIdx];
+    }
+
+    if (rightIdx - leftIdx >= 1) {
+      const originalStartIndex = visibleRange ? visibleRange[0] : 0;
+      const newStart = originalStartIndex + leftIdx;
+      const newEnd = originalStartIndex + rightIdx;
+      setZoomRange([newStart, newEnd]);
+    }
+
+    setRefAreaLeft(null);
+    setRefAreaRight(null);
+  }, [refAreaLeft, refAreaRight, visibleRange]);
+
+  const handleSeriesToggle = useCallback((seriesKey: string) => {
+    setUserToggledKeys((prev) => ({
+      ...prev,
+      [seriesKey]: !isSeriesVisible(seriesKey),
+    }));
+  }, [isSeriesVisible]);
+
   const panelTitle = row ? (
     <div className="flex items-center gap-1">
       <button
@@ -606,7 +662,7 @@ export function LiveTemperatureThresholdChart({
       {zoomRange && (
         <button
           type="button"
-          onClick={() => setZoomRange(null)}
+          onClick={handleZoomReset}
           className="px-2 py-0.5 text-[9px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 shadow-sm transition-all cursor-pointer"
         >
           {isEn ? "Reset Zoom" : "重置缩放"}
@@ -617,10 +673,7 @@ export function LiveTemperatureThresholdChart({
           <button
             key={mode}
             type="button"
-            onClick={() => {
-              setViewMode(mode);
-              setZoomRange(null);
-            }}
+            onClick={() => handleViewModeChange(mode)}
             className={clsx(
               "px-2 py-0.5 text-[9px] font-bold rounded transition-all cursor-pointer",
               viewMode === mode
@@ -670,45 +723,7 @@ export function LiveTemperatureThresholdChart({
         </div>
       )}
     </div>
-  );  const handleMouseDown = (e: any) => {
-    if (compact || !e) return;
-    if (typeof e.activeTooltipIndex === "number") {
-      setRefAreaLeft(e.activeTooltipIndex);
-      setRefAreaRight(e.activeTooltipIndex);
-    }
-  };
-
-  const handleMouseMove = (e: any) => {
-    if (compact || !e || refAreaLeft === null) return;
-    if (typeof e.activeTooltipIndex === "number") {
-      setRefAreaRight(e.activeTooltipIndex);
-    }
-  };
-
-  const handleMouseUp = () => {
-    if (refAreaLeft === null || refAreaRight === null) {
-      setRefAreaLeft(null);
-      setRefAreaRight(null);
-      return;
-    }
-
-    let leftIdx = refAreaLeft;
-    let rightIdx = refAreaRight;
-
-    if (leftIdx > rightIdx) {
-      [leftIdx, rightIdx] = [rightIdx, leftIdx];
-    }
-
-    if (rightIdx - leftIdx >= 1) {
-      const originalStartIndex = visibleRange ? visibleRange[0] : 0;
-      const newStart = originalStartIndex + leftIdx;
-      const newEnd = originalStartIndex + rightIdx;
-      setZoomRange([newStart, newEnd]);
-    }
-
-    setRefAreaLeft(null);
-    setRefAreaRight(null);
-  };
+  );
 
   return (
     <Panel
@@ -768,14 +783,9 @@ export function LiveTemperatureThresholdChart({
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          onZoomReset={() => setZoomRange(null)}
+          onZoomReset={handleZoomReset}
           isSeriesVisible={isSeriesVisible}
-          onSeriesToggle={(seriesKey) => {
-            setUserToggledKeys((prev) => ({
-              ...prev,
-              [seriesKey]: !isSeriesVisible(seriesKey),
-            }));
-          }}
+          onSeriesToggle={handleSeriesToggle}
           onShowRunwayDetailsChange={setShowRunwayDetails}
         />
       </div>

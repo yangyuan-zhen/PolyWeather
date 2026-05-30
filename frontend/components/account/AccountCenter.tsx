@@ -196,8 +196,21 @@ export function AccountCenter() {
   useEffect(() => {
     if (!authIsAuthenticated || !authUserId) return;
     const actorKey = authUserId.toLowerCase();
+    const subscriptionPlanCode = String(backend?.subscription_plan_code || "").trim();
+    const subscriptionSource = String(backend?.subscription_source || "").trim();
+    const trialSubscription = Boolean(
+      backend?.subscription_is_trial === true ||
+        subscriptionPlanCode.toLowerCase().includes("trial") ||
+        subscriptionSource.toLowerCase().includes("trial"),
+    );
     if (markAnalyticsOnce(`signup_completed:${actorKey}`, "local")) {
       trackAppEvent("signup_completed", {
+        entry: "account_center",
+        user_id: authUserId,
+      });
+    }
+    if (markAnalyticsOnce(`signup_success:${actorKey}`, "local")) {
+      trackAppEvent("signup_success", {
         entry: "account_center",
         user_id: authUserId,
       });
@@ -208,7 +221,24 @@ export function AccountCenter() {
         user_id: authUserId,
       });
     }
-  }, [authIsAuthenticated, authUserId]);
+    if (trialSubscription && markAnalyticsOnce(`trial_created:${actorKey}`, "local")) {
+      trackAppEvent("trial_created", {
+        entry: "account_center",
+        user_id: authUserId,
+        subscription_plan_code: subscriptionPlanCode || null,
+        subscription_source: subscriptionSource || null,
+        subscription_expires_at: backend?.subscription_expires_at || null,
+        subscription_is_trial: backend?.subscription_is_trial === true,
+      });
+    }
+  }, [
+    authIsAuthenticated,
+    authUserId,
+    backend?.subscription_expires_at,
+    backend?.subscription_is_trial,
+    backend?.subscription_plan_code,
+    backend?.subscription_source,
+  ]);
 
   // ── Idle callback effect ──────────────────────────────
   useEffect(() => {

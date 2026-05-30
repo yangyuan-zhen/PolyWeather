@@ -14,7 +14,7 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { CityListItem, ProAccessState, ScanOpportunityRow } from "@/lib/dashboard-types";
 import { getInitialLocaleFromNavigator } from "@/lib/i18n";
 import { isBrowserLocalFullAccess } from "@/lib/local-dev-access";
@@ -60,6 +60,7 @@ import {
   cityListItemsToScanRows,
   mergeScanRowsWithCityFallbackRows,
 } from "@/components/dashboard/scan-terminal/city-fallback-rows";
+import { markAnalyticsOnce, trackAppEvent } from "@/lib/app-analytics";
 
 function createEmptyAccess(loading = true): ProAccessState {
   return {
@@ -1184,6 +1185,17 @@ function ScanTerminalScreen() {
       timezoneOffsetSeconds: useLocalTimezoneDefault ? localTimezoneOffsetSeconds : null,
       tradingRegion: selectedRegionKey,
     });
+
+  useEffect(() => {
+    if (!hydrated || !isAuthenticated || !isPro) return;
+    const actorKey = String(proAccess.userId || "local").toLowerCase();
+    if (markAnalyticsOnce(`enter_terminal:${actorKey}`, "session")) {
+      trackAppEvent("enter_terminal", {
+        entry: "terminal",
+        user_id: proAccess.userId || null,
+      });
+    }
+  }, [hydrated, isAuthenticated, isPro, proAccess.userId]);
   const handleRefresh = useCallback(() => {
     clearCityDetailCache();
     refreshScanTerminalManually();
@@ -1223,11 +1235,12 @@ function ScanTerminalScreen() {
     return () => controller.abort();
   }, [isPro]);
   const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const filteredRows = useMemo(() => {
-    if (!searchQuery.trim()) return rows;
-    const q = searchQuery.toLowerCase().trim();
+    if (!deferredSearchQuery.trim()) return rows;
+    const q = deferredSearchQuery.toLowerCase().trim();
     return rows.filter((row) => {
       const haystack = [
         row.city,
@@ -1246,7 +1259,7 @@ function ScanTerminalScreen() {
         .map((v) => String(v).toLowerCase());
       return haystack.some((s) => s.includes(q));
     });
-  }, [rows, searchQuery]);
+  }, [rows, deferredSearchQuery]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedCity, setSelectedCity] = useState<string | null>(null);

@@ -204,6 +204,27 @@ export function runTests() {
     "account center must emit signup_completed and dashboard_active so the ops funnel has top-of-funnel data",
   );
   assert(
+    appAnalyticsSource.includes('| "landing_view"') &&
+      appAnalyticsSource.includes('| "enter_terminal"') &&
+      appAnalyticsSource.includes('| "login_start"') &&
+      appAnalyticsSource.includes('| "signup_success"') &&
+      appAnalyticsSource.includes('| "trial_created"') &&
+      appAnalyticsSource.includes('| "payment_start"') &&
+      appAnalyticsSource.includes('| "payment_success"'),
+    "app analytics must expose the standard growth funnel event names",
+  );
+  assert(
+    accountCenterSource.includes('trackAppEvent("signup_success"') &&
+      accountCenterSource.includes('trackAppEvent("trial_created"') &&
+      accountCenterSource.includes("subscription_is_trial"),
+    "account center must emit signup_success and trial_created for the standard funnel",
+  );
+  assert(
+    paymentFlowSource.includes('trackAppEvent("payment_start"') &&
+      paymentFlowSource.includes('trackAppEvent("payment_success"'),
+    "payment flow must emit payment_start and payment_success alongside legacy checkout events",
+  );
+  assert(
     accountCenterSource.includes("isSubscriptionUnknown") &&
       accountCenterSource.includes("subscriptionStatusLabel") &&
       !accountCenterSource.includes(

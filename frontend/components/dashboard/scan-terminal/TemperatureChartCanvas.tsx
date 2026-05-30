@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import {
   Area,
   CartesianGrid,
@@ -28,7 +28,7 @@ type CityThreshold = {
   kind: "gte" | "lte";
 };
 
-export function TemperatureChartCanvas({
+function TemperatureChartCanvasComponent({
   isEn,
   compact,
   timeframe,
@@ -349,3 +349,5 @@ export function TemperatureChartCanvas({
     </div>
   );
 }
+
+export const TemperatureChartCanvas = memo(TemperatureChartCanvasComponent);

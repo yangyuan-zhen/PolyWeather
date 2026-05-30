@@ -4,6 +4,13 @@ const ANALYTICS_ENABLED =
   process.env.NEXT_PUBLIC_POLYWEATHER_APP_ANALYTICS !== "false";
 
 type TrackableAnalyticsEvent =
+  | "landing_view"
+  | "enter_terminal"
+  | "login_start"
+  | "signup_success"
+  | "trial_created"
+  | "payment_start"
+  | "payment_success"
   | "signup_completed"
   | "dashboard_active"
   | "paywall_feature_clicked"

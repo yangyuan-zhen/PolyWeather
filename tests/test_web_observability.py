@@ -11,6 +11,7 @@ import web.routes as routes
 import web.services.ops_api as ops_api
 import web.scan_terminal_cache as scan_terminal_cache
 import web.scan_terminal_service as scan_terminal_service
+import web.services.city_runtime as city_runtime
 from web.scan_terminal_cache import scan_terminal_cache_key
 from src.database.runtime_state import TruthRecordRepository
 
@@ -58,6 +59,49 @@ def test_metrics_endpoint_returns_prometheus_payload():
     response = client.get('/metrics')
     assert response.status_code == 200
     assert 'polyweather_http_requests_total' in response.text
+
+
+def test_standard_growth_funnel_events_are_trackable():
+    assert {
+        "landing_view",
+        "enter_terminal",
+        "login_start",
+        "signup_success",
+        "trial_created",
+        "payment_start",
+        "payment_success",
+    }.issubset(city_runtime.TRACKABLE_ANALYTICS_EVENTS)
+
+
+def test_standard_growth_funnel_summary_order(monkeypatch):
+    from src.database.db_manager import DBManager
+
+    rows = [
+        {"id": 1, "event_type": "landing_view", "user_id": "", "client_id": "c1", "session_id": "s1"},
+        {"id": 2, "event_type": "enter_terminal", "user_id": "", "client_id": "c1", "session_id": "s1"},
+        {"id": 3, "event_type": "login_start", "user_id": "", "client_id": "c1", "session_id": "s1"},
+        {"id": 4, "event_type": "signup_success", "user_id": "u1", "client_id": "c1", "session_id": "s1"},
+        {"id": 5, "event_type": "trial_created", "user_id": "u1", "client_id": "c1", "session_id": "s1"},
+        {"id": 6, "event_type": "payment_start", "user_id": "u1", "client_id": "c1", "session_id": "s1"},
+        {"id": 7, "event_type": "payment_success", "user_id": "u1", "client_id": "c1", "session_id": "s1"},
+    ]
+    monkeypatch.setattr(
+        DBManager,
+        "list_app_analytics_events",
+        lambda self, limit=5000, since_iso=None: rows,
+    )
+
+    summary = DBManager().get_app_analytics_funnel_summary(days=7)
+    assert list(summary["events"].keys()) == [
+        "landing_view",
+        "enter_terminal",
+        "login_start",
+        "signup_success",
+        "trial_created",
+        "payment_start",
+        "payment_success",
+    ]
+    assert summary["rates"]["payment_success_rate"] == 1.0
 
 
 

@@ -174,6 +174,14 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
   const planList = paymentConfig?.plans || [];
   const effectivePlanList = planList;
   const selectedPlan = effectivePlanList.find((plan) => plan.plan_code === selectedPlanCode) || effectivePlanList[0];
+  const trackPaymentStart = useCallback((payload: Record<string, unknown>) => {
+    trackAppEvent("checkout_started", payload);
+    trackAppEvent("payment_start", payload);
+  }, []);
+  const trackPaymentSuccess = useCallback((payload: Record<string, unknown>) => {
+    trackAppEvent("checkout_succeeded", payload);
+    trackAppEvent("payment_success", payload);
+  }, []);
 
   const availableChainList: PaymentChainOption[] = useMemo(() => {
     const configured = Array.isArray(paymentConfig?.chains) ? paymentConfig?.chains || [] : [];
@@ -345,7 +353,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
         if (status === "confirmed") {
           setPaymentError("");
           setPaymentInfo(copy.paymentConfirmed.replace("{txHash}", shortAddress(txHash)));
-          trackAppEvent("checkout_succeeded", {
+          trackPaymentSuccess({
             entry: "account_center",
             plan_code: selectedPlan?.plan_code || "pro_monthly",
             intent_id: intentId,
@@ -363,7 +371,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
       }
       throw new Error(copy.paymentPendingTimeout);
     },
-    [loadPaymentSnapshot, refreshEntitlementAfterPayment, selectedPlan?.plan_code],
+    [loadPaymentSnapshot, refreshEntitlementAfterPayment, selectedPlan?.plan_code, trackPaymentSuccess],
   );
 
   // ── createIntentAndPay ──────────────────────────────────
@@ -484,7 +492,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
       const intentId = String(created.intent?.intent_id || "");
       const txPayload = created.tx_payload;
       if (!intentId || !txPayload?.to || !txPayload?.data) throw new Error(copy.intentPayloadInvalid);
-      trackAppEvent("checkout_started", {
+      trackPaymentStart({
         entry: "account_center",
         plan_code: selectedPlan?.plan_code || "pro_monthly",
         intent_id: intentId,
@@ -582,7 +590,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
       }
 
       setPaymentInfo(copy.paymentConfirmed.replace("{txHash}", shortAddress(txHashNorm)));
-      trackAppEvent("checkout_succeeded", {
+      trackPaymentSuccess({
         entry: "account_center",
         plan_code: selectedPlan?.plan_code || "pro_monthly",
         intent_id: intentId,
@@ -676,7 +684,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
           .replace("{chain}", chainName)
           .replace("{receiver}", shortAddress(direct.receiver_address)),
       );
-      trackAppEvent("checkout_started", {
+      trackPaymentStart({
         entry: "account_center_manual_transfer",
         plan_code: selectedPlan?.plan_code || "pro_monthly",
         intent_id: intentId,
@@ -739,7 +747,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
       setManualPayment(null);
       setManualTxHash("");
       setTxValidation({ loading: false, checked: false });
-      trackAppEvent("checkout_succeeded", {
+      trackPaymentSuccess({
         entry: "account_center_manual_transfer",
         plan_code: selectedPlan?.plan_code || "pro_monthly",
         intent_id: intentIdVal,

@@ -21,6 +21,7 @@ import {
   getSupabaseBrowserClient,
   hasSupabasePublicEnv,
 } from "@/lib/supabase/client";
+import { markAnalyticsOnce, trackAppEvent } from "@/lib/app-analytics";
 
 const COVERAGE_EN = [
   "Live airport observations",
@@ -77,6 +78,12 @@ function InstitutionalLandingScreen() {
   const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
+    if (markAnalyticsOnce("landing_view", "session")) {
+      trackAppEvent("landing_view", { entry: "landing" });
+    }
+  }, []);
+
+  useEffect(() => {
     if (!hasSupabasePublicEnv()) {
       setAuthChecked(true);
       return;
@@ -89,6 +96,26 @@ function InstitutionalLandingScreen() {
   }, []);
 
   const coverage = isEn ? COVERAGE_EN : COVERAGE_ZH;
+
+  const trackLoginStart = (mode: "login" | "signup") => {
+    trackAppEvent("login_start", {
+      entry: "landing",
+      mode,
+      next: "/terminal",
+    });
+  };
+
+  const trackEnterTerminal = (entry: string) => {
+    trackAppEvent("enter_terminal", {
+      entry,
+      authenticated: isAuthenticated,
+    });
+  };
+
+  const trackTerminalAuthStart = (entry: string, mode: "login" | "signup") => {
+    trackEnterTerminal(entry);
+    trackLoginStart(mode);
+  };
 
   const platformCards = isEn
     ? [
@@ -176,6 +203,7 @@ function InstitutionalLandingScreen() {
               <div className="flex items-center gap-2">
                 <Link
                   href="/terminal"
+                  onClick={() => trackEnterTerminal("landing_header")}
                   className="inline-flex h-9 items-center gap-2 rounded-md bg-slate-950 px-3 text-sm font-semibold text-white hover:bg-slate-800"
                 >
                   {isEn ? "Open" : "进入"}
@@ -193,12 +221,14 @@ function InstitutionalLandingScreen() {
               <>
                 <Link
                   href="/auth/login?next=%2Fterminal"
+                  onClick={() => trackTerminalAuthStart("landing_header_login", "login")}
                   className="hidden h-9 items-center rounded-md px-3 text-sm font-semibold text-slate-600 hover:text-slate-950 sm:inline-flex"
                 >
                   {isEn ? "Log in" : "登录"}
                 </Link>
                 <Link
                   href="/auth/login?next=%2Fterminal&mode=signup"
+                  onClick={() => trackTerminalAuthStart("landing_header_signup", "signup")}
                   className="inline-flex h-9 items-center gap-2 rounded-md bg-slate-950 px-3 text-sm font-semibold text-white hover:bg-slate-800"
                 >
                   {isEn ? "Start" : "开始使用"}
@@ -226,6 +256,11 @@ function InstitutionalLandingScreen() {
               <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <Link
                   href={authChecked && isAuthenticated ? "/terminal" : "/auth/login?next=%2Fterminal"}
+                  onClick={() =>
+                    authChecked && isAuthenticated
+                      ? trackEnterTerminal("landing_hero")
+                      : trackTerminalAuthStart("landing_hero_login", "login")
+                  }
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-slate-950 px-5 text-sm font-bold text-white shadow-sm hover:bg-slate-800"
                 >
                   {isEn ? "Open product" : "进入产品"}
@@ -252,11 +287,19 @@ function InstitutionalLandingScreen() {
                 <span className="h-2.5 w-2.5 rounded-full bg-[#06d6a0]" />
                 <span className="ml-2 text-xs font-semibold text-slate-400">polyweather.app/terminal</span>
               </div>
-              <img
-                src="/static/web.png"
-                alt={isEn ? "PolyWeather terminal preview" : "PolyWeather 终端预览"}
-                className="mt-2 aspect-[16/9] w-full rounded-md border border-slate-100 object-cover object-top"
-              />
+              <div className="mt-2 aspect-[16/9] overflow-hidden rounded-md border border-slate-100 bg-slate-100">
+                <img
+                  src="/static/web.webp"
+                  width="680"
+                  height="340"
+                  alt={isEn ? "PolyWeather terminal preview" : "PolyWeather 终端预览"}
+                  className="h-full w-full object-cover object-top"
+                  decoding="async"
+                  fetchPriority="high"
+                  loading="eager"
+                  sizes="(min-width: 1024px) 960px, calc(100vw - 48px)"
+                />
+              </div>
             </div>
 
             <div className="mx-auto mt-8 grid max-w-5xl gap-2 sm:grid-cols-2 lg:grid-cols-4">

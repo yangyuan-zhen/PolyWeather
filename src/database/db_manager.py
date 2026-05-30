@@ -942,13 +942,28 @@ class DBManager:
         since_dt = datetime.now() - timedelta(days=safe_days)
         rows = self.list_app_analytics_events(limit=5000, since_iso=since_dt.isoformat())
         event_names = [
-            "signup_completed",
-            "dashboard_active",
-            "paywall_feature_clicked",
-            "paywall_viewed",
-            "checkout_started",
-            "checkout_succeeded",
+            "landing_view",
+            "enter_terminal",
+            "login_start",
+            "signup_success",
+            "trial_created",
+            "payment_start",
+            "payment_success",
         ]
+        event_aliases = {
+            "landing_view": ("landing_view",),
+            "enter_terminal": ("enter_terminal", "dashboard_active"),
+            "login_start": ("login_start",),
+            "signup_success": ("signup_success", "signup_completed"),
+            "trial_created": ("trial_created",),
+            "payment_start": ("payment_start", "checkout_started"),
+            "payment_success": ("payment_success", "checkout_succeeded"),
+        }
+        alias_to_event = {
+            alias: event_name
+            for event_name, aliases in event_aliases.items()
+            for alias in aliases
+        }
         summary: Dict[str, Dict[str, Any]] = {
             name: {
                 "total": 0,
@@ -961,8 +976,9 @@ class DBManager:
         user_sets: Dict[str, set[str]] = {name: set() for name in event_names}
 
         for row in rows:
-            event_type = str(row.get("event_type") or "").strip().lower()
-            if event_type not in summary:
+            raw_event_type = str(row.get("event_type") or "").strip().lower()
+            event_type = alias_to_event.get(raw_event_type)
+            if not event_type:
                 continue
             summary[event_type]["total"] += 1
             user_id = str(row.get("user_id") or "").strip().lower()
@@ -996,11 +1012,12 @@ class DBManager:
             "since": since_dt.isoformat(),
             "events": summary,
             "rates": {
-                "login_active_rate": _rate("dashboard_active", "signup_completed"),
-                "paywall_click_rate": _rate("paywall_feature_clicked", "dashboard_active"),
-                "paywall_view_rate": _rate("paywall_viewed", "paywall_feature_clicked"),
-                "checkout_start_rate": _rate("checkout_started", "paywall_viewed"),
-                "checkout_success_rate": _rate("checkout_succeeded", "checkout_started"),
+                "enter_terminal_rate": _rate("enter_terminal", "landing_view"),
+                "login_start_rate": _rate("login_start", "enter_terminal"),
+                "signup_success_rate": _rate("signup_success", "login_start"),
+                "trial_created_rate": _rate("trial_created", "signup_success"),
+                "payment_start_rate": _rate("payment_start", "trial_created"),
+                "payment_success_rate": _rate("payment_success", "payment_start"),
             },
         }
 

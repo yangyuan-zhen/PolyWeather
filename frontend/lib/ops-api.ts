@@ -28,14 +28,15 @@ export const opsApi = {
       rates?: Record<string, number>;
       window_days?: number;
     }>(`/api/ops/analytics/funnel?days=${days}`);
-    const stepOrder = ["signup_completed", "dashboard_active", "paywall_feature_clicked", "paywall_viewed", "checkout_started", "checkout_succeeded"];
+    const stepOrder = ["landing_view", "enter_terminal", "login_start", "signup_success", "trial_created", "payment_start", "payment_success"];
     const stepLabels: Record<string, string> = {
-      signup_completed: "注册",
-      dashboard_active: "活跃",
-      paywall_feature_clicked: "点击高级功能",
-      paywall_viewed: "看到付费墙",
-      checkout_started: "发起支付",
-      checkout_succeeded: "支付成功",
+      landing_view: "访问落地页",
+      enter_terminal: "进入终端",
+      login_start: "开始登录",
+      signup_success: "注册成功",
+      trial_created: "试用开通",
+      payment_start: "发起支付",
+      payment_success: "支付成功",
     };
     const steps = stepOrder.map((key, i) => {
       const evt = raw?.events?.[key];
