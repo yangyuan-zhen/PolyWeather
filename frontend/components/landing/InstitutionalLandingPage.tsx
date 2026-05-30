@@ -1,27 +1,15 @@
-"use client";
-
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { cookies, headers } from "next/headers";
+import { LandingAnalytics } from "@/components/landing/LandingAnalytics";
 import {
-  ArrowRight,
-  Bell,
-  Check,
-  CheckCircle2,
-  Clock3,
-  CloudSun,
-  Database,
-  Gauge,
-  LineChart,
-  Radar,
-  ShieldCheck,
-  Users,
-} from "lucide-react";
-import { I18nProvider, useI18n } from "@/hooks/useI18n";
+  LandingHeaderActions,
+  LandingHeroActions,
+} from "@/components/landing/LandingAuthActions";
 import {
-  getSupabaseBrowserClient,
-  hasSupabasePublicEnv,
-} from "@/lib/supabase/client";
-import { markAnalyticsOnce, trackAppEvent } from "@/lib/app-analytics";
+  LANDING_LOCALE_COOKIE,
+  pickLandingLocale,
+  type LandingLocale,
+} from "@/components/landing/landingLocale";
 
 const COVERAGE_EN = [
   "Live airport observations",
@@ -59,6 +47,123 @@ const PRO_FEATURES_ZH = [
   "订阅与准入问题优先支持",
 ];
 
+type IconName =
+  | "radar"
+  | "gauge"
+  | "shield"
+  | "cloudSun"
+  | "lineChart"
+  | "bell"
+  | "clock"
+  | "database"
+  | "check"
+  | "arrow";
+
+function LandingIcon({
+  className,
+  name,
+  size = 16,
+}: {
+  className?: string;
+  name: IconName;
+  size?: number;
+}) {
+  const common = {
+    "aria-hidden": true,
+    className,
+    fill: "none",
+    height: size,
+    stroke: "currentColor",
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    strokeWidth: 2,
+    viewBox: "0 0 24 24",
+    width: size,
+  };
+
+  switch (name) {
+    case "radar":
+      return (
+        <svg {...common}>
+          <path d="M12 3a9 9 0 1 0 9 9" />
+          <path d="M12 7a5 5 0 1 0 5 5" />
+          <path d="M12 12l7-7" />
+          <path d="M16 4h4v4" />
+        </svg>
+      );
+    case "gauge":
+      return (
+        <svg {...common}>
+          <path d="M4 14a8 8 0 1 1 16 0" />
+          <path d="M12 14l4-4" />
+          <path d="M8 18h8" />
+        </svg>
+      );
+    case "shield":
+      return (
+        <svg {...common}>
+          <path d="M12 3l7 3v5c0 4.3-2.8 8.1-7 9-4.2-.9-7-4.7-7-9V6l7-3Z" />
+          <path d="M9 12l2 2 4-5" />
+        </svg>
+      );
+    case "cloudSun":
+      return (
+        <svg {...common}>
+          <path d="M8 14.5a4 4 0 0 1 7.8-1.2A3.3 3.3 0 1 1 17 20H8.5a2.8 2.8 0 0 1-.5-5.5Z" />
+          <path d="M16 3v2" />
+          <path d="M20.2 4.8l-1.4 1.4" />
+          <path d="M21 10h-2" />
+          <path d="M12 4.8l1.4 1.4" />
+        </svg>
+      );
+    case "lineChart":
+      return (
+        <svg {...common}>
+          <path d="M4 19V5" />
+          <path d="M4 19h16" />
+          <path d="M7 15l3-4 3 2 4-6" />
+        </svg>
+      );
+    case "bell":
+      return (
+        <svg {...common}>
+          <path d="M6 9a6 6 0 0 1 12 0c0 6 2 6 2 8H4c0-2 2-2 2-8Z" />
+          <path d="M10 20a2 2 0 0 0 4 0" />
+        </svg>
+      );
+    case "clock":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M12 7v5l3 2" />
+        </svg>
+      );
+    case "database":
+      return (
+        <svg {...common}>
+          <ellipse cx="12" cy="6" rx="7" ry="3" />
+          <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6" />
+          <path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />
+        </svg>
+      );
+    case "check":
+      return (
+        <svg {...common}>
+          <path d="M5 12.5l4 4L19 7" />
+        </svg>
+      );
+    case "arrow":
+      return (
+        <svg {...common}>
+          <path d="M5 12h14" />
+          <path d="M13 6l6 6-6 6" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
 function WeatherWorkflowIllustration() {
   return (
     <div
@@ -71,83 +176,55 @@ function WeatherWorkflowIllustration() {
   );
 }
 
-function InstitutionalLandingScreen() {
-  const { locale, toggleLocale } = useI18n();
+async function resolveLandingLocale(): Promise<LandingLocale> {
+  const [cookieStore, headerStore] = await Promise.all([cookies(), headers()]);
+  return pickLandingLocale(
+    cookieStore.get(LANDING_LOCALE_COOKIE)?.value,
+    headerStore.get("accept-language"),
+  );
+}
+
+function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
   const isEn = locale === "en-US";
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authChecked, setAuthChecked] = useState(false);
-
-  useEffect(() => {
-    if (markAnalyticsOnce("landing_view", "session")) {
-      trackAppEvent("landing_view", { entry: "landing" });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!hasSupabasePublicEnv()) {
-      setAuthChecked(true);
-      return;
-    }
-    const supabase = getSupabaseBrowserClient();
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsAuthenticated(!!session?.user);
-      setAuthChecked(true);
-    });
-  }, []);
-
   const coverage = isEn ? COVERAGE_EN : COVERAGE_ZH;
+  const coverageAccentClasses = [
+    "bg-sky-100 text-sky-700",
+    "bg-emerald-100 text-emerald-700",
+    "bg-amber-100 text-amber-700",
+  ];
+  const coverageIcons: IconName[] = ["cloudSun", "lineChart", "bell"];
 
-  const trackLoginStart = (mode: "login" | "signup") => {
-    trackAppEvent("login_start", {
-      entry: "landing",
-      mode,
-      next: "/terminal",
-    });
-  };
-
-  const trackEnterTerminal = (entry: string) => {
-    trackAppEvent("enter_terminal", {
-      entry,
-      authenticated: isAuthenticated,
-    });
-  };
-
-  const trackTerminalAuthStart = (entry: string, mode: "login" | "signup") => {
-    trackEnterTerminal(entry);
-    trackLoginStart(mode);
-  };
-
-  const platformCards = isEn
+  const platformCards: Array<{ body: string; icon: IconName; title: string }> = isEn
     ? [
         {
-          icon: Radar,
+          icon: "radar",
           title: "Live Evidence",
           body: "Airport observations, model spreads, and deviation checks stay in one calm workspace.",
         },
         {
-          icon: Gauge,
+          icon: "gauge",
           title: "Daily Review",
           body: "Scan the city board, compare forecasts, and keep the current decision context visible.",
         },
         {
-          icon: ShieldCheck,
+          icon: "shield",
           title: "Access Control",
           body: "Trial users get the same product experience as Pro, except the paid Telegram group link stays hidden.",
         },
       ]
     : [
         {
-          icon: Radar,
+          icon: "radar",
           title: "实况证据",
           body: "机场观测、模型分歧与偏差校验放在一个安静清晰的工作台里。",
         },
         {
-          icon: Gauge,
+          icon: "gauge",
           title: "每日复盘",
           body: "快速扫描城市面板、比较预报路径，并保留当前判断上下文。",
         },
         {
-          icon: ShieldCheck,
+          icon: "shield",
           title: "权益分层",
           body: "试用期权益和 Pro 一致，唯一例外是不显示付费 Telegram 群链接。",
         },
@@ -169,6 +246,7 @@ function InstitutionalLandingScreen() {
 
   return (
     <div className="min-h-screen bg-[#fbfbfa] text-slate-950 antialiased">
+      <LandingAnalytics />
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-[#fbfbfa]/90 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
@@ -187,56 +265,7 @@ function InstitutionalLandingScreen() {
             </a>
           </nav>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={toggleLocale}
-              className="inline-flex h-9 cursor-pointer items-center gap-1 rounded-md border border-slate-200 bg-white px-1 text-xs font-semibold text-slate-500 shadow-sm hover:border-slate-300"
-            >
-              <span className={`rounded px-2 py-1 ${!isEn ? "bg-slate-900 text-white" : ""}`}>中</span>
-              <span className={`rounded px-2 py-1 ${isEn ? "bg-slate-900 text-white" : ""}`}>EN</span>
-            </button>
-
-            {!authChecked ? (
-              <div className="h-9 w-24 animate-pulse rounded-md bg-slate-200" />
-            ) : isAuthenticated ? (
-              <div className="flex items-center gap-2">
-                <Link
-                  href="/terminal"
-                  onClick={() => trackEnterTerminal("landing_header")}
-                  className="inline-flex h-9 items-center gap-2 rounded-md bg-slate-950 px-3 text-sm font-semibold text-white hover:bg-slate-800"
-                >
-                  {isEn ? "Open" : "进入"}
-                  <ArrowRight size={14} />
-                </Link>
-                <Link
-                  href="/account"
-                  className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-slate-300 hover:text-slate-950"
-                  title={isEn ? "Account" : "账户"}
-                >
-                  <Users size={15} />
-                </Link>
-              </div>
-            ) : (
-              <>
-                <Link
-                  href="/auth/login?next=%2Fterminal"
-                  onClick={() => trackTerminalAuthStart("landing_header_login", "login")}
-                  className="hidden h-9 items-center rounded-md px-3 text-sm font-semibold text-slate-600 hover:text-slate-950 sm:inline-flex"
-                >
-                  {isEn ? "Log in" : "登录"}
-                </Link>
-                <Link
-                  href="/auth/login?next=%2Fterminal&mode=signup"
-                  onClick={() => trackTerminalAuthStart("landing_header_signup", "signup")}
-                  className="inline-flex h-9 items-center gap-2 rounded-md bg-slate-950 px-3 text-sm font-semibold text-white hover:bg-slate-800"
-                >
-                  {isEn ? "Start" : "开始使用"}
-                  <ArrowRight size={14} />
-                </Link>
-              </>
-            )}
-          </div>
+          <LandingHeaderActions locale={locale} />
         </div>
       </header>
 
@@ -253,26 +282,7 @@ function InstitutionalLandingScreen() {
                   ? "A calmer way to read airport weather, model forecasts, and intraday risk before the market moves."
                   : "用更轻松的方式阅读机场天气、模型预报和日内风险，在市场变化前完成判断。"}
               </p>
-              <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                <Link
-                  href={authChecked && isAuthenticated ? "/terminal" : "/auth/login?next=%2Fterminal"}
-                  onClick={() =>
-                    authChecked && isAuthenticated
-                      ? trackEnterTerminal("landing_hero")
-                      : trackTerminalAuthStart("landing_hero_login", "login")
-                  }
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-slate-950 px-5 text-sm font-bold text-white shadow-sm hover:bg-slate-800"
-                >
-                  {isEn ? "Open product" : "进入产品"}
-                  <ArrowRight size={15} />
-                </Link>
-                <Link
-                  href="/account"
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm hover:border-slate-300 hover:text-slate-950"
-                >
-                  {isEn ? "Subscribe / account" : "订阅 / 账户"}
-                </Link>
-              </div>
+              <LandingHeroActions locale={locale} />
               <p className="mt-4 text-sm text-slate-500">
                 {isEn
                   ? "Start with a one-time 3-day trial. Trial access matches Pro except for the paid Telegram group link."
@@ -285,7 +295,9 @@ function InstitutionalLandingScreen() {
                 <span className="h-2.5 w-2.5 rounded-full bg-[#ff6b6b]" />
                 <span className="h-2.5 w-2.5 rounded-full bg-[#ffd166]" />
                 <span className="h-2.5 w-2.5 rounded-full bg-[#06d6a0]" />
-                <span className="ml-2 text-xs font-semibold text-slate-400">polyweather.app/terminal</span>
+                <span className="ml-2 text-xs font-semibold text-slate-400">
+                  polyweather.app/terminal
+                </span>
               </div>
               <div className="mt-2 aspect-[16/9] overflow-hidden rounded-md border border-slate-100 bg-slate-100">
                 <img
@@ -304,8 +316,13 @@ function InstitutionalLandingScreen() {
 
             <div className="mx-auto mt-8 grid max-w-5xl gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {heroStats.map((item) => (
-                <div key={item.label} className="rounded-lg border border-slate-200 bg-white px-4 py-4 shadow-sm">
-                  <div className="font-mono text-lg font-black text-slate-950">{item.value}</div>
+                <div
+                  key={item.label}
+                  className="rounded-lg border border-slate-200 bg-white px-4 py-4 shadow-sm"
+                >
+                  <div className="font-mono text-lg font-black text-slate-950">
+                    {item.value}
+                  </div>
                   <div className="mt-1 text-xs font-medium text-slate-500">{item.label}</div>
                 </div>
               ))}
@@ -320,15 +337,17 @@ function InstitutionalLandingScreen() {
                 {isEn ? "Platform" : "平台能力"}
               </p>
               <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-                {isEn ? "Like a tidy workspace for weather decisions." : "像整理好的工作区一样阅读天气决策。"}
+                {isEn
+                  ? "Like a tidy workspace for weather decisions."
+                  : "像整理好的工作区一样阅读天气决策。"}
               </h2>
             </div>
 
             <div className="mt-12 grid gap-4 md:grid-cols-3">
-              {platformCards.map(({ body, icon: Icon, title }) => (
+              {platformCards.map(({ body, icon, title }) => (
                 <article key={title} className="rounded-lg border border-slate-200 bg-[#fbfbfa] p-6 shadow-sm">
                   <div className="mb-5 inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-800">
-                    <Icon size={19} />
+                    <LandingIcon name={icon} size={19} />
                   </div>
                   <h3 className="text-lg font-black text-slate-950">{title}</h3>
                   <p className="mt-3 text-sm leading-7 text-slate-600">{body}</p>
@@ -352,15 +371,16 @@ function InstitutionalLandingScreen() {
             <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
               <div className="grid gap-2 sm:grid-cols-2">
                 {coverage.map((item, index) => (
-                  <div key={item} className="flex items-center gap-3 rounded-md border border-slate-100 bg-[#fbfbfa] px-4 py-3">
-                    <span className={`grid h-8 w-8 place-items-center rounded-md ${
-                      index % 3 === 0
-                        ? "bg-sky-100 text-sky-700"
-                        : index % 3 === 1
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-amber-100 text-amber-700"
-                    }`}>
-                      {index % 3 === 0 ? <CloudSun size={16} /> : index % 3 === 1 ? <LineChart size={16} /> : <Bell size={16} />}
+                  <div
+                    key={item}
+                    className="flex items-center gap-3 rounded-md border border-slate-100 bg-[#fbfbfa] px-4 py-3"
+                  >
+                    <span
+                      className={`grid h-8 w-8 place-items-center rounded-md ${
+                        coverageAccentClasses[index % coverageAccentClasses.length]
+                      }`}
+                    >
+                      <LandingIcon name={coverageIcons[index % coverageIcons.length]} />
                     </span>
                     <span className="text-sm font-semibold text-slate-700">{item}</span>
                   </div>
@@ -377,7 +397,9 @@ function InstitutionalLandingScreen() {
                 {isEn ? "Pricing" : "定价"}
               </p>
               <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-                {isEn ? "Try first, upgrade when it becomes part of your workflow." : "先试用，确认进入工作流后再开通 Pro。"}
+                {isEn
+                  ? "Try first, upgrade when it becomes part of your workflow."
+                  : "先试用，确认进入工作流后再开通 Pro。"}
               </h2>
               <p className="mt-4 text-base leading-8 text-slate-600">
                 {isEn
@@ -389,7 +411,7 @@ function InstitutionalLandingScreen() {
             <div className="mt-12 grid gap-4 md:grid-cols-3">
               <div className="flex flex-col rounded-lg border border-slate-200 bg-[#fbfbfa] p-6 shadow-sm">
                 <div className="flex items-center gap-2 text-sm font-bold text-emerald-700">
-                  <Clock3 size={16} />
+                  <LandingIcon name="clock" />
                   {isEn ? "Trial" : "试用"}
                 </div>
                 <h3 className="mt-5 text-2xl font-black text-slate-950">
@@ -405,7 +427,7 @@ function InstitutionalLandingScreen() {
                   className="mt-8 inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white text-sm font-bold text-slate-700 shadow-sm hover:border-slate-300 hover:text-slate-950"
                 >
                   {isEn ? "Start trial" : "开始试用"}
-                  <ArrowRight size={15} />
+                  <LandingIcon name="arrow" size={15} />
                 </Link>
               </div>
 
@@ -414,8 +436,8 @@ function InstitutionalLandingScreen() {
                   {isEn ? "Popular" : "常用"}
                 </div>
                 <div className="flex items-center gap-2 text-sm font-bold text-sky-700">
-                  <Database size={16} />
-                  {isEn ? "Pro" : "Pro"}
+                  <LandingIcon name="database" />
+                  Pro
                 </div>
                 <h3 className="mt-5 text-2xl font-black text-slate-950">
                   {isEn ? "Pro Monthly" : "Pro 月付"}
@@ -435,7 +457,11 @@ function InstitutionalLandingScreen() {
                 <ul className="mt-7 space-y-3 border-t border-slate-200 pt-6">
                   {(isEn ? PRO_FEATURES_EN : PRO_FEATURES_ZH).map((feature) => (
                     <li key={feature} className="flex items-start gap-3">
-                      <Check size={15} className="mt-0.5 shrink-0 text-slate-500" />
+                      <LandingIcon
+                        name="check"
+                        size={15}
+                        className="mt-0.5 shrink-0 text-slate-500"
+                      />
                       <span className="text-sm leading-6 text-slate-700">{feature}</span>
                     </li>
                   ))}
@@ -445,13 +471,13 @@ function InstitutionalLandingScreen() {
                   className="mt-8 inline-flex h-11 items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-bold text-white hover:bg-slate-800"
                 >
                   {isEn ? "Subscribe monthly" : "订阅月付 Pro"}
-                  <ArrowRight size={15} />
+                  <LandingIcon name="arrow" size={15} />
                 </Link>
               </div>
 
               <div className="flex flex-col rounded-lg border border-slate-200 bg-[#fbfbfa] p-6 shadow-sm">
                 <div className="flex items-center gap-2 text-sm font-bold text-amber-700">
-                  <LineChart size={16} />
+                  <LandingIcon name="lineChart" />
                   {isEn ? "Quarterly" : "季度"}
                 </div>
                 <h3 className="mt-5 text-2xl font-black text-slate-950">
@@ -476,7 +502,7 @@ function InstitutionalLandingScreen() {
                   className="mt-8 inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white text-sm font-bold text-slate-700 shadow-sm hover:border-slate-300 hover:text-slate-950"
                 >
                   {isEn ? "Choose quarterly" : "选择季度 Pro"}
-                  <ArrowRight size={15} />
+                  <LandingIcon name="arrow" size={15} />
                 </Link>
               </div>
             </div>
@@ -487,10 +513,7 @@ function InstitutionalLandingScreen() {
   );
 }
 
-export function InstitutionalLandingPage() {
-  return (
-    <I18nProvider>
-      <InstitutionalLandingScreen />
-    </I18nProvider>
-  );
+export async function InstitutionalLandingPage() {
+  const locale = await resolveLandingLocale();
+  return <InstitutionalLandingScreen locale={locale} />;
 }

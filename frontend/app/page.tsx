@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { PreloadTerminalData } from "@/components/landing/PreloadTerminalData";
 import { InstitutionalLandingPage } from "@/components/landing/InstitutionalLandingPage";
 
 export const metadata: Metadata = {
@@ -69,7 +68,6 @@ export default async function HomePage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <PreloadTerminalData />
       <InstitutionalLandingPage />
     </>
   );
