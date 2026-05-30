@@ -65,7 +65,9 @@ export function runTests() {
     degraded_auth_profile: true,
   });
   assert(
-    coldUnknown.subscriptionActive === false && coldUnknown.authenticated === true,
-    "cold-start unknown subscription state must not fabricate Pro access",
+    coldUnknown.subscriptionActive === false &&
+      coldUnknown.authenticated === true &&
+      coldUnknown.loading === true,
+    "cold-start unknown subscription state must keep the terminal gate loading instead of showing a false paywall",
   );
 }

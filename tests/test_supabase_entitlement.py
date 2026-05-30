@@ -164,6 +164,29 @@ def test_subscription_window_query_selects_only_window_fields(monkeypatch):
     assert window["current"]["plan_code"] == "pro_monthly"
 
 
+def test_subscription_window_can_report_unknown_on_transient_query_failure(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "anon-key")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role")
+
+    service = SupabaseEntitlementService()
+
+    def _fake_get(url, headers=None, params=None, timeout=None):
+        return _Response(503, {"message": "temporarily unavailable"})
+
+    monkeypatch.setattr(entitlement_module.requests, "get", _fake_get)
+
+    window = service.get_subscription_window(
+        "user-1",
+        respect_requirement=False,
+        bypass_cache=True,
+        unknown_on_error=True,
+    )
+
+    assert window["unknown"] is True
+    assert window["rows"] is None
+
+
 def test_list_subscription_windows_selects_only_batch_window_fields(monkeypatch):
     monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setenv("SUPABASE_ANON_KEY", "anon-key")

@@ -5,9 +5,9 @@ import { LockKeyhole, CreditCard, LogIn } from "lucide-react";
 
 const ACCESS_TERM = {
   signInToContinue: { en: "Sign in to continue", zh: "请先登录" },
-  proAccessRequired: { en: "Pro Access Required", zh: "需要付费订阅" },
-  month: { en: "/ month", zh: "/ 月" },
-  subscribeNow: { en: "Subscribe Now — $10/mo", zh: "立即订阅 — $10/月" },
+  proAccessRequired: { en: "Pro subscription required", zh: "需要开通 Pro" },
+  month: { en: "/ 30 days", zh: "/ 30 天" },
+  subscribeNow: { en: "View Pro plans", zh: "查看订阅方案" },
   backToProduct: { en: "Back to product overview", zh: "返回产品介绍页" },
 } as const;
 
@@ -19,16 +19,16 @@ function t(key: keyof typeof ACCESS_TERM, isEn: boolean) {
 function SubscriptionGate({ isEn }: { isEn: boolean }) {
   const features = isEn
     ? [
-        "Real-time METAR observations across 500+ stations",
-        "DEB forecast blends with 0–240h horizon",
-        "AI decision cards with Poly-score ranking",
-        "Historical backtesting & weather signals",
+        "Real-time station, METAR, and runway signals",
+        "DEB forecast curves and model comparison",
+        "Full terminal grid with high-frequency refresh",
+        "API and paid Telegram group access on paid Pro",
       ]
     : [
-        "500+ 气象站实时 METAR 实况",
-        "DEB 智能融合预测（0–240 小时）",
-        "AI 决策卡片 + Poly-score 排名",
-        "历史回测与天气信号",
+        "实时气象站、METAR 与跑道信号",
+        "DEB 预测曲线与模型对比",
+        "完整终端网格与高频刷新",
+        "付费 Pro 可进入 API 与付费 Telegram 群",
       ];
 
   return (
@@ -57,7 +57,7 @@ function SubscriptionGate({ isEn }: { isEn: boolean }) {
 
           <div className="p-8">
             <div className="mb-6 flex items-baseline gap-1">
-              <span className="text-4xl font-black text-slate-900">$10</span>
+              <span className="text-4xl font-black text-slate-900">29.9 USDC</span>
               <span className="text-base text-slate-500">
                 {t("month", isEn)}
               </span>

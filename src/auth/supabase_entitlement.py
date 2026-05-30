@@ -7,7 +7,7 @@ import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 from loguru import logger
@@ -1495,16 +1495,16 @@ class SupabaseEntitlementService:
             logger.warning(f"supabase subscription query error user_id={user_id}: {exc}")
             return None
 
-    def _query_active_subscription_rows(
+    def _query_active_subscription_rows_result(
         self,
         user_id: str,
         bypass_cache: bool = False,
-    ) -> List[Dict[str, object]]:
+    ) -> Tuple[List[Dict[str, object]], bool]:
         if not user_id:
-            return []
+            return [], True
         if not self.service_role_key:
             logger.warning("SUPABASE_SERVICE_ROLE_KEY is missing")
-            return []
+            return [], False
 
         now_ts = time.time()
         if not bypass_cache:
@@ -1513,7 +1513,7 @@ class SupabaseEntitlementService:
                 if cached and now_ts - float(cached.get("ts") or 0) < self.sub_cache_ttl_sec:
                     rows = cached.get("rows")
                     if isinstance(rows, list):
-                        return [row for row in rows if isinstance(row, dict)]
+                        return [row for row in rows if isinstance(row, dict)], True
 
         try:
             now = datetime.now(timezone.utc)
@@ -1538,7 +1538,7 @@ class SupabaseEntitlementService:
                     user_id,
                     response.status_code,
                 )
-                rows: List[Dict[str, object]] = []
+                return [], False
             else:
                 data = response.json() if response.content else []
                 rows = [row for row in data if isinstance(row, dict)] if isinstance(data, list) else []
@@ -1551,10 +1551,21 @@ class SupabaseEntitlementService:
                     "rows": rows,
                     "ts": now_ts,
                 }
-            return rows
+            return rows, True
         except Exception as exc:
             logger.warning(f"supabase active subscription rows query error user_id={user_id}: {exc}")
-            return []
+            return [], False
+
+    def _query_active_subscription_rows(
+        self,
+        user_id: str,
+        bypass_cache: bool = False,
+    ) -> List[Dict[str, object]]:
+        rows, _ok = self._query_active_subscription_rows_result(
+            user_id,
+            bypass_cache=bypass_cache,
+        )
+        return rows
 
     def _query_latest_subscription_any_status(
         self,
@@ -1726,10 +1737,25 @@ class SupabaseEntitlementService:
         user_id: str,
         respect_requirement: bool = True,
         bypass_cache: bool = False,
+        unknown_on_error: bool = False,
     ) -> Dict[str, object]:
         if respect_requirement and not self.require_subscription:
             return {}
-        rows = self._query_active_subscription_rows(user_id, bypass_cache=bypass_cache)
+        rows, query_ok = self._query_active_subscription_rows_result(
+            user_id,
+            bypass_cache=bypass_cache,
+        )
+        if not query_ok and unknown_on_error:
+            return {
+                "unknown": True,
+                "current": None,
+                "current_expires_at": None,
+                "current_starts_at": None,
+                "total_expires_at": None,
+                "queued_days": 0,
+                "queued_count": 0,
+                "rows": None,
+            }
         return self._subscription_window_from_rows(rows)
 
     def _subscription_window_from_rows(

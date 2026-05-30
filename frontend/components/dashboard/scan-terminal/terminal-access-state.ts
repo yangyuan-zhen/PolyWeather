@@ -16,11 +16,21 @@ function queuedDays(value: unknown) {
   return Math.max(0, Number(value ?? 0));
 }
 
+export function isSubscriptionStatusUnknown(payload: AuthProfilePayload) {
+  return (
+    payload.subscription_active === null ||
+    payload.subscription_active === undefined ||
+    payload.degraded_auth_profile === true
+  );
+}
+
 export function createAccessStateFromAuthPayload(
   payload: AuthProfilePayload,
 ): ProAccessState {
+  const subscriptionUnknown =
+    Boolean(payload.authenticated) && isSubscriptionStatusUnknown(payload);
   return {
-    loading: false,
+    loading: subscriptionUnknown,
     authenticated: Boolean(payload.authenticated),
     userId: payload.user_id ?? null,
     subscriptionActive: payload.subscription_active === true,
@@ -41,10 +51,7 @@ export function mergeAccessStateWithAuthPayload(
   payload: AuthProfilePayload,
 ): ProAccessState {
   const next = createAccessStateFromAuthPayload(payload);
-  const subscriptionUnknown =
-    payload.subscription_active === null ||
-    payload.subscription_active === undefined ||
-    payload.degraded_auth_profile === true;
+  const subscriptionUnknown = isSubscriptionStatusUnknown(payload);
 
   if (!subscriptionUnknown || !previous.subscriptionActive || !next.authenticated) {
     return next;
@@ -52,6 +59,7 @@ export function mergeAccessStateWithAuthPayload(
 
   return {
     ...next,
+    loading: false,
     subscriptionActive: true,
     subscriptionPlanCode: previous.subscriptionPlanCode,
     subscriptionExpiresAt: previous.subscriptionExpiresAt,

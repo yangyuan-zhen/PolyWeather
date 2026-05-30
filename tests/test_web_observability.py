@@ -382,6 +382,51 @@ def test_auth_me_uses_subscription_window_as_required_subscription_gate(monkeypa
     assert payload["subscription_queued_days"] == 30
 
 
+def test_auth_me_preserves_unknown_subscription_window(monkeypatch):
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "enabled", True)
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "require_subscription", False)
+    monkeypatch.setattr(web_core, "_SUPABASE_AUTH_REQUIRED", False)
+    monkeypatch.setattr(routes, "_resolve_weekly_profile", lambda request: {"weekly_points": 0, "weekly_rank": None})
+    monkeypatch.setattr(routes, "_resolve_auth_points", lambda request: 0)
+
+    def _bind_identity(request):
+        request.state.auth_user_id = "user-1"
+        request.state.auth_email = "user@example.com"
+
+    monkeypatch.setattr(routes, "_assert_entitlement", lambda request: None)
+    monkeypatch.setattr(routes, "_bind_optional_supabase_identity", _bind_identity)
+    monkeypatch.setattr(
+        routes.SUPABASE_ENTITLEMENT,
+        "get_subscription_window",
+        lambda user_id, respect_requirement=False, bypass_cache=False, unknown_on_error=False: {
+            "unknown": True,
+            "rows": None,
+        },
+    )
+    monkeypatch.setattr(
+        routes.SUPABASE_ENTITLEMENT,
+        "get_latest_active_subscription",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("unknown subscription window must not be downgraded to inactive"),
+        ),
+    )
+    monkeypatch.setattr(
+        routes.SUPABASE_ENTITLEMENT,
+        "get_latest_subscription_any_status",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("unknown subscription window must not be treated as subscription history"),
+        ),
+    )
+
+    response = client.get("/api/auth/me")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["authenticated"] is True
+    assert payload["subscription_active"] is None
+    assert payload["subscription_plan_code"] is None
+
+
 def test_auth_me_uses_window_rows_for_non_required_latest_known_subscription(monkeypatch):
     monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "enabled", True)
     monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "require_subscription", False)

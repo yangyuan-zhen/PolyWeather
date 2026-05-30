@@ -127,7 +127,7 @@ const TERM = {
   logIn: { en: "Log in", zh: "登录" },
   createAccount: { en: "Create an account", zh: "注册账号" },
   learnAbout: { en: "Learn about PolyWeather", zh: "了解 PolyWeather" },
-  proAccessRequired: { en: "Pro Access Required", zh: "需要付费订阅" },
+  proAccessRequired: { en: "Pro subscription required", zh: "需要开通 Pro" },
   proDesc: {
     en: "The PolyWeather terminal is a paid product. Subscribe to unlock real-time weather-signal intelligence.",
     zh: "PolyWeather 决策台为付费产品。订阅以解锁实时天气信号情报。",
@@ -137,7 +137,7 @@ const TERM = {
     zh: "按月计费，随时可取消。通过 Polygon 链 USDC 支付。",
   },
   month: { en: "/ month", zh: "/ 月" },
-  subscribeNow: { en: "Subscribe Now — $10/mo", zh: "立即订阅 — $10/月" },
+  subscribeNow: { en: "View Pro plans", zh: "查看订阅方案" },
   subscribePrompt: {
     en: "You need an active subscription to access the terminal.",
     zh: "你需要开通有效订阅才能访问决策台。",
@@ -1077,6 +1077,62 @@ function ScanTerminalScreen() {
       cancelled = true;
     };
   }, [loadAuthProfile]);
+
+  useEffect(() => {
+    if (
+      !hydrated ||
+      canUseLocalFullAccess ||
+      !proAccess.authenticated ||
+      !proAccess.loading ||
+      proAccess.subscriptionActive ||
+      typeof fetch !== "function"
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    const supabaseEnabled = hasSupabasePublicEnv();
+    const retryAuthProfile = async () => {
+      try {
+        const payload = await loadTerminalAuthProfile({
+          getSession: () =>
+            supabaseEnabled
+              ? getSupabaseBrowserClient().auth.getSession()
+              : Promise.resolve({ data: { session: null } }),
+          hasSupabasePublicEnv: supabaseEnabled,
+          loadAuthProfile,
+        });
+        if (cancelled) return;
+        setProAccess((prev) => mergeAccessStateWithAuthPayload(prev, payload));
+      } catch (error) {
+        if (cancelled) return;
+        setProAccess((prev) =>
+          prev.loading && prev.authenticated && !prev.subscriptionActive
+            ? { ...prev, error: String(error) }
+            : prev,
+        );
+      }
+    };
+
+    const firstRetry = window.setTimeout(() => {
+      void retryAuthProfile();
+    }, 1500);
+    const interval = window.setInterval(() => {
+      void retryAuthProfile();
+    }, 5000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(firstRetry);
+      window.clearInterval(interval);
+    };
+  }, [
+    canUseLocalFullAccess,
+    hydrated,
+    loadAuthProfile,
+    proAccess.authenticated,
+    proAccess.loading,
+    proAccess.subscriptionActive,
+  ]);
 
   useEffect(() => {
     setSelectedRegionKey("all");

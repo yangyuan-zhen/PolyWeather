@@ -57,6 +57,7 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
                     user_id,
                     respect_requirement=False,
                     bypass_cache=True,
+                    unknown_on_error=True,
                 )
             except TypeError:
                 subscription_window = legacy_routes.SUPABASE_ENTITLEMENT.get_subscription_window(
@@ -65,8 +66,15 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
                 )
             latest_subscription = None
             latest_known_subscription = None
-            subscription_window_known = isinstance(subscription_window, dict)
-            if isinstance(subscription_window, dict):
+            subscription_window_unknown = (
+                isinstance(subscription_window, dict)
+                and subscription_window.get("unknown") is True
+            )
+            subscription_window_known = (
+                isinstance(subscription_window, dict)
+                and not subscription_window_unknown
+            )
+            if subscription_window_known:
                 current_subscription = subscription_window.get("current")
                 if isinstance(current_subscription, dict):
                     latest_subscription = current_subscription
@@ -79,6 +87,7 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
             if (
                 not latest_subscription
                 and not latest_known_subscription
+                and not subscription_window_unknown
                 and not subscription_window_known
                 and not subscription_required
             ):
@@ -89,13 +98,18 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
                     )
                 )
 
-            subscription_active = bool(latest_subscription)
-            if subscription_required and not subscription_active:
+            subscription_active = (
+                None if subscription_window_unknown else bool(latest_subscription)
+            )
+            if (
+                subscription_required
+                and subscription_active is False
+            ):
                 raise HTTPException(status_code=403, detail="Subscription required")
 
-            if not latest_known_subscription:
+            if not subscription_window_unknown and not latest_known_subscription:
                 latest_known_subscription = latest_subscription
-            if not latest_known_subscription:
+            if not subscription_window_unknown and not latest_known_subscription:
                 latest_known_subscription = (
                     legacy_routes.SUPABASE_ENTITLEMENT.get_latest_subscription_any_status(
                         user_id
@@ -113,7 +127,7 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
                 subscription_is_trial = _subscription_row_is_trial(latest_known_subscription)
                 subscription_starts_at = latest_known_subscription.get("starts_at")
                 subscription_expires_at = latest_known_subscription.get("expires_at")
-            if isinstance(subscription_window, dict):
+            if subscription_window_known:
                 subscription_total_expires_at = subscription_window.get("total_expires_at")
                 subscription_queued_days = int(subscription_window.get("queued_days") or 0)
                 subscription_queued_count = int(subscription_window.get("queued_count") or 0)
