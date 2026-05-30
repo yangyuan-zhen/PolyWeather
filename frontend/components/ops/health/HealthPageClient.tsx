@@ -10,7 +10,16 @@ import {
   ResponsiveContainer, Cell,
 } from "recharts";
 
-type ServiceResult = { ok: boolean; status?: number; latency_ms?: number; error?: string };
+type ServiceResult = {
+  ok: boolean;
+  status?: number;
+  latency_ms?: number;
+  error?: string;
+  credential_configured?: boolean;
+  points?: number;
+  observation_time_local?: string;
+  sample_city?: string;
+};
 type HealthPayload = { ok: boolean; checked_at: string; services: Record<string, ServiceResult> };
 
 const LABELS: Record<string, string> = {
@@ -135,6 +144,15 @@ export function HealthPageClient() {
                 {svc.status ? <span className="text-xs text-slate-500">HTTP {svc.status}</span> : null}
                 <StatusText svc={svc} />
               </div>
+              {(svc.credential_configured != null || svc.points != null || svc.observation_time_local) && (
+                <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-slate-500">
+                  {svc.credential_configured != null && (
+                    <span>{svc.credential_configured ? "凭证已配置" : "凭证未配置"}</span>
+                  )}
+                  {svc.points != null && <span>跑道点 {svc.points}</span>}
+                  {svc.observation_time_local && <span>{svc.observation_time_local}</span>}
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}

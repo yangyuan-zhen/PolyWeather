@@ -510,6 +510,84 @@ def update_ops_config(request: Request, key: str, value: str) -> dict[str, Any]:
     return {"key": key, "value": value, "ok": True}
 
 
+def _build_amsc_awos_headers() -> dict[str, str]:
+    headers = {
+        "Accept": "application/json, text/plain, */*",
+        "Referer": os.getenv("AMSC_AWOS_REFERER", "https://www.amsc.net.cn/"),
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
+        ),
+    }
+    cookie = str(os.getenv("POLYWEATHER_AMSC_COOKIE") or "").strip()
+    session_id = str(os.getenv("POLYWEATHER_AMSC_SESSION_ID") or "").strip()
+    if cookie:
+        headers["Cookie"] = cookie
+    elif session_id:
+        headers["sessionId"] = session_id
+        headers["app"] = "AMS"
+    return headers
+
+
+def _check_amsc_awos_health(timeout: int = 8) -> dict[str, Any]:
+    import time as _time
+
+    from src.data_collection.amsc_awos_sources import _amsc_parse_wind_plate_payload
+
+    amsc_base = str(os.getenv("AMSC_AWOS_BASE_URL") or "").strip()
+    if not amsc_base:
+        return {"ok": False, "error": "not configured"}
+
+    credential_configured = bool(
+        str(os.getenv("POLYWEATHER_AMSC_COOKIE") or "").strip()
+        or str(os.getenv("POLYWEATHER_AMSC_SESSION_ID") or "").strip()
+    )
+    try:
+        t0 = _time.perf_counter()
+        response = _requests.get(
+            f"{amsc_base}?cccc=ZSPD",
+            timeout=timeout,
+            verify=False,
+            headers=_build_amsc_awos_headers(),
+        )
+        latency_ms = round((_time.perf_counter() - t0) * 1000)
+        try:
+            payload = response.json() if response.content else {}
+        except ValueError:
+            payload = {}
+        parsed = _amsc_parse_wind_plate_payload(
+            payload if isinstance(payload, dict) else {},
+            city_key="shanghai",
+            icao="ZSPD",
+        )
+        points = (
+            ((parsed or {}).get("runway_obs") or {}).get("point_temperatures")
+            if isinstance(parsed, dict)
+            else []
+        )
+        point_count = len(points or [])
+        ok = bool(response.ok and parsed and point_count > 0)
+        result: dict[str, Any] = {
+            "ok": ok,
+            "status": response.status_code,
+            "latency_ms": latency_ms,
+            "credential_configured": credential_configured,
+            "points": point_count,
+        }
+        if isinstance(parsed, dict):
+            result["sample_city"] = "shanghai"
+            result["observation_time_local"] = parsed.get("observation_time_local")
+        if not ok:
+            result["error"] = "empty_or_unauthorized_response"
+        return result
+    except Exception as exc:
+        return {
+            "ok": False,
+            "credential_configured": credential_configured,
+            "error": str(exc)[:100],
+        }
+
+
 # ── Subscriptions ───────────────────────────────────────────────────
 
 
@@ -1070,32 +1148,8 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
     except Exception as e:
         results["amos"] = {"ok": False, "error": str(e)[:100]}
 
-    # AMSC AWOS (China mainland airports) — matches actual source SSL + URL pattern
-    amsc_base = str(os.getenv("AMSC_AWOS_BASE_URL") or "").strip()
-    if amsc_base:
-        try:
-            t0 = _time.perf_counter()
-            r = _r.get(
-                f"{amsc_base}?cccc=ZSPD",
-                timeout=timeout,
-                verify=False,
-                headers={
-                    "Accept": "application/json, text/plain, */*",
-                    "Referer": os.getenv(
-                        "AMSC_AWOS_REFERER", "https://www.amsc.net.cn/"
-                    ),
-                    "User-Agent": "PolyWeather/1.0",
-                },
-            )
-            results["amsc_awos"] = {
-                "ok": r.ok,
-                "status": r.status_code,
-                "latency_ms": round((_time.perf_counter() - t0) * 1000),
-            }
-        except Exception as e:
-            results["amsc_awos"] = {"ok": False, "error": str(e)[:100]}
-    else:
-        results["amsc_awos"] = {"ok": False, "error": "not configured"}
+    # AMSC AWOS (China mainland airports)
+    results["amsc_awos"] = _check_amsc_awos_health(timeout=timeout)
 
     # NOAA WRH (US settlement verification)
     try:
