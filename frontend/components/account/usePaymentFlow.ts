@@ -632,7 +632,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
 
     setPaymentBusy(true);
     try {
-      const authHeaders = await buildAuthedHeaders(true, false);
+      const authHeaders = await buildAuthedHeaders(true, true);
       const createRes = await fetch("/api/payments/intents", {
         method: "POST",
         headers: authHeaders,
@@ -704,7 +704,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
     setPaymentBusy(true);
     setPaymentError("");
     try {
-      const authHeaders = await buildAuthedHeaders(true, false);
+      const authHeaders = await buildAuthedHeaders(true, true);
       const submitRes = await fetch(`/api/payments/intents/${intentIdVal}/submit`, {
         method: "POST", headers: authHeaders, body: JSON.stringify({ tx_hash: txHashNorm }),
       });
@@ -762,7 +762,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
       }
       setTxValidation({ loading: true, checked: false });
       try {
-        const headers = await buildAuthedHeaders(true, false);
+        const headers = await buildAuthedHeaders(true, true);
         const res = await fetch(`/api/payments/intents/${intentId}/validate`, {
           method: "POST", headers, body: JSON.stringify({ tx_hash: hashNorm }),
         });

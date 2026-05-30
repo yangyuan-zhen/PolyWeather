@@ -58,6 +58,10 @@ export function runTests() {
   const hookSource = fs.existsSync(hookPath)
     ? fs.readFileSync(hookPath, "utf8")
     : "";
+  const paymentFlowSource = fs.readFileSync(
+    path.join(accountDir, "usePaymentFlow.ts"),
+    "utf8",
+  );
   assert(
     (accountCenterSource.includes('import { usePaymentState } from "./usePaymentState";') ||
       hookSource.includes('import { usePaymentState } from "./usePaymentState";')) &&
@@ -326,5 +330,10 @@ export function runTests() {
   assert(
     paymentRuntimeRouteSource.includes("includeSupabaseIdentity: false"),
     "payment runtime proxy must not read Supabase session cookies because backend entitlement token already protects the runtime status payload",
+  );
+  assert(
+    (paymentFlowSource.match(/await buildAuthedHeaders\(true, true\);/g) || [])
+      .length >= 3,
+    "manual payment mutations must require a valid Supabase bearer token instead of forwarding unauthenticated requests that surface raw backend JSON",
   );
 }
