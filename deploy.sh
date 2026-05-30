@@ -30,6 +30,28 @@ if [ "$pull_ok" != "1" ]; then
 fi
 docker compose up -d
 
+smoke_check() {
+    local name="$1"
+    local url="$2"
+    local timeout="$3"
+    local attempts="${4:-6}"
+    local delay="${5:-5}"
+
+    for i in $(seq 1 "$attempts"); do
+        if curl -fsSo /dev/null --max-time "$timeout" "$url"; then
+            echo "✅ $name"
+            return 0
+        fi
+        if [ "$i" != "$attempts" ]; then
+            echo "   $name retry $i/$attempts..."
+            sleep "$delay"
+        fi
+    done
+
+    echo "❌ $name"
+    return 1
+}
+
 # Wait for backend to be ready (retry up to 150s)
 echo "Waiting for backend..."
 for i in $(seq 1 30); do
@@ -42,9 +64,9 @@ for i in $(seq 1 30); do
 done
 
 FAILED=0
-curl -fsSo /dev/null --max-time 15 "https://api.polyweather.top/healthz" && echo "✅ healthz" || { echo "❌ healthz"; FAILED=1; }
-curl -fsSo /dev/null --max-time 10 "https://api.polyweather.top/api/cities" && echo "✅ cities" || { echo "❌ cities"; FAILED=1; }
-curl -fsSo /dev/null --max-time 10 "https://www.polyweather.top/" && echo "✅ frontend" || { echo "❌ frontend"; FAILED=1; }
+smoke_check "healthz" "https://api.polyweather.top/healthz" 15 3 5 || FAILED=1
+smoke_check "cities" "https://api.polyweather.top/api/cities" 15 8 5 || FAILED=1
+smoke_check "frontend" "https://www.polyweather.top/" 15 3 5 || FAILED=1
 
 if [ "$FAILED" = "1" ]; then
     echo "❌ Smoke tests failed. Rolling back..."

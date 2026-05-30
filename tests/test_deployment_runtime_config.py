@@ -69,6 +69,15 @@ def test_deploy_script_retries_image_pull_for_registry_propagation():
     assert "docker compose pull && pull_ok=1 && break" in script
 
 
+def test_deploy_script_retries_startup_smoke_checks():
+    script = (ROOT / "deploy.sh").read_text(encoding="utf-8")
+
+    assert "smoke_check()" in script
+    assert 'smoke_check "healthz" "https://api.polyweather.top/healthz" 15 3 5' in script
+    assert 'smoke_check "cities" "https://api.polyweather.top/api/cities" 15 8 5' in script
+    assert 'smoke_check "frontend" "https://www.polyweather.top/" 15 3 5' in script
+
+
 def test_city_detail_builds_deb_hourly_consensus_before_peak_window():
     source = (ROOT / "web" / "analysis_service.py").read_text(encoding="utf-8")
 
