@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, BackgroundTasks, Query, Request
 
 from web.services.city_api import (
+    get_city_detail_batch_payload,
     get_city_detail_aggregate_payload,
     get_city_detail_payload,
     get_city_summary_payload,
@@ -102,6 +103,27 @@ async def cities_model_range(
 
     rows.sort(key=lambda r: str(r.get("id") or ""))
     return {"cities": rows}
+
+
+@router.get("/api/cities/detail-batch")
+async def city_detail_batch(
+    request: Request,
+    cities: str = "",
+    force_refresh: bool = False,
+    market_slug: Optional[str] = None,
+    target_date: Optional[str] = None,
+    resolution: Optional[str] = "10m",
+    limit: int = 12,
+):
+    return await get_city_detail_batch_payload(
+        request,
+        cities=cities,
+        force_refresh=force_refresh,
+        market_slug=market_slug,
+        target_date=target_date,
+        resolution=resolution,
+        limit=limit,
+    )
 
 
 @router.get("/api/city/{name}")

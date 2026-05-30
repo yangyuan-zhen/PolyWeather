@@ -27,8 +27,12 @@ export function runTests() {
       systemPage.includes("sourceHealth") &&
       systemPage.includes("MGM、KNMI、IMS") &&
       systemPage.includes("断线") &&
-      systemPage.includes("延迟"),
-    "ops system page must show source latency/disconnect status for operational city sources",
+      systemPage.includes("延迟") &&
+      systemPage.includes("sourceReasonLabel") &&
+      systemPage.includes("观测时间缺失") &&
+      systemPage.includes("formatOpsValue") &&
+      systemPage.includes("强制刷新"),
+    "ops system page must show readable source reasons, object values, and cache force-refresh metrics",
   );
   assert(
     nextRoute.includes("requireOpsProxyAuth") &&

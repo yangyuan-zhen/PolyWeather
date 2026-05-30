@@ -97,9 +97,15 @@ export type PaymentIncident = {
   id: number;
   event_type?: string;
   reason?: string;
+  detail?: string;
+  intent_id?: string;
+  user_id?: string;
+  tx_hash?: string;
   payload_json?: string;
   created_at?: string;
   resolved?: boolean;
+  resolved_at?: string;
+  resolved_by?: string;
 };
 
 export type IncidentsPayload = {

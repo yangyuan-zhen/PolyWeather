@@ -31,6 +31,35 @@ function formatAge(ageMin?: number | null) {
   return `${(ageMin / 60).toFixed(1)}h`;
 }
 
+function sourceReasonLabel(reason?: string | null) {
+  const key = String(reason || "").trim().toLowerCase();
+  if (key === "observation_time_missing") return "观测时间缺失";
+  if (key === "expected_source_not_present_in_cached_detail") return "缓存详情未包含预期来源";
+  if (key === "past_expected_cadence") return "超过预期更新节奏";
+  if (key === "within_expected_cadence") return "仍在预期更新窗口";
+  if (key === "missing_observation") return "缺少观测值";
+  if (key === "no_cached_detail") return "缺少城市详情缓存";
+  return key || "—";
+}
+
+function formatOpsValue(value: unknown) {
+  if (typeof value === "boolean") {
+    return { label: value ? "TRUE" : "FALSE", active: value };
+  }
+  if (typeof value === "string" || typeof value === "number") {
+    return { label: String(value), active: Boolean(value) };
+  }
+  if (Array.isArray(value)) {
+    return { label: `${value.length} 项`, active: value.length > 0 };
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.values(value as Record<string, unknown>);
+    const enabled = entries.filter(Boolean).length;
+    return { label: `${enabled}/${entries.length} 已配置`, active: enabled > 0 };
+  }
+  return { label: "—", active: false };
+}
+
 export function SystemPageClient() {
   const [loading, setLoading] = useState(true);
   const [health, setHealth] = useState<HealthPayload | null>(null);
@@ -137,12 +166,15 @@ export function SystemPageClient() {
           <CardContent>
             <dl className="space-y-2 text-sm">
               {status?.features
-                ? Object.entries(status.features).map(([k, v]) => (
-                    <div key={k} className="flex justify-between">
-                      <span className="text-slate-400">{k}</span>
-                      <Badge variant={v ? "default" : "secondary"}>{String(v)}</Badge>
-                    </div>
-                  ))
+                ? Object.entries(status.features).map(([k, v]) => {
+                    const formatted = formatOpsValue(v);
+                    return (
+                      <div key={k} className="flex justify-between">
+                        <span className="text-slate-400">{k}</span>
+                        <Badge variant={formatted.active ? "default" : "secondary"}>{formatted.label}</Badge>
+                      </div>
+                    );
+                  })
                 : <span className="text-slate-500">无数据</span>}
             </dl>
           </CardContent>
@@ -155,12 +187,15 @@ export function SystemPageClient() {
           <CardContent>
             <dl className="space-y-2 text-sm">
               {status?.integrations
-                ? Object.entries(status.integrations).map(([k, v]) => (
-                    <div key={k} className="flex justify-between">
-                      <span className="text-slate-400">{k}</span>
-                      <Badge variant={v ? "default" : "secondary"}>{String(v)}</Badge>
-                    </div>
-                  ))
+                ? Object.entries(status.integrations).map(([k, v]) => {
+                    const formatted = formatOpsValue(v);
+                    return (
+                      <div key={k} className="flex justify-between">
+                        <span className="text-slate-400">{k}</span>
+                        <Badge variant={formatted.active ? "default" : "secondary"}>{formatted.label}</Badge>
+                      </div>
+                    );
+                  })
                 : <span className="text-slate-500">无数据</span>}
             </dl>
           </CardContent>
@@ -174,7 +209,7 @@ export function SystemPageClient() {
             <CardTitle>缓存分析</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+            <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-5">
               <div>
                 <div className="text-slate-500">总请求</div>
                 <div className="text-lg font-bold text-white">{cacheAnalysis.total_requests ?? 0}</div>
@@ -188,11 +223,18 @@ export function SystemPageClient() {
                 <div className="text-lg font-bold text-amber-400">{cacheAnalysis.cache_misses ?? 0}</div>
               </div>
               <div>
+                <div className="text-slate-500">强制刷新</div>
+                <div className="text-lg font-bold text-blue-500">{cacheAnalysis.force_refresh_requests ?? 0}</div>
+              </div>
+              <div>
                 <div className="text-slate-500">命中率</div>
                 <div className="text-lg font-bold text-cyan-400">
                   {cacheAnalysis.hit_rate != null ? `${(cacheAnalysis.hit_rate * 100).toFixed(0)}%` : "—"}
                 </div>
               </div>
+            </div>
+            <div className="mt-3 text-xs text-slate-500">
+              这里统计当前后端进程的分析缓存请求；部署重启后会重新累计。
             </div>
           </CardContent>
         </Card>
@@ -243,7 +285,9 @@ export function SystemPageClient() {
                       </td>
                       <td className="px-3 py-2 font-mono text-slate-600">{formatAge(source.age_min)}</td>
                       <td className="px-3 py-2 font-mono text-slate-600">{source.observed_at || "—"}</td>
-                      <td className="px-3 py-2 text-slate-500">{source.reason || "—"}</td>
+                      <td className="px-3 py-2 text-slate-500" title={source.reason || ""}>
+                        {sourceReasonLabel(source.reason)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

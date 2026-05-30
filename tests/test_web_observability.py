@@ -13,6 +13,7 @@ import web.scan_terminal_cache as scan_terminal_cache
 import web.scan_terminal_service as scan_terminal_service
 import web.services.city_api as city_api
 import web.services.city_runtime as city_runtime
+from web.services.observation_freshness import build_observation_freshness
 from web.scan_terminal_cache import scan_terminal_cache_key
 from src.database.runtime_state import TruthRecordRepository
 
@@ -54,6 +55,21 @@ def test_system_status_returns_summary_shape():
     assert 'model_city_coverage' in payload['training_data']
     assert 'metar_entries' in payload['cache']
     assert 'cities_count' in payload
+
+
+def test_observation_freshness_accepts_epoch_seconds():
+    now = datetime.fromtimestamp(1780169100, tz=timezone.utc)
+
+    payload = build_observation_freshness(
+        source_code="mgm",
+        observed_at=1780168800,
+        now_utc=now,
+    )
+
+    assert payload["freshness_status"] == "fresh"
+    assert payload["freshness_reason"] == "within_native_fresh_window"
+    assert payload["age_sec"] == 300
+    assert payload["observed_at"].startswith("2026-")
 
 
 def test_metrics_endpoint_returns_prometheus_payload():
@@ -341,6 +357,116 @@ def test_ops_billing_risk_surfaces_trial_payment_referral_and_points(monkeypatch
     }.issubset({issue["category"] for issue in payload["issues"]})
 
 
+def test_ops_billing_risk_does_not_flag_signup_when_backend_trial_exists(monkeypatch):
+    from src.database.db_manager import DBManager
+
+    now = datetime.now(timezone.utc)
+    recent = now.isoformat()
+
+    def fake_supabase_rows(table, params, *, timeout=10):
+        if table == "trial_claims":
+            return [
+                {
+                    "id": 31,
+                    "user_id": "user-with-trial",
+                    "email": "trial@example.com",
+                    "telegram_user_id": None,
+                    "claimed_at": recent,
+                    "created_at": recent,
+                }
+            ]
+        if table == "subscriptions":
+            return [
+                {
+                    "id": 41,
+                    "user_id": "user-with-trial",
+                    "plan_code": "signup_trial_3d",
+                    "source": "signup_trial",
+                    "status": "active",
+                    "starts_at": recent,
+                    "expires_at": (now + timedelta(days=3)).isoformat(),
+                    "created_at": recent,
+                }
+            ]
+        return []
+
+    monkeypatch.setattr(ops_api.legacy_routes, "_require_ops_admin", lambda request: {"email": "ops@example.com"})
+    monkeypatch.setattr(ops_api, "_supabase_rest_rows", fake_supabase_rows)
+    monkeypatch.setattr(
+        DBManager,
+        "list_app_analytics_events",
+        lambda self, limit=20000, since_iso=None: [
+            {
+                "id": 51,
+                "event_type": "signup_success",
+                "user_id": "user-with-trial",
+                "client_id": "",
+                "session_id": "session-trial",
+                "created_at": recent,
+                "payload": {"user_id": "user-with-trial"},
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        DBManager,
+        "list_payment_audit_events",
+        lambda self, limit=50, event_type=None: [],
+    )
+
+    payload = ops_api.get_ops_billing_risk(None, days=30, limit=20)
+
+    assert payload["summary"]["trial_gaps"] == 0
+    assert not any(issue["category"] == "signup_trial" for issue in payload["issues"])
+
+
+def test_ops_payment_incidents_expose_top_level_reason_and_filters_resolved(monkeypatch):
+    from src.database.db_manager import DBManager
+
+    recent = datetime.now(timezone.utc).isoformat()
+
+    monkeypatch.setattr(ops_api.legacy_routes, "_require_ops_admin", lambda request: {"email": "ops@example.com"})
+    monkeypatch.setattr(
+        DBManager,
+        "list_payment_audit_events",
+        lambda self, limit=50, event_type=None: [
+            {
+                "id": 71,
+                "event_type": "payment_intent_failed",
+                "created_at": recent,
+                "payload": {
+                    "reason": "receiver_mismatch",
+                    "detail": "receiver address differs",
+                    "intent_id": "intent-71",
+                    "user_id": "user-71",
+                    "tx_hash": "0x" + "7" * 64,
+                },
+            },
+            {
+                "id": 72,
+                "event_type": "payment_intent_failed",
+                "created_at": recent,
+                "payload": {
+                    "reason": "receiver_mismatch",
+                    "resolved_at": recent,
+                    "resolved_by": "ops@example.com",
+                },
+            },
+        ],
+    )
+
+    payload = ops_api.list_ops_payment_incidents(None, limit=20)
+
+    assert len(payload["incidents"]) == 1
+    incident = payload["incidents"][0]
+    assert incident["id"] == 71
+    assert incident["reason"] == "receiver_mismatch"
+    assert incident["detail"] == "receiver address differs"
+    assert incident["intent_id"] == "intent-71"
+    assert incident["user_id"] == "user-71"
+    assert incident["tx_hash"].startswith("0x777")
+    assert incident["resolved"] is False
+
+
 def test_cities_endpoint_uses_denver_display_name_for_aurora_market():
     response = client.get("/api/cities")
     assert response.status_code == 200
@@ -390,6 +516,55 @@ def test_cities_endpoint_does_not_block_on_recent_deb_index(monkeypatch):
     denver = next(item for item in response.json()["cities"] if item["name"] == "denver")
     assert denver["deb_recent_tier"] == "other"
     assert denver["deb_recent_sample_count"] == 0
+
+
+def test_city_detail_batch_endpoint_builds_multiple_cached_details(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(city_api.legacy_routes, "_assert_entitlement", lambda request: None)
+    monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "_city_cache_is_fresh",
+        lambda entry, ttl: True,
+    )
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "_overlay_latest_wunderground_current",
+        lambda city, payload: {**payload, "overlay_city": city},
+    )
+
+    class FakeCache:
+        def get_city_cache(self, kind, city):
+            assert kind == "full"
+            return {
+                "payload": {
+                    "city": city,
+                    "hourly": {"times": ["2026-05-30T00:00:00Z"], "temps": [20.0]},
+                }
+            }
+
+    def build_detail(data, market_slug, target_date, resolution):
+        calls.append((data["city"], resolution))
+        return {
+            "city": data["city"],
+            "hourly": data["hourly"],
+            "resolution": resolution,
+            "overlay_city": data["overlay_city"],
+        }
+
+    monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
+    monkeypatch.setattr(city_api.legacy_routes, "_build_city_detail_payload", build_detail)
+
+    response = client.get("/api/cities/detail-batch?cities=Shanghai,Paris&resolution=10m")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["cities"] == ["shanghai", "paris"]
+    assert sorted(payload["details"]) == ["paris", "shanghai"]
+    assert payload["details"]["shanghai"]["resolution"] == "10m"
+    assert payload["details"]["paris"]["overlay_city"] == "paris"
+    assert calls == [("shanghai", "10m"), ("paris", "10m")]
 
 
 def test_payment_runtime_endpoint_returns_shape():

@@ -61,6 +61,7 @@ import {
   mergeScanRowsWithCityFallbackRows,
 } from "@/components/dashboard/scan-terminal/city-fallback-rows";
 import { markAnalyticsOnce, trackAppEvent } from "@/lib/app-analytics";
+import { STATIC_CITY_LIST } from "@/lib/static-cities";
 
 const TrainingDashboard = dynamic(
   () =>
@@ -1218,7 +1219,9 @@ function ScanTerminalScreen() {
     refreshScanTerminalManually();
   }, [refreshScanTerminalManually]);
 
-  const [cityFallbackRows, setCityFallbackRows] = useState<ScanOpportunityRow[]>([]);
+  const [cityFallbackRows, setCityFallbackRows] = useState<ScanOpportunityRow[]>(() =>
+    cityListItemsToScanRows(STATIC_CITY_LIST),
+  );
   const rows = useMemo(
     () => {
       const scanRows = terminalData?.rows || [];

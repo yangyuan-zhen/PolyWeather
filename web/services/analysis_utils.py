@@ -99,8 +99,21 @@ def add_signal(
 
 def parse_utc_datetime(value: Any) -> Optional[datetime]:
     raw = str(value or "").strip()
-    if not raw or "T" not in raw:
+    if not raw:
         return None
+    if "T" not in raw:
+        try:
+            epoch = float(raw)
+        except Exception:
+            return None
+        if epoch <= 1_000_000_000:
+            return None
+        if epoch > 10_000_000_000:
+            epoch = epoch / 1000.0
+        try:
+            return datetime.fromtimestamp(epoch, tz=timezone.utc)
+        except Exception:
+            return None
     try:
         dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
     except Exception:

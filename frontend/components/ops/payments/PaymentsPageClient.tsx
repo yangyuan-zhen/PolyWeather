@@ -50,6 +50,25 @@ function compactDate(value?: string) {
   return value.slice(0, 19).replace("T", " ");
 }
 
+function paymentReasonLabel(reason?: string) {
+  const key = String(reason || "").trim().toLowerCase();
+  if (key === "receiver_mismatch") return "收款地址不匹配";
+  if (key === "amount_mismatch") return "金额不匹配";
+  if (key === "chain_mismatch") return "支付网络不匹配";
+  if (key === "tx_not_found") return "链上交易未找到";
+  if (key === "tx_reverted") return "链上交易失败";
+  if (key === "expired") return "订单已过期";
+  if (key === "unknown") return "未知原因";
+  return key || "未知原因";
+}
+
+function compactMono(value?: string, head = 10, tail = 6) {
+  const text = String(value || "").trim();
+  if (!text) return "—";
+  if (text.length <= head + tail + 3) return text;
+  return `${text.slice(0, head)}...${text.slice(-tail)}`;
+}
+
 function RiskStat({
   label,
   value,
@@ -148,7 +167,7 @@ export function PaymentsPageClient() {
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
             <RiskStat label="总异常" value={Number(riskSummary.issues ?? 0)} sub="需要人工关注" tone={hasRisk ? "text-red-600" : "text-emerald-600"} />
             <RiskStat label="Intent 卡住" value={Number(riskSummary.stuck_intents ?? 0)} sub="submitted/过期 created" />
-            <RiskStat label="试用漏开" value={Number(riskSummary.trial_gaps ?? 0)} sub="signup 无 trial_created" />
+            <RiskStat label="试用漏开" value={Number(riskSummary.trial_gaps ?? 0)} sub="后端试用/订阅证据缺失" />
             <RiskStat label="支付异常" value={Number(riskSummary.payment_incidents ?? incidents.length)} sub="未标记处理" />
             <RiskStat label="积分异常" value={Number(riskSummary.points_discount_issues ?? 0)} sub="确认后未扣/少扣" />
             <RiskStat label="推荐异常" value={Number(riskSummary.referral_settlement_issues ?? 0)} sub="转化无奖励记录" />
@@ -287,7 +306,8 @@ export function PaymentsPageClient() {
                 <thead>
                   <tr className="border-b border-white/10 text-left text-slate-400">
                     <th className="py-2 pr-4 font-medium">ID</th>
-                    <th className="py-2 pr-4 font-medium">原因</th>
+                    <th className="py-2 pr-4 font-medium">原因 / 详情</th>
+                    <th className="py-2 pr-4 font-medium">用户 / Intent</th>
                     <th className="py-2 pr-4 font-medium">时间</th>
                     <th className="py-2 font-medium">操作</th>
                   </tr>
@@ -296,7 +316,16 @@ export function PaymentsPageClient() {
                   {incidents.map((inc) => (
                     <tr key={inc.id} className="border-b border-white/5">
                       <td className="py-2 pr-4 text-slate-500 font-mono">{inc.id}</td>
-                      <td className="py-2 pr-4 text-amber-300">{inc.reason ?? "—"}</td>
+                      <td className="py-2 pr-4">
+                        <div className="font-bold text-amber-600">{paymentReasonLabel(inc.reason)}</div>
+                        <div className="mt-0.5 max-w-xl truncate text-xs text-slate-500" title={inc.detail || inc.reason || ""}>
+                          {inc.detail || inc.reason || "—"}
+                        </div>
+                      </td>
+                      <td className="py-2 pr-4 text-xs text-slate-500">
+                        <div className="font-mono" title={inc.user_id || ""}>{compactMono(inc.user_id)}</div>
+                        <div className="mt-0.5 font-mono text-blue-700" title={inc.intent_id || ""}>{compactMono(inc.intent_id, 12, 6)}</div>
+                      </td>
                       <td className="py-2 pr-4 text-slate-400 text-xs">{inc.created_at?.slice(0, 19) ?? "—"}</td>
                       <td className="py-2">
                         <Button

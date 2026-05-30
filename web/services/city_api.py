@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import os
+import asyncio
 import threading
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
@@ -252,5 +253,96 @@ async def get_city_detail_aggregate_payload(
         resolution,
     )
 
+
+def _parse_batch_city_names(raw_cities: str, *, limit: int) -> List[str]:
+    seen = set()
+    out: List[str] = []
+    for item in str(raw_cities or "").split(","):
+        raw = item.strip()
+        if not raw:
+            continue
+        city = legacy_routes._normalize_city_or_404(raw)
+        if city in seen:
+            continue
+        seen.add(city)
+        out.append(city)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _build_city_detail_batch_item(
+    city: str,
+    *,
+    force_refresh: bool,
+    market_slug: Optional[str],
+    target_date: Optional[str],
+    resolution: Optional[str],
+) -> Tuple[str, Dict[str, Any]]:
+    if force_refresh:
+        data = legacy_routes._refresh_city_full_cache(city, True)
+    else:
+        cached_entry = legacy_routes._CACHE_DB.get_city_cache("full", city)
+        if cached_entry and legacy_routes._city_cache_is_fresh(
+            cached_entry,
+            legacy_routes.CITY_FULL_CACHE_TTL_SEC,
+        ):
+            data = legacy_routes._overlay_latest_wunderground_current(
+                city,
+                cached_entry.get("payload") or {},
+            )
+        else:
+            data = legacy_routes._refresh_city_full_cache(city, False)
+
+    detail = legacy_routes._build_city_detail_payload(
+        data,
+        market_slug,
+        target_date,
+        resolution,
+    )
+    return city, detail
+
+
+async def get_city_detail_batch_payload(
+    request: Request,
+    *,
+    cities: str,
+    force_refresh: bool = False,
+    market_slug: Optional[str] = None,
+    target_date: Optional[str] = None,
+    resolution: Optional[str] = "10m",
+    limit: int = 12,
+) -> Dict[str, Any]:
+    legacy_routes._assert_entitlement(request)
+    city_names = _parse_batch_city_names(cities, limit=max(1, min(24, int(limit or 12))))
+    if not city_names:
+        return {"cities": [], "details": {}, "errors": {}}
+
+    tasks = [
+        run_in_threadpool(
+            _build_city_detail_batch_item,
+            city,
+            force_refresh=force_refresh,
+            market_slug=market_slug,
+            target_date=target_date,
+            resolution=resolution,
+        )
+        for city in city_names
+    ]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    details: Dict[str, Any] = {}
+    errors: Dict[str, str] = {}
+    for city, result in zip(city_names, results):
+        if isinstance(result, Exception):
+            errors[city] = str(result)
+            continue
+        result_city, payload = result
+        details[result_city] = payload
+
+    return {
+        "cities": city_names,
+        "details": details,
+        "errors": errors,
+    }
 
 

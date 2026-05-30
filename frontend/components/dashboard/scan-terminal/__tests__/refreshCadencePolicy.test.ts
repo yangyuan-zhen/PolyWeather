@@ -86,6 +86,17 @@ export async function runTests() {
     "terminal charts should render from row data immediately and dedupe concurrent city detail requests",
   );
   assert(
+    chartLogicSource.includes("/api/cities/detail-batch") &&
+      chartLogicSource.includes("flushCityDetailBatch") &&
+      chartLogicSource.includes("primeCityDetailCache"),
+    "visible terminal chart detail fetches should be coalesced into one batch request and prime the shared chart cache",
+  );
+  assert(
+    chartLogicSource.includes("options.ignoreCache\n      ? runQueuedHourlyDetailRequest") &&
+      chartLogicSource.includes(": queueCityDetailBatch(city, resParam)"),
+    "normal first-paint city detail requests should enter the batch queue before single-request concurrency limiting",
+  );
+  assert(
     chartSource.includes("IntersectionObserver") &&
       chartSource.includes("shouldFetchCityDetailForChart") &&
       chartSource.includes("isChartVisible"),

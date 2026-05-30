@@ -121,9 +121,11 @@ export function runTests() {
 
   assert(
     dashboardSource.includes("cityListItemsToScanRows") &&
+      dashboardSource.includes("STATIC_CITY_LIST") &&
+      dashboardSource.includes("useState<ScanOpportunityRow[]>(() =>") &&
       dashboardSource.includes("/api/cities") &&
       dashboardSource.includes("cityFallbackRows"),
-    "terminal dashboard should use /api/cities fallback rows when scan terminal rows are not ready",
+    "terminal dashboard should seed fallback rows from the static city snapshot before refreshing /api/cities",
   );
   assert(fs.existsSync(staticCitiesPath), "/api/cities route should have a static city snapshot fallback");
   assert(

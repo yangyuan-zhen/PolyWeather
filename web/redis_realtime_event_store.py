@@ -20,6 +20,8 @@ DEFAULT_COUNTER_KEY = "counter:city_observation_revision"
 DEFAULT_MAXLEN = 50000
 DEFAULT_SOCKET_TIMEOUT_SECONDS = 15.0
 DEFAULT_SOCKET_CONNECT_TIMEOUT_SECONDS = 5.0
+DEFAULT_REPLAY_CHUNK_SIZE = 512
+DEFAULT_REPLAY_SCAN_MAX = 5000
 
 APPEND_EVENT_SCRIPT = """
 local revision = redis.call('INCR', KEYS[2])
@@ -69,6 +71,14 @@ def _float_env(name: str, default: float) -> float:
         return default
 
 
+def _int_env(name: str, default: int, *, min_value: int, max_value: int) -> int:
+    try:
+        value = int(os.getenv(name) or default)
+    except (TypeError, ValueError):
+        value = default
+    return max(min_value, min(max_value, int(value)))
+
+
 class RedisRealtimeEventStore:
     """Persist replayable observation patch events in a Redis Stream."""
 
@@ -87,6 +97,18 @@ class RedisRealtimeEventStore:
         self.stream_key = stream_key or os.getenv("POLYWEATHER_REDIS_STREAM_KEY") or DEFAULT_STREAM_KEY
         self.counter_key = counter_key or os.getenv("POLYWEATHER_REDIS_COUNTER_KEY") or DEFAULT_COUNTER_KEY
         self.maxlen = max(1, int(maxlen or os.getenv("POLYWEATHER_REDIS_STREAM_MAXLEN") or DEFAULT_MAXLEN))
+        self.replay_chunk_size = _int_env(
+            "POLYWEATHER_REDIS_REPLAY_CHUNK_SIZE",
+            DEFAULT_REPLAY_CHUNK_SIZE,
+            min_value=50,
+            max_value=2000,
+        )
+        self.replay_scan_max = _int_env(
+            "POLYWEATHER_REDIS_REPLAY_SCAN_MAX",
+            DEFAULT_REPLAY_SCAN_MAX,
+            min_value=500,
+            max_value=50000,
+        )
         self.producer_id = producer_id or os.getenv("POLYWEATHER_INSTANCE_ID") or socket.gethostname()
         self._client = redis_client or self._build_client(redis_url)
         self._subscriber_lock = threading.Lock()
@@ -157,7 +179,9 @@ class RedisRealtimeEventStore:
         revision = _int_or_zero(_decode(value))
         if revision:
             return revision
-        return max((event["revision"] for event in self._all_events()), default=0)
+        rows = self._client.xrevrange(self.stream_key, max="+", min="-", count=1)
+        events = self._rows_to_events(rows)
+        return max((event["revision"] for event in events), default=0)
 
     def status(self) -> Dict[str, Any]:
         out: Dict[str, Any] = {
@@ -180,9 +204,7 @@ class RedisRealtimeEventStore:
             xlen = getattr(self._client, "xlen", None)
             if callable(xlen):
                 out["stream_len"] = int(xlen(self.stream_key))
-            events = self._all_events()
-            if events:
-                out["oldest_revision"] = min(int(event["revision"]) for event in events)
+            out["oldest_revision"] = self._oldest_revision()
         except Exception as exc:
             out["error"] = str(exc)
         return out
@@ -197,16 +219,17 @@ class RedisRealtimeEventStore:
         city_set = _normalize_city_set(cities)
         since = max(0, int(since_revision or 0))
         bounded_limit = max(1, min(MAX_REPLAY_LIMIT, int(limit or 1)))
-        replay: List[Dict[str, Any]] = []
-        for event in self._all_events():
-            if int(event.get("revision") or 0) <= since:
-                continue
-            if city_set and str(event.get("city") or "").strip().lower() not in city_set:
-                continue
-            replay.append(event)
-            if len(replay) >= bounded_limit:
-                break
-        return replay
+        if since <= 0:
+            return self._replay_events_forward(
+                city_set=city_set,
+                since=since,
+                limit=bounded_limit,
+            )[0]
+        return self._replay_events_reverse(
+            city_set=city_set,
+            since=since,
+            limit=bounded_limit,
+        )[0]
 
     def replay_requires_resync(
         self,
@@ -218,21 +241,29 @@ class RedisRealtimeEventStore:
     ) -> bool:
         city_set = _normalize_city_set(cities)
         since = max(0, int(since_revision or 0))
-        matching_events = [
-            event
-            for event in self._all_events()
-            if not city_set or str(event.get("city") or "").strip().lower() in city_set
-        ]
-        if not matching_events:
-            return False
-
-        min_revision = min(int(event["revision"]) for event in matching_events)
-        if since > 0 and since < min_revision - 1:
+        oldest_revision = self._oldest_revision()
+        if since > 0 and oldest_revision and since < oldest_revision - 1:
             return True
         bounded_limit = max(1, int(limit or 1))
         if int(replay_count or 0) < bounded_limit:
             return False
-        return sum(1 for event in matching_events if int(event["revision"]) > since) > bounded_limit
+        probe_limit = min(MAX_REPLAY_LIMIT + 1, bounded_limit + 1)
+        if since <= 0:
+            probe_events, _, _ = self._replay_events_forward(
+                city_set=city_set,
+                since=since,
+                limit=probe_limit,
+            )
+            return len(probe_events) > bounded_limit
+
+        probe_events, hit_boundary, scanned = self._replay_events_reverse(
+            city_set=city_set,
+            since=since,
+            limit=probe_limit,
+        )
+        if len(probe_events) > bounded_limit:
+            return True
+        return not hit_boundary and scanned >= self.replay_scan_max
 
     def start_live_subscription(self, callback: Callable[[Dict[str, Any]], None]) -> None:
         with self._subscriber_lock:
@@ -273,7 +304,80 @@ class RedisRealtimeEventStore:
 
     def _all_events(self) -> List[Dict[str, Any]]:
         rows = self._client.xrange(self.stream_key, min="-", max="+")
+        return self._rows_to_events(rows)
+
+    def _oldest_revision(self) -> Optional[int]:
+        rows = self._client.xrange(self.stream_key, min="-", max="+", count=1)
+        events = self._rows_to_events(rows)
+        if not events:
+            return None
+        return int(events[0].get("revision") or 0) or None
+
+    def _rows_to_events(self, rows: Any) -> List[Dict[str, Any]]:
         return [self._entry_to_event(entry_id, fields) for entry_id, fields in rows or []]
+
+    @staticmethod
+    def _matches_city(event: Dict[str, Any], city_set: Set[str]) -> bool:
+        return not city_set or str(event.get("city") or "").strip().lower() in city_set
+
+    def _replay_events_forward(
+        self,
+        *,
+        city_set: Set[str],
+        since: int,
+        limit: int,
+    ) -> tuple[List[Dict[str, Any]], bool, int]:
+        replay: List[Dict[str, Any]] = []
+        scanned = 0
+        min_id = "-"
+        hit_boundary = False
+        while len(replay) < limit and scanned < self.replay_scan_max:
+            count = min(self.replay_chunk_size, self.replay_scan_max - scanned)
+            rows = self._client.xrange(self.stream_key, min=min_id, max="+", count=count)
+            if not rows:
+                hit_boundary = True
+                break
+            scanned += len(rows)
+            for entry_id, fields in rows:
+                event = self._entry_to_event(entry_id, fields)
+                if int(event.get("revision") or 0) <= since:
+                    continue
+                if self._matches_city(event, city_set):
+                    replay.append(event)
+                    if len(replay) >= limit:
+                        break
+            min_id = f"({_decode(rows[-1][0])}"
+        return replay, hit_boundary, scanned
+
+    def _replay_events_reverse(
+        self,
+        *,
+        city_set: Set[str],
+        since: int,
+        limit: int,
+    ) -> tuple[List[Dict[str, Any]], bool, int]:
+        replay_desc: List[Dict[str, Any]] = []
+        scanned = 0
+        max_id = "+"
+        hit_boundary = False
+        while len(replay_desc) < limit and scanned < self.replay_scan_max:
+            count = min(self.replay_chunk_size, self.replay_scan_max - scanned)
+            rows = self._client.xrevrange(self.stream_key, max=max_id, min="-", count=count)
+            if not rows:
+                hit_boundary = True
+                break
+            scanned += len(rows)
+            for entry_id, fields in rows:
+                event = self._entry_to_event(entry_id, fields)
+                if int(event.get("revision") or 0) <= since:
+                    hit_boundary = True
+                    return list(reversed(replay_desc)), hit_boundary, scanned
+                if self._matches_city(event, city_set):
+                    replay_desc.append(event)
+                    if len(replay_desc) >= limit:
+                        break
+            max_id = f"({_decode(rows[-1][0])}"
+        return list(reversed(replay_desc)), hit_boundary, scanned
 
     @staticmethod
     def _entry_to_event(entry_id: Any, fields: Dict[Any, Any]) -> Dict[str, Any]:

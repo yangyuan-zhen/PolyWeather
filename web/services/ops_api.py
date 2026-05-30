@@ -380,6 +380,51 @@ def get_ops_memberships_overview(
     }
 
 
+def _normalize_payment_incident(item: Dict[str, Any]) -> Dict[str, Any]:
+    payload = item.get("payload") if isinstance(item, dict) else {}
+    payload = payload if isinstance(payload, dict) else {}
+    confirm_failure = (
+        payload.get("confirm_failure")
+        if isinstance(payload.get("confirm_failure"), dict)
+        else {}
+    )
+    reason = str(
+        payload.get("reason")
+        or confirm_failure.get("reason")
+        or payload.get("error")
+        or "unknown"
+    ).strip().lower()
+    detail = str(
+        payload.get("detail")
+        or confirm_failure.get("detail")
+        or payload.get("message")
+        or payload.get("error")
+        or ""
+    ).strip()
+    resolved_at = str(payload.get("resolved_at") or "").strip()
+    return {
+        **item,
+        "payload": payload,
+        "reason": reason or "unknown",
+        "detail": detail,
+        "intent_id": str(
+            payload.get("intent_id")
+            or payload.get("payment_intent_id")
+            or confirm_failure.get("intent_id")
+            or ""
+        ).strip(),
+        "user_id": str(payload.get("user_id") or "").strip(),
+        "tx_hash": str(
+            payload.get("tx_hash")
+            or confirm_failure.get("tx_hash")
+            or ""
+        ).strip(),
+        "resolved": bool(resolved_at),
+        "resolved_at": resolved_at,
+        "resolved_by": str(payload.get("resolved_by") or "").strip(),
+    }
+
+
 def list_ops_payment_incidents(
     request: Request,
     limit: int = 50,
@@ -395,16 +440,15 @@ def list_ops_payment_incidents(
     normalized_reason = str(reason or "").strip().lower()
     filtered = []
     for item in incidents:
-        payload = item.get("payload") if isinstance(item, dict) else {}
-        payload = payload if isinstance(payload, dict) else {}
-        item_reason = str(payload.get("reason") or "").strip().lower()
-        resolved_at = str(payload.get("resolved_at") or "").strip()
+        normalized_item = _normalize_payment_incident(item)
+        item_reason = str(normalized_item.get("reason") or "").strip().lower()
+        resolved = bool(normalized_item.get("resolved"))
         if normalized_reason and item_reason != normalized_reason:
             continue
-        if not include_resolved and resolved_at:
+        if not include_resolved and resolved:
             continue
-        filtered.append(item)
-    return {"incidents": filtered}
+        filtered.append(normalized_item)
+    return {"incidents": filtered, "total": len(filtered)}
 
 
 def resolve_ops_payment_incident(request: Request, event_id: int) -> Dict[str, Any]:
@@ -498,7 +542,28 @@ def get_ops_billing_risk(
         {
             "select": "id,user_id,email,telegram_user_id,claimed_at,created_at",
             "order": "created_at.desc",
-            "limit": str(min(safe_limit, 80)),
+            "limit": str(max(safe_limit * 10, 500)),
+        },
+    )
+    subscription_rows = collect(
+        "subscriptions",
+        {
+            "select": (
+                "id,user_id,plan_code,source,status,starts_at,expires_at,"
+                "created_at,updated_at"
+            ),
+            "or": "(source.eq.signup_trial,plan_code.eq.signup_trial_3d,status.eq.active)",
+            "order": "created_at.desc",
+            "limit": str(max(safe_limit * 20, 1000)),
+        },
+    )
+    entitlement_trial_events = collect(
+        "entitlement_events",
+        {
+            "select": "id,user_id,action,payload,created_at",
+            "action": "in.(signup_trial_claimed,signup_trial_granted)",
+            "order": "created_at.desc",
+            "limit": str(max(safe_limit * 10, 500)),
         },
     )
 
@@ -683,22 +748,58 @@ def get_ops_billing_risk(
         if str(row.get("event_type") or "").strip().lower()
         in {"signup_success", "signup_completed"}
     ]
+    def normalize_user_key(value: Any) -> str:
+        return str(value or "").strip().lower()
+
     trial_actor_keys = {
         _app_analytics_actor_key(row)
         for row in events
         if str(row.get("event_type") or "").strip().lower() == "trial_created"
     }
-    trial_gaps: List[Dict[str, Any]] = []
-    for row in signup_rows[:300]:
-        actor_key = _app_analytics_actor_key(row)
-        if actor_key in trial_actor_keys:
-            continue
+    subscription_user_keys = {
+        normalize_user_key(row.get("user_id"))
+        for row in subscription_rows
+        if normalize_user_key(row.get("user_id"))
+    }
+    trial_subscription_user_keys = {
+        normalize_user_key(row.get("user_id"))
+        for row in subscription_rows
+        if normalize_user_key(row.get("user_id"))
+        and (
+            str(row.get("plan_code") or "").strip().lower() == "signup_trial_3d"
+            or str(row.get("source") or "").strip().lower() == "signup_trial"
+        )
+    }
+    trial_claim_user_keys = {
+        normalize_user_key(row.get("user_id"))
+        for row in trial_claims
+        if normalize_user_key(row.get("user_id"))
+    }
+    trial_event_user_keys: set[str] = set()
+    for row in entitlement_trial_events:
+        event_user_id = normalize_user_key(row.get("user_id"))
         payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+        payload_user_id = normalize_user_key(payload.get("user_id"))
+        if event_user_id:
+            trial_event_user_keys.add(event_user_id)
+        if payload_user_id:
+            trial_event_user_keys.add(payload_user_id)
+
+    backend_trial_user_keys = (
+        trial_subscription_user_keys | trial_claim_user_keys | trial_event_user_keys
+    )
+    trial_gaps: List[Dict[str, Any]] = []
+
+    for claim in trial_claims:
+        claim_user_id = normalize_user_key(claim.get("user_id"))
+        if not claim_user_id or claim_user_id in trial_subscription_user_keys:
+            continue
         gap = {
-            "event_id": row.get("id"),
-            "actor_key": actor_key,
-            "user_id": row.get("user_id") or payload.get("user_id"),
-            "created_at": row.get("created_at"),
+            "claim_id": claim.get("id"),
+            "user_id": claim.get("user_id"),
+            "email": claim.get("email"),
+            "created_at": claim.get("created_at") or claim.get("claimed_at"),
+            "reason": "trial_claim_without_subscription",
         }
         trial_gaps.append(gap)
         if len(trial_gaps) <= 20:
@@ -706,8 +807,46 @@ def get_ops_billing_risk(
                 _risk_issue(
                     category="signup_trial",
                     severity="high",
-                    title="注册成功后未记录试用开通",
-                    detail="该用户进入 signup_success，但同窗口内没有 trial_created 事件。",
+                    title="试用 claim 已写入但订阅缺失",
+                    detail="trial_claims 已记录该用户领取试用，但 subscriptions 中没有 signup_trial_3d 记录。",
+                    user_id=gap.get("user_id"),
+                    created_at=gap.get("created_at"),
+                    reference=str(gap.get("claim_id") or ""),
+                    payload=gap,
+                )
+            )
+
+    for row in signup_rows[:300]:
+        actor_key = _app_analytics_actor_key(row)
+        if actor_key in trial_actor_keys:
+            continue
+        payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+        signup_user_id = normalize_user_key(row.get("user_id") or payload.get("user_id"))
+        if not signup_user_id:
+            continue
+        if (
+            signup_user_id in backend_trial_user_keys
+            or signup_user_id in subscription_user_keys
+        ):
+            continue
+        gap = {
+            "event_id": row.get("id"),
+            "actor_key": actor_key,
+            "user_id": signup_user_id,
+            "created_at": row.get("created_at"),
+            "reason": "signup_without_backend_trial_evidence",
+        }
+        trial_gaps.append(gap)
+        if len(trial_gaps) <= 20:
+            issues.append(
+                _risk_issue(
+                    category="signup_trial",
+                    severity="high",
+                    title="注册成功后未发现后端试用记录",
+                    detail=(
+                        "该用户进入 signup_success，但没有 trial_created、trial_claims、"
+                        "signup_trial subscription 或其他有效订阅证据。"
+                    ),
                     user_id=gap.get("user_id"),
                     created_at=gap.get("created_at"),
                     reference=str(gap.get("event_id") or ""),

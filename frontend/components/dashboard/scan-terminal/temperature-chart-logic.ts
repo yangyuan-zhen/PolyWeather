@@ -965,6 +965,26 @@ type HourlyForecastFetchOptions = {
   resolution?: string;
 };
 
+type CityDetailBatchPayload = {
+  details?: Record<string, CityDetail | null | undefined>;
+  errors?: Record<string, string>;
+};
+
+type CityDetailBatchWaiter = {
+  resolve: (value: HourlyForecast) => void;
+  reject: (reason?: unknown) => void;
+};
+
+type CityDetailBatchQueue = {
+  cities: Set<string>;
+  waiters: Map<string, CityDetailBatchWaiter[]>;
+  timer: ReturnType<typeof setTimeout> | null;
+};
+
+const CITY_DETAIL_BATCH_WINDOW_MS = 25;
+const CITY_DETAIL_BATCH_MAX_CITIES = 12;
+const _cityDetailBatchQueues = new Map<string, CityDetailBatchQueue>();
+
 function parseHourlyForecastFromCityDetail(json: CityDetail | null): HourlyForecast {
   const hourlySource = (json as any)?.hourly ?? (json as any)?.timeseries?.hourly;
   if (!json || !hourlySource) return null;
@@ -993,6 +1013,133 @@ function parseHourlyForecastFromCityDetail(json: CityDetail | null): HourlyForec
   };
 }
 
+function primeCityDetailCache(
+  city: string,
+  resolution: string,
+  detail: CityDetail | null | undefined,
+): HourlyForecast {
+  const data = parseHourlyForecastFromCityDetail(detail || null);
+  if (!data) return null;
+  const cacheKey = `${city}:${resolution}`;
+  _hourlyCache.set(cacheKey, { ts: Date.now(), data });
+  writeSessionCache(cacheKey, data);
+  return data;
+}
+
+async function fetchSingleHourlyForecastForCity(
+  city: string,
+  resolution: string,
+): Promise<HourlyForecast> {
+  const res = await fetchCityDetailWithTimeout(city, resolution);
+  if (!res || !res.ok) return null;
+  const json = await res.json() as CityDetail;
+  return primeCityDetailCache(city, resolution, json);
+}
+
+function queueCityDetailBatch(city: string, resolution: string): Promise<HourlyForecast> {
+  return new Promise<HourlyForecast>((resolve, reject) => {
+    const queue = _cityDetailBatchQueues.get(resolution) || {
+      cities: new Set<string>(),
+      waiters: new Map<string, CityDetailBatchWaiter[]>(),
+      timer: null,
+    };
+    _cityDetailBatchQueues.set(resolution, queue);
+
+    const cityWaiters = queue.waiters.get(city) || [];
+    cityWaiters.push({ resolve, reject });
+    queue.waiters.set(city, cityWaiters);
+    queue.cities.add(city);
+
+    if (queue.timer === null) {
+      queue.timer = setTimeout(() => flushCityDetailBatch(resolution), CITY_DETAIL_BATCH_WINDOW_MS);
+    }
+    if (queue.cities.size >= CITY_DETAIL_BATCH_MAX_CITIES) {
+      flushCityDetailBatch(resolution);
+    }
+  });
+}
+
+function resolveBatchWaiters(
+  waiters: CityDetailBatchWaiter[] | undefined,
+  value: HourlyForecast,
+) {
+  (waiters || []).forEach((waiter) => waiter.resolve(value));
+}
+
+function rejectBatchWaiters(
+  waiters: CityDetailBatchWaiter[] | undefined,
+  reason: unknown,
+) {
+  (waiters || []).forEach((waiter) => waiter.reject(reason));
+}
+
+async function flushCityDetailBatch(resolution: string) {
+  const queue = _cityDetailBatchQueues.get(resolution);
+  if (!queue) return;
+  _cityDetailBatchQueues.delete(resolution);
+  if (queue.timer !== null) {
+    clearTimeout(queue.timer);
+    queue.timer = null;
+  }
+
+  const cities = Array.from(queue.cities).sort();
+  if (!cities.length) return;
+
+  try {
+    const payload = await fetchCityDetailBatchWithTimeout(cities, resolution);
+    const details = payload?.details || {};
+    await Promise.all(
+      cities.map(async (city) => {
+        const waiters = queue.waiters.get(city);
+        const detail = details[city];
+        const data = primeCityDetailCache(city, resolution, detail);
+        if (data) {
+          resolveBatchWaiters(waiters, data);
+          return;
+        }
+        try {
+          resolveBatchWaiters(waiters, await fetchSingleHourlyForecastForCity(city, resolution));
+        } catch (error) {
+          rejectBatchWaiters(waiters, error);
+        }
+      }),
+    );
+  } catch (error) {
+    await Promise.all(
+      cities.map(async (city) => {
+        const waiters = queue.waiters.get(city);
+        try {
+          resolveBatchWaiters(waiters, await fetchSingleHourlyForecastForCity(city, resolution));
+        } catch (fallbackError) {
+          rejectBatchWaiters(waiters, fallbackError || error);
+        }
+      }),
+    );
+  }
+}
+
+function fetchCityDetailBatchWithTimeout(cities: string[], resolution: string) {
+  const controller = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), HOURLY_DETAIL_REQUEST_TIMEOUT_MS);
+  const params = new URLSearchParams({
+    cities: cities.join(","),
+    depth: "full",
+    force_refresh: "false",
+    limit: String(Math.max(cities.length, CITY_DETAIL_BATCH_MAX_CITIES)),
+    resolution,
+  });
+  return fetch(`/api/cities/detail-batch?${params.toString()}`, {
+    headers: { Accept: "application/json" },
+    signal: controller.signal,
+  })
+    .then(async (res) => {
+      if (!res.ok) return null;
+      return res.json() as Promise<CityDetailBatchPayload>;
+    })
+    .catch(() => null)
+    .finally(() => globalThis.clearTimeout(timeoutId));
+}
+
 async function fetchHourlyForecastForCity(
   city: string,
   options: HourlyForecastFetchOptions = {},
@@ -1011,19 +1158,10 @@ async function fetchHourlyForecastForCity(
   const pending = _hourlyRequestCache.get(requestKey);
   if (pending) return pending;
 
-  const request = runQueuedHourlyDetailRequest(() =>
-    fetchCityDetailWithTimeout(city, resParam)
-      .then(async (res) => {
-        if (!res || !res.ok) return null;
-        return res.json() as Promise<CityDetail>;
-      })
-      .then((json) => {
-        const data = parseHourlyForecastFromCityDetail(json);
-        if (!data) return null;
-        _hourlyCache.set(cacheKey, { ts: Date.now(), data });
-        writeSessionCache(cacheKey, data);
-        return data;
-      }),
+  const request = (
+    options.ignoreCache
+      ? runQueuedHourlyDetailRequest(() => fetchSingleHourlyForecastForCity(city, resParam))
+      : queueCityDetailBatch(city, resParam)
   )
     .finally(() => {
       _hourlyRequestCache.delete(requestKey);

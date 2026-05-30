@@ -6,6 +6,7 @@ class FakeRedis:
     def __init__(self):
         self.counter = 0
         self.entries = []
+        self.full_xrange_calls = 0
 
     def eval(self, _script, _numkeys, stream_key, counter_key, *args):
         (
@@ -48,7 +49,32 @@ class FakeRedis:
         return None
 
     def xrange(self, stream_key, min="-", max="+", count=None):
+        if min == "-" and max == "+" and count is None:
+            self.full_xrange_calls += 1
         rows = list(self.entries)
+        if isinstance(min, str) and min.startswith("("):
+            exclusive = min[1:]
+            rows = [row for row in rows if row[0] > exclusive]
+        elif min not in ("-", None):
+            rows = [row for row in rows if row[0] >= min]
+        if max not in ("+", None):
+            rows = [row for row in rows if row[0] <= max]
+        if count is not None:
+            rows = rows[: int(count)]
+        return rows
+
+    def xlen(self, stream_key):
+        return len(self.entries)
+
+    def xrevrange(self, stream_key, max="+", min="-", count=None):
+        rows = list(reversed(self.entries))
+        if isinstance(max, str) and max.startswith("("):
+            exclusive = max[1:]
+            rows = [row for row in rows if row[0] < exclusive]
+        elif max not in ("+", None):
+            rows = [row for row in rows if row[0] <= max]
+        if min not in ("-", None):
+            rows = [row for row in rows if row[0] >= min]
         if count is not None:
             rows = rows[: int(count)]
         return rows
@@ -123,3 +149,16 @@ def test_redis_event_store_reports_replay_gap_when_limit_is_exceeded():
         replay_count=len(replay),
         limit=2,
     )
+
+
+def test_redis_replay_after_known_revision_does_not_scan_full_stream():
+    fake = FakeRedis()
+    store = RedisRealtimeEventStore(redis_client=fake, maxlen=50, producer_id="test")
+
+    for idx in range(20):
+        store.append_event(_event("taipei", 30.0 + idx))
+
+    replay = store.replay_events(cities={"taipei"}, since_revision=18, limit=5)
+
+    assert [event["revision"] for event in replay] == [19, 20]
+    assert fake.full_xrange_calls == 0

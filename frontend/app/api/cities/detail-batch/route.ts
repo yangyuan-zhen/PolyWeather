@@ -1,0 +1,47 @@
+import { NextRequest, NextResponse } from "next/server";
+import { proxyBackendJsonGet } from "@/lib/api-proxy";
+import { buildCityDetailProxyCachePolicy } from "@/lib/proxy-cache-policy";
+
+const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
+const DETAIL_BATCH_PROXY_TIMEOUT_MS = Number(
+  process.env.POLYWEATHER_CITY_DETAIL_BATCH_PROXY_TIMEOUT_MS || "12000",
+);
+
+export async function GET(req: NextRequest) {
+  if (!API_BASE) {
+    return NextResponse.json(
+      { error: "POLYWEATHER_API_BASE_URL is not configured" },
+      { status: 500 },
+    );
+  }
+
+  const forceRefresh = req.nextUrl.searchParams.get("force_refresh") ?? "false";
+  const cachePolicy = buildCityDetailProxyCachePolicy(forceRefresh, 15);
+  const searchParams = new URLSearchParams({
+    cities: req.nextUrl.searchParams.get("cities") || "",
+    force_refresh: forceRefresh,
+    limit: req.nextUrl.searchParams.get("limit") || "12",
+  });
+  for (const key of ["market_slug", "target_date", "resolution"]) {
+    const value = req.nextUrl.searchParams.get(key);
+    if (value) searchParams.set(key, value);
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), DETAIL_BATCH_PROXY_TIMEOUT_MS);
+
+  try {
+    return await proxyBackendJsonGet(req, {
+      cacheControl: cachePolicy.responseCacheControl,
+      fetchCache:
+        cachePolicy.fetchMode === "no-store" ? "no-store" : undefined,
+      publicMessage: "Failed to fetch city detail batch",
+      revalidateSeconds: cachePolicy.revalidateSeconds,
+      signal: controller.signal,
+      timeoutPublicMessage: "City detail batch request timed out",
+      url: `${API_BASE}/api/cities/detail-batch?${searchParams.toString()}`,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
