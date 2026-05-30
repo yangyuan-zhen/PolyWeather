@@ -15,6 +15,11 @@ export function runTests() {
     path.join(process.cwd(), "components", "dashboard", "ScanTerminalDashboard.tsx"),
     "utf8",
   );
+  const citiesRouteSource = fs.readFileSync(
+    path.join(process.cwd(), "app", "api", "cities", "route.ts"),
+    "utf8",
+  );
+  const staticCitiesPath = path.join(process.cwd(), "lib", "static-cities.ts");
 
   const cities: CityListItem[] = [
     {
@@ -119,5 +124,13 @@ export function runTests() {
       dashboardSource.includes("/api/cities") &&
       dashboardSource.includes("cityFallbackRows"),
     "terminal dashboard should use /api/cities fallback rows when scan terminal rows are not ready",
+  );
+  assert(fs.existsSync(staticCitiesPath), "/api/cities route should have a static city snapshot fallback");
+  assert(
+    citiesRouteSource.includes("STATIC_CITY_LIST") &&
+      citiesRouteSource.includes("AbortController") &&
+      citiesRouteSource.includes("x-polyweather-cities-source") &&
+      citiesRouteSource.includes("static-fallback"),
+    "/api/cities should return a quick static fallback when the backend city registry is cold or unavailable",
   );
 }
