@@ -100,6 +100,11 @@ export function runTests() {
     backendAuthSource.includes("requireBackendAuthUser"),
     "backend auth helper must expose a real-user requirement for payment mutations",
   );
+  assert(
+    backendAuthSource.includes("requireBackendPaymentAuth") &&
+      backendAuthSource.includes("hasBearerAuth"),
+    "backend auth helper must allow bearer-backed payment mutations to reach the backend verifier",
+  );
 
   const middlewareSource = fs.readFileSync(middlewarePath, "utf8");
   assert(
@@ -205,8 +210,9 @@ export function runTests() {
   for (const route of paymentRoutes) {
     const routeSource = fs.readFileSync(path.join(projectRoot, route), "utf8");
     assert(
-      routeSource.includes("requireBackendAuthUser"),
-      `${route} must reject payment mutations without a real Supabase user`,
+      routeSource.includes("requireBackendPaymentAuth") &&
+        !routeSource.includes("requireBackendAuthUser(auth)"),
+      `${route} must allow bearer-backed payment mutations while still rejecting requests with no auth context`,
     );
   }
 }

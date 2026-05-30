@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   applyAuthResponseCookies,
   buildBackendRequestHeaders,
-  requireBackendAuthUser,
+  requireBackendPaymentAuth,
 } from "@/lib/backend-auth";
 import {
   buildProxyExceptionResponse,
@@ -45,7 +45,7 @@ export async function DELETE(req: NextRequest) {
   }
   try {
     const auth = await buildBackendRequestHeaders(req);
-    const authError = requireBackendAuthUser(auth);
+    const authError = requireBackendPaymentAuth(auth);
     if (authError) return authError;
     const proxiedHeaders = new Headers(auth.headers);
     proxiedHeaders.set("Content-Type", "application/json");

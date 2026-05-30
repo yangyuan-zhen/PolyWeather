@@ -11,6 +11,7 @@ export type BackendHeaderBuildResult = {
   response: NextResponse | null;
   authUserId?: string | null;
   authEmail?: string | null;
+  hasBearerAuth?: boolean;
 };
 
 type HeaderBuildOptions = {
@@ -53,13 +54,25 @@ export async function buildBackendRequestHeaders(
   const incomingAuth = extractBearerToken(request.headers.get("authorization"));
   if (incomingAuth) {
     headers.set("Authorization", `Bearer ${incomingAuth}`);
-    return { headers, response: null, authUserId: null, authEmail: null };
+    return {
+      headers,
+      response: null,
+      authUserId: null,
+      authEmail: null,
+      hasBearerAuth: true,
+    };
   }
 
   const includeSupabaseIdentity = options?.includeSupabaseIdentity !== false;
   if (hasSupabaseServerEnv() && includeSupabaseIdentity) {
     if (!hasSupabaseSessionCookie(request)) {
-      return { headers, response: null, authUserId: null, authEmail: null };
+      return {
+        headers,
+        response: null,
+        authUserId: null,
+        authEmail: null,
+        hasBearerAuth: false,
+      };
     }
 
     const passthroughResponse = new NextResponse(null, { status: 200 });
@@ -81,10 +94,22 @@ export async function buildBackendRequestHeaders(
     if (forwardedEmail) {
       headers.set(FORWARDED_SUPABASE_EMAIL_HEADER, forwardedEmail);
     }
-    return { headers, response: passthroughResponse, authUserId: forwardedUserId || null, authEmail: forwardedEmail || null };
+    return {
+      headers,
+      response: passthroughResponse,
+      authUserId: forwardedUserId || null,
+      authEmail: forwardedEmail || null,
+      hasBearerAuth: Boolean(accessToken),
+    };
   }
 
-  return { headers, response: null, authUserId: null, authEmail: null };
+  return {
+    headers,
+    response: null,
+    authUserId: null,
+    authEmail: null,
+    hasBearerAuth: false,
+  };
 }
 
 export function applyAuthResponseCookies(
@@ -109,4 +134,9 @@ export function requireBackendAuthUser(auth: BackendHeaderBuildResult) {
     ),
     auth.response,
   );
+}
+
+export function requireBackendPaymentAuth(auth: BackendHeaderBuildResult) {
+  if (auth.authUserId || auth.hasBearerAuth) return null;
+  return requireBackendAuthUser(auth);
 }
