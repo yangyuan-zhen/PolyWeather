@@ -7,6 +7,7 @@ from web.services.ops_api import (
     extend_ops_subscription,
     get_ops_analytics_funnel,
     get_ops_config,
+    get_ops_sensitive_config,
     get_ops_memberships_growth,
     get_ops_memberships_overview,
     get_ops_health_check,
@@ -23,6 +24,7 @@ from web.services.ops_api import (
     list_ops_payments,
     search_ops_users,
     update_ops_config,
+    update_ops_sensitive_config,
     get_ops_training_accuracy,
     get_ops_telegram_audit,
 )
@@ -146,6 +148,24 @@ async def ops_update_config(request: Request):
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="key is required")
     return update_ops_config(request, key, value)
+
+
+@router.get("/api/ops/sensitive-config")
+async def ops_sensitive_config(request: Request):
+    return get_ops_sensitive_config(request)
+
+
+@router.put("/api/ops/sensitive-config")
+async def ops_update_sensitive_config(request: Request):
+    import json as _json
+    body_bytes = await request.body()
+    body = _json.loads(body_bytes.decode("utf-8"))
+    key = str(body.get("key") or "").strip()
+    value = str(body.get("value") or "")
+    if not key:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="key is required")
+    return update_ops_sensitive_config(request, key, value)
 
 
 # ── Subscriptions ───────────────────────────────────────────────────

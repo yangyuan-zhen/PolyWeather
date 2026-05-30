@@ -9,6 +9,7 @@ from fastapi import HTTPException, Request
 import requests as _requests
 
 from src.database.db_manager import DBManager
+from src.utils.runtime_secrets import get_runtime_secret, get_runtime_secret_status
 from web.core import GrantPointsRequest
 import web.routes as legacy_routes
 
@@ -481,6 +482,13 @@ _EDITABLE_CONFIG_KEYS: dict[str, str] = {
     "POLYWEATHER_PAYMENT_DIRECT_RECEIVER_ADDRESS": "手动转账收款钱包地址",
 }
 
+_SENSITIVE_CONFIG_KEYS: dict[str, dict[str, str]] = {
+    "POLYWEATHER_AMSC_SESSION_ID": {
+        "label": "AMSC AWOS sessionId",
+        "description": "中国跑道观测接口 sessionId，用于上海/北京/广州等 AMSC AWOS 数据源。",
+    },
+}
+
 
 def get_ops_config(request: Request) -> dict[str, Any]:
     _require_ops(request)
@@ -510,6 +518,81 @@ def update_ops_config(request: Request, key: str, value: str) -> dict[str, Any]:
     return {"key": key, "value": value, "ok": True}
 
 
+def _sensitive_config_payload(key: str) -> dict[str, Any]:
+    definition = _SENSITIVE_CONFIG_KEYS.get(key) or {}
+    metadata = get_runtime_secret_status(key)
+    return {
+        "key": key,
+        "label": definition.get("label") or key,
+        "description": definition.get("description") or "",
+        "configured": bool(metadata.get("configured")),
+        "masked": str(metadata.get("masked") or ""),
+        "length": int(metadata.get("length") or 0),
+        "updated_at": str(metadata.get("updated_at") or ""),
+        "updated_by": str(metadata.get("updated_by") or ""),
+        "source": str(metadata.get("source") or "runtime_store"),
+    }
+
+
+def get_ops_sensitive_config(request: Request) -> dict[str, Any]:
+    _require_ops(request)
+    return {
+        "configs": [
+            _sensitive_config_payload(key)
+            for key in _SENSITIVE_CONFIG_KEYS
+        ]
+    }
+
+
+def update_ops_sensitive_config(
+    request: Request,
+    key: str,
+    value: str,
+) -> dict[str, Any]:
+    admin = _require_ops(request) or {}
+    normalized_key = str(key or "").strip()
+    if normalized_key not in _SENSITIVE_CONFIG_KEYS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"sensitive config key '{normalized_key}' is not editable",
+        )
+    secret_value = str(value or "").strip()
+    if not 12 <= len(secret_value) <= 256 or any(ch.isspace() for ch in secret_value):
+        raise HTTPException(
+            status_code=400,
+            detail="sessionId must be 12-256 non-whitespace characters",
+        )
+
+    db = DBManager()
+    try:
+        config = db.set_runtime_secret(
+            normalized_key,
+            secret_value,
+            updated_by=str(admin.get("email") or ""),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    os.environ[normalized_key] = secret_value
+    response_config = _sensitive_config_payload(normalized_key)
+    response_config.update(
+        {
+            "configured": bool(config.get("configured")),
+            "masked": str(config.get("masked") or ""),
+            "length": int(config.get("length") or 0),
+            "updated_at": str(config.get("updated_at") or ""),
+            "updated_by": str(config.get("updated_by") or ""),
+            "source": str(config.get("source") or "runtime_store"),
+        }
+    )
+    health = (
+        _check_amsc_awos_health(timeout=8)
+        if normalized_key == "POLYWEATHER_AMSC_SESSION_ID"
+        else None
+    )
+    return {"ok": True, "config": response_config, "health": health}
+
+
 def _build_amsc_awos_headers() -> dict[str, str]:
     headers = {
         "Accept": "application/json, text/plain, */*",
@@ -519,8 +602,8 @@ def _build_amsc_awos_headers() -> dict[str, str]:
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
         ),
     }
-    cookie = str(os.getenv("POLYWEATHER_AMSC_COOKIE") or "").strip()
-    session_id = str(os.getenv("POLYWEATHER_AMSC_SESSION_ID") or "").strip()
+    cookie = get_runtime_secret("POLYWEATHER_AMSC_COOKIE")
+    session_id = get_runtime_secret("POLYWEATHER_AMSC_SESSION_ID")
     if cookie:
         headers["Cookie"] = cookie
     elif session_id:
@@ -539,8 +622,8 @@ def _check_amsc_awos_health(timeout: int = 8) -> dict[str, Any]:
         return {"ok": False, "error": "not configured"}
 
     credential_configured = bool(
-        str(os.getenv("POLYWEATHER_AMSC_COOKIE") or "").strip()
-        or str(os.getenv("POLYWEATHER_AMSC_SESSION_ID") or "").strip()
+        get_runtime_secret("POLYWEATHER_AMSC_COOKIE")
+        or get_runtime_secret("POLYWEATHER_AMSC_SESSION_ID")
     )
     try:
         t0 = _time.perf_counter()

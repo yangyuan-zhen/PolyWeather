@@ -20,6 +20,7 @@ from urllib.request import Request, urlopen
 from loguru import logger
 
 from src.utils.metrics import record_source_call
+from src.utils.runtime_secrets import get_runtime_secret
 
 AMSC_AWOS_BASE_URL = os.getenv("AMSC_AWOS_BASE_URL", "").strip()
 
@@ -316,8 +317,8 @@ class AmscAwosSourceMixin:
                 "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
             ),
         }
-        cookie = os.getenv("POLYWEATHER_AMSC_COOKIE", "").strip()
-        session_id = os.getenv("POLYWEATHER_AMSC_SESSION_ID", "").strip()
+        cookie = get_runtime_secret("POLYWEATHER_AMSC_COOKIE")
+        session_id = get_runtime_secret("POLYWEATHER_AMSC_SESSION_ID")
         if cookie:
             headers["Cookie"] = cookie
         elif session_id:
