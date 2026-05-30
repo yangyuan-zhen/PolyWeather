@@ -55,19 +55,20 @@ smoke_check() {
     local timeout="$3"
     local attempts="${4:-6}"
     local delay="${5:-5}"
+    local output=""
 
     for i in $(seq 1 "$attempts"); do
-        if curl -fsSo /dev/null --max-time "$timeout" "$url"; then
-            echo "✅ $name"
+        if output=$(curl -fsS -w "http=%{http_code} time=%{time_total}" -o /dev/null --max-time "$timeout" "$url" 2>&1); then
+            echo "✅ $name ($output)"
             return 0
         fi
         if [ "$i" != "$attempts" ]; then
-            echo "   $name retry $i/$attempts..."
+            echo "   $name retry $i/$attempts... ($output)"
             sleep "$delay"
         fi
     done
 
-    echo "❌ $name"
+    echo "❌ $name ($output)"
     return 1
 }
 
@@ -149,7 +150,8 @@ warm_public_route "cities" "https://polyweather.top/api/cities" 20 3 2
 
 FAILED=0
 smoke_check "healthz" "https://api.polyweather.top/healthz" 15 3 5 || FAILED=1
-smoke_check "cities" "https://api.polyweather.top/api/cities" 15 8 5 || FAILED=1
+smoke_check "local cities" "http://127.0.0.1:8000/api/cities" 10 6 3 || FAILED=1
+smoke_check "frontend cities" "https://polyweather.top/api/cities" 20 5 5 || FAILED=1
 smoke_check "frontend" "https://www.polyweather.top/" 15 3 5 || FAILED=1
 
 if [ "$FAILED" = "1" ]; then
