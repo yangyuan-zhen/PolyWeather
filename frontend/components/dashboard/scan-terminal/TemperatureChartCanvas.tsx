@@ -28,6 +28,46 @@ type CityThreshold = {
   kind: "gte" | "lte";
 };
 
+function isFiniteChartValue(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function hasDrawableTemperatureChartContent({
+  activeSeries,
+  probabilityOverlay,
+  zoomedData,
+}: {
+  activeSeries: EvidenceSeries[];
+  probabilityOverlay: ProbabilityOverlay | null;
+  zoomedData: Array<Record<string, any>>;
+}) {
+  if (probabilityOverlay?.muLine || probabilityOverlay?.bands.length) return true;
+  return activeSeries.some((series) =>
+    zoomedData.some((point, index) => {
+      const value = point?.[series.key] ?? series.values[index];
+      return isFiniteChartValue(value);
+    }),
+  );
+}
+
+function shouldKeepTemperatureChartLoading({
+  row,
+  isHourlyLoading,
+  activeSeries,
+  probabilityOverlay,
+  zoomedData,
+}: {
+  row: ScanOpportunityRow | null;
+  isHourlyLoading: boolean;
+  activeSeries: EvidenceSeries[];
+  probabilityOverlay: ProbabilityOverlay | null;
+  zoomedData: Array<Record<string, any>>;
+}) {
+  if (!row?.city) return false;
+  if (isHourlyLoading) return true;
+  return !hasDrawableTemperatureChartContent({ activeSeries, probabilityOverlay, zoomedData });
+}
+
 function TemperatureChartCanvasComponent({
   isEn,
   compact,
@@ -133,6 +173,13 @@ function TemperatureChartCanvasComponent({
     hasRunwayData &&
     individualRunwaySeriesCount > 1 &&
     collapsedRunwaySeries.length < chartSeries.length;
+  const shouldShowChartLoading = shouldKeepTemperatureChartLoading({
+    row,
+    isHourlyLoading,
+    activeSeries,
+    probabilityOverlay,
+    zoomedData,
+  });
 
   return (
     <div className={clsx("relative flex flex-1 flex-col p-2", compact ? "min-h-[120px]" : "min-h-[240px]")}>
@@ -195,7 +242,7 @@ function TemperatureChartCanvasComponent({
         )}
       </div>
       <div ref={chartHostRef} className={clsx("relative flex-1", compact ? "min-h-[120px]" : "min-h-[220px]")}>
-        {canRenderChart && (
+        {canRenderChart && !shouldShowChartLoading && (
           <ReComposedChart
             width={chartWidth}
             height={chartHeight}
@@ -338,7 +385,7 @@ function TemperatureChartCanvasComponent({
           </ReComposedChart>
         )}
       </div>
-      {isHourlyLoading && (
+      {shouldShowChartLoading && (
         <div className="pointer-events-none absolute inset-2 z-10 grid place-items-center bg-white/65 backdrop-blur-[1px]">
           <div className="flex items-center gap-2 rounded border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-600 shadow-sm">
             <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-blue-500" />
@@ -351,3 +398,4 @@ function TemperatureChartCanvasComponent({
 }
 
 export const TemperatureChartCanvas = memo(TemperatureChartCanvasComponent);
+export const __shouldKeepTemperatureChartLoadingForTest = shouldKeepTemperatureChartLoading;

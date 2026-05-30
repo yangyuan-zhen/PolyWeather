@@ -2,6 +2,10 @@ import {
   loadTerminalAuthProfile,
   type TerminalAuthProfilePayload,
 } from "@/components/dashboard/scan-terminal/terminal-auth-bootstrap";
+import {
+  buildSubscriptionRequiredAuthProfile,
+  isSubscriptionRequiredBackendResponse,
+} from "@/lib/auth-profile-proxy";
 
 function assert(condition: unknown, message: string) {
   if (!condition) throw new Error(message);
@@ -147,5 +151,32 @@ export async function runTests() {
   assert(
     failedWithTransientAuthError,
     "terminal auth bootstrap must not resolve to an anonymous paywall when a bearer session exists but the auth profile request is transiently failing",
+  );
+
+  assert(
+    isSubscriptionRequiredBackendResponse(
+      403,
+      '{"detail":"Subscription required"}',
+    ) === true,
+    "auth profile proxy should recognize backend subscription-required responses as confirmed inactive access",
+  );
+  assert(
+    isSubscriptionRequiredBackendResponse(
+      403,
+      '{"detail":"temporary entitlement outage"}',
+    ) === false,
+    "auth profile proxy should keep unrelated backend 403 responses in the transient/degraded path",
+  );
+
+  const subscriptionRequiredProfile = buildSubscriptionRequiredAuthProfile({
+    email: "user@example.com",
+    userId: "user-1",
+  });
+  assert(
+    subscriptionRequiredProfile.authenticated === true &&
+      subscriptionRequiredProfile.user_id === "user-1" &&
+      subscriptionRequiredProfile.subscription_active === false &&
+      !("degraded_auth_profile" in subscriptionRequiredProfile),
+    "auth profile proxy must return confirmed inactive access instead of an endless unknown subscription state",
   );
 }

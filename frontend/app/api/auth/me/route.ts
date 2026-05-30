@@ -17,6 +17,10 @@ import {
   entitlementSnapshotToAuthPayload,
   readEntitlementSnapshot,
 } from "@/lib/entitlement-snapshot";
+import {
+  buildSubscriptionRequiredAuthProfile,
+  isSubscriptionRequiredBackendResponse,
+} from "@/lib/auth-profile-proxy";
 import { hasSupabaseServerEnv } from "@/lib/supabase/server";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
@@ -111,6 +115,22 @@ function degradedAuthProfileResponse({
     degraded_reason: reason,
   });
   return applyAuthResponseCookies(degraded, response);
+}
+
+function subscriptionRequiredAuthProfileResponse({
+  email,
+  response,
+  userId,
+}: {
+  email: string | null;
+  response: NextResponse | null;
+  userId: string;
+}) {
+  const inactive = NextResponse.json(
+    buildSubscriptionRequiredAuthProfile({ email, userId }),
+  );
+  clearEntitlementSnapshotCookie(inactive);
+  return applyAuthResponseCookies(inactive, response);
 }
 
 function snapshotAuthProfileResponse({
@@ -223,16 +243,30 @@ export async function GET(req: NextRequest) {
     } finally {
       clearTimeout(timeoutId);
     }
-    if ((res.status === 401 || res.status === 403) && auth.authUserId) {
-      return degradedAuthProfileResponse({
-        email: auth.authEmail || null,
-        reason: `backend_${res.status}`,
-        req,
-        response: auth.response,
-        userId: auth.authUserId,
-      });
-    }
     if (res.status === 401 || res.status === 403) {
+      const raw = await res.text();
+      const authIdentity = auth.authUserId
+        ? { email: auth.authEmail || null, userId: auth.authUserId }
+        : await getBearerIdentityOnce();
+      if (
+        authIdentity?.userId &&
+        isSubscriptionRequiredBackendResponse(res.status, raw)
+      ) {
+        return subscriptionRequiredAuthProfileResponse({
+          email: authIdentity.email,
+          response: auth.response,
+          userId: authIdentity.userId,
+        });
+      }
+      if (auth.authUserId) {
+        return degradedAuthProfileResponse({
+          email: auth.authEmail || null,
+          reason: `backend_${res.status}`,
+          req,
+          response: auth.response,
+          userId: auth.authUserId,
+        });
+      }
       const identity = await getBearerIdentityOnce();
       if (identity) {
         return degradedAuthProfileResponse({

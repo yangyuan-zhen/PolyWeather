@@ -282,11 +282,12 @@ export function runTests() {
     "ops subscription grant route must fall back to direct Supabase grant and resolve users via indexed profiles before Auth Admin",
   );
   assert(
-    authMeRouteSource.includes("if ((res.status === 401 || res.status === 403) && auth.authUserId)") &&
+    authMeRouteSource.includes("isSubscriptionRequiredBackendResponse(res.status, raw)") &&
+      authMeRouteSource.includes("subscriptionRequiredAuthProfileResponse") &&
       authMeRouteSource.includes("degradedAuthProfileResponse") &&
       authMeRouteSource.includes("reason: `backend_${res.status}`") &&
       authMeRouteSource.includes("subscription_active: null"),
-    "auth profile proxy must preserve authenticated identity with unknown subscription on backend 401/403 instead of forcing a false paywall",
+    "auth profile proxy must only convert explicit subscription-required 403 responses to inactive access while preserving unrelated backend 401/403 responses as unknown subscription",
   );
   assert(
     (authMeRouteSource.match(/buildBackendRequestHeaders\(req\)/g) || []).length === 1 &&

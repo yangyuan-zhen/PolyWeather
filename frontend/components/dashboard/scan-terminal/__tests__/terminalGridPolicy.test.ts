@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { __shouldKeepTemperatureChartLoadingForTest } from "@/components/dashboard/scan-terminal/TemperatureChartCanvas";
 
 function assert(condition: unknown, message: string) {
   if (!condition) throw new Error(message);
@@ -117,5 +118,39 @@ export function runTests() {
     chartCanvasSource.includes("memo(") &&
       chartCanvasSource.includes("TemperatureChartCanvasComponent"),
     "temperature chart canvas must be memoized so unrelated terminal state does not remount Recharts",
+  );
+  assert(
+    __shouldKeepTemperatureChartLoadingForTest({
+      row: { city: "Moscow" } as any,
+      isHourlyLoading: false,
+      activeSeries: [],
+      probabilityOverlay: null,
+      zoomedData: [
+        { label: "00:00", ts: 1 },
+        { label: "05:00", ts: 2 },
+      ],
+    }),
+    "temperature chart must keep loading instead of rendering an empty axis grid when no drawable series is available",
+  );
+  assert(
+    !__shouldKeepTemperatureChartLoadingForTest({
+      row: { city: "Moscow" } as any,
+      isHourlyLoading: false,
+      activeSeries: [
+        {
+          key: "current",
+          label: "Current reference",
+          source: "Live",
+          color: "#009688",
+          values: [13, 13],
+        },
+      ] as any,
+      probabilityOverlay: null,
+      zoomedData: [
+        { label: "00:00", ts: 1, current: 13 },
+        { label: "05:00", ts: 2, current: 13 },
+      ],
+    }),
+    "temperature chart should render once a visible series has drawable values",
   );
 }
