@@ -65,4 +65,15 @@ export function runTests() {
       chartCanvasSource.includes('compact ? "min-h-[120px]" : "min-h-[220px]"'),
     "compact grid charts must not force desktop minimum heights that get clipped inside 3x3 terminal slots",
   );
+  const signedOutBlock = dashboardSource.slice(
+    dashboardSource.indexOf('if (event === "SIGNED_OUT")'),
+    dashboardSource.indexOf('} else if (event === "TOKEN_REFRESHED"'),
+  );
+  assert(
+    signedOutBlock.includes("await supabase.auth.getSession()") &&
+      signedOutBlock.includes("mergeAccessStateWithAuthPayload(prev, payload)") &&
+      signedOutBlock.indexOf("await supabase.auth.getSession()") <
+        signedOutBlock.indexOf("setProAccess(createEmptyAccess(false))"),
+    "terminal auth listener must re-check the current Supabase session before clearing access on SIGNED_OUT events",
+  );
 }

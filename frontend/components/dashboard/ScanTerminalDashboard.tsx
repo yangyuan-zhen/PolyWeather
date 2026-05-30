@@ -954,6 +954,18 @@ function ScanTerminalScreen() {
         data: { subscription },
       } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === "SIGNED_OUT") {
+          try {
+            const {
+              data: { session: currentSession },
+            } = await supabase.auth.getSession();
+            const accessToken =
+              currentSession?.access_token || session?.access_token || null;
+            if (accessToken) {
+              const payload = await loadAuthProfile(accessToken);
+              setProAccess((prev) => mergeAccessStateWithAuthPayload(prev, payload));
+              return;
+            }
+          } catch {}
           setProAccess(createEmptyAccess(false));
         } else if (event === "TOKEN_REFRESHED" || event === "SIGNED_IN") {
           try {

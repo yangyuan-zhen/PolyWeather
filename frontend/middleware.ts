@@ -104,8 +104,11 @@ async function handleTerminalGate(request: NextRequest): Promise<NextResponse> {
     return response;
   }
 
-  // Layer 1: Not logged in → redirect to /auth/login?next=/terminal
-  return redirectToLogin(request, pathname);
+  // A session cookie exists, but the edge/server refresh can occasionally fail
+  // during a long-lived terminal tab. Do not navigate an active dashboard away
+  // on a transient claims failure; the client can still verify via bearer auth
+  // and render the in-product access gate if the session is truly gone.
+  return response;
 }
 
 async function handleSupabaseAuthGate(request: NextRequest) {

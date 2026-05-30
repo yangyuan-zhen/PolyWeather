@@ -119,6 +119,15 @@ export function runTests() {
         middlewareSource.indexOf("await refreshMiddlewareSession(request)"),
     "middleware must redirect no-cookie page requests without calling Supabase auth",
   );
+  const terminalGateSource = middlewareSource.slice(
+    middlewareSource.indexOf("async function handleTerminalGate"),
+    middlewareSource.indexOf("async function handleSupabaseAuthGate"),
+  );
+  assert(
+    terminalGateSource.includes("return response;") &&
+      !terminalGateSource.includes("return redirectToLogin(request, pathname);\n}"),
+    "terminal middleware must not navigate long-lived dashboards away when a session cookie exists but claims refresh is transiently unavailable",
+  );
   assert(
     middlewareSource.includes("unauthorizedSupabaseSessionResponse()"),
     "middleware must reject no-cookie protected API requests without calling Supabase auth",
