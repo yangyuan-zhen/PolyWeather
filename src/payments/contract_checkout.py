@@ -2059,6 +2059,26 @@ class PaymentContractCheckoutService:
                 raise PaymentCheckoutError(
                     409, "tx_hash already used by another payment intent"
                 )
+        intent_rows = self._rest(
+            "GET",
+            "payment_intents",
+            params={
+                "select": "id",
+                "tx_hash": f"eq.{tx_hash_text}",
+                "limit": "5",
+            },
+            allowed_status=[200],
+        )
+        if not isinstance(intent_rows, list):
+            return
+        for row in intent_rows:
+            if not isinstance(row, dict):
+                continue
+            existing_intent = str(row.get("id") or "").strip()
+            if existing_intent and existing_intent != str(intent_id):
+                raise PaymentCheckoutError(
+                    409, "tx_hash already used by another payment intent"
+                )
 
     def _record_duplicate_transaction(
         self,
@@ -2893,6 +2913,7 @@ class PaymentContractCheckoutService:
             raise PaymentCheckoutError(400, "tx_hash required")
         if not (tx_hash_text.startswith("0x") and len(tx_hash_text) == 66):
             raise PaymentCheckoutError(400, "invalid tx_hash")
+        self._ensure_tx_hash_unused(tx_hash_text, intent.intent_id)
         w3 = self._get_web3(chain_id=intent.chain_id)
         if not w3.is_connected():
             raise PaymentCheckoutError(503, "cannot connect payment rpc")

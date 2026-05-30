@@ -1114,13 +1114,43 @@ def test_tx_hash_unused_check_selects_only_intent_id(monkeypatch, tmp_path):
 
     def _fake_rest(method, table, **kwargs):
         calls.append({"method": method, "table": table, **kwargs})
-        return [{"intent_id": "intent-1"}]
+        if table == "payment_transactions":
+            return [{"intent_id": "intent-1"}]
+        if table == "payment_intents":
+            return [{"id": "intent-1"}]
+        raise AssertionError((method, table, kwargs))
 
     monkeypatch.setattr(service, "_rest", _fake_rest)
 
     service._ensure_tx_hash_unused("0x" + "1" * 64, "intent-1")
 
     assert calls[0]["params"]["select"] == "intent_id"
+    assert calls[1]["params"]["select"] == "id"
+
+
+def test_tx_hash_unused_check_rejects_existing_intent_tx_hash(
+    monkeypatch,
+    tmp_path,
+):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+
+    def _fake_rest(method, table, **kwargs):
+        if table == "payment_transactions":
+            return []
+        if table == "payment_intents":
+            return [{"id": "other-intent"}]
+        raise AssertionError((method, table, kwargs))
+
+    monkeypatch.setattr(service, "_rest", _fake_rest)
+
+    try:
+        service._ensure_tx_hash_unused("0x" + "1" * 64, "intent-1")
+    except PaymentCheckoutError as exc:
+        assert exc.status_code == 409
+        assert "tx_hash already used" in exc.detail
+    else:
+        raise AssertionError("expected duplicate tx_hash rejection")
 
 
 def test_grant_subscription_keeps_unknown_active_subscription_extension(monkeypatch, tmp_path):
