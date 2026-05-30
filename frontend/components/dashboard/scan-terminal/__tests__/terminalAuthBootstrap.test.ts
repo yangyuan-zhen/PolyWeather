@@ -79,4 +79,43 @@ export async function runTests() {
     cookieOnlyResult.user_id === "cookie-user",
     "terminal auth bootstrap should accept an authenticated cookie profile immediately",
   );
+
+  const delayedBearerSession = deferred<{ data: { session: { access_token: string } } }>();
+  let coldStartSettled = false;
+  const coldStartResultPromise = loadTerminalAuthProfile({
+    hasSupabasePublicEnv: true,
+    getSession: () => delayedBearerSession.promise,
+    loadAuthProfile: (accessToken) => {
+      const token = String(accessToken || "");
+      if (!token) {
+        return Promise.resolve({
+          authenticated: true,
+          user_id: "cookie-user",
+          subscription_active: null,
+          degraded_auth_profile: true,
+        });
+      }
+      return Promise.resolve({
+        authenticated: true,
+        user_id: "bearer-paid-user",
+        subscription_active: true,
+      });
+    },
+  });
+  coldStartResultPromise.then(() => {
+    coldStartSettled = true;
+  });
+  await flushMicrotasks();
+  assert(
+    coldStartSettled === false,
+    "terminal auth bootstrap must not show a cold-start paywall from a degraded cookie profile before bearer auth has a chance to confirm Pro",
+  );
+
+  delayedBearerSession.resolve({ data: { session: { access_token: "paid-token" } } });
+  const coldStartResult = await coldStartResultPromise;
+  assert(
+    coldStartResult.user_id === "bearer-paid-user" &&
+      coldStartResult.subscription_active === true,
+    "terminal auth bootstrap should prefer the bearer-confirmed active Pro profile over a degraded cookie profile",
+  );
 }

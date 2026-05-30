@@ -76,4 +76,10 @@ export function runTests() {
         signedOutBlock.indexOf("setProAccess(createEmptyAccess(false))"),
     "terminal auth listener must re-check the current Supabase session before clearing access on SIGNED_OUT events",
   );
+  assert(
+    dashboardSource.includes('event === "INITIAL_SESSION"') &&
+      dashboardSource.indexOf('event === "INITIAL_SESSION"') <
+        dashboardSource.indexOf('event === "TOKEN_REFRESHED"'),
+    "terminal auth listener must hydrate access from Supabase INITIAL_SESSION events during first navigation from the landing page",
+  );
 }

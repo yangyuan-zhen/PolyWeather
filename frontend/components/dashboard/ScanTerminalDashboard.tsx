@@ -967,8 +967,13 @@ function ScanTerminalScreen() {
             }
           } catch {}
           setProAccess(createEmptyAccess(false));
-        } else if (event === "TOKEN_REFRESHED" || event === "SIGNED_IN") {
+        } else if (
+          event === "INITIAL_SESSION" ||
+          event === "TOKEN_REFRESHED" ||
+          event === "SIGNED_IN"
+        ) {
           try {
+            if (!session?.access_token) return;
             const payload = await loadAuthProfile(session?.access_token);
             setProAccess((prev) => mergeAccessStateWithAuthPayload(prev, payload));
           } catch {}

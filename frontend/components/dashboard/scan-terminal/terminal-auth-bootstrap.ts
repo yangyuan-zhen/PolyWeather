@@ -41,6 +41,12 @@ function firstKnownProfile(cookieResult: SettledProfile, bearerResult: SettledPr
   };
 }
 
+function canResolveProfileImmediately(
+  payload: TerminalAuthProfilePayload | null,
+): payload is TerminalAuthProfilePayload {
+  return payload?.authenticated === true && payload.subscription_active === true;
+}
+
 export async function loadTerminalAuthProfile({
   getSession,
   hasSupabasePublicEnv,
@@ -56,7 +62,7 @@ export async function loadTerminalAuthProfile({
   });
 
   const resolveIfAuthenticated = (payload: TerminalAuthProfilePayload | null) => {
-    if (!payload?.authenticated || resolvedAuthenticated) return;
+    if (!canResolveProfileImmediately(payload) || resolvedAuthenticated) return;
     resolvedAuthenticated = true;
     resolveAuthenticated?.(payload);
   };
