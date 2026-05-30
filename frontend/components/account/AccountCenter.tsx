@@ -431,20 +431,31 @@ export function AccountCenter() {
     showOverlay,
   ]);
 
-  // ── Weekly points display (component-only derived) ──────
-  const backendWeeklyPointsRaw = Number(backend?.weekly_points);
-  const metadataWeeklyPointsRaw = Number(
-    user?.user_metadata?.weekly_points ?? 0,
-  );
-  const weeklyPointsRaw = Number.isFinite(backendWeeklyPointsRaw)
-    ? backendWeeklyPointsRaw
-    : metadataWeeklyPointsRaw;
-  const weeklyRankRaw =
-    backend?.weekly_rank ?? user?.user_metadata?.weekly_rank;
-  const weeklyPoints = Number.isFinite(weeklyPointsRaw)
-    ? Math.max(0, weeklyPointsRaw)
+  // ── Referral points display ────────────────────────────
+  const referralRewardPointsRaw = Number(referral?.reward_points ?? 3500);
+  const referralRewardPoints = Number.isFinite(referralRewardPointsRaw)
+    ? Math.max(0, referralRewardPointsRaw)
+    : 3500;
+  const monthlyReferralCountRaw = Number(referral?.monthly_reward_count ?? 0);
+  const monthlyReferralCount = Number.isFinite(monthlyReferralCountRaw)
+    ? Math.max(0, monthlyReferralCountRaw)
     : 0;
-  const weeklyRank = weeklyRankRaw == null ? "--" : String(weeklyRankRaw);
+  const monthlyReferralLimitRaw = Number(referral?.monthly_reward_limit ?? 10);
+  const monthlyReferralLimit = Number.isFinite(monthlyReferralLimitRaw)
+    ? Math.max(0, monthlyReferralLimitRaw)
+    : 10;
+  const monthlyReferralPointsRaw = Number(
+    referral?.monthly_reward_points ?? monthlyReferralCount * referralRewardPoints,
+  );
+  const monthlyReferralPoints = Number.isFinite(monthlyReferralPointsRaw)
+    ? Math.max(0, monthlyReferralPointsRaw)
+    : 0;
+  const monthlyReferralPointsLimitRaw = Number(
+    referral?.monthly_reward_points_limit ?? monthlyReferralLimit * referralRewardPoints,
+  );
+  const monthlyReferralPointsLimit = Number.isFinite(monthlyReferralPointsLimitRaw)
+    ? Math.max(0, monthlyReferralPointsLimitRaw)
+    : monthlyReferralLimit * referralRewardPoints;
 
   // ── Telegram bind command ──────────────────────────────
   const bindCommand = userId
@@ -691,7 +702,7 @@ export function AccountCenter() {
               </p>
               <p className="flex items-center justify-center gap-2 text-xl font-bold text-slate-950">
                 <TrendingUp size={16} className="text-emerald-400" />{" "}
-                {weeklyPoints.toLocaleString()}
+                {monthlyReferralCount.toLocaleString()}
               </p>
             </div>
             <div className="min-w-[140px] rounded-xl border border-blue-200 bg-blue-50 px-6 py-4 text-center">
@@ -700,13 +711,13 @@ export function AccountCenter() {
               </p>
               <p className="flex items-center justify-center gap-2 text-xl font-bold text-slate-950">
                 <Trophy size={16} className="text-amber-400" />{" "}
-                {weeklyRank === "--" ? weeklyRank : `#${weeklyRank}`}
+                {monthlyReferralCount}/{monthlyReferralLimit}
               </p>
             </div>
           </div>
         </div>
 
-        {/* Weekly Ranking Motivation */}
+        {/* Referral rewards */}
         {showSecondarySections ? (
           <div className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-4">
             <div>
@@ -717,35 +728,29 @@ export function AccountCenter() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <span className="text-sm flex items-center gap-2">
-                    <div className="w-5 h-5 bg-yellow-500 rounded text-black font-bold text-[10px] flex items-center justify-center">
-                      1
-                    </div>{" "}
-                    Top 1
+                    <Coins size={16} className="text-yellow-500" />{" "}
+                    {copy.referralRewardHint}
                   </span>
                   <span className="text-xs font-bold text-amber-600">
-                    +200 积分 & 7天Pro
+                    +{referralRewardPoints.toLocaleString()}
                   </span>
                 </div>
                 <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <span className="text-sm flex items-center gap-2">
-                    <div className="w-5 h-5 bg-slate-300 rounded text-black font-bold text-[10px] flex items-center justify-center">
-                      2
-                    </div>{" "}
-                    Top 2-3
+                    <TrendingUp size={16} className="text-emerald-500" />{" "}
+                    {copy.weeklyPoints}
                   </span>
                   <span className="text-xs font-bold text-slate-600">
-                    +100 积分
+                    {monthlyReferralCount}/{monthlyReferralLimit}
                   </span>
                 </div>
                 <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <span className="text-sm flex items-center gap-2">
-                    <div className="w-5 h-5 bg-orange-800 rounded text-white font-bold text-[10px] flex items-center justify-center">
-                      4
-                    </div>{" "}
-                    Top 4-10
+                    <Trophy size={16} className="text-blue-500" />{" "}
+                    {copy.totalPoints}
                   </span>
                   <span className="text-xs font-bold text-orange-400">
-                    +50 积分
+                    {monthlyReferralPoints.toLocaleString()}/{monthlyReferralPointsLimit.toLocaleString()}
                   </span>
                 </div>
               </div>
@@ -753,8 +758,7 @@ export function AccountCenter() {
             <div className="mt-6 flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
               <Info size={14} className="text-slate-500 mt-0.5 shrink-0" />
               <p className="text-[10px] text-slate-500 leading-normal italic">
-                积分规则：群内有效发言（自动防刷检测）+
-                每日首条发言额外奖励。每周一零点结算周榜，所有活跃用户均享参与奖。
+                {copy.pointsRule}
               </p>
             </div>
           </div>

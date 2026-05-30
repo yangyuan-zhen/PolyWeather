@@ -47,6 +47,14 @@ export function runTests() {
     "account center must show monthly and quarterly Pro prices",
   );
   assert(
+    accountCopy.includes("20 USDC") &&
+      accountCopy.includes("+3500 积分") &&
+      accountCopy.includes("月付订单最多抵扣 3 USDC") &&
+      accountCopy.includes("季度订单最多抵扣 8 USDC") &&
+      !accountCopy.includes("群内有效发言"),
+    "account copy must describe balanced referral points and remove group-message points",
+  );
+  assert(
     !useAccountPayment.includes("monthlyPlanList") &&
       !usePaymentFlow.includes("monthlyPlanList"),
     "payment hooks must not filter checkout plans down to monthly only",
@@ -54,7 +62,8 @@ export function runTests() {
   assert(
     types.includes("ReferralSummary") &&
       types.includes("referral?: ReferralSummary | null") &&
-      types.includes("duration_days: number"),
+      types.includes("duration_days: number") &&
+      types.includes("max_discount_usdc_by_plan"),
     "account auth and payment types must include referral summary and plan durations",
   );
 }

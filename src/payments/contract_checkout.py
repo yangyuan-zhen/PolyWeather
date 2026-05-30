@@ -95,7 +95,11 @@ DEFAULT_PLAN_CATALOG: Dict[str, Dict[str, Any]] = {
     "pro_quarterly": {"plan_id": 102, "amount_usdc": "79.9", "duration_days": 90},
 }
 
-REFERRAL_FIRST_MONTH_DISCOUNT_USDC = Decimal("3")
+REFERRAL_FIRST_MONTH_DISCOUNT_USDC = Decimal("9.9")
+DEFAULT_POINTS_MAX_DISCOUNT_BY_PLAN: Dict[str, int] = {
+    "pro_monthly": 3,
+    "pro_quarterly": 8,
+}
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -206,6 +210,29 @@ def _parse_allowed_plan_codes(raw: str) -> List[str]:
         if code and code not in out:
             out.append(code)
     return out or ["pro_monthly", "pro_quarterly"]
+
+
+def _parse_points_max_discount_by_plan(raw: str, fallback: int) -> Dict[str, int]:
+    if not raw:
+        return dict(DEFAULT_POINTS_MAX_DISCOUNT_BY_PLAN)
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        return dict(DEFAULT_POINTS_MAX_DISCOUNT_BY_PLAN)
+    if not isinstance(parsed, dict):
+        return dict(DEFAULT_POINTS_MAX_DISCOUNT_BY_PLAN)
+
+    out: Dict[str, int] = {}
+    for plan_code, raw_value in parsed.items():
+        code = str(plan_code or "").strip().lower()
+        if not code:
+            continue
+        try:
+            value = int(raw_value)
+        except Exception:
+            value = fallback
+        out[code] = max(0, value)
+    return out or dict(DEFAULT_POINTS_MAX_DISCOUNT_BY_PLAN)
 
 
 @dataclass
@@ -377,6 +404,11 @@ class PaymentContractCheckoutService:
         )
         self.points_max_discount_usdc = max(
             0, _env_int("POLYWEATHER_PAYMENT_POINTS_MAX_DISCOUNT_USDC", 3)
+        )
+        self.points_max_discount_usdc_by_plan = _parse_points_max_discount_by_plan(
+            os.getenv("POLYWEATHER_PAYMENT_POINTS_MAX_DISCOUNT_USDC_BY_PLAN_JSON")
+            or "",
+            self.points_max_discount_usdc,
         )
         self._w3_lock = threading.Lock()
         self._w3: Optional[Web3] = None
@@ -919,6 +951,12 @@ class PaymentContractCheckoutService:
         balance = self._extract_points_from_metadata(metadata)
         return {"source": "supabase_metadata", "balance": balance, "metadata": metadata}
 
+    def _points_max_discount_for_plan(self, plan_code: str) -> int:
+        code = str(plan_code or "").strip().lower()
+        if code in self.points_max_discount_usdc_by_plan:
+            return max(0, int(self.points_max_discount_usdc_by_plan[code]))
+        return max(0, int(self.points_max_discount_usdc))
+
     def _auth_admin_get_user(self, user_id: str) -> Dict[str, Any]:
         user_id_text = str(user_id or "").strip()
         if not user_id_text:
@@ -961,15 +999,21 @@ class PaymentContractCheckoutService:
         self,
         *,
         user_id: str,
+        plan_code: str,
         plan_amount_usdc: Decimal,
         use_points: bool,
         requested_points_to_consume: Optional[int],
     ) -> Dict[str, Any]:
+        max_discount_for_plan = self._points_max_discount_for_plan(plan_code)
         base = {
             "enabled": bool(self.points_enabled),
             "applied": False,
             "points_per_usdc": int(self.points_per_usdc),
-            "max_discount_usdc": int(self.points_max_discount_usdc),
+            "max_discount_usdc": int(max_discount_for_plan),
+            "max_discount_usdc_by_plan": {
+                str(code): int(value)
+                for code, value in self.points_max_discount_usdc_by_plan.items()
+            },
             "points_source": "supabase_metadata",
             "points_balance_snapshot": 0,
             "points_to_consume": 0,
@@ -990,7 +1034,7 @@ class PaymentContractCheckoutService:
             return base
 
         max_discount_usdc = min(
-            Decimal(int(self.points_max_discount_usdc)),
+            Decimal(int(max_discount_for_plan)),
             plan_amount_usdc,
         )
         max_points_by_plan = int(
@@ -1266,6 +1310,10 @@ class PaymentContractCheckoutService:
                 "enabled": bool(self.points_enabled),
                 "points_per_usdc": int(self.points_per_usdc),
                 "max_discount_usdc": int(self.points_max_discount_usdc),
+                "max_discount_usdc_by_plan": {
+                    str(plan_code): int(self._points_max_discount_for_plan(plan_code))
+                    for plan_code in sorted(self.plan_catalog.keys())
+                },
             },
             "plans": [
                 {
@@ -1789,10 +1837,12 @@ class PaymentContractCheckoutService:
             "amount_before_discount_usdc_decimal",
             plan_amount_usdc,
         )
+        referral_discount_applied = isinstance(plan.get("referral_discount"), dict)
         redemption = self._build_points_redemption(
             user_id=user_id,
+            plan_code=str(plan.get("plan_code") or plan_code),
             plan_amount_usdc=plan_amount_usdc,
-            use_points=bool(use_points),
+            use_points=bool(use_points) and not referral_discount_applied,
             requested_points_to_consume=points_to_consume,
         )
         final_amount_usdc = redemption["pay_amount_usdc"]
@@ -1831,7 +1881,8 @@ class PaymentContractCheckoutService:
                 redemption.get("points_per_usdc") or self.points_per_usdc
             ),
             "max_discount_usdc": int(
-                redemption.get("max_discount_usdc") or self.points_max_discount_usdc
+                redemption.get("max_discount_usdc")
+                or self._points_max_discount_for_plan(str(plan.get("plan_code") or plan_code))
             ),
             "points_source": str(
                 redemption.get("points_source") or "supabase_metadata"

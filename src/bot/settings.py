@@ -14,7 +14,18 @@ def _env_int(name: str, default: int, min_value: int = 0) -> int:
     return max(min_value, value)
 
 
-MESSAGE_POINTS = _env_int("POLYWEATHER_BOT_MESSAGE_POINTS", 4, min_value=1)
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+
+GROUP_MESSAGE_POINTS_ENABLED = _env_bool(
+    "POLYWEATHER_BOT_GROUP_MESSAGE_POINTS_ENABLED",
+    False,
+)
+MESSAGE_POINTS = _env_int("POLYWEATHER_BOT_MESSAGE_POINTS", 0, min_value=0)
 MESSAGE_DAILY_CAP = _env_int("POLYWEATHER_BOT_MESSAGE_DAILY_CAP", 40, min_value=1)
 MESSAGE_MIN_LENGTH = _env_int("POLYWEATHER_BOT_MESSAGE_MIN_LENGTH", 3, min_value=1)
 MESSAGE_COOLDOWN_SEC = _env_int("POLYWEATHER_BOT_MESSAGE_COOLDOWN_SEC", 30, min_value=0)

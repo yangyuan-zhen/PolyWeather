@@ -12,11 +12,6 @@ import {
 } from "lucide-react";
 import { useI18n } from "@/hooks/useI18n";
 
-const TELEGRAM_GROUP_URL = String(
-  process.env.NEXT_PUBLIC_TELEGRAM_GROUP_URL ||
-    "https://t.me/+Io5H9oVHFmVjOTQ5",
-).trim();
-
 const FAQ_ITEMS = [
   {
     q_zh: "Pro 包含哪些功能？",
@@ -27,14 +22,14 @@ const FAQ_ITEMS = [
   {
     q_zh: "当前订阅价格是多少？",
     q_en: "What is the current subscription price?",
-    a_zh: "目前仅提供月付：10 USDC / 30 天。",
-    a_en: "Monthly plan only: 10 USDC / 30 days.",
+    a_zh: "Pro 月付 29.9 USDC / 30 天，Pro 季度 79.9 USDC / 90 天。",
+    a_en: "Pro monthly is 29.9 USDC / 30 days. Pro quarterly is 79.9 USDC / 90 days.",
   },
   {
     q_zh: "积分如何抵扣？",
     q_en: "How do points work for discounts?",
-    a_zh: "满 500 积分起兑，每 500 积分抵 1U，单次最多抵 3U。",
-    a_en: "500 points minimum — every 500 points = 1 USDC off, up to 3 USDC discount per payment.",
+    a_zh: "满 500 积分起兑，每 500 积分抵 1U。月付最多抵 3U，季度最多抵 8U。",
+    a_en: "500 points minimum: every 500 points = 1 USDC off. Monthly orders can use up to 3 USDC off; quarterly orders can use up to 8 USDC off.",
   },
   {
     q_zh: "支持哪些钱包和支付方式？",
@@ -55,11 +50,11 @@ export function SubscriptionHelpClient() {
       ? "Complete subscription rules and payment guide."
       : "这里是完整的订阅规则和支付说明。你可以先在页面内绑定钱包，再直接开通 Pro。",
     priceLabel: isEn ? "Price" : "订阅价格",
-    priceText: "10 USDC / 30 " + (isEn ? "Days" : "天"),
+    priceText: isEn ? "29.9 / 30d · 79.9 / 90d" : "29.9 / 30天 · 79.9 / 90天",
     discountLabel: isEn ? "Points Discount" : "积分抵扣",
-    discountText: isEn ? "Up to 3 USDC off" : "最多抵 3U",
-    communityLabel: isEn ? "Community Points" : "社群积分",
-    communityLink: isEn ? "Join community to earn" : "加入社群即可赚取积分",
+    discountText: isEn ? "Monthly 3U · Quarterly 8U" : "月付 3U · 季度 8U",
+    communityLabel: isEn ? "Telegram Group" : "Telegram 群",
+    communityLink: isEn ? "Open Account Center" : "前往账户中心",
     faqTitle: isEn ? "FAQ" : "常见问题",
   }), [isEn]);
 
@@ -102,8 +97,7 @@ export function SubscriptionHelpClient() {
                 <span className="text-sm font-semibold">{copy.communityLabel}</span>
               </div>
               <Link
-                href={TELEGRAM_GROUP_URL}
-                target="_blank"
+                href="/account"
                 className="inline-flex min-h-9 items-center text-sm font-semibold text-blue-700 underline decoration-blue-500/50 underline-offset-4"
               >
                 {copy.communityLink}

@@ -92,14 +92,15 @@ POLYWEATHER_PAYMENT_MAX_WAIT_SEC=50
 # Ethereum 主网 USDC 当前建议只开 direct transfer，不走 Polygon checkout 合约。
 POLYWEATHER_PAYMENT_ACCEPTED_TOKENS_JSON=[{"code":"usdc_polygon","symbol":"USDC","name":"USDC on Polygon","chain_id":137,"chain_code":"polygon","chain_name":"Polygon","address":"0x3c499c542cef5e3811e1192ce70d8cc03d5c3359","decimals":6,"receiver_contract":"0x<receiver_contract>","direct_receiver_address":"0x<treasury_or_receiver_wallet>","is_default":true},{"code":"usdc_e_polygon","symbol":"USDC.e","name":"USDC.e on Polygon","chain_id":137,"chain_code":"polygon","chain_name":"Polygon","address":"0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174","decimals":6,"receiver_contract":"0x<receiver_contract>","direct_receiver_address":"0x<treasury_or_receiver_wallet>"},{"code":"usdc_ethereum","symbol":"USDC","name":"USDC on Ethereum","chain_id":1,"chain_code":"ethereum","chain_name":"Ethereum Mainnet","address":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48","decimals":6,"direct_receiver_address":"0x<treasury_or_receiver_wallet>","supports_contract_checkout":false,"supports_direct_transfer":true,"confirmations":2,"explorer_tx_url":"https://etherscan.io/tx/{tx_hash}"}]
 
-# 套餐（当前只保留月付）
-POLYWEATHER_PAYMENT_PLAN_CATALOG_JSON={"pro_monthly":{"plan_id":101,"amount_usdc":"10","duration_days":30}}
-POLYWEATHER_PAYMENT_ALLOWED_PLAN_CODES=pro_monthly
+# 套餐
+POLYWEATHER_PAYMENT_PLAN_CATALOG_JSON={"pro_monthly":{"plan_id":101,"amount_usdc":"29.9","duration_days":30},"pro_quarterly":{"plan_id":102,"amount_usdc":"79.9","duration_days":90}}
+POLYWEATHER_PAYMENT_ALLOWED_PLAN_CODES=pro_monthly,pro_quarterly
 
 # 积分抵扣
 POLYWEATHER_PAYMENT_POINTS_ENABLED=true
 POLYWEATHER_PAYMENT_POINTS_PER_USDC=500
 POLYWEATHER_PAYMENT_POINTS_MAX_DISCOUNT_USDC=3
+POLYWEATHER_PAYMENT_POINTS_MAX_DISCOUNT_USDC_BY_PLAN_JSON={"pro_monthly":3,"pro_quarterly":8}
 
 # 支付自动补单
 POLYWEATHER_PAYMENT_EVENT_LOOP_ENABLED=true

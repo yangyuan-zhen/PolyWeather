@@ -1442,6 +1442,59 @@ class DBManager:
                 "points_after": after,
             }
 
+    def grant_points_by_supabase_user_id(
+        self,
+        supabase_user_id: str,
+        amount: int,
+    ) -> Dict[str, Any]:
+        key = str(supabase_user_id or "").strip().lower()
+        points = int(amount or 0)
+        if not key:
+            return {"ok": False, "reason": "invalid_supabase_user_id"}
+        if points <= 0:
+            return {"ok": False, "reason": "invalid_amount"}
+
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            telegram_id = self._find_telegram_id_by_supabase_user_id(conn, key)
+            if telegram_id is None:
+                return {"ok": False, "reason": "user_not_found", "supabase_user_id": key}
+            row = conn.execute(
+                """
+                SELECT telegram_id, username, points, supabase_email
+                FROM users
+                WHERE telegram_id = ?
+                LIMIT 1
+                """,
+                (int(telegram_id),),
+            ).fetchone()
+            if not row:
+                return {"ok": False, "reason": "user_not_found", "supabase_user_id": key}
+
+            telegram_id = int(row["telegram_id"] or 0)
+            before = int(row["points"] or 0)
+            after = before + points
+            conn.execute(
+                """
+                UPDATE users
+                SET points = ?
+                WHERE telegram_id = ?
+                """,
+                (after, telegram_id),
+            )
+            conn.commit()
+            self._sync_points_to_supabase_user_metadata(telegram_id, force=True)
+            return {
+                "ok": True,
+                "telegram_id": telegram_id,
+                "username": str(row["username"] or ""),
+                "supabase_user_id": key,
+                "supabase_email": str(row["supabase_email"] or ""),
+                "points_before": before,
+                "points_added": points,
+                "points_after": after,
+            }
+
     def deduct_points_by_supabase_email(
         self,
         supabase_email: str,

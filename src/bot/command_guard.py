@@ -91,7 +91,7 @@ class CommandGuard:
             used = int(result.get("used") or 0)
             self.io_layer.send_query_message(
                 message,
-                f"❌ 今日 <b>/{query_type}</b> 免费次数已用完 ({used}/{limit})\n请明天再来，或通过群内发言赚取积分。",
+                f"❌ 今日 <b>/{query_type}</b> 免费次数已用完 ({used}/{limit})\n请明天再来；积分可通过邀请付费用户获得。",
                 parse_mode="HTML",
             )
             return False

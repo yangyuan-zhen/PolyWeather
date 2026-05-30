@@ -32,6 +32,63 @@ def test_default_payment_catalog_has_monthly_and_quarterly_prices(monkeypatch, t
     assert plans["pro_quarterly"]["amount_usdc"] == "79.9"
     assert plans["pro_quarterly"]["duration_days"] == 90
 
+    points_config = service.get_config_payload()["points_redemption"]
+    assert points_config["points_per_usdc"] == 500
+    assert points_config["max_discount_usdc_by_plan"]["pro_monthly"] == 3
+    assert points_config["max_discount_usdc_by_plan"]["pro_quarterly"] == 8
+
+
+def test_points_redemption_uses_plan_specific_caps(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    intent_posts = []
+
+    monkeypatch.setattr(
+        service,
+        "_get_pending_referral_attribution",
+        lambda user_id: None,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        service,
+        "_resolve_points_balance",
+        lambda user_id: {
+            "source": "supabase_metadata",
+            "balance": 5000,
+            "metadata": {"points": 5000},
+        },
+        raising=False,
+    )
+
+    def fake_rest(method, table, **kwargs):
+        if method == "POST" and table == "payment_intents":
+            intent_posts.append(kwargs["payload"])
+            return []
+        raise AssertionError((method, table, kwargs))
+
+    monkeypatch.setattr(service, "_rest", fake_rest)
+
+    monthly = service.create_intent(
+        user_id="user-1",
+        plan_code="pro_monthly",
+        payment_mode="direct",
+        use_points=True,
+    )
+    quarterly = service.create_intent(
+        user_id="user-1",
+        plan_code="pro_quarterly",
+        payment_mode="direct",
+        use_points=True,
+    )
+
+    assert monthly["plan"]["amount_after_discount_usdc"] == "26.9"
+    assert intent_posts[0]["metadata"]["points_redemption"]["points_to_consume"] == 1500
+    assert intent_posts[0]["metadata"]["points_redemption"]["max_discount_usdc"] == 3
+
+    assert quarterly["plan"]["amount_after_discount_usdc"] == "71.9"
+    assert intent_posts[1]["metadata"]["points_redemption"]["points_to_consume"] == 4000
+    assert intent_posts[1]["metadata"]["points_redemption"]["max_discount_usdc"] == 8
+
 
 def test_paid_subscription_replaces_active_signup_trial_immediately(monkeypatch, tmp_path):
     _payment_env(monkeypatch, tmp_path)
@@ -187,9 +244,116 @@ def test_referral_discount_applies_to_first_monthly_payment(monkeypatch, tmp_pat
     )
 
     assert result["plan"]["amount_before_discount_usdc"] == "29.9"
-    assert result["plan"]["amount_after_discount_usdc"] == "26.9"
-    assert intent_posts[0]["amount_units"] == "26900000"
-    assert intent_posts[0]["metadata"]["referral_discount"]["discount_usdc"] == "3"
+    assert result["plan"]["amount_after_discount_usdc"] == "20"
+    assert intent_posts[0]["amount_units"] == "20000000"
+    assert intent_posts[0]["metadata"]["referral_discount"]["discount_usdc"] == "9.9"
+
+
+def test_referral_first_month_price_does_not_stack_with_points(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    intent_posts = []
+
+    monkeypatch.setattr(
+        service,
+        "_get_pending_referral_attribution",
+        lambda user_id: {
+            "id": 7,
+            "code": "YUAN2026",
+            "referrer_user_id": "referrer-1",
+        },
+        raising=False,
+    )
+    monkeypatch.setattr(
+        service,
+        "_has_prior_paid_subscription",
+        lambda user_id: False,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        service,
+        "_resolve_points_balance",
+        lambda user_id: {
+            "source": "supabase_metadata",
+            "balance": 5000,
+            "metadata": {"points": 5000},
+        },
+        raising=False,
+    )
+
+    def fake_rest(method, table, **kwargs):
+        if method == "POST" and table == "payment_intents":
+            intent_posts.append(kwargs["payload"])
+            return []
+        raise AssertionError((method, table, kwargs))
+
+    monkeypatch.setattr(service, "_rest", fake_rest)
+
+    result = service.create_intent(
+        user_id="referred-1",
+        plan_code="pro_monthly",
+        payment_mode="direct",
+        use_points=True,
+        points_to_consume=1500,
+    )
+
+    assert result["plan"]["amount_after_discount_usdc"] == "20"
+    assert intent_posts[0]["amount_units"] == "20000000"
+    assert intent_posts[0]["metadata"]["points_redemption"]["applied"] is False
+    assert intent_posts[0]["metadata"]["points_redemption"]["points_to_consume"] == 0
+
+
+def test_referral_reward_grants_points_instead_of_pro_days(monkeypatch):
+    monkeypatch.setenv("POLYWEATHER_AUTH_ENABLED", "true")
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "anon")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role")
+    service = SupabaseEntitlementService()
+    writes = []
+    point_grants = []
+
+    def fake_rest(method, table, **kwargs):
+        if method == "GET" and table == "referral_attributions":
+            return [
+                {
+                    "id": 77,
+                    "referrer_user_id": "referrer-1",
+                    "referred_user_id": "referred-1",
+                    "status": "pending",
+                }
+            ]
+        if method == "GET" and table == "referral_rewards":
+            return []
+        if method in {"POST", "PATCH"}:
+            writes.append({"method": method, "table": table, **kwargs})
+            return []
+        raise AssertionError((method, table, kwargs))
+
+    monkeypatch.setattr(service, "_rest", fake_rest)
+    monkeypatch.setattr(
+        service,
+        "_grant_referral_points",
+        lambda referrer_user_id, points: point_grants.append(
+            {"referrer_user_id": referrer_user_id, "points": points}
+        )
+        or {"ok": True, "points_added": points, "points_after": points},
+        raising=False,
+    )
+
+    result = service.settle_referral_reward(
+        referred_user_id="referred-1",
+        payment_intent_id="intent-1",
+        tx_hash="0x" + "2" * 64,
+    )
+
+    assert result["awarded"] is True
+    assert result["reward_points"] == 3500
+    assert result["reward_days"] == 0
+    assert point_grants == [{"referrer_user_id": "referrer-1", "points": 3500}]
+    assert not any(call["table"] == "subscriptions" for call in writes)
+    reward_write = next(call for call in writes if call["table"] == "referral_rewards")
+    assert reward_write["payload"]["reward_points"] == 3500
+    assert reward_write["payload"]["reward_days"] == 0
 
 
 def test_referral_reward_respects_monthly_ten_invite_cap(monkeypatch):
@@ -211,7 +375,7 @@ def test_referral_reward_respects_monthly_ten_invite_cap(monkeypatch):
                 }
             ]
         if method == "GET" and table == "referral_rewards":
-            return [{"id": i} for i in range(10)]
+            return [{"id": i, "reward_points": 3500} for i in range(10)]
         if method in {"POST", "PATCH"}:
             writes.append({"method": method, "table": table, **kwargs})
             return []
@@ -227,7 +391,56 @@ def test_referral_reward_respects_monthly_ten_invite_cap(monkeypatch):
 
     assert result["awarded"] is False
     assert result["reason"] == "monthly_cap_reached"
-    assert not any(call["table"] == "subscriptions" for call in writes)
+    assert not any(call["table"] == "referral_rewards" for call in writes)
+
+
+def test_referral_reward_existing_reward_row_does_not_grant_points(monkeypatch):
+    monkeypatch.setenv("POLYWEATHER_AUTH_ENABLED", "true")
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "anon")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role")
+    service = SupabaseEntitlementService()
+    point_grants = []
+
+    def fake_rest(method, table, **kwargs):
+        if method == "GET" and table == "referral_attributions":
+            return [
+                {
+                    "id": 77,
+                    "referrer_user_id": "referrer-1",
+                    "referred_user_id": "referred-1",
+                    "status": "pending",
+                }
+            ]
+        if method == "GET" and table == "referral_rewards":
+            params = kwargs.get("params") or {}
+            if params.get("referral_attribution_id") == "eq.77":
+                return [{"id": 88, "reward_points": 3500}]
+            return []
+        if method in {"POST", "PATCH"}:
+            return []
+        raise AssertionError((method, table, kwargs))
+
+    monkeypatch.setattr(service, "_rest", fake_rest)
+    monkeypatch.setattr(
+        service,
+        "_grant_referral_points",
+        lambda referrer_user_id, points: point_grants.append(
+            {"referrer_user_id": referrer_user_id, "points": points}
+        )
+        or {"ok": True, "points_added": points, "points_after": points},
+        raising=False,
+    )
+
+    result = service.settle_referral_reward(
+        referred_user_id="referred-1",
+        payment_intent_id="intent-1",
+        tx_hash="0x" + "2" * 64,
+    )
+
+    assert result["awarded"] is False
+    assert result["reason"] == "already_rewarded"
+    assert point_grants == []
 
 
 def test_signup_trial_falls_back_to_entitlement_events_without_trial_tables(monkeypatch):
@@ -333,6 +546,7 @@ def test_referral_reward_falls_back_to_entitlement_events_without_referral_table
         }
     ]
     writes = []
+    point_grants = []
 
     def fake_rest(method, table, **kwargs):
         if table in {"referral_attributions", "referral_rewards"}:
@@ -341,17 +555,23 @@ def test_referral_reward_falls_back_to_entitlement_events_without_referral_table
             user_filter = str((kwargs.get("params") or {}).get("user_id") or "")
             user_id = user_filter[3:] if user_filter.startswith("eq.") else user_filter
             return [event for event in events if event.get("user_id") == user_id]
-        if method == "GET" and table == "subscriptions":
-            return []
-        if method == "POST" and table in {"subscriptions", "entitlement_events"}:
+        if method == "POST" and table == "entitlement_events":
             payload = kwargs.get("payload") or {}
             writes.append({"table": table, "payload": payload})
-            if table == "entitlement_events":
-                events.append(payload)
+            events.append(payload)
             return [payload]
         raise AssertionError((method, table, kwargs))
 
     monkeypatch.setattr(service, "_rest", fake_rest)
+    monkeypatch.setattr(
+        service,
+        "_grant_referral_points",
+        lambda referrer_user_id, points: point_grants.append(
+            {"referrer_user_id": referrer_user_id, "points": points}
+        )
+        or {"ok": True, "points_added": points, "points_after": points},
+        raising=False,
+    )
 
     result = service.settle_referral_reward(
         referred_user_id=referred_id,
@@ -360,9 +580,12 @@ def test_referral_reward_falls_back_to_entitlement_events_without_referral_table
     )
 
     assert result["awarded"] is True
-    assert any(call["table"] == "subscriptions" for call in writes)
+    assert result["reward_points"] == 3500
+    assert not any(call["table"] == "subscriptions" for call in writes)
+    assert point_grants == [{"referrer_user_id": referrer_id, "points": 3500}]
     assert any(
         call["table"] == "entitlement_events"
         and call["payload"]["action"] == "referral_reward_granted"
+        and call["payload"]["payload"]["reward_points"] == 3500
         for call in writes
     )

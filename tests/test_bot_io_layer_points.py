@@ -27,7 +27,7 @@ def _message(chat_id: int | str, text: str = "有效发言"):
     )
 
 
-def test_group_message_points_include_configured_forum_chat(monkeypatch):
+def test_group_message_points_disabled_by_default(monkeypatch):
     monkeypatch.delenv("POLYWEATHER_BOT_POINTS_CHAT_IDS", raising=False)
     monkeypatch.delenv("POLYWEATHER_BOT_POINTS_CHAT_ID", raising=False)
     monkeypatch.setenv("TELEGRAM_CHAT_IDS", "-1003965137823")
@@ -37,9 +37,8 @@ def test_group_message_points_include_configured_forum_chat(monkeypatch):
 
     io_layer.track_group_text_activity(_message(-1003965137823))
 
-    assert db.upserts == [(123, "alice")]
-    assert len(db.activities) == 1
-    assert db.activities[0]["telegram_id"] == 123
+    assert db.upserts == []
+    assert db.activities == []
 
 
 def test_group_message_points_skip_unconfigured_chat_when_allowlist_exists(monkeypatch):

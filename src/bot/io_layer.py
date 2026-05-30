@@ -9,6 +9,7 @@ from loguru import logger
 from src.bot.settings import (
     CITY_DAILY_FREE_LIMIT,
     DEB_DAILY_FREE_LIMIT,
+    GROUP_MESSAGE_POINTS_ENABLED,
     MESSAGE_COOLDOWN_SEC,
     MESSAGE_DAILY_CAP,
     MESSAGE_MIN_LENGTH,
@@ -184,8 +185,8 @@ class BotIOLayer:
                 f"当前积分: <code>{balance}</code>\n"
                 f"需要积分: <code>{required}</code>\n"
                 f"还差积分: <code>{missing}</code>\n\n"
-                f"积分规则：有效发言满 {MESSAGE_MIN_LENGTH} 字获得 <b>{MESSAGE_POINTS}</b> 积分，"
-                f"每日上限 {MESSAGE_DAILY_CAP} 分。"
+                "积分现在通过邀请制度获得：被邀请人完成首次 Pro 付款后，"
+                "邀请人获得积分奖励。"
             ),
             parse_mode="HTML",
         )
@@ -207,9 +208,7 @@ class BotIOLayer:
             "👥 社群: <a href=\"https://t.me/+Io5H9oVHFmVjOTQ5\">加入 Telegram 群组</a>\n\n"
             "📌 <i>私有频道用于接收自动推送；手动查看市场概览请私聊机器人发送 <code>/markets</code>。</i>\n\n"
             "示例: <code>/city 伦敦</code> 或 <code>/pwcity 伦敦</code>\n"
-            f"💡 <i>提示: 群内有效发言(满 {MESSAGE_MIN_LENGTH} 字)获得 <b>{MESSAGE_POINTS}</b> 积分，"
-            f"每日上限 {MESSAGE_DAILY_CAP} 分。"
-            f"首次发言额外奖励 <b>20</b> 积分，每日首条消息 +<b>2</b> 积分。</i>"
+            "💡 <i>提示: 积分现在通过邀请制度获得；有效邀请完成首次 Pro 付款后，邀请人获得积分奖励。</i>"
         )
 
     def build_points_rank_text(self, user: Any) -> str:
@@ -217,33 +216,17 @@ class BotIOLayer:
         user_info = self.db.get_user(user.id)
         now = datetime.now()
         today_str = now.strftime("%Y-%m-%d")
-        weekly_profile = self.db.get_weekly_profile(user.id)
-        week_key = str(weekly_profile.get("week_key") or "")
 
-        leaderboard = self.db.get_weekly_leaderboard(limit=5)
-        rank_text = f"🏆 <b>PolyWeather 周活跃度排行榜 ({week_key})</b>\n"
+        leaderboard = self.db.get_leaderboard(limit=5)
+        rank_text = "🏆 <b>PolyWeather 用户积分排行</b>\n"
         rank_text += "────────────────────\n"
         for i, entry in enumerate(leaderboard):
             medal = ["🥇", "🥈", "🥉", "  ", "  "][i] if i < 5 else "  "
             username = (entry.get("username") or "unknown")[:12]
-            weekly_points = int(entry.get("weekly_points") or 0)
-            rank_text += f"{medal} {username}: <b>{weekly_points}</b> 点\n"
+            points = int(entry.get("points") or 0)
+            rank_text += f"{medal} {username}: <b>{points}</b> 分\n"
 
         if user_info:
-            daily_points = int(user_info.get("daily_points") or 0)
-            daily_points_date = str(user_info.get("daily_points_date") or "")
-            if daily_points_date != today_str:
-                daily_points = 0
-            if daily_points > MESSAGE_DAILY_CAP:
-                daily_points = MESSAGE_DAILY_CAP
-
-            weekly_points = int(weekly_profile.get("weekly_points") or 0)
-            weekly_rank = weekly_profile.get("weekly_rank")
-            ranked_count = int(weekly_profile.get("total_ranked") or 0)
-            weekly_rank_text = (
-                f"{weekly_rank}/{ranked_count}" if weekly_rank and ranked_count > 0 else "未上榜"
-            )
-
             daily_queries_date = str(user_info.get("daily_queries_date") or "")
             city_used = int(user_info.get("daily_city_queries") or 0) if daily_queries_date == today_str else 0
             deb_used = int(user_info.get("daily_deb_queries") or 0) if daily_queries_date == today_str else 0
@@ -252,15 +235,15 @@ class BotIOLayer:
             rank_text += (
                 "👤 <b>我的状态：</b>\n"
                 f"┣ 累计积分: <code>{user_info['points']}</code>\n"
-                f"┣ 累计发言: <code>{user_info['message_count']}</code> 次\n"
-                f"┣ 本周排名: <code>{weekly_rank_text}</code>\n"
-                f"┣ 本周发言积分: <code>{weekly_points}</code>\n"
-                f"┣ 今日发言积分: <code>{daily_points}/{MESSAGE_DAILY_CAP}</code>\n"
+                "┣ 积分获取: <code>邀请付费用户</code>\n"
+                "┣ 抵扣规则: <code>500分 = 1 USDC，单笔最多抵3U</code>\n"
                 f"┗ /city 免费 ({city_used}/{CITY_DAILY_FREE_LIMIT}) | /deb 免费 ({deb_used}/{DEB_DAILY_FREE_LIMIT})"
             )
         return rank_text
 
     def track_group_text_activity(self, message: Any) -> None:
+        if not GROUP_MESSAGE_POINTS_ENABLED or MESSAGE_POINTS <= 0:
+            return
         text = str(getattr(message, "text", "") or "")
         if text.startswith("/"):
             return

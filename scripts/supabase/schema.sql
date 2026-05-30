@@ -392,7 +392,8 @@ create table if not exists public.referral_rewards (
   referred_user_id uuid not null references auth.users(id) on delete cascade,
   payment_intent_id text not null,
   tx_hash text,
-  reward_days integer not null default 3 check (reward_days > 0 and reward_days <= 30),
+  reward_days integer not null default 0 check (reward_days >= 0 and reward_days <= 30),
+  reward_points integer not null default 0 check (reward_points >= 0 and reward_points <= 100000),
   created_at timestamptz not null default now()
 );
 
@@ -401,7 +402,35 @@ create unique index if not exists uq_referral_rewards_attribution
 
 create index if not exists idx_referral_rewards_referrer_month
   on public.referral_rewards(referrer_user_id, created_at desc)
-  include (id, reward_days);
+  include (id, reward_days, reward_points);
+
+create table if not exists public.points_ledger (
+  id bigserial primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  delta integer not null check (delta <> 0),
+  source text not null,
+  reason text not null,
+  payment_intent_id text,
+  referral_attribution_id bigint references public.referral_attributions(id) on delete set null,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_points_ledger_user_created
+  on public.points_ledger(user_id, created_at desc);
+
+create index if not exists idx_points_ledger_referral
+  on public.points_ledger(referral_attribution_id)
+  where referral_attribution_id is not null;
+
+alter table public.points_ledger enable row level security;
+
+drop policy if exists points_ledger_select_own on public.points_ledger;
+create policy points_ledger_select_own
+  on public.points_ledger
+  for select
+  to authenticated
+  using (auth.uid() = user_id);
 
 create table if not exists public.wallet_link_challenges (
   id bigserial primary key,

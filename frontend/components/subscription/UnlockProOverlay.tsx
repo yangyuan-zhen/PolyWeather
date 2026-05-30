@@ -22,7 +22,7 @@ import {
 import s from "./UnlockProOverlay.module.css";
 
 const DEFAULT_FAQ_HREF = "/subscription-help";
-const DEFAULT_TELEGRAM_GROUP_URL = "https://t.me/+Io5H9oVHFmVjOTQ5";
+const DEFAULT_TELEGRAM_GROUP_URL = "";
 
 export type UnlockProBilling = {
   pointsEnabled: boolean;
@@ -310,16 +310,16 @@ export function UnlockProOverlay({
                 >
                   <MessageSquare size={12} />
                   {isEn
-                    ? "Join community to earn points"
-                    : "加入社群即可赚取积分"}
+                    ? "Invite paid users to earn points"
+                    : "邀请付费用户即可获得积分"}
                   <ArrowRight size={11} />
                 </Link>
               ) : (
                 <span className={s.unavailCta} style={{ cursor: "default" }}>
                   <MessageSquare size={12} />
                   {isEn
-                    ? "Join community to earn points"
-                    : "加入社群即可赚取积分"}
+                    ? "Invite paid users to earn points"
+                    : "邀请付费用户即可获得积分"}
                 </span>
               )}
             </div>

@@ -18,11 +18,13 @@ SIGNUP_TRIAL_PLAN_CODE = "signup_trial_3d"
 SIGNUP_TRIAL_SOURCE = "signup_trial"
 SIGNUP_TRIAL_DAYS = 3
 
-REFERRAL_REWARD_DAYS = 3
+REFERRAL_REWARD_DAYS = 0
 REFERRAL_MONTHLY_REWARD_LIMIT = 10
 REFERRAL_MONTHLY_DAY_LIMIT = 30
-REFERRAL_DISCOUNT_USDC = "3"
-REFERRAL_MONTHLY_DISCOUNTED_AMOUNT_USDC = "26.9"
+REFERRAL_REWARD_POINTS = 3500
+REFERRAL_MONTHLY_POINTS_LIMIT = REFERRAL_REWARD_POINTS * REFERRAL_MONTHLY_REWARD_LIMIT
+REFERRAL_DISCOUNT_USDC = "9.9"
+REFERRAL_MONTHLY_DISCOUNTED_AMOUNT_USDC = "20"
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -203,6 +205,63 @@ class SupabaseEntitlementService:
 
     def _admin_user_endpoint(self, user_id: str) -> str:
         return f"{self.supabase_url}/auth/v1/admin/users/{user_id}"
+
+    @staticmethod
+    def _extract_points_from_metadata(metadata: Optional[Dict[str, object]]) -> int:
+        if not isinstance(metadata, dict):
+            return 0
+        for key in ("points", "total_points"):
+            raw = metadata.get(key)
+            if raw is None:
+                continue
+            try:
+                return max(0, int(raw))
+            except Exception:
+                continue
+        return 0
+
+    def _admin_get_user(self, user_id: str) -> Dict[str, object]:
+        user_key = str(user_id or "").strip()
+        if not user_key:
+            raise ValueError("user_id required")
+        response = requests.get(
+            self._admin_user_endpoint(user_key),
+            headers=self._request_headers_for_service_role(),
+            timeout=self.timeout_sec,
+        )
+        if response.status_code != 200:
+            detail = response.text[:350] if response.text else response.reason
+            raise RuntimeError(
+                f"supabase admin user query failed: {response.status_code} {detail}"
+            )
+        raw = response.json() if response.content else {}
+        if isinstance(raw, dict) and isinstance(raw.get("user"), dict):
+            return dict(raw["user"])
+        return dict(raw) if isinstance(raw, dict) else {}
+
+    def _admin_update_user_metadata(
+        self,
+        user_id: str,
+        metadata: Dict[str, object],
+    ) -> Dict[str, object]:
+        user_key = str(user_id or "").strip()
+        if not user_key:
+            raise ValueError("user_id required")
+        response = requests.put(
+            self._admin_user_endpoint(user_key),
+            headers={**self._request_headers_for_service_role(), "Content-Type": "application/json"},
+            json={"user_metadata": metadata or {}},
+            timeout=self.timeout_sec,
+        )
+        if response.status_code != 200:
+            detail = response.text[:350] if response.text else response.reason
+            raise RuntimeError(
+                f"supabase admin metadata update failed: {response.status_code} {detail}"
+            )
+        raw = response.json() if response.content else {}
+        if isinstance(raw, dict) and isinstance(raw.get("user"), dict):
+            return dict(raw["user"])
+        return dict(raw) if isinstance(raw, dict) else {}
 
     @staticmethod
     def _to_iso(dt: datetime) -> str:
@@ -797,7 +856,7 @@ class SupabaseEntitlementService:
                 "GET",
                 "referral_rewards",
                 params={
-                    "select": "id,reward_days,created_at",
+                    "select": "id,reward_days,reward_points,created_at",
                     "referrer_user_id": f"eq.{referrer_user_id}",
                     "created_at": f"gte.{self._to_iso(month_start)}",
                     "limit": "100",
@@ -832,11 +891,31 @@ class SupabaseEntitlementService:
                 {
                     "id": row.get("id"),
                     "reward_days": int(payload.get("reward_days") or REFERRAL_REWARD_DAYS),
+                    "reward_points": int(payload.get("reward_points") or REFERRAL_REWARD_POINTS),
                     "created_at": row.get("created_at"),
                     "_storage": "entitlement_events",
                 }
             )
         return out
+
+    def _has_referral_reward_for_attribution(self, attribution_id: object) -> bool:
+        raw_id = str(attribution_id or "").strip()
+        if not raw_id or raw_id.startswith("event:"):
+            return False
+        try:
+            rows = self._rest(
+                "GET",
+                "referral_rewards",
+                params={
+                    "select": "id",
+                    "referral_attribution_id": f"eq.{raw_id}",
+                    "limit": "1",
+                },
+                allowed_status=[200],
+            )
+        except Exception:
+            return False
+        return bool(isinstance(rows, list) and rows)
 
     def get_referral_summary(self, user_id: str) -> Optional[Dict[str, object]]:
         user_key = str(user_id or "").strip()
@@ -848,15 +927,19 @@ class SupabaseEntitlementService:
             rewards = self._current_month_reward_rows(user_key)
             reward_count = len(rewards)
             reward_days = sum(int(row.get("reward_days") or 0) for row in rewards)
+            reward_points = sum(int(row.get("reward_points") or 0) for row in rewards)
             return {
                 "code": str(code_row.get("code") or ""),
                 "discount_usdc": REFERRAL_DISCOUNT_USDC,
                 "discounted_monthly_amount_usdc": REFERRAL_MONTHLY_DISCOUNTED_AMOUNT_USDC,
                 "reward_days": REFERRAL_REWARD_DAYS,
+                "reward_points": REFERRAL_REWARD_POINTS,
                 "monthly_reward_limit": REFERRAL_MONTHLY_REWARD_LIMIT,
                 "monthly_reward_days_limit": REFERRAL_MONTHLY_DAY_LIMIT,
+                "monthly_reward_points_limit": REFERRAL_MONTHLY_POINTS_LIMIT,
                 "monthly_reward_count": reward_count,
                 "monthly_reward_days": min(reward_days, REFERRAL_MONTHLY_DAY_LIMIT),
+                "monthly_reward_points": min(reward_points, REFERRAL_MONTHLY_POINTS_LIMIT),
                 "applied_code": str(pending.get("code") or "") if isinstance(pending, dict) else "",
                 "attribution_status": str(pending.get("status") or "") if isinstance(pending, dict) else "",
             }
@@ -947,6 +1030,77 @@ class SupabaseEntitlementService:
                     break
         return starts
 
+    def _record_points_ledger(
+        self,
+        *,
+        user_id: str,
+        delta: int,
+        source: str,
+        reason: str,
+        payment_intent_id: str = "",
+        referral_attribution_id: Optional[object] = None,
+        metadata: Optional[Dict[str, object]] = None,
+    ) -> None:
+        try:
+            self._rest(
+                "POST",
+                "points_ledger",
+                payload={
+                    "user_id": user_id,
+                    "delta": int(delta),
+                    "source": source,
+                    "reason": reason,
+                    "payment_intent_id": payment_intent_id or None,
+                    "referral_attribution_id": referral_attribution_id,
+                    "metadata": metadata or {},
+                    "created_at": self._to_iso(datetime.now(timezone.utc)),
+                },
+                prefer="return=minimal",
+                allowed_status=[201],
+            )
+        except Exception as exc:
+            logger.info("points ledger write skipped user_id={} reason={}", user_id, exc)
+
+    def _grant_referral_points(
+        self,
+        referrer_user_id: str,
+        points: int,
+    ) -> Dict[str, object]:
+        user_key = str(referrer_user_id or "").strip().lower()
+        amount = int(points or 0)
+        if not user_key:
+            return {"ok": False, "reason": "invalid_referrer"}
+        if amount <= 0:
+            return {"ok": False, "reason": "invalid_points"}
+
+        try:
+            db_result = DBManager().grant_points_by_supabase_user_id(user_key, amount)
+        except Exception as exc:
+            db_result = {"ok": False, "reason": f"bot_db_error:{exc}"}
+        if bool(db_result.get("ok")):
+            return {
+                "ok": True,
+                "source": "bot_db",
+                "points_before": int(db_result.get("points_before") or 0),
+                "points_added": amount,
+                "points_after": int(db_result.get("points_after") or 0),
+            }
+
+        user_obj = self._admin_get_user(user_key)
+        metadata = dict(user_obj.get("user_metadata") or {})
+        before = self._extract_points_from_metadata(metadata)
+        after = before + amount
+        metadata["points"] = after
+        metadata["total_points"] = after
+        self._admin_update_user_metadata(user_key, metadata)
+        return {
+            "ok": True,
+            "source": "supabase_metadata",
+            "points_before": before,
+            "points_added": amount,
+            "points_after": after,
+        }
+
     def _record_referral_resolution_event(
         self,
         *,
@@ -958,6 +1112,7 @@ class SupabaseEntitlementService:
         tx_hash: str,
         created_at: datetime,
         reward_days: int = 0,
+        reward_points: int = 0,
     ) -> None:
         self._rest(
             "POST",
@@ -975,6 +1130,7 @@ class SupabaseEntitlementService:
                     "payment_intent_id": payment_intent_id,
                     "tx_hash": tx_hash,
                     "reward_days": reward_days,
+                    "reward_points": reward_points,
                     "storage": "entitlement_events",
                 },
                 "created_at": self._to_iso(created_at),
@@ -1006,24 +1162,27 @@ class SupabaseEntitlementService:
             )
             return {"awarded": False, "reason": "monthly_cap_reached"}
 
-        starts = self._subscription_extension_start(referrer_user_id)
-        expires = starts + timedelta(days=REFERRAL_REWARD_DAYS)
-        subscription_payload = {
-            "user_id": referrer_user_id,
-            "plan_code": "pro_monthly",
-            "status": "active",
-            "starts_at": self._to_iso(starts),
-            "expires_at": self._to_iso(expires),
-            "source": "referral_reward",
-            "created_at": self._to_iso(now),
-            "updated_at": self._to_iso(now),
-        }
-        self._rest(
-            "POST",
-            "subscriptions",
-            payload=subscription_payload,
-            prefer="return=minimal",
-            allowed_status=[201],
+        grant_result = self._grant_referral_points(
+            referrer_user_id,
+            REFERRAL_REWARD_POINTS,
+        )
+        if not bool(grant_result.get("ok")):
+            return {
+                "awarded": False,
+                "reason": str(grant_result.get("reason") or "points_grant_failed"),
+            }
+        self._record_points_ledger(
+            user_id=referrer_user_id,
+            delta=REFERRAL_REWARD_POINTS,
+            source="referral",
+            reason="referred_user_paid",
+            payment_intent_id=payment_intent_id,
+            referral_attribution_id=attribution.get("id"),
+            metadata={
+                "referred_user_id": referred_user_id,
+                "tx_hash": tx_hash,
+                "storage": str(attribution.get("_storage") or "entitlement_events"),
+            },
         )
         self._record_referral_resolution_event(
             action="referral_reward_granted",
@@ -1034,6 +1193,7 @@ class SupabaseEntitlementService:
             tx_hash=tx_hash,
             created_at=now,
             reward_days=REFERRAL_REWARD_DAYS,
+            reward_points=REFERRAL_REWARD_POINTS,
         )
         self._record_referral_resolution_event(
             action="referral_attribution_converted",
@@ -1044,13 +1204,14 @@ class SupabaseEntitlementService:
             tx_hash=tx_hash,
             created_at=now,
             reward_days=REFERRAL_REWARD_DAYS,
+            reward_points=REFERRAL_REWARD_POINTS,
         )
-        self.invalidate_subscription_cache(referrer_user_id)
         return {
             "awarded": True,
             "reward_days": REFERRAL_REWARD_DAYS,
+            "reward_points": REFERRAL_REWARD_POINTS,
             "referrer_user_id": referrer_user_id,
-            "subscription": subscription_payload,
+            "points": grant_result,
             "storage": "entitlement_events",
         }
 
@@ -1096,40 +1257,80 @@ class SupabaseEntitlementService:
                 allowed_status=[204],
             )
             return {"awarded": False, "reason": "monthly_cap_reached"}
+        if self._has_referral_reward_for_attribution(attribution.get("id")):
+            self._rest(
+                "PATCH",
+                "referral_attributions",
+                params={"id": f"eq.{attribution.get('id')}"},
+                payload={
+                    "status": "converted",
+                    "converted_payment_intent_id": payment_intent_id,
+                    "converted_tx_hash": tx_hash,
+                    "converted_at": self._to_iso(now),
+                    "updated_at": self._to_iso(now),
+                },
+                prefer="return=minimal",
+                allowed_status=[204],
+            )
+            return {"awarded": False, "reason": "already_rewarded"}
 
-        starts = self._subscription_extension_start(referrer_key)
-        expires = starts + timedelta(days=REFERRAL_REWARD_DAYS)
-        subscription_payload = {
-            "user_id": referrer_key,
-            "plan_code": "pro_monthly",
-            "status": "active",
-            "starts_at": self._to_iso(starts),
-            "expires_at": self._to_iso(expires),
-            "source": "referral_reward",
-            "created_at": self._to_iso(now),
-            "updated_at": self._to_iso(now),
-        }
-        self._rest(
-            "POST",
-            "subscriptions",
-            payload=subscription_payload,
-            prefer="return=minimal",
-            allowed_status=[201],
+        grant_result = self._grant_referral_points(
+            referrer_key,
+            REFERRAL_REWARD_POINTS,
         )
-        self._rest(
-            "POST",
-            "referral_rewards",
-            payload={
+        if not bool(grant_result.get("ok")):
+            return {
+                "awarded": False,
+                "reason": str(grant_result.get("reason") or "points_grant_failed"),
+            }
+
+        reward_payload = {
                 "referral_attribution_id": attribution.get("id"),
                 "referrer_user_id": referrer_key,
                 "referred_user_id": referred_key,
                 "payment_intent_id": payment_intent_id,
                 "tx_hash": tx_hash,
                 "reward_days": REFERRAL_REWARD_DAYS,
+                "reward_points": REFERRAL_REWARD_POINTS,
                 "created_at": self._to_iso(now),
+        }
+        try:
+            self._rest(
+                "POST",
+                "referral_rewards",
+                payload=reward_payload,
+                prefer="return=minimal",
+                allowed_status=[201],
+            )
+        except Exception as exc:
+            logger.warning(
+                "referral_rewards insert failed attribution_id={} error={}",
+                attribution.get("id"),
+                exc,
+            )
+            self._record_referral_resolution_event(
+                action="referral_reward_granted",
+                referrer_user_id=referrer_key,
+                referred_user_id=referred_key,
+                attribution=attribution,
+                payment_intent_id=payment_intent_id,
+                tx_hash=tx_hash,
+                created_at=now,
+                reward_days=REFERRAL_REWARD_DAYS,
+                reward_points=REFERRAL_REWARD_POINTS,
+            )
+        self._record_points_ledger(
+            user_id=referrer_key,
+            delta=REFERRAL_REWARD_POINTS,
+            source="referral",
+            reason="referred_user_paid",
+            payment_intent_id=payment_intent_id,
+            referral_attribution_id=attribution.get("id"),
+            metadata={
+                "referred_user_id": referred_key,
+                "tx_hash": tx_hash,
+                "grant_source": str(grant_result.get("source") or ""),
             },
-            prefer="return=minimal",
-            allowed_status=[201],
         )
         self._rest(
             "PATCH",
@@ -1145,31 +1346,23 @@ class SupabaseEntitlementService:
             prefer="return=minimal",
             allowed_status=[204],
         )
-        self._rest(
-            "POST",
-            "entitlement_events",
-            payload={
-                "user_id": referrer_key,
-                "action": "referral_reward_granted",
-                "reason": "referred_user_paid",
-                "actor": "payment_contract_checkout",
-                "payload": {
-                    "referred_user_id": referred_key,
-                    "payment_intent_id": payment_intent_id,
-                    "tx_hash": tx_hash,
-                    "reward_days": REFERRAL_REWARD_DAYS,
-                },
-                "created_at": self._to_iso(now),
-            },
-            prefer="return=minimal",
-            allowed_status=[201],
+        self._record_referral_resolution_event(
+            action="referral_attribution_converted",
+            referrer_user_id=referrer_key,
+            referred_user_id=referred_key,
+            attribution=attribution,
+            payment_intent_id=payment_intent_id,
+            tx_hash=tx_hash,
+            created_at=now,
+            reward_days=REFERRAL_REWARD_DAYS,
+            reward_points=REFERRAL_REWARD_POINTS,
         )
-        self.invalidate_subscription_cache(referrer_key)
         return {
             "awarded": True,
             "reward_days": REFERRAL_REWARD_DAYS,
+            "reward_points": REFERRAL_REWARD_POINTS,
             "referrer_user_id": referrer_key,
-            "subscription": subscription_payload,
+            "points": grant_result,
         }
 
     def get_identity(self, access_token: str) -> Optional[SupabaseIdentity]:

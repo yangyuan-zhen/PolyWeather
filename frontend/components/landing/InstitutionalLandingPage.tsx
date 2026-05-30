@@ -131,13 +131,13 @@ function InstitutionalLandingScreen() {
         { label: "Trial", value: "3 days" },
         { label: "Monthly", value: "29.9 USDC" },
         { label: "Quarterly", value: "79.9 USDC" },
-        { label: "Referral", value: "26.9 USDC" },
+        { label: "Referral", value: "20 USDC" },
       ]
     : [
         { label: "试用", value: "3 天" },
         { label: "月付", value: "29.9 USDC" },
         { label: "季度", value: "79.9 USDC" },
-        { label: "邀请首月", value: "26.9 USDC" },
+        { label: "邀请首月", value: "20 USDC" },
       ];
 
   return (
@@ -387,7 +387,7 @@ function InstitutionalLandingScreen() {
                   <span className="text-sm font-semibold text-slate-500">USDC / 30 天</span>
                 </div>
                 <p className="mt-2 text-xs font-semibold text-slate-500">
-                  {isEn ? "Referral first month: 26.9 USDC" : "使用邀请码首月 26.9 USDC"}
+                  {isEn ? "Referral first month: 20 USDC" : "使用邀请码首月 20 USDC"}
                 </p>
                 <ul className="mt-7 space-y-3 border-t border-slate-200 pt-6">
                   {(isEn ? PRO_FEATURES_EN : PRO_FEATURES_ZH).map((feature) => (
@@ -425,8 +425,8 @@ function InstitutionalLandingScreen() {
                 </div>
                 <div className="mt-5 rounded-md border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600">
                   {isEn
-                    ? "Invite reward: referrer gets +3 days Pro when invitee subscribes."
-                    : "邀请奖励：被邀请人付费后，邀请人 +3 天 Pro。"}
+                    ? "Invite reward: referrer gets +3500 points when invitee subscribes."
+                    : "邀请奖励：被邀请人付费后，邀请人 +3500 积分。"}
                 </div>
                 <Link
                   href="/account"

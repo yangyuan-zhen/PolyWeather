@@ -188,7 +188,7 @@ class StartupCoordinator:
         )
 
     def _start_weekly_reward_loop(self) -> LoopStatus:
-        enabled = _env_bool("POLYWEATHER_WEEKLY_REWARD_ENABLED", True)
+        enabled = _env_bool("POLYWEATHER_WEEKLY_REWARD_ENABLED", False)
         chat_ids = get_telegram_chat_ids_from_env()
         settle_weekday = min(
             7, max(1, _env_int("POLYWEATHER_WEEKLY_REWARD_SETTLE_WEEKDAY", 1))

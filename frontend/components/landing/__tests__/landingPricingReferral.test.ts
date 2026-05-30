@@ -20,7 +20,7 @@ export function runTests() {
   assert(source.includes("/static/web.png"), "landing page must show the product preview image");
   assert(source.includes("29.9") && source.includes("30 天"), "landing page must show monthly Pro pricing");
   assert(source.includes("79.9") && source.includes("90 天"), "landing page must show quarterly Pro pricing");
-  assert(source.includes("26.9") && source.includes("+3 天 Pro"), "landing page must describe referral discount and reward");
+  assert(source.includes("20 USDC") && source.includes("+3500 积分"), "landing page must describe referral discount and reward");
   assert(!source.includes("AI 气象证据链解读"), "legacy AI evidence-chain wording must be removed");
   assert(!source.includes("AI weather evidence"), "legacy AI evidence wording must be removed");
   assert(!source.includes("$10"), "legacy $10/month pricing must be removed from landing page");

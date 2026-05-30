@@ -150,7 +150,10 @@ export function useBilling(params: UseBillingParams) {
     const pointsPerUsdc =
       Number.isFinite(pointsPerUsdcRaw) && pointsPerUsdcRaw > 0 ? Math.floor(pointsPerUsdcRaw) : 500;
 
-    const maxDiscountRaw = Number(pointsCfg.max_discount_usdc ?? 3);
+    const maxDiscountByPlan = pointsCfg.max_discount_usdc_by_plan || {};
+    const planMaxDiscountRaw =
+      maxDiscountByPlan[selectedPlanCode] ?? pointsCfg.max_discount_usdc ?? 3;
+    const maxDiscountRaw = Number(planMaxDiscountRaw);
     const maxDiscountUsdc = Math.max(
       0,
       Math.min(
@@ -160,10 +163,11 @@ export function useBilling(params: UseBillingParams) {
     );
 
     const maxRedeemablePoints = pointsPerUsdc * maxDiscountUsdc;
-    const actualRedeem = pointsEnabled ? Math.min(totalPoints, maxRedeemablePoints) : 0;
+    const pointsCanApply = pointsEnabled && !referralApplies;
+    const actualRedeem = pointsCanApply ? Math.min(totalPoints, maxRedeemablePoints) : 0;
     const discountUnits = Math.floor(actualRedeem / pointsPerUsdc);
     const pointsUsed = discountUnits * pointsPerUsdc;
-    const canRedeem = pointsEnabled && maxDiscountUsdc > 0 && totalPoints >= pointsPerUsdc;
+    const canRedeem = pointsCanApply && maxDiscountUsdc > 0 && totalPoints >= pointsPerUsdc;
     const applyDiscount = usePoints && canRedeem && pointsUsed > 0;
 
     return {

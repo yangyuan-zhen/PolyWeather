@@ -243,7 +243,7 @@ def _render_settle_report(
 
 
 def _runner(bot: Any) -> None:
-    enabled = _env_bool("POLYWEATHER_WEEKLY_REWARD_ENABLED", True)
+    enabled = _env_bool("POLYWEATHER_WEEKLY_REWARD_ENABLED", False)
     if not enabled:
         logger.info("weekly reward loop disabled")
         return

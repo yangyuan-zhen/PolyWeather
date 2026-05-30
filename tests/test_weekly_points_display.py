@@ -16,7 +16,7 @@ class _User:
         self.first_name = username
 
 
-def test_weekly_points_display_uses_weekly_profile_archive_fallback(tmp_path):
+def test_points_rank_display_uses_invite_points_copy(tmp_path):
     db = DBManager(str(tmp_path / "test.db"))
     io = BotIOLayer(_DummyBot(), db)
     user = _User(1001, "yuan")
@@ -46,6 +46,8 @@ def test_weekly_points_display_uses_weekly_profile_archive_fallback(tmp_path):
         conn.commit()
 
     text = io.build_points_rank_text(user)
-    assert "累计发言" in text
-    assert "本周发言积分: <code>192</code>" in text
-    assert "本周排名: <code>1/1</code>" in text
+    assert "用户积分排行" in text
+    assert "累计积分: <code>206</code>" in text
+    assert "积分获取: <code>邀请付费用户</code>" in text
+    assert "本周发言积分" not in text
+    assert "今日发言积分" not in text

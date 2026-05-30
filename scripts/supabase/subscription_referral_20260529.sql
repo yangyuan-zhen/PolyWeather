@@ -77,7 +77,8 @@ create table if not exists public.referral_rewards (
   referred_user_id uuid not null references auth.users(id) on delete cascade,
   payment_intent_id text not null,
   tx_hash text,
-  reward_days integer not null default 3 check (reward_days > 0 and reward_days <= 30),
+  reward_days integer not null default 0 check (reward_days >= 0 and reward_days <= 30),
+  reward_points integer not null default 0 check (reward_points >= 0 and reward_points <= 100000),
   created_at timestamptz not null default now()
 );
 
@@ -86,7 +87,7 @@ create unique index if not exists uq_referral_rewards_attribution
 
 create index if not exists idx_referral_rewards_referrer_month
   on public.referral_rewards(referrer_user_id, created_at desc)
-  include (id, reward_days);
+  include (id, reward_days, reward_points);
 
 analyze public.trial_claims;
 analyze public.trial_claim_wallets;

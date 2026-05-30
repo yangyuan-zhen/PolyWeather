@@ -14,16 +14,16 @@
 
 ![PolyWeather Telegram 跑道推送](frontend/public/static/tel.png)
 
-## 当前产品状态（2026-05-29）
+## 当前产品状态（2026-05-30）
 
-- 已上线订阅制：`Pro 月付 10 USDC`。
-- 已上线积分体系：群内发言赚分 + 首次发言欢迎奖励 (+20) + 每日首条消息奖励 (+2) + 每周全员参与奖。
-- `/city` 与 `/deb` 已改为免费（每日各 10 次）；积分可用于支付抵扣（`500 分 = 1 USDC`，最多抵 `3 USDC`）。
-- 周榜奖励已改造：降低赢家积分加成 (200/100/50)，所有周活跃用户均享参与奖。
+- 已上线订阅制：`Pro 月付 29.9 USDC / 30 天`，`Pro 季度 79.9 USDC / 90 天`。
+- 积分获取已切换为邀请制度：被邀请人完成首次 Pro 付款后，邀请人获得 `3500` 积分；Telegram 群发言不再获得积分。
+- `/city` 与 `/deb` 已改为免费（每日各 10 次）；积分可用于支付抵扣（`500 分 = 1 USDC`，月付最多抵 `3 USDC`，季度最多抵 `8 USDC`）。
+- 邀请首月价：被邀请人首次月付 `20 USDC`；每个邀请人每月最多 10 个有效付费邀请奖励。
 - 已上线链上支付：Polygon 合约支付（USDC / USDC.e）+ Ethereum 主网 USDC 直转确认。
 - 已上线自动补单：事件监听 + 周期确认双链路。
 - 已上线支付运行态与审计接口：`/api/payments/runtime`。
-- 已上线轻量运营后台：`/ops`（会员、周榜、补分、支付异常单）。
+- 已上线轻量运营后台：`/ops`（会员、积分、补分、支付异常单）。
 - 已上线轻量可观测性：`/healthz`、`/api/system/status`、`/metrics`。
 - 已补最小外部监控栈：Prometheus + Alertmanager + Grafana + Telegram 告警 relay。
 - 实时终端已切换到可重放事件流：可见城市图表通过 `/api/events?cities=...&since_revision=...` 订阅 `city_observation_patch.v1`，生产环境使用 Redis Stream 做短窗口 replay，本地/单进程可回退 SQLite event log。

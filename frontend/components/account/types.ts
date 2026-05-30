@@ -26,10 +26,13 @@ export type ReferralSummary = {
   discount_usdc?: string;
   discounted_monthly_amount_usdc?: string;
   reward_days?: number;
+  reward_points?: number;
   monthly_reward_limit?: number;
   monthly_reward_days_limit?: number;
+  monthly_reward_points_limit?: number;
   monthly_reward_count?: number;
   monthly_reward_days?: number;
+  monthly_reward_points?: number;
   applied_code?: string;
   attribution_status?: string;
 };
@@ -81,6 +84,7 @@ export type PointsRedemptionConfig = {
   enabled?: boolean;
   points_per_usdc?: number;
   max_discount_usdc?: number;
+  max_discount_usdc_by_plan?: Record<string, number>;
 };
 
 export type PaymentConfig = {

@@ -49,7 +49,7 @@ export default async function HomePage({
         price: "29.90",
         priceCurrency: "USD",
         description:
-          "Pro subscription for 30 days. Referral users pay 26.90 USD-equivalent USDC for the first month.",
+          "Pro subscription for 30 days. Referral users pay 20.00 USD-equivalent USDC for the first month.",
         availability: "https://schema.org/InStock",
       },
       {
