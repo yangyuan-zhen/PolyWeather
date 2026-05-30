@@ -255,7 +255,8 @@ export function runTests() {
   );
   assert(
     authMeRouteSource.includes("if ((res.status === 401 || res.status === 403) && auth.authUserId)") &&
-      authMeRouteSource.includes("degraded_reason: `backend_${res.status}`") &&
+      authMeRouteSource.includes("degradedAuthProfileResponse") &&
+      authMeRouteSource.includes("reason: `backend_${res.status}`") &&
       authMeRouteSource.includes("subscription_active: null"),
     "auth profile proxy must preserve authenticated identity with unknown subscription on backend 401/403 instead of forcing a false paywall",
   );

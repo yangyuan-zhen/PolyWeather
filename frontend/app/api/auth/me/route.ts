@@ -15,6 +15,84 @@ import { hasSupabaseServerEnv } from "@/lib/supabase/server";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
+type VerifiedBearerIdentity = {
+  email: string | null;
+  userId: string;
+};
+
+function extractBearerToken(headerValue: string | null) {
+  if (!headerValue) return "";
+  const parts = headerValue.trim().split(/\s+/);
+  if (parts.length === 2 && parts[0].toLowerCase() === "bearer") {
+    return parts[1];
+  }
+  return "";
+}
+
+async function getVerifiedBearerIdentity(
+  req: NextRequest,
+): Promise<VerifiedBearerIdentity | null> {
+  const token = extractBearerToken(req.headers.get("authorization"));
+  if (!token) return null;
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  if (!supabaseUrl || !anonKey) return null;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 4000);
+  try {
+    const res = await fetch(`${supabaseUrl.replace(/\/+$/, "")}/auth/v1/user`, {
+      cache: "no-store",
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${token}`,
+      },
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    const user = await res.json();
+    const userId = String(user?.id || "").trim();
+    if (!userId) return null;
+    return {
+      email: String(user?.email || "").trim() || null,
+      userId,
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function degradedAuthProfileResponse({
+  email,
+  reason,
+  response,
+  userId,
+}: {
+  email: string | null;
+  reason: string;
+  response: NextResponse | null;
+  userId: string;
+}) {
+  const degraded = NextResponse.json({
+    authenticated: true,
+    user_id: userId,
+    email,
+    subscription_active: null,
+    subscription_plan_code: null,
+    subscription_expires_at: null,
+    subscription_total_expires_at: null,
+    subscription_queued_days: 0,
+    subscription_queued_count: 0,
+    points: 0,
+    degraded_auth_profile: true,
+    degraded_reason: reason,
+  });
+  return applyAuthResponseCookies(degraded, response);
+}
+
 export async function GET(req: NextRequest) {
   const requestHost =
     req.headers.get("x-forwarded-host") || req.headers.get("host") || req.nextUrl.host;
@@ -63,23 +141,23 @@ export async function GET(req: NextRequest) {
       clearTimeout(timeoutId);
     }
     if ((res.status === 401 || res.status === 403) && auth.authUserId) {
-      const response = NextResponse.json({
-        authenticated: true,
-        user_id: auth.authUserId,
+      return degradedAuthProfileResponse({
         email: auth.authEmail || null,
-        subscription_active: null,
-        subscription_plan_code: null,
-        subscription_expires_at: null,
-        subscription_total_expires_at: null,
-        subscription_queued_days: 0,
-        subscription_queued_count: 0,
-        points: 0,
-        degraded_auth_profile: true,
-        degraded_reason: `backend_${res.status}`,
+        reason: `backend_${res.status}`,
+        response: auth.response,
+        userId: auth.authUserId,
       });
-      return applyAuthResponseCookies(response, auth.response);
     }
     if (res.status === 401 || res.status === 403) {
+      const bearerIdentity = await getVerifiedBearerIdentity(req);
+      if (bearerIdentity) {
+        return degradedAuthProfileResponse({
+          email: bearerIdentity.email,
+          reason: `backend_${res.status}`,
+          response: auth.response,
+          userId: bearerIdentity.userId,
+        });
+      }
       const response = NextResponse.json({
         authenticated: false,
         subscription_active: false,
@@ -90,21 +168,21 @@ export async function GET(req: NextRequest) {
     if (!res.ok) {
       const raw = await res.text();
       if (auth.authUserId) {
-        const response = NextResponse.json({
-          authenticated: true,
-          user_id: auth.authUserId,
+        return degradedAuthProfileResponse({
           email: auth.authEmail || null,
-          subscription_active: null,
-          subscription_plan_code: null,
-          subscription_expires_at: null,
-          subscription_total_expires_at: null,
-          subscription_queued_days: 0,
-          subscription_queued_count: 0,
-          points: 0,
-          degraded_auth_profile: true,
-          degraded_reason: `backend_${res.status}`,
+          reason: `backend_${res.status}`,
+          response: auth.response,
+          userId: auth.authUserId,
         });
-        return applyAuthResponseCookies(response, auth.response);
+      }
+      const bearerIdentity = await getVerifiedBearerIdentity(req);
+      if (bearerIdentity) {
+        return degradedAuthProfileResponse({
+          email: bearerIdentity.email,
+          reason: `backend_${res.status}`,
+          response: auth.response,
+          userId: bearerIdentity.userId,
+        });
       }
       const response = buildUpstreamErrorResponse(res.status, raw);
       return applyAuthResponseCookies(response, auth.response);
@@ -114,21 +192,21 @@ export async function GET(req: NextRequest) {
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {
     if (auth?.authUserId) {
-      const response = NextResponse.json({
-        authenticated: true,
-        user_id: auth.authUserId,
+      return degradedAuthProfileResponse({
         email: auth.authEmail || null,
-        subscription_active: null,
-        subscription_plan_code: null,
-        subscription_expires_at: null,
-        subscription_total_expires_at: null,
-        subscription_queued_days: 0,
-        subscription_queued_count: 0,
-        points: 0,
-        degraded_auth_profile: true,
-        degraded_reason: String(error),
+        reason: String(error),
+        response: auth.response,
+        userId: auth.authUserId,
       });
-      return applyAuthResponseCookies(response, auth.response);
+    }
+    const bearerIdentity = await getVerifiedBearerIdentity(req);
+    if (bearerIdentity) {
+      return degradedAuthProfileResponse({
+        email: bearerIdentity.email,
+        reason: String(error),
+        response: auth?.response || null,
+        userId: bearerIdentity.userId,
+      });
     }
     return buildProxyExceptionResponse(error, {
       publicMessage: "Failed to fetch auth profile",

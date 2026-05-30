@@ -132,6 +132,22 @@ export function runTests() {
     middlewareSource.includes("unauthorizedSupabaseSessionResponse()"),
     "middleware must reject no-cookie protected API requests without calling Supabase auth",
   );
+
+  const authMeRouteSource = fs.readFileSync(
+    path.join(projectRoot, "app", "api", "auth", "me", "route.ts"),
+    "utf8",
+  );
+  assert(
+    authMeRouteSource.includes("/auth/v1/user") &&
+      authMeRouteSource.includes("getVerifiedBearerIdentity") &&
+      authMeRouteSource.includes("degraded_auth_profile: true"),
+    "/api/auth/me must verify bearer tokens directly and return a degraded authenticated profile when the backend auth profile is transiently unavailable",
+  );
+  assert(
+    authMeRouteSource.indexOf("const bearerIdentity = await getVerifiedBearerIdentity(req)") <
+      authMeRouteSource.indexOf("return buildProxyExceptionResponse(error"),
+    "/api/auth/me must try bearer identity fallback before returning a proxy exception",
+  );
   for (const route of [
     "app/api/ops/analytics/funnel/route.ts",
     "app/api/ops/config/route.ts",
