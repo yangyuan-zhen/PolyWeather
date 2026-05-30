@@ -176,6 +176,31 @@ class SupabaseEntitlementService:
         except Exception:
             return None
 
+    def _rpc(
+        self,
+        name: str,
+        payload: Optional[Any] = None,
+        *,
+        allowed_status: Optional[List[int]] = None,
+    ) -> Any:
+        return self._rest(
+            "POST",
+            f"rpc/{name}",
+            payload=payload or {},
+            allowed_status=allowed_status or [200],
+        )
+
+    @staticmethod
+    def _looks_like_missing_rpc(exc: Exception) -> bool:
+        text = str(exc).lower()
+        return (
+            "pgrst202" in text
+            or "could not find the function" in text
+            or "function public.claim_signup_trial" in text
+            or "schema cache" in text
+            or "404" in text
+        )
+
     def _admin_user_endpoint(self, user_id: str) -> str:
         return f"{self.supabase_url}/auth/v1/admin/users/{user_id}"
 
@@ -407,6 +432,31 @@ class SupabaseEntitlementService:
         try:
             telegram_user_id = self._telegram_user_id_for(user_key)
             wallet_addresses = self._active_wallet_addresses_for(user_key)
+            try:
+                result = self._rpc(
+                    "claim_signup_trial",
+                    {
+                        "p_user_id": user_key,
+                        "p_email": normalized_email,
+                        "p_telegram_user_id": telegram_user_id,
+                        "p_wallet_addresses": wallet_addresses,
+                    },
+                    allowed_status=[200],
+                )
+                if isinstance(result, dict):
+                    self.invalidate_subscription_cache(user_key)
+                    return result
+                if isinstance(result, list) and result and isinstance(result[0], dict):
+                    self.invalidate_subscription_cache(user_key)
+                    return result[0]
+            except Exception as rpc_exc:
+                if not self._looks_like_missing_rpc(rpc_exc):
+                    raise
+                logger.warning(
+                    "signup trial rpc missing; falling back to legacy grant user_id={}: {}",
+                    user_key,
+                    rpc_exc,
+                )
             if self._trial_claim_exists(
                 user_id=user_key,
                 email=normalized_email,
@@ -437,6 +487,13 @@ class SupabaseEntitlementService:
                 if isinstance(claim_rows, list) and claim_rows and isinstance(claim_rows[0], dict):
                     claim_id = claim_rows[0].get("id")
             except Exception:
+                if self._trial_claim_exists(
+                    user_id=user_key,
+                    email=normalized_email,
+                    telegram_user_id=telegram_user_id,
+                    wallet_addresses=wallet_addresses,
+                ):
+                    return {"created": False, "reason": "already_claimed"}
                 self._record_signup_trial_claim_event(
                     user_id=user_key,
                     email=normalized_email,

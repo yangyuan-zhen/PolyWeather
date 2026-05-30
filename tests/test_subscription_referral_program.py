@@ -78,6 +78,14 @@ def test_signup_trial_claim_creates_three_day_trial_once(monkeypatch):
     service = SupabaseEntitlementService()
     calls = []
 
+    monkeypatch.setattr(
+        service,
+        "_rpc",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            RuntimeError("PGRST202 function not found")
+        ),
+    )
+
     def fake_rest(method, table, **kwargs):
         calls.append({"method": method, "table": table, **kwargs})
         if method == "GET" and table in {"trial_claims", "user_wallets"}:
@@ -97,6 +105,49 @@ def test_signup_trial_claim_creates_three_day_trial_once(monkeypatch):
     assert payload["source"] == "signup_trial"
     assert payload["status"] == "active"
     assert payload["user_id"] == "user-1"
+
+
+def test_signup_trial_uses_atomic_database_claim_rpc(monkeypatch):
+    monkeypatch.setenv("POLYWEATHER_AUTH_ENABLED", "true")
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "anon")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role")
+    service = SupabaseEntitlementService()
+    rpc_calls = []
+
+    def fake_rpc(name, payload, **kwargs):
+        rpc_calls.append({"name": name, "payload": payload, **kwargs})
+        return {
+            "created": True,
+            "plan_code": "signup_trial_3d",
+            "expires_at": "2026-06-02T00:00:00+00:00",
+        }
+
+    def fake_rest(method, table, **kwargs):
+        if method == "GET" and table == "user_wallets":
+            return [{"address": "0xabc"}]
+        raise AssertionError(
+            f"signup trial must use atomic RPC instead of legacy {method} {table}"
+        )
+
+    monkeypatch.setattr(service, "_rpc", fake_rpc, raising=False)
+    monkeypatch.setattr(service, "_rest", fake_rest)
+
+    result = service.ensure_signup_trial("user-1", "USER@example.com")
+
+    assert result["created"] is True
+    assert rpc_calls == [
+        {
+            "name": "claim_signup_trial",
+            "payload": {
+                "p_user_id": "user-1",
+                "p_email": "user@example.com",
+                "p_telegram_user_id": None,
+                "p_wallet_addresses": ["0xabc"],
+            },
+            "allowed_status": [200],
+        }
+    ]
 
 
 def test_referral_discount_applies_to_first_monthly_payment(monkeypatch, tmp_path):
@@ -186,6 +237,14 @@ def test_signup_trial_falls_back_to_entitlement_events_without_trial_tables(monk
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role")
     service = SupabaseEntitlementService()
     calls = []
+
+    monkeypatch.setattr(
+        service,
+        "_rpc",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            RuntimeError("PGRST202 function not found")
+        ),
+    )
 
     def fake_rest(method, table, **kwargs):
         calls.append({"method": method, "table": table, **kwargs})

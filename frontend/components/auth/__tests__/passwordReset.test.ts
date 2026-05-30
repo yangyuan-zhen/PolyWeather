@@ -26,6 +26,13 @@ export function runTests() {
     "auth",
     "ResetPasswordClient.tsx",
   );
+  const authCallbackPath = path.join(
+    projectRoot,
+    "app",
+    "auth",
+    "callback",
+    "route.ts",
+  );
 
   const loginClientSource = fs.readFileSync(loginClientPath, "utf8");
 
@@ -54,5 +61,15 @@ export function runTests() {
     resetClientSource.includes("getSession") &&
       resetClientSource.includes("expired"),
     "password reset client must detect an expired or invalid recovery session",
+  );
+
+  const authCallbackSource = fs.readFileSync(authCallbackPath, "utf8");
+  assert(
+    authCallbackSource.includes("warmSignupTrial") &&
+      authCallbackSource.includes("exchangeCodeForSession") &&
+      authCallbackSource.includes("/api/auth/me") &&
+      authCallbackSource.includes("Authorization") &&
+      authCallbackSource.includes("Bearer"),
+    "auth callback must warm /api/auth/me with the exchanged Supabase session so new users receive the signup trial immediately",
   );
 }
