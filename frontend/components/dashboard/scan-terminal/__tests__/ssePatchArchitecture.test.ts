@@ -233,6 +233,13 @@ export function runTests() {
     chartCanvas.includes("canToggleRunwayDetails") && chartCanvas.includes("individualRunwaySeriesCount > 1"),
     "single-runway charts must not show the runway-detail toggle because aggregate and individual views are visually redundant",
   );
+  assert(
+    chartLogic.includes("HOURLY_DETAIL_REQUEST_TIMEOUT_MS = 12_000") &&
+      chartLogic.includes("fetchCityDetailWithTimeout") &&
+      chartLogic.includes("signal: controller.signal") &&
+      chartLogic.includes("controller.abort()"),
+    "city detail chart fetches must have a frontend timeout so panels cannot stay on 加载图表 forever",
+  );
   assert(!chart.includes("3D"), "temperature chart UI must not expose a 3D/future-forecast mode");
   assert(!chart.includes("build3DayChartData"), "temperature chart component must not render future prediction curves");
   assert(

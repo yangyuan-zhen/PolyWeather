@@ -356,6 +356,7 @@ const HOURLY_CACHE_TTL_MS = DASHBOARD_REFRESH_POLICY_MS.metar;
 const _hourlyCache = new Map<string, { ts: number; data: HourlyForecast }>();
 const _hourlyRequestCache = new Map<string, Promise<HourlyForecast>>();
 const MAX_HOURLY_DETAIL_CONCURRENT_REQUESTS = 3;
+const HOURLY_DETAIL_REQUEST_TIMEOUT_MS = 12_000;
 let _hourlyActiveDetailRequests = 0;
 const _hourlyDetailRequestQueue: Array<() => void> = [];
 const RUNWAY_LINE_COLORS = ["#00897b", "#d97706", "#7c3aed", "#0891b2", "#ea580c", "#64748b"];
@@ -985,11 +986,9 @@ async function fetchHourlyForecastForCity(
   if (pending) return pending;
 
   const request = runQueuedHourlyDetailRequest(() =>
-    fetch(`/api/city/${encodeURIComponent(city)}/detail?depth=full&force_refresh=false&resolution=${resParam}`, {
-      headers: { Accept: "application/json" },
-    })
+    fetchCityDetailWithTimeout(city, resParam)
       .then(async (res) => {
-        if (!res.ok) return null;
+        if (!res || !res.ok) return null;
         return res.json() as Promise<CityDetail>;
       })
       .then((json) => {
@@ -1006,6 +1005,17 @@ async function fetchHourlyForecastForCity(
 
   _hourlyRequestCache.set(requestKey, request);
   return request;
+}
+
+function fetchCityDetailWithTimeout(city: string, resolution: string) {
+  const controller = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), HOURLY_DETAIL_REQUEST_TIMEOUT_MS);
+  return fetch(`/api/city/${encodeURIComponent(city)}/detail?depth=full&force_refresh=false&resolution=${resolution}`, {
+    headers: { Accept: "application/json" },
+    signal: controller.signal,
+  })
+    .catch(() => null)
+    .finally(() => globalThis.clearTimeout(timeoutId));
 }
 
 function shouldPollLiveChart({
@@ -2246,6 +2256,7 @@ function binObservationsToSlots(
 
 export {
   MAX_HOURLY_DETAIL_CONCURRENT_REQUESTS,
+  HOURLY_DETAIL_REQUEST_TIMEOUT_MS,
   HOURLY_CACHE_TTL_MS,
   _hourlyCache,
   __resetHourlyDetailRequestQueueForTest,

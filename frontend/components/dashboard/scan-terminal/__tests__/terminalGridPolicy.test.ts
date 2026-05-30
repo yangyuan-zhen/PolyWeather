@@ -23,6 +23,10 @@ export function runTests() {
     path.join(projectRoot, "components", "dashboard", "scan-terminal", "TemperatureChartCanvas.tsx"),
     "utf8",
   );
+  const citySelectorSource = fs.readFileSync(
+    path.join(projectRoot, "components", "dashboard", "scan-terminal", "CitySelectorDropdown.tsx"),
+    "utf8",
+  );
 
   assert(
     dashboardSource.includes("MAX_TERMINAL_CHARTS = 9"),
@@ -53,6 +57,22 @@ export function runTests() {
     dashboardSource.includes("if (!cityInSlot || !rowForSlot)") &&
       dashboardSource.includes("handleSelectCityForSlot(slotIndex, null);"),
     "stale saved chart slots must render the empty city picker instead of a row=null Temperature Chart",
+  );
+  assert(
+    dashboardSource.includes("absolute left-1/2 top-12 z-50") &&
+      !dashboardSource.includes("top-1/2 -translate-x-1/2 -translate-y-1/2"),
+    "empty top-row slots must open the city selector downward so the search input is not clipped by the viewport header",
+  );
+  assert(
+    citySelectorSource.includes("max-h-[calc(100vh-72px)]") &&
+      citySelectorSource.includes("min-h-0 flex-1 overflow-y-auto"),
+    "city selector dropdown must cap its viewport height and keep the result list scrollable",
+  );
+  assert(
+    citySelectorSource.includes("MIN_DROPDOWN_TOP_PX") &&
+      citySelectorSource.includes("viewportNudgeY") &&
+      citySelectorSource.includes("getBoundingClientRect()"),
+    "city selector dropdown must nudge itself inside the viewport when opened from top-row chart cards",
   );
   assert(
     chartSource.includes("setLiveTemp(null);") &&

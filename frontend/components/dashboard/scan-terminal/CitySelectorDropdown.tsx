@@ -113,6 +113,9 @@ const getCityCode = (city: string): string => {
   return CITY_IATA_MAP[normalized] || normalized.substring(0, 3).toUpperCase();
 };
 
+const MIN_DROPDOWN_TOP_PX = 56;
+const DROPDOWN_VIEWPORT_PADDING_PX = 12;
+
 export function CitySelectorDropdown({
   isEn,
   rows,
@@ -124,6 +127,7 @@ export function CitySelectorDropdown({
   const inputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<string>("all");
+  const [viewportNudgeY, setViewportNudgeY] = useState(0);
 
   // Auto-focus input on mount
   useEffect(() => {
@@ -193,6 +197,35 @@ export function CitySelectorDropdown({
     });
   }, [rows, searchQuery, activeTab]);
 
+  useEffect(() => {
+    let frame = 0;
+    const updatePosition = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const el = containerRef.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        let next = 0;
+        if (rect.top < MIN_DROPDOWN_TOP_PX) {
+          next = MIN_DROPDOWN_TOP_PX - rect.top;
+        } else if (rect.bottom > window.innerHeight - DROPDOWN_VIEWPORT_PADDING_PX) {
+          next = Math.max(
+            MIN_DROPDOWN_TOP_PX - rect.top,
+            window.innerHeight - DROPDOWN_VIEWPORT_PADDING_PX - rect.bottom,
+          );
+        }
+        setViewportNudgeY((prev) => (Math.abs(prev - next) < 1 ? prev : next));
+      });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [filteredRows.length]);
+
   const getRegionLabel = (regionKey: string): string => {
     const match = REGIONS.find((r) => r.key === regionKey);
     if (!match) return regionKey;
@@ -203,9 +236,10 @@ export function CitySelectorDropdown({
     <div
       ref={containerRef}
       className={clsx(
-        "flex flex-col bg-white border border-slate-300 rounded shadow-2xl overflow-hidden text-xs text-[#202833] animate-in fade-in-50 zoom-in-95 duration-100",
+        "flex max-h-[calc(100vh-72px)] min-h-0 flex-col bg-white border border-slate-300 rounded shadow-2xl overflow-hidden text-xs text-[#202833] animate-in fade-in-50 zoom-in-95 duration-100",
         className
       )}
+      style={viewportNudgeY ? { marginTop: viewportNudgeY } : undefined}
       onClick={(e) => e.stopPropagation()} // Prevent triggering slot clicks
     >
       {/* Search Input Area */}
@@ -243,7 +277,7 @@ export function CitySelectorDropdown({
       </div>
 
       {/* Results List */}
-      <div className="flex-1 overflow-y-auto max-h-[380px] divide-y divide-slate-100">
+      <div className="min-h-0 flex-1 overflow-y-auto max-h-[380px] divide-y divide-slate-100">
         {filteredRows.length === 0 ? (
           <div className="p-4 text-center text-slate-400 font-medium">
             {isEn ? "No matching cities" : "无匹配城市"}
