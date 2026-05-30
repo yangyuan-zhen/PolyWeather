@@ -3,6 +3,68 @@
 import clsx from "clsx";
 import { temp } from "@/components/dashboard/scan-terminal/utils";
 
+const OBSERVATION_LABEL_EN: Record<string, string> = {
+  "参考站点 (1分钟)": "Reference Station (1m)",
+  "天文台实测 (10分钟)": "HKO Live (10m)",
+  "机场气象站 (10分钟)": "Airport Weather Station (10m)",
+  "航站楼温度": "Terminal Temperature",
+  "官方机场观测 (15分钟)": "Official Airport Obs (15m)",
+  "CWA (10分钟)": "CWA (10m)",
+  "气象站实测": "Weather Station Live",
+  "跑道实测 (1分钟)": "Runway Live (1m)",
+  "机场报文": "Airport METAR",
+  "METAR 结算 (30分钟)": "METAR Settlement (30m)",
+};
+
+const HIGH_LABEL_EN: Record<string, string> = {
+  "参考站点": "Reference Station",
+  "天文台实测": "HKO Live",
+  "天文台": "HKO",
+  "机场气象站": "Airport Weather Station",
+  "航站楼": "Terminal",
+  "官方机场观测": "Official Airport Obs",
+  "气象站": "Weather Station",
+  "跑道实测": "Runway",
+  "机场报文": "Airport METAR",
+  "METAR 官方": "Official METAR",
+};
+
+function observationLabel(label: string, isEn: boolean) {
+  return isEn ? (OBSERVATION_LABEL_EN[label] || label) : label;
+}
+
+function highLabel(label: string, isEn: boolean) {
+  return isEn ? (HIGH_LABEL_EN[label] || label) : label;
+}
+
+function buildStatsLabels({
+  isEn,
+  isShenzhen,
+  runwayHeaderLabel,
+  metarHeaderLabel,
+  runwayHighLabel,
+  metarHighLabel,
+}: {
+  isEn: boolean;
+  isShenzhen: boolean;
+  runwayHeaderLabel: string;
+  metarHeaderLabel: string;
+  runwayHighLabel: string;
+  metarHighLabel: string;
+}) {
+  const primary = observationLabel(runwayHeaderLabel, isEn);
+  const secondaryObservation = observationLabel(metarHeaderLabel, isEn);
+  const dailyHigh = isEn ? "Daily High" : "当日最高";
+  return {
+    primary,
+    compactSecondary: isShenzhen ? dailyHigh : secondaryObservation,
+    expandedSecondary: `${secondaryObservation} · ${dailyHigh}`,
+    dailyPeakTitle: isEn ? "Daily Peak" : "当日最高气温",
+    runwayHigh: highLabel(runwayHighLabel, isEn),
+    metarHigh: highLabel(metarHighLabel, isEn),
+  };
+}
+
 export function TemperatureStatsBars({
   isEn,
   compact,
@@ -46,18 +108,27 @@ export function TemperatureStatsBars({
   spreadLabelEn: string;
   formattedUpdateTime: string;
 }) {
+  const labels = buildStatsLabels({
+    isEn,
+    isShenzhen,
+    runwayHeaderLabel,
+    metarHeaderLabel,
+    runwayHighLabel,
+    metarHighLabel,
+  });
+
   if (compact) {
     return (
       <div className="shrink-0 border-b border-slate-200 bg-white px-3 py-1.5 flex items-center justify-between">
         {timeframe === "1D" ? (
           <div className="flex items-center gap-4 text-[11px]">
             <span className="font-semibold text-slate-500">
-              {isEn ? "Runway" : runwayHeaderLabel}:{" "}
+              {labels.primary}:{" "}
               <strong className="text-[#009688] font-mono">{temp(displayRunwayTemp, tempSymbol)}</strong>
             </span>
             <span className="text-slate-300">|</span>
             <span className="font-semibold text-slate-500">
-              {isEn ? "METAR" : (isShenzhen ? "当日最高" : metarHeaderLabel)}:{" "}
+              {labels.compactSecondary}:{" "}
               <strong className="text-blue-600 font-mono">{temp(observedHighMetar, tempSymbol)}</strong>
             </span>
           </div>
@@ -93,7 +164,7 @@ export function TemperatureStatsBars({
           <div className="flex items-center gap-12">
             <div className="flex flex-col">
               <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                {isEn ? "Runway Live (1m)" : `${runwayHeaderLabel}`}
+                {labels.primary}
               </span>
               <span className="text-2xl font-bold font-mono text-[#009688] mt-1">
                 {temp(displayRunwayTemp, tempSymbol)}
@@ -101,7 +172,7 @@ export function TemperatureStatsBars({
             </div>
             <div className="flex flex-col">
               <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                {isEn ? "METAR Settlement · Daily High" : `${metarHeaderLabel} · 当日最高`}
+                {labels.expandedSecondary}
               </span>
               <span className="text-2xl font-bold font-mono text-blue-600 mt-1">
                 {temp(observedHighMetar, tempSymbol)}
@@ -131,12 +202,12 @@ export function TemperatureStatsBars({
 
         <div className="hidden sm:flex flex-col items-end text-right">
           <span className="text-[10px] text-slate-400 uppercase font-semibold">
-            {isEn ? "Daily Peak" : "当日最高气温"}
+            {labels.dailyPeakTitle}
           </span>
           <div className="mt-1 flex items-center gap-2 text-xs font-mono text-slate-600">
-            <span>{isEn ? "Runway" : runwayHighLabel}: <strong className="text-[#009688]">{temp(observedHighRunway, tempSymbol)}</strong></span>
+            <span>{labels.runwayHigh}: <strong className="text-[#009688]">{temp(observedHighRunway, tempSymbol)}</strong></span>
             <span>|</span>
-            <span>{isEn ? "METAR" : metarHighLabel}: <strong className="text-blue-600">{temp(observedHighMetar, tempSymbol)}</strong></span>
+            <span>{labels.metarHigh}: <strong className="text-blue-600">{temp(observedHighMetar, tempSymbol)}</strong></span>
             {wundergroundDailyHigh !== null && (
               <>
                 <span>|</span>
@@ -187,3 +258,5 @@ export function TemperatureStatsBars({
     </div>
   );
 }
+
+export const __buildTemperatureStatsLabelsForTest = buildStatsLabels;
