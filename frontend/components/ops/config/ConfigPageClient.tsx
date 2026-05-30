@@ -42,6 +42,7 @@ export function ConfigPageClient() {
   const [result, setResult] = useState("");
   const [sensitiveResult, setSensitiveResult] = useState("");
   const [sensitiveHealth, setSensitiveHealth] = useState<SensitiveHealth | null>(null);
+  const [sensitiveCheckedAt, setSensitiveCheckedAt] = useState("");
 
   const load = async () => {
     try {
@@ -90,6 +91,7 @@ export function ConfigPageClient() {
     setSensitiveSaving(true);
     setSensitiveResult("");
     setSensitiveHealth(null);
+    setSensitiveCheckedAt("");
     try {
       const res = await fetch("/api/ops/sensitive-config", {
         method: "PUT",
@@ -106,6 +108,7 @@ export function ConfigPageClient() {
         }
         setSensitiveEditing((prev) => { const n = { ...prev }; delete n[key]; return n; });
         setSensitiveHealth(data.health ?? null);
+        setSensitiveCheckedAt(new Date().toLocaleString("zh-CN", { hour12: false }));
         setSensitiveResult(`${key} 已轮换`);
       } else {
         setSensitiveResult(`轮换失败: ${await res.text().catch(() => "")}`);
@@ -214,8 +217,11 @@ export function ConfigPageClient() {
                     </div>
                     <div className="flex w-full flex-col gap-2 sm:flex-row xl:w-[520px]">
                       <input
+                        data-testid="sensitive-session-input"
                         type="password"
                         autoComplete="off"
+                        autoCapitalize="none"
+                        spellCheck={false}
                         placeholder="输入新的 sessionId，不会回显"
                         value={sensitiveEditing[cfg.key] ?? ""}
                         onChange={(e) => setSensitiveEditing((prev) => ({ ...prev, [cfg.key]: e.target.value }))}
@@ -232,6 +238,9 @@ export function ConfigPageClient() {
                       </Button>
                     </div>
                   </div>
+                  <p className="mt-3 text-xs leading-5 text-slate-500">
+                    在 ops 页面粘贴真实的 $$ sessionId 即可；这里不是 Docker .env，不需要把 $$ 写成 $$$$。
+                  </p>
                 </div>
               ))}
             </div>
@@ -244,6 +253,7 @@ export function ConfigPageClient() {
           {sensitiveHealth && (
             <div className={`mt-3 rounded-lg border px-3 py-2 text-xs ${sensitiveHealth.ok ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200" : "border-amber-400/20 bg-amber-400/10 text-amber-200"}`}>
               AMSC 健康检查：{sensitiveHealth.ok ? "通过" : "失败"}
+              {sensitiveCheckedAt ? ` · 最近检查 ${sensitiveCheckedAt}` : ""}
               {typeof sensitiveHealth.points === "number" ? ` · 跑道点 ${sensitiveHealth.points}` : ""}
               {sensitiveHealth.observation_time_local ? ` · 观测 ${sensitiveHealth.observation_time_local}` : ""}
               {sensitiveHealth.error ? ` · ${sensitiveHealth.error}` : ""}

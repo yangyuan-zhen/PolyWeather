@@ -20,12 +20,20 @@ export function runTests() {
     path.join(projectRoot, "components", "dashboard", "scan-terminal", "LiveTemperatureThresholdChart.tsx"),
     "utf8",
   );
+  const terminalPageSource = fs.readFileSync(
+    path.join(projectRoot, "app", "terminal", "page.tsx"),
+    "utf8",
+  );
   const chartCanvasSource = fs.readFileSync(
     path.join(projectRoot, "components", "dashboard", "scan-terminal", "TemperatureChartCanvas.tsx"),
     "utf8",
   );
   const citySelectorSource = fs.readFileSync(
     path.join(projectRoot, "components", "dashboard", "scan-terminal", "CitySelectorDropdown.tsx"),
+    "utf8",
+  );
+  const scanQuerySource = fs.readFileSync(
+    path.join(projectRoot, "components", "dashboard", "scan-terminal", "use-scan-terminal-query.ts"),
     "utf8",
   );
 
@@ -76,6 +84,26 @@ export function runTests() {
     "city selector dropdown must nudge itself inside the viewport when opened from top-row chart cards",
   );
   assert(
+    terminalPageSource.includes("dynamic(") &&
+      terminalPageSource.includes('import("@/components/dashboard/ScanTerminalDashboard")') &&
+      terminalPageSource.includes("DashboardShellSkeleton") &&
+      !terminalPageSource.includes('import { ScanTerminalDashboard } from "@/components/dashboard/ScanTerminalDashboard";'),
+    "terminal route must dynamically load the heavy dashboard behind the shell skeleton",
+  );
+  assert(
+    dashboardSource.includes('from "next/dynamic"') &&
+      dashboardSource.includes('import("@/components/dashboard/scan-terminal/TrainingDashboard")') &&
+      !dashboardSource.includes('import { TrainingDashboard } from "@/components/dashboard/scan-terminal/TrainingDashboard";'),
+    "terminal dashboard must lazy-load the training analytics tab so Recharts stays out of the default terminal path",
+  );
+  assert(
+    chartSource.includes('from "next/dynamic"') &&
+      chartSource.includes("TemperatureChartCanvasFallback") &&
+      chartSource.includes("import(\"@/components/dashboard/scan-terminal/TemperatureChartCanvas\")") &&
+      !chartSource.includes('import { TemperatureChartCanvas } from "@/components/dashboard/scan-terminal/TemperatureChartCanvas";'),
+    "terminal temperature charts must lazy-load the Recharts canvas behind a lightweight fallback",
+  );
+  assert(
     chartSource.includes("setLiveTemp(null);") &&
       chartSource.includes("lastAppliedPatchRevisionRef.current = 0;"),
     "switching city slots must clear the previous live temperature so Fahrenheit values cannot leak into Celsius charts",
@@ -108,6 +136,25 @@ export function runTests() {
       dashboardSource.includes("deferredSearchQuery") &&
       dashboardSource.includes("[rows, deferredSearchQuery]"),
     "terminal search must defer expensive row filtering so typing stays responsive",
+  );
+  assert(
+    scanQuerySource.includes("MAX_STALE_SCAN_CACHE_MS") &&
+      scanQuerySource.includes("allowStale") &&
+      scanQuerySource.includes("setCachedRows(readScanCache(tradingRegion || \"\", { allowStale: true }))"),
+    "terminal data hook must render stale scan rows immediately while revalidating the first-screen API",
+  );
+  assert(
+    citySelectorSource.includes("useDeferredValue") &&
+      citySelectorSource.includes("deferredSearchQuery") &&
+      citySelectorSource.includes("[rows, deferredSearchQuery, activeTab]"),
+    "city selector search must defer expensive dropdown filtering so top-row selection stays responsive",
+  );
+  assert(
+    dashboardSource.includes("accessDecisionPending") &&
+      dashboardSource.includes("shouldShowPaywall") &&
+      dashboardSource.indexOf("if (accessDecisionPending)") <
+        dashboardSource.indexOf("if (shouldShowPaywall)"),
+    "terminal must keep showing verification while access is undecided instead of flashing the paywall",
   );
   assert(
     dashboardSource.includes('trackAppEvent("enter_terminal"') &&

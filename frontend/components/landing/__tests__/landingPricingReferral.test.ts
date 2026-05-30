@@ -81,6 +81,11 @@ export function runTests() {
   assert(appPageSource.includes('price: "79.90"'), "JSON-LD must expose quarterly Pro pricing");
   assert(!appPageSource.includes('price: "10.00"'), "legacy JSON-LD pricing must be removed");
   assert(!appPageSource.includes("PreloadTerminalData"), "landing route must not add a fourth client island");
+  assert(
+    !appPageSource.includes("AI decision cards") &&
+      !appPageSource.includes("AI 气象证据链"),
+    "landing metadata and JSON-LD must not advertise the removed AI decision-card positioning",
+  );
 }
 
 function projectRoot() {

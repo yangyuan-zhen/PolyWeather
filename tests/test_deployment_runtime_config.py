@@ -74,7 +74,8 @@ def test_deploy_script_retries_startup_smoke_checks():
 
     assert "smoke_check()" in script
     assert 'smoke_check "healthz" "https://api.polyweather.top/healthz" 15 3 5' in script
-    assert 'smoke_check "local cities" "http://127.0.0.1:8000/api/cities" 10 6 3' in script
+    assert 'warm_public_route "local cities recent stats" "http://127.0.0.1:8000/api/cities?refresh_deb_recent=1"' in script
+    assert 'smoke_check "local cities" "http://127.0.0.1:8000/api/cities" 10 6 3' not in script
     assert 'smoke_check "frontend cities" "https://polyweather.top/api/cities" 20 5 5' in script
     assert 'smoke_check "frontend" "https://www.polyweather.top/" 15 3 5' in script
 

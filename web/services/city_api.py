@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import threading
+import time
 from typing import Any, Dict, Optional
 
 from fastapi import HTTPException, Request
@@ -9,6 +12,15 @@ from fastapi.concurrency import run_in_threadpool
 from loguru import logger
 
 import web.routes as legacy_routes
+
+_RECENT_DEB_CACHE: Optional[Dict[str, Dict[str, object]]] = None
+_RECENT_DEB_CACHE_TS = 0.0
+_RECENT_DEB_REFRESHING = False
+_RECENT_DEB_LOCK = threading.Lock()
+_RECENT_DEB_CACHE_TTL_SEC = max(
+    60,
+    int(os.getenv("POLYWEATHER_CITIES_DEB_RECENT_CACHE_TTL_SEC", "300") or "300"),
+)
 
 
 async def _overlay_cached_wunderground(city: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -19,13 +31,69 @@ async def _overlay_cached_wunderground(city: str, payload: Dict[str, Any]) -> Di
     )
 
 
-def _build_cities_payload() -> Dict[str, Any]:
+def _default_deb_recent() -> Dict[str, object]:
+    return {
+        "tier": "other",
+        "hit_rate": None,
+        "sample_count": 0,
+        "mae": None,
+        "last_date": None,
+    }
+
+
+def _refresh_recent_deb_cache() -> Dict[str, Dict[str, object]]:
+    global _RECENT_DEB_CACHE, _RECENT_DEB_CACHE_TS, _RECENT_DEB_REFRESHING
+
+    try:
+        index = legacy_routes._build_recent_deb_performance_index()
+        with _RECENT_DEB_LOCK:
+            _RECENT_DEB_CACHE = index
+            _RECENT_DEB_CACHE_TS = time.time()
+        return index
+    except Exception as exc:
+        logger.warning(f"Recent DEB performance cache refresh failed: {exc}")
+        with _RECENT_DEB_LOCK:
+            return _RECENT_DEB_CACHE or {}
+    finally:
+        with _RECENT_DEB_LOCK:
+            _RECENT_DEB_REFRESHING = False
+
+
+def _get_recent_deb_cache() -> Optional[Dict[str, Dict[str, object]]]:
+    with _RECENT_DEB_LOCK:
+        if (
+            _RECENT_DEB_CACHE is not None
+            and time.time() - _RECENT_DEB_CACHE_TS < _RECENT_DEB_CACHE_TTL_SEC
+        ):
+            return _RECENT_DEB_CACHE
+    return None
+
+
+def _start_recent_deb_refresh() -> None:
+    global _RECENT_DEB_REFRESHING
+
+    with _RECENT_DEB_LOCK:
+        if _RECENT_DEB_REFRESHING:
+            return
+        _RECENT_DEB_REFRESHING = True
+
+    thread = threading.Thread(
+        target=_refresh_recent_deb_cache,
+        name="cities-recent-deb-refresh",
+        daemon=True,
+    )
+    thread.start()
+
+
+def _build_cities_payload(
+    deb_recent_index: Optional[Dict[str, Dict[str, object]]] = None,
+) -> Dict[str, Any]:
     out = []
-    deb_recent_index = legacy_routes._build_recent_deb_performance_index()
+    deb_recent_index = deb_recent_index or {}
     for name, info in legacy_routes.CITIES.items():
         risk = legacy_routes.CITY_RISK_PROFILES.get(name, {})
         city_meta = legacy_routes.CITY_REGISTRY.get(name, {}) or {}
-        deb_recent = deb_recent_index.get(name, {})
+        deb_recent = deb_recent_index.get(name, _default_deb_recent())
         settlement_source = str(info.get("settlement_source") or "metar").strip().lower() or "metar"
         provider = legacy_routes.get_country_network_provider(name)
         out.append(
@@ -60,9 +128,19 @@ def _build_cities_payload() -> Dict[str, Any]:
     return {"cities": out}
 
 
-async def list_cities_payload(_request: Request) -> Dict[str, Any]:
+async def list_cities_payload(request: Request) -> Dict[str, Any]:
     try:
-        return await run_in_threadpool(_build_cities_payload)
+        refresh_recent = str(
+            request.query_params.get("refresh_deb_recent") or "",
+        ).strip().lower() in {"1", "true", "yes"}
+        if refresh_recent:
+            deb_recent_index = await run_in_threadpool(_refresh_recent_deb_cache)
+        else:
+            deb_recent_index = _get_recent_deb_cache()
+            if deb_recent_index is None:
+                _start_recent_deb_refresh()
+                deb_recent_index = {}
+        return await run_in_threadpool(_build_cities_payload, deb_recent_index)
     except Exception as exc:
         logger.error(f"Error in list_cities: {exc}")
         raise HTTPException(status_code=500, detail=str(exc)) from exc

@@ -1,5 +1,16 @@
 import type { Metadata } from "next";
-import { ScanTerminalDashboard } from "@/components/dashboard/ScanTerminalDashboard";
+import dynamic from "next/dynamic";
+import { DashboardShellSkeleton } from "@/components/dashboard/DashboardShellSkeleton";
+
+const ScanTerminalDashboard = dynamic(
+  () =>
+    import("@/components/dashboard/ScanTerminalDashboard").then(
+      (mod) => mod.ScanTerminalDashboard,
+    ),
+  {
+    loading: () => <DashboardShellSkeleton />,
+  },
+);
 
 export const metadata: Metadata = {
   title: "PolyWeather Terminal | Paid Product",

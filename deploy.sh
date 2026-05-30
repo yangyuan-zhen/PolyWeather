@@ -146,11 +146,11 @@ fi
 
 warm_public_route "terminal" "https://polyweather.top/terminal" 20 4 3
 warm_public_route "auth snapshot" "https://polyweather.top/api/auth/me?prefer_snapshot=1" 10 3 2
+warm_public_route "local cities recent stats" "http://127.0.0.1:8000/api/cities?refresh_deb_recent=1" 15 2 2
 warm_public_route "cities" "https://polyweather.top/api/cities" 20 3 2
 
 FAILED=0
 smoke_check "healthz" "https://api.polyweather.top/healthz" 15 3 5 || FAILED=1
-smoke_check "local cities" "http://127.0.0.1:8000/api/cities" 10 6 3 || FAILED=1
 smoke_check "frontend cities" "https://polyweather.top/api/cities" 20 5 5 || FAILED=1
 smoke_check "frontend" "https://www.polyweather.top/" 15 3 5 || FAILED=1
 

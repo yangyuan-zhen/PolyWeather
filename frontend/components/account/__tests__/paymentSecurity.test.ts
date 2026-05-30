@@ -149,9 +149,15 @@ export function runTests() {
     "/api/auth/me must verify bearer tokens directly and return a degraded authenticated profile when the backend auth profile is transiently unavailable",
   );
   assert(
-    authMeRouteSource.indexOf("const bearerIdentity = await getVerifiedBearerIdentity(req)") <
-      authMeRouteSource.indexOf("return buildProxyExceptionResponse(error"),
+    authMeRouteSource.includes("const identity = await getBearerIdentityOnce();") &&
+      !authMeRouteSource.includes("return buildProxyExceptionResponse(error"),
     "/api/auth/me must try bearer identity fallback before returning a proxy exception",
+  );
+  assert(
+    authMeRouteSource.includes("exception_snapshot") &&
+      authMeRouteSource.includes("unauthenticatedAuthProfileResponse") &&
+      !authMeRouteSource.includes("return buildProxyExceptionResponse(error"),
+    "/api/auth/me must serve a snapshot or anonymous auth profile before surfacing proxy exceptions to long-lived clients",
   );
   for (const route of [
     "app/api/ops/analytics/funnel/route.ts",

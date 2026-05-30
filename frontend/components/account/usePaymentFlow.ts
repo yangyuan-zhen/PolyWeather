@@ -183,6 +183,35 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
     trackAppEvent("payment_success", payload);
   }, []);
 
+  const verifyPaymentAuthReady = useCallback(async () => {
+    const accessToken = await getValidAccessToken();
+    const authHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    };
+    const authRes = await fetch("/api/auth/me", {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+    });
+    if (!authRes.ok) {
+      const raw = (await authRes.text().catch(() => "")).slice(0, 240);
+      throw new Error(
+        isEn
+          ? `Authentication check failed before payment (${authRes.status}). ${raw}`
+          : `支付前登录态校验失败 (${authRes.status})。${raw}`,
+      );
+    }
+    const profile = (await authRes.json()) as AuthMeResponse;
+    if (profile.authenticated !== true) {
+      throw new Error(copy.loginBeforePay);
+    }
+    return {
+      authHeaders,
+      auth_confirmed_at: new Date().toISOString(),
+      profile,
+    };
+  }, [copy.loginBeforePay, getValidAccessToken, isEn]);
+
   const availableChainList: PaymentChainOption[] = useMemo(() => {
     const configured = Array.isArray(paymentConfig?.chains) ? paymentConfig?.chains || [] : [];
     const clean = configured
@@ -401,6 +430,8 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
     setPaymentBusy(true);
     let approvedInThisRun = false;
     try {
+      const authReady = await verifyPaymentAuthReady();
+      const authHeaders = authReady.authHeaders;
       const providerSelection = await resolvePaymentProvider(providerMode, selectedInjectedProviderKey);
       const eth = providerSelection.provider;
       const activeAccounts = await requestWalletWithTimeout<string[]>(
@@ -417,18 +448,6 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
 
       setSelectedWallet(payingWallet);
       setProviderMode(providerSelection.mode);
-
-      let accessToken: string;
-      try { accessToken = await getValidAccessToken(); }
-      catch (tokenErr) {
-        setPaymentError(normalizePaymentError(tokenErr).message);
-        setPaymentBusy(false);
-        return;
-      }
-      const authHeaders: Record<string, string> = {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      };
 
       const latestConfig = await fetchLatestPaymentConfig(authHeaders, true);
       if (!latestConfig?.enabled || !latestConfig?.configured) throw new Error(copy.payNotReady);
@@ -480,6 +499,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
             source: "account_center",
             frontend_host: currentPaymentHost || null,
             account_email: backend?.email || null,
+            auth_confirmed_at: authReady.auth_confirmed_at,
           },
         }),
       });

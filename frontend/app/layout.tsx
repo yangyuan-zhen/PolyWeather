@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     template: "%s | PolyWeather",
   },
   description:
-    "PolyWeather is a paid professional weather-signal intelligence terminal with METAR evidence, DEB forecast blending, and AI decision cards. Real-time observations for 51 global cities.",
+    "PolyWeather is a paid professional weather-signal intelligence terminal with METAR evidence, DEB forecast blending, and structured decision context. Real-time observations for 51 global cities.",
   manifest: "/site.webmanifest",
   metadataBase: new URL("https://polyweather.top"),
   alternates: {
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
     siteName: "PolyWeather",
     title: "PolyWeather | Institutional Weather Signal Intelligence",
     description:
-      "Paid professional weather-signal intelligence terminal. METAR evidence, DEB forecast blending, AI decision cards. 51 cities, real-time.",
+      "Paid professional weather-signal intelligence terminal. METAR evidence, DEB forecast blending, structured decision context. 51 cities, real-time.",
     url: "https://polyweather.top",
     images: [
       {

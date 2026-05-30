@@ -11,6 +11,7 @@ import web.routes as routes
 import web.services.ops_api as ops_api
 import web.scan_terminal_cache as scan_terminal_cache
 import web.scan_terminal_service as scan_terminal_service
+import web.services.city_api as city_api
 import web.services.city_runtime as city_runtime
 from web.scan_terminal_cache import scan_terminal_cache_key
 from src.database.runtime_state import TruthRecordRepository
@@ -130,6 +131,30 @@ def test_cities_endpoint_includes_new_wunderground_cities():
         "helsinki",
         "amsterdam",
     }.issubset(names)
+
+
+def test_cities_endpoint_does_not_block_on_recent_deb_index(monkeypatch):
+    monkeypatch.setattr(city_api, "_RECENT_DEB_CACHE", None, raising=False)
+    monkeypatch.setattr(city_api, "_RECENT_DEB_CACHE_TS", 0.0, raising=False)
+    monkeypatch.setattr(city_api, "_RECENT_DEB_REFRESHING", False, raising=False)
+    monkeypatch.setattr(city_api, "_get_recent_deb_cache", lambda: None, raising=False)
+    monkeypatch.setattr(city_api, "_start_recent_deb_refresh", lambda: None, raising=False)
+
+    def fail_recent_index():
+        raise AssertionError("recent DEB stats must not run in the default city-list request")
+
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "_build_recent_deb_performance_index",
+        fail_recent_index,
+    )
+
+    response = client.get("/api/cities")
+
+    assert response.status_code == 200
+    denver = next(item for item in response.json()["cities"] if item["name"] == "denver")
+    assert denver["deb_recent_tier"] == "other"
+    assert denver["deb_recent_sample_count"] == 0
 
 
 def test_payment_runtime_endpoint_returns_shape():

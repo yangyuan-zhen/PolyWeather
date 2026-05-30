@@ -1,6 +1,7 @@
 "use client";
 
 import clsx from "clsx";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   Activity,
@@ -44,7 +45,6 @@ import { ScanTerminalLoadingScreen } from "@/components/dashboard/scan-terminal/
 import { scanRootClass } from "@/components/dashboard/scan-root-styles";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
 import { Panel } from "@/components/dashboard/scan-terminal/Panel";
-import { TrainingDashboard } from "@/components/dashboard/scan-terminal/TrainingDashboard";
 import { UsageGuideDashboard } from "@/components/dashboard/scan-terminal/UsageGuideDashboard";
 import { LiveTemperatureThresholdChart, clearCityDetailCache } from "@/components/dashboard/scan-terminal/LiveTemperatureThresholdChart";
 import { KoyfinRowsTable } from "@/components/dashboard/scan-terminal/KoyfinRowsTable";
@@ -61,6 +61,20 @@ import {
   mergeScanRowsWithCityFallbackRows,
 } from "@/components/dashboard/scan-terminal/city-fallback-rows";
 import { markAnalyticsOnce, trackAppEvent } from "@/lib/app-analytics";
+
+const TrainingDashboard = dynamic(
+  () =>
+    import("@/components/dashboard/scan-terminal/TrainingDashboard").then(
+      (mod) => mod.TrainingDashboard,
+    ),
+  {
+    loading: () => (
+      <div className="flex min-h-0 flex-1 items-center justify-center text-xs font-semibold text-slate-400">
+        Loading analytics...
+      </div>
+    ),
+  },
+);
 
 function createEmptyAccess(loading = true): ProAccessState {
   return {
@@ -1037,6 +1051,9 @@ function ScanTerminalScreen() {
     hydrated && (proAccess.authenticated || canUseLocalFullAccess);
   const isPro =
     hydrated && (proAccess.subscriptionActive || canUseLocalFullAccess);
+  const accessDecisionPending =
+    !hydrated || (proAccess.loading && !canUseLocalFullAccess);
+  const shouldShowPaywall = !accessDecisionPending && (!isAuthenticated || !isPro);
   const userLocalTime = useUserLocalClock();
   const { themeMode } = useScanTerminalTheme();
   const [selectedRegionKey, setSelectedRegionKey] = useState<string>("all");
@@ -1272,7 +1289,7 @@ function ScanTerminalScreen() {
   }, []);
   const generatedText = useRelativeTime(terminalData?.generated_at ?? null);
 
-  if (!hydrated || (proAccess.loading && !canUseLocalFullAccess)) {
+  if (accessDecisionPending) {
     return (
       <ScanTerminalLoadingScreen
         isEn={isEn}
@@ -1283,7 +1300,7 @@ function ScanTerminalScreen() {
     );
   }
 
-  if (!isAuthenticated || !isPro) {
+  if (shouldShowPaywall) {
     return (
       <ProductAccessRequired
         isAuthenticated={isAuthenticated}

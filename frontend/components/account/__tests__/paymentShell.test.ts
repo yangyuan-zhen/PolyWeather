@@ -372,4 +372,11 @@ export function runTests() {
       .length >= 3,
     "manual payment mutations must require a valid Supabase bearer token instead of forwarding unauthenticated requests that surface raw backend JSON",
   );
+  assert(
+    paymentFlowSource.includes("verifyPaymentAuthReady") &&
+      paymentFlowSource.indexOf("await verifyPaymentAuthReady()") <
+        paymentFlowSource.indexOf("resolvePaymentProvider(") &&
+      paymentFlowSource.includes("auth_confirmed_at"),
+    "wallet checkout must confirm a fresh Supabase bearer before opening wallet prompts or creating payment intents",
+  );
 }

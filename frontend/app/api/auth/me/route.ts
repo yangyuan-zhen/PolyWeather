@@ -4,7 +4,6 @@ import {
   buildBackendRequestHeaders,
 } from "@/lib/backend-auth";
 import {
-  buildProxyExceptionResponse,
   buildUpstreamErrorResponse,
 } from "@/lib/api-proxy";
 import {
@@ -134,6 +133,27 @@ function subscriptionRequiredAuthProfileResponse({
   );
   clearEntitlementSnapshotCookie(inactive);
   return applyAuthResponseCookies(inactive, response);
+}
+
+function unauthenticatedAuthProfileResponse({
+  reason,
+  response,
+}: {
+  reason: string;
+  response: NextResponse | null;
+}) {
+  const anonymous = NextResponse.json(
+    {
+      authenticated: false,
+      subscription_active: false,
+      points: 0,
+      degraded_auth_profile: true,
+      degraded_reason: reason,
+    },
+    { headers: { "Cache-Control": "no-store" } },
+  );
+  clearEntitlementSnapshotCookie(anonymous);
+  return applyAuthResponseCookies(anonymous, response);
 }
 
 function snapshotAuthProfileResponse({
@@ -377,8 +397,19 @@ export async function GET(req: NextRequest) {
         userId: identity.userId,
       });
     }
-    return buildProxyExceptionResponse(error, {
-      publicMessage: "Failed to fetch auth profile",
+    const snapshotPayload = entitlementSnapshotToAuthPayload(
+      readEntitlementSnapshot(req),
+    );
+    if (snapshotPayload) {
+      const snapshotResponse = NextResponse.json({
+        ...snapshotPayload,
+        entitlement_snapshot_reason: "exception_snapshot",
+      });
+      return applyAuthResponseCookies(snapshotResponse, auth?.response || null);
+    }
+    return unauthenticatedAuthProfileResponse({
+      reason: String(error),
+      response: auth?.response || null,
     });
   }
 }

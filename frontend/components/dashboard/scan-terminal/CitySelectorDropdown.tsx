@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 import { REGIONS, getCityRegion } from "./continent-grouping";
@@ -126,6 +126,7 @@ export function CitySelectorDropdown({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [activeTab, setActiveTab] = useState<string>("all");
   const [viewportNudgeY, setViewportNudgeY] = useState(0);
 
@@ -170,7 +171,7 @@ export function CitySelectorDropdown({
 
   // Filter rows
   const filteredRows = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
+    const q = deferredSearchQuery.toLowerCase().trim();
     return rows.filter((row) => {
       // 1. Region filter
       if (activeTab !== "all") {
@@ -195,7 +196,7 @@ export function CitySelectorDropdown({
         .map((s) => s!.toLowerCase());
       return haystack.some((s) => s.includes(q));
     });
-  }, [rows, searchQuery, activeTab]);
+  }, [rows, deferredSearchQuery, activeTab]);
 
   useEffect(() => {
     let frame = 0;

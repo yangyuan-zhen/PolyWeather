@@ -17,17 +17,23 @@ import type { ScanTerminalResponse } from "@/lib/dashboard-types";
 
 const SCAN_CACHE_PREFIX = "polyweather_scan_v2";
 const SCAN_CACHE_TTL_MS = DASHBOARD_REFRESH_POLICY_MS.scanRows;
+const MAX_STALE_SCAN_CACHE_MS = 6 * 60 * 60 * 1000;
 
 function scanCacheKey(tradingRegion: string): string {
   return `${SCAN_CACHE_PREFIX}:${tradingRegion || "all"}`;
 }
 
-function readScanCache(tradingRegion: string): ScanTerminalResponse | null {
+function readScanCache(
+  tradingRegion: string,
+  options?: { allowStale?: boolean },
+): ScanTerminalResponse | null {
   try {
     const raw = localStorage.getItem(scanCacheKey(tradingRegion));
     if (!raw) return null;
     const cached = JSON.parse(raw);
-    if (cached.ts && Date.now() - cached.ts < SCAN_CACHE_TTL_MS && cached.data?.rows) {
+    const age = Date.now() - Number(cached.ts || 0);
+    const maxAge = options?.allowStale ? MAX_STALE_SCAN_CACHE_MS : SCAN_CACHE_TTL_MS;
+    if (cached.ts && age >= 0 && age < maxAge && cached.data?.rows) {
       return cached.data;
     }
   } catch { /* ignore */ }
@@ -99,9 +105,16 @@ export function useScanTerminalQuery({
   const lastForcedScanRefreshAtRef = useRef(0);
   const patchVersion = useSsePatchVersion();
   const [cachedRows, setCachedRows] = useState<ScanTerminalResponse | null>(() => {
-    if (typeof window !== "undefined") return readScanCache(tradingRegion || "");
+    if (typeof window !== "undefined") {
+      return readScanCache(tradingRegion || "", { allowStale: true });
+    }
     return null;
   });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setCachedRows(readScanCache(tradingRegion || "", { allowStale: true }));
+  }, [tradingRegion]);
 
   const fetchScanTerminal = useCallback(
     async ({

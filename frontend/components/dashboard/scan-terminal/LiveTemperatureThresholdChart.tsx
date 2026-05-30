@@ -1,12 +1,13 @@
 "use client";
 
 import clsx from "clsx";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 import { useLatestPatch, useSseResyncVersion } from "@/hooks/use-sse-patches";
 import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { ModelCurvesSummary } from "@/components/dashboard/scan-terminal/ModelCurvesSummary";
-import { TemperatureChartCanvas } from "@/components/dashboard/scan-terminal/TemperatureChartCanvas";
+import { TemperatureChartCanvasFallback } from "@/components/dashboard/scan-terminal/TemperatureChartCanvasFallback";
 import { TemperatureRunwayDetails } from "@/components/dashboard/scan-terminal/TemperatureRunwayDetails";
 import { TemperatureStatsBars } from "@/components/dashboard/scan-terminal/TemperatureStatsBars";
 import { rowName } from "@/components/dashboard/scan-terminal/utils";
@@ -55,6 +56,17 @@ const PEAK_GLOW_BADGE_CLASS = {
 } as const;
 
 const PROBABILITY_REFRESH_AFTER_PATCH_MS = 60_000;
+
+const TemperatureChartCanvas = dynamic(
+  () =>
+    import("@/components/dashboard/scan-terminal/TemperatureChartCanvas").then(
+      (mod) => mod.TemperatureChartCanvas,
+    ),
+  {
+    ssr: false,
+    loading: () => <TemperatureChartCanvasFallback />,
+  },
+);
 
 function peakGlowLabel(state: keyof typeof PEAK_GLOW_PANEL_CLASS, isEn: boolean) {
   if (state === "watch") return isEn ? "Watch" : "关注";
