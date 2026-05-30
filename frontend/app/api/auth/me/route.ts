@@ -21,7 +21,10 @@ import {
   buildSubscriptionRequiredAuthProfile,
   isSubscriptionRequiredBackendResponse,
 } from "@/lib/auth-profile-proxy";
-import { hasSupabaseServerEnv } from "@/lib/supabase/server";
+import {
+  hasSupabaseServerEnv,
+  hasSupabaseSessionCookieValues,
+} from "@/lib/supabase/server";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -171,6 +174,15 @@ function applyEntitlementSnapshotFromAuthPayload(
   return response;
 }
 
+function hasRequestSupabaseSessionCookie(req: NextRequest) {
+  return hasSupabaseSessionCookieValues(
+    req.cookies.getAll().map((item) => ({
+      name: item.name,
+      value: item.value,
+    })),
+  );
+}
+
 export async function GET(req: NextRequest) {
   const requestHost =
     req.headers.get("x-forwarded-host") || req.headers.get("host") || req.nextUrl.host;
@@ -190,9 +202,28 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  const preferSnapshot = req.nextUrl.searchParams.get("prefer_snapshot") === "1";
+  if (
+    preferSnapshot &&
+    !req.headers.get("authorization") &&
+    hasRequestSupabaseSessionCookie(req)
+  ) {
+    const snapshotPayload = entitlementSnapshotToAuthPayload(
+      readEntitlementSnapshot(req),
+    );
+    if (snapshotPayload) {
+      return NextResponse.json(
+        {
+          ...snapshotPayload,
+          entitlement_snapshot_reason: "prefer_snapshot_fast_path",
+        },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
+  }
+
   let auth: Awaited<ReturnType<typeof buildBackendRequestHeaders>> | null = null;
   let bearerIdentity: VerifiedBearerIdentity | null | undefined;
-  const preferSnapshot = req.nextUrl.searchParams.get("prefer_snapshot") === "1";
   const getBearerIdentityOnce = async () => {
     if (bearerIdentity !== undefined) return bearerIdentity;
     bearerIdentity = await getVerifiedBearerIdentity(req);

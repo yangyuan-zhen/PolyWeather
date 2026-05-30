@@ -303,6 +303,12 @@ export function runTests() {
     "auth profile proxy must return unauthenticated locally for no-session Supabase requests instead of forwarding the backend entitlement token",
   );
   assert(
+    authMeRouteSource.includes('reason: "prefer_snapshot_fast_path"') &&
+      authMeRouteSource.indexOf('reason: "prefer_snapshot_fast_path"') <
+        authMeRouteSource.indexOf("buildBackendRequestHeaders(req)"),
+    "auth profile proxy must return a valid entitlement snapshot before reading Supabase session cookies on terminal cold start",
+  );
+  assert(
     backendAuthSource.includes("if (incomingAuth) {") &&
       backendAuthSource.indexOf("if (incomingAuth) {") <
         backendAuthSource.indexOf("const supabase = createSupabaseRouteClient"),
