@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { proxyBackendJsonGet } from "@/lib/api-proxy";
 import { buildForceRefreshProxyCachePolicy } from "@/lib/proxy-cache-policy";
+import { DASHBOARD_REFRESH_POLICY_SEC } from "@/lib/refresh-policy";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 const SCAN_TERMINAL_PROXY_TIMEOUT_MS = Number(
@@ -41,7 +42,10 @@ export async function GET(req: NextRequest) {
   if (tradingRegion != null && tradingRegion !== "") {
     params.set("region", tradingRegion);
   }
-  const cachePolicy = buildForceRefreshProxyCachePolicy(forceRefresh, 10);
+  const cachePolicy = buildForceRefreshProxyCachePolicy(
+    forceRefresh,
+    DASHBOARD_REFRESH_POLICY_SEC.scanRows,
+  );
 
   const url = `${API_BASE}/api/scan/terminal?${params.toString()}`;
 

@@ -3,6 +3,7 @@
 import {
   buildBrowserBackendHeaders,
   fetchBackendApi,
+  hasDirectBackendApiBaseUrl,
 } from "@/lib/backend-api";
 import { DASHBOARD_REFRESH_POLICY_MS } from "@/lib/refresh-policy";
 import type {
@@ -144,11 +145,14 @@ async function getTerminal({
   if (forceRefresh) {
     params.set("_ts", String(Date.now()));
   }
-  const headers = await buildBrowserBackendHeaders({ Accept: "application/json" });
+  const directBackend = hasDirectBackendApiBaseUrl();
+  const headers = directBackend
+    ? await buildBrowserBackendHeaders({ Accept: "application/json" })
+    : new Headers({ Accept: "application/json" });
   return readJsonOrThrow<ScanTerminalResponse>(
     `/api/scan/terminal?${params.toString()}`,
     {
-      cache: "no-store",
+      cache: forceRefresh || directBackend ? "no-store" : "default",
       headers,
       signal,
     },

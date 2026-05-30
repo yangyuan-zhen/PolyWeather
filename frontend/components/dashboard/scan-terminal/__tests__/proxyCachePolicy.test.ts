@@ -25,6 +25,37 @@ export function runTests() {
   const scanForced = buildForceRefreshProxyCachePolicy("true", 10);
   assert.equal(scanForced.fetchMode, "no-store");
 
+  const scanTerminalProxySource = fs.readFileSync(
+    path.join(process.cwd(), "app", "api", "scan", "terminal", "route.ts"),
+    "utf8",
+  );
+  assert.match(
+    scanTerminalProxySource,
+    /DASHBOARD_REFRESH_POLICY_SEC\.scanRows/,
+    "scan terminal proxy cache TTL should match the dashboard scan refresh cadence instead of a short literal TTL",
+  );
+  assert.doesNotMatch(
+    scanTerminalProxySource,
+    /buildForceRefreshProxyCachePolicy\(forceRefresh,\s*10\)/,
+    "scan terminal proxy must not use the old 10 second edge cache because it over-drives the slow scan endpoint",
+  );
+
+  const scanTerminalClientSource = fs.readFileSync(
+    path.join(
+      process.cwd(),
+      "components",
+      "dashboard",
+      "scan-terminal",
+      "scan-terminal-client.ts",
+    ),
+    "utf8",
+  );
+  assert.match(
+    scanTerminalClientSource,
+    /hasDirectBackendApiBaseUrl/,
+    "public scan terminal requests should only attach user auth in direct-backend mode so CDN caches can be shared through the Next proxy",
+  );
+
   const overviewProxySource = fs.readFileSync(
     path.join(
       process.cwd(),
