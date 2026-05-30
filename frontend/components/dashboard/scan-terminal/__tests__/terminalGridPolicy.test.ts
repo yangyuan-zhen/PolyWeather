@@ -122,6 +122,19 @@ export function runTests() {
   assert(
     __shouldKeepTemperatureChartLoadingForTest({
       row: { city: "Moscow" } as any,
+      isHourlyLoading: true,
+      activeSeries: [],
+      probabilityOverlay: null,
+      zoomedData: [
+        { label: "00:00", ts: 1 },
+        { label: "05:00", ts: 2 },
+      ],
+    }),
+    "temperature chart should show the loading skeleton while the first detail fetch is in flight and no drawable data exists",
+  );
+  assert(
+    !__shouldKeepTemperatureChartLoadingForTest({
+      row: { city: "Moscow" } as any,
       isHourlyLoading: false,
       activeSeries: [],
       probabilityOverlay: null,
@@ -130,7 +143,7 @@ export function runTests() {
         { label: "05:00", ts: 2 },
       ],
     }),
-    "temperature chart must keep loading instead of rendering an empty axis grid when no drawable series is available",
+    "temperature chart must stop showing an indefinite loading overlay after the detail fetch finishes without drawable data",
   );
   assert(
     !__shouldKeepTemperatureChartLoadingForTest({
@@ -152,5 +165,26 @@ export function runTests() {
       ],
     }),
     "temperature chart should render once a visible series has drawable values",
+  );
+  assert(
+    !__shouldKeepTemperatureChartLoadingForTest({
+      row: { city: "Moscow" } as any,
+      isHourlyLoading: true,
+      activeSeries: [
+        {
+          key: "current",
+          label: "Current reference",
+          source: "Live",
+          color: "#009688",
+          values: [13, 13],
+        },
+      ] as any,
+      probabilityOverlay: null,
+      zoomedData: [
+        { label: "00:00", ts: 1, current: 13 },
+        { label: "05:00", ts: 2, current: 13 },
+      ],
+    }),
+    "temperature chart must render seeded or cached data immediately while full detail continues loading in the background",
   );
 }

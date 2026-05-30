@@ -17,6 +17,8 @@ export function money(value: unknown) {
 }
 
 export function temp(value: unknown, unit?: string | null) {
+  if (value == null) return "--";
+  if (typeof value === "string" && value.trim() === "") return "--";
   const n = Number(value);
   if (!Number.isFinite(n)) return "--";
   return `${n.toFixed(1)}${unit || "°"}`;

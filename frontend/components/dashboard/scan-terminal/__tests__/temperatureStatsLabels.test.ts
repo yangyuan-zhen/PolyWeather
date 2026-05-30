@@ -1,4 +1,5 @@
 import { __buildTemperatureStatsLabelsForTest } from "@/components/dashboard/scan-terminal/TemperatureStatsBars";
+import { temp } from "@/components/dashboard/scan-terminal/utils";
 
 function assert(condition: unknown, message: string) {
   if (!condition) throw new Error(message);
@@ -46,4 +47,8 @@ export function runTests() {
 
   assert(zh.primary === "天文台实测 (10分钟)", "Chinese primary label should remain unchanged");
   assert(zh.compactSecondary === "当日最高", "Chinese Shenzhen compact secondary label should remain 当日最高");
+
+  assert(temp(null, "°C") === "--", "empty temperature values should not render as 0.0°C while city detail is loading");
+  assert(temp(undefined, "°C") === "--", "undefined temperature values should not render as 0.0°C while city detail is loading");
+  assert(temp("", "°C") === "--", "blank temperature values should not render as 0.0°C while city detail is loading");
 }
