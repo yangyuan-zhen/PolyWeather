@@ -8,7 +8,7 @@ const CITIES_CACHE_CONTROL = "public, max-age=0, s-maxage=60, stale-while-revali
 const STATIC_CITIES_CACHE_CONTROL =
   "public, max-age=0, s-maxage=300, stale-while-revalidate=3600";
 const CITIES_BACKEND_TIMEOUT_MS = Number(
-  process.env.POLYWEATHER_CITIES_BACKEND_TIMEOUT_MS || 2500,
+  process.env.POLYWEATHER_CITIES_BACKEND_TIMEOUT_MS || 1000,
 );
 
 function staticCitiesFallback(req: NextRequest, reason: string) {
