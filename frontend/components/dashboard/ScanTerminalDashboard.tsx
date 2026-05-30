@@ -91,7 +91,13 @@ function createLocalAccess(): ProAccessState {
   };
 }
 
-
+function createTransientAccess(error: unknown): ProAccessState {
+  return {
+    ...createEmptyAccess(true),
+    authenticated: true,
+    error: String(error),
+  };
+}
 
 const TERM = {
   cityThreshold: { en: "City / Threshold", zh: "城市 / 阈值" },
@@ -931,19 +937,41 @@ function ScanTerminalScreen() {
   );
 
   const loadAuthProfile = useCallback(
-    async (accessToken?: string | null): Promise<AuthProfilePayload> => {
+    async (
+      accessToken?: string | null,
+      options?: { preferSnapshot?: boolean },
+    ): Promise<AuthProfilePayload> => {
       const headers: Record<string, string> = { Accept: "application/json" };
       const token = String(accessToken || "").trim();
       if (token) headers.Authorization = `Bearer ${token}`;
-      const response = await fetch("/api/auth/me", {
-        cache: "no-store",
-        headers,
-      });
+      const response = await fetch(
+        options?.preferSnapshot
+          ? "/api/auth/me?prefer_snapshot=1"
+          : "/api/auth/me",
+        {
+          cache: "no-store",
+          headers,
+        },
+      );
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return response.json() as Promise<AuthProfilePayload>;
     },
     [],
   );
+
+  const refreshLiveAuthProfile = useCallback(async () => {
+    const supabaseEnabled = hasSupabasePublicEnv();
+    const payload = await loadTerminalAuthProfile({
+      getSession: () =>
+        supabaseEnabled
+          ? getSupabaseBrowserClient().auth.getSession()
+          : Promise.resolve({ data: { session: null } }),
+      hasSupabasePublicEnv: supabaseEnabled,
+      loadAuthProfile: (accessToken) =>
+        loadAuthProfile(accessToken, { preferSnapshot: false }),
+    });
+    setProAccess((prev) => mergeAccessStateWithAuthPayload(prev, payload));
+  }, [loadAuthProfile]);
 
   // Listen to Supabase auth events (e.g. token refreshed, signed out)
   useEffect(() => {
@@ -1064,19 +1092,24 @@ function ScanTerminalScreen() {
       .then((payload) => {
         if (cancelled) return;
         setProAccess((prev) => mergeAccessStateWithAuthPayload(prev, payload));
+        if (payload.entitlement_snapshot === true) {
+          window.setTimeout(() => {
+            if (!cancelled) void refreshLiveAuthProfile();
+          }, 0);
+        }
       })
       .catch((error) => {
         if (cancelled) return;
         setProAccess((prev) => (
           prev.subscriptionActive
             ? { ...prev, loading: false, error: String(error) }
-            : { ...createEmptyAccess(false), error: String(error) }
+            : createTransientAccess(error)
         ));
       });
     return () => {
       cancelled = true;
     };
-  }, [loadAuthProfile]);
+  }, [loadAuthProfile, refreshLiveAuthProfile]);
 
   useEffect(() => {
     if (

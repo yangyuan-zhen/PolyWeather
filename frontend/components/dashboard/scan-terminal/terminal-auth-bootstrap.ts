@@ -13,7 +13,10 @@ type SupabaseSessionResult = {
 type LoadTerminalAuthProfileOptions = {
   getSession: () => Promise<SupabaseSessionResult>;
   hasSupabasePublicEnv: boolean;
-  loadAuthProfile: (accessToken?: string | null) => Promise<TerminalAuthProfilePayload>;
+  loadAuthProfile: (
+    accessToken?: string | null,
+    options?: { preferSnapshot?: boolean },
+  ) => Promise<TerminalAuthProfilePayload>;
 };
 
 type SettledProfile =
@@ -30,6 +33,13 @@ function settleProfile(
 
 function firstKnownProfile(cookieResult: SettledProfile, bearerResult: SettledProfile) {
   if (bearerResult.ok && bearerResult.payload?.authenticated) return bearerResult.payload;
+  if (
+    !bearerResult.ok &&
+    cookieResult.ok &&
+    cookieResult.payload?.authenticated === false
+  ) {
+    throw bearerResult.error;
+  }
   if (cookieResult.ok && cookieResult.payload) return cookieResult.payload;
   if (bearerResult.ok && bearerResult.payload) return bearerResult.payload;
   if (!cookieResult.ok) throw cookieResult.error;
@@ -68,7 +78,7 @@ export async function loadTerminalAuthProfile({
   };
 
   const cookieProfile = settleProfile(
-    loadAuthProfile(null).then((payload) => {
+    loadAuthProfile(null, { preferSnapshot: true }).then((payload) => {
       resolveIfAuthenticated(payload);
       return payload;
     }),
@@ -83,7 +93,7 @@ export async function loadTerminalAuthProfile({
         sessionResult?.data?.session?.access_token || "",
       ).trim();
       if (!accessToken) return null;
-      const payload = await loadAuthProfile(accessToken);
+      const payload = await loadAuthProfile(accessToken, { preferSnapshot: true });
       resolveIfAuthenticated(payload);
       return payload;
     })(),

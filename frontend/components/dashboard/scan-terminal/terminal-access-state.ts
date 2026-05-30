@@ -10,6 +10,7 @@ export type AuthProfilePayload = {
   subscription_queued_days?: number | null;
   points?: number | null;
   degraded_auth_profile?: boolean | null;
+  entitlement_snapshot?: boolean | null;
 };
 
 function queuedDays(value: unknown) {

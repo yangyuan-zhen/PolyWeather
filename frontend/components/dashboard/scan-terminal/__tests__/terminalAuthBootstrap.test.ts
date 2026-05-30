@@ -33,9 +33,13 @@ export async function runTests() {
       calls.push("getSession");
       return fastSession.promise;
     },
-    loadAuthProfile: (accessToken) => {
+    loadAuthProfile: (accessToken, options) => {
       const token = String(accessToken || "");
-      calls.push(token ? `profile:${token}` : "profile:cookie");
+      calls.push(
+        token
+          ? `profile:${token}:${options?.preferSnapshot ? "snapshot" : "live"}`
+          : `profile:cookie:${options?.preferSnapshot ? "snapshot" : "live"}`,
+      );
       if (!token) return slowCookieProfile.promise;
       return Promise.resolve({
         authenticated: true,
@@ -47,15 +51,15 @@ export async function runTests() {
 
   await flushMicrotasks();
   assert(
-    calls.includes("profile:cookie") && calls.includes("getSession"),
-    "terminal auth bootstrap should start cookie profile and Supabase session in parallel",
+    calls.includes("profile:cookie:snapshot") && calls.includes("getSession"),
+    "terminal auth bootstrap should start a snapshot-preferred cookie profile and Supabase session in parallel",
   );
 
   fastSession.resolve({ data: { session: { access_token: "fast-token" } } });
   const result = await resultPromise;
   assert(
-    calls.includes("profile:fast-token"),
-    "terminal auth bootstrap should retry auth profile with the Supabase bearer token",
+    calls.includes("profile:fast-token:snapshot"),
+    "terminal auth bootstrap should retry auth profile with the Supabase bearer token and snapshot hint",
   );
   assert(
     result.authenticated === true && result.user_id === "bearer-user",
@@ -117,5 +121,31 @@ export async function runTests() {
     coldStartResult.user_id === "bearer-paid-user" &&
       coldStartResult.subscription_active === true,
     "terminal auth bootstrap should prefer the bearer-confirmed active Pro profile over a degraded cookie profile",
+  );
+
+  const failingBearerResult = loadTerminalAuthProfile({
+    hasSupabasePublicEnv: true,
+    getSession: () =>
+      Promise.resolve({ data: { session: { access_token: "paid-token" } } }),
+    loadAuthProfile: (accessToken) => {
+      if (!accessToken) {
+        return Promise.resolve({
+          authenticated: false,
+          subscription_active: false,
+          points: 0,
+        });
+      }
+      return Promise.reject(new Error("HTTP 500"));
+    },
+  });
+  let failedWithTransientAuthError = false;
+  try {
+    await failingBearerResult;
+  } catch (error) {
+    failedWithTransientAuthError = String(error).includes("HTTP 500");
+  }
+  assert(
+    failedWithTransientAuthError,
+    "terminal auth bootstrap must not resolve to an anonymous paywall when a bearer session exists but the auth profile request is transiently failing",
   );
 }
