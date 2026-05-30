@@ -73,6 +73,7 @@ TRACKABLE_ANALYTICS_EVENTS = {
     "trial_created",
     "payment_start",
     "payment_success",
+    "degraded_auth_profile",
     "signup_completed",
     "dashboard_active",
     "paywall_feature_clicked",

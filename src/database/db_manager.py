@@ -5,8 +5,10 @@ import json
 import secrets
 import threading
 import time
+from collections import Counter
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, Set
+from urllib.parse import urlparse
 
 import requests
 from loguru import logger
@@ -1002,7 +1004,7 @@ class DBManager:
         event_type: Optional[str] = None,
         since_iso: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        safe_limit = max(1, min(int(limit or 200), 2000))
+        safe_limit = max(1, min(int(limit or 200), 20000))
         kind = str(event_type or "").strip().lower()
         params: List[Any] = []
         clauses: List[str] = []
@@ -1049,7 +1051,7 @@ class DBManager:
     def get_app_analytics_funnel_summary(self, *, days: int = 30) -> Dict[str, Any]:
         safe_days = max(1, min(int(days or 30), 365))
         since_dt = datetime.now() - timedelta(days=safe_days)
-        rows = self.list_app_analytics_events(limit=5000, since_iso=since_dt.isoformat())
+        rows = self.list_app_analytics_events(limit=20000, since_iso=since_dt.isoformat())
         event_names = [
             "landing_view",
             "enter_terminal",
@@ -1059,6 +1061,7 @@ class DBManager:
             "payment_start",
             "payment_success",
         ]
+        diagnostic_event_names = ["degraded_auth_profile"]
         event_aliases = {
             "landing_view": ("landing_view",),
             "enter_terminal": ("enter_terminal", "dashboard_active"),
@@ -1083,31 +1086,90 @@ class DBManager:
         }
         actor_sets: Dict[str, set[str]] = {name: set() for name in event_names}
         user_sets: Dict[str, set[str]] = {name: set() for name in event_names}
+        diagnostics: Dict[str, Dict[str, Any]] = {
+            name: {"total": 0, "unique_actors": 0, "by_reason": []}
+            for name in diagnostic_event_names
+        }
+        diagnostic_actor_sets: Dict[str, set[str]] = {
+            name: set() for name in diagnostic_event_names
+        }
+        diagnostic_reason_counts: Dict[str, Counter] = {
+            name: Counter() for name in diagnostic_event_names
+        }
+        referrer_counts: Counter = Counter()
+        country_counts: Counter = Counter()
+        device_counts: Counter = Counter()
+        landing_path_counts: Counter = Counter()
+
+        def _payload(row: Dict[str, Any]) -> Dict[str, Any]:
+            payload = row.get("payload")
+            return payload if isinstance(payload, dict) else {}
+
+        def _actor_key(row: Dict[str, Any]) -> str:
+            payload = _payload(row)
+            user_id = str(row.get("user_id") or payload.get("user_id") or "").strip().lower()
+            client_id = str(row.get("client_id") or "").strip()
+            session_id = str(row.get("session_id") or "").strip()
+            if user_id:
+                return f"user:{user_id}"
+            if client_id:
+                return f"client:{client_id}"
+            if session_id:
+                return f"session:{session_id}"
+            return f"event:{row.get('id')}"
+
+        def _top(counter: Counter, *, limit: int = 8) -> List[Dict[str, Any]]:
+            return [
+                {"name": name, "count": count}
+                for name, count in counter.most_common(limit)
+            ]
+
+        def _normalize_referrer(value: Any) -> str:
+            raw = str(value or "").strip()
+            if not raw:
+                return "(direct)"
+            try:
+                parsed = urlparse(raw)
+                host = (parsed.netloc or parsed.path or raw).lower()
+                return host.replace("www.", "", 1) or "(direct)"
+            except Exception:
+                return raw[:80] or "(direct)"
 
         for row in rows:
             raw_event_type = str(row.get("event_type") or "").strip().lower()
+            payload = _payload(row)
+            if raw_event_type in diagnostics:
+                diagnostics[raw_event_type]["total"] += 1
+                diagnostic_actor_sets[raw_event_type].add(_actor_key(row))
+                reason = str(payload.get("reason") or payload.get("degraded_reason") or "unknown").strip()
+                diagnostic_reason_counts[raw_event_type][reason[:120] or "unknown"] += 1
+                continue
+
             event_type = alias_to_event.get(raw_event_type)
             if not event_type:
                 continue
             summary[event_type]["total"] += 1
             user_id = str(row.get("user_id") or "").strip().lower()
-            client_id = str(row.get("client_id") or "").strip()
-            session_id = str(row.get("session_id") or "").strip()
-            actor_key = ""
             if user_id:
-                actor_key = f"user:{user_id}"
                 user_sets[event_type].add(user_id)
-            elif client_id:
-                actor_key = f"client:{client_id}"
-            elif session_id:
-                actor_key = f"session:{session_id}"
-            else:
-                actor_key = f"event:{row.get('id')}"
+            actor_key = _actor_key(row)
             actor_sets[event_type].add(actor_key)
+
+            if event_type == "landing_view":
+                referrer_counts[_normalize_referrer(payload.get("referrer"))] += 1
+                country = str(payload.get("cf_country") or payload.get("country") or "").strip().upper()
+                country_counts[country or "UNKNOWN"] += 1
+                device = str(payload.get("device_type") or "unknown").strip().lower()
+                device_counts[device or "unknown"] += 1
+                path = str(payload.get("path") or "/").strip()[:120]
+                landing_path_counts[path or "/"] += 1
 
         for name in event_names:
             summary[name]["unique_users"] = len(user_sets[name])
             summary[name]["unique_actors"] = len(actor_sets[name])
+        for name in diagnostic_event_names:
+            diagnostics[name]["unique_actors"] = len(diagnostic_actor_sets[name])
+            diagnostics[name]["by_reason"] = _top(diagnostic_reason_counts[name], limit=6)
 
         def _rate(numerator_key: str, denominator_key: str) -> Optional[float]:
             denominator = int(summary[denominator_key]["unique_actors"] or 0)
@@ -1120,6 +1182,13 @@ class DBManager:
             "window_days": safe_days,
             "since": since_dt.isoformat(),
             "events": summary,
+            "diagnostics": diagnostics,
+            "traffic": {
+                "referrers": _top(referrer_counts),
+                "countries": _top(country_counts),
+                "devices": _top(device_counts),
+                "landing_paths": _top(landing_path_counts),
+            },
             "rates": {
                 "enter_terminal_rate": _rate("enter_terminal", "landing_view"),
                 "login_start_rate": _rate("login_start", "enter_terminal"),

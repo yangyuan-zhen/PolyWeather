@@ -52,6 +52,38 @@ export type SystemStatusPayload = {
   };
 };
 
+export type SourceHealthSource = {
+  role?: string;
+  source_code?: string;
+  source_label?: string;
+  station_code?: string | null;
+  station_label?: string | null;
+  status?: "fresh" | "expected_wait" | "delayed" | "stale" | "missing" | "unknown" | string;
+  reason?: string | null;
+  age_sec?: number | null;
+  age_min?: number | null;
+  observed_at?: string | null;
+  expected_next_update_at?: string | null;
+  temp?: number | null;
+};
+
+export type SourceHealthCity = {
+  city: string;
+  cache_exists?: boolean;
+  cache_updated_at?: string | null;
+  cache_age_sec?: number | null;
+  source_count?: number;
+  worst_status?: string;
+  sources?: SourceHealthSource[];
+};
+
+export type SourceHealthPayload = {
+  checked_at?: string;
+  cities?: SourceHealthCity[];
+  status_counts?: Record<string, number>;
+  total_cities?: number;
+};
+
 export type PaymentRuntimePayload = {
   rpc?: string;
   chain_id?: number;
@@ -89,6 +121,43 @@ export type PaymentRecord = {
 export type PaymentsPayload = {
   payments?: PaymentRecord[];
   total?: number;
+};
+
+export type BillingRiskIssue = {
+  category?: string;
+  severity?: "high" | "medium" | "low" | string;
+  title?: string;
+  detail?: string;
+  user_id?: string;
+  created_at?: string;
+  reference?: string;
+  payload?: Record<string, unknown>;
+};
+
+export type BillingRiskPayload = {
+  checked_at?: string;
+  window_days?: number;
+  summary?: {
+    issues?: number;
+    stuck_intents?: number;
+    trial_gaps?: number;
+    payment_incidents?: number;
+    points_discount_issues?: number;
+    referral_settlement_issues?: number;
+    monthly_cap_hits?: number;
+    recent_referral_rewards?: number;
+    recent_trial_claims?: number;
+  };
+  issues?: BillingRiskIssue[];
+  stuck_intents?: Array<Record<string, unknown>>;
+  trial_gaps?: Array<Record<string, unknown>>;
+  payment_incidents?: Array<Record<string, unknown>>;
+  points_discount_issues?: Array<Record<string, unknown>>;
+  referral_settlement_issues?: Array<Record<string, unknown>>;
+  monthly_cap_hits?: Array<Record<string, unknown>>;
+  recent_referral_rewards?: Array<Record<string, unknown>>;
+  recent_trial_claims?: Array<Record<string, unknown>>;
+  query_errors?: Array<{ table?: string; error?: string }>;
 };
 
 export type OpsUser = {

@@ -1,19 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RefreshCcw, TrendingUp, Users, CreditCard, Database, Activity, Cpu } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { opsApi } from "@/lib/ops-api";
+import dynamic from "next/dynamic";
+import { Activity, Cpu, CreditCard, Database, RefreshCcw, TrendingUp, Users } from "lucide-react";
 import Link from "next/link";
-import type { SystemStatusPayload, MembershipsPayload, MembershipEntry } from "@/types/ops";
-import { CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
-import {
-  PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  AreaChart, Area, Legend,
-} from "recharts";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { opsApi } from "@/lib/ops-api";
+import type { MembershipEntry, MembershipsPayload, SystemStatusPayload } from "@/types/ops";
+
+const OverviewCharts = dynamic(
+  () => import("./OverviewCharts").then((mod) => mod.OverviewCharts),
+  {
+    ssr: false,
+    loading: () => <div className="h-[360px] animate-pulse rounded-lg bg-slate-100" />,
+  },
+);
 
 function KpiCard({ href, icon: Icon, label, value, color, sub }: {
   href: string; icon: React.ElementType; label: string; value: string | number; color: string; sub?: string;
@@ -38,7 +41,7 @@ export function OverviewPageClient() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<SystemStatusPayload | null>(null);
   const [memberships, setMemberships] = useState<MembershipEntry[]>([]);
-  const [funnel, setFunnel] = useState<{ steps: { label: string; count: number; pct_of_prev?: number }[] } | null>(null);
+  const [funnel, setFunnel] = useState<{ steps: { key?: string; label: string; count: number; pct_of_prev?: number; uniqueActors?: number }[] } | null>(null);
   const [growth, setGrowth] = useState<{ date: string; trial: number; paid: number; total: number; cumulative: number }[]>([]);
 
   const load = async () => {
@@ -70,19 +73,20 @@ export function OverviewPageClient() {
     </div>
   );
 
-  // ── Derived data ──
   const paid = memberships.filter((m) => !m.is_trial).length;
   const trials = memberships.filter((m) => m.is_trial).length;
   const steps = funnel?.steps ?? [];
   const totalUsers = steps[0]?.count ?? 0;
-  const payingUsers = steps[5]?.count ?? 0;
+  const stepByKey = Object.fromEntries(steps.map((step) => [step.key || step.label, step]));
+  const payingUsers = stepByKey.payment_success?.count ?? 0;
   const convRate = totalUsers > 0 ? ((payingUsers / totalUsers) * 100).toFixed(1) : "—";
   const cache = status?.cache;
   const cacheAnalysis = cache?.analysis;
   const td = status?.training_data;
   const features = status?.features;
+  const coverage = td?.city_coverage;
+  const truthRows = td?.truth_records?.row_count ?? 0;
 
-  // Cache bucket data for bar chart
   const cacheBuckets = cache ? [
     { name: "API", value: cache.api_cache_entries ?? 0 },
     { name: "预报", value: cache.open_meteo_forecast_entries ?? 0 },
@@ -91,20 +95,17 @@ export function OverviewPageClient() {
     { name: "结算", value: cache.settlement_entries ?? 0 },
   ].filter((d) => d.value > 0) : [];
 
-  // Cache pie
   const cachePie = cacheAnalysis ? [
     { name: "命中", value: cacheAnalysis.cache_hits ?? 0, color: "#22c55e" },
     { name: "未命中", value: cacheAnalysis.cache_misses ?? 0, color: "#f59e0b" },
     { name: "强制刷新", value: cacheAnalysis.force_refresh_requests ?? 0, color: "#3b82f6" },
   ] : [];
 
-  // Membership pie
   const memberPie = [
     { name: "付费", value: paid, color: "#22c55e" },
     ...(trials > 0 ? [{ name: "体验", value: trials, color: "#f59e0b" }] : []),
   ];
 
-  // Plan breakdown
   const planCounts: Record<string, number> = {};
   memberships.forEach((m) => {
     const code = m.plan_code ?? "unknown";
@@ -116,9 +117,6 @@ export function OverviewPageClient() {
       return { name: label, value: v };
     })
     .sort((a, b) => b.value - a.value);
-
-  const truthRows = td?.truth_records?.row_count ?? 0;
-  const coverage = td?.city_coverage;
 
   return (
     <div className="space-y-5">
@@ -132,7 +130,6 @@ export function OverviewPageClient() {
         </Button>
       </div>
 
-      {/* KPI row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
         <KpiCard href="/ops/system" icon={Activity} label="系统" value={status?.db?.ok ? "OK" : "FAIL"} color={status?.db?.ok ? "text-emerald-400" : "text-red-400"} />
         <KpiCard href="/ops/memberships" icon={Users} label="付费会员" value={paid} color="text-cyan-400" sub={trials > 0 ? `+${trials} 体验` : undefined} />
@@ -142,237 +139,61 @@ export function OverviewPageClient() {
         <KpiCard href="/ops/system" icon={Cpu} label="概率引擎" value={status?.probability?.engine_mode ?? "—"} color="text-amber-400" />
       </div>
 
-      {/* Membership Growth Trend */}
-      {growth.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">会员增长趋势 — 近 30 天</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Cumulative area chart */}
-              <div>
-                <h4 className="text-xs text-slate-500 mb-2">累计会员</h4>
-                <ResponsiveContainer width="100%" height={160}>
-                  <AreaChart data={growth}>
-                    <defs>
-                      <linearGradient id="colorCumulative" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.2}/>
-                        <stop offset="95%" stopColor="#06b6d4" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                    <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 10 }} interval="preserveStartEnd" />
-                    <YAxis tick={{ fill: "#64748b", fontSize: 10 }} width={35} />
-                    <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-                    <Area type="monotone" dataKey="cumulative" stroke="#06b6d4" fillOpacity={1} fill="url(#colorCumulative)" name="累计" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
+      <OverviewCharts
+        growth={growth}
+        steps={steps}
+        cacheBuckets={cacheBuckets}
+        memberPie={memberPie}
+        planBreakdown={planBreakdown}
+        cachePie={cachePie}
+        cacheAnalysis={cacheAnalysis}
+      />
 
-              {/* Daily stack chart */}
-              <div>
-                <h4 className="text-xs text-slate-500 mb-2">每日新增</h4>
-                <ResponsiveContainer width="100%" height={160}>
-                  <AreaChart data={growth}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                    <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 10 }} interval="preserveStartEnd" />
-                    <YAxis tick={{ fill: "#64748b", fontSize: 10 }} width={25} />
-                    <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Area type="monotone" dataKey="paid" stackId="1" stroke="#22c55e" fill="#22c55e40" name="付费" />
-                    <Area type="monotone" dataKey="trial" stackId="1" stroke="#f59e0b" fill="#f59e0b40" name="体验" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Main grid: 2 columns */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
-        {/* Column 1 */}
-        <div className="space-y-5">
-
-          {/* Funnel mini chart */}
-          {steps.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">30天转化漏斗</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={[...steps].reverse().map((s) => ({ name: s.label, count: s.count }))} layout="vertical" margin={{ left: 80, right: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                    <XAxis type="number" tick={{ fill: "#64748b", fontSize: 11 }} />
-                    <YAxis type="category" dataKey="name" tick={{ fill: "#94a3b8", fontSize: 11 }} width={75} />
-                    <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-                    <Bar dataKey="count" radius={[0, 4, 4, 0]} fill="#06b6d4" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Cache buckets */}
-          {cacheBuckets.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">缓存桶分布</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={180}>
-                  <BarChart data={cacheBuckets} layout="vertical" margin={{ left: 50, right: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                    <XAxis type="number" tick={{ fill: "#64748b", fontSize: 11 }} />
-                    <YAxis type="category" dataKey="name" tick={{ fill: "#94a3b8", fontSize: 11 }} width={45} />
-                    <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-                    <Bar dataKey="value" radius={[0, 4, 4, 0]} fill="#6366f1" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Features */}
-          {features && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">功能开关</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-1.5">
-                  {Object.entries(features).map(([k, v]) => (
-                    <Badge key={k} variant={v ? "default" : "secondary"} className="text-[11px]">
-                      {k.replace(/_/g, " ")}: {String(v)}
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* Column 2 */}
-        <div className="space-y-5">
-
-          {/* Membership donut + plan breakdown side by side */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        {features && (
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">会员分布</CardTitle>
+              <CardTitle className="text-sm">功能开关</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center gap-4">
-                <div className="w-36 h-36 shrink-0">
-                  <ResponsiveContainer>
-                    <PieChart>
-                      <Pie data={memberPie} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={2} dataKey="value">
-                        {memberPie.map((d, i) => (<Cell key={i} fill={d.color} />))}
-                      </Pie>
-                      <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-                    </PieChart>
-                  </ResponsiveContainer>
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(features).map(([k, v]) => (
+                  <Badge key={k} variant={v ? "default" : "secondary"} className="text-[11px]">
+                    {k.replace(/_/g, " ")}: {String(v)}
+                  </Badge>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {coverage && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">城市模型覆盖</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-xl bg-white/5 p-3 text-center">
+                  <div className="text-xl font-bold text-cyan-400">{coverage.total_cities ?? 0}</div>
+                  <div className="text-[11px] text-slate-500">总城市</div>
                 </div>
-                <div className="flex-1 space-y-1.5 text-sm">
-                  {memberPie.map((d) => (
-                    <div key={d.name} className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.color }} />
-                      <span className="text-slate-400">{d.name}</span>
-                      <span className="text-white font-bold ml-auto">{d.value}</span>
-                    </div>
-                  ))}
-                  {planBreakdown.length > 0 && (
-                    <div className="pt-2 mt-2 border-t border-white/10 space-y-1">
-                      {planBreakdown.map((p) => (
-                        <div key={p.name} className="flex justify-between text-xs">
-                          <span className="text-slate-500">{p.name}</span>
-                          <span className="text-slate-300">{p.value}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                <div className="rounded-xl bg-white/5 p-3 text-center">
+                  <div className="text-xl font-bold text-emerald-400">{coverage.with_truth_rows ?? 0}</div>
+                  <div className="text-[11px] text-slate-500">有真值</div>
+                </div>
+                <div className="rounded-xl bg-white/5 p-3 text-center">
+                  <div className="text-xl font-bold text-purple-400">{coverage.with_feature_rows ?? 0}</div>
+                  <div className="text-[11px] text-slate-500">有特征</div>
+                </div>
+                <div className="rounded-xl bg-white/5 p-3 text-center">
+                  <div className="text-xl font-bold text-amber-400">{td?.truth_records?.row_count ?? 0}</div>
+                  <div className="text-[11px] text-slate-500">真值行数</div>
                 </div>
               </div>
             </CardContent>
           </Card>
-
-          {/* Cache hit rate donut */}
-          {cachePie.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">
-                  缓存分析{" "}
-                  {cacheAnalysis?.hit_rate != null && (
-                    <span className="text-emerald-400 font-normal">{(cacheAnalysis.hit_rate * 100).toFixed(1)}% 命中</span>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-4">
-                  <div className="w-36 h-36 shrink-0">
-                    <ResponsiveContainer>
-                      <PieChart>
-                        <Pie data={cachePie} cx="50%" cy="50%" innerRadius={36} outerRadius={58} paddingAngle={2} dataKey="value">
-                          {cachePie.map((d, i) => (<Cell key={i} fill={d.color} />))}
-                        </Pie>
-                        <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="flex-1 grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <div className="text-slate-500 text-xs">总请求</div>
-                      <div className="text-white font-bold">{cacheAnalysis?.total_requests ?? 0}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-500 text-xs">强制刷新</div>
-                      <div className="text-blue-400 font-bold">{cacheAnalysis?.force_refresh_requests ?? 0}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-500 text-xs">命中</div>
-                      <div className="text-emerald-400 font-bold">{cacheAnalysis?.cache_hits ?? 0}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-500 text-xs">未命中</div>
-                      <div className="text-amber-400 font-bold">{cacheAnalysis?.cache_misses ?? 0}</div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Training data summary */}
-          {coverage && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">城市模型覆盖</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="rounded-xl bg-white/5 p-3 text-center">
-                    <div className="text-xl font-bold text-cyan-400">{coverage.total_cities ?? 0}</div>
-                    <div className="text-[11px] text-slate-500">总城市</div>
-                  </div>
-                  <div className="rounded-xl bg-white/5 p-3 text-center">
-                    <div className="text-xl font-bold text-emerald-400">{coverage.with_truth_rows ?? 0}</div>
-                    <div className="text-[11px] text-slate-500">有真值</div>
-                  </div>
-                  <div className="rounded-xl bg-white/5 p-3 text-center">
-                    <div className="text-xl font-bold text-purple-400">{coverage.with_feature_rows ?? 0}</div>
-                    <div className="text-[11px] text-slate-500">有特征</div>
-                  </div>
-                  <div className="rounded-xl bg-white/5 p-3 text-center">
-                    <div className="text-xl font-bold text-amber-400">{td?.truth_records?.row_count ?? 0}</div>
-                    <div className="text-[11px] text-slate-500">真值行数</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );

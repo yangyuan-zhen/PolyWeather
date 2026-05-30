@@ -105,6 +105,18 @@ function getWundergroundDailyHigh(hourly: HourlyForecast) {
   return validNumber(hourly?.wundergroundCurrent?.max_so_far) ?? null;
 }
 
+function shouldFetchCityDetailForChart({
+  city,
+  documentHidden,
+  isChartVisible,
+}: {
+  city: string;
+  documentHidden: boolean;
+  isChartVisible: boolean;
+}) {
+  return Boolean(city) && isChartVisible && !documentHidden;
+}
+
 // ── Main component ─────────────────────────────────────────────────────
 
 export function LiveTemperatureThresholdChart({
@@ -141,11 +153,18 @@ export function LiveTemperatureThresholdChart({
   const [userToggledKeys, setUserToggledKeys] = useState<Record<string, boolean>>({});
   const [liveTemp, setLiveTemp] = useState<number | null>(null);
   const [isHourlyLoading, setIsHourlyLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailRetryNonce, setDetailRetryNonce] = useState(0);
+  const [showingStaleDetail, setShowingStaleDetail] = useState(false);
   const hasLoadedHourlyDetailRef = useRef(false);
+  const chartVisibilityRef = useRef<HTMLDivElement | null>(null);
   const lastPatchAtRef = useRef<number>(Date.now());
   const lastAppliedPatchRevisionRef = useRef<number>(0);
   const lastProbabilityRefreshAtRef = useRef<number>(0);
   const localDayRolloverFetchDateRef = useRef<string>("");
+  const [isChartVisible, setIsChartVisible] = useState(
+    () => typeof IntersectionObserver === "undefined",
+  );
 
   const [showRunwayDetails, setShowRunwayDetails] = useState<boolean>(true);
   const [refAreaLeft, setRefAreaLeft] = useState<number | null>(null);
@@ -167,6 +186,9 @@ export function LiveTemperatureThresholdChart({
     setHourly(seedHourlyForecastFromRow(row));
     setLiveTemp(null);
     setIsHourlyLoading(Boolean(city));
+    setDetailError(null);
+    setDetailRetryNonce(0);
+    setShowingStaleDetail(false);
     hasLoadedHourlyDetailRef.current = false;
     lastPatchAtRef.current = Date.now();
     lastAppliedPatchRevisionRef.current = 0;
@@ -174,6 +196,23 @@ export function LiveTemperatureThresholdChart({
     localDayRolloverFetchDateRef.current = "";
     setCurrentCityLocalDate(formatCityLocalDate(row?.tz_offset_seconds));
   }, [city]);
+
+  useEffect(() => {
+    const node = chartVisibilityRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      setIsChartVisible(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsChartVisible(entry.isIntersecting || entry.intersectionRatio > 0);
+      },
+      { root: null, rootMargin: "160px 0px", threshold: 0.01 },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     setCurrentCityLocalDate(formatCityLocalDate(row?.tz_offset_seconds));
@@ -188,30 +227,47 @@ export function LiveTemperatureThresholdChart({
       setIsHourlyLoading(false);
       return;
     }
+
+    if (
+      !shouldFetchCityDetailForChart({
+        city,
+        documentHidden:
+          typeof document !== "undefined" && document.visibilityState === "hidden",
+        isChartVisible,
+      })
+    ) {
+      return;
+    }
     
     const cacheKey = `${city}:${targetResolution}`;
-    // Check in-memory cache first
     let cached = _hourlyCache.get(cacheKey);
-    if (!cached) {
-      // Fallback to session cache
-      const sessionEntry = readSessionCache(cacheKey);
+    if (!cached || Date.now() - Number(cached.ts || 0) >= HOURLY_CACHE_TTL_MS) {
+      const sessionEntry = readSessionCache(cacheKey, { allowStale: true });
       if (sessionEntry) {
         cached = sessionEntry;
         _hourlyCache.set(cacheKey, sessionEntry);
       }
     }
+    const cacheAge = cached ? Date.now() - Number(cached.ts || 0) : Number.POSITIVE_INFINITY;
+    const hasFreshCache = cached && cacheAge >= 0 && cacheAge < HOURLY_CACHE_TTL_MS;
 
-    if (cached && Date.now() - cached.ts < HOURLY_CACHE_TTL_MS) {
+    if (cached) {
       hasLoadedHourlyDetailRef.current = true;
       setHourly(cached.data);
+      setShowingStaleDetail(!hasFreshCache);
+    }
+
+    if (hasFreshCache) {
       setIsHourlyLoading(false);
+      setDetailError(null);
       return;
     }
 
-    if (!hasLoadedHourlyDetailRef.current) {
+    if (!cached && !hasLoadedHourlyDetailRef.current) {
       setHourly(seedHourlyForecastFromRow(row));
+      setShowingStaleDetail(false);
     }
-    setIsHourlyLoading(!hasLoadedHourlyDetailRef.current);
+    setIsHourlyLoading(true);
     let cancelled = false;
 
     // Prioritize active slots, stagger/delay background slots to optimize load performance
@@ -220,11 +276,19 @@ export function LiveTemperatureThresholdChart({
     const timer = setTimeout(() => {
       fetchHourlyForecastForCity(city, { resolution: targetResolution })
         .then((data) => {
-          if (cancelled || !data) return;
+          if (cancelled) return;
+          if (!data) {
+            setDetailError(isEn ? "Data temporarily unavailable." : "数据暂不可用");
+            return;
+          }
           hasLoadedHourlyDetailRef.current = true;
           setHourly(data);
+          setDetailError(null);
+          setShowingStaleDetail(false);
         })
-        .catch(() => {})
+        .catch(() => {
+          if (!cancelled) setDetailError(isEn ? "Data temporarily unavailable." : "数据暂不可用");
+        })
         .finally(() => {
           if (!cancelled) setIsHourlyLoading(false);
         });
@@ -234,7 +298,7 @@ export function LiveTemperatureThresholdChart({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [city, row, isActive, slotIndex, targetResolution]);
+  }, [city, row, isActive, slotIndex, targetResolution, isChartVisible, detailRetryNonce, isEn]);
 
   useEffect(() => {
     if (!latestPatch || latestPatch.revision <= lastAppliedPatchRevisionRef.current) return;
@@ -636,6 +700,12 @@ export function LiveTemperatureThresholdChart({
     }));
   }, [isSeriesVisible]);
 
+  const handleRetryDetail = useCallback(() => {
+    setDetailError(null);
+    setIsHourlyLoading(true);
+    setDetailRetryNonce((value) => value + 1);
+  }, []);
+
   const panelTitle = row ? (
     <div className="flex items-center gap-1">
       <button
@@ -743,7 +813,7 @@ export function LiveTemperatureThresholdChart({
       actions={timeframeActions}
       className={PEAK_GLOW_PANEL_CLASS[peakGlow.state]}
     >
-      <div className={clsx("flex h-full flex-col", compact ? "min-h-0" : "min-h-[300px]")}>
+      <div ref={chartVisibilityRef} className={clsx("flex h-full flex-col", compact ? "min-h-0" : "min-h-[300px]")}>
         <TemperatureStatsBars
           isEn={isEn}
           compact={compact}
@@ -790,6 +860,8 @@ export function LiveTemperatureThresholdChart({
           hasRunwayData={hasRunwayData}
           showRunwayDetails={showRunwayDetails}
           isHourlyLoading={isHourlyLoading}
+          detailError={detailError}
+          showingStaleDetail={showingStaleDetail}
           refAreaLeft={refAreaLeft}
           refAreaRight={refAreaRight}
           onMouseDown={handleMouseDown}
@@ -799,6 +871,7 @@ export function LiveTemperatureThresholdChart({
           isSeriesVisible={isSeriesVisible}
           onSeriesToggle={handleSeriesToggle}
           onShowRunwayDetailsChange={setShowRunwayDetails}
+          onRetryDetail={handleRetryDetail}
         />
       </div>
     </Panel>
@@ -822,6 +895,7 @@ export const __getLiveObservationLabelsForTest = getLiveObservationLabels;
 export const __getObservationDisplayMetricsForTest = getObservationDisplayMetrics;
 export const __getPeakGlowStateForTest = getPeakGlowState;
 export const __getWundergroundDailyHighForTest = getWundergroundDailyHigh;
+export const __shouldFetchCityDetailForChartForTest = shouldFetchCityDetailForChart;
 export const __shouldPollLiveChartForTest = shouldPollLiveChart;
 export const __mergePatchIntoHourlyForTest = mergePatchIntoHourly;
 export const __selectDisplayRunwayTempForTest = selectDisplayRunwayTemp;

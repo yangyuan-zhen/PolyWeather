@@ -1,0 +1,182 @@
+.root {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 18% 10%, rgba(37, 99, 235, 0.08), transparent 28%),
+    linear-gradient(180deg, #f7f9fc 0%, #eef2f7 100%);
+  color: var(--color-text-primary);
+}
+
+.main {
+  min-height: 100vh;
+  margin-left: 14rem;
+  padding: 18px;
+}
+
+.content {
+  color: var(--color-text-primary);
+}
+
+.content :global(h1) {
+  color: var(--color-text-primary);
+  letter-spacing: 0;
+}
+
+.content :global([class~="text-white"]),
+.content :global([class~="text-slate-100"]),
+.content :global([class~="text-slate-200"]),
+.content :global([class~="text-slate-300"]) {
+  color: var(--color-text-primary);
+}
+
+.content :global([class~="text-slate-400"]) {
+  color: #52637a;
+}
+
+.content :global([class~="text-slate-500"]),
+.content :global([class~="text-slate-600"]) {
+  color: #6b7a91;
+}
+
+.content :global([class*="border-white/"]),
+.content :global([class*="divide-white/"]),
+.content :global([class*="border-black/"]) {
+  border-color: var(--color-border-default);
+}
+
+.content :global([class*="border-slate-7"]),
+.content :global([class*="border-slate-8"]) {
+  border-color: var(--color-border-default);
+}
+
+.content :global([class*="bg-card"]),
+.content :global([class*="bg-slate-900"]),
+.content :global([class*="bg-slate-950"]),
+.content :global([class*="bg-[#0f172a]"]),
+.content :global([class*="bg-black/"]),
+.content :global([class*="bg-white/5"]),
+.content :global([class*="bg-white/10"]) {
+  background: #ffffff;
+}
+
+.content :global([class~="rounded-2xl"]),
+.content :global([class~="rounded-xl"]),
+.content :global([class~="rounded-3xl"]) {
+  border-radius: 8px;
+}
+
+.content :global([class*="shadow-xl"]),
+.content :global([class*="shadow-2xl"]) {
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 12px 28px rgba(15, 23, 42, 0.05);
+}
+
+.content :global([class*="backdrop-blur"]) {
+  backdrop-filter: none;
+}
+
+.content :global([class*="hover:bg-white/"]:hover) {
+  background: #f8fafc;
+}
+
+.content :global([class*="hover:bg-slate-"]:hover),
+.content :global([class*="hover:bg-black/"]:hover) {
+  background: #f1f5f9;
+}
+
+.content :global([class*="hover:text-white"]:hover),
+.content :global([class*="hover:text-slate-2"]:hover),
+.content :global([class*="hover:text-slate-3"]:hover) {
+  color: var(--color-text-primary);
+}
+
+.content :global(code),
+.content :global(pre),
+.content :global(.font-mono) {
+  color: #1d4ed8;
+}
+
+.content :global(input),
+.content :global(select),
+.content :global(textarea) {
+  border-color: var(--color-border-default);
+  background: #ffffff;
+  color: var(--color-text-primary);
+}
+
+.content :global(input::placeholder),
+.content :global(textarea::placeholder) {
+  color: #8ba0b7;
+}
+
+.content :global(input:focus),
+.content :global(select:focus),
+.content :global(textarea:focus) {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.content :global(button[class*="border"]) {
+  border-color: #cbd7e6;
+}
+
+.content :global(button[class*="bg-transparent"]),
+.content :global(button[class*="outline"]) {
+  background: #ffffff;
+}
+
+.content :global(table) {
+  color: #1e293b;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.content :global(thead),
+.content :global(thead tr),
+.content :global([class*="bg-slate-800"]) {
+  background: #f1f5f9;
+}
+
+.content :global(th) {
+  color: #52637a;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.content :global(td) {
+  color: #1e293b;
+}
+
+.content :global(tbody tr) {
+  border-color: #e5edf6;
+}
+
+.content :global(tbody tr:hover) {
+  background: #f8fbff;
+}
+
+.content :global(.recharts-cartesian-grid line) {
+  stroke: #dbe7f3;
+}
+
+.content :global(.recharts-cartesian-axis-line),
+.content :global(.recharts-cartesian-axis-tick-line) {
+  stroke: #cbd7e6;
+}
+
+.content :global(.recharts-cartesian-axis-tick-value) {
+  fill: #64748b;
+}
+
+.content :global(.recharts-legend-item-text) {
+  color: #475569 !important;
+}
+
+.content :global([class*="animate-pulse"]) {
+  color: #64748b;
+}
+
+@media (max-width: 900px) {
+  .main {
+    margin-left: 0;
+    padding: 12px;
+  }
+}

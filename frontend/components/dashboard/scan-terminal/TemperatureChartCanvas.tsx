@@ -110,6 +110,8 @@ function TemperatureChartCanvasComponent({
   hasRunwayData,
   showRunwayDetails,
   isHourlyLoading,
+  detailError,
+  showingStaleDetail,
   refAreaLeft,
   refAreaRight,
   onMouseDown,
@@ -119,6 +121,7 @@ function TemperatureChartCanvasComponent({
   isSeriesVisible,
   onSeriesToggle,
   onShowRunwayDetailsChange,
+  onRetryDetail,
 }: {
   isEn: boolean;
   compact: boolean;
@@ -134,6 +137,8 @@ function TemperatureChartCanvasComponent({
   hasRunwayData: boolean;
   showRunwayDetails: boolean;
   isHourlyLoading: boolean;
+  detailError?: string | null;
+  showingStaleDetail?: boolean;
   refAreaLeft: number | null;
   refAreaRight: number | null;
   onMouseDown: (event: any) => void;
@@ -143,6 +148,7 @@ function TemperatureChartCanvasComponent({
   isSeriesVisible: (seriesKey: string) => boolean;
   onSeriesToggle: (seriesKey: string) => void;
   onShowRunwayDetailsChange: (value: boolean) => void;
+  onRetryDetail?: () => void;
 }) {
   const chartHostRef = useRef<HTMLDivElement | null>(null);
   const [chartSize, setChartSize] = useState({ width: 0, height: 0 });
@@ -215,6 +221,9 @@ function TemperatureChartCanvasComponent({
   const shouldRenderChart = canRenderChart && hasDrawableChartContent;
   const shouldShowEmptyState = Boolean(row?.city) && !isHourlyLoading && !hasDrawableChartContent;
   const shouldShowBackgroundRefresh = isHourlyLoading && hasDrawableChartContent;
+  const shouldShowUnavailableState = Boolean(row?.city) && Boolean(detailError) && !isHourlyLoading && !hasDrawableChartContent;
+  const shouldShowBackgroundError =
+    Boolean(row?.city) && Boolean(detailError) && !isHourlyLoading && hasDrawableChartContent;
 
   return (
     <div className={clsx("relative flex flex-1 flex-col p-2", compact ? "min-h-[120px]" : "min-h-[240px]")}>
@@ -420,7 +429,21 @@ function TemperatureChartCanvasComponent({
             ))}
           </ReComposedChart>
         )}
-        {shouldShowEmptyState && (
+        {shouldShowUnavailableState && (
+          <div className="absolute inset-0 z-10 grid place-items-center px-4 text-center">
+            <div className="max-w-[260px] rounded border border-amber-200 bg-amber-50/95 px-3 py-2 text-[11px] font-semibold text-amber-700 shadow-sm">
+              <div>{isEn ? "Data temporarily unavailable" : "数据暂不可用"}</div>
+              <button
+                type="button"
+                onClick={onRetryDetail}
+                className="mt-2 rounded border border-amber-300 bg-white px-2 py-1 text-[10px] font-bold text-amber-700 shadow-sm transition-colors hover:bg-amber-100"
+              >
+                {isEn ? "Retry" : "重试"}
+              </button>
+            </div>
+          </div>
+        )}
+        {shouldShowEmptyState && !shouldShowUnavailableState && (
           <div className="pointer-events-none absolute inset-0 grid place-items-center px-4 text-center">
             <div className="rounded border border-slate-200 bg-white/90 px-3 py-2 text-[11px] font-semibold text-slate-500 shadow-sm">
               {isEn ? "No drawable chart data yet" : "暂无可绘制图表数据"}
@@ -428,6 +451,18 @@ function TemperatureChartCanvasComponent({
           </div>
         )}
       </div>
+      {shouldShowBackgroundError && (
+        <div className="absolute right-3 top-12 z-10 inline-flex items-center gap-1.5 rounded border border-amber-200 bg-amber-50/95 px-2 py-1 text-[10px] font-semibold text-amber-700 shadow-sm">
+          <span>{showingStaleDetail ? (isEn ? "Showing cache" : "显示缓存") : (isEn ? "Update failed" : "更新失败")}</span>
+          <button
+            type="button"
+            onClick={onRetryDetail}
+            className="rounded border border-amber-300 bg-white px-1.5 py-0.5 font-bold transition-colors hover:bg-amber-100"
+          >
+            {isEn ? "Retry" : "重试"}
+          </button>
+        </div>
+      )}
       {shouldShowBackgroundRefresh && (
         <div className="pointer-events-none absolute right-3 top-12 z-10 inline-flex items-center gap-1.5 rounded border border-slate-200 bg-white/80 px-2 py-1 text-[10px] font-semibold text-slate-500 shadow-sm backdrop-blur-[1px]">
           <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-slate-200 border-t-blue-500" />

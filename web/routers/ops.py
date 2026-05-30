@@ -6,12 +6,14 @@ from web.core import GrantPointsRequest
 from web.services.ops_api import (
     extend_ops_subscription,
     get_ops_analytics_funnel,
+    get_ops_billing_risk,
     get_ops_config,
     get_ops_sensitive_config,
     get_ops_memberships_growth,
     get_ops_memberships_overview,
     get_ops_health_check,
     get_ops_logs,
+    get_ops_source_health,
     get_ops_truth_history,
     get_ops_weekly_leaderboard,
     get_ops_user_subscriptions,
@@ -90,6 +92,11 @@ async def ops_resolve_payment_incident(request: Request, event_id: int):
 @router.get("/api/ops/payments")
 async def ops_payments(request: Request, limit: int = 50):
     return list_ops_payments(request, limit=limit)
+
+
+@router.get("/api/ops/billing-risk")
+async def ops_billing_risk(request: Request, days: int = 30, limit: int = 80):
+    return get_ops_billing_risk(request, days=days, limit=limit)
 
 
 @router.post("/api/ops/users/grant-points")
@@ -211,6 +218,15 @@ async def ops_logs(
 @router.get("/api/ops/health-check")
 async def ops_health_check(request: Request):
     return get_ops_health_check(request)
+
+
+@router.get("/api/ops/source-health")
+async def ops_source_health(
+    request: Request,
+    cities: str = "",
+    limit: int = 80,
+):
+    return get_ops_source_health(request, cities=cities, limit=limit)
 
 
 @router.get("/api/ops/training/accuracy")

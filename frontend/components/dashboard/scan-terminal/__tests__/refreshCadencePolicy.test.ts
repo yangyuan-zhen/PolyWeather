@@ -5,11 +5,17 @@ import {
   DASHBOARD_REFRESH_POLICY_SEC,
 } from "@/lib/refresh-policy";
 import { scanTerminalQueryPolicy } from "@/components/dashboard/scan-terminal/scan-terminal-client";
-import { __shouldPollLiveChartForTest } from "@/components/dashboard/scan-terminal/LiveTemperatureThresholdChart";
+import {
+  __shouldFetchCityDetailForChartForTest,
+  __shouldPollLiveChartForTest,
+} from "@/components/dashboard/scan-terminal/LiveTemperatureThresholdChart";
 import {
   MAX_HOURLY_DETAIL_CONCURRENT_REQUESTS,
+  HOURLY_CACHE_TTL_MS,
+  __readHourlyCacheEntryForTest,
   __resetHourlyDetailRequestQueueForTest,
   __runQueuedHourlyDetailRequestForTest,
+  clearCityDetailCache,
 } from "@/components/dashboard/scan-terminal/temperature-chart-logic";
 
 function assert(condition: unknown, message: string) {
@@ -79,6 +85,30 @@ export async function runTests() {
       chartSource.includes("setHourly(seedHourlyForecastFromRow(row))"),
     "terminal charts should render from row data immediately and dedupe concurrent city detail requests",
   );
+  assert(
+    chartSource.includes("IntersectionObserver") &&
+      chartSource.includes("shouldFetchCityDetailForChart") &&
+      chartSource.includes("isChartVisible"),
+    "city detail prefetch should be gated to visible chart cards instead of every mounted slot",
+  );
+  assert(
+    chartSource.includes("allowStale: true") &&
+      chartCanvasSourceIncludes(chartSource, "数据暂不可用") &&
+      chartCanvasSourceIncludes(chartSource, "handleRetryDetail"),
+    "city detail charts should show stale cache first and expose a retryable unavailable state",
+  );
+  assert(
+    __shouldFetchCityDetailForChartForTest({ city: "paris", documentHidden: false, isChartVisible: true }) === true,
+    "visible chart cards should fetch city detail",
+  );
+  assert(
+    __shouldFetchCityDetailForChartForTest({ city: "paris", documentHidden: false, isChartVisible: false }) === false,
+    "offscreen chart cards should not prefetch city detail",
+  );
+  assert(
+    __shouldFetchCityDetailForChartForTest({ city: "paris", documentHidden: true, isChartVisible: true }) === false,
+    "hidden browser tabs should not prefetch city detail",
+  );
 
   __resetHourlyDetailRequestQueueForTest();
   let activeRequests = 0;
@@ -130,4 +160,63 @@ export async function runTests() {
     "city detail queue should resolve every queued request in order",
   );
   __resetHourlyDetailRequestQueueForTest();
+
+  const originalWindow = (globalThis as any).window;
+  const originalSessionStorage = (globalThis as any).sessionStorage;
+  const store = new Map<string, string>();
+  (globalThis as any).window = {};
+  (globalThis as any).sessionStorage = {
+    get length() {
+      return store.size;
+    },
+    getItem(key: string) {
+      return store.get(key) ?? null;
+    },
+    key(index: number) {
+      return Array.from(store.keys())[index] ?? null;
+    },
+    removeItem(key: string) {
+      store.delete(key);
+    },
+    setItem(key: string, value: string) {
+      store.set(key, value);
+    },
+  };
+  try {
+    clearCityDetailCache();
+    const cacheKey = "paris:10m";
+    store.set(
+      `polyweather_city_detail_v1:${cacheKey}`,
+      JSON.stringify({
+        ts: Date.now() - HOURLY_CACHE_TTL_MS - 1000,
+        data: {
+          forecastDaily: [],
+          localDate: "2026-05-31",
+          multiModelDaily: {},
+          probabilities: null,
+          temps: [21],
+          times: ["00:00"],
+        },
+      }),
+    );
+    assert(
+      __readHourlyCacheEntryForTest(cacheKey) === null,
+      "stale city detail cache should not suppress a fresh revalidation",
+    );
+    assert(
+      __readHourlyCacheEntryForTest(cacheKey, { allowStale: true })?.data?.temps[0] === 21,
+      "stale city detail cache should still be available for immediate chart rendering",
+    );
+  } finally {
+    clearCityDetailCache();
+    (globalThis as any).window = originalWindow;
+    (globalThis as any).sessionStorage = originalSessionStorage;
+  }
+}
+
+function chartCanvasSourceIncludes(source: string, pattern: string) {
+  return source.includes(pattern) || fs.readFileSync(
+    path.join(process.cwd(), "components", "dashboard", "scan-terminal", "TemperatureChartCanvas.tsx"),
+    "utf8",
+  ).includes(pattern);
 }

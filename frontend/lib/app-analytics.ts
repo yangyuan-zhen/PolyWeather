@@ -11,6 +11,7 @@ type TrackableAnalyticsEvent =
   | "trial_created"
   | "payment_start"
   | "payment_success"
+  | "degraded_auth_profile"
   | "signup_completed"
   | "dashboard_active"
   | "paywall_feature_clicked"
@@ -39,6 +40,15 @@ function getStoredId(storage: Storage, key: string) {
     storage.setItem(key, value);
   }
   return value;
+}
+
+function getDeviceType() {
+  if (!isClient()) return "unknown";
+  const width = window.innerWidth || 0;
+  const ua = navigator.userAgent || "";
+  if (/ipad|tablet/i.test(ua) || (width >= 768 && width < 1100)) return "tablet";
+  if (/mobi|android|iphone/i.test(ua) || width < 768) return "mobile";
+  return "desktop";
 }
 
 export function getAnalyticsClientId() {
@@ -88,6 +98,11 @@ export function trackAppEvent(
       ...payload,
       path: window.location.pathname,
       href: window.location.href,
+      referrer: document.referrer || "",
+      language: navigator.language || "",
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
+      device_type: getDeviceType(),
+      viewport: `${window.innerWidth || 0}x${window.innerHeight || 0}`,
       captured_at: new Date().toISOString(),
     },
   };

@@ -57,17 +57,17 @@ export function AdminSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-56 border-r border-white/10 bg-slate-950 flex flex-col">
-      <div className="flex h-14 items-center gap-2 border-b border-white/10 px-4">
-        <LayoutDashboard className="h-5 w-5 text-cyan-400" />
-        <Link href="/ops/system" className="text-sm font-bold text-white">
+    <aside className="fixed left-0 top-0 z-40 flex h-screen w-56 flex-col border-r border-slate-200 bg-white shadow-[1px_0_2px_rgba(15,23,42,0.04)]">
+      <div className="flex h-14 items-center gap-2 border-b border-slate-200 px-4">
+        <LayoutDashboard className="h-5 w-5 text-blue-600" />
+        <Link href="/ops/system" className="text-sm font-extrabold text-slate-950">
           PolyWeather Ops
         </Link>
       </div>
-      <nav className="flex-1 overflow-y-auto py-4 space-y-6">
+      <nav className="flex-1 space-y-6 overflow-y-auto py-4">
         {navGroups.map((group) => (
           <div key={group.label} className="px-3">
-            <h4 className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+            <h4 className="mb-2 px-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
               {group.label}
             </h4>
             <ul className="space-y-0.5">
@@ -78,10 +78,10 @@ export function AdminSidebar() {
                     <Link
                       href={item.href}
                       className={
-                        "flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm transition-colors " +
+                        "flex items-center gap-2.5 rounded-md border border-transparent px-2 py-2 text-sm transition-colors " +
                         (isActive
-                          ? "bg-white/10 text-white font-medium"
-                          : "text-slate-400 hover:bg-white/5 hover:text-slate-200")
+                          ? "border-blue-200 bg-blue-50 text-blue-700 font-semibold shadow-[inset_3px_0_0_#2563eb]"
+                          : "text-slate-600 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-950")
                       }
                     >
                       <item.icon className="h-4 w-4 shrink-0" />
@@ -94,10 +94,10 @@ export function AdminSidebar() {
           </div>
         ))}
       </nav>
-      <div className="border-t border-white/10 px-4 py-3">
+      <div className="border-t border-slate-200 px-4 py-3">
         <Link
           href="/"
-          className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+          className="flex items-center gap-2 text-xs font-semibold text-slate-500 transition-colors hover:text-blue-700"
         >
           ← 返回前台
         </Link>

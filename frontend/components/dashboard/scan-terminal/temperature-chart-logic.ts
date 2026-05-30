@@ -364,16 +364,47 @@ const RUNWAY_LINE_COLORS = ["#00897b", "#d97706", "#7c3aed", "#0891b2", "#ea580c
 const SESSION_CACHE_PREFIX = "polyweather_city_detail_v1:";
 const SESSION_CACHE_TTL_MS = DASHBOARD_REFRESH_POLICY_MS.metar;
 
-function readSessionCache(city: string): { ts: number; data: HourlyForecast } | null {
+type HourlyCacheEntry = { ts: number; data: HourlyForecast };
+
+function isFreshHourlyCacheEntry(entry: HourlyCacheEntry | null | undefined) {
+  return Boolean(entry && Date.now() - Number(entry.ts || 0) < SESSION_CACHE_TTL_MS);
+}
+
+function readSessionCache(
+  city: string,
+  options: { allowStale?: boolean } = {},
+): HourlyCacheEntry | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = sessionStorage.getItem(`${SESSION_CACHE_PREFIX}${city}`);
     if (!raw) return null;
     const item = JSON.parse(raw);
-    if (item && item.ts && Date.now() - item.ts < SESSION_CACHE_TTL_MS) {
+    if (
+      item &&
+      item.ts &&
+      (options.allowStale || Date.now() - item.ts < SESSION_CACHE_TTL_MS)
+    ) {
       return item;
     }
   } catch {}
+  return null;
+}
+
+function readHourlyCacheEntry(
+  cacheKey: string,
+  options: { allowStale?: boolean } = {},
+): HourlyCacheEntry | null {
+  const cached = _hourlyCache.get(cacheKey);
+  if (cached && (options.allowStale || isFreshHourlyCacheEntry(cached))) {
+    return cached;
+  }
+
+  const sessionEntry = readSessionCache(cacheKey, options);
+  if (sessionEntry) {
+    _hourlyCache.set(cacheKey, sessionEntry);
+    return sessionEntry;
+  }
+
   return null;
 }
 
@@ -436,6 +467,7 @@ function __resetHourlyDetailRequestQueueForTest() {
 }
 
 const __runQueuedHourlyDetailRequestForTest = runQueuedHourlyDetailRequest;
+const __readHourlyCacheEntryForTest = readHourlyCacheEntry;
 
 function validNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -969,15 +1001,9 @@ async function fetchHourlyForecastForCity(
   const cacheKey = `${city}:${resParam}`;
 
   if (!options.ignoreCache) {
-    const cached = _hourlyCache.get(cacheKey);
-    if (cached && Date.now() - cached.ts < HOURLY_CACHE_TTL_MS) {
+    const cached = readHourlyCacheEntry(cacheKey);
+    if (cached) {
       return cached.data;
-    }
-
-    const sessionCached = readSessionCache(cacheKey);
-    if (sessionCached) {
-      _hourlyCache.set(cacheKey, sessionCached);
-      return sessionCached.data;
     }
   }
 
@@ -2259,6 +2285,7 @@ export {
   HOURLY_DETAIL_REQUEST_TIMEOUT_MS,
   HOURLY_CACHE_TTL_MS,
   _hourlyCache,
+  __readHourlyCacheEntryForTest,
   __resetHourlyDetailRequestQueueForTest,
   __runQueuedHourlyDetailRequestForTest,
   buildChartDomain,

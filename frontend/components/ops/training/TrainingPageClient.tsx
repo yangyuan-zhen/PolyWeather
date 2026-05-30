@@ -1,18 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { RefreshCcw, TrendingUp, TrendingDown, Target, Activity } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { opsApi } from "@/lib/ops-api";
 import type { SystemStatusPayload } from "@/types/ops";
-import { CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
 import Link from "next/link";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  ComposedChart, Line, Legend, Cell, LabelList,
-} from "recharts";
+
+const TrainingAccuracyCharts = dynamic(
+  () => import("./TrainingAccuracyCharts").then((mod) => mod.TrainingAccuracyCharts),
+  {
+    ssr: false,
+    loading: () => <div className="h-[400px] animate-pulse rounded-lg bg-slate-100" />,
+  },
+);
 
 function StatRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -59,37 +63,6 @@ interface CityAccuracy {
     total_days: number;
     details_str: string;
   } | null;
-}
-
-const CHART_COLORS = {
-  green: "#22c55e",
-  yellow: "#eab308",
-  red: "#ef4444",
-  blue: "#3b82f6",
-  cyan: "#06b6d4",
-  purple: "#a855f7",
-  slate: "#64748b",
-  emerald: "#10b981",
-  amber: "#f59e0b",
-  rose: "#f43f5e",
-};
-
-function hitColor(hitRate: number) {
-  if (hitRate >= 80) return CHART_COLORS.green;
-  if (hitRate >= 60) return CHART_COLORS.yellow;
-  return CHART_COLORS.red;
-}
-
-function maeColor(mae: number) {
-  if (mae <= 1.5) return CHART_COLORS.green;
-  if (mae <= 2.5) return CHART_COLORS.yellow;
-  return CHART_COLORS.red;
-}
-
-function brierColor(score: number) {
-  if (score <= 0.1) return CHART_COLORS.green;
-  if (score <= 0.25) return CHART_COLORS.yellow;
-  return CHART_COLORS.red;
 }
 
 export function TrainingPageClient() {
@@ -221,115 +194,7 @@ export function TrainingPageClient() {
         </div>
       ) : null}
 
-      {/* DEB Accuracy Charts */}
-      {debChartData.length > 0 ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader><CardTitle>DEB 命中率 by 城市</CardTitle></CardHeader>
-            <CardContent>
-              <div className="h-[400px]">
-                <ResponsiveContainer>
-                  <BarChart data={debChartData} margin={{ top: 8, right: 8, left: 8, bottom: 80 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                    <XAxis dataKey="name" angle={-45} textAnchor="end" tick={{ fill: "#94a3b8", fontSize: 11 }} interval={0} />
-                    <YAxis domain={[0, 100]} tick={{ fill: "#94a3b8", fontSize: 11 }} unit="%" />
-                    <Tooltip
-                      contentStyle={CHART_TOOLTIP_STYLE}
-                      formatter={(value: unknown) => [`${Number(value).toFixed(1)}%`, "命中率"]}
-                    />
-                    <Bar dataKey="hitRate" radius={[4, 4, 0, 0]} maxBarSize={36}>
-                      {debChartData.map((entry, i) => (
-                        <Cell key={i} fill={hitColor(entry.hitRate)} fillOpacity={0.85} />
-                      ))}
-                      <LabelList dataKey="hitRate" position="top" style={{ fill: "#94a3b8", fontSize: 10 }} formatter={(v: unknown) => `${Number(v)}%`} />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>DEB MAE by 城市</CardTitle></CardHeader>
-            <CardContent>
-              <div className="h-[400px]">
-                <ResponsiveContainer>
-                  <ComposedChart data={debChartData} margin={{ top: 8, right: 8, left: 8, bottom: 80 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                    <XAxis dataKey="name" angle={-45} textAnchor="end" tick={{ fill: "#94a3b8", fontSize: 11 }} interval={0} />
-                    <YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} unit="°" />
-                    <Tooltip
-                      contentStyle={CHART_TOOLTIP_STYLE}
-                      formatter={(value: unknown) => [`${Number(value).toFixed(1)}°`, "MAE"]}
-                    />
-                    <Bar dataKey="mae" radius={[4, 4, 0, 0]} maxBarSize={36}>
-                      {debChartData.map((entry, i) => (
-                        <Cell key={i} fill={maeColor(entry.mae)} fillOpacity={0.85} />
-                      ))}
-                      <LabelList dataKey="mae" position="top" style={{ fill: "#94a3b8", fontSize: 10 }} formatter={(v: unknown) => `${Number(v)}°`} />
-                    </Bar>
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      ) : null}
-
-      {/* Mu Probability Charts */}
-      {muChartData.length > 0 ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader><CardTitle>概率 μ Brier Score by 城市</CardTitle></CardHeader>
-            <CardContent>
-              <div className="h-[400px]">
-                <ResponsiveContainer>
-                  <BarChart data={muChartData} margin={{ top: 8, right: 8, left: 8, bottom: 80 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                    <XAxis dataKey="name" angle={-45} textAnchor="end" tick={{ fill: "#94a3b8", fontSize: 11 }} interval={0} />
-                    <YAxis domain={[0, 0.5]} tick={{ fill: "#94a3b8", fontSize: 11 }} />
-                    <Tooltip
-                      contentStyle={CHART_TOOLTIP_STYLE}
-                      formatter={(value: unknown) => [Number(value).toFixed(4), "Brier Score"]}
-                    />
-                    <Bar dataKey="brierScore" radius={[4, 4, 0, 0]} maxBarSize={36}>
-                      {muChartData.map((entry, i) => (
-                        <Cell key={i} fill={brierColor(entry.brierScore)} fillOpacity={0.85} />
-                      ))}
-                      <LabelList dataKey="brierScore" position="top" style={{ fill: "#94a3b8", fontSize: 10 }} formatter={(v: unknown) => Number(v).toFixed(3)} />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>概率 μ 命中率 by 城市</CardTitle></CardHeader>
-            <CardContent>
-              <div className="h-[400px]">
-                <ResponsiveContainer>
-                  <BarChart data={muChartData} margin={{ top: 8, right: 8, left: 8, bottom: 80 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                    <XAxis dataKey="name" angle={-45} textAnchor="end" tick={{ fill: "#94a3b8", fontSize: 11 }} interval={0} />
-                    <YAxis domain={[0, 100]} tick={{ fill: "#94a3b8", fontSize: 11 }} unit="%" />
-                    <Tooltip
-                      contentStyle={CHART_TOOLTIP_STYLE}
-                      formatter={(value: unknown) => [`${Number(value).toFixed(1)}%`, "命中率"]}
-                    />
-                    <Bar dataKey="hitRate" radius={[4, 4, 0, 0]} maxBarSize={36}>
-                      {muChartData.map((entry, i) => (
-                        <Cell key={i} fill={hitColor(entry.hitRate)} fillOpacity={0.85} />
-                      ))}
-                      <LabelList dataKey="hitRate" position="top" style={{ fill: "#94a3b8", fontSize: 10 }} formatter={(v: unknown) => `${Number(v)}%`} />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      ) : null}
+      <TrainingAccuracyCharts debChartData={debChartData} muChartData={muChartData} />
 
       {/* City coverage */}
       {modelCities ? (

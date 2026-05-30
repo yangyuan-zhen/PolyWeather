@@ -16,16 +16,29 @@ export const opsApi = {
   systemStatus() {
     return opsFetch<Record<string, unknown>>("/api/system/status");
   },
+  sourceHealth(limit = 80) {
+    return opsFetch<Record<string, unknown>>(`/api/ops/source-health?limit=${limit}`);
+  },
   paymentRuntime() {
     return opsFetch<Record<string, unknown>>("/api/payments/runtime");
   },
   listPayments(limit = 50) {
     return opsFetch<{ payments?: Array<Record<string, unknown>>; total?: number }>(`/api/ops/payments?limit=${limit}`);
   },
+  billingRisk(days = 30, limit = 80) {
+    return opsFetch<Record<string, unknown>>(`/api/ops/billing-risk?days=${days}&limit=${limit}`);
+  },
   async funnel(days = 30) {
     const raw = await opsFetch<{
-      events?: Record<string, { total?: number; unique_users?: number }>;
+      events?: Record<string, { total?: number; unique_users?: number; unique_actors?: number }>;
+      diagnostics?: Record<string, { total?: number; unique_actors?: number; by_reason?: { name: string; count: number }[] }>;
       rates?: Record<string, number>;
+      traffic?: {
+        referrers?: { name: string; count: number }[];
+        countries?: { name: string; count: number }[];
+        devices?: { name: string; count: number }[];
+        landing_paths?: { name: string; count: number }[];
+      };
       window_days?: number;
     }>(`/api/ops/analytics/funnel?days=${days}`);
     const stepOrder = ["landing_view", "enter_terminal", "login_start", "signup_success", "trial_created", "payment_start", "payment_success"];
@@ -41,6 +54,7 @@ export const opsApi = {
     const steps = stepOrder.map((key, i) => {
       const evt = raw?.events?.[key];
       const count = evt?.total ?? 0;
+      const uniqueActors = evt?.unique_actors ?? evt?.unique_users ?? 0;
       let pct_of_prev: number | undefined;
       if (i > 0) {
         const prevCount = raw?.events?.[stepOrder[i - 1]]?.total ?? 0;
@@ -48,9 +62,15 @@ export const opsApi = {
       } else {
         pct_of_prev = 100;
       }
-      return { label: stepLabels[key] ?? key, count, pct_of_prev };
+      return { key, label: stepLabels[key] ?? key, count, uniqueActors, pct_of_prev };
     });
-    return { steps, rates: raw?.rates, window_days: raw?.window_days };
+    return {
+      diagnostics: raw?.diagnostics ?? {},
+      rates: raw?.rates,
+      steps,
+      traffic: raw?.traffic ?? {},
+      window_days: raw?.window_days,
+    };
   },
   users(q: string, limit = 20) {
     return opsFetch<Record<string, unknown>>(`/api/ops/users?q=${encodeURIComponent(q)}&limit=${limit}`);

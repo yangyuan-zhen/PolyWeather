@@ -1,11 +1,12 @@
 import { AdminSidebar } from "./AdminSidebar";
+import styles from "./AdminShell.module.css";
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div className={styles.root}>
       <AdminSidebar />
-      <main className="ml-56 min-h-screen p-6">
-        {children}
+      <main className={styles.main}>
+        <div className={styles.content}>{children}</div>
       </main>
     </div>
   );

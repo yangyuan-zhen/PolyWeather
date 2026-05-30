@@ -67,6 +67,41 @@ _OBSERVATION_SOURCE_PROFILES: Dict[str, Dict[str, Any]] = {
         "expected_grace_sec": 900,
         "stale_after_sec": 3600,
     },
+    "ims": {
+        "label": "IMS",
+        "native_update_interval_sec": 600,
+        "fresh_window_sec": 900,
+        "expected_grace_sec": 600,
+        "stale_after_sec": 2700,
+    },
+    "madis": {
+        "label": "NOAA MADIS",
+        "native_update_interval_sec": 900,
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600,
+    },
+    "aeroweb": {
+        "label": "AEROWEB",
+        "native_update_interval_sec": 900,
+        "fresh_window_sec": 900,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600,
+    },
+    "ncm": {
+        "label": "NCM",
+        "native_update_interval_sec": 900,
+        "fresh_window_sec": 900,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600,
+    },
+    "singapore_mss": {
+        "label": "Singapore MSS",
+        "native_update_interval_sec": 600,
+        "fresh_window_sec": 900,
+        "expected_grace_sec": 600,
+        "stale_after_sec": 2700,
+    },
     "metar": {
         "label": "METAR",
         "native_update_interval_sec": 900,
@@ -117,6 +152,16 @@ def canonical_observation_source_code(value: Any) -> str:
         return "cwa"
     if "mgm" in raw:
         return "mgm"
+    if "ims" in raw:
+        return "ims"
+    if "madis" in raw:
+        return "madis"
+    if "aeroweb" in raw:
+        return "aeroweb"
+    if "ncm" in raw:
+        return "ncm"
+    if "singapore_mss" in raw or raw == "mss":
+        return "singapore_mss"
     if "noaa" in raw:
         return "noaa"
     if "wunderground" in raw or raw == "wu":

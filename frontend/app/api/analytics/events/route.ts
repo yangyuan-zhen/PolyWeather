@@ -26,6 +26,22 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
+    const payload =
+      body && typeof body.payload === "object" && body.payload != null
+        ? body.payload
+        : {};
+    const enrichedBody = {
+      ...(body ?? {}),
+      payload: {
+        ...payload,
+        cf_country:
+          req.headers.get("cf-ipcountry") ||
+          req.headers.get("x-vercel-ip-country") ||
+          "",
+        user_agent: req.headers.get("user-agent") || "",
+        referer_header: req.headers.get("referer") || "",
+      },
+    };
     const auth = await buildBackendRequestHeaders(req, {
       includeSupabaseIdentity: false,
     });
@@ -34,7 +50,7 @@ export async function POST(req: NextRequest) {
     const res = await fetch(`${API_BASE}/api/analytics/events`, {
       method: "POST",
       headers,
-      body: JSON.stringify(body ?? {}),
+      body: JSON.stringify(enrichedBody),
       cache: "no-store",
     });
     if (!res.ok) {

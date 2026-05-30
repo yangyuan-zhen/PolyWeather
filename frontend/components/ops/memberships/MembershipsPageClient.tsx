@@ -1,16 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { RefreshCcw, X, Search } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { opsApi } from "@/lib/ops-api";
 import type { MembershipEntry } from "@/types/ops";
-import { CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend, Area, AreaChart,
-} from "recharts";
+
+const MembershipGrowthChart = dynamic(
+  () => import("./MembershipGrowthChart").then((mod) => mod.MembershipGrowthChart),
+  {
+    ssr: false,
+    loading: () => <div className="h-[360px] animate-pulse rounded-lg bg-slate-100" />,
+  },
+);
 
 type GrowthPoint = { date: string; trial: number; paid: number; total: number; cumulative: number };
 
@@ -160,35 +164,7 @@ export function MembershipsPageClient() {
               </div>
             </div>
 
-            {/* Cumulative area chart */}
-            <div className="mb-6">
-              <h4 className="text-xs text-slate-500 mb-2">累计会员</h4>
-              <ResponsiveContainer width="100%" height={160}>
-                <AreaChart data={growth}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                  <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 10 }} interval="preserveStartEnd" />
-                  <YAxis tick={{ fill: "#64748b", fontSize: 10 }} width={45} />
-                  <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-                  <Area type="monotone" dataKey="cumulative" stroke="#06b6d4" fill="#06b6d420" name="累计" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Daily bars */}
-            <div>
-              <h4 className="text-xs text-slate-500 mb-2">每日新增</h4>
-              <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={growth}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                  <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 10 }} interval="preserveStartEnd" />
-                  <YAxis tick={{ fill: "#64748b", fontSize: 10 }} width={30} />
-                  <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Area type="monotone" dataKey="paid" stackId="1" stroke="#22c55e" fill="#22c55e60" name="付费" />
-                  <Area type="monotone" dataKey="trial" stackId="1" stroke="#f59e0b" fill="#f59e0b60" name="体验" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            <MembershipGrowthChart growth={growth} />
           </CardContent>
         </Card>
       )}

@@ -1,14 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { RefreshCcw, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell,
-} from "recharts";
+
+const HealthLatencyChart = dynamic(
+  () => import("./HealthLatencyChart").then((mod) => mod.HealthLatencyChart),
+  {
+    ssr: false,
+    loading: () => <div className="h-[220px] animate-pulse rounded-lg bg-slate-100" />,
+  },
+);
 
 type ServiceResult = {
   ok: boolean;
@@ -107,27 +111,7 @@ export function HealthPageClient() {
         <Card className="border-slate-800 bg-slate-900/50">
           <CardContent className="p-4">
             <h3 className="text-sm font-semibold text-white mb-4">服务响应延迟对比 (ms)</h3>
-            <ResponsiveContainer width="100%" height={Math.max(160, latencyData.length * 28 + 40)}>
-              <BarChart
-                data={latencyData}
-                layout="vertical"
-                margin={{ top: 5, right: 30, left: 100, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                <XAxis type="number" stroke="rgba(255,255,255,0.2)" tick={{ fill: "#64748b", fontSize: 10 }} />
-                <YAxis type="category" dataKey="name" stroke="rgba(255,255,255,0.2)" tick={{ fill: "#94a3b8", fontSize: 11 }} width={120} />
-                <Tooltip
-                  contentStyle={CHART_TOOLTIP_STYLE}
-                  formatter={(value) => [`${value} ms`, "延迟"]}
-                />
-                <Bar dataKey="latency" radius={[0, 4, 4, 0]}>
-                  {latencyData.map((d, i) => {
-                    const colors = ["#22c55e", "#10b981", "#14b8a6", "#06b6d4", "#0ea5e9", "#3b82f6", "#6366f1", "#8b5cf6", "#a855f7", "#d946ef", "#ec4899", "#f43f5e", "#ef4444"];
-                    return <Cell key={i} fill={colors[i % colors.length]} />;
-                  })}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <HealthLatencyChart data={latencyData} />
           </CardContent>
         </Card>
       )}

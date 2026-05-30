@@ -27,6 +27,56 @@ import {
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
+async function trackAuthDiagnosticEvent(
+  req: NextRequest,
+  {
+    email,
+    reason,
+    responseMode,
+    userId,
+  }: {
+    email: string | null;
+    reason: string;
+    responseMode: "snapshot" | "degraded" | "anonymous";
+    userId?: string | null;
+  },
+) {
+  if (!API_BASE) return;
+  const normalizedUserId = String(userId || "").trim();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 1200);
+  try {
+    await fetch(`${API_BASE}/api/analytics/events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event_type: "degraded_auth_profile",
+        client_id: normalizedUserId ? `auth:${normalizedUserId}` : undefined,
+        payload: {
+          route: "/api/auth/me",
+          reason: String(reason || "unknown").slice(0, 240),
+          response_mode: responseMode,
+          user_id: normalizedUserId || undefined,
+          email_domain: email?.includes("@") ? email.split("@").pop() : undefined,
+          cf_country:
+            req.headers.get("cf-ipcountry") ||
+            req.headers.get("x-vercel-ip-country") ||
+            "",
+          user_agent: req.headers.get("user-agent") || "",
+          referer_header: req.headers.get("referer") || "",
+          captured_at: new Date().toISOString(),
+        },
+      }),
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch {
+    // Diagnostics must never block auth/profile fallback responses.
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 type VerifiedBearerIdentity = {
   email: string | null;
   userId: string;
@@ -77,7 +127,7 @@ async function getVerifiedBearerIdentity(
   }
 }
 
-function degradedAuthProfileResponse({
+async function degradedAuthProfileResponse({
   email,
   reason,
   req,
@@ -94,6 +144,12 @@ function degradedAuthProfileResponse({
     readEntitlementSnapshot(req, userId),
   );
   if (snapshotPayload) {
+    await trackAuthDiagnosticEvent(req, {
+      email: snapshotPayload.email || email,
+      reason,
+      responseMode: "snapshot",
+      userId,
+    });
     const snapshotResponse = NextResponse.json({
       ...snapshotPayload,
       email: snapshotPayload.email || email,
@@ -102,6 +158,12 @@ function degradedAuthProfileResponse({
     return applyAuthResponseCookies(snapshotResponse, response);
   }
 
+  await trackAuthDiagnosticEvent(req, {
+    email,
+    reason,
+    responseMode: "degraded",
+    userId,
+  });
   const degraded = NextResponse.json({
     authenticated: true,
     user_id: userId,
@@ -135,13 +197,20 @@ function subscriptionRequiredAuthProfileResponse({
   return applyAuthResponseCookies(inactive, response);
 }
 
-function unauthenticatedAuthProfileResponse({
+async function unauthenticatedAuthProfileResponse({
   reason,
+  req,
   response,
 }: {
   reason: string;
+  req: NextRequest;
   response: NextResponse | null;
 }) {
+  await trackAuthDiagnosticEvent(req, {
+    email: null,
+    reason,
+    responseMode: "anonymous",
+  });
   const anonymous = NextResponse.json(
     {
       authenticated: false,
@@ -409,6 +478,7 @@ export async function GET(req: NextRequest) {
     }
     return unauthenticatedAuthProfileResponse({
       reason: String(error),
+      req,
       response: auth?.response || null,
     });
   }

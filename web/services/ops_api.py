@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException, Request
 import requests as _requests
 
 from src.database.db_manager import DBManager
 from src.utils.runtime_secrets import get_runtime_secret, get_runtime_secret_status
+from web.services.observation_freshness import (
+    build_observation_freshness,
+    canonical_observation_source_code,
+)
 from web.core import GrantPointsRequest
 import web.routes as legacy_routes
 
@@ -18,6 +23,104 @@ def _require_ops(request: Request) -> Dict[str, Any] | None:
     # Ops admins are authenticated via Supabase identity + email whitelist.
     # They do NOT need an active Pro subscription to manage the system.
     return legacy_routes._require_ops_admin(request)
+
+
+def _parse_iso_datetime(value: Any) -> Optional[datetime]:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except Exception:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _to_utc_iso(value: datetime) -> str:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _supabase_rest_rows(
+    table: str,
+    params: Dict[str, Any],
+    *,
+    timeout: int = 10,
+) -> List[Dict[str, Any]]:
+    supabase_url = str(os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
+    service_role_key = str(os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
+    if not supabase_url or not service_role_key:
+        raise HTTPException(status_code=503, detail="Supabase not configured")
+
+    headers = {
+        "apikey": service_role_key,
+        "Authorization": f"Bearer {service_role_key}",
+    }
+    resp = _requests.get(
+        f"{supabase_url}/rest/v1/{table}",
+        headers=headers,
+        params=params,
+        timeout=timeout,
+    )
+    if not resp.ok:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Supabase query failed for {table}: {resp.status_code}",
+        )
+    rows = resp.json() if resp.content else []
+    if not isinstance(rows, list):
+        return []
+    return [row for row in rows if isinstance(row, dict)]
+
+
+def _payment_explorer_url(chain: Any, tx_hash: Any) -> str:
+    tx = str(tx_hash or "").strip()
+    if not tx:
+        return ""
+    chain_text = str(chain or "").strip().lower()
+    base = "https://etherscan.io" if "eth" in chain_text else "https://polygonscan.com"
+    return f"{base}/tx/{tx}"
+
+
+def _app_analytics_actor_key(row: Dict[str, Any]) -> str:
+    payload = row.get("payload")
+    payload = payload if isinstance(payload, dict) else {}
+    user_id = str(row.get("user_id") or payload.get("user_id") or "").strip().lower()
+    client_id = str(row.get("client_id") or "").strip()
+    session_id = str(row.get("session_id") or "").strip()
+    if user_id:
+        return f"user:{user_id}"
+    if client_id:
+        return f"client:{client_id}"
+    if session_id:
+        return f"session:{session_id}"
+    return f"event:{row.get('id')}"
+
+
+def _risk_issue(
+    *,
+    category: str,
+    severity: str,
+    title: str,
+    detail: str,
+    user_id: Any = "",
+    created_at: Any = "",
+    reference: Any = "",
+    payload: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    return {
+        "category": category,
+        "severity": severity,
+        "title": title,
+        "detail": detail,
+        "user_id": str(user_id or ""),
+        "created_at": str(created_at or ""),
+        "reference": str(reference or ""),
+        "payload": payload or {},
+    }
 
 
 def search_ops_users(request: Request, q: str = "", limit: int = 20) -> Dict[str, Any]:
@@ -321,33 +424,349 @@ def list_ops_payments(
 ) -> Dict[str, Any]:
     """List successful payment records from Supabase."""
     _require_ops(request)
-    import os
-    import requests as _requests
-
-    supabase_url = str(os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
-    service_role_key = str(os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
-    if not supabase_url or not service_role_key:
-        raise HTTPException(status_code=503, detail="Supabase not configured")
-
-    headers = {
-        "apikey": service_role_key,
-        "Authorization": f"Bearer {service_role_key}",
-    }
     safe_limit = max(1, min(int(limit or 50), 200))
-    resp = _requests.get(
-        f"{supabase_url}/rest/v1/payments",
-        headers=headers,
-        params={
+    rows = _supabase_rest_rows(
+        "payments",
+        {
             "select": "id,user_id,amount,currency,chain,tx_hash,status,created_at",
             "order": "created_at.desc",
             "limit": str(safe_limit),
         },
-        timeout=10,
     )
-    rows = resp.json() if resp.ok and resp.content else []
-    if not isinstance(rows, list):
-        rows = []
     return {"payments": rows, "total": len(rows)}
+
+
+def get_ops_billing_risk(
+    request: Request,
+    days: int = 30,
+    limit: int = 80,
+) -> Dict[str, Any]:
+    """Summarize trial, payment, referral, and points risk signals for ops."""
+    _require_ops(request)
+    db = DBManager()
+    now = datetime.now(timezone.utc)
+    safe_days = max(1, min(int(days or 30), 120))
+    safe_limit = max(10, min(int(limit or 80), 200))
+    since_dt = now - timedelta(days=safe_days)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    query_errors: List[Dict[str, str]] = []
+
+    def collect(table: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        try:
+            return _supabase_rest_rows(table, params)
+        except Exception as exc:
+            query_errors.append({"table": table, "error": str(exc)[:180]})
+            return []
+
+    intents = collect(
+        "payment_intents",
+        {
+            "select": (
+                "id,user_id,plan_code,chain_id,status,expires_at,tx_hash,"
+                "metadata,created_at,updated_at"
+            ),
+            "order": "updated_at.desc",
+            "limit": str(max(safe_limit * 3, 100)),
+        },
+    )
+    referral_attributions = collect(
+        "referral_attributions",
+        {
+            "select": (
+                "id,referrer_user_id,referred_user_id,code,status,"
+                "converted_payment_intent_id,converted_tx_hash,converted_at,"
+                "created_at,updated_at"
+            ),
+            "order": "updated_at.desc",
+            "limit": str(safe_limit),
+        },
+    )
+    referral_rewards = collect(
+        "referral_rewards",
+        {
+            "select": (
+                "id,referral_attribution_id,referrer_user_id,referred_user_id,"
+                "payment_intent_id,tx_hash,reward_days,reward_points,created_at"
+            ),
+            "order": "created_at.desc",
+            "limit": str(safe_limit),
+        },
+    )
+    trial_claims = collect(
+        "trial_claims",
+        {
+            "select": "id,user_id,email,telegram_user_id,claimed_at,created_at",
+            "order": "created_at.desc",
+            "limit": str(min(safe_limit, 80)),
+        },
+    )
+
+    issues: List[Dict[str, Any]] = []
+    stuck_intents: List[Dict[str, Any]] = []
+    points_issues: List[Dict[str, Any]] = []
+
+    for intent in intents:
+        status = str(intent.get("status") or "").strip().lower()
+        updated_at = _parse_iso_datetime(intent.get("updated_at"))
+        created_at = _parse_iso_datetime(intent.get("created_at"))
+        expires_at = _parse_iso_datetime(intent.get("expires_at"))
+        age_min = (
+            int((now - (updated_at or created_at or now)).total_seconds() // 60)
+            if (updated_at or created_at)
+            else 0
+        )
+        intent_id = str(intent.get("id") or "")
+        user_id = str(intent.get("user_id") or "")
+        metadata = intent.get("metadata")
+        metadata = metadata if isinstance(metadata, dict) else {}
+        redemption = metadata.get("points_redemption")
+        redemption = redemption if isinstance(redemption, dict) else {}
+
+        if status == "submitted" and age_min >= 10:
+            row = {
+                "id": intent_id,
+                "user_id": user_id,
+                "plan_code": intent.get("plan_code"),
+                "status": status,
+                "age_min": age_min,
+                "tx_hash": intent.get("tx_hash"),
+                "updated_at": intent.get("updated_at"),
+            }
+            stuck_intents.append(row)
+            issues.append(
+                _risk_issue(
+                    category="payment_intent",
+                    severity="high",
+                    title="Submitted intent 超过 10 分钟未确认",
+                    detail=f"{intent_id} 已提交 {age_min} 分钟，可能需要补单或检查确认循环。",
+                    user_id=user_id,
+                    created_at=intent.get("updated_at") or intent.get("created_at"),
+                    reference=intent_id,
+                    payload=row,
+                )
+            )
+        elif status == "created" and expires_at and expires_at < now:
+            row = {
+                "id": intent_id,
+                "user_id": user_id,
+                "plan_code": intent.get("plan_code"),
+                "status": status,
+                "expires_at": intent.get("expires_at"),
+                "age_min": age_min,
+            }
+            stuck_intents.append(row)
+            issues.append(
+                _risk_issue(
+                    category="payment_intent",
+                    severity="medium",
+                    title="Created intent 已过期但未关闭",
+                    detail=f"{intent_id} 已过期，用户可能离开支付流程。",
+                    user_id=user_id,
+                    created_at=intent.get("created_at"),
+                    reference=intent_id,
+                    payload=row,
+                )
+            )
+
+        if bool(redemption.get("applied")):
+            planned = int(redemption.get("points_to_consume") or 0)
+            consumed = bool(redemption.get("consumed"))
+            consumed_points = int(redemption.get("consumed_points") or 0)
+            if status == "confirmed" and not consumed:
+                row = {
+                    "intent_id": intent_id,
+                    "user_id": user_id,
+                    "status": status,
+                    "planned_points": planned,
+                    "consumed_points": consumed_points,
+                    "updated_at": intent.get("updated_at"),
+                }
+                points_issues.append(row)
+                issues.append(
+                    _risk_issue(
+                        category="points_redemption",
+                        severity="high",
+                        title="订单已确认但积分未扣减",
+                        detail=f"{intent_id} 标记使用积分，但 confirmed metadata 未显示 consumed。",
+                        user_id=user_id,
+                        created_at=intent.get("updated_at") or intent.get("created_at"),
+                        reference=intent_id,
+                        payload=row,
+                    )
+                )
+            elif status == "confirmed" and planned > 0 and 0 < consumed_points < planned:
+                row = {
+                    "intent_id": intent_id,
+                    "user_id": user_id,
+                    "status": status,
+                    "planned_points": planned,
+                    "consumed_points": consumed_points,
+                    "updated_at": intent.get("updated_at"),
+                }
+                points_issues.append(row)
+                issues.append(
+                    _risk_issue(
+                        category="points_redemption",
+                        severity="medium",
+                        title="积分抵扣只扣了部分积分",
+                        detail=f"{intent_id} 计划扣 {planned}，实际扣 {consumed_points}。",
+                        user_id=user_id,
+                        created_at=intent.get("updated_at") or intent.get("created_at"),
+                        reference=intent_id,
+                        payload=row,
+                    )
+                )
+
+    reward_by_attribution = {
+        str(row.get("referral_attribution_id") or ""): row
+        for row in referral_rewards
+        if row.get("referral_attribution_id") is not None
+    }
+    monthly_cap_hits: List[Dict[str, Any]] = []
+    referral_settlement_issues: List[Dict[str, Any]] = []
+
+    for attribution in referral_attributions:
+        status = str(attribution.get("status") or "").strip().lower()
+        attribution_id = str(attribution.get("id") or "")
+        updated_at = _parse_iso_datetime(
+            attribution.get("updated_at") or attribution.get("converted_at") or attribution.get("created_at")
+        )
+        if status == "capped" and (not updated_at or updated_at >= month_start):
+            row = {
+                "id": attribution_id,
+                "code": attribution.get("code"),
+                "referrer_user_id": attribution.get("referrer_user_id"),
+                "referred_user_id": attribution.get("referred_user_id"),
+                "updated_at": attribution.get("updated_at"),
+            }
+            monthly_cap_hits.append(row)
+            issues.append(
+                _risk_issue(
+                    category="referral",
+                    severity="medium",
+                    title="邀请奖励月度上限命中",
+                    detail=f"邀请码 {attribution.get('code') or ''} 的推荐奖励已被月度上限拦截。",
+                    user_id=attribution.get("referrer_user_id"),
+                    created_at=attribution.get("updated_at") or attribution.get("created_at"),
+                    reference=attribution_id,
+                    payload=row,
+                )
+            )
+        if status == "converted" and attribution_id not in reward_by_attribution:
+            row = {
+                "id": attribution_id,
+                "code": attribution.get("code"),
+                "referrer_user_id": attribution.get("referrer_user_id"),
+                "referred_user_id": attribution.get("referred_user_id"),
+                "converted_payment_intent_id": attribution.get("converted_payment_intent_id"),
+                "converted_at": attribution.get("converted_at"),
+            }
+            referral_settlement_issues.append(row)
+            issues.append(
+                _risk_issue(
+                    category="referral",
+                    severity="high",
+                    title="推荐已转化但没有奖励记录",
+                    detail=f"归因 {attribution_id} 已 converted，但 referral_rewards 未找到对应记录。",
+                    user_id=attribution.get("referrer_user_id"),
+                    created_at=attribution.get("converted_at") or attribution.get("updated_at"),
+                    reference=attribution_id,
+                    payload=row,
+                )
+            )
+
+    events = db.list_app_analytics_events(limit=20000, since_iso=since_dt.isoformat())
+    signup_rows = [
+        row
+        for row in events
+        if str(row.get("event_type") or "").strip().lower()
+        in {"signup_success", "signup_completed"}
+    ]
+    trial_actor_keys = {
+        _app_analytics_actor_key(row)
+        for row in events
+        if str(row.get("event_type") or "").strip().lower() == "trial_created"
+    }
+    trial_gaps: List[Dict[str, Any]] = []
+    for row in signup_rows[:300]:
+        actor_key = _app_analytics_actor_key(row)
+        if actor_key in trial_actor_keys:
+            continue
+        payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+        gap = {
+            "event_id": row.get("id"),
+            "actor_key": actor_key,
+            "user_id": row.get("user_id") or payload.get("user_id"),
+            "created_at": row.get("created_at"),
+        }
+        trial_gaps.append(gap)
+        if len(trial_gaps) <= 20:
+            issues.append(
+                _risk_issue(
+                    category="signup_trial",
+                    severity="high",
+                    title="注册成功后未记录试用开通",
+                    detail="该用户进入 signup_success，但同窗口内没有 trial_created 事件。",
+                    user_id=gap.get("user_id"),
+                    created_at=gap.get("created_at"),
+                    reference=str(gap.get("event_id") or ""),
+                    payload=gap,
+                )
+            )
+
+    payment_incidents = db.list_payment_audit_events(
+        limit=safe_limit,
+        event_type="payment_intent_failed",
+    )
+    unresolved_incidents = [
+        item
+        for item in payment_incidents
+        if not str((item.get("payload") or {}).get("resolved_at") or "").strip()
+    ]
+
+    issues.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
+    recent_rewards = [
+        {
+            "id": row.get("id"),
+            "referral_attribution_id": row.get("referral_attribution_id"),
+            "referrer_user_id": row.get("referrer_user_id"),
+            "referred_user_id": row.get("referred_user_id"),
+            "payment_intent_id": row.get("payment_intent_id"),
+            "reward_points": int(row.get("reward_points") or 0),
+            "reward_days": int(row.get("reward_days") or 0),
+            "tx_hash": row.get("tx_hash"),
+            "explorer_url": _payment_explorer_url("polygon", row.get("tx_hash")),
+            "created_at": row.get("created_at"),
+        }
+        for row in referral_rewards[:safe_limit]
+    ]
+
+    return {
+        "checked_at": _to_utc_iso(now),
+        "window_days": safe_days,
+        "summary": {
+            "issues": len(issues),
+            "stuck_intents": len(stuck_intents),
+            "trial_gaps": len(trial_gaps),
+            "payment_incidents": len(unresolved_incidents),
+            "points_discount_issues": len(points_issues),
+            "referral_settlement_issues": len(referral_settlement_issues),
+            "monthly_cap_hits": len(monthly_cap_hits),
+            "recent_referral_rewards": len(recent_rewards),
+            "recent_trial_claims": len(trial_claims),
+        },
+        "issues": issues[:safe_limit],
+        "stuck_intents": stuck_intents[:safe_limit],
+        "trial_gaps": trial_gaps[:safe_limit],
+        "payment_incidents": unresolved_incidents[:safe_limit],
+        "points_discount_issues": points_issues[:safe_limit],
+        "referral_settlement_issues": referral_settlement_issues[:safe_limit],
+        "monthly_cap_hits": monthly_cap_hits[:safe_limit],
+        "recent_referral_rewards": recent_rewards,
+        "recent_trial_claims": trial_claims,
+        "query_errors": query_errors,
+    }
 
 
 def grant_ops_points(request: Request, body: GrantPointsRequest) -> Dict[str, Any]:
@@ -984,6 +1403,235 @@ def get_ops_logs(
     return {
         "lines": log_lines[-safe_lines:],
         "total": len(log_lines),
+    }
+
+
+def _safe_source_text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _source_observed_at(source: dict[str, Any]) -> Any:
+    for key in (
+        "observed_at",
+        "obs_time",
+        "report_time",
+        "observation_time",
+        "observation_time_local",
+        "time",
+        "timestamp",
+    ):
+        value = source.get(key)
+        if _safe_source_text(value):
+            return value
+    return None
+
+
+def _source_code(source: dict[str, Any], fallback: str = "") -> str:
+    for key in ("source_code", "source", "provider_code", "network_provider"):
+        value = _safe_source_text(source.get(key))
+        if value:
+            return canonical_observation_source_code(value)
+    return canonical_observation_source_code(fallback)
+
+
+def _source_label(source: dict[str, Any], code: str, fallback: str = "") -> str:
+    for key in ("source_label", "station_label", "station_name", "label", "provider_label"):
+        value = _safe_source_text(source.get(key))
+        if value:
+            return value
+    return fallback or code.upper()
+
+
+def _source_health_entry(
+    *,
+    city: str,
+    role: str,
+    source: dict[str, Any],
+    fallback_code: str = "",
+    fallback_label: str = "",
+) -> dict[str, Any] | None:
+    if not isinstance(source, dict) or not source:
+        return None
+
+    code = _source_code(source, fallback_code)
+    label = _source_label(source, code, fallback_label)
+    observed_at = _source_observed_at(source)
+    freshness = source.get("freshness") if isinstance(source.get("freshness"), dict) else None
+    if freshness:
+        status = _safe_source_text(freshness.get("freshness_status")) or "unknown"
+        age_sec = freshness.get("age_sec")
+        observed_at = freshness.get("observed_at") or freshness.get("observed_at_local") or observed_at
+        expected_next = freshness.get("expected_next_update_at")
+        reason = freshness.get("freshness_reason")
+    else:
+        age_min = source.get("obs_age_min")
+        try:
+            age_min_int = int(age_min) if age_min is not None else None
+        except Exception:
+            age_min_int = None
+        freshness = build_observation_freshness(
+            source_code=code,
+            source_label=label,
+            observed_at=observed_at,
+            age_min=age_min_int,
+        )
+        status = str(freshness.get("freshness_status") or "unknown")
+        age_sec = freshness.get("age_sec")
+        expected_next = freshness.get("expected_next_update_at")
+        reason = freshness.get("freshness_reason")
+
+    return {
+        "city": city,
+        "role": role,
+        "source_code": code,
+        "source_label": label,
+        "station_code": source.get("station_code") or source.get("icao"),
+        "station_label": source.get("station_label") or source.get("station_name"),
+        "status": status,
+        "reason": reason,
+        "age_sec": age_sec,
+        "age_min": round(float(age_sec) / 60, 1) if isinstance(age_sec, (int, float)) else None,
+        "observed_at": observed_at,
+        "expected_next_update_at": expected_next,
+        "temp": source.get("temp"),
+    }
+
+
+def _expected_city_source_codes(city: str, payload: dict[str, Any]) -> list[str]:
+    city_key = str(city or "").strip().lower().replace(" ", "")
+    expected: list[str] = []
+    if city_key in {"ankara", "istanbul"}:
+        expected.append("mgm")
+    if city_key == "amsterdam":
+        expected.append("knmi")
+    if city_key in {"telaviv", "telavivyafo"}:
+        expected.append("ims")
+    provider = canonical_observation_source_code(payload.get("official_network_source"))
+    if provider and provider not in {"metar", "none"}:
+        expected.append(provider)
+    return list(dict.fromkeys(expected))
+
+
+def _collect_city_source_health(city: str, entry: dict[str, Any] | None) -> dict[str, Any]:
+    payload = (entry or {}).get("payload") if isinstance(entry, dict) else {}
+    if not isinstance(payload, dict):
+        payload = {}
+
+    sources: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+
+    def add(role: str, source: Any, fallback_code: str = "", fallback_label: str = "") -> None:
+        item = _source_health_entry(
+            city=city,
+            role=role,
+            source=source if isinstance(source, dict) else {},
+            fallback_code=fallback_code,
+            fallback_label=fallback_label,
+        )
+        if not item:
+            return
+        key = (str(item.get("role")), str(item.get("source_code")))
+        if key in seen:
+            return
+        seen.add(key)
+        sources.append(item)
+
+    add("settlement", payload.get("current"), fallback_label="Settlement")
+    add("airport_metar", payload.get("airport_current"), fallback_code="metar", fallback_label="METAR")
+    add("airport_primary", payload.get("airport_primary"), fallback_label="Airport station")
+
+    official = payload.get("official") if isinstance(payload.get("official"), dict) else {}
+    add("official_airport_primary", official.get("airport_primary"), fallback_label="Official airport station")
+    add("official_airport_primary", official.get("airport_primary_current"), fallback_label="Official airport station")
+
+    mgm = payload.get("mgm") if isinstance(payload.get("mgm"), dict) else {}
+    if mgm:
+        mgm_current = mgm.get("current") if isinstance(mgm.get("current"), dict) else {}
+        add(
+            "official_network",
+            {
+                **mgm_current,
+                "source_code": "mgm",
+                "source_label": "MGM",
+                "obs_time": mgm.get("obs_time") or mgm_current.get("time"),
+            },
+            fallback_code="mgm",
+            fallback_label="MGM",
+        )
+
+    for nearby in payload.get("official_nearby") or payload.get("mgm_nearby") or []:
+        if isinstance(nearby, dict):
+            add("nearby_official", nearby, fallback_label="Nearby official")
+
+    expected_codes = _expected_city_source_codes(city, payload)
+    present_codes = {str(item.get("source_code") or "") for item in sources}
+    for code in expected_codes:
+        if code and code not in present_codes:
+            sources.append(
+                {
+                    "city": city,
+                    "role": "expected_source",
+                    "source_code": code,
+                    "source_label": code.upper(),
+                    "status": "missing",
+                    "reason": "expected_source_not_present_in_cached_detail",
+                    "age_sec": None,
+                    "age_min": None,
+                    "observed_at": None,
+                    "expected_next_update_at": None,
+                    "temp": None,
+                }
+            )
+
+    priority = {"stale": 4, "missing": 4, "delayed": 3, "unknown": 2, "expected_wait": 1, "fresh": 0}
+    worst = max(sources, key=lambda item: priority.get(str(item.get("status") or ""), 2), default=None)
+    full_age_sec = (
+        round(max(0.0, __import__("time").time() - float(entry.get("updated_at_ts") or 0.0)), 1)
+        if entry
+        else None
+    )
+    return {
+        "city": city,
+        "cache_exists": bool(entry),
+        "cache_updated_at": entry.get("updated_at") if entry else None,
+        "cache_age_sec": full_age_sec,
+        "source_count": len(sources),
+        "worst_status": str(worst.get("status") if worst else "missing"),
+        "sources": sources,
+    }
+
+
+def get_ops_source_health(
+    request: Request,
+    cities: str = "",
+    limit: int = 80,
+) -> dict[str, Any]:
+    _require_ops(request)
+    requested = legacy_routes._normalize_city_list(cities) if cities else []
+    if requested:
+        selected = requested
+    else:
+        all_cities = getattr(legacy_routes, "CITIES", {})
+        selected = list(all_cities.keys()) if isinstance(all_cities, dict) else []
+    safe_limit = max(1, min(int(limit or 80), 200))
+    rows = []
+    for city in selected[:safe_limit]:
+        entry = legacy_routes._CACHE_DB.get_city_cache("full", city)
+        if not entry:
+            entry = legacy_routes._CACHE_DB.get_city_cache("panel", city)
+        rows.append(_collect_city_source_health(city, entry))
+
+    status_counts: dict[str, int] = {}
+    for row in rows:
+        for source in row.get("sources") or []:
+            status = str(source.get("status") or "unknown")
+            status_counts[status] = status_counts.get(status, 0) + 1
+
+    return {
+        "checked_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+        "cities": rows,
+        "status_counts": status_counts,
+        "total_cities": len(rows),
     }
 
 

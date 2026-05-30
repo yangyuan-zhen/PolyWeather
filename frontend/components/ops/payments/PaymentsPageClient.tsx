@@ -1,34 +1,96 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RefreshCcw, CheckCircle2, ExternalLink } from "lucide-react";
+import dynamic from "next/dynamic";
+import { RefreshCcw, CheckCircle2, ExternalLink, AlertTriangle, ShieldCheck } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { opsApi } from "@/lib/ops-api";
-import type { PaymentRuntimePayload, PaymentIncident, PaymentRecord } from "@/types/ops";
-import { CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
-import {
-  PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
-} from "recharts";
+import type {
+  BillingRiskIssue,
+  BillingRiskPayload,
+  PaymentRuntimePayload,
+  PaymentIncident,
+  PaymentRecord,
+} from "@/types/ops";
+
+const PaymentIncidentPieChart = dynamic(
+  () => import("./PaymentIncidentPieChart").then((mod) => mod.PaymentIncidentPieChart),
+  {
+    ssr: false,
+    loading: () => <span className="text-sm text-slate-500">加载图表...</span>,
+  },
+);
+
+function paymentExplorerUrl(payment: PaymentRecord): string {
+  const txHash = String(payment.tx_hash || "").trim();
+  if (!txHash) return "";
+  const chain = String(payment.chain || "").trim().toLowerCase();
+  const base = chain.includes("eth")
+    ? "https://etherscan.io"
+    : "https://polygonscan.com";
+  return `${base}/tx/${txHash}`;
+}
+
+function severityTone(severity?: string) {
+  if (severity === "high") return "border-red-200 bg-red-50 text-red-700";
+  if (severity === "medium") return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-slate-200 bg-slate-50 text-slate-600";
+}
+
+function severityLabel(severity?: string) {
+  if (severity === "high") return "高";
+  if (severity === "medium") return "中";
+  if (severity === "low") return "低";
+  return severity || "未知";
+}
+
+function compactDate(value?: string) {
+  if (!value) return "—";
+  return value.slice(0, 19).replace("T", " ");
+}
+
+function RiskStat({
+  label,
+  value,
+  sub,
+  tone = "text-slate-950",
+}: {
+  label: string;
+  value: number;
+  sub: string;
+  tone?: string;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <div className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</div>
+      <div className={`mt-1 text-2xl font-black ${tone}`}>{value}</div>
+      <div className="mt-1 text-xs text-slate-500">{sub}</div>
+    </div>
+  );
+}
 
 export function PaymentsPageClient() {
   const [loading, setLoading] = useState(true);
   const [runtime, setRuntime] = useState<PaymentRuntimePayload | null>(null);
   const [incidents, setIncidents] = useState<PaymentIncident[]>([]);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [risk, setRisk] = useState<BillingRiskPayload | null>(null);
   const [resolving, setResolving] = useState<Set<number>>(new Set());
 
   const load = async () => {
     setLoading(true);
     try {
-      const [rt, inc, pay] = await Promise.all([
+      const [rt, inc, pay, riskPayload] = await Promise.all([
         opsApi.paymentRuntime() as Promise<PaymentRuntimePayload>,
         opsApi.incidents(50),
         opsApi.listPayments(50),
+        opsApi.billingRisk(30, 80) as Promise<BillingRiskPayload>,
       ]);
       setRuntime(rt);
       setIncidents((inc as unknown as { incidents?: PaymentIncident[] }).incidents ?? []);
       setPayments((pay as unknown as { payments?: PaymentRecord[] }).payments ?? []);
+      setRisk(riskPayload);
     } catch { /* */ }
     setLoading(false);
   };
@@ -60,18 +122,10 @@ export function PaymentsPageClient() {
     name,
     value,
   }));
-
-const COLORS = ["#ef4444", "#f59e0b", "#3b82f6", "#10b981", "#a855f7", "#6366f1", "#ec4899"];
-
-function paymentExplorerUrl(payment: PaymentRecord): string {
-  const txHash = String(payment.tx_hash || "").trim();
-  if (!txHash) return "";
-  const chain = String(payment.chain || "").trim().toLowerCase();
-  const base = chain.includes("eth")
-    ? "https://etherscan.io"
-    : "https://polygonscan.com";
-  return `${base}/tx/${txHash}`;
-}
+  const riskSummary = risk?.summary ?? {};
+  const riskIssues = risk?.issues ?? [];
+  const referralRewards = risk?.recent_referral_rewards ?? [];
+  const hasRisk = Number(riskSummary.issues ?? 0) > 0;
 
   return (
     <div className="space-y-6">
@@ -81,6 +135,73 @@ function paymentExplorerUrl(payment: PaymentRecord): string {
           <RefreshCcw className="h-3.5 w-3.5" /> 刷新
         </Button>
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <CardTitle className="flex items-center gap-2">
+            {hasRisk ? <AlertTriangle className="h-4 w-4 text-amber-500" /> : <ShieldCheck className="h-4 w-4 text-emerald-500" />}
+            支付与邀请风控流水
+          </CardTitle>
+          <span className="text-xs text-slate-500">最近 {risk?.window_days ?? 30} 天 · {compactDate(risk?.checked_at)}</span>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
+            <RiskStat label="总异常" value={Number(riskSummary.issues ?? 0)} sub="需要人工关注" tone={hasRisk ? "text-red-600" : "text-emerald-600"} />
+            <RiskStat label="Intent 卡住" value={Number(riskSummary.stuck_intents ?? 0)} sub="submitted/过期 created" />
+            <RiskStat label="试用漏开" value={Number(riskSummary.trial_gaps ?? 0)} sub="signup 无 trial_created" />
+            <RiskStat label="支付异常" value={Number(riskSummary.payment_incidents ?? incidents.length)} sub="未标记处理" />
+            <RiskStat label="积分异常" value={Number(riskSummary.points_discount_issues ?? 0)} sub="确认后未扣/少扣" />
+            <RiskStat label="推荐异常" value={Number(riskSummary.referral_settlement_issues ?? 0)} sub="转化无奖励记录" />
+            <RiskStat label="上限命中" value={Number(riskSummary.monthly_cap_hits ?? 0)} sub="月度邀请封顶" />
+          </div>
+
+          {risk?.query_errors?.length ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              部分 Supabase 表查询失败：{risk.query_errors.map((item) => item.table).filter(Boolean).join(", ")}
+            </div>
+          ) : null}
+
+          {riskIssues.length === 0 ? (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+              暂无试用、支付、推荐奖励或积分抵扣风险信号。
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-slate-500">
+                    <th className="py-2 pr-4 font-bold">级别</th>
+                    <th className="py-2 pr-4 font-bold">类型</th>
+                    <th className="py-2 pr-4 font-bold">问题</th>
+                    <th className="py-2 pr-4 font-bold">用户</th>
+                    <th className="py-2 pr-4 font-bold">时间</th>
+                    <th className="py-2 pr-4 font-bold">引用</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {riskIssues.slice(0, 30).map((issue: BillingRiskIssue, index) => (
+                    <tr key={`${issue.category}-${issue.reference}-${index}`} className="border-b border-slate-100">
+                      <td className="py-2 pr-4">
+                        <span className={`inline-flex min-w-8 items-center justify-center rounded-md border px-2 py-1 text-xs font-bold ${severityTone(issue.severity)}`}>
+                          {severityLabel(issue.severity)}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-4 text-slate-500">{issue.category ?? "—"}</td>
+                      <td className="py-2 pr-4">
+                        <div className="font-bold text-slate-900">{issue.title ?? "—"}</div>
+                        <div className="mt-0.5 max-w-xl text-xs text-slate-500">{issue.detail ?? "—"}</div>
+                      </td>
+                      <td className="py-2 pr-4 font-mono text-xs text-slate-500">{issue.user_id ? `${issue.user_id.slice(0, 10)}...` : "—"}</td>
+                      <td className="py-2 pr-4 whitespace-nowrap text-xs text-slate-500">{compactDate(issue.created_at)}</td>
+                      <td className="py-2 pr-4 font-mono text-xs text-blue-700">{issue.reference ? String(issue.reference).slice(0, 14) : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2">
@@ -113,41 +234,47 @@ function paymentExplorerUrl(payment: PaymentRecord): string {
             {incidentPieData.length === 0 ? (
               <span className="text-sm text-slate-500">暂无异常数据</span>
             ) : (
-              <div className="w-full h-full flex items-center gap-2">
-                <div className="w-[100px] h-[100px] shrink-0">
-                  <ResponsiveContainer>
-                    <PieChart>
-                      <Pie
-                        data={incidentPieData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={24}
-                        outerRadius={40}
-                        paddingAngle={2}
-                        dataKey="value"
-                      >
-                        {incidentPieData.map((d, i) => (
-                          <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip contentStyle={{ ...CHART_TOOLTIP_STYLE, fontSize: 11 }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="flex-1 space-y-1 overflow-y-auto max-h-[100px] text-xs">
-                  {incidentPieData.map((d, i) => (
-                    <div key={d.name} className="flex items-center gap-1.5 truncate">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                      <span className="text-slate-400 truncate" title={d.name}>{d.name}</span>
-                      <span className="text-white font-bold ml-auto">{d.value}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <PaymentIncidentPieChart data={incidentPieData} />
             )}
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader><CardTitle>推荐奖励结算 ({referralRewards.length})</CardTitle></CardHeader>
+        <CardContent>
+          {referralRewards.length === 0 ? (
+            <span className="text-sm text-slate-500">最近没有推荐奖励记录</span>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-slate-500">
+                    <th className="py-2 pr-4 font-bold">ID</th>
+                    <th className="py-2 pr-4 font-bold">邀请人</th>
+                    <th className="py-2 pr-4 font-bold">被邀请人</th>
+                    <th className="py-2 pr-4 font-bold">奖励</th>
+                    <th className="py-2 pr-4 font-bold">Intent</th>
+                    <th className="py-2 pr-4 font-bold">时间</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {referralRewards.slice(0, 20).map((row, index) => (
+                    <tr key={`${row.id}-${index}`} className="border-b border-slate-100">
+                      <td className="py-2 pr-4 font-mono text-xs text-slate-500">{String(row.id ?? "—")}</td>
+                      <td className="py-2 pr-4 font-mono text-xs text-slate-500">{String(row.referrer_user_id ?? "—").slice(0, 10)}...</td>
+                      <td className="py-2 pr-4 font-mono text-xs text-slate-500">{String(row.referred_user_id ?? "—").slice(0, 10)}...</td>
+                      <td className="py-2 pr-4 text-emerald-700 font-bold">+{Number(row.reward_points ?? 0).toLocaleString()} 分</td>
+                      <td className="py-2 pr-4 font-mono text-xs text-blue-700">{String(row.payment_intent_id ?? "—").slice(0, 14)}</td>
+                      <td className="py-2 pr-4 whitespace-nowrap text-xs text-slate-500">{compactDate(String(row.created_at ?? ""))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader><CardTitle>支付异常 ({incidents.length})</CardTitle></CardHeader>
