@@ -64,7 +64,10 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
       ? "Set at least 6 characters"
       : "设置至少 6 位密码",
     loginSubmit: isEn ? "Start your weather decision journey" : "开启气象决策之旅",
+    loginSubmitting: isEn ? "Signing in..." : "正在登录...",
     signupSubmit: isEn ? "Create account now" : "立即创建账号",
+    signupSubmitting: isEn ? "Creating account..." : "正在创建账号...",
+    googleSubmitting: isEn ? "Connecting Google..." : "正在连接 Google...",
     loginHint: isEn
       ? "After signing in, your homepage will be personalized."
       : "登录后将为您个性化定制首页数据",
@@ -109,6 +112,14 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
       : "提供精准的机场 METAR 实况、先进的 DEB 智能融合预测和实时 AI 决策卡片，助您理清气象风险脉络。",
     trusted: isEn ? "Trusted by industry professionals" : "深受行业决策人员信赖",
   } as const;
+  const submittingLabel = isLogin ? copy.loginSubmitting : copy.signupSubmitting;
+  const googleSubmittingLabel = copy.googleSubmitting;
+  const loadingSpinner = (
+    <span
+      aria-hidden="true"
+      className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+    />
+  );
 
   const onResetPassword = async () => {
     setErrorText("");
@@ -489,10 +500,12 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
               <button
                 type="submit"
                 disabled={loading}
+                aria-busy={loading}
                 className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 hover:from-blue-600 hover:to-indigo-600 text-sm font-bold text-white shadow-lg shadow-slate-950/10 hover:shadow-blue-600/25 active:scale-[0.98] transition-all duration-300 disabled:opacity-50 mt-8 flex items-center justify-center gap-2 group animate-fade-up [animation-delay:550ms] opacity-0"
               >
-                <span>{isLogin ? copy.loginSubmit : copy.signupSubmit}</span>
-                <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
+                {loading ? loadingSpinner : null}
+                <span>{loading ? submittingLabel : (isLogin ? copy.loginSubmit : copy.signupSubmit)}</span>
+                {!loading && <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />}
               </button>
             </form>
 
@@ -508,10 +521,11 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
               type="button"
               onClick={() => void onGoogleSignIn()}
               disabled={loading}
+              aria-busy={loading}
               className="w-full py-3 px-4 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 active:scale-[0.99] transition-all duration-150 flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              <Chrome className="h-4 w-4 text-blue-600" />
-              <span>{copy.googleOneClick}</span>
+              {loading ? loadingSpinner : <Chrome className="h-4 w-4 text-blue-600" />}
+              <span>{loading ? googleSubmittingLabel : copy.googleOneClick}</span>
             </button>
 
             {errorText ? <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-700 leading-normal">{errorText}</p> : null}

@@ -50,6 +50,14 @@ export function runTests() {
     fs.existsSync(resetClientPath),
     "password reset page must use a dedicated client component",
   );
+  assert(
+    loginClientSource.includes("loadingSpinner") &&
+      loginClientSource.includes("submittingLabel") &&
+      loginClientSource.includes("googleSubmittingLabel") &&
+      loginClientSource.includes('aria-busy={loading}') &&
+      loginClientSource.includes("animate-spin"),
+    "login submit and Google sign-in buttons must show a visible loading spinner and pending label",
+  );
 
   const resetClientSource = fs.readFileSync(resetClientPath, "utf8");
   assert(
