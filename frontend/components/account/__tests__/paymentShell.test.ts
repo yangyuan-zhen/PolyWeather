@@ -218,6 +218,13 @@ export function runTests() {
     "account snapshot loader must retry with a refreshed Supabase token when local user exists but /api/auth/me reports unauthenticated",
   );
   assert(
+    hookSource.includes("refreshEntitlementAfterPayment") &&
+      paymentFlowSource.includes("refreshEntitlementAfterPayment") &&
+      paymentFlowSource.includes("await refreshEntitlementAfterPayment();") &&
+      hookSource.includes("subscription_active === true"),
+    "successful payment flows must automatically poll /api/auth/me until the paid subscription is visible instead of requiring logout or manual refresh",
+  );
+  assert(
     !hookSource.includes(".auth.getUser()") &&
       hookSource.includes(".auth.getSession()"),
     "account snapshot loader must use the local Supabase session instead of calling getUser before /api/auth/me validates the bearer",

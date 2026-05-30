@@ -146,10 +146,9 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
     [supabaseReady, getValidAccessToken],
   );
 
-  // ── loadSnapshot ──────────────────────────────────────────
-  const loadSnapshot = useCallback(async () => {
-    setErrorText("");
-    const attempt = async (retry: boolean): Promise<void> => {
+  // ── Auth snapshot refresh ────────────────────────────────
+  const fetchAuthSnapshot = useCallback(
+    async (retry: boolean): Promise<AuthMeResponse> => {
       const userPromise = supabaseReady
         ? getSupabaseBrowserClient()
             .auth.getSession()
@@ -165,7 +164,7 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
       if (!backendResult.ok) {
         if (retry && backendResult.status === 401) {
           await new Promise((r) => setTimeout(r, 1200));
-          return attempt(false);
+          return fetchAuthSnapshot(false);
         }
         const raw = (await backendResult.text()).slice(0, 260);
         throw new Error(copy.httpError.replace("{status}", String(backendResult.status)).replace("{raw}", raw));
@@ -202,10 +201,41 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
       }
       setBackend(backendJson);
       setUpdatedAt(new Date().toISOString());
-    };
-    try { await attempt(true); }
+      return backendJson;
+    },
+    [
+      buildAuthedHeaders,
+      copy.httpError,
+      setBackend,
+      setUpdatedAt,
+      setUser,
+      supabaseReady,
+    ],
+  );
+
+  // ── loadSnapshot ──────────────────────────────────────────
+  const loadSnapshot = useCallback(async () => {
+    setErrorText("");
+    try { await fetchAuthSnapshot(true); }
     catch (error) { setErrorText(String(error)); }
-  }, [buildAuthedHeaders, supabaseReady, copy.httpError]);
+  }, [fetchAuthSnapshot, setErrorText]);
+
+  const refreshEntitlementAfterPayment = useCallback(async () => {
+    setErrorText("");
+    const maxAttempts = 5;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const backendJson = await fetchAuthSnapshot(true);
+        if (backendJson.subscription_active === true) return;
+      } catch (error) {
+        if (attempt === maxAttempts - 1) {
+          setErrorText(String(error));
+          return;
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    }
+  }, [fetchAuthSnapshot, setErrorText]);
 
   // ── Shared state for sub-hooks ───────────────────────────
   // These state variables are managed in the master hook and passed
@@ -383,6 +413,7 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
     getValidAccessToken,
     buildAuthedHeaders,
     loadSnapshot,
+    refreshEntitlementAfterPayment,
     loadPaymentSnapshot: loadPaymentSnapshotImpl,
     user,
   });
@@ -438,6 +469,7 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
     getValidAccessToken,
     buildAuthedHeaders,
     loadSnapshot,
+    refreshEntitlementAfterPayment,
     loadPaymentSnapshot: loadPaymentSnapshotImpl,
     waitForReceipt: walletBind.waitForReceipt,
     ensureTargetChain: walletBind.ensureTargetChain,

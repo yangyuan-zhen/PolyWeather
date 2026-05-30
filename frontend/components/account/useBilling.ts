@@ -53,6 +53,7 @@ export interface UseBillingParams {
   getValidAccessToken: () => Promise<string>;
   buildAuthedHeaders: (withJson?: boolean, requireAuth?: boolean) => Promise<Record<string, string>>;
   loadSnapshot: () => Promise<void>;
+  refreshEntitlementAfterPayment: () => Promise<void>;
   loadPaymentSnapshot: () => Promise<void>;
 
   // User for metadata points
@@ -86,6 +87,7 @@ export function useBilling(params: UseBillingParams) {
     getValidAccessToken,
     buildAuthedHeaders,
     loadSnapshot,
+    refreshEntitlementAfterPayment,
     loadPaymentSnapshot,
     user,
   } = params;
@@ -203,7 +205,7 @@ export function useBilling(params: UseBillingParams) {
       if (json.ok) {
         setPaymentInfo(copy.walletRecoveryDone);
         setPaymentError("");
-        await loadSnapshot();
+        await refreshEntitlementAfterPayment();
         await loadPaymentSnapshot();
         return true;
       }
@@ -215,7 +217,7 @@ export function useBilling(params: UseBillingParams) {
     }
   }, [
     authIsAuthenticated, buildAuthedHeaders, copy.walletRecoveryDone,
-    loadPaymentSnapshot, loadSnapshot, reconcileBusy,
+    loadPaymentSnapshot, refreshEntitlementAfterPayment, reconcileBusy,
   ]);
 
   // ── handleSubmit409 ────────────────────────────────────
@@ -226,7 +228,7 @@ export function useBilling(params: UseBillingParams) {
         const ok = await reconcileLatestPayment();
         if (ok) return;
         setPaymentInfo(copy.orderAlreadyPaid);
-        await loadSnapshot();
+        await refreshEntitlementAfterPayment();
         await loadPaymentSnapshot();
         return;
       }
@@ -246,7 +248,7 @@ export function useBilling(params: UseBillingParams) {
             const txHash = intentJson.intent?.tx_hash || txHashNorm;
             setPaymentInfo(`支付已确认，交易: ${shortAddress(txHash)}`);
             setPaymentError("");
-            await loadSnapshot();
+            await refreshEntitlementAfterPayment();
             await loadPaymentSnapshot();
             return;
           }
@@ -257,7 +259,7 @@ export function useBilling(params: UseBillingParams) {
       }
       throw new Error(copy.submitTxFailed.replace("{raw}", raw));
     },
-    [buildAuthedHeaders, copy, loadPaymentSnapshot, loadSnapshot, reconcileLatestPayment],
+    [buildAuthedHeaders, copy, loadPaymentSnapshot, refreshEntitlementAfterPayment, reconcileLatestPayment],
   );
 
   // ── openTelegramBotBindLink ──────────────────────────────

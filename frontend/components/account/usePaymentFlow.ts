@@ -101,6 +101,7 @@ export interface UsePaymentFlowParams {
   getValidAccessToken: () => Promise<string>;
   buildAuthedHeaders: (withJson?: boolean, requireAuth?: boolean) => Promise<Record<string, string>>;
   loadSnapshot: () => Promise<void>;
+  refreshEntitlementAfterPayment: () => Promise<void>;
   loadPaymentSnapshot: () => Promise<void>;
   waitForReceipt: (txHash: string, provider?: EvmProvider, timeoutMs?: number, pollMs?: number) => Promise<any>;
   ensureTargetChain: (eth: EvmProvider, targetChainId: number, chain?: PaymentChainOption) => Promise<void>;
@@ -160,6 +161,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
     getValidAccessToken,
     buildAuthedHeaders,
     loadSnapshot,
+    refreshEntitlementAfterPayment,
     loadPaymentSnapshot,
     waitForReceipt,
     ensureTargetChain,
@@ -349,7 +351,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
             intent_id: intentId,
             tx_hash: txHash || null,
           });
-          await loadSnapshot();
+          await refreshEntitlementAfterPayment();
           await loadPaymentSnapshot();
           return;
         }
@@ -361,7 +363,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
       }
       throw new Error(copy.paymentPendingTimeout);
     },
-    [loadPaymentSnapshot, loadSnapshot, selectedPlan?.plan_code],
+    [loadPaymentSnapshot, refreshEntitlementAfterPayment, selectedPlan?.plan_code],
   );
 
   // ── createIntentAndPay ──────────────────────────────────
@@ -586,7 +588,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
         intent_id: intentId,
         tx_hash: txHashNorm,
       });
-      await loadSnapshot();
+      await refreshEntitlementAfterPayment();
       await loadPaymentSnapshot();
     } catch (error) {
       const normalized = normalizePaymentError(error);
@@ -743,7 +745,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
         intent_id: intentIdVal,
         tx_hash: txHashNorm,
       });
-      await loadSnapshot();
+      await refreshEntitlementAfterPayment();
       await loadPaymentSnapshot();
     } catch (error) {
       setPaymentError(normalizePaymentError(error).message);
