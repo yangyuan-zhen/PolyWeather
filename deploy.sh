@@ -5,6 +5,14 @@ GHCR_PAT="$1"
 NEW_TAG="${2:-latest}"
 TAG_FILE="/var/lib/polyweather/.current_tag"
 COMPOSE_DIR="/root/PolyWeather"
+LOCK_FILE="${POLYWEATHER_DEPLOY_LOCK_FILE:-/var/lock/polyweather-deploy.lock}"
+
+mkdir -p "$(dirname "$LOCK_FILE")"
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+    echo "❌ Another PolyWeather deploy is already running"
+    exit 1
+fi
 
 echo "$GHCR_PAT" | docker login ghcr.io -u yangyuan-zhen --password-stdin
 
@@ -17,6 +25,18 @@ if [ -f "$TAG_FILE" ]; then
     echo "Previous tag: $PREVIOUS_TAG"
 fi
 
+rollback_to_previous() {
+    if [ -n "$PREVIOUS_TAG" ]; then
+        echo "Rolling back to $PREVIOUS_TAG..."
+        export IMAGE_TAG="$PREVIOUS_TAG"
+        docker compose pull
+        docker compose up -d
+        echo "✅ Rolled back to $PREVIOUS_TAG"
+    else
+        echo "⚠️  No previous tag to rollback to"
+    fi
+}
+
 export IMAGE_TAG="$NEW_TAG"
 pull_ok=0
 for pull_attempt in $(seq 1 6); do
@@ -28,7 +48,6 @@ if [ "$pull_ok" != "1" ]; then
     echo "❌ Image pull failed after retries"
     exit 1
 fi
-docker compose up -d
 
 smoke_check() {
     local name="$1"
@@ -52,16 +71,81 @@ smoke_check() {
     return 1
 }
 
-# Wait for backend to be ready (retry up to 150s)
+wait_for_local_service() {
+    local name="$1"
+    local url="$2"
+    local timeout="${3:-5}"
+    local attempts="${4:-30}"
+    local delay="${5:-2}"
+
+    for i in $(seq 1 "$attempts"); do
+        if curl -fsSo /dev/null --max-time "$timeout" "$url"; then
+            echo "✅ $name ready after attempt $i/$attempts"
+            return 0
+        fi
+        if [ "$i" != "$attempts" ]; then
+            echo "   $name warming $i/$attempts..."
+            sleep "$delay"
+        fi
+    done
+
+    echo "❌ $name did not become ready"
+    return 1
+}
+
+warm_public_route() {
+    local name="$1"
+    local url="$2"
+    local timeout="${3:-15}"
+    local attempts="${4:-3}"
+    local delay="${5:-2}"
+
+    for i in $(seq 1 "$attempts"); do
+        if curl -fsSo /dev/null --max-time "$timeout" "$url"; then
+            echo "✅ warmed $name"
+            return 0
+        fi
+        if [ "$i" != "$attempts" ]; then
+            echo "   warm $name retry $i/$attempts..."
+            sleep "$delay"
+        fi
+    done
+
+    echo "⚠️  warm $name failed"
+    return 0
+}
+
+echo "Updating Redis dependency..."
+docker compose up -d polyweather_redis
+
+echo "Updating backend services..."
+docker compose up -d --no-deps polyweather_web polyweather
+
 echo "Waiting for backend..."
-for i in $(seq 1 30); do
-    sleep 5
-    if curl -fsSo /dev/null --max-time 5 "https://api.polyweather.top/healthz"; then
-        echo "✅ healthz ready after ${i}x5s"
-        break
-    fi
-    echo "   retry $i/30..."
-done
+wait_for_local_service "backend healthz" "http://127.0.0.1:8000/healthz" 5 30 5 || FAILED_BACKEND=1
+FAILED_BACKEND="${FAILED_BACKEND:-0}"
+if [ "$FAILED_BACKEND" = "1" ]; then
+    echo "❌ Backend did not become healthy"
+    rollback_to_previous
+    exit 1
+fi
+
+echo "Updating frontend..."
+docker compose up -d --no-deps polyweather_frontend
+
+echo "Waiting for frontend..."
+wait_for_local_service "frontend root" "http://127.0.0.1:3001/" 5 40 2 || FAILED_FRONTEND=1
+wait_for_local_service "frontend terminal" "http://127.0.0.1:3001/terminal" 10 20 2 || FAILED_FRONTEND=1
+FAILED_FRONTEND="${FAILED_FRONTEND:-0}"
+if [ "$FAILED_FRONTEND" = "1" ]; then
+    echo "❌ Frontend did not become healthy"
+    rollback_to_previous
+    exit 1
+fi
+
+warm_public_route "terminal" "https://polyweather.top/terminal" 20 4 3
+warm_public_route "auth snapshot" "https://polyweather.top/api/auth/me?prefer_snapshot=1" 10 3 2
+warm_public_route "cities" "https://polyweather.top/api/cities" 20 3 2
 
 FAILED=0
 smoke_check "healthz" "https://api.polyweather.top/healthz" 15 3 5 || FAILED=1
@@ -70,14 +154,7 @@ smoke_check "frontend" "https://www.polyweather.top/" 15 3 5 || FAILED=1
 
 if [ "$FAILED" = "1" ]; then
     echo "❌ Smoke tests failed. Rolling back..."
-    if [ -n "$PREVIOUS_TAG" ]; then
-        export IMAGE_TAG="$PREVIOUS_TAG"
-        docker compose pull
-        docker compose up -d
-        echo "✅ Rolled back to $PREVIOUS_TAG"
-    else
-        echo "⚠️  No previous tag to rollback to"
-    fi
+    rollback_to_previous
     exit 1
 fi
 
