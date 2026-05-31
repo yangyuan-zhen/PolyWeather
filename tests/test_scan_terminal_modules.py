@@ -6,6 +6,7 @@ from web.scan_terminal_payloads import (
     build_stale_scan_terminal_payload,
 )
 from web.scan_terminal_ranker import build_ranked_scan_terminal_result
+from web.scan_terminal_city_row import _build_quick_row
 from web.routers.scan import router as scan_router
 
 
@@ -137,6 +138,41 @@ def test_scan_terminal_snapshot_id_is_stable_for_same_ranked_inputs():
     assert first.startswith("scan-")
 
 
+def test_scan_terminal_quick_row_compacts_runway_history_for_list_payload():
+    raw_history = {
+        "35R": [
+            {"time": "2026-05-31T00:00:00+00:00", "temp": 22.11},
+            {"time": "2026-05-31T00:01:00+00:00", "temp": 22.22},
+            {"time": "2026-05-31T00:02:00+00:00", "temp": 22.33},
+            {"time": "2026-05-31T00:10:00+00:00", "temp": 23.44},
+            {"time": "2026-05-31T00:11:00+00:00", "temp": 23.55},
+        ]
+    }
+
+    row = _build_quick_row(
+        city="shanghai",
+        data={
+            "display_name": "Shanghai",
+            "local_date": "2026-05-31",
+            "local_time": "2026-05-31T08:11:00+08:00",
+            "temp_symbol": "°C",
+            "current": {"temp": 22.3, "max_so_far": 23.0},
+            "risk": {"airport": "Shanghai Pudong", "level": "medium"},
+            "deb": {"prediction": 24.0},
+            "probabilities": {"distribution": []},
+            "multi_model": {},
+            "runway_plate_history": raw_history,
+        },
+    )
+
+    compact_history = row["runway_plate_history"]["35R"]
+
+    assert len(compact_history) == 2
+    assert compact_history[0]["temp"] == 22.3
+    assert compact_history[1]["temp"] == 23.6
+    assert len(str(row["runway_plate_history"])) < len(str(raw_history))
+
+
 def test_metar_gate_vetoes_yes_when_observed_breaks_above_bucket():
     row = {
         "id": "yes-row",
@@ -158,4 +194,3 @@ def test_metar_gate_vetoes_yes_when_observed_breaks_above_bucket():
     assert row["v4_metar_decision"] == "veto"
     assert row["ai_decision"] == "veto"
     assert "越过目标桶上沿" in row["ai_reason_zh"]
-

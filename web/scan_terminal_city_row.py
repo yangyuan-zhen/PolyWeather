@@ -11,6 +11,22 @@ from web.scan_terminal_filters import (
     market_region_from_tz_offset as _market_region_from_tz_offset,
     safe_int as _safe_int,
 )
+from web.services.city_payloads import aggregate_runway_history
+
+
+SCAN_ROW_RUNWAY_HISTORY_RESOLUTION = "10m"
+SCAN_ROW_MAX_RUNWAY_POINTS = 144
+
+
+def _compact_runway_plate_history_for_scan(raw_history: Any) -> Dict[str, List[Dict[str, Any]]]:
+    if not isinstance(raw_history, dict) or not raw_history:
+        return {}
+    compacted = aggregate_runway_history(raw_history, SCAN_ROW_RUNWAY_HISTORY_RESOLUTION)
+    return {
+        str(runway): points[-SCAN_ROW_MAX_RUNWAY_POINTS:]
+        for runway, points in compacted.items()
+        if isinstance(points, list) and points
+    }
 
 
 def _resolve_time_range_dates(data: Dict[str, Any], time_range: str) -> List[str]:
@@ -132,7 +148,9 @@ def _build_terminal_row(
         "amos": data.get("amos") or None,
         "top_buckets": scan.get("top_buckets") or [],
         "all_buckets": scan.get("all_buckets") or [],
-        "runway_plate_history": data.get("runway_plate_history") or {},
+        "runway_plate_history": _compact_runway_plate_history_for_scan(
+            data.get("runway_plate_history")
+        ),
     }
 
 
@@ -232,7 +250,9 @@ def _build_quick_row(
         "is_primary_signal": True,
         "accepting_orders": False,
         "row_id": row_id,
-        "runway_plate_history": data.get("runway_plate_history") or {},
+        "runway_plate_history": _compact_runway_plate_history_for_scan(
+            data.get("runway_plate_history")
+        ),
     }
     # Compute a simple edge: model top probability vs neutral
     best_model_prob = max(
