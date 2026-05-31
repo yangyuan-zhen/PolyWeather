@@ -99,6 +99,18 @@ export function runTests() {
   assert(hook.includes("useLatestPatch"), "frontend patch hook must export useLatestPatch(city)");
   assert(hook.includes("revision"), "frontend patch hook must track revisions and skip stale patches");
   assert(hook.includes("setTimeout"), "frontend patch hook must implement explicit reconnect backoff");
+  assert(
+    hook.includes("SSE_SUBSCRIPTION_RECONNECT_DELAY_MS") &&
+      hook.includes("scheduleSubscriptionReconnect") &&
+      hook.includes("clearSubscriptionReconnectTimer"),
+    "frontend patch hook must debounce visible-city subscription changes before reopening SSE",
+  );
+  const subscriptionBlock = hook.match(/function registerCitySubscription[\s\S]*?\n}\r?\n\r?\nfunction normalizeLegacyPatch/)?.[0] || "";
+  assert(
+    subscriptionBlock.includes("scheduleSubscriptionReconnect()") &&
+      !subscriptionBlock.includes("ensureSsePatchConnection();"),
+    "city subscription mount/unmount should schedule one coalesced SSE reconnect instead of reconnecting per chart",
+  );
 
   const bffEventsRoute = readFrontendFile("app", "api", "events", "route.ts");
   assert(bffEventsRoute.includes("searchParams"), "Next.js SSE proxy must forward query parameters to FastAPI");

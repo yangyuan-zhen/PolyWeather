@@ -4,6 +4,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { resolveBackendApiUrl } from "@/lib/backend-api";
 
 const V1_EVENT_TYPE = "city_observation_patch.v1";
+const SSE_SUBSCRIPTION_RECONNECT_DELAY_MS = 150;
 
 export type CityPatch = {
   type?: string;
@@ -38,6 +39,7 @@ const subscribedCities = new Map<string, number>();
 
 let eventSource: EventSource | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let subscriptionReconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempt = 0;
 let patchVersion = 0;
 let resyncVersion = 0;
@@ -72,6 +74,12 @@ function clearReconnectTimer() {
   if (!reconnectTimer) return;
   clearTimeout(reconnectTimer);
   reconnectTimer = null;
+}
+
+function clearSubscriptionReconnectTimer() {
+  if (!subscriptionReconnectTimer) return;
+  clearTimeout(subscriptionReconnectTimer);
+  subscriptionReconnectTimer = null;
 }
 
 function buildSseUrl(baseUrl: string) {
@@ -113,6 +121,7 @@ function closeEventSource() {
 function reconnectNow() {
   if (typeof window === "undefined") return;
   clearReconnectTimer();
+  clearSubscriptionReconnectTimer();
   closeEventSource();
   connectSsePatches();
 }
@@ -159,12 +168,26 @@ function connectSsePatches() {
 
 function ensureSsePatchConnection() {
   if (subscribedCities.size === 0) {
+    clearSubscriptionReconnectTimer();
     closeEventSource();
     clearReconnectTimer();
     return;
   }
   if (eventSource && activeConnectionKey === currentConnectionKey()) return;
   reconnectNow();
+}
+
+function scheduleSubscriptionReconnect() {
+  if (typeof window === "undefined") return;
+  if (subscribedCities.size === 0) {
+    ensureSsePatchConnection();
+    return;
+  }
+  clearSubscriptionReconnectTimer();
+  subscriptionReconnectTimer = setTimeout(() => {
+    subscriptionReconnectTimer = null;
+    ensureSsePatchConnection();
+  }, SSE_SUBSCRIPTION_RECONNECT_DELAY_MS);
 }
 
 function registerCitySubscription(city: string) {
@@ -174,7 +197,7 @@ function registerCitySubscription(city: string) {
   const previousCount = subscribedCities.get(cityKey) ?? 0;
   subscribedCities.set(cityKey, previousCount + 1);
   if (previousCount === 0) {
-    ensureSsePatchConnection();
+    scheduleSubscriptionReconnect();
   }
 
   return () => {
@@ -184,7 +207,7 @@ function registerCitySubscription(city: string) {
     } else {
       subscribedCities.set(cityKey, nextCount);
     }
-    ensureSsePatchConnection();
+    scheduleSubscriptionReconnect();
   };
 }
 
