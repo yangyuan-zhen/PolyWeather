@@ -79,7 +79,7 @@ services:
       timeout: 5s
     image: ghcr.io/yangyuan-zhen/polyweather-frontend:${IMAGE_TAG:-latest}
     ports:
-    - 3001:3000
+    - "127.0.0.1:3001:3000"
     restart: unless-stopped
   polyweather_web:
     command: python web/app.py
@@ -104,7 +104,7 @@ services:
       timeout: 5s
     image: ghcr.io/yangyuan-zhen/polyweather-backend:${IMAGE_TAG:-latest}
     ports:
-    - 8000:8000
+    - "127.0.0.1:8000:8000"
     restart: unless-stopped
     user: ${UID:-1000}:${GID:-1000}
     volumes:

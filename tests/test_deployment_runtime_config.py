@@ -80,6 +80,15 @@ def test_deploy_script_retries_startup_smoke_checks():
     assert 'smoke_check "frontend" "https://www.polyweather.top/" 15 3 5' in script
 
 
+def test_docker_compose_keeps_polyweather_ports_on_loopback():
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+
+    assert "127.0.0.1:3001:3000" in compose
+    assert "127.0.0.1:8000:8000" in compose
+    assert "\n    - 3001:3000" not in compose
+    assert "\n    - 8000:8000" not in compose
+
+
 def test_city_detail_builds_deb_hourly_consensus_before_peak_window():
     source = (ROOT / "web" / "analysis_service.py").read_text(encoding="utf-8")
 
