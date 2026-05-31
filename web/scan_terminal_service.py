@@ -16,6 +16,7 @@ from web.services.scan_terminal_config import (
     SCAN_TERMINAL_BUILD_TIMEOUT_SEC,
     SCAN_TERMINAL_MAX_WORKERS,
     SCAN_TERMINAL_PAYLOAD_TTL_SEC,
+    SCAN_TERMINAL_PREWARM_PAYLOAD_TIMEOUT_SEC,
 )
 from src.data_collection.city_registry import ALIASES
 from web.scan_terminal_cache import (
@@ -101,11 +102,17 @@ def _build_scan_terminal_payload_uncached(
     filters: Dict[str, Any],
     *,
     force_refresh: bool = False,
+    timeout_sec: Optional[float] = None,
 ) -> Dict[str, Any]:
     cached_entry = get_scan_terminal_cache_entry(filters) or {}
 
     try:
         city_names = list(CITIES.keys())
+        build_timeout_sec = float(
+            timeout_sec
+            if timeout_sec is not None
+            else SCAN_TERMINAL_BUILD_TIMEOUT_SEC
+        )
         timezone_offset = filters.get("timezone_offset_seconds")
         if timezone_offset is not None:
             target_tz = int(timezone_offset)
@@ -145,7 +152,7 @@ def _build_scan_terminal_payload_uncached(
             try:
                 completed = as_completed(
                     future_map,
-                    timeout=float(SCAN_TERMINAL_BUILD_TIMEOUT_SEC),
+                    timeout=build_timeout_sec,
                 )
                 for future in completed:
                     city_name = future_map[future]
@@ -160,8 +167,7 @@ def _build_scan_terminal_payload_uncached(
             except FutureTimeoutError:
                 timed_out = True
                 timeout_message = (
-                    f"scan terminal build timed out after "
-                    f"{SCAN_TERMINAL_BUILD_TIMEOUT_SEC}s"
+                    f"scan terminal build timed out after {build_timeout_sec:g}s"
                 )
                 failed_reasons.append(timeout_message)
                 for future, city_name in future_map.items():
@@ -361,7 +367,11 @@ def _warm_scan_terminal_payloads() -> int:
     ok = 0
     for filters in _scan_terminal_prewarm_filters():
         try:
-            _build_scan_terminal_payload_uncached(filters, force_refresh=False)
+            _build_scan_terminal_payload_uncached(
+                filters,
+                force_refresh=False,
+                timeout_sec=SCAN_TERMINAL_PREWARM_PAYLOAD_TIMEOUT_SEC,
+            )
             ok += 1
         except Exception as exc:
             logger.warning("scan terminal payload pre-warm failed: {}", exc)

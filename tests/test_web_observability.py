@@ -2301,8 +2301,8 @@ def test_scan_terminal_timeout_does_not_replace_better_cached_snapshot(monkeypat
 def test_scan_terminal_prewarm_builds_default_terminal_payload(monkeypatch):
     calls = []
 
-    def _fake_build(filters, *, force_refresh=False):
-        calls.append((dict(filters), force_refresh))
+    def _fake_build(filters, *, force_refresh=False, timeout_sec=None):
+        calls.append((dict(filters), force_refresh, timeout_sec))
         return {"rows": []}
 
     monkeypatch.setattr(
@@ -2312,8 +2312,9 @@ def test_scan_terminal_prewarm_builds_default_terminal_payload(monkeypatch):
     )
 
     assert scan_terminal_service._warm_scan_terminal_payloads() == 1
-    filters, force_refresh = calls[0]
+    filters, force_refresh, timeout_sec = calls[0]
     assert force_refresh is False
+    assert timeout_sec == scan_terminal_service.SCAN_TERMINAL_PREWARM_PAYLOAD_TIMEOUT_SEC
     assert filters["scan_mode"] == "tradable"
     assert filters["min_price"] == 0.05
     assert filters["max_price"] == 0.95
