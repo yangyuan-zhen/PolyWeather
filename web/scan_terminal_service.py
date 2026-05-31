@@ -47,6 +47,35 @@ def _normalize_city_key(value: Any) -> str:
     return ALIASES.get(text, text)
 
 
+def _rows_count(payload: Dict[str, Any]) -> int:
+    rows = payload.get("rows")
+    return len(rows) if isinstance(rows, list) else 0
+
+
+def _build_stale_payload_for_timeout_if_better_cached(
+    *,
+    filters: Dict[str, Any],
+    cached_entry: Dict[str, Any],
+    ranked_rows: List[Dict[str, Any]],
+    timeout_message: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    success_payload = cached_entry.get("success_payload")
+    if not isinstance(success_payload, dict) or not success_payload.get("rows"):
+        return None
+    if _rows_count(success_payload) < len(ranked_rows):
+        return None
+
+    error_message = timeout_message or "市场扫描快照正在刷新中"
+    set_scan_terminal_failure_state(filters, error_message=error_message)
+    failed_entry = get_scan_terminal_cache_entry(filters) or cached_entry
+    return build_stale_scan_terminal_payload(
+        filters=filters,
+        success_payload=success_payload,
+        error_message=error_message,
+        failed_at=failed_entry.get("last_failed_at"),
+    )
+
+
 def _start_scan_terminal_background_refresh(filters: Dict[str, Any]) -> bool:
     if not mark_scan_terminal_refreshing(filters):
         return False
@@ -189,6 +218,16 @@ def _build_scan_terminal_payload_uncached(
 
         summary = ranked_result["summary"]
         top_signal = ranked_result["top_signal"]
+        if timed_out:
+            stale_payload = _build_stale_payload_for_timeout_if_better_cached(
+                filters=filters,
+                cached_entry=cached_entry,
+                ranked_rows=ranked_rows,
+                timeout_message=timeout_message,
+            )
+            if stale_payload is not None:
+                return stale_payload
+
         payload = {
             "generated_at": datetime.utcnow().isoformat() + "Z",
             "filters": filters,

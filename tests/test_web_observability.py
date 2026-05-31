@@ -2233,6 +2233,71 @@ def test_scan_terminal_service_returns_stale_payload_after_failed_refresh(monkey
     assert stale["stale_reason"] == "upstream 504"
 
 
+def test_scan_terminal_timeout_does_not_replace_better_cached_snapshot(monkeypatch):
+    import time
+
+    filters = {"scan_mode": "tradable", "limit": 5}
+    normalized_filters = scan_terminal_service._normalize_scan_terminal_filters(filters)
+    scan_terminal_cache._SCAN_TERMINAL_CACHE.clear()
+    previous_payload = {
+        "generated_at": "2026-05-31T00:00:00Z",
+        "snapshot_id": "scan-existing",
+        "filters": normalized_filters,
+        "summary": {"candidate_total": 2, "visible_count": 2},
+        "top_signal": {"id": "old-1"},
+        "rows": [{"id": "old-1"}, {"id": "old-2"}],
+        "status": "ready",
+        "stale": False,
+        "stale_reason": None,
+        "last_success_at": None,
+        "last_failed_at": None,
+    }
+    scan_terminal_cache.set_cached_scan_terminal_payload(
+        normalized_filters,
+        previous_payload,
+    )
+
+    monkeypatch.setattr(
+        scan_terminal_service,
+        "CITIES",
+        {"fast": {"tz": 0}, "slow": {"tz": 0}},
+    )
+    monkeypatch.setattr(scan_terminal_service, "SCAN_TERMINAL_BUILD_TIMEOUT_SEC", 0.01)
+    monkeypatch.setattr(scan_terminal_service, "SCAN_TERMINAL_MAX_WORKERS", 2)
+
+    def _scan_city(city_name, *_args, **_kwargs):
+        if city_name == "slow":
+            time.sleep(0.05)
+        return {
+            "city": city_name,
+            "candidate_total": 1,
+            "primary_scores": [80.0],
+            "rows": [
+                {
+                    "id": f"{city_name}-row",
+                    "market_key": f"{city_name}-market",
+                    "edge_percent": 4.0,
+                    "final_score": 80.0,
+                    "volume": 1000,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(scan_terminal_service, "_scan_city_terminal_rows", _scan_city)
+
+    stale = scan_terminal_service.build_scan_terminal_payload(filters, force_refresh=True)
+
+    assert stale["status"] == "stale"
+    assert stale["stale"] is True
+    assert [row["id"] for row in stale["rows"]] == ["old-1", "old-2"]
+    assert stale["stale_reason"].startswith("scan terminal build timed out")
+    cached = scan_terminal_cache.get_cached_scan_terminal_payload(
+        normalized_filters,
+        ttl_sec=3600,
+    )
+    assert [row["id"] for row in cached["rows"]] == ["old-1", "old-2"]
+
+
 def test_scan_terminal_service_returns_failed_without_success_snapshot(monkeypatch):
     filters = {"scan_mode": "tradable", "limit": 5}
     scan_terminal_cache._SCAN_TERMINAL_CACHE.clear()
