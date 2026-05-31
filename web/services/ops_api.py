@@ -545,18 +545,41 @@ def get_ops_billing_risk(
             "limit": str(max(safe_limit * 10, 500)),
         },
     )
-    subscription_rows = collect(
+    trial_subscription_rows = collect(
         "subscriptions",
         {
             "select": (
                 "id,user_id,plan_code,source,status,starts_at,expires_at,"
                 "created_at,updated_at"
             ),
-            "or": "(source.eq.signup_trial,plan_code.eq.signup_trial_3d,status.eq.active)",
+            "or": "(source.eq.signup_trial,plan_code.eq.signup_trial_3d)",
             "order": "created_at.desc",
             "limit": str(max(safe_limit * 20, 1000)),
         },
     )
+    active_subscription_rows = collect(
+        "subscriptions",
+        {
+            "select": (
+                "id,user_id,plan_code,source,status,starts_at,expires_at,"
+                "created_at,updated_at"
+            ),
+            "status": "eq.active",
+            "order": "created_at.desc",
+            "limit": str(max(safe_limit * 20, 1000)),
+        },
+    )
+    subscription_rows: List[Dict[str, Any]] = []
+    seen_subscription_keys: set[str] = set()
+    for row in [*trial_subscription_rows, *active_subscription_rows]:
+        key = str(row.get("id") or "").strip() or (
+            f"{row.get('user_id')}:{row.get('plan_code')}:{row.get('source')}:"
+            f"{row.get('starts_at')}:{row.get('expires_at')}"
+        )
+        if key in seen_subscription_keys:
+            continue
+        seen_subscription_keys.add(key)
+        subscription_rows.append(row)
     entitlement_trial_events = collect(
         "entitlement_events",
         {
@@ -751,6 +774,40 @@ def get_ops_billing_risk(
     def normalize_user_key(value: Any) -> str:
         return str(value or "").strip().lower()
 
+    def analytics_payload(row: Dict[str, Any]) -> Dict[str, Any]:
+        payload = row.get("payload")
+        return payload if isinstance(payload, dict) else {}
+
+    def analytics_correlation_keys(row: Dict[str, Any]) -> set[str]:
+        payload = analytics_payload(row)
+        keys: set[str] = set()
+        user_id = normalize_user_key(row.get("user_id") or payload.get("user_id"))
+        client_id = str(row.get("client_id") or "").strip()
+        session_id = str(row.get("session_id") or "").strip()
+        if user_id:
+            keys.add(f"user:{user_id}")
+        if client_id:
+            keys.add(f"client:{client_id}")
+        if session_id:
+            keys.add(f"session:{session_id}")
+        return keys
+
+    signup_intent_keys: set[str] = set()
+    for row in events:
+        if str(row.get("event_type") or "").strip().lower() != "login_start":
+            continue
+        payload = analytics_payload(row)
+        mode = str(payload.get("mode") or payload.get("auth_mode") or "").strip().lower()
+        if mode == "signup":
+            signup_intent_keys.update(analytics_correlation_keys(row))
+
+    def has_signup_intent(row: Dict[str, Any]) -> bool:
+        payload = analytics_payload(row)
+        mode = str(payload.get("mode") or payload.get("auth_mode") or "").strip().lower()
+        if mode == "signup" or payload.get("signup_intent") is True:
+            return True
+        return bool(analytics_correlation_keys(row).intersection(signup_intent_keys))
+
     trial_actor_keys = {
         _app_analytics_actor_key(row)
         for row in events
@@ -817,10 +874,12 @@ def get_ops_billing_risk(
             )
 
     for row in signup_rows[:300]:
+        if not has_signup_intent(row):
+            continue
         actor_key = _app_analytics_actor_key(row)
         if actor_key in trial_actor_keys:
             continue
-        payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+        payload = analytics_payload(row)
         signup_user_id = normalize_user_key(row.get("user_id") or payload.get("user_id"))
         if not signup_user_id:
             continue
