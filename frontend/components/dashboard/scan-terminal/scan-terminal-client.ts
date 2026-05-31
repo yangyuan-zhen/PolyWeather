@@ -22,6 +22,7 @@ export const scanTerminalQueryPolicy = {
   autoRefreshMs: null,
   manualForceRefreshCooldownMs: 2 * 60_000,
 } as const;
+const SCAN_TERMINAL_PAYLOAD_VERSION = "runway-slim-v1";
 
 type TerminalQueryOptions = {
   forceRefresh?: boolean;
@@ -142,6 +143,7 @@ async function getTerminal({
   if (Number.isFinite(timezoneOffsetSeconds)) {
     params.set("timezone_offset_seconds", String(Math.trunc(Number(timezoneOffsetSeconds))));
   }
+  params.set("_v", SCAN_TERMINAL_PAYLOAD_VERSION);
   if (forceRefresh) {
     params.set("_ts", String(Date.now()));
   }

@@ -56,6 +56,16 @@ export function runTests() {
     /hasDirectBackendApiBaseUrl/,
     "public scan terminal requests should only attach user auth in direct-backend mode so CDN caches can be shared through the Next proxy",
   );
+  assert.match(
+    scanTerminalClientSource,
+    /SCAN_TERMINAL_PAYLOAD_VERSION/,
+    "scan terminal client should include a stable payload version in the URL so CDN caches roll forward after response-shape optimizations",
+  );
+  assert.match(
+    scanTerminalClientSource,
+    /params\.set\("_v",\s*SCAN_TERMINAL_PAYLOAD_VERSION\)/,
+    "scan terminal client should vary the CDN cache key without changing backend scan filters",
+  );
 
   const overviewProxySource = fs.readFileSync(
     path.join(
