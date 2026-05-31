@@ -97,11 +97,10 @@ export function runTests() {
     "terminal dashboard must lazy-load the training analytics tab so Recharts stays out of the default terminal path",
   );
   assert(
-    chartSource.includes('from "next/dynamic"') &&
-      chartSource.includes("TemperatureChartCanvasFallback") &&
-      chartSource.includes("import(\"@/components/dashboard/scan-terminal/TemperatureChartCanvas\")") &&
-      !chartSource.includes('import { TemperatureChartCanvas } from "@/components/dashboard/scan-terminal/TemperatureChartCanvas";'),
-    "terminal temperature charts must lazy-load the Recharts canvas behind a lightweight fallback",
+    chartSource.includes('import { TemperatureChartCanvas } from "@/components/dashboard/scan-terminal/TemperatureChartCanvas";') &&
+      !chartSource.includes("TemperatureChartCanvasFallback") &&
+      !chartSource.includes("import(\"@/components/dashboard/scan-terminal/TemperatureChartCanvas\")"),
+    "terminal temperature charts must load the Recharts canvas with the terminal route so visible cards do not sit behind a second-stage fallback",
   );
   assert(
     chartSource.includes("setLiveTemp(null);") &&

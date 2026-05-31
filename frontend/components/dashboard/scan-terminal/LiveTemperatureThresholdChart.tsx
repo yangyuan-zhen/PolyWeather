@@ -1,13 +1,12 @@
 "use client";
 
 import clsx from "clsx";
-import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 import { useLatestPatch, useSseResyncVersion } from "@/hooks/use-sse-patches";
 import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { ModelCurvesSummary } from "@/components/dashboard/scan-terminal/ModelCurvesSummary";
-import { TemperatureChartCanvasFallback } from "@/components/dashboard/scan-terminal/TemperatureChartCanvasFallback";
+import { TemperatureChartCanvas } from "@/components/dashboard/scan-terminal/TemperatureChartCanvas";
 import { TemperatureRunwayDetails } from "@/components/dashboard/scan-terminal/TemperatureRunwayDetails";
 import { TemperatureStatsBars } from "@/components/dashboard/scan-terminal/TemperatureStatsBars";
 import { rowName } from "@/components/dashboard/scan-terminal/utils";
@@ -63,31 +62,9 @@ const DEFERRED_DETAIL_LOAD_DELAY_MS = 1_200;
 const DEFERRED_DETAIL_LOAD_GROUP_SIZE = 3;
 const DEFERRED_DETAIL_LOAD_WAVE_STEP_MS = 900;
 
-let temperatureChartCanvasModulePromise: Promise<
-  typeof import("@/components/dashboard/scan-terminal/TemperatureChartCanvas")
-> | null = null;
-
-function loadTemperatureChartCanvasModule() {
-  temperatureChartCanvasModulePromise ??= import(
-    "@/components/dashboard/scan-terminal/TemperatureChartCanvas"
-  );
-  return temperatureChartCanvasModulePromise;
-}
-
 export function preloadTemperatureChartCanvas() {
-  return loadTemperatureChartCanvasModule().then(() => undefined, () => undefined);
+  return Promise.resolve();
 }
-
-const TemperatureChartCanvas = dynamic(
-  () =>
-    loadTemperatureChartCanvasModule().then(
-      (mod) => mod.TemperatureChartCanvas,
-    ),
-  {
-    ssr: false,
-    loading: () => <TemperatureChartCanvasFallback />,
-  },
-);
 
 function peakGlowLabel(state: keyof typeof PEAK_GLOW_PANEL_CLASS, isEn: boolean) {
   if (state === "watch") return isEn ? "Watch" : "关注";

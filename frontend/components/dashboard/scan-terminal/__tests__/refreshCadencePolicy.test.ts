@@ -73,9 +73,14 @@ export async function runTests() {
     "selected city chart should consume SSE patches and use a 2-minute no-patch fallback",
   );
   assert(
-    chartSource.includes("loadTemperatureChartCanvasModule") &&
-      chartSource.includes("preloadTemperatureChartCanvas"),
-    "terminal chart canvas should expose a preload hook for the dynamic chart chunk",
+    chartSource.includes("preloadTemperatureChartCanvas"),
+    "terminal chart canvas should expose a preload hook for first-paint optimization",
+  );
+  assert(
+    chartSource.includes('from "@/components/dashboard/scan-terminal/TemperatureChartCanvas"') &&
+      !chartSource.includes("next/dynamic") &&
+      !chartSource.includes("TemperatureChartCanvasFallback"),
+    "terminal chart canvas should be loaded with the terminal route instead of showing a second-stage dynamic chunk fallback",
   );
   assert(
     dashboardSource.includes("preloadTemperatureChartCanvas") &&
