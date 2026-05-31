@@ -27,6 +27,104 @@ import {
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
+type AuthMeTimingStage = {
+  durationMs: number;
+  name: string;
+};
+
+type AuthMeTimer = {
+  hasAuthorization: boolean;
+  hasSupabaseCookie: boolean;
+  measure<T>(name: string, action: () => Promise<T>): Promise<T>;
+  measureSync<T>(name: string, action: () => T): T;
+  preferSnapshot: boolean;
+  stages: AuthMeTimingStage[];
+  totalMs(): number;
+};
+
+function authMeNowMs() {
+  return typeof performance !== "undefined" ? performance.now() : Date.now();
+}
+
+function createAuthMeTimer(req: NextRequest): AuthMeTimer {
+  const startedAt = authMeNowMs();
+  const stages: AuthMeTimingStage[] = [];
+  const recordStage = (name: string, stageStartedAt: number) => {
+    stages.push({
+      durationMs: Math.round((authMeNowMs() - stageStartedAt) * 10) / 10,
+      name,
+    });
+  };
+
+  return {
+    hasAuthorization: Boolean(req.headers.get("authorization")),
+    hasSupabaseCookie: hasRequestSupabaseSessionCookie(req),
+    async measure<T>(name: string, action: () => Promise<T>) {
+      const stageStartedAt = authMeNowMs();
+      try {
+        return await action();
+      } finally {
+        recordStage(name, stageStartedAt);
+      }
+    },
+    measureSync<T>(name: string, action: () => T) {
+      const stageStartedAt = authMeNowMs();
+      try {
+        return action();
+      } finally {
+        recordStage(name, stageStartedAt);
+      }
+    },
+    preferSnapshot: req.nextUrl.searchParams.get("prefer_snapshot") === "1",
+    stages,
+    totalMs() {
+      return Math.round((authMeNowMs() - startedAt) * 10) / 10;
+    },
+  };
+}
+
+function formatServerTiming(stages: AuthMeTimingStage[], totalMs: number) {
+  return [...stages, { durationMs: totalMs, name: "total" }]
+    .map(({ durationMs, name }) => {
+      const safeName = name.replace(/[^A-Za-z0-9_-]/g, "_");
+      return `${safeName};dur=${Math.max(0, durationMs).toFixed(1)}`;
+    })
+    .join(", ");
+}
+
+function finishAuthMeResponse(
+  response: NextResponse,
+  timer: AuthMeTimer,
+  outcome: string,
+  extra?: { backendServerTiming?: string },
+) {
+  const total = timer.totalMs();
+  const ownServerTiming = formatServerTiming(timer.stages, total);
+  const backendServerTiming = String(extra?.backendServerTiming || "").trim();
+  response.headers.set(
+    "Server-Timing",
+    backendServerTiming
+      ? `${ownServerTiming}, ${backendServerTiming}`
+      : ownServerTiming,
+  );
+  console.info(
+    "[auth-me-timing]",
+    JSON.stringify({
+      backendServerTiming: backendServerTiming || undefined,
+      hasAuthorization: timer.hasAuthorization,
+      hasSupabaseCookie: timer.hasSupabaseCookie,
+      outcome,
+      preferSnapshot: timer.preferSnapshot,
+      stagesMs: Object.fromEntries(
+        timer.stages.map((stage) => [stage.name, stage.durationMs]),
+      ),
+      status: response.status,
+      totalMs: total,
+    }),
+  );
+  return response;
+}
+
 async function trackAuthDiagnosticEvent(
   req: NextRequest,
   {
@@ -273,21 +371,30 @@ function hasRequestSupabaseSessionCookie(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  const timer = createAuthMeTimer(req);
   const requestHost =
     req.headers.get("x-forwarded-host") || req.headers.get("host") || req.nextUrl.host;
   if (
     isLocalFullAccessHost(requestHost) ||
     isLocalFullAccessHost(req.nextUrl.hostname)
   ) {
-    return NextResponse.json(getLocalDevAuthPayload(), {
-      headers: { "Cache-Control": "no-store" },
-    });
+    return finishAuthMeResponse(
+      NextResponse.json(getLocalDevAuthPayload(), {
+        headers: { "Cache-Control": "no-store" },
+      }),
+      timer,
+      "local_full_access",
+    );
   }
 
   if (!API_BASE) {
-    return NextResponse.json(
-      { error: "POLYWEATHER_API_BASE_URL is not configured" },
-      { status: 500 },
+    return finishAuthMeResponse(
+      NextResponse.json(
+        { error: "POLYWEATHER_API_BASE_URL is not configured" },
+        { status: 500 },
+      ),
+      timer,
+      "missing_api_base",
     );
   }
 
@@ -297,16 +404,21 @@ export async function GET(req: NextRequest) {
     !req.headers.get("authorization") &&
     hasRequestSupabaseSessionCookie(req)
   ) {
-    const snapshotPayload = entitlementSnapshotToAuthPayload(
-      readEntitlementSnapshot(req),
+    const snapshotPayload = timer.measureSync(
+      "snapshot_cookie",
+      () => entitlementSnapshotToAuthPayload(readEntitlementSnapshot(req)),
     );
     if (snapshotPayload) {
-      return NextResponse.json(
-        {
-          ...snapshotPayload,
-          entitlement_snapshot_reason: "prefer_snapshot_fast_path",
-        },
-        { headers: { "Cache-Control": "no-store" } },
+      return finishAuthMeResponse(
+        NextResponse.json(
+          {
+            ...snapshotPayload,
+            entitlement_snapshot_reason: "prefer_snapshot_fast_path",
+          },
+          { headers: { "Cache-Control": "no-store" } },
+        ),
+        timer,
+        "prefer_snapshot_fast_path",
       );
     }
   }
@@ -315,11 +427,17 @@ export async function GET(req: NextRequest) {
   let bearerIdentity: VerifiedBearerIdentity | null | undefined;
   const getBearerIdentityOnce = async () => {
     if (bearerIdentity !== undefined) return bearerIdentity;
-    bearerIdentity = await getVerifiedBearerIdentity(req);
+    bearerIdentity = await timer.measure(
+      "bearer_identity",
+      () => getVerifiedBearerIdentity(req),
+    );
     return bearerIdentity;
   };
   try {
-    auth = await buildBackendRequestHeaders(req);
+    auth = await timer.measure(
+      "auth_headers",
+      () => buildBackendRequestHeaders(req),
+    );
     if (
       hasSupabaseServerEnv() &&
       !auth.authUserId &&
@@ -331,7 +449,11 @@ export async function GET(req: NextRequest) {
         points: 0,
       });
       if (!preferSnapshot) clearEntitlementSnapshotCookie(response);
-      return applyAuthResponseCookies(response, auth.response);
+      return finishAuthMeResponse(
+        applyAuthResponseCookies(response, auth.response),
+        timer,
+        "no_session",
+      );
     }
 
     if (preferSnapshot) {
@@ -347,24 +469,35 @@ export async function GET(req: NextRequest) {
           response: auth.response,
           userId: identity.userId,
         });
-        if (snapshotResponse) return snapshotResponse;
+        if (snapshotResponse) {
+          return finishAuthMeResponse(
+            snapshotResponse,
+            timer,
+            "prefer_snapshot",
+          );
+        }
       }
     }
 
+    if (!auth) throw new Error("auth headers unavailable");
+    const backendAuth = auth;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
     let res: Response;
     try {
-      res = await fetch(`${API_BASE}/api/auth/me`, {
-        headers: auth.headers,
-        cache: "no-store",
-        signal: controller.signal,
-      });
+      res = await timer.measure("backend_fetch", async () =>
+        await fetch(`${API_BASE}/api/auth/me`, {
+          headers: backendAuth.headers,
+          cache: "no-store",
+          signal: controller.signal,
+        }),
+      );
     } finally {
       clearTimeout(timeoutId);
     }
+    const backendServerTiming = res.headers.get("server-timing") || "";
     if (res.status === 401 || res.status === 403) {
-      const raw = await res.text();
+      const raw = await timer.measure("backend_read", () => res.text());
       const authIdentity = auth.authUserId
         ? { email: auth.authEmail || null, userId: auth.authUserId }
         : await getBearerIdentityOnce();
@@ -372,30 +505,45 @@ export async function GET(req: NextRequest) {
         authIdentity?.userId &&
         isSubscriptionRequiredBackendResponse(res.status, raw)
       ) {
-        return subscriptionRequiredAuthProfileResponse({
-          email: authIdentity.email,
-          response: auth.response,
-          userId: authIdentity.userId,
-        });
+        return finishAuthMeResponse(
+          subscriptionRequiredAuthProfileResponse({
+            email: authIdentity.email,
+            response: auth.response,
+            userId: authIdentity.userId,
+          }),
+          timer,
+          "subscription_required",
+          { backendServerTiming },
+        );
       }
       if (auth.authUserId) {
-        return degradedAuthProfileResponse({
-          email: auth.authEmail || null,
-          reason: `backend_${res.status}`,
-          req,
-          response: auth.response,
-          userId: auth.authUserId,
-        });
+        return finishAuthMeResponse(
+          await degradedAuthProfileResponse({
+            email: auth.authEmail || null,
+            reason: `backend_${res.status}`,
+            req,
+            response: auth.response,
+            userId: auth.authUserId,
+          }),
+          timer,
+          `degraded_backend_${res.status}`,
+          { backendServerTiming },
+        );
       }
       const identity = await getBearerIdentityOnce();
       if (identity) {
-        return degradedAuthProfileResponse({
-          email: identity.email,
-          reason: `backend_${res.status}`,
-          req,
-          response: auth.response,
-          userId: identity.userId,
-        });
+        return finishAuthMeResponse(
+          await degradedAuthProfileResponse({
+            email: identity.email,
+            reason: `backend_${res.status}`,
+            req,
+            response: auth.response,
+            userId: identity.userId,
+          }),
+          timer,
+          `degraded_backend_${res.status}`,
+          { backendServerTiming },
+        );
       }
       const response = NextResponse.json({
         authenticated: false,
@@ -403,33 +551,53 @@ export async function GET(req: NextRequest) {
         points: 0,
       });
       clearEntitlementSnapshotCookie(response);
-      return applyAuthResponseCookies(response, auth.response);
+      return finishAuthMeResponse(
+        applyAuthResponseCookies(response, auth.response),
+        timer,
+        `anonymous_backend_${res.status}`,
+        { backendServerTiming },
+      );
     }
     if (!res.ok) {
-      const raw = await res.text();
+      const raw = await timer.measure("backend_read", () => res.text());
       if (auth.authUserId) {
-        return degradedAuthProfileResponse({
-          email: auth.authEmail || null,
-          reason: `backend_${res.status}`,
-          req,
-          response: auth.response,
-          userId: auth.authUserId,
-        });
+        return finishAuthMeResponse(
+          await degradedAuthProfileResponse({
+            email: auth.authEmail || null,
+            reason: `backend_${res.status}`,
+            req,
+            response: auth.response,
+            userId: auth.authUserId,
+          }),
+          timer,
+          `degraded_backend_${res.status}`,
+          { backendServerTiming },
+        );
       }
       const identity = await getBearerIdentityOnce();
       if (identity) {
-        return degradedAuthProfileResponse({
-          email: identity.email,
-          reason: `backend_${res.status}`,
-          req,
-          response: auth.response,
-          userId: identity.userId,
-        });
+        return finishAuthMeResponse(
+          await degradedAuthProfileResponse({
+            email: identity.email,
+            reason: `backend_${res.status}`,
+            req,
+            response: auth.response,
+            userId: identity.userId,
+          }),
+          timer,
+          `degraded_backend_${res.status}`,
+          { backendServerTiming },
+        );
       }
       const response = buildUpstreamErrorResponse(res.status, raw);
-      return applyAuthResponseCookies(response, auth.response);
+      return finishAuthMeResponse(
+        applyAuthResponseCookies(response, auth.response),
+        timer,
+        `upstream_${res.status}`,
+        { backendServerTiming },
+      );
     }
-    const data = await res.json();
+    const data = await timer.measure("backend_read", () => res.json());
     if (data?.authenticated === true && data?.subscription_active == null) {
       const userId = String(data.user_id || auth.authUserId || "").trim();
       if (userId) {
@@ -440,47 +608,76 @@ export async function GET(req: NextRequest) {
           response: auth.response,
           userId,
         });
-        if (snapshotResponse) return snapshotResponse;
+        if (snapshotResponse) {
+          return finishAuthMeResponse(
+            snapshotResponse,
+            timer,
+            "subscription_unknown_snapshot",
+            { backendServerTiming },
+          );
+        }
       }
     }
     const response = NextResponse.json(data);
     applyEntitlementSnapshotFromAuthPayload(response, data);
-    return applyAuthResponseCookies(response, auth.response);
+    return finishAuthMeResponse(
+      applyAuthResponseCookies(response, auth.response),
+      timer,
+      "ok",
+      { backendServerTiming },
+    );
   } catch (error) {
     if (auth?.authUserId) {
-      return degradedAuthProfileResponse({
-        email: auth.authEmail || null,
-        reason: String(error),
-        req,
-        response: auth.response,
-        userId: auth.authUserId,
-      });
+      return finishAuthMeResponse(
+        await degradedAuthProfileResponse({
+          email: auth.authEmail || null,
+          reason: String(error),
+          req,
+          response: auth.response,
+          userId: auth.authUserId,
+        }),
+        timer,
+        "exception_degraded",
+      );
     }
     const identity = await getBearerIdentityOnce();
     if (identity) {
-      return degradedAuthProfileResponse({
-        email: identity.email,
-        reason: String(error),
-        req,
-        response: auth?.response || null,
-        userId: identity.userId,
-      });
+      return finishAuthMeResponse(
+        await degradedAuthProfileResponse({
+          email: identity.email,
+          reason: String(error),
+          req,
+          response: auth?.response || null,
+          userId: identity.userId,
+        }),
+        timer,
+        "exception_degraded",
+      );
     }
-    const snapshotPayload = entitlementSnapshotToAuthPayload(
-      readEntitlementSnapshot(req),
+    const snapshotPayload = timer.measureSync(
+      "snapshot_cookie",
+      () => entitlementSnapshotToAuthPayload(readEntitlementSnapshot(req)),
     );
     if (snapshotPayload) {
       const snapshotResponse = NextResponse.json({
         ...snapshotPayload,
         entitlement_snapshot_reason: "exception_snapshot",
       });
-      return applyAuthResponseCookies(snapshotResponse, auth?.response || null);
+      return finishAuthMeResponse(
+        applyAuthResponseCookies(snapshotResponse, auth?.response || null),
+        timer,
+        "exception_snapshot",
+      );
     }
-    return unauthenticatedAuthProfileResponse({
-      reason: String(error),
-      req,
-      response: auth?.response || null,
-    });
+    return finishAuthMeResponse(
+      await unauthenticatedAuthProfileResponse({
+        reason: String(error),
+        req,
+        response: auth?.response || null,
+      }),
+      timer,
+      "exception_anonymous",
+    );
   }
 }
 
