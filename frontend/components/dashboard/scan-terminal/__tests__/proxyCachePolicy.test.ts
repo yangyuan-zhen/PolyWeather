@@ -20,6 +20,7 @@ export function runTests() {
   const cached = buildCityDetailProxyCachePolicy("false", 15);
   assert.equal(cached.fetchMode, "revalidate");
   assert.equal(cached.revalidateSeconds, 15);
+  assert.match(cached.responseCacheControl, /max-age=15/);
   assert.match(cached.responseCacheControl, /s-maxage=15/);
 
   const scanForced = buildForceRefreshProxyCachePolicy("true", 10);

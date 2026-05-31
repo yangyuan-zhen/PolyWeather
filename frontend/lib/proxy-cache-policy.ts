@@ -28,4 +28,22 @@ export function buildForceRefreshProxyCachePolicy(
   };
 }
 
-export const buildCityDetailProxyCachePolicy = buildForceRefreshProxyCachePolicy;
+export function buildCityDetailProxyCachePolicy(
+  forceRefresh: string | null | undefined,
+  revalidateSeconds = 15,
+): ProxyCachePolicy {
+  if (isForceRefreshValue(forceRefresh)) {
+    return {
+      fetchMode: "no-store",
+      responseCacheControl: "no-store, max-age=0",
+    };
+  }
+  return {
+    fetchMode: "revalidate",
+    responseCacheControl: `public, max-age=${revalidateSeconds}, s-maxage=${revalidateSeconds}, stale-while-revalidate=${Math.max(
+      revalidateSeconds * 3,
+      30,
+    )}`,
+    revalidateSeconds,
+  };
+}

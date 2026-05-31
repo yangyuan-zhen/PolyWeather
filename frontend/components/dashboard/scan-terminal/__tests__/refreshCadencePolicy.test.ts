@@ -77,6 +77,12 @@ export async function runTests() {
     "visible chart fallback must refresh the full city detail payload at the current chart resolution when SSE patches stop",
   );
   assert(
+    chartLogicSource.includes("HOURLY_FORCE_REFRESH_DEDUP_MS") &&
+      chartLogicSource.includes("maxAgeMs: HOURLY_FORCE_REFRESH_DEDUP_MS") &&
+      chartLogicSource.includes("recentlyRefreshed.data"),
+    "forced chart detail refreshes should reuse a very recent full-detail payload instead of refetching repeatedly",
+  );
+  assert(
     __shouldPollLiveChartForTest({ city: "shanghai", compact: true, isActive: false, isMaximized: false }) === true,
     "compact grid slots are visible charts and should run the no-patch fallback guard",
   );

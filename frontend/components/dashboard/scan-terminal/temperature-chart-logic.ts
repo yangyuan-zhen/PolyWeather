@@ -353,6 +353,7 @@ type LocalDayBounds = { start: number; end: number };
 
 const MAX_OBS_POINTS = 1440;
 const HOURLY_CACHE_TTL_MS = DASHBOARD_REFRESH_POLICY_MS.metar;
+const HOURLY_FORCE_REFRESH_DEDUP_MS = 60_000;
 const _hourlyCache = new Map<string, { ts: number; data: HourlyForecast }>();
 const _hourlyRequestCache = new Map<string, Promise<HourlyForecast>>();
 const MAX_HOURLY_DETAIL_CONCURRENT_REQUESTS = 3;
@@ -366,13 +367,16 @@ const SESSION_CACHE_TTL_MS = DASHBOARD_REFRESH_POLICY_MS.metar;
 
 type HourlyCacheEntry = { ts: number; data: HourlyForecast };
 
-function isFreshHourlyCacheEntry(entry: HourlyCacheEntry | null | undefined) {
-  return Boolean(entry && Date.now() - Number(entry.ts || 0) < SESSION_CACHE_TTL_MS);
+function isFreshHourlyCacheEntry(
+  entry: HourlyCacheEntry | null | undefined,
+  maxAgeMs = SESSION_CACHE_TTL_MS,
+) {
+  return Boolean(entry && Date.now() - Number(entry.ts || 0) < maxAgeMs);
 }
 
 function readSessionCache(
   city: string,
-  options: { allowStale?: boolean } = {},
+  options: { allowStale?: boolean; maxAgeMs?: number } = {},
 ): HourlyCacheEntry | null {
   if (typeof window === "undefined") return null;
   try {
@@ -382,7 +386,7 @@ function readSessionCache(
     if (
       item &&
       item.ts &&
-      (options.allowStale || Date.now() - item.ts < SESSION_CACHE_TTL_MS)
+      (options.allowStale || Date.now() - item.ts < (options.maxAgeMs ?? SESSION_CACHE_TTL_MS))
     ) {
       return item;
     }
@@ -392,10 +396,10 @@ function readSessionCache(
 
 function readHourlyCacheEntry(
   cacheKey: string,
-  options: { allowStale?: boolean } = {},
+  options: { allowStale?: boolean; maxAgeMs?: number } = {},
 ): HourlyCacheEntry | null {
   const cached = _hourlyCache.get(cacheKey);
-  if (cached && (options.allowStale || isFreshHourlyCacheEntry(cached))) {
+  if (cached && (options.allowStale || isFreshHourlyCacheEntry(cached, options.maxAgeMs))) {
     return cached;
   }
 
@@ -1192,6 +1196,13 @@ async function fetchHourlyForecastForCity(
     const cached = readHourlyCacheEntry(cacheKey);
     if (cached) {
       return cached.data;
+    }
+  } else {
+    const recentlyRefreshed = readHourlyCacheEntry(cacheKey, {
+      maxAgeMs: HOURLY_FORCE_REFRESH_DEDUP_MS,
+    });
+    if (recentlyRefreshed) {
+      return recentlyRefreshed.data;
     }
   }
 
@@ -2459,6 +2470,7 @@ export {
   MAX_HOURLY_DETAIL_CONCURRENT_REQUESTS,
   HOURLY_DETAIL_REQUEST_TIMEOUT_MS,
   HOURLY_CACHE_TTL_MS,
+  HOURLY_FORCE_REFRESH_DEDUP_MS,
   _hourlyCache,
   __readHourlyCacheEntryForTest,
   resolveCityDetailFromBatch as __resolveCityDetailFromBatchForTest,
