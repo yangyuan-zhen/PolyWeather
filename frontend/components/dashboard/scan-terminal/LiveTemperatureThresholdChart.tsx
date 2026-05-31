@@ -60,7 +60,8 @@ const FOREGROUND_FULL_DETAIL_REFRESH_DEDUP_MS = 90_000;
 const DETAIL_LOAD_BATCH_DELAY_MS = 0;
 const INITIAL_DETAIL_LOAD_SLOTS = 3;
 const DEFERRED_DETAIL_LOAD_DELAY_MS = 1_200;
-const DEFERRED_DETAIL_LOAD_STEP_MS = 450;
+const DEFERRED_DETAIL_LOAD_GROUP_SIZE = 3;
+const DEFERRED_DETAIL_LOAD_WAVE_STEP_MS = 900;
 
 const TemperatureChartCanvas = dynamic(
   () =>
@@ -157,7 +158,10 @@ function getInitialDetailLoadDelayMs({
   if (!compact || isActive || isMaximized) return 0;
   const normalizedIndex = normalizeSlotIndex(slotIndex);
   if (normalizedIndex < INITIAL_DETAIL_LOAD_SLOTS) return 0;
-  return DEFERRED_DETAIL_LOAD_DELAY_MS + (normalizedIndex - INITIAL_DETAIL_LOAD_SLOTS) * DEFERRED_DETAIL_LOAD_STEP_MS;
+  const deferredWave = Math.floor(
+    (normalizedIndex - INITIAL_DETAIL_LOAD_SLOTS) / DEFERRED_DETAIL_LOAD_GROUP_SIZE,
+  );
+  return DEFERRED_DETAIL_LOAD_DELAY_MS + deferredWave * DEFERRED_DETAIL_LOAD_WAVE_STEP_MS;
 }
 
 // ── Main component ─────────────────────────────────────────────────────

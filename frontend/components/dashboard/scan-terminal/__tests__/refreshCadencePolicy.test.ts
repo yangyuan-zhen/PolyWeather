@@ -175,6 +175,18 @@ export async function runTests() {
     "later non-active grid charts should defer full-detail loading after first paint",
   );
   assert(
+    __getInitialDetailLoadDelayMsForTest({ compact: true, isActive: false, isMaximized: false, slotIndex: 3 }) ===
+      __getInitialDetailLoadDelayMsForTest({ compact: true, isActive: false, isMaximized: false, slotIndex: 5 }),
+    "deferred grid charts should load in same-wave groups so detail-batch can coalesce them",
+  );
+  assert(
+    __getInitialDetailLoadDelayMsForTest({ compact: true, isActive: false, isMaximized: false, slotIndex: 6 }) ===
+      __getInitialDetailLoadDelayMsForTest({ compact: true, isActive: false, isMaximized: false, slotIndex: 8 }) &&
+      __getInitialDetailLoadDelayMsForTest({ compact: true, isActive: false, isMaximized: false, slotIndex: 6 }) >
+        __getInitialDetailLoadDelayMsForTest({ compact: true, isActive: false, isMaximized: false, slotIndex: 5 }),
+    "later deferred grid charts should form a second batch wave instead of one request per slot",
+  );
+  assert(
     __getInitialDetailLoadDelayMsForTest({ compact: true, isActive: true, isMaximized: false, slotIndex: 8 }) === 0 &&
       __getInitialDetailLoadDelayMsForTest({ compact: true, isActive: false, isMaximized: true, slotIndex: 8 }) === 0,
     "active or maximized charts should bypass deferred detail loading",
