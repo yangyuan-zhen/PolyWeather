@@ -1,6 +1,6 @@
 """Operations/admin API routes."""
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 
 from web.core import GrantPointsRequest
 from web.services.ops_api import (
@@ -30,14 +30,35 @@ from web.services.ops_api import (
     get_ops_training_accuracy,
     get_ops_telegram_audit,
 )
+from web.services.request_timing import ServerTimingRecorder, attach_server_timing_header
 
 router = APIRouter(tags=["ops"])
 
 
 @router.get("/api/ops/online-users")
-async def ops_online_users():
-    from src.utils.online_tracker import online_count
-    return {"online": online_count()}
+async def ops_online_users(request: Request, response: Response):
+    timer = ServerTimingRecorder(
+        request,
+        log_name="ops_online_users_timing",
+        prefix="ops_online_users",
+        state_attr="ops_online_users_server_timing",
+    )
+    outcome = "ok"
+    status_code = 200
+    try:
+        from src.utils.online_tracker import online_count
+        return {"online": timer.measure("online_count", online_count)}
+    except Exception:
+        outcome = "exception"
+        status_code = 500
+        raise
+    finally:
+        timer.finish(outcome=outcome, status_code=status_code)
+        attach_server_timing_header(
+            response,
+            request,
+            "ops_online_users_server_timing",
+        )
 
 
 @router.get("/api/ops/users")

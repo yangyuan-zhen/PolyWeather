@@ -12,6 +12,7 @@ import {
 import {
   MAX_HOURLY_DETAIL_CONCURRENT_REQUESTS,
   HOURLY_CACHE_TTL_MS,
+  __resolveCityDetailFromBatchForTest,
   __readHourlyCacheEntryForTest,
   __resetHourlyDetailRequestQueueForTest,
   __runQueuedHourlyDetailRequestForTest,
@@ -129,6 +130,19 @@ export async function runTests() {
   assert(
     __shouldFetchCityDetailForChartForTest({ city: "paris", documentHidden: true, isChartVisible: true }) === false,
     "hidden browser tabs should not prefetch city detail",
+  );
+  const normalizedBatchDetail = __resolveCityDetailFromBatchForTest(
+      {
+        "hong kong": {
+          city: "hong kong",
+          timeseries: { hourly: { times: ["00:00"], temps: [32] } },
+        },
+      } as any,
+      "Hong Kong",
+    ) as any;
+  assert(
+    normalizedBatchDetail?.city === "hong kong",
+    "frontend detail batch lookup should accept backend-normalized city keys before falling back to single-city requests",
   );
 
   __resetHourlyDetailRequestQueueForTest();

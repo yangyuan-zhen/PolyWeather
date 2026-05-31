@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { proxyBackendJsonGet } from "@/lib/api-proxy";
 import { buildForceRefreshProxyCachePolicy } from "@/lib/proxy-cache-policy";
 import { DASHBOARD_REFRESH_POLICY_SEC } from "@/lib/refresh-policy";
+import {
+  createProxyTimer,
+  finishProxyTimedResponse,
+} from "@/lib/proxy-timing";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 const SCAN_TERMINAL_PROXY_TIMEOUT_MS = Number(
@@ -11,10 +15,15 @@ const SCAN_TERMINAL_PROXY_TIMEOUT_MS = Number(
 export const maxDuration = 45;
 
 export async function GET(req: NextRequest) {
+  const timer = createProxyTimer(req, "scan_terminal");
   if (!API_BASE) {
-    return NextResponse.json(
-      { error: "POLYWEATHER_API_BASE_URL is not configured" },
-      { status: 500 },
+    return finishProxyTimedResponse(
+      NextResponse.json(
+        { error: "POLYWEATHER_API_BASE_URL is not configured" },
+        { status: 500 },
+      ),
+      timer,
+      "missing_api_base",
     );
   }
 
@@ -61,6 +70,7 @@ export async function GET(req: NextRequest) {
       revalidateSeconds: cachePolicy.revalidateSeconds,
       signal: controller.signal,
       timeoutPublicMessage: "Scan terminal request timed out",
+      timing: timer,
       url,
     });
   } finally {

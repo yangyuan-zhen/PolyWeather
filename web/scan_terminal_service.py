@@ -235,16 +235,41 @@ def build_scan_terminal_payload(
     raw_filters: Optional[Dict[str, Any]] = None,
     *,
     force_refresh: bool = False,
+    timing_recorder: Any = None,
 ) -> Dict[str, Any]:
-    filters = _normalize_scan_terminal_filters(raw_filters)
+    filters = (
+        timing_recorder.measure(
+            "normalize_filters",
+            lambda: _normalize_scan_terminal_filters(raw_filters),
+        )
+        if timing_recorder is not None
+        else _normalize_scan_terminal_filters(raw_filters)
+    )
     if not force_refresh:
-        cached = get_cached_scan_terminal_payload(
-            filters, ttl_sec=SCAN_TERMINAL_PAYLOAD_TTL_SEC
+        cached = (
+            timing_recorder.measure(
+                "cache_lookup",
+                lambda: get_cached_scan_terminal_payload(
+                    filters,
+                    ttl_sec=SCAN_TERMINAL_PAYLOAD_TTL_SEC,
+                ),
+            )
+            if timing_recorder is not None
+            else get_cached_scan_terminal_payload(
+                filters, ttl_sec=SCAN_TERMINAL_PAYLOAD_TTL_SEC
+            )
         )
         if cached is not None:
             return cached
 
-        cached_entry = get_scan_terminal_cache_entry(filters) or {}
+        cached_entry = (
+            timing_recorder.measure(
+                "stale_cache_lookup",
+                lambda: get_scan_terminal_cache_entry(filters) or {},
+            )
+            if timing_recorder is not None
+            else get_scan_terminal_cache_entry(filters) or {}
+        )
         success_payload = cached_entry.get("success_payload")
         if isinstance(success_payload, dict) and success_payload:
             started = _start_scan_terminal_background_refresh(filters)
@@ -257,7 +282,17 @@ def build_scan_terminal_payload(
                 failed_at=cached_entry.get("last_failed_at"),
             )
 
-    return _build_scan_terminal_payload_uncached(filters, force_refresh=force_refresh)
+    return (
+        timing_recorder.measure(
+            "uncached_build",
+            lambda: _build_scan_terminal_payload_uncached(
+                filters,
+                force_refresh=force_refresh,
+            ),
+        )
+        if timing_recorder is not None
+        else _build_scan_terminal_payload_uncached(filters, force_refresh=force_refresh)
+    )
 
 
 _SCAN_PREWARM_STARTED = False

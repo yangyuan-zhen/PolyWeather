@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Query, Request, Response
 
 from web.services.city_api import (
     get_city_detail_batch_payload,
@@ -12,6 +12,7 @@ from web.services.city_api import (
     list_cities_payload,
 )
 from web.services.city_realtime_stream import get_realtime_stream_payload
+from web.services.request_timing import attach_server_timing_header
 
 router = APIRouter(tags=["city"])
 
@@ -108,6 +109,7 @@ async def cities_model_range(
 @router.get("/api/cities/detail-batch")
 async def city_detail_batch(
     request: Request,
+    response: Response,
     cities: str = "",
     force_refresh: bool = False,
     market_slug: Optional[str] = None,
@@ -115,7 +117,7 @@ async def city_detail_batch(
     resolution: Optional[str] = "10m",
     limit: int = 12,
 ):
-    return await get_city_detail_batch_payload(
+    payload = await get_city_detail_batch_payload(
         request,
         cities=cities,
         force_refresh=force_refresh,
@@ -124,6 +126,8 @@ async def city_detail_batch(
         resolution=resolution,
         limit=limit,
     )
+    attach_server_timing_header(response, request, "city_detail_batch_server_timing")
+    return payload
 
 
 @router.get("/api/city/{name}")
@@ -159,13 +163,14 @@ async def city_summary(
 @router.get("/api/city/{name}/detail")
 async def city_detail_aggregate(
     request: Request,
+    response: Response,
     name: str,
     force_refresh: bool = False,
     market_slug: Optional[str] = None,
     target_date: Optional[str] = None,
     resolution: Optional[str] = "10m",
 ):
-    return await get_city_detail_aggregate_payload(
+    payload = await get_city_detail_aggregate_payload(
         request,
         name,
         force_refresh=force_refresh,
@@ -173,6 +178,8 @@ async def city_detail_aggregate(
         target_date=target_date,
         resolution=resolution,
     )
+    attach_server_timing_header(response, request, "city_detail_server_timing")
+    return payload
 
 
 @router.get("/api/city/{name}/realtime-stream")

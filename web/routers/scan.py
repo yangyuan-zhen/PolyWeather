@@ -9,6 +9,7 @@ from web.services.scan_api import (
     get_scan_terminal_overview_payload,
     get_scan_terminal_payload,
 )
+from web.services.request_timing import attach_server_timing_header
 
 router = APIRouter(tags=["scan"])
 
@@ -45,12 +46,14 @@ async def scan_terminal(
         region=region or trading_region or None,
         timezone_offset_seconds=timezone_offset_seconds,
     )
-    return JSONResponse(
+    response = JSONResponse(
         content=payload,
         headers={
             "Cache-Control": "public, s-maxage=30, stale-while-revalidate=120",
         },
     )
+    attach_server_timing_header(response, request, "scan_terminal_server_timing")
+    return response
 
 
 @router.post("/api/scan/terminal/overview")
