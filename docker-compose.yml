@@ -28,6 +28,7 @@ services:
     env_file: &id001
     - .env
     environment:
+      POLYWEATHER_REDIS_URL: ${POLYWEATHER_REDIS_URL:-redis://polyweather_redis:6379/0}
       POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'false'
       POLYWEATHER_SERVICE_ROLE: bot
       TELEGRAM_AIRPORT_PUSH_INTERVAL_SEC: ${POLYWEATHER_BOT_AIRPORT_PUSH_INTERVAL_SEC:-180}
@@ -96,6 +97,7 @@ services:
     container_name: polyweather_web
     env_file: *id001
     environment:
+      POLYWEATHER_REDIS_URL: ${POLYWEATHER_REDIS_URL:-redis://polyweather_redis:6379/0}
       POLYWEATHER_SERVICE_ROLE: web
     healthcheck:
       interval: 30s

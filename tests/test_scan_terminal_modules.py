@@ -1,4 +1,5 @@
 from web.scan_terminal_filters import normalize_scan_terminal_filters
+from web import scan_terminal_cache
 from web.scan_terminal_metar_gate import _apply_metar_gate_to_row
 from web.scan_terminal_payloads import (
     build_failed_scan_terminal_payload,
@@ -8,6 +9,65 @@ from web.scan_terminal_payloads import (
 from web.scan_terminal_ranker import build_ranked_scan_terminal_result
 from web.scan_terminal_city_row import _build_quick_row
 from web.routers.scan import router as scan_router
+
+
+class _FakeRedis:
+    def __init__(self):
+        self.data = {}
+
+    def get(self, key):
+        return self.data.get(key)
+
+    def setex(self, key, _ttl, value):
+        self.data[key] = value
+
+
+def test_scan_terminal_cache_hydrates_success_payload_from_redis(monkeypatch):
+    fake_redis = _FakeRedis()
+    monkeypatch.setenv("POLYWEATHER_SCAN_TERMINAL_REDIS_CACHE_ENABLED", "true")
+    monkeypatch.setattr(scan_terminal_cache, "_get_redis_client", lambda: fake_redis)
+    scan_terminal_cache._SCAN_TERMINAL_CACHE.clear()
+
+    filters = {"scan_mode": "tradable", "limit": 9}
+    payload = {
+        "generated_at": "2026-06-01T00:00:00Z",
+        "rows": [{"id": "row-1"}],
+        "summary": {"candidate_total": 1},
+    }
+
+    scan_terminal_cache.set_cached_scan_terminal_payload(filters, payload)
+    scan_terminal_cache._SCAN_TERMINAL_CACHE.clear()
+
+    entry = scan_terminal_cache.get_scan_terminal_cache_entry(filters)
+    cached = scan_terminal_cache.get_cached_scan_terminal_payload(filters, ttl_sec=3600)
+
+    assert entry["success_payload"]["rows"] == [{"id": "row-1"}]
+    assert cached["summary"]["candidate_total"] == 1
+
+
+def test_scan_terminal_failure_state_preserves_redis_success_payload(monkeypatch):
+    fake_redis = _FakeRedis()
+    monkeypatch.setenv("POLYWEATHER_SCAN_TERMINAL_REDIS_CACHE_ENABLED", "true")
+    monkeypatch.setattr(scan_terminal_cache, "_get_redis_client", lambda: fake_redis)
+    scan_terminal_cache._SCAN_TERMINAL_CACHE.clear()
+
+    filters = {"scan_mode": "tradable", "limit": 9}
+    scan_terminal_cache.set_cached_scan_terminal_payload(
+        filters,
+        {
+            "generated_at": "2026-06-01T00:00:00Z",
+            "rows": [{"id": "row-1"}],
+        },
+    )
+    scan_terminal_cache._SCAN_TERMINAL_CACHE.clear()
+
+    scan_terminal_cache.set_scan_terminal_failure_state(filters, error_message="timeout")
+    scan_terminal_cache._SCAN_TERMINAL_CACHE.clear()
+
+    entry = scan_terminal_cache.get_scan_terminal_cache_entry(filters)
+
+    assert entry["success_payload"]["rows"] == [{"id": "row-1"}]
+    assert entry["last_error"] == "timeout"
 
 
 def test_scan_router_does_not_expose_terminal_ai_endpoint():
