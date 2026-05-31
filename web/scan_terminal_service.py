@@ -35,6 +35,7 @@ from web.scan_terminal_payloads import (
     build_failed_scan_terminal_payload,
     build_scan_terminal_snapshot_id,
     build_stale_scan_terminal_payload,
+    compact_ranked_scan_rows_for_payload,
 )
 from web.scan_terminal_ranker import build_ranked_scan_terminal_result
 def _normalize_locale(value: Any) -> str:
@@ -210,7 +211,9 @@ def _build_scan_terminal_payload_uncached(
             total_city_count=len(city_names),
             failed_city_count=len(failed_cities),
         )
-        ranked_rows = ranked_result["ranked_rows"]
+        ranked_rows = compact_ranked_scan_rows_for_payload(
+            ranked_result["ranked_rows"]
+        )
 
         if timed_out and not ranked_rows:
             success_payload = cached_entry.get("success_payload")

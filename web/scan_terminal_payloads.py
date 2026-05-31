@@ -5,6 +5,48 @@ import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+SCAN_PAYLOAD_FULL_RUNWAY_HISTORY_ROWS = 9
+SCAN_PAYLOAD_DEFERRED_RUNWAY_POINTS = 12
+
+
+def _compact_runway_history_points(
+    history: Any,
+    *,
+    max_points: int,
+) -> Dict[str, List[Dict[str, Any]]]:
+    if not isinstance(history, dict) or max_points <= 0:
+        return {}
+    compacted: Dict[str, List[Dict[str, Any]]] = {}
+    for runway, points in history.items():
+        if not isinstance(points, list) or not points:
+            continue
+        compacted[str(runway)] = points[-max_points:]
+    return compacted
+
+
+def compact_ranked_scan_rows_for_payload(
+    rows: List[Dict[str, Any]],
+    *,
+    full_history_rows: int = SCAN_PAYLOAD_FULL_RUNWAY_HISTORY_ROWS,
+    deferred_runway_points: int = SCAN_PAYLOAD_DEFERRED_RUNWAY_POINTS,
+) -> List[Dict[str, Any]]:
+    compacted_rows: List[Dict[str, Any]] = []
+    for index, row in enumerate(rows):
+        if index < full_history_rows:
+            compacted_rows.append(row)
+            continue
+        history = row.get("runway_plate_history")
+        if not isinstance(history, dict) or not history:
+            compacted_rows.append(row)
+            continue
+        next_row = dict(row)
+        next_row["runway_plate_history"] = _compact_runway_history_points(
+            history,
+            max_points=deferred_runway_points,
+        )
+        compacted_rows.append(next_row)
+    return compacted_rows
+
 
 def build_scan_terminal_snapshot_id(
     filters: Dict[str, Any],

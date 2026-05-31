@@ -5,6 +5,9 @@ from web.scan_terminal_payloads import (
     build_failed_scan_terminal_payload,
     build_scan_terminal_snapshot_id,
     build_stale_scan_terminal_payload,
+    compact_ranked_scan_rows_for_payload,
+    SCAN_PAYLOAD_DEFERRED_RUNWAY_POINTS,
+    SCAN_PAYLOAD_FULL_RUNWAY_HISTORY_ROWS,
 )
 from web.scan_terminal_ranker import build_ranked_scan_terminal_result
 from web.scan_terminal_city_row import _build_quick_row
@@ -204,6 +207,43 @@ def test_scan_terminal_snapshot_id_is_stable_for_same_ranked_inputs():
 
     assert first == second
     assert first.startswith("scan-")
+
+
+def test_scan_terminal_payload_slims_deferred_runway_history_rows():
+    runway_points = [
+        {"time": f"2026-05-31T{hour:02d}:00:00+00:00", "temp": 20 + hour}
+        for hour in range(24)
+    ]
+    rows = [
+        {
+            "id": f"row-{index}",
+            "runway_plate_history": {"35R": list(runway_points)},
+        }
+        for index in range(SCAN_PAYLOAD_FULL_RUNWAY_HISTORY_ROWS + 2)
+    ]
+
+    compacted = compact_ranked_scan_rows_for_payload(rows)
+
+    assert len(compacted[0]["runway_plate_history"]["35R"]) == len(runway_points)
+    assert (
+        len(
+            compacted[SCAN_PAYLOAD_FULL_RUNWAY_HISTORY_ROWS - 1][
+                "runway_plate_history"
+            ]["35R"]
+        )
+        == len(runway_points)
+    )
+    assert (
+        len(
+            compacted[SCAN_PAYLOAD_FULL_RUNWAY_HISTORY_ROWS][
+                "runway_plate_history"
+            ]["35R"]
+        )
+        == SCAN_PAYLOAD_DEFERRED_RUNWAY_POINTS
+    )
+    assert len(rows[SCAN_PAYLOAD_FULL_RUNWAY_HISTORY_ROWS]["runway_plate_history"]["35R"]) == len(
+        runway_points
+    )
 
 
 def test_scan_terminal_quick_row_compacts_runway_history_for_list_payload():
