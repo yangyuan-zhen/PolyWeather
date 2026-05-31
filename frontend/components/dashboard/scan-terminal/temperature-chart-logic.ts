@@ -1098,7 +1098,10 @@ async function flushCityDetailBatch(resolution: string) {
           return;
         }
         try {
-          resolveBatchWaiters(waiters, await fetchSingleHourlyForecastForCity(city, resolution));
+          resolveBatchWaiters(
+            waiters,
+            await runQueuedHourlyDetailRequest(() => fetchSingleHourlyForecastForCity(city, resolution)),
+          );
         } catch (error) {
           rejectBatchWaiters(waiters, error);
         }
@@ -1109,7 +1112,10 @@ async function flushCityDetailBatch(resolution: string) {
       cities.map(async (city) => {
         const waiters = queue.waiters.get(city);
         try {
-          resolveBatchWaiters(waiters, await fetchSingleHourlyForecastForCity(city, resolution));
+          resolveBatchWaiters(
+            waiters,
+            await runQueuedHourlyDetailRequest(() => fetchSingleHourlyForecastForCity(city, resolution)),
+          );
         } catch (fallbackError) {
           rejectBatchWaiters(waiters, fallbackError || error);
         }
@@ -1158,11 +1164,7 @@ async function fetchHourlyForecastForCity(
   const pending = _hourlyRequestCache.get(requestKey);
   if (pending) return pending;
 
-  const request = (
-    options.ignoreCache
-      ? runQueuedHourlyDetailRequest(() => fetchSingleHourlyForecastForCity(city, resParam))
-      : queueCityDetailBatch(city, resParam)
-  )
+  const request = queueCityDetailBatch(city, resParam)
     .finally(() => {
       _hourlyRequestCache.delete(requestKey);
     });

@@ -101,6 +101,10 @@ function formatCityLocalDate(tzOffsetSeconds: number | null | undefined) {
   return `${y}-${m}-${d}`;
 }
 
+function getLiveTempFromHourly(data: HourlyForecast) {
+  return validNumber(data?.airportCurrent?.temp) ?? validNumber(data?.airportPrimary?.temp) ?? null;
+}
+
 function getWundergroundDailyHigh(hourly: HourlyForecast) {
   return validNumber(hourly?.wundergroundCurrent?.max_so_far) ?? null;
 }
@@ -365,6 +369,8 @@ export function LiveTemperatureThresholdChart({
         .then((data) => {
           if (cancelled || !data) return;
           hasLoadedHourlyDetailRef.current = true;
+          const temp = getLiveTempFromHourly(data);
+          if (temp !== null) setLiveTemp(temp);
           setHourly(data);
         })
         .catch(() => {})
@@ -376,15 +382,6 @@ export function LiveTemperatureThresholdChart({
     const checkFallback = () => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
       if (Date.now() - lastPatchAtRef.current < 2 * 60_000) return;
-
-      fetch(`/api/city/${encodeURIComponent(city)}/summary`)
-        .then((res) => (res.ok ? res.json() : null))
-        .then((payload) => {
-          if (cancelled || !payload) return;
-          const temp = validNumber(payload?.current?.temp);
-          if (temp !== null) setLiveTemp(temp);
-        })
-        .catch(() => {});
 
       refreshFullDetail();
     };
@@ -403,19 +400,12 @@ export function LiveTemperatureThresholdChart({
     const refreshForegroundFullDetail = () => {
       lastPatchAtRef.current = Date.now();
 
-      fetch(`/api/city/${encodeURIComponent(city)}/summary`)
-        .then((res) => (res.ok ? res.json() : null))
-        .then((payload) => {
-          if (cancelled || !payload) return;
-          const temp = validNumber(payload?.current?.temp);
-          if (temp !== null) setLiveTemp(temp);
-        })
-        .catch(() => {});
-
       fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })
         .then((data) => {
           if (cancelled || !data) return;
           hasLoadedHourlyDetailRef.current = true;
+          const temp = getLiveTempFromHourly(data);
+          if (temp !== null) setLiveTemp(temp);
           setHourly(data);
         })
         .catch(() => {});

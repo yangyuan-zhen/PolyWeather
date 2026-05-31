@@ -180,6 +180,55 @@ def test_fetch_wunderground_historical_keeps_fahrenheit_for_us_cities(monkeypatc
     assert payload["max_so_far"] == 75
 
 
+def test_fetch_wunderground_historical_negative_caches_client_errors(monkeypatch, tmp_path):
+    collector = _collector(monkeypatch, tmp_path)
+    monkeypatch.setenv("WUNDERGROUND_NEGATIVE_CACHE_TTL_SEC", "900")
+    calls = []
+
+    def fake_get(url: str, **_kwargs):
+        calls.append(url)
+        return httpx.Response(
+            400,
+            json={"errors": [{"message": "invalid location"}]},
+            request=httpx.Request("GET", url),
+        )
+
+    monkeypatch.setattr(collector, "_http_get", fake_get)
+
+    first = collector.fetch_wunderground_historical(
+        "istanbul",
+        use_fahrenheit=False,
+        utc_offset=10800,
+        local_date="2026-05-31",
+    )
+    second = collector.fetch_wunderground_historical(
+        "istanbul",
+        use_fahrenheit=False,
+        utc_offset=10800,
+        local_date="2026-05-31",
+    )
+
+    assert first is None
+    assert second is None
+    assert len(calls) == 2
+
+    collector._evict_city_caches(
+        city="istanbul",
+        lat=None,
+        lon=None,
+        use_fahrenheit=False,
+    )
+    third = collector.fetch_wunderground_historical(
+        "istanbul",
+        use_fahrenheit=False,
+        utc_offset=10800,
+        local_date="2026-05-31",
+    )
+
+    assert third is None
+    assert len(calls) == 4
+
+
 def test_fetch_all_sources_attaches_wunderground_historical(monkeypatch, tmp_path):
     collector = _collector(monkeypatch, tmp_path)
     called = {}

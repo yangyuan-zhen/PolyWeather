@@ -73,6 +73,13 @@ class WundergroundHistoricalMixin:
             self._wunderground_historical_cache = {}
         if not hasattr(self, "_wunderground_historical_cache_lock"):
             self._wunderground_historical_cache_lock = threading.Lock()
+        if not hasattr(self, "_wunderground_negative_cache"):
+            self._wunderground_negative_cache = {}
+        if not hasattr(self, "wunderground_negative_cache_ttl_sec"):
+            self.wunderground_negative_cache_ttl_sec = max(
+                60,
+                int(os.getenv("WUNDERGROUND_NEGATIVE_CACHE_TTL_SEC", "900")),
+            )
         if not hasattr(self, "wunderground_historical_cache_ttl_sec"):
             self.wunderground_historical_cache_ttl_sec = max(
                 30,
@@ -239,6 +246,15 @@ class WundergroundHistoricalMixin:
             cached = self._wunderground_historical_cache.get(cache_key)
             if cached and now_ts - float(cached.get("t", 0)) < self.wunderground_historical_cache_ttl_sec:
                 return dict(cached["d"])
+            negative_cached = self._wunderground_negative_cache.get(cache_key)
+            if negative_cached and now_ts - float(negative_cached.get("t", 0)) < self.wunderground_negative_cache_ttl_sec:
+                record_source_call(
+                    "wunderground",
+                    "historical",
+                    "negative_cached",
+                    (time.perf_counter() - started) * 1000.0,
+                )
+                return None
 
         current_url = (
             "https://api.weather.com/v1/location/"
@@ -286,6 +302,16 @@ class WundergroundHistoricalMixin:
                 location_id,
                 exc,
             )
+            if (
+                isinstance(exc, httpx.HTTPStatusError)
+                and exc.response is not None
+                and 400 <= exc.response.status_code < 500
+            ):
+                with self._wunderground_historical_cache_lock:
+                    self._wunderground_negative_cache[cache_key] = {
+                        "t": time.time(),
+                        "status": exc.response.status_code,
+                    }
             record_source_call(
                 "wunderground",
                 "historical",
@@ -396,6 +422,7 @@ class WundergroundHistoricalMixin:
                 "t": time.time(),
                 "d": payload,
             }
+            self._wunderground_negative_cache.pop(cache_key, None)
         record_source_call(
             "wunderground",
             "historical",

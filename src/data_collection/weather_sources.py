@@ -946,6 +946,9 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 for key in list(self._wunderground_historical_cache.keys()):
                     if key.startswith(prefix):
                         self._wunderground_historical_cache.pop(key, None)
+                for key in list(getattr(self, "_wunderground_negative_cache", {}).keys()):
+                    if key.startswith(prefix):
+                        self._wunderground_negative_cache.pop(key, None)
 
     def _uses_fahrenheit(self, city_lower: str) -> bool:
         return city_lower in self.US_CITIES

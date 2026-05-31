@@ -77,6 +77,8 @@ const TrainingDashboard = dynamic(
   },
 );
 
+const ONLINE_USERS_REFRESH_MS = 5 * 60_000;
+
 function createEmptyAccess(loading = true): ProAccessState {
   return {
     loading,
@@ -425,14 +427,22 @@ function PolyWeatherTerminal({
 
   useEffect(() => {
     const fetchOnline = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
       fetch("/api/ops/online-users", { headers: { Accept: "application/json" } })
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => { if (d?.online != null) setOnlineCount(d.online); })
         .catch(() => {});
     };
     fetchOnline();
-    const id = setInterval(fetchOnline, 60_000);
-    return () => clearInterval(id);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") fetchOnline();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    const id = setInterval(fetchOnline, ONLINE_USERS_REFRESH_MS);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      clearInterval(id);
+    };
   }, []);
 
   const [gridCols, setGridCols] = useState<number>(() => {

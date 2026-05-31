@@ -182,6 +182,10 @@ export function runTests() {
       !foregroundRefreshBlock.includes("setIsHourlyLoading(true)"),
     "foreground resume refresh should update full detail immediately in the background without showing the loading overlay",
   );
+  assert(
+    !chart.includes("/api/city/${encodeURIComponent(city)}/summary"),
+    "visible chart fallback and foreground refresh should not issue a separate summary request after requesting full detail",
+  );
   assert(chart.includes("viewMode"), "temperature chart must expose a view mode for DEB-peak auto view versus full-day view");
   assert(chart.includes('useState<"auto" | "full">("full")'), "temperature chart must default every city panel to the all-day view");
   assert(

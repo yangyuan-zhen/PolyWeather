@@ -22,6 +22,22 @@ _RECENT_DEB_CACHE_TTL_SEC = max(
     60,
     int(os.getenv("POLYWEATHER_CITIES_DEB_RECENT_CACHE_TTL_SEC", "300") or "300"),
 )
+_CITY_FULL_REFRESH_INFLIGHT: Dict[str, "asyncio.Task[Dict[str, Any]]"] = {}
+_CITY_FULL_REFRESH_LOCK = asyncio.Lock()
+CityDetailPayloadCacheKey = Tuple[str, str, str, str, str, int]
+_CITY_DETAIL_PAYLOAD_CACHE: Dict[CityDetailPayloadCacheKey, Dict[str, Any]] = {}
+_CITY_DETAIL_PAYLOAD_CACHE_TS: Dict[CityDetailPayloadCacheKey, float] = {}
+_CITY_DETAIL_PAYLOAD_INFLIGHT: Dict[CityDetailPayloadCacheKey, "asyncio.Task[Dict[str, Any]]"] = {}
+_CITY_DETAIL_PAYLOAD_EPOCH: Dict[str, int] = {}
+_CITY_DETAIL_PAYLOAD_LOCK = asyncio.Lock()
+
+
+def _city_detail_payload_cache_ttl() -> float:
+    try:
+        value = float(os.getenv("POLYWEATHER_CITY_DETAIL_PAYLOAD_CACHE_TTL_SEC", "8") or "8")
+    except ValueError:
+        value = 8.0
+    return max(0.0, min(30.0, value))
 
 
 async def _overlay_cached_wunderground(city: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -30,6 +46,134 @@ async def _overlay_cached_wunderground(city: str, payload: Dict[str, Any]) -> Di
         city,
         payload,
     )
+
+
+async def _refresh_city_full_cache_singleflight(city: str, force_refresh: bool) -> Dict[str, Any]:
+    key = f"{city}:{bool(force_refresh)}"
+    async with _CITY_FULL_REFRESH_LOCK:
+        task = _CITY_FULL_REFRESH_INFLIGHT.get(key)
+        if task is None:
+            task = asyncio.create_task(
+                run_in_threadpool(legacy_routes._refresh_city_full_cache, city, force_refresh),
+            )
+            _CITY_FULL_REFRESH_INFLIGHT[key] = task
+    try:
+        return await task
+    finally:
+        if task.done():
+            async with _CITY_FULL_REFRESH_LOCK:
+                if _CITY_FULL_REFRESH_INFLIGHT.get(key) is task:
+                    _CITY_FULL_REFRESH_INFLIGHT.pop(key, None)
+
+
+async def _invalidate_city_detail_payload_cache(city: str) -> None:
+    normalized = str(city or "").strip().lower()
+    if not normalized:
+        return
+    async with _CITY_DETAIL_PAYLOAD_LOCK:
+        _CITY_DETAIL_PAYLOAD_EPOCH[normalized] = _CITY_DETAIL_PAYLOAD_EPOCH.get(normalized, 0) + 1
+        old_keys = [key for key in _CITY_DETAIL_PAYLOAD_CACHE if key[0] == normalized]
+        for key in old_keys:
+            _CITY_DETAIL_PAYLOAD_CACHE.pop(key, None)
+            _CITY_DETAIL_PAYLOAD_CACHE_TS.pop(key, None)
+
+
+async def _refresh_city_full_data(city: str, force_refresh: bool) -> Dict[str, Any]:
+    await _invalidate_city_detail_payload_cache(city)
+    return await _refresh_city_full_cache_singleflight(city, force_refresh)
+
+
+async def _get_city_full_data(city: str, *, force_refresh: bool) -> Dict[str, Any]:
+    if force_refresh:
+        return await _refresh_city_full_data(city, True)
+    cached_entry = await run_in_threadpool(legacy_routes._CACHE_DB.get_city_cache, "full", city)
+    if cached_entry:
+        if not legacy_routes._city_cache_is_fresh(cached_entry, legacy_routes.CITY_FULL_CACHE_TTL_SEC):
+            return await _refresh_city_full_data(city, False)
+        return await _overlay_cached_wunderground(city, cached_entry.get("payload") or {})
+    return await _refresh_city_full_data(city, False)
+
+
+def _city_detail_payload_cache_key(
+    data: Dict[str, Any],
+    market_slug: Optional[str],
+    target_date: Optional[str],
+    resolution: Optional[str],
+) -> CityDetailPayloadCacheKey:
+    city = str(data.get("city") or data.get("name") or "").strip().lower()
+    fingerprint = str(
+        data.get("updated_at_ts")
+        or data.get("updated_at")
+        or data.get("local_time")
+        or data.get("local_date")
+        or id(data)
+    )
+    generation = _CITY_DETAIL_PAYLOAD_EPOCH.get(city, 0)
+    return (
+        city,
+        str(resolution or "10m"),
+        str(market_slug or ""),
+        str(target_date or ""),
+        fingerprint,
+        generation,
+    )
+
+
+async def _build_city_detail_payload_cached(
+    data: Dict[str, Any],
+    market_slug: Optional[str],
+    target_date: Optional[str],
+    resolution: Optional[str],
+) -> Dict[str, Any]:
+    ttl = _city_detail_payload_cache_ttl()
+    if ttl <= 0:
+        return await run_in_threadpool(
+            legacy_routes._build_city_detail_payload,
+            data,
+            market_slug,
+            target_date,
+            resolution,
+        )
+
+    key = _city_detail_payload_cache_key(data, market_slug, target_date, resolution)
+    now_ts = time.time()
+    async with _CITY_DETAIL_PAYLOAD_LOCK:
+        cached = _CITY_DETAIL_PAYLOAD_CACHE.get(key)
+        cached_ts = _CITY_DETAIL_PAYLOAD_CACHE_TS.get(key, 0.0)
+        if cached is not None and now_ts - cached_ts < ttl:
+            return cached
+        task = _CITY_DETAIL_PAYLOAD_INFLIGHT.get(key)
+        if task is None:
+            task = asyncio.create_task(
+                run_in_threadpool(
+                    legacy_routes._build_city_detail_payload,
+                    data,
+                    market_slug,
+                    target_date,
+                    resolution,
+                ),
+            )
+            _CITY_DETAIL_PAYLOAD_INFLIGHT[key] = task
+    try:
+        payload = await task
+    finally:
+        if task.done():
+            async with _CITY_DETAIL_PAYLOAD_LOCK:
+                if _CITY_DETAIL_PAYLOAD_INFLIGHT.get(key) is task:
+                    _CITY_DETAIL_PAYLOAD_INFLIGHT.pop(key, None)
+
+    async with _CITY_DETAIL_PAYLOAD_LOCK:
+        _CITY_DETAIL_PAYLOAD_CACHE[key] = payload
+        _CITY_DETAIL_PAYLOAD_CACHE_TS[key] = time.time()
+        if len(_CITY_DETAIL_PAYLOAD_CACHE) > 256:
+            oldest_keys = sorted(
+                _CITY_DETAIL_PAYLOAD_CACHE_TS,
+                key=lambda item: _CITY_DETAIL_PAYLOAD_CACHE_TS.get(item, 0.0),
+            )[:64]
+            for old_key in oldest_keys:
+                _CITY_DETAIL_PAYLOAD_CACHE.pop(old_key, None)
+                _CITY_DETAIL_PAYLOAD_CACHE_TS.pop(old_key, None)
+    return payload
 
 
 def _default_deb_recent() -> Dict[str, object]:
@@ -167,14 +311,7 @@ async def get_city_detail_payload(
     else:
         detail_mode = "panel"
     if detail_mode == "full":
-        if force_refresh:
-            return await run_in_threadpool(legacy_routes._refresh_city_full_cache, city, True)
-        cached_entry = await run_in_threadpool(legacy_routes._CACHE_DB.get_city_cache, "full", city)
-        if cached_entry:
-            if not legacy_routes._city_cache_is_fresh(cached_entry, legacy_routes.CITY_FULL_CACHE_TTL_SEC):
-                return await run_in_threadpool(legacy_routes._refresh_city_full_cache, city, False)
-            return await _overlay_cached_wunderground(city, cached_entry.get("payload") or {})
-        return await run_in_threadpool(legacy_routes._refresh_city_full_cache, city, False)
+        return await _get_city_full_data(city, force_refresh=force_refresh)
     if detail_mode == "panel":
         if force_refresh:
             return await run_in_threadpool(legacy_routes._refresh_city_panel_cache, city, True)
@@ -233,20 +370,9 @@ async def get_city_detail_aggregate_payload(
 ) -> Dict[str, Any]:
     legacy_routes._assert_entitlement(request)
     city = legacy_routes._normalize_city_or_404(name)
-    if force_refresh:
-        data = await run_in_threadpool(legacy_routes._refresh_city_full_cache, city, True)
-    else:
-        cached_entry = await run_in_threadpool(legacy_routes._CACHE_DB.get_city_cache, "full", city)
-        if cached_entry:
-            if not legacy_routes._city_cache_is_fresh(cached_entry, legacy_routes.CITY_FULL_CACHE_TTL_SEC):
-                data = await run_in_threadpool(legacy_routes._refresh_city_full_cache, city, False)
-            else:
-                data = await _overlay_cached_wunderground(city, cached_entry.get("payload") or {})
-        else:
-            data = await run_in_threadpool(legacy_routes._refresh_city_full_cache, city, False)
+    data = await _get_city_full_data(city, force_refresh=force_refresh)
 
-    return await run_in_threadpool(
-        legacy_routes._build_city_detail_payload,
+    return await _build_city_detail_payload_cached(
         data,
         market_slug,
         target_date,
@@ -271,7 +397,7 @@ def _parse_batch_city_names(raw_cities: str, *, limit: int) -> List[str]:
     return out
 
 
-def _build_city_detail_batch_item(
+async def _build_city_detail_batch_item_async(
     city: str,
     *,
     force_refresh: bool,
@@ -279,28 +405,22 @@ def _build_city_detail_batch_item(
     target_date: Optional[str],
     resolution: Optional[str],
 ) -> Tuple[str, Dict[str, Any]]:
-    if force_refresh:
-        data = legacy_routes._refresh_city_full_cache(city, True)
-    else:
-        cached_entry = legacy_routes._CACHE_DB.get_city_cache("full", city)
-        if cached_entry and legacy_routes._city_cache_is_fresh(
-            cached_entry,
-            legacy_routes.CITY_FULL_CACHE_TTL_SEC,
-        ):
-            data = legacy_routes._overlay_latest_wunderground_current(
-                city,
-                cached_entry.get("payload") or {},
-            )
-        else:
-            data = legacy_routes._refresh_city_full_cache(city, False)
-
-    detail = legacy_routes._build_city_detail_payload(
+    data = await _get_city_full_data(city, force_refresh=force_refresh)
+    detail = await _build_city_detail_payload_cached(
         data,
         market_slug,
         target_date,
         resolution,
     )
     return city, detail
+
+
+def _city_detail_batch_concurrency() -> int:
+    try:
+        value = int(os.getenv("POLYWEATHER_CITY_DETAIL_BATCH_CONCURRENCY", "3") or "3")
+    except ValueError:
+        value = 3
+    return max(1, min(6, value))
 
 
 async def get_city_detail_batch_payload(
@@ -318,15 +438,20 @@ async def get_city_detail_batch_payload(
     if not city_names:
         return {"cities": [], "details": {}, "errors": {}}
 
+    semaphore = asyncio.Semaphore(_city_detail_batch_concurrency())
+
+    async def _build_with_limit(city: str) -> Tuple[str, Dict[str, Any]]:
+        async with semaphore:
+            return await _build_city_detail_batch_item_async(
+                city,
+                force_refresh=force_refresh,
+                market_slug=market_slug,
+                target_date=target_date,
+                resolution=resolution,
+            )
+
     tasks = [
-        run_in_threadpool(
-            _build_city_detail_batch_item,
-            city,
-            force_refresh=force_refresh,
-            market_slug=market_slug,
-            target_date=target_date,
-            resolution=resolution,
-        )
+        _build_with_limit(city)
         for city in city_names
     ]
     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -344,5 +469,3 @@ async def get_city_detail_batch_payload(
         "details": details,
         "errors": errors,
     }
-
-

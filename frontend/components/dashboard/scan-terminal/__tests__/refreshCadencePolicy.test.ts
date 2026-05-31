@@ -49,6 +49,10 @@ export async function runTests() {
     path.join(projectRoot, "components", "dashboard", "scan-terminal", "temperature-chart-logic.ts"),
     "utf8",
   );
+  const dashboardSource = fs.readFileSync(
+    path.join(projectRoot, "components", "dashboard", "ScanTerminalDashboard.tsx"),
+    "utf8",
+  );
 
   assert(
     querySource.includes("useSsePatchVersion") &&
@@ -91,10 +95,16 @@ export async function runTests() {
       chartLogicSource.includes("primeCityDetailCache"),
     "visible terminal chart detail fetches should be coalesced into one batch request and prime the shared chart cache",
   );
+  const fetchHourlyBlock = chartLogicSource.match(/async function fetchHourlyForecastForCity[\s\S]*?\n}\n\nfunction fetchCityDetailWithTimeout/)?.[0] || "";
   assert(
-    chartLogicSource.includes("options.ignoreCache\n      ? runQueuedHourlyDetailRequest") &&
-      chartLogicSource.includes(": queueCityDetailBatch(city, resParam)"),
-    "normal first-paint city detail requests should enter the batch queue before single-request concurrency limiting",
+    fetchHourlyBlock.includes("queueCityDetailBatch(city, resParam)") &&
+      !fetchHourlyBlock.includes("runQueuedHourlyDetailRequest"),
+    "first-paint and background city detail refreshes should both enter the batch queue before falling back to single requests",
+  );
+  assert(
+    dashboardSource.includes("ONLINE_USERS_REFRESH_MS = 5 * 60_000") &&
+      dashboardSource.includes('document.visibilityState === "hidden"'),
+    "terminal online-user presence should refresh slowly and pause while the browser tab is hidden",
   );
   assert(
     chartSource.includes("IntersectionObserver") &&
