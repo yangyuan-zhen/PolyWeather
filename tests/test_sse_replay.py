@@ -136,6 +136,33 @@ def test_replay_limit_is_bounded():
     assert sse_router._bounded_replay_limit(25, city_count=5) == 25
 
 
+def test_replay_gap_direct_resync_policy():
+    assert (
+        sse_router._should_direct_resync(
+            since_revision=1000,
+            latest_revision=1200,
+            limit=60,
+        )
+        is False
+    )
+    assert (
+        sse_router._should_direct_resync(
+            since_revision=1000,
+            latest_revision=1300,
+            limit=60,
+        )
+        is True
+    )
+    assert (
+        sse_router._should_direct_resync(
+            since_revision=0,
+            latest_revision=1300,
+            limit=60,
+        )
+        is False
+    )
+
+
 def test_legacy_high_replay_limit_is_clamped_by_city_count(monkeypatch):
     captured = {}
 
@@ -176,6 +203,51 @@ def test_legacy_high_replay_limit_is_clamped_by_city_count(monkeypatch):
     assert captured["cities"] == {"ankara", "buenos aires", "istanbul", "jeddah", "seoul"}
     assert captured["limit"] == 120
     assert captured["resync_limit"] == 120
+
+
+def test_stale_client_gets_direct_resync_without_replay_scan(monkeypatch):
+    calls = {"replay": 0, "requires_resync": 0}
+
+    class FakeStore:
+        def latest_revision(self):
+            return 2000
+
+        def replay_events(self, *, cities, since_revision, limit):
+            calls["replay"] += 1
+            return []
+
+        def replay_requires_resync(self, *, cities, since_revision, replay_count, limit):
+            calls["requires_resync"] += 1
+            return False
+
+    async def finite_stream(
+        user_id,
+        *,
+        cities=None,
+        replay_events=None,
+        connected_revision=0,
+        resync_event=None,
+    ):
+        yield sse_router.sse_manager._format_event(
+            {"type": "connected", "revision": connected_revision}
+        )
+        if resync_event:
+            yield sse_router.sse_manager._format_event(resync_event)
+
+    monkeypatch.setattr(sse_router, "event_store", FakeStore())
+    monkeypatch.setattr(sse_router.sse_manager, "event_stream", finite_stream)
+
+    response = TestClient(app).get(
+        "/api/events?cities=ankara,buenos%20aires,istanbul,jeddah,seoul"
+        "&since_revision=100&replay_limit=500"
+    )
+
+    assert response.status_code == 200
+    assert calls == {"replay": 0, "requires_resync": 0}
+    events = _decode_sse_events(response.text)
+    assert events[-1]["type"] == "resync_required"
+    assert events[-1]["reason"] == "replay_gap_too_large"
+    assert events[-1]["latest_revision"] == 2000
 
 
 def test_ingest_patch_uses_external_fanout_without_direct_broadcast(monkeypatch):
