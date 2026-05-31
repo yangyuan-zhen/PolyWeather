@@ -129,8 +129,53 @@ def test_events_endpoint_emits_resync_when_replay_is_incomplete(monkeypatch):
 
 def test_replay_limit_is_bounded():
     assert sse_router._bounded_replay_limit(0) == 1
-    assert sse_router._bounded_replay_limit(500) == 500
-    assert sse_router._bounded_replay_limit(5000) == 2000
+    assert sse_router._bounded_replay_limit(500) == 60
+    assert sse_router._bounded_replay_limit(5000) == 60
+    assert sse_router._bounded_replay_limit(500, city_count=5) == 120
+    assert sse_router._bounded_replay_limit(500, city_count=20) == 240
+    assert sse_router._bounded_replay_limit(25, city_count=5) == 25
+
+
+def test_legacy_high_replay_limit_is_clamped_by_city_count(monkeypatch):
+    captured = {}
+
+    class FakeStore:
+        def latest_revision(self):
+            return 44
+
+        def replay_events(self, *, cities, since_revision, limit):
+            captured["cities"] = cities
+            captured["limit"] = limit
+            return []
+
+        def replay_requires_resync(self, *, cities, since_revision, replay_count, limit):
+            captured["resync_limit"] = limit
+            return False
+
+    async def finite_stream(
+        user_id,
+        *,
+        cities=None,
+        replay_events=None,
+        connected_revision=0,
+        resync_event=None,
+    ):
+        yield sse_router.sse_manager._format_event(
+            {"type": "connected", "revision": connected_revision}
+        )
+
+    monkeypatch.setattr(sse_router, "event_store", FakeStore())
+    monkeypatch.setattr(sse_router.sse_manager, "event_stream", finite_stream)
+
+    response = TestClient(app).get(
+        "/api/events?cities=ankara,buenos%20aires,istanbul,jeddah,seoul"
+        "&since_revision=42&replay_limit=500"
+    )
+
+    assert response.status_code == 200
+    assert captured["cities"] == {"ankara", "buenos aires", "istanbul", "jeddah", "seoul"}
+    assert captured["limit"] == 120
+    assert captured["resync_limit"] == 120
 
 
 def test_ingest_patch_uses_external_fanout_without_direct_broadcast(monkeypatch):

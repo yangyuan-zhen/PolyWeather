@@ -19,6 +19,9 @@ router = APIRouter(tags=["events"])
 event_store = create_realtime_event_store()
 _live_subscription_lock = threading.Lock()
 _live_subscription_started = False
+SSE_REPLAY_BASE_LIMIT = 60
+SSE_REPLAY_EVENTS_PER_CITY = 24
+SSE_REPLAY_MAX_LIMIT = 240
 
 
 def _parse_cities_param(cities: str) -> Set[str]:
@@ -29,12 +32,18 @@ def _parse_cities_param(cities: str) -> Set[str]:
     }
 
 
-def _bounded_replay_limit(value: int) -> int:
+def _recommended_replay_limit(city_count: int) -> int:
+    requested = max(1, int(city_count or 0)) * SSE_REPLAY_EVENTS_PER_CITY
+    return max(SSE_REPLAY_BASE_LIMIT, min(SSE_REPLAY_MAX_LIMIT, requested))
+
+
+def _bounded_replay_limit(value: int, *, city_count: int = 0) -> int:
     try:
         limit = int(value)
     except (TypeError, ValueError):
-        limit = 500
-    return max(1, min(MAX_REPLAY_LIMIT, limit))
+        limit = _recommended_replay_limit(city_count)
+    route_limit = _recommended_replay_limit(city_count)
+    return max(1, min(MAX_REPLAY_LIMIT, route_limit, limit))
 
 
 def _ensure_live_subscription() -> None:
@@ -65,7 +74,7 @@ async def sse_events(
     origin = request.headers.get("origin", "")
     allowed = origin in {"https://polyweather.top", "https://www.polyweather.top", "http://localhost:3000"}
     city_set = _parse_cities_param(cities)
-    limit = _bounded_replay_limit(replay_limit)
+    limit = _bounded_replay_limit(replay_limit, city_count=len(city_set))
     _ensure_live_subscription()
     latest_revision = event_store.latest_revision()
     replay_events = []
