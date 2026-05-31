@@ -66,6 +66,8 @@ import {
 import {
   cityListItemsToScanRows,
   mergeScanRowsWithCityFallbackRows,
+  readCachedCityList,
+  writeCachedCityList,
 } from "@/components/dashboard/scan-terminal/city-fallback-rows";
 import { markAnalyticsOnce, trackAppEvent } from "@/lib/app-analytics";
 import { STATIC_CITY_LIST } from "@/lib/static-cities";
@@ -1264,7 +1266,7 @@ function ScanTerminalScreen() {
   }, [refreshScanTerminalManually]);
 
   const [cityFallbackRows, setCityFallbackRows] = useState<ScanOpportunityRow[]>(() =>
-    cityListItemsToScanRows(STATIC_CITY_LIST),
+    cityListItemsToScanRows(readCachedCityList() || STATIC_CITY_LIST),
   );
   const rows = useMemo(
     () => {
@@ -1280,9 +1282,15 @@ function ScanTerminalScreen() {
   useEffect(() => {
     if (!isPro || typeof fetch !== "function") return;
     if (fallbackFetchedRef.current) return;
+    const cachedCities = readCachedCityList();
+    if (cachedCities) {
+      fallbackFetchedRef.current = true;
+      setCityFallbackRows(cityListItemsToScanRows(cachedCities));
+      return;
+    }
     const controller = new AbortController();
     fetch("/api/cities", {
-      cache: "no-store",
+      cache: "default",
       headers: { Accept: "application/json" },
       signal: controller.signal,
     })
@@ -1293,6 +1301,7 @@ function ScanTerminalScreen() {
       .then((payload) => {
         if (!payload || !Array.isArray(payload.cities)) return;
         fallbackFetchedRef.current = true;
+        writeCachedCityList(payload.cities);
         setCityFallbackRows(cityListItemsToScanRows(payload.cities));
       })
       .catch(() => {});

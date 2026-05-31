@@ -1,6 +1,9 @@
 import {
+  CITY_LIST_CACHE_TTL_MS,
   cityListItemsToScanRows,
   mergeScanRowsWithCityFallbackRows,
+  readCachedCityList,
+  writeCachedCityList,
 } from "@/components/dashboard/scan-terminal/city-fallback-rows";
 import type { CityListItem } from "@/lib/dashboard-types";
 
@@ -47,6 +50,15 @@ export function runTests() {
   ];
 
   const rows = cityListItemsToScanRows(cities);
+  const cacheStorage = new Map<string, string>();
+  const memoryStorage = {
+    getItem: (key: string) => cacheStorage.get(key) ?? null,
+    removeItem: (key: string) => { cacheStorage.delete(key); },
+    setItem: (key: string, value: string) => { cacheStorage.set(key, value); },
+  };
+
+  writeCachedCityList(cities, memoryStorage, 1_000);
+  const cachedCities = readCachedCityList(memoryStorage, 1_000 + 60_000);
 
   assert(rows.length === 2, "fallback rows should preserve every city");
   assert(rows[0].id === "city-fallback:taipei", "fallback row id should be stable");
@@ -57,6 +69,12 @@ export function runTests() {
   assert(rows[0].temp_symbol === "°C", "celsius cities should use °C");
   assert(rows[1].trading_region === "north_america", "known cities should keep their configured product region");
   assert(rows[1].temp_symbol === "°F", "fahrenheit cities should use °F");
+  assert(cachedCities?.length === 2, "fresh city registry cache should return the stored city list");
+  assert(cachedCities?.[0]?.name === "taipei", "city registry cache should preserve city payloads");
+  assert(
+    readCachedCityList(memoryStorage, 1_000 + CITY_LIST_CACHE_TTL_MS + 1) === null,
+    "expired city registry cache should be ignored so the dashboard can revalidate",
+  );
 
   const scanRows = [
     {
@@ -122,10 +140,13 @@ export function runTests() {
   assert(
     dashboardSource.includes("cityListItemsToScanRows") &&
       dashboardSource.includes("STATIC_CITY_LIST") &&
+      dashboardSource.includes("readCachedCityList") &&
+      dashboardSource.includes("writeCachedCityList") &&
       dashboardSource.includes("useState<ScanOpportunityRow[]>(() =>") &&
       dashboardSource.includes("/api/cities") &&
+      dashboardSource.includes('cache: "default"') &&
       dashboardSource.includes("cityFallbackRows"),
-    "terminal dashboard should seed fallback rows from the static city snapshot before refreshing /api/cities",
+    "terminal dashboard should seed fallback rows from cached/static city snapshots and avoid no-store /api/cities fetches when possible",
   );
   assert(fs.existsSync(staticCitiesPath), "/api/cities route should have a static city snapshot fallback");
   assert(

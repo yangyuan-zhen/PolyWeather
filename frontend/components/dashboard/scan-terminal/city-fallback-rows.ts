@@ -5,8 +5,59 @@ import {
   type RegionKey,
 } from "@/components/dashboard/scan-terminal/continent-grouping";
 
+const CITY_LIST_CACHE_KEY = "polyweather_city_list_v1";
+export const CITY_LIST_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+type CityListCacheStorage = Pick<Storage, "getItem" | "removeItem" | "setItem">;
+
 function normalizeCityKey(value: string) {
   return String(value || "").trim().toLowerCase();
+}
+
+function getCityListCacheStorage(storage?: CityListCacheStorage): CityListCacheStorage | null {
+  if (storage) return storage;
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function readCachedCityList(
+  storage?: CityListCacheStorage,
+  now = Date.now(),
+): CityListItem[] | null {
+  const cacheStorage = getCityListCacheStorage(storage);
+  if (!cacheStorage) return null;
+  try {
+    const raw = cacheStorage.getItem(CITY_LIST_CACHE_KEY);
+    if (!raw) return null;
+    const cached = JSON.parse(raw);
+    const age = now - Number(cached.ts || 0);
+    if (age < 0 || age >= CITY_LIST_CACHE_TTL_MS || !Array.isArray(cached.cities)) {
+      return null;
+    }
+    return cached.cities as CityListItem[];
+  } catch {
+    try { cacheStorage.removeItem(CITY_LIST_CACHE_KEY); } catch {}
+  }
+  return null;
+}
+
+export function writeCachedCityList(
+  cities: CityListItem[],
+  storage?: CityListCacheStorage,
+  now = Date.now(),
+) {
+  const cacheStorage = getCityListCacheStorage(storage);
+  if (!cacheStorage || !Array.isArray(cities) || !cities.length) return;
+  try {
+    cacheStorage.setItem(
+      CITY_LIST_CACHE_KEY,
+      JSON.stringify({ ts: now, cities }),
+    );
+  } catch {}
 }
 
 function tempSymbolForCity(city: CityListItem) {
