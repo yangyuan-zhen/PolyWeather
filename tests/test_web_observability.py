@@ -2311,10 +2311,14 @@ def test_scan_terminal_prewarm_builds_default_terminal_payload(monkeypatch):
         _fake_build,
     )
 
-    assert scan_terminal_service._warm_scan_terminal_payloads() == 1
+    assert scan_terminal_service._warm_scan_terminal_payloads() == 2
+    assert {filters["limit"] for filters, _, _ in calls} == {25, 180}
     filters, force_refresh, timeout_sec = calls[0]
-    assert force_refresh is False
-    assert timeout_sec == scan_terminal_service.SCAN_TERMINAL_PREWARM_PAYLOAD_TIMEOUT_SEC
+    assert all(force_refresh is False for _, force_refresh, _ in calls)
+    assert all(
+        timeout_sec == scan_terminal_service.SCAN_TERMINAL_PREWARM_PAYLOAD_TIMEOUT_SEC
+        for _, _, timeout_sec in calls
+    )
     assert filters["scan_mode"] == "tradable"
     assert filters["min_price"] == 0.05
     assert filters["max_price"] == 0.95
@@ -2322,7 +2326,7 @@ def test_scan_terminal_prewarm_builds_default_terminal_payload(monkeypatch):
     assert filters["min_liquidity"] == 500.0
     assert filters["market_type"] == "maxtemp"
     assert filters["time_range"] == "today"
-    assert filters["limit"] == 180
+    assert filters["limit"] == 25
 
 
 def test_scan_terminal_service_returns_failed_without_success_snapshot(monkeypatch):
