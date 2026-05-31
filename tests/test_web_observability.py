@@ -316,6 +316,15 @@ def test_ops_billing_risk_surfaces_trial_payment_referral_and_points(monkeypatch
         "list_app_analytics_events",
         lambda self, limit=20000, since_iso=None: [
             {
+                "id": 10,
+                "event_type": "login_start",
+                "user_id": None,
+                "client_id": "c1",
+                "session_id": "session-gap",
+                "created_at": recent,
+                "payload": {"mode": "signup"},
+            },
+            {
                 "id": 11,
                 "event_type": "signup_success",
                 "user_id": "user-trial-gap",
@@ -405,6 +414,108 @@ def test_ops_billing_risk_does_not_flag_signup_when_backend_trial_exists(monkeyp
                 "created_at": recent,
                 "payload": {"user_id": "user-with-trial"},
             }
+        ],
+    )
+    monkeypatch.setattr(
+        DBManager,
+        "list_payment_audit_events",
+        lambda self, limit=50, event_type=None: [],
+    )
+
+    payload = ops_api.get_ops_billing_risk(None, days=30, limit=20)
+
+    assert payload["summary"]["trial_gaps"] == 0
+    assert not any(issue["category"] == "signup_trial" for issue in payload["issues"])
+
+
+def test_ops_billing_risk_ignores_account_visit_without_signup_intent(monkeypatch):
+    from src.database.db_manager import DBManager
+
+    recent = datetime.now(timezone.utc).isoformat()
+
+    monkeypatch.setattr(ops_api.legacy_routes, "_require_ops_admin", lambda request: {"email": "ops@example.com"})
+    monkeypatch.setattr(ops_api, "_supabase_rest_rows", lambda table, params, *, timeout=10: [])
+    monkeypatch.setattr(
+        DBManager,
+        "list_app_analytics_events",
+        lambda self, limit=20000, since_iso=None: [
+            {
+                "id": 61,
+                "event_type": "signup_success",
+                "user_id": "returning-no-trial-user",
+                "client_id": "client-return",
+                "session_id": "session-return",
+                "created_at": recent,
+                "payload": {
+                    "entry": "account_center",
+                    "user_id": "returning-no-trial-user",
+                },
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        DBManager,
+        "list_payment_audit_events",
+        lambda self, limit=50, event_type=None: [],
+    )
+
+    payload = ops_api.get_ops_billing_risk(None, days=30, limit=20)
+
+    assert payload["summary"]["trial_gaps"] == 0
+    assert not any(issue["category"] == "signup_trial" for issue in payload["issues"])
+
+
+def test_ops_billing_risk_treats_expired_signup_trial_subscription_as_backend_evidence(monkeypatch):
+    from src.database.db_manager import DBManager
+
+    now = datetime.now(timezone.utc)
+    recent = now.isoformat()
+    expired = (now - timedelta(days=2)).isoformat()
+
+    def fake_supabase_rows(table, params, *, timeout=10):
+        if table == "subscriptions" and params.get("or") == "(source.eq.signup_trial,plan_code.eq.signup_trial_3d)":
+            return [
+                {
+                    "id": 81,
+                    "user_id": "expired-trial-user",
+                    "plan_code": "signup_trial_3d",
+                    "source": "signup_trial",
+                    "status": "expired",
+                    "starts_at": (now - timedelta(days=5)).isoformat(),
+                    "expires_at": expired,
+                    "created_at": (now - timedelta(days=5)).isoformat(),
+                    "updated_at": expired,
+                }
+            ]
+        return []
+
+    monkeypatch.setattr(ops_api.legacy_routes, "_require_ops_admin", lambda request: {"email": "ops@example.com"})
+    monkeypatch.setattr(ops_api, "_supabase_rest_rows", fake_supabase_rows)
+    monkeypatch.setattr(
+        DBManager,
+        "list_app_analytics_events",
+        lambda self, limit=20000, since_iso=None: [
+            {
+                "id": 80,
+                "event_type": "login_start",
+                "user_id": None,
+                "client_id": "client-expired",
+                "session_id": "session-expired",
+                "created_at": recent,
+                "payload": {"mode": "signup"},
+            },
+            {
+                "id": 82,
+                "event_type": "signup_success",
+                "user_id": "expired-trial-user",
+                "client_id": "client-expired",
+                "session_id": "session-expired",
+                "created_at": recent,
+                "payload": {
+                    "entry": "account_center",
+                    "user_id": "expired-trial-user",
+                },
+            },
         ],
     )
     monkeypatch.setattr(
