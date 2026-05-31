@@ -132,6 +132,11 @@ export async function runTests() {
     "city detail prefetch should be gated to visible chart cards instead of every mounted slot",
   );
   assert(
+    chartSource.includes("DETAIL_LOAD_BATCH_DELAY_MS") &&
+      !chartSource.includes("slotIndex ? 300 + slotIndex * 250"),
+    "visible chart detail loads should enter the batch queue together instead of being staggered into single-city requests",
+  );
+  assert(
     chartSource.includes("allowStale: true") &&
       chartCanvasSourceIncludes(chartSource, "数据暂不可用") &&
       chartCanvasSourceIncludes(chartSource, "handleRetryDetail"),

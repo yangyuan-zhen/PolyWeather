@@ -56,6 +56,7 @@ const PEAK_GLOW_BADGE_CLASS = {
 } as const;
 
 const PROBABILITY_REFRESH_AFTER_PATCH_MS = 60_000;
+const DETAIL_LOAD_BATCH_DELAY_MS = 0;
 
 const TemperatureChartCanvas = dynamic(
   () =>
@@ -134,7 +135,6 @@ export function LiveTemperatureThresholdChart({
   isMaximized = false,
   disableClose = false,
   isActive = !compact,
-  slotIndex = 0,
 }: {
   isEn: boolean;
   row: ScanOpportunityRow | null;
@@ -274,9 +274,6 @@ export function LiveTemperatureThresholdChart({
     setIsHourlyLoading(true);
     let cancelled = false;
 
-    // Prioritize active slots, stagger/delay background slots to optimize load performance
-    const delay = isActive ? 0 : (slotIndex ? 300 + slotIndex * 250 : 350);
-
     const timer = setTimeout(() => {
       fetchHourlyForecastForCity(city, { resolution: targetResolution })
         .then((data) => {
@@ -296,13 +293,13 @@ export function LiveTemperatureThresholdChart({
         .finally(() => {
           if (!cancelled) setIsHourlyLoading(false);
         });
-    }, delay);
+    }, DETAIL_LOAD_BATCH_DELAY_MS);
 
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [city, row, isActive, slotIndex, targetResolution, isChartVisible, detailRetryNonce, isEn]);
+  }, [city, row, targetResolution, isChartVisible, detailRetryNonce, isEn]);
 
   useEffect(() => {
     if (!latestPatch || latestPatch.revision <= lastAppliedPatchRevisionRef.current) return;
