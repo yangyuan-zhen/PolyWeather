@@ -57,4 +57,26 @@ export function runTests() {
   for (const stage of ["auth_headers", "ops_auth", "backend_fetch", "backend_read"]) {
     assert.match(onlineUsersProxy, new RegExp(stage));
   }
+
+  const analyticsProxy = readFrontend("app", "api", "analytics", "events", "route.ts");
+  assert.match(
+    analyticsProxy,
+    /ANALYTICS_PROXY_TIMEOUT_MS/,
+    "analytics event proxy should use a short dedicated timeout instead of waiting for long backend stalls",
+  );
+  assert.match(
+    analyticsProxy,
+    /createProxyTimer\(req,\s*"analytics_events"\)/,
+    "analytics event proxy should expose Server-Timing for HAR inspection",
+  );
+  assert.match(
+    analyticsProxy,
+    /AbortController/,
+    "analytics event proxy should abort slow upstream tracking requests",
+  );
+  assert.match(
+    analyticsProxy,
+    /status:\s*202/,
+    "analytics event proxy timeout should stay non-blocking for the fire-and-forget client event",
+  );
 }

@@ -1,4 +1,5 @@
 import {
+  createAuthProfileRequestCache,
   loadTerminalAuthProfile,
   type TerminalAuthProfilePayload,
 } from "@/components/dashboard/scan-terminal/terminal-auth-bootstrap";
@@ -27,6 +28,41 @@ async function flushMicrotasks() {
 }
 
 export async function runTests() {
+  const pendingProfile = deferred<TerminalAuthProfilePayload>();
+  let underlyingProfileLoads = 0;
+  const cachedLoadAuthProfile = createAuthProfileRequestCache((
+    accessToken?: string | null,
+    options?: { preferSnapshot?: boolean },
+  ) => {
+    underlyingProfileLoads += 1;
+    assert(
+      accessToken === "shared-token" && options?.preferSnapshot === true,
+      "auth profile request cache should pass through the original token and snapshot preference",
+    );
+    return pendingProfile.promise;
+  });
+  const firstCachedProfile = cachedLoadAuthProfile("shared-token", {
+    preferSnapshot: true,
+  });
+  const secondCachedProfile = cachedLoadAuthProfile("shared-token", {
+    preferSnapshot: true,
+  });
+  assert(
+    firstCachedProfile === secondCachedProfile && underlyingProfileLoads === 1,
+    "auth profile request cache should dedupe identical in-flight profile loads",
+  );
+  pendingProfile.resolve({
+    authenticated: true,
+    user_id: "shared-user",
+    subscription_active: true,
+  });
+  await firstCachedProfile;
+  await cachedLoadAuthProfile("shared-token", { preferSnapshot: true });
+  assert(
+    underlyingProfileLoads === 2,
+    "auth profile request cache should clear a key after the in-flight load settles",
+  );
+
   const slowCookieProfile = deferred<TerminalAuthProfilePayload>();
   const fastSession = deferred<{ data: { session: { access_token: string } } }>();
   const calls: string[] = [];

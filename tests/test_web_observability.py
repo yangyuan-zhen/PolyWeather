@@ -678,6 +678,70 @@ def test_concurrent_city_detail_requests_share_same_full_cache_refresh(monkeypat
     assert build_calls == 1
 
 
+def test_stale_city_detail_uses_cached_full_payload_while_refreshing(monkeypatch):
+    import asyncio
+
+    refresh_calls = 0
+    build_inputs = []
+
+    class FakeCache:
+        def get_city_cache(self, kind, city):
+            assert kind == "full"
+            assert city == "paris"
+            return {
+                "payload": {
+                    "city": "paris",
+                    "hourly": {"times": ["2026-05-30T00:00:00Z"], "temps": [20.0]},
+                },
+            }
+
+    async def fake_run_in_threadpool(fn, *args, **kwargs):
+        if fn is city_api.legacy_routes._refresh_city_full_cache:
+            await asyncio.sleep(0.01)
+        return fn(*args, **kwargs)
+
+    def refresh_full(city, force_refresh):
+        nonlocal refresh_calls
+        refresh_calls += 1
+        return {
+            "city": city,
+            "hourly": {"times": ["2026-05-30T00:00:00Z"], "temps": [21.0]},
+        }
+
+    def build_detail(data, market_slug, target_date, resolution):
+        build_inputs.append(data["hourly"]["temps"][0])
+        return {
+            "city": data["city"],
+            "live_temp": data["hourly"]["temps"][0],
+            "resolution": resolution,
+        }
+
+    city_api._CITY_FULL_REFRESH_INFLIGHT.clear()
+    city_api._CITY_DETAIL_PAYLOAD_CACHE.clear()
+    city_api._CITY_DETAIL_PAYLOAD_CACHE_TS.clear()
+    city_api._CITY_DETAIL_PAYLOAD_INFLIGHT.clear()
+
+    monkeypatch.setattr(city_api, "run_in_threadpool", fake_run_in_threadpool)
+    monkeypatch.setattr(city_api.legacy_routes, "_assert_entitlement", lambda request: None)
+    monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
+    monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
+    monkeypatch.setattr(city_api.legacy_routes, "_city_cache_is_fresh", lambda entry, ttl: False)
+    monkeypatch.setattr(city_api.legacy_routes, "_overlay_latest_wunderground_current", lambda city, payload: payload)
+    monkeypatch.setattr(city_api.legacy_routes, "_refresh_city_full_cache", refresh_full)
+    monkeypatch.setattr(city_api.legacy_routes, "_build_city_detail_payload", build_detail)
+
+    async def run_request():
+        payload = await city_api.get_city_detail_aggregate_payload(object(), "Paris", resolution="10m")
+        await asyncio.sleep(0.03)
+        return payload
+
+    result = asyncio.run(run_request())
+
+    assert result["live_temp"] == 20.0
+    assert build_inputs == [20.0]
+    assert refresh_calls == 1
+
+
 def test_force_refresh_invalidates_short_city_detail_payload_cache(monkeypatch):
     import asyncio
 

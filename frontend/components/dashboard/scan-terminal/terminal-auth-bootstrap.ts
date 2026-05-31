@@ -57,6 +57,32 @@ function canResolveProfileImmediately(
   return payload?.authenticated === true && payload.subscription_active === true;
 }
 
+function authProfileRequestCacheKey(
+  accessToken?: string | null,
+  options?: { preferSnapshot?: boolean },
+) {
+  const token = String(accessToken || "").trim();
+  const scope = token ? `bearer:${token}` : "cookie";
+  const mode = options?.preferSnapshot ? "snapshot" : "live";
+  return `${mode}:${scope}`;
+}
+
+export function createAuthProfileRequestCache(
+  loadAuthProfile: LoadTerminalAuthProfileOptions["loadAuthProfile"],
+): LoadTerminalAuthProfileOptions["loadAuthProfile"] {
+  const pending = new Map<string, Promise<TerminalAuthProfilePayload>>();
+  return (accessToken, options) => {
+    const key = authProfileRequestCacheKey(accessToken, options);
+    const existing = pending.get(key);
+    if (existing) return existing;
+    const request = loadAuthProfile(accessToken, options).finally(() => {
+      pending.delete(key);
+    });
+    pending.set(key, request);
+    return request;
+  };
+}
+
 export async function loadTerminalAuthProfile({
   getSession,
   hasSupabasePublicEnv,

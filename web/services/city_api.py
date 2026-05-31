@@ -24,6 +24,7 @@ _RECENT_DEB_CACHE_TTL_SEC = max(
     int(os.getenv("POLYWEATHER_CITIES_DEB_RECENT_CACHE_TTL_SEC", "300") or "300"),
 )
 _CITY_FULL_REFRESH_INFLIGHT: Dict[str, "asyncio.Task[Dict[str, Any]]"] = {}
+_CITY_FULL_STALE_REFRESH_TASKS: Dict[str, "asyncio.Task[Dict[str, Any]]"] = {}
 _CITY_FULL_REFRESH_LOCK = asyncio.Lock()
 CityDetailPayloadCacheKey = Tuple[str, str, str, str, str, int]
 _CITY_DETAIL_PAYLOAD_CACHE: Dict[CityDetailPayloadCacheKey, Dict[str, Any]] = {}
@@ -54,9 +55,17 @@ async def _refresh_city_full_cache_singleflight(city: str, force_refresh: bool) 
     async with _CITY_FULL_REFRESH_LOCK:
         task = _CITY_FULL_REFRESH_INFLIGHT.get(key)
         if task is None:
-            task = asyncio.create_task(
-                run_in_threadpool(legacy_routes._refresh_city_full_cache, city, force_refresh),
-            )
+            async def _run_refresh() -> Dict[str, Any]:
+                try:
+                    return await run_in_threadpool(
+                        legacy_routes._refresh_city_full_cache,
+                        city,
+                        force_refresh,
+                    )
+                finally:
+                    await _invalidate_city_detail_payload_cache(city)
+
+            task = asyncio.create_task(_run_refresh())
             _CITY_FULL_REFRESH_INFLIGHT[key] = task
     try:
         return await task
@@ -84,14 +93,40 @@ async def _refresh_city_full_data(city: str, force_refresh: bool) -> Dict[str, A
     return await _refresh_city_full_cache_singleflight(city, force_refresh)
 
 
+def _start_city_full_stale_refresh(city: str) -> None:
+    normalized = str(city or "").strip().lower()
+    if not normalized:
+        return
+    existing = _CITY_FULL_STALE_REFRESH_TASKS.get(normalized)
+    if existing is not None and not existing.done():
+        return
+
+    task = asyncio.create_task(_refresh_city_full_data(city, False))
+    _CITY_FULL_STALE_REFRESH_TASKS[normalized] = task
+
+    def _cleanup(done: "asyncio.Task[Dict[str, Any]]") -> None:
+        if _CITY_FULL_STALE_REFRESH_TASKS.get(normalized) is done:
+            _CITY_FULL_STALE_REFRESH_TASKS.pop(normalized, None)
+        try:
+            done.result()
+        except Exception as exc:  # pragma: no cover - defensive background guard
+            logger.warning("city full stale refresh failed city={}: {}", city, exc)
+
+    task.add_done_callback(_cleanup)
+
+
 async def _get_city_full_data(city: str, *, force_refresh: bool) -> Dict[str, Any]:
     if force_refresh:
         return await _refresh_city_full_data(city, True)
     cached_entry = await run_in_threadpool(legacy_routes._CACHE_DB.get_city_cache, "full", city)
     if cached_entry:
+        payload = cached_entry.get("payload") or {}
         if not legacy_routes._city_cache_is_fresh(cached_entry, legacy_routes.CITY_FULL_CACHE_TTL_SEC):
+            if payload:
+                _start_city_full_stale_refresh(city)
+                return await _overlay_cached_wunderground(city, payload)
             return await _refresh_city_full_data(city, False)
-        return await _overlay_cached_wunderground(city, cached_entry.get("payload") or {})
+        return await _overlay_cached_wunderground(city, payload)
     return await _refresh_city_full_data(city, False)
 
 

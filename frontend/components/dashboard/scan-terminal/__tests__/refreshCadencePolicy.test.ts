@@ -96,7 +96,7 @@ export async function runTests() {
       chartLogicSource.includes("primeCityDetailCache"),
     "visible terminal chart detail fetches should be coalesced into one batch request and prime the shared chart cache",
   );
-  const fetchHourlyBlock = chartLogicSource.match(/async function fetchHourlyForecastForCity[\s\S]*?\n}\n\nfunction fetchCityDetailWithTimeout/)?.[0] || "";
+  const fetchHourlyBlock = chartLogicSource.match(/async function fetchHourlyForecastForCity[\s\S]*?\r?\n}\r?\n\r?\nfunction fetchCityDetailWithTimeout/)?.[0] || "";
   assert(
     fetchHourlyBlock.includes("queueCityDetailBatch(city, resParam)") &&
       !fetchHourlyBlock.includes("runQueuedHourlyDetailRequest"),

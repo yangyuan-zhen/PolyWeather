@@ -55,7 +55,10 @@ import {
   mergeAccessStateWithAuthPayload,
   type AuthProfilePayload,
 } from "@/components/dashboard/scan-terminal/terminal-access-state";
-import { loadTerminalAuthProfile } from "@/components/dashboard/scan-terminal/terminal-auth-bootstrap";
+import {
+  createAuthProfileRequestCache,
+  loadTerminalAuthProfile,
+} from "@/components/dashboard/scan-terminal/terminal-auth-bootstrap";
 import {
   cityListItemsToScanRows,
   mergeScanRowsWithCityFallbackRows,
@@ -962,7 +965,7 @@ function ScanTerminalScreen() {
     createEmptyAccess(true),
   );
 
-  const loadAuthProfile = useCallback(
+  const rawLoadAuthProfile = useCallback(
     async (
       accessToken?: string | null,
       options?: { preferSnapshot?: boolean },
@@ -983,6 +986,28 @@ function ScanTerminalScreen() {
       return response.json() as Promise<AuthProfilePayload>;
     },
     [],
+  );
+  const authProfileRequestCacheRef = useRef<{
+    load: typeof rawLoadAuthProfile;
+    cached: ReturnType<typeof createAuthProfileRequestCache>;
+  } | null>(null);
+  const loadAuthProfile = useCallback(
+    (
+      accessToken?: string | null,
+      options?: { preferSnapshot?: boolean },
+    ): Promise<AuthProfilePayload> => {
+      const current = authProfileRequestCacheRef.current;
+      if (current?.load === rawLoadAuthProfile) {
+        return current.cached(accessToken, options);
+      }
+      const next = {
+        load: rawLoadAuthProfile,
+        cached: createAuthProfileRequestCache(rawLoadAuthProfile),
+      };
+      authProfileRequestCacheRef.current = next;
+      return next.cached(accessToken, options);
+    },
+    [rawLoadAuthProfile],
   );
 
   const refreshLiveAuthProfile = useCallback(async () => {
