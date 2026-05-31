@@ -336,6 +336,36 @@ def build_scan_terminal_payload(
 
 _SCAN_PREWARM_STARTED = False
 _SCAN_PREWARM_LOCK = threading.Lock()
+_SCAN_TERMINAL_PREWARM_RAW_FILTERS = [
+    {
+        "scan_mode": "tradable",
+        "min_price": 0.05,
+        "max_price": 0.95,
+        "min_edge_pct": 2,
+        "min_liquidity": 500,
+        "market_type": "maxtemp",
+        "time_range": "today",
+        "limit": 180,
+    }
+]
+
+
+def _scan_terminal_prewarm_filters() -> List[Dict[str, Any]]:
+    return [
+        _normalize_scan_terminal_filters(filters)
+        for filters in _SCAN_TERMINAL_PREWARM_RAW_FILTERS
+    ]
+
+
+def _warm_scan_terminal_payloads() -> int:
+    ok = 0
+    for filters in _scan_terminal_prewarm_filters():
+        try:
+            _build_scan_terminal_payload_uncached(filters, force_refresh=False)
+            ok += 1
+        except Exception as exc:
+            logger.warning("scan terminal payload pre-warm failed: {}", exc)
+    return ok
 
 
 def start_scan_terminal_prewarm() -> None:
@@ -379,11 +409,13 @@ def start_scan_terminal_prewarm() -> None:
                         ok += 1
                     except Exception:
                         pass
+            payload_ok = _warm_scan_terminal_payloads()
             elapsed = int(time.time() - started)
             logger.info(
-                "scan terminal pre-warm finished ok={}/{} elapsed={}s",
+                "scan terminal pre-warm finished ok={}/{} payloads={} elapsed={}s",
                 ok,
                 len(city_names),
+                payload_ok,
                 elapsed,
             )
         except (ValueError, OSError, IOError):

@@ -2298,6 +2298,32 @@ def test_scan_terminal_timeout_does_not_replace_better_cached_snapshot(monkeypat
     assert [row["id"] for row in cached["rows"]] == ["old-1", "old-2"]
 
 
+def test_scan_terminal_prewarm_builds_default_terminal_payload(monkeypatch):
+    calls = []
+
+    def _fake_build(filters, *, force_refresh=False):
+        calls.append((dict(filters), force_refresh))
+        return {"rows": []}
+
+    monkeypatch.setattr(
+        scan_terminal_service,
+        "_build_scan_terminal_payload_uncached",
+        _fake_build,
+    )
+
+    assert scan_terminal_service._warm_scan_terminal_payloads() == 1
+    filters, force_refresh = calls[0]
+    assert force_refresh is False
+    assert filters["scan_mode"] == "tradable"
+    assert filters["min_price"] == 0.05
+    assert filters["max_price"] == 0.95
+    assert filters["min_edge_pct"] == 2.0
+    assert filters["min_liquidity"] == 500.0
+    assert filters["market_type"] == "maxtemp"
+    assert filters["time_range"] == "today"
+    assert filters["limit"] == 180
+
+
 def test_scan_terminal_service_returns_failed_without_success_snapshot(monkeypatch):
     filters = {"scan_mode": "tradable", "limit": 5}
     scan_terminal_cache._SCAN_TERMINAL_CACHE.clear()
