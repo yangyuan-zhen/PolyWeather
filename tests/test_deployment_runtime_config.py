@@ -38,6 +38,28 @@ def test_scan_terminal_prewarm_is_lazy_by_default():
     )
 
 
+def test_scan_terminal_prewarm_only_runs_for_web_service(monkeypatch):
+    from web import app_factory
+
+    monkeypatch.setenv("POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED", "true")
+    monkeypatch.delenv("POLYWEATHER_SERVICE_ROLE", raising=False)
+    assert app_factory._scan_terminal_prewarm_enabled() is False
+
+    monkeypatch.setenv("POLYWEATHER_SERVICE_ROLE", "bot")
+    assert app_factory._scan_terminal_prewarm_enabled() is False
+
+    monkeypatch.setenv("POLYWEATHER_SERVICE_ROLE", "web")
+    assert app_factory._scan_terminal_prewarm_enabled() is True
+
+
+def test_docker_compose_isolates_scan_terminal_prewarm_to_web_service():
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+
+    assert "POLYWEATHER_SERVICE_ROLE: web" in compose
+    assert "POLYWEATHER_SERVICE_ROLE: bot" in compose
+    assert "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'false'" in compose
+
+
 def test_scan_terminal_backend_timeout_returns_before_next_proxy_abort():
     import web.services.scan_terminal_config as scan_terminal_config
 

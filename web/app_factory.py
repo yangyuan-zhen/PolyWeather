@@ -24,10 +24,15 @@ from web.scan_terminal_service import start_scan_terminal_prewarm
 _ROUTES_REGISTERED_FLAG = "_polyweather_routes_registered"
 
 
+def _service_role() -> str:
+    return str(os.getenv("POLYWEATHER_SERVICE_ROLE") or "").strip().lower()
+
+
 def _scan_terminal_prewarm_enabled() -> bool:
-    return str(
+    enabled = str(
         os.getenv("POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED") or "false"
     ).strip().lower() in {"1", "true", "yes", "on"}
+    return enabled and _service_role() in {"web", "api", "backend"}
 
 
 def create_app() -> FastAPI:

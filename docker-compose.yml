@@ -28,6 +28,8 @@ services:
     env_file: &id001
     - .env
     environment:
+      POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'false'
+      POLYWEATHER_SERVICE_ROLE: bot
       TELEGRAM_AIRPORT_PUSH_INTERVAL_SEC: ${POLYWEATHER_BOT_AIRPORT_PUSH_INTERVAL_SEC:-180}
       TELEGRAM_AIRPORT_PUSH_MAX_WORKERS: ${POLYWEATHER_BOT_AIRPORT_PUSH_MAX_WORKERS:-1}
     healthcheck:
@@ -93,6 +95,8 @@ services:
         max-file: "3"
     container_name: polyweather_web
     env_file: *id001
+    environment:
+      POLYWEATHER_SERVICE_ROLE: web
     healthcheck:
       interval: 30s
       retries: 3
