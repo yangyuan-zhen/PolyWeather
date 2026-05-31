@@ -46,7 +46,11 @@ import { scanRootClass } from "@/components/dashboard/scan-root-styles";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
 import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { UsageGuideDashboard } from "@/components/dashboard/scan-terminal/UsageGuideDashboard";
-import { LiveTemperatureThresholdChart, clearCityDetailCache } from "@/components/dashboard/scan-terminal/LiveTemperatureThresholdChart";
+import {
+  LiveTemperatureThresholdChart,
+  clearCityDetailCache,
+  preloadTemperatureChartCanvas,
+} from "@/components/dashboard/scan-terminal/LiveTemperatureThresholdChart";
 import { KoyfinRowsTable } from "@/components/dashboard/scan-terminal/KoyfinRowsTable";
 import { rowName, pct, money, temp, edgeClass } from "@/components/dashboard/scan-terminal/utils";
 import { CitySelectorDropdown } from "@/components/dashboard/scan-terminal/CitySelectorDropdown";
@@ -427,6 +431,11 @@ function PolyWeatherTerminal({
   const [navExpanded, setNavExpanded] = useState(false);
   const [activeNavKey, setActiveNavKey] = useState<string>("thresholds");
   const [onlineCount, setOnlineCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (activeNavKey !== "thresholds") return;
+    void preloadTemperatureChartCanvas();
+  }, [activeNavKey]);
 
   useEffect(() => {
     const fetchOnline = () => {

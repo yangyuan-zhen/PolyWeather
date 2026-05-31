@@ -63,9 +63,24 @@ const DEFERRED_DETAIL_LOAD_DELAY_MS = 1_200;
 const DEFERRED_DETAIL_LOAD_GROUP_SIZE = 3;
 const DEFERRED_DETAIL_LOAD_WAVE_STEP_MS = 900;
 
+let temperatureChartCanvasModulePromise: Promise<
+  typeof import("@/components/dashboard/scan-terminal/TemperatureChartCanvas")
+> | null = null;
+
+function loadTemperatureChartCanvasModule() {
+  temperatureChartCanvasModulePromise ??= import(
+    "@/components/dashboard/scan-terminal/TemperatureChartCanvas"
+  );
+  return temperatureChartCanvasModulePromise;
+}
+
+export function preloadTemperatureChartCanvas() {
+  return loadTemperatureChartCanvasModule().then(() => undefined, () => undefined);
+}
+
 const TemperatureChartCanvas = dynamic(
   () =>
-    import("@/components/dashboard/scan-terminal/TemperatureChartCanvas").then(
+    loadTemperatureChartCanvasModule().then(
       (mod) => mod.TemperatureChartCanvas,
     ),
   {

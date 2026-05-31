@@ -73,6 +73,17 @@ export async function runTests() {
     "selected city chart should consume SSE patches and use a 2-minute no-patch fallback",
   );
   assert(
+    chartSource.includes("loadTemperatureChartCanvasModule") &&
+      chartSource.includes("preloadTemperatureChartCanvas"),
+    "terminal chart canvas should expose a preload hook for the dynamic chart chunk",
+  );
+  assert(
+    dashboardSource.includes("preloadTemperatureChartCanvas") &&
+      dashboardSource.includes("void preloadTemperatureChartCanvas()") &&
+      dashboardSource.includes('activeNavKey !== "thresholds"'),
+    "terminal screen should preload the chart chunk once access is confirmed on the chart tab",
+  );
+  assert(
     chartSource.includes("fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })") &&
       chartSource.includes("setHourly(data)"),
     "visible chart fallback must refresh the full city detail payload at the current chart resolution when SSE patches stop",
