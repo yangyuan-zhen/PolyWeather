@@ -1073,6 +1073,30 @@ function rejectBatchWaiters(
   (waiters || []).forEach((waiter) => waiter.reject(reason));
 }
 
+function resolveCityDetailFromBatch(
+  details: Record<string, CityDetail | null | undefined> | undefined,
+  city: string,
+) {
+  if (!details) return undefined;
+  const trimmed = String(city || "").trim();
+  const direct =
+    details[city] ||
+    details[trimmed] ||
+    details[trimmed.toLowerCase()] ||
+    details[normalizeCityKey(trimmed)];
+  if (direct) return direct;
+
+  const requestedKey = normalizeCityKey(trimmed);
+  if (!requestedKey) return undefined;
+  for (const [key, detail] of Object.entries(details)) {
+    if (!detail) continue;
+    if (normalizeCityKey(key) === requestedKey) return detail;
+    const detailCity = (detail as any).city || detail.name || detail.display_name;
+    if (normalizeCityKey(detailCity) === requestedKey) return detail;
+  }
+  return undefined;
+}
+
 async function flushCityDetailBatch(resolution: string) {
   const queue = _cityDetailBatchQueues.get(resolution);
   if (!queue) return;
@@ -1091,7 +1115,7 @@ async function flushCityDetailBatch(resolution: string) {
     await Promise.all(
       cities.map(async (city) => {
         const waiters = queue.waiters.get(city);
-        const detail = details[city];
+        const detail = resolveCityDetailFromBatch(details, city);
         const data = primeCityDetailCache(city, resolution, detail);
         if (data) {
           resolveBatchWaiters(waiters, data);
@@ -2426,6 +2450,7 @@ export {
   HOURLY_CACHE_TTL_MS,
   _hourlyCache,
   __readHourlyCacheEntryForTest,
+  resolveCityDetailFromBatch as __resolveCityDetailFromBatchForTest,
   __resetHourlyDetailRequestQueueForTest,
   __runQueuedHourlyDetailRequestForTest,
   buildChartDomain,

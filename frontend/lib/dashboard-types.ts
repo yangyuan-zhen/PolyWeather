@@ -716,6 +716,7 @@ export interface AiAnalysisStructured {
 }
 
 export interface CityDetail {
+  city?: string;
   name: string;
   display_name: string;
   detail_depth?: "panel" | "market" | "nearby" | "full";

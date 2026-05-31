@@ -13,6 +13,7 @@ from fastapi.concurrency import run_in_threadpool
 from loguru import logger
 
 import web.routes as legacy_routes
+from web.services.request_timing import ServerTimingRecorder
 
 _RECENT_DEB_CACHE: Optional[Dict[str, Dict[str, object]]] = None
 _RECENT_DEB_CACHE_TS = 0.0
@@ -368,16 +369,41 @@ async def get_city_detail_aggregate_payload(
     target_date: Optional[str] = None,
     resolution: Optional[str] = "10m",
 ) -> Dict[str, Any]:
-    legacy_routes._assert_entitlement(request)
-    city = legacy_routes._normalize_city_or_404(name)
-    data = await _get_city_full_data(city, force_refresh=force_refresh)
-
-    return await _build_city_detail_payload_cached(
-        data,
-        market_slug,
-        target_date,
-        resolution,
+    timer = ServerTimingRecorder(
+        request,
+        log_name="city_detail_timing",
+        prefix="city_detail",
+        state_attr="city_detail_server_timing",
     )
+    outcome = "ok"
+    status_code = 200
+    try:
+        timer.measure("assert_entitlement", lambda: legacy_routes._assert_entitlement(request))
+        city = timer.measure("normalize_city", lambda: legacy_routes._normalize_city_or_404(name))
+        data = await timer.measure_async(
+            "full_data",
+            lambda: _get_city_full_data(city, force_refresh=force_refresh),
+        )
+
+        return await timer.measure_async(
+            "detail_payload",
+            lambda: _build_city_detail_payload_cached(
+                data,
+                market_slug,
+                target_date,
+                resolution,
+            ),
+        )
+    except HTTPException as exc:
+        outcome = f"http_{exc.status_code}"
+        status_code = exc.status_code
+        raise
+    except Exception:
+        outcome = "exception"
+        status_code = 500
+        raise
+    finally:
+        timer.finish(outcome=outcome, status_code=status_code)
 
 
 def _parse_batch_city_names(raw_cities: str, *, limit: int) -> List[str]:
@@ -404,14 +430,30 @@ async def _build_city_detail_batch_item_async(
     market_slug: Optional[str],
     target_date: Optional[str],
     resolution: Optional[str],
+    timing_recorder: Optional[ServerTimingRecorder] = None,
 ) -> Tuple[str, Dict[str, Any]]:
-    data = await _get_city_full_data(city, force_refresh=force_refresh)
-    detail = await _build_city_detail_payload_cached(
-        data,
-        market_slug,
-        target_date,
-        resolution,
-    )
+    if timing_recorder is not None:
+        data = await timing_recorder.measure_async(
+            f"full_data_{city}",
+            lambda: _get_city_full_data(city, force_refresh=force_refresh),
+        )
+        detail = await timing_recorder.measure_async(
+            f"detail_payload_{city}",
+            lambda: _build_city_detail_payload_cached(
+                data,
+                market_slug,
+                target_date,
+                resolution,
+            ),
+        )
+    else:
+        data = await _get_city_full_data(city, force_refresh=force_refresh)
+        detail = await _build_city_detail_payload_cached(
+            data,
+            market_slug,
+            target_date,
+            resolution,
+        )
     return city, detail
 
 
@@ -433,39 +475,68 @@ async def get_city_detail_batch_payload(
     resolution: Optional[str] = "10m",
     limit: int = 12,
 ) -> Dict[str, Any]:
-    legacy_routes._assert_entitlement(request)
-    city_names = _parse_batch_city_names(cities, limit=max(1, min(24, int(limit or 12))))
-    if not city_names:
-        return {"cities": [], "details": {}, "errors": {}}
+    timer = ServerTimingRecorder(
+        request,
+        log_name="city_detail_batch_timing",
+        prefix="city_detail_batch",
+        state_attr="city_detail_batch_server_timing",
+    )
+    outcome = "ok"
+    status_code = 200
+    try:
+        timer.measure("assert_entitlement", lambda: legacy_routes._assert_entitlement(request))
+        city_names = timer.measure(
+            "parse_cities",
+            lambda: _parse_batch_city_names(
+                cities,
+                limit=max(1, min(24, int(limit or 12))),
+            ),
+        )
+        if not city_names:
+            return {"cities": [], "details": {}, "errors": {}}
 
-    semaphore = asyncio.Semaphore(_city_detail_batch_concurrency())
+        semaphore = asyncio.Semaphore(_city_detail_batch_concurrency())
 
-    async def _build_with_limit(city: str) -> Tuple[str, Dict[str, Any]]:
-        async with semaphore:
-            return await _build_city_detail_batch_item_async(
-                city,
-                force_refresh=force_refresh,
-                market_slug=market_slug,
-                target_date=target_date,
-                resolution=resolution,
-            )
+        async def _build_with_limit(city: str) -> Tuple[str, Dict[str, Any]]:
+            async with semaphore:
+                return await _build_city_detail_batch_item_async(
+                    city,
+                    force_refresh=force_refresh,
+                    market_slug=market_slug,
+                    target_date=target_date,
+                    resolution=resolution,
+                    timing_recorder=timer,
+                )
 
-    tasks = [
-        _build_with_limit(city)
-        for city in city_names
-    ]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    details: Dict[str, Any] = {}
-    errors: Dict[str, str] = {}
-    for city, result in zip(city_names, results):
-        if isinstance(result, Exception):
-            errors[city] = str(result)
-            continue
-        result_city, payload = result
-        details[result_city] = payload
+        tasks = [
+            _build_with_limit(city)
+            for city in city_names
+        ]
+        results = await timer.measure_async(
+            "build_details",
+            lambda: asyncio.gather(*tasks, return_exceptions=True),
+        )
+        details: Dict[str, Any] = {}
+        errors: Dict[str, str] = {}
+        for city, result in zip(city_names, results):
+            if isinstance(result, Exception):
+                errors[city] = str(result)
+                continue
+            result_city, payload = result
+            details[result_city] = payload
 
-    return {
-        "cities": city_names,
-        "details": details,
-        "errors": errors,
-    }
+        return {
+            "cities": city_names,
+            "details": details,
+            "errors": errors,
+        }
+    except HTTPException as exc:
+        outcome = f"http_{exc.status_code}"
+        status_code = exc.status_code
+        raise
+    except Exception:
+        outcome = "exception"
+        status_code = 500
+        raise
+    finally:
+        timer.finish(outcome=outcome, status_code=status_code)

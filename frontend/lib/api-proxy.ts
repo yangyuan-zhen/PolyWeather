@@ -5,6 +5,10 @@ import {
   buildBackendRequestHeaders,
 } from "@/lib/backend-auth";
 import { buildCachedJsonResponse } from "@/lib/http-cache";
+import {
+  finishProxyTimedResponse,
+  type ProxyTimer,
+} from "@/lib/proxy-timing";
 
 const PASSTHROUGH_UPSTREAM_STATUSES = new Set([
   400,
@@ -91,31 +95,59 @@ export async function proxyBackendJsonGet(
     signal?: AbortSignal;
     statusOnException?: number;
     timeoutPublicMessage?: string;
+    timing?: ProxyTimer;
     url: string;
   },
 ) {
   let auth: Awaited<ReturnType<typeof buildBackendRequestHeaders>> | null = null;
+  const timing = options.timing;
   try {
-    auth = await buildBackendRequestHeaders(req, {
-      includeSupabaseIdentity: options.includeSupabaseIdentity ?? false,
-    });
-    const res = await fetch(options.url, {
-      headers: auth.headers,
-      ...(options.fetchCache
-        ? { cache: options.fetchCache }
-        : { next: { revalidate: options.revalidateSeconds ?? 30 } }),
-      signal: options.signal,
-    });
+    auth = await (timing
+      ? timing.measure("auth_headers", () =>
+          buildBackendRequestHeaders(req, {
+            includeSupabaseIdentity: options.includeSupabaseIdentity ?? false,
+          }),
+        )
+      : buildBackendRequestHeaders(req, {
+          includeSupabaseIdentity: options.includeSupabaseIdentity ?? false,
+        }));
+    const res = await (timing
+      ? timing.measure("backend_fetch", () =>
+          fetch(options.url, {
+            headers: auth!.headers,
+            ...(options.fetchCache
+              ? { cache: options.fetchCache }
+              : { next: { revalidate: options.revalidateSeconds ?? 30 } }),
+            signal: options.signal,
+          }),
+        )
+      : fetch(options.url, {
+          headers: auth.headers,
+          ...(options.fetchCache
+            ? { cache: options.fetchCache }
+            : { next: { revalidate: options.revalidateSeconds ?? 30 } }),
+          signal: options.signal,
+        }));
+    const backendServerTiming = res.headers.get("server-timing") || "";
     if (!res.ok) {
-      const raw = await res.text();
+      const raw = await (timing
+        ? timing.measure("backend_read", () => res.text())
+        : res.text());
       const response = buildUpstreamErrorResponse(res.status, raw, {
         detailLimit: options.detailLimit,
         error: options.error,
       });
-      return applyAuthResponseCookies(response, auth.response);
+      const withCookies = applyAuthResponseCookies(response, auth.response);
+      return timing
+        ? finishProxyTimedResponse(withCookies, timing, `upstream_${res.status}`, {
+            backendServerTiming,
+          })
+        : withCookies;
     }
 
-    const data = await res.json();
+    const data = await (timing
+      ? timing.measure("backend_read", () => res.json())
+      : res.json());
     const response =
       options.cacheControl && options.conditionalResponse !== false
         ? buildCachedJsonResponse(req, data, options.cacheControl)
@@ -124,7 +156,12 @@ export async function proxyBackendJsonGet(
               ? { "Cache-Control": options.cacheControl }
               : undefined,
           });
-    return applyAuthResponseCookies(response, auth.response);
+    const withCookies = applyAuthResponseCookies(response, auth.response);
+    return timing
+      ? finishProxyTimedResponse(withCookies, timing, "ok", {
+          backendServerTiming,
+        })
+      : withCookies;
   } catch (error) {
     const timedOut = options.signal?.aborted === true;
     const response = buildProxyExceptionResponse(error, {
@@ -134,6 +171,9 @@ export async function proxyBackendJsonGet(
           : options.publicMessage,
       status: timedOut ? 504 : options.statusOnException,
     });
-    return auth ? applyAuthResponseCookies(response, auth.response) : response;
+    const withCookies = auth ? applyAuthResponseCookies(response, auth.response) : response;
+    return timing
+      ? finishProxyTimedResponse(withCookies, timing, timedOut ? "timeout" : "exception")
+      : withCookies;
   }
 }
