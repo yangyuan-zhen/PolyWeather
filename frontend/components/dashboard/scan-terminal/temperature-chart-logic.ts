@@ -1118,6 +1118,11 @@ async function flushCityDetailBatch(resolution: string) {
 
   try {
     const payload = await fetchCityDetailBatchWithTimeout(cities, resolution);
+    if (!payload) {
+      await resolveCityDetailBatchWithSingleFallback(cities, queue, resolution);
+      return;
+    }
+
     const details = payload?.details || {};
     const partialMissingCities =
       payload?.partial === true
@@ -1136,31 +1141,33 @@ async function flushCityDetailBatch(resolution: string) {
           resolveBatchWaiters(waiters, null);
           return;
         }
-        try {
-          resolveBatchWaiters(
-            waiters,
-            await runQueuedHourlyDetailRequest(() => fetchSingleHourlyForecastForCity(city, resolution)),
-          );
-        } catch (error) {
-          rejectBatchWaiters(waiters, error);
-        }
+        resolveBatchWaiters(waiters, null);
       }),
     );
   } catch (error) {
-    await Promise.all(
-      cities.map(async (city) => {
-        const waiters = queue.waiters.get(city);
-        try {
-          resolveBatchWaiters(
-            waiters,
-            await runQueuedHourlyDetailRequest(() => fetchSingleHourlyForecastForCity(city, resolution)),
-          );
-        } catch (fallbackError) {
-          rejectBatchWaiters(waiters, fallbackError || error);
-        }
-      }),
-    );
+    await resolveCityDetailBatchWithSingleFallback(cities, queue, resolution, error);
   }
+}
+
+async function resolveCityDetailBatchWithSingleFallback(
+  cities: string[],
+  queue: CityDetailBatchQueue,
+  resolution: string,
+  reason?: unknown,
+) {
+  await Promise.all(
+    cities.map(async (city) => {
+      const waiters = queue.waiters.get(city);
+      try {
+        resolveBatchWaiters(
+          waiters,
+          await runQueuedHourlyDetailRequest(() => fetchSingleHourlyForecastForCity(city, resolution)),
+        );
+      } catch (fallbackError) {
+        rejectBatchWaiters(waiters, fallbackError || reason);
+      }
+    }),
+  );
 }
 
 function fetchCityDetailBatchWithTimeout(cities: string[], resolution: string) {

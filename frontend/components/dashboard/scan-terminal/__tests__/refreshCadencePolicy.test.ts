@@ -118,6 +118,12 @@ export async function runTests() {
       flushCityDetailBatchBlock.includes("payload?.partial === true"),
     "partial detail-batch misses should resolve without immediately issuing single-city fallback requests",
   );
+  assert(
+    flushCityDetailBatchBlock.includes("if (!payload)") &&
+      flushCityDetailBatchBlock.includes("resolveCityDetailBatchWithSingleFallback") &&
+      flushCityDetailBatchBlock.includes("resolveBatchWaiters(waiters, null)"),
+    "single-city detail fallback should be reserved for whole-batch failures rather than successful batch misses",
+  );
   const fetchHourlyBlock = chartLogicSource.match(/async function fetchHourlyForecastForCity[\s\S]*?\r?\n}\r?\n\r?\nfunction fetchCityDetailWithTimeout/)?.[0] || "";
   assert(
     fetchHourlyBlock.includes("queueCityDetailBatch(city, resParam)") &&
