@@ -767,6 +767,109 @@ def test_city_detail_batch_returns_completed_details_when_one_city_is_slow(monke
     assert "slow" not in completed
 
 
+def test_city_detail_batch_response_cache_keeps_entitlement_check(monkeypatch):
+    import asyncio
+
+    entitlement_calls = 0
+    build_calls = 0
+
+    async def build_batch_item(city, **kwargs):
+        nonlocal build_calls
+        build_calls += 1
+        return city, {
+            "city": city,
+            "hourly": {"times": ["2026-05-30T00:00:00Z"], "temps": [20.0]},
+            "resolution": kwargs.get("resolution"),
+        }
+
+    def assert_entitlement(request):
+        nonlocal entitlement_calls
+        entitlement_calls += 1
+
+    city_api._CITY_DETAIL_BATCH_RESPONSE_CACHE.clear()
+    city_api._CITY_DETAIL_BATCH_RESPONSE_CACHE_TS.clear()
+    city_api._CITY_DETAIL_BATCH_RESPONSE_INFLIGHT.clear()
+
+    monkeypatch.setenv("POLYWEATHER_CITY_DETAIL_BATCH_RESPONSE_CACHE_TTL_SEC", "20")
+    monkeypatch.setattr(city_api.legacy_routes, "_assert_entitlement", assert_entitlement)
+    monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
+    monkeypatch.setattr(city_api, "_build_city_detail_batch_item_async", build_batch_item)
+
+    first = asyncio.run(
+        city_api.get_city_detail_batch_payload(
+            object(),
+            cities="Paris",
+            resolution="10m",
+            limit=12,
+        )
+    )
+    second = asyncio.run(
+        city_api.get_city_detail_batch_payload(
+            object(),
+            cities="Paris",
+            resolution="10m",
+            limit=12,
+        )
+    )
+
+    assert first == second
+    assert first["details"]["paris"]["resolution"] == "10m"
+    assert entitlement_calls == 2
+    assert build_calls == 1
+
+
+def test_concurrent_city_detail_batch_requests_share_inflight_response(monkeypatch):
+    import asyncio
+
+    entitlement_calls = 0
+    build_calls = 0
+
+    async def build_batch_item(city, **kwargs):
+        nonlocal build_calls
+        build_calls += 1
+        await asyncio.sleep(0.02)
+        return city, {
+            "city": city,
+            "hourly": {"times": ["2026-05-30T00:00:00Z"], "temps": [20.0]},
+            "resolution": kwargs.get("resolution"),
+        }
+
+    def assert_entitlement(request):
+        nonlocal entitlement_calls
+        entitlement_calls += 1
+
+    city_api._CITY_DETAIL_BATCH_RESPONSE_CACHE.clear()
+    city_api._CITY_DETAIL_BATCH_RESPONSE_CACHE_TS.clear()
+    city_api._CITY_DETAIL_BATCH_RESPONSE_INFLIGHT.clear()
+
+    monkeypatch.setenv("POLYWEATHER_CITY_DETAIL_BATCH_RESPONSE_CACHE_TTL_SEC", "20")
+    monkeypatch.setattr(city_api.legacy_routes, "_assert_entitlement", assert_entitlement)
+    monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
+    monkeypatch.setattr(city_api, "_build_city_detail_batch_item_async", build_batch_item)
+
+    async def run_requests():
+        return await asyncio.gather(
+            city_api.get_city_detail_batch_payload(
+                object(),
+                cities="Paris",
+                resolution="10m",
+                limit=12,
+            ),
+            city_api.get_city_detail_batch_payload(
+                object(),
+                cities="Paris",
+                resolution="10m",
+                limit=12,
+            ),
+        )
+
+    first, second = asyncio.run(run_requests())
+
+    assert first == second
+    assert entitlement_calls == 2
+    assert build_calls == 1
+
+
 def test_concurrent_city_detail_requests_share_same_full_cache_refresh(monkeypatch):
     import asyncio
 

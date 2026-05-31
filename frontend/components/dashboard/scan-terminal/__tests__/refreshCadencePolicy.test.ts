@@ -103,6 +103,10 @@ export async function runTests() {
     "visible terminal chart detail fetches should be coalesced into one batch request and prime the shared chart cache",
   );
   assert(
+    chartLogicSource.includes("CITY_DETAIL_BATCH_WINDOW_MS = 100"),
+    "visible terminal chart detail fetches should use a wide enough batch window to coalesce cards mounted across adjacent frames",
+  );
+  assert(
     chartLogicSource.includes("partial?: boolean") &&
       chartLogicSource.includes("missing?: string[]"),
     "frontend city detail batch payload should understand partial responses and missing city markers",

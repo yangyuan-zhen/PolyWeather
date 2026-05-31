@@ -988,7 +988,7 @@ type CityDetailBatchQueue = {
   timer: ReturnType<typeof setTimeout> | null;
 };
 
-const CITY_DETAIL_BATCH_WINDOW_MS = 25;
+const CITY_DETAIL_BATCH_WINDOW_MS = 100;
 const CITY_DETAIL_BATCH_MAX_CITIES = 12;
 const _cityDetailBatchQueues = new Map<string, CityDetailBatchQueue>();
 

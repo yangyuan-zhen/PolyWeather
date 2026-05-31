@@ -198,8 +198,9 @@ export function runTests() {
   assert(
     foregroundRefreshBlock.includes("ignoreCache: true") &&
       foregroundRefreshBlock.includes("fetchHourlyForecastForCity") &&
+      foregroundRefreshBlock.includes("FOREGROUND_FULL_DETAIL_REFRESH_DEDUP_MS") &&
       !foregroundRefreshBlock.includes("setIsHourlyLoading(true)"),
-    "foreground resume refresh should update full detail immediately in the background without showing the loading overlay",
+    "foreground resume refresh should update full detail in the background without showing the loading overlay or refetching fresh detail",
   );
   assert(
     !chart.includes("/api/city/${encodeURIComponent(city)}/summary"),

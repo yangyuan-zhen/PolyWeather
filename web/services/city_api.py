@@ -27,11 +27,16 @@ _CITY_FULL_REFRESH_INFLIGHT: Dict[str, "asyncio.Task[Dict[str, Any]]"] = {}
 _CITY_FULL_STALE_REFRESH_TASKS: Dict[str, "asyncio.Task[Dict[str, Any]]"] = {}
 _CITY_FULL_REFRESH_LOCK = asyncio.Lock()
 CityDetailPayloadCacheKey = Tuple[str, str, str, str, str, int]
+CityDetailBatchResponseCacheKey = Tuple[Tuple[str, ...], bool, str, str, str]
 _CITY_DETAIL_PAYLOAD_CACHE: Dict[CityDetailPayloadCacheKey, Dict[str, Any]] = {}
 _CITY_DETAIL_PAYLOAD_CACHE_TS: Dict[CityDetailPayloadCacheKey, float] = {}
 _CITY_DETAIL_PAYLOAD_INFLIGHT: Dict[CityDetailPayloadCacheKey, "asyncio.Task[Dict[str, Any]]"] = {}
 _CITY_DETAIL_PAYLOAD_EPOCH: Dict[str, int] = {}
 _CITY_DETAIL_PAYLOAD_LOCK = asyncio.Lock()
+_CITY_DETAIL_BATCH_RESPONSE_CACHE: Dict[CityDetailBatchResponseCacheKey, Dict[str, Any]] = {}
+_CITY_DETAIL_BATCH_RESPONSE_CACHE_TS: Dict[CityDetailBatchResponseCacheKey, float] = {}
+_CITY_DETAIL_BATCH_RESPONSE_INFLIGHT: Dict[CityDetailBatchResponseCacheKey, "asyncio.Task[Dict[str, Any]]"] = {}
+_CITY_DETAIL_BATCH_RESPONSE_LOCK = asyncio.Lock()
 
 
 def _city_detail_payload_cache_ttl() -> float:
@@ -39,6 +44,17 @@ def _city_detail_payload_cache_ttl() -> float:
         value = float(os.getenv("POLYWEATHER_CITY_DETAIL_PAYLOAD_CACHE_TTL_SEC", "8") or "8")
     except ValueError:
         value = 8.0
+    return max(0.0, min(30.0, value))
+
+
+def _city_detail_batch_response_cache_ttl() -> float:
+    try:
+        value = float(
+            os.getenv("POLYWEATHER_CITY_DETAIL_BATCH_RESPONSE_CACHE_TTL_SEC", "12")
+            or "12"
+        )
+    except ValueError:
+        value = 12.0
     return max(0.0, min(30.0, value))
 
 
@@ -458,6 +474,23 @@ def _parse_batch_city_names(raw_cities: str, *, limit: int) -> List[str]:
     return out
 
 
+def _city_detail_batch_response_cache_key(
+    city_names: List[str],
+    *,
+    force_refresh: bool,
+    market_slug: Optional[str],
+    target_date: Optional[str],
+    resolution: Optional[str],
+) -> CityDetailBatchResponseCacheKey:
+    return (
+        tuple(city_names),
+        bool(force_refresh),
+        str(market_slug or ""),
+        str(target_date or ""),
+        str(resolution or "10m"),
+    )
+
+
 async def _build_city_detail_batch_item_async(
     city: str,
     *,
@@ -549,61 +582,116 @@ async def get_city_detail_batch_payload(
                 "partial": False,
             }
 
-        semaphore = asyncio.Semaphore(_city_detail_batch_concurrency())
+        async def _build_uncached_payload() -> Dict[str, Any]:
+            semaphore = asyncio.Semaphore(_city_detail_batch_concurrency())
 
-        async def _build_with_limit(city: str) -> Tuple[str, Dict[str, Any]]:
-            async with semaphore:
-                return await _build_city_detail_batch_item_async(
-                    city,
-                    force_refresh=force_refresh,
-                    market_slug=market_slug,
-                    target_date=target_date,
-                    resolution=resolution,
-                    timing_recorder=timer,
-                )
+            async def _build_with_limit(city: str) -> Tuple[str, Dict[str, Any]]:
+                async with semaphore:
+                    return await _build_city_detail_batch_item_async(
+                        city,
+                        force_refresh=force_refresh,
+                        market_slug=market_slug,
+                        target_date=target_date,
+                        resolution=resolution,
+                        timing_recorder=timer,
+                    )
 
-        task_by_city = {
-            city: asyncio.create_task(_build_with_limit(city))
-            for city in city_names
-        }
-        task_city_lookup = {task: city for city, task in task_by_city.items()}
-        done, pending = await timer.measure_async(
-            "build_details",
-            lambda: asyncio.wait(
-                task_by_city.values(),
-                timeout=_city_detail_batch_partial_timeout_seconds(),
-            ),
+            task_by_city = {
+                city: asyncio.create_task(_build_with_limit(city))
+                for city in city_names
+            }
+            task_city_lookup = {task: city for city, task in task_by_city.items()}
+            done, pending = await timer.measure_async(
+                "build_details",
+                lambda: asyncio.wait(
+                    task_by_city.values(),
+                    timeout=_city_detail_batch_partial_timeout_seconds(),
+                ),
+            )
+            details: Dict[str, Any] = {}
+            errors: Dict[str, str] = {}
+            missing: List[str] = []
+            for task in done:
+                city = task_city_lookup[task]
+                try:
+                    result_city, payload = task.result()
+                except Exception as exc:
+                    errors[city] = str(exc)
+                    continue
+                details[result_city] = payload
+
+            for task in pending:
+                city = task_city_lookup[task]
+                missing.append(city)
+                task.cancel()
+
+            missing_set = set(missing)
+            missing = [city for city in city_names if city in missing_set]
+            return {
+                "cities": city_names,
+                "details": details,
+                "errors": errors,
+                "missing": missing,
+                "partial": bool(missing or errors),
+            }
+
+        cache_ttl = _city_detail_batch_response_cache_ttl()
+        cache_key = _city_detail_batch_response_cache_key(
+            city_names,
+            force_refresh=force_refresh,
+            market_slug=market_slug,
+            target_date=target_date,
+            resolution=resolution,
         )
-        details: Dict[str, Any] = {}
-        errors: Dict[str, str] = {}
-        missing: List[str] = []
-        for task in done:
-            city = task_city_lookup[task]
+        if cache_ttl > 0 and not force_refresh:
+            now_ts = time.time()
+            async with _CITY_DETAIL_BATCH_RESPONSE_LOCK:
+                cached = _CITY_DETAIL_BATCH_RESPONSE_CACHE.get(cache_key)
+                cached_ts = _CITY_DETAIL_BATCH_RESPONSE_CACHE_TS.get(cache_key, 0.0)
+                if cached is not None and now_ts - cached_ts < cache_ttl:
+                    outcome = "cache_hit"
+                    return cached
+                task = _CITY_DETAIL_BATCH_RESPONSE_INFLIGHT.get(cache_key)
+                owner = False
+                if task is None:
+                    owner = True
+                    task = asyncio.create_task(_build_uncached_payload())
+                    _CITY_DETAIL_BATCH_RESPONSE_INFLIGHT[cache_key] = task
+
             try:
-                result_city, payload = task.result()
-            except Exception as exc:
-                errors[city] = str(exc)
-                continue
-            details[result_city] = payload
+                payload = await timer.measure_async(
+                    "build_or_wait_cached_batch",
+                    lambda: task,
+                )
+            finally:
+                if owner and task.done():
+                    async with _CITY_DETAIL_BATCH_RESPONSE_LOCK:
+                        if _CITY_DETAIL_BATCH_RESPONSE_INFLIGHT.get(cache_key) is task:
+                            _CITY_DETAIL_BATCH_RESPONSE_INFLIGHT.pop(cache_key, None)
+            if payload.get("partial"):
+                outcome = "partial"
+            elif not owner:
+                outcome = "shared_inflight"
 
-        for task in pending:
-            city = task_city_lookup[task]
-            missing.append(city)
-            task.cancel()
+            if owner:
+                async with _CITY_DETAIL_BATCH_RESPONSE_LOCK:
+                    if not payload.get("partial"):
+                        _CITY_DETAIL_BATCH_RESPONSE_CACHE[cache_key] = payload
+                        _CITY_DETAIL_BATCH_RESPONSE_CACHE_TS[cache_key] = time.time()
+                        if len(_CITY_DETAIL_BATCH_RESPONSE_CACHE) > 128:
+                            oldest_keys = sorted(
+                                _CITY_DETAIL_BATCH_RESPONSE_CACHE_TS,
+                                key=lambda item: _CITY_DETAIL_BATCH_RESPONSE_CACHE_TS.get(item, 0.0),
+                            )[:32]
+                            for old_key in oldest_keys:
+                                _CITY_DETAIL_BATCH_RESPONSE_CACHE.pop(old_key, None)
+                                _CITY_DETAIL_BATCH_RESPONSE_CACHE_TS.pop(old_key, None)
+            return payload
 
-        missing_set = set(missing)
-        missing = [city for city in city_names if city in missing_set]
-        partial = bool(missing or errors)
-        if partial:
+        payload = await _build_uncached_payload()
+        if payload.get("partial"):
             outcome = "partial"
-
-        return {
-            "cities": city_names,
-            "details": details,
-            "errors": errors,
-            "missing": missing,
-            "partial": partial,
-        }
+        return payload
     except HTTPException as exc:
         outcome = f"http_{exc.status_code}"
         status_code = exc.status_code
