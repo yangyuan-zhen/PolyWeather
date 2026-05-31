@@ -94,6 +94,13 @@ export function runTests() {
   assert(hook.includes("subscribedCities"), "frontend patch hook must track the visible city subscription set");
   assert(hook.includes("since_revision"), "frontend patch hook must reconnect with since_revision");
   assert(hook.includes("resync_required"), "frontend patch hook must react to server resync_required events");
+  assert(
+    hook.includes("SSE_REPLAY_EVENTS_PER_CITY") &&
+      hook.includes("resolveSseReplayLimit") &&
+      hook.includes('params.set("replay_limit", String(resolveSseReplayLimit(cities.length)))') &&
+      !hook.includes('params.set("replay_limit", "500")'),
+    "frontend patch hook should size SSE replay_limit by visible city count instead of always asking for 500 events",
+  );
   assert(hook.includes("lastRevision"), "frontend patch hook must track the global last processed revision");
   assert(hook.includes("Map<"), "frontend patch hook must keep latest patches in a Map");
   assert(hook.includes("useLatestPatch"), "frontend patch hook must export useLatestPatch(city)");

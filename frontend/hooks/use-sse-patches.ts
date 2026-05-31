@@ -5,6 +5,9 @@ import { resolveBackendApiUrl } from "@/lib/backend-api";
 
 const V1_EVENT_TYPE = "city_observation_patch.v1";
 const SSE_SUBSCRIPTION_RECONNECT_DELAY_MS = 150;
+const SSE_REPLAY_BASE_LIMIT = 60;
+const SSE_REPLAY_EVENTS_PER_CITY = 24;
+const SSE_REPLAY_MAX_LIMIT = 240;
 
 export type CityPatch = {
   type?: string;
@@ -91,10 +94,15 @@ function buildSseUrl(baseUrl: string) {
   if (lastRevision > 0) {
     params.set("since_revision", String(lastRevision));
   }
-  params.set("replay_limit", "500");
+  params.set("replay_limit", String(resolveSseReplayLimit(cities.length)));
 
   const query = params.toString();
   return query ? `${baseUrl}?${query}` : baseUrl;
+}
+
+function resolveSseReplayLimit(cityCount: number) {
+  const requested = Math.max(1, cityCount) * SSE_REPLAY_EVENTS_PER_CITY;
+  return Math.max(SSE_REPLAY_BASE_LIMIT, Math.min(SSE_REPLAY_MAX_LIMIT, requested));
 }
 
 function currentConnectionKey() {

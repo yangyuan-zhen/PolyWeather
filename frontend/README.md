@@ -192,7 +192,7 @@ Ops：
 - 支付相关路由：`no-store`
 - 当 detail 缓存只返回单模型或单日 forecast 时，前端会自动强刷完整 detail，并在补齐前显示同步提示 / 占位卡
 - 今日日内分析打开时如果正在切换城市、日期或 detail 深度，弹窗会阻断旧内容点击并显示刷新锁
-- 终端图表订阅 `/api/events?cities=...&since_revision=...&replay_limit=500`，接收 `city_observation_patch.v1`；无 patch 超过 2 分钟时，可见图表才触发 60 秒兜底刷新
+- 终端图表订阅 `/api/events?cities=...&since_revision=...&replay_limit=按可见城市数动态限制`，接收 `city_observation_patch.v1`；无 patch 超过 2 分钟时，可见图表才触发 60 秒兜底刷新
 - 前端只消费 HTTP snapshot + SSE patch，不直接感知 Redis；Redis Stream / SQLite event log 都由后端统一封装
 
 ## Vercel 节流建议
