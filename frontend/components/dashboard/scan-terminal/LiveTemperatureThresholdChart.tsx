@@ -58,6 +58,9 @@ const PEAK_GLOW_BADGE_CLASS = {
 const PROBABILITY_REFRESH_AFTER_PATCH_MS = 60_000;
 const FOREGROUND_FULL_DETAIL_REFRESH_DEDUP_MS = 90_000;
 const DETAIL_LOAD_BATCH_DELAY_MS = 0;
+const INITIAL_DETAIL_LOAD_SLOTS = 3;
+const DEFERRED_DETAIL_LOAD_DELAY_MS = 1_200;
+const DEFERRED_DETAIL_LOAD_STEP_MS = 450;
 
 const TemperatureChartCanvas = dynamic(
   () =>
@@ -115,12 +118,46 @@ function shouldFetchCityDetailForChart({
   city,
   documentHidden,
   isChartVisible,
+  compact = false,
+  isActive = false,
+  isMaximized = false,
+  slotIndex = 0,
+  detailLoadReady = true,
 }: {
   city: string;
   documentHidden: boolean;
   isChartVisible: boolean;
+  compact?: boolean;
+  isActive?: boolean;
+  isMaximized?: boolean;
+  slotIndex?: number;
+  detailLoadReady?: boolean;
 }) {
-  return Boolean(city) && isChartVisible && !documentHidden;
+  if (!city || !isChartVisible || documentHidden) return false;
+  if (!compact || isActive || isMaximized) return true;
+  if (normalizeSlotIndex(slotIndex) < INITIAL_DETAIL_LOAD_SLOTS) return true;
+  return detailLoadReady;
+}
+
+function normalizeSlotIndex(slotIndex: number | null | undefined) {
+  return Number.isFinite(slotIndex) && Number(slotIndex) >= 0 ? Math.floor(Number(slotIndex)) : 0;
+}
+
+function getInitialDetailLoadDelayMs({
+  compact,
+  isActive,
+  isMaximized,
+  slotIndex,
+}: {
+  compact?: boolean;
+  isActive?: boolean;
+  isMaximized?: boolean;
+  slotIndex?: number;
+}) {
+  if (!compact || isActive || isMaximized) return 0;
+  const normalizedIndex = normalizeSlotIndex(slotIndex);
+  if (normalizedIndex < INITIAL_DETAIL_LOAD_SLOTS) return 0;
+  return DEFERRED_DETAIL_LOAD_DELAY_MS + (normalizedIndex - INITIAL_DETAIL_LOAD_SLOTS) * DEFERRED_DETAIL_LOAD_STEP_MS;
 }
 
 // ── Main component ─────────────────────────────────────────────────────
@@ -136,6 +173,7 @@ export function LiveTemperatureThresholdChart({
   isMaximized = false,
   disableClose = false,
   isActive = !compact,
+  slotIndex = 0,
 }: {
   isEn: boolean;
   row: ScanOpportunityRow | null;
@@ -179,6 +217,11 @@ export function LiveTemperatureThresholdChart({
   const [targetResolution, setTargetResolution] = useState<string>(() =>
     prefersHighFrequencyRunwayResolution(row, null) ? "1m" : "10m",
   );
+  const detailLoadDelayMs = useMemo(
+    () => getInitialDetailLoadDelayMs({ compact, isActive, isMaximized, slotIndex }),
+    [compact, isActive, isMaximized, slotIndex],
+  );
+  const [detailLoadReady, setDetailLoadReady] = useState(() => detailLoadDelayMs === 0);
   const [currentCityLocalDate, setCurrentCityLocalDate] = useState(() =>
     formatCityLocalDate(row?.tz_offset_seconds),
   );
@@ -191,7 +234,7 @@ export function LiveTemperatureThresholdChart({
     setTargetResolution(prefersHighFrequencyRunwayResolution(row, null) ? "1m" : "10m");
     setHourly(seedHourlyForecastFromRow(row));
     setLiveTemp(null);
-    setIsHourlyLoading(Boolean(city));
+    setIsHourlyLoading(Boolean(city) && detailLoadDelayMs === 0);
     setDetailError(null);
     setDetailRetryNonce(0);
     setShowingStaleDetail(false);
@@ -202,7 +245,22 @@ export function LiveTemperatureThresholdChart({
     lastForegroundRefreshAtRef.current = 0;
     localDayRolloverFetchDateRef.current = "";
     setCurrentCityLocalDate(formatCityLocalDate(row?.tz_offset_seconds));
-  }, [city]);
+  }, [city, detailLoadDelayMs]);
+
+  useEffect(() => {
+    if (!city) {
+      setDetailLoadReady(false);
+      return;
+    }
+    if (detailLoadDelayMs <= 0) {
+      setDetailLoadReady(true);
+      return;
+    }
+
+    setDetailLoadReady(false);
+    const id = setTimeout(() => setDetailLoadReady(true), detailLoadDelayMs);
+    return () => clearTimeout(id);
+  }, [city, detailLoadDelayMs]);
 
   useEffect(() => {
     const node = chartVisibilityRef.current;
@@ -235,17 +293,6 @@ export function LiveTemperatureThresholdChart({
       return;
     }
 
-    if (
-      !shouldFetchCityDetailForChart({
-        city,
-        documentHidden:
-          typeof document !== "undefined" && document.visibilityState === "hidden",
-        isChartVisible,
-      })
-    ) {
-      return;
-    }
-    
     const cacheKey = `${city}:${targetResolution}`;
     let cached = _hourlyCache.get(cacheKey);
     if (!cached || Date.now() - Number(cached.ts || 0) >= HOURLY_CACHE_TTL_MS) {
@@ -267,6 +314,23 @@ export function LiveTemperatureThresholdChart({
     if (hasFreshCache) {
       setIsHourlyLoading(false);
       setDetailError(null);
+      return;
+    }
+
+    if (
+      !shouldFetchCityDetailForChart({
+        city,
+        documentHidden:
+          typeof document !== "undefined" && document.visibilityState === "hidden",
+        isChartVisible,
+        compact,
+        isActive,
+        isMaximized,
+        slotIndex,
+        detailLoadReady,
+      })
+    ) {
+      setIsHourlyLoading(false);
       return;
     }
 
@@ -302,7 +366,19 @@ export function LiveTemperatureThresholdChart({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [city, row, targetResolution, isChartVisible, detailRetryNonce, isEn]);
+  }, [
+    city,
+    row,
+    targetResolution,
+    isChartVisible,
+    compact,
+    isActive,
+    isMaximized,
+    slotIndex,
+    detailLoadReady,
+    detailRetryNonce,
+    isEn,
+  ]);
 
   useEffect(() => {
     if (!latestPatch || latestPatch.revision <= lastAppliedPatchRevisionRef.current) return;
@@ -897,6 +973,7 @@ export const __getLiveObservationLabelsForTest = getLiveObservationLabels;
 export const __getObservationDisplayMetricsForTest = getObservationDisplayMetrics;
 export const __getPeakGlowStateForTest = getPeakGlowState;
 export const __getWundergroundDailyHighForTest = getWundergroundDailyHigh;
+export const __getInitialDetailLoadDelayMsForTest = getInitialDetailLoadDelayMs;
 export const __shouldFetchCityDetailForChartForTest = shouldFetchCityDetailForChart;
 export const __shouldPollLiveChartForTest = shouldPollLiveChart;
 export const __mergePatchIntoHourlyForTest = mergePatchIntoHourly;

@@ -6,6 +6,7 @@ import {
 } from "@/lib/refresh-policy";
 import { scanTerminalQueryPolicy } from "@/components/dashboard/scan-terminal/scan-terminal-client";
 import {
+  __getInitialDetailLoadDelayMsForTest,
   __shouldFetchCityDetailForChartForTest,
   __shouldPollLiveChartForTest,
 } from "@/components/dashboard/scan-terminal/LiveTemperatureThresholdChart";
@@ -163,6 +164,46 @@ export async function runTests() {
   assert(
     __shouldFetchCityDetailForChartForTest({ city: "paris", documentHidden: true, isChartVisible: true }) === false,
     "hidden browser tabs should not prefetch city detail",
+  );
+  assert(
+    __getInitialDetailLoadDelayMsForTest({ compact: true, isActive: false, isMaximized: false, slotIndex: 0 }) === 0 &&
+      __getInitialDetailLoadDelayMsForTest({ compact: true, isActive: false, isMaximized: false, slotIndex: 2 }) === 0,
+    "first visible grid charts should fetch full detail immediately",
+  );
+  assert(
+    __getInitialDetailLoadDelayMsForTest({ compact: true, isActive: false, isMaximized: false, slotIndex: 3 }) > 0,
+    "later non-active grid charts should defer full-detail loading after first paint",
+  );
+  assert(
+    __getInitialDetailLoadDelayMsForTest({ compact: true, isActive: true, isMaximized: false, slotIndex: 8 }) === 0 &&
+      __getInitialDetailLoadDelayMsForTest({ compact: true, isActive: false, isMaximized: true, slotIndex: 8 }) === 0,
+    "active or maximized charts should bypass deferred detail loading",
+  );
+  assert(
+    __shouldFetchCityDetailForChartForTest({
+      city: "paris",
+      documentHidden: false,
+      isChartVisible: true,
+      compact: true,
+      isActive: false,
+      isMaximized: false,
+      slotIndex: 5,
+      detailLoadReady: false,
+    }) === false,
+    "deferred grid charts should not enter the detail request queue before their delay is ready",
+  );
+  assert(
+    __shouldFetchCityDetailForChartForTest({
+      city: "paris",
+      documentHidden: false,
+      isChartVisible: true,
+      compact: true,
+      isActive: false,
+      isMaximized: false,
+      slotIndex: 5,
+      detailLoadReady: true,
+    }) === true,
+    "deferred grid charts should fetch detail after their delay is ready",
   );
   const normalizedBatchDetail = __resolveCityDetailFromBatchForTest(
       {
