@@ -351,6 +351,16 @@ _SCAN_TERMINAL_PREWARM_RAW_FILTERS = [
         "min_liquidity": 500,
         "market_type": "maxtemp",
         "time_range": "today",
+        "limit": 25,
+    },
+    {
+        "scan_mode": "tradable",
+        "min_price": 0.05,
+        "max_price": 0.95,
+        "min_edge_pct": 2,
+        "min_liquidity": 500,
+        "market_type": "maxtemp",
+        "time_range": "today",
         "limit": 180,
     }
 ]

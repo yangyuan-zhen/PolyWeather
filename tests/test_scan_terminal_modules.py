@@ -9,6 +9,7 @@ from web.scan_terminal_payloads import (
 from web.scan_terminal_ranker import build_ranked_scan_terminal_result
 from web.scan_terminal_city_row import _build_quick_row
 from web.routers.scan import router as scan_router
+from web.scan_terminal_service import _scan_terminal_prewarm_filters
 
 
 class _FakeRedis:
@@ -68,6 +69,13 @@ def test_scan_terminal_failure_state_preserves_redis_success_payload(monkeypatch
 
     assert entry["success_payload"]["rows"] == [{"id": "row-1"}]
     assert entry["last_error"] == "timeout"
+
+
+def test_scan_terminal_prewarm_covers_default_api_limit():
+    limits = {filters["limit"] for filters in _scan_terminal_prewarm_filters()}
+
+    assert 25 in limits
+    assert 180 in limits
 
 
 def test_scan_router_does_not_expose_terminal_ai_endpoint():
