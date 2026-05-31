@@ -85,6 +85,7 @@ export async function proxyBackendJsonGet(
   req: NextRequest,
   options: {
     cacheControl?: string;
+    cacheControlForData?: (data: unknown) => string | undefined;
     conditionalResponse?: boolean;
     detailLimit?: number;
     error?: string;
@@ -148,12 +149,14 @@ export async function proxyBackendJsonGet(
     const data = await (timing
       ? timing.measure("backend_read", () => res.json())
       : res.json());
+    const responseCacheControl =
+      options.cacheControlForData?.(data) ?? options.cacheControl;
     const response =
-      options.cacheControl && options.conditionalResponse !== false
-        ? buildCachedJsonResponse(req, data, options.cacheControl)
+      responseCacheControl && options.conditionalResponse !== false
+        ? buildCachedJsonResponse(req, data, responseCacheControl)
         : NextResponse.json(data, {
-            headers: options.cacheControl
-              ? { "Cache-Control": options.cacheControl }
+            headers: responseCacheControl
+              ? { "Cache-Control": responseCacheControl }
               : undefined,
           });
     const withCookies = applyAuthResponseCookies(response, auth.response);

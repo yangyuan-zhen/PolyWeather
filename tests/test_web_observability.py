@@ -618,6 +618,44 @@ def test_city_detail_batch_endpoint_limits_backend_concurrency(monkeypatch):
     assert max_active <= 2
 
 
+def test_city_detail_batch_returns_completed_details_when_one_city_is_slow(monkeypatch):
+    import asyncio
+
+    completed = []
+
+    async def build_batch_item(city, **kwargs):
+        if city == "slow":
+            await asyncio.sleep(0.08)
+        completed.append(city)
+        return city, {
+            "city": city,
+            "hourly": {"times": ["2026-05-30T00:00:00Z"], "temps": [20.0]},
+            "resolution": kwargs.get("resolution"),
+        }
+
+    monkeypatch.setenv("POLYWEATHER_CITY_DETAIL_BATCH_PARTIAL_TIMEOUT_MS", "20")
+    monkeypatch.setattr(city_api.legacy_routes, "_assert_entitlement", lambda request: None)
+    monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
+    monkeypatch.setattr(city_api, "_build_city_detail_batch_item_async", build_batch_item)
+
+    payload = asyncio.run(
+        city_api.get_city_detail_batch_payload(
+            object(),
+            cities="fast,slow,other",
+            resolution="10m",
+            limit=3,
+        )
+    )
+
+    assert payload["cities"] == ["fast", "slow", "other"]
+    assert sorted(payload["details"]) == ["fast", "other"]
+    assert payload["details"]["fast"]["resolution"] == "10m"
+    assert payload["partial"] is True
+    assert payload["missing"] == ["slow"]
+    assert payload["errors"] == {}
+    assert "slow" not in completed
+
+
 def test_concurrent_city_detail_requests_share_same_full_cache_refresh(monkeypatch):
     import asyncio
 

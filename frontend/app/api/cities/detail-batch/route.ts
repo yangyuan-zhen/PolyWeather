@@ -42,8 +42,13 @@ export async function GET(req: NextRequest) {
   try {
     return await proxyBackendJsonGet(req, {
       cacheControl: cachePolicy.responseCacheControl,
-      fetchCache:
-        cachePolicy.fetchMode === "no-store" ? "no-store" : undefined,
+      cacheControlForData: (data) =>
+        data &&
+        typeof data === "object" &&
+        (data as { partial?: unknown }).partial === true
+          ? "no-store, max-age=0"
+          : cachePolicy.responseCacheControl,
+      fetchCache: "no-store",
       publicMessage: "Failed to fetch city detail batch",
       revalidateSeconds: cachePolicy.revalidateSeconds,
       signal: controller.signal,

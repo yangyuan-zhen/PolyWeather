@@ -500,6 +500,19 @@ def _city_detail_batch_concurrency() -> int:
     return max(1, min(6, value))
 
 
+def _city_detail_batch_partial_timeout_seconds() -> Optional[float]:
+    try:
+        timeout_ms = int(
+            os.getenv("POLYWEATHER_CITY_DETAIL_BATCH_PARTIAL_TIMEOUT_MS", "8500")
+            or "8500"
+        )
+    except ValueError:
+        timeout_ms = 8500
+    if timeout_ms <= 0:
+        return None
+    return max(0.001, min(60.0, timeout_ms / 1000.0))
+
+
 async def get_city_detail_batch_payload(
     request: Request,
     *,
@@ -528,7 +541,13 @@ async def get_city_detail_batch_payload(
             ),
         )
         if not city_names:
-            return {"cities": [], "details": {}, "errors": {}}
+            return {
+                "cities": [],
+                "details": {},
+                "errors": {},
+                "missing": [],
+                "partial": False,
+            }
 
         semaphore = asyncio.Semaphore(_city_detail_batch_concurrency())
 
@@ -543,27 +562,47 @@ async def get_city_detail_batch_payload(
                     timing_recorder=timer,
                 )
 
-        tasks = [
-            _build_with_limit(city)
+        task_by_city = {
+            city: asyncio.create_task(_build_with_limit(city))
             for city in city_names
-        ]
-        results = await timer.measure_async(
+        }
+        task_city_lookup = {task: city for city, task in task_by_city.items()}
+        done, pending = await timer.measure_async(
             "build_details",
-            lambda: asyncio.gather(*tasks, return_exceptions=True),
+            lambda: asyncio.wait(
+                task_by_city.values(),
+                timeout=_city_detail_batch_partial_timeout_seconds(),
+            ),
         )
         details: Dict[str, Any] = {}
         errors: Dict[str, str] = {}
-        for city, result in zip(city_names, results):
-            if isinstance(result, Exception):
-                errors[city] = str(result)
+        missing: List[str] = []
+        for task in done:
+            city = task_city_lookup[task]
+            try:
+                result_city, payload = task.result()
+            except Exception as exc:
+                errors[city] = str(exc)
                 continue
-            result_city, payload = result
             details[result_city] = payload
+
+        for task in pending:
+            city = task_city_lookup[task]
+            missing.append(city)
+            task.cancel()
+
+        missing_set = set(missing)
+        missing = [city for city in city_names if city in missing_set]
+        partial = bool(missing or errors)
+        if partial:
+            outcome = "partial"
 
         return {
             "cities": city_names,
             "details": details,
             "errors": errors,
+            "missing": missing,
+            "partial": partial,
         }
     except HTTPException as exc:
         outcome = f"http_{exc.status_code}"

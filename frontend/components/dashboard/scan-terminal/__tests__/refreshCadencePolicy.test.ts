@@ -96,6 +96,18 @@ export async function runTests() {
       chartLogicSource.includes("primeCityDetailCache"),
     "visible terminal chart detail fetches should be coalesced into one batch request and prime the shared chart cache",
   );
+  assert(
+    chartLogicSource.includes("partial?: boolean") &&
+      chartLogicSource.includes("missing?: string[]"),
+    "frontend city detail batch payload should understand partial responses and missing city markers",
+  );
+  const flushCityDetailBatchBlock = chartLogicSource.match(/async function flushCityDetailBatch[\s\S]*?\r?\n}\r?\n\r?\nfunction fetchCityDetailBatchWithTimeout/)?.[0] || "";
+  assert(
+    flushCityDetailBatchBlock.includes("partialMissingCities") &&
+      flushCityDetailBatchBlock.includes("resolveBatchWaiters(waiters, null)") &&
+      flushCityDetailBatchBlock.includes("payload?.partial === true"),
+    "partial detail-batch misses should resolve without immediately issuing single-city fallback requests",
+  );
   const fetchHourlyBlock = chartLogicSource.match(/async function fetchHourlyForecastForCity[\s\S]*?\r?\n}\r?\n\r?\nfunction fetchCityDetailWithTimeout/)?.[0] || "";
   assert(
     fetchHourlyBlock.includes("queueCityDetailBatch(city, resParam)") &&

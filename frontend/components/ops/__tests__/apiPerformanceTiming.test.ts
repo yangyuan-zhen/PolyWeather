@@ -41,6 +41,21 @@ export function runTests() {
   const detailBatchProxy = readFrontend("app", "api", "cities", "detail-batch", "route.ts");
   assert.match(detailBatchProxy, /createProxyTimer\(req,\s*"city_detail_batch"\)/);
   assert.match(detailBatchProxy, /timing:\s*timer/);
+  assert.match(
+    detailBatchProxy,
+    /fetchCache:\s*"no-store"/,
+    "city detail batch proxy should avoid caching partial backend fetches in the Next data cache",
+  );
+  assert.match(
+    detailBatchProxy,
+    /cacheControlForData/,
+    "city detail batch proxy should be able to suppress response caching for partial payloads",
+  );
+  assert.match(
+    apiProxySource,
+    /cacheControlForData\?:/,
+    "generic backend JSON proxy should allow response cache policy to depend on parsed data",
+  );
 
   const scanTerminalProxy = readFrontend("app", "api", "scan", "terminal", "route.ts");
   assert.match(scanTerminalProxy, /createProxyTimer\(req,\s*"scan_terminal"\)/);

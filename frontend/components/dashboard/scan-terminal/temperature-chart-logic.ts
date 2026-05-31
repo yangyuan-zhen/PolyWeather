@@ -966,8 +966,11 @@ type HourlyForecastFetchOptions = {
 };
 
 type CityDetailBatchPayload = {
+  cities?: string[];
   details?: Record<string, CityDetail | null | undefined>;
   errors?: Record<string, string>;
+  missing?: string[];
+  partial?: boolean;
 };
 
 type CityDetailBatchWaiter = {
@@ -1112,6 +1115,10 @@ async function flushCityDetailBatch(resolution: string) {
   try {
     const payload = await fetchCityDetailBatchWithTimeout(cities, resolution);
     const details = payload?.details || {};
+    const partialMissingCities =
+      payload?.partial === true
+        ? new Set((payload.missing || []).map((city) => normalizeCityKey(city)))
+        : new Set<string>();
     await Promise.all(
       cities.map(async (city) => {
         const waiters = queue.waiters.get(city);
@@ -1119,6 +1126,10 @@ async function flushCityDetailBatch(resolution: string) {
         const data = primeCityDetailCache(city, resolution, detail);
         if (data) {
           resolveBatchWaiters(waiters, data);
+          return;
+        }
+        if (partialMissingCities.has(normalizeCityKey(city))) {
+          resolveBatchWaiters(waiters, null);
           return;
         }
         try {
