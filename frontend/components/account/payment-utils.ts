@@ -68,6 +68,29 @@ export type NormalizedPaymentError = {
   userRejected: boolean;
 };
 
+export async function readPaymentApiErrorMessage(
+  response: Response,
+  fallback = "Request failed",
+  limit = 300,
+) {
+  const raw = (await response.text()).slice(0, limit);
+  if (!raw) return fallback;
+  try {
+    const parsed = JSON.parse(raw) as {
+      error?: unknown;
+      detail?: unknown;
+      message?: unknown;
+    };
+    const message = [parsed.error, parsed.detail, parsed.message].find(
+      (item) => typeof item === "string" && item.trim(),
+    );
+    if (typeof message === "string") return message.trim();
+  } catch {
+    // Fall back to the raw response body below.
+  }
+  return raw;
+}
+
 export function normalizePaymentError(error: unknown): NormalizedPaymentError {
   const source = error as any;
   const code = Number(

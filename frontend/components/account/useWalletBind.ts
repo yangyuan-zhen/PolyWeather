@@ -16,7 +16,11 @@ import {
   WALLET_TRANSACTION_REQUEST_TIMEOUT_MS,
 } from "./constants";
 import { shortAddress } from "./formatters";
-import { normalizePaymentError, requestWalletWithTimeout } from "./payment-utils";
+import {
+  normalizePaymentError,
+  readPaymentApiErrorMessage,
+  requestWalletWithTimeout,
+} from "./payment-utils";
 import {
   eip6963Providers,
   getEvmProvider,
@@ -300,8 +304,8 @@ export function useWalletBind(params: UseWalletBindParams) {
         method: "POST", headers: authHeaders, body: JSON.stringify({ address }),
       });
       if (!challengeRes.ok) {
-        const raw = (await challengeRes.text()).slice(0, 300);
-        throw new Error(copy.challengeFailed.replace("{raw}", raw));
+        const message = await readPaymentApiErrorMessage(challengeRes);
+        throw new Error(copy.challengeFailed.replace("{raw}", message));
       }
 
       const challengeJson = (await challengeRes.json()) as { nonce?: string; message?: string };
@@ -314,8 +318,8 @@ export function useWalletBind(params: UseWalletBindParams) {
         method: "POST", headers: authHeaders, body: JSON.stringify({ address, nonce, signature }),
       });
       if (!verifyRes.ok) {
-        const raw = (await verifyRes.text()).slice(0, 300);
-        throw new Error(copy.verifyFailedRaw.replace("{raw}", raw));
+        const message = await readPaymentApiErrorMessage(verifyRes);
+        throw new Error(copy.verifyFailedRaw.replace("{raw}", message));
       }
 
       setPaymentInfo(`${walletLabel} 绑定成功: ${shortAddress(address)}。${binanceBindHint || "现在可点击“立即订阅并激活服务”。"}`);

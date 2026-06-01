@@ -44,6 +44,10 @@ export function runTests() {
   );
 
   const accountCenterSource = fs.readFileSync(accountCenterPath, "utf8");
+  const walletBindSource = fs.readFileSync(
+    path.join(projectRoot, "components", "account", "useWalletBind.ts"),
+    "utf8",
+  );
   const hookPath = path.join(
     projectRoot,
     "components",
@@ -221,4 +225,25 @@ export function runTests() {
       `${route} must allow bearer-backed payment mutations while still rejecting requests with no auth context`,
     );
   }
+
+  const walletChallengeRouteSource = fs.readFileSync(
+    path.join(projectRoot, "app/api/payments/wallets/challenge/route.ts"),
+    "utf8",
+  );
+  assert(
+    walletChallengeRouteSource.includes("fetchWalletChallengeWithRetry"),
+    "wallet challenge proxy must retry a transient backend connection failure before blocking payment",
+  );
+  assert(
+    walletChallengeRouteSource.includes("Invalid wallet challenge request"),
+    "wallet challenge proxy must return a client error for malformed JSON instead of a generic payment failure",
+  );
+  assert(
+    walletChallengeRouteSource.includes("retryable: true"),
+    "wallet challenge proxy exception response must mark transient failures as retryable",
+  );
+  assert(
+    walletBindSource.includes("readPaymentApiErrorMessage"),
+    "wallet binding errors must show the API error message instead of raw JSON",
+  );
 }
