@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException, Request
 import requests as _requests
@@ -425,20 +425,26 @@ def _normalize_payment_incident(item: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def list_ops_payment_incidents(
-    request: Request,
-    limit: int = 50,
+def _payment_incident_group_key(item: Dict[str, Any]) -> Tuple[str, str, str, str]:
+    reason = str(item.get("reason") or "unknown").strip().lower()
+    intent_id = str(item.get("intent_id") or "").strip().lower()
+    tx_hash = str(item.get("tx_hash") or "").strip().lower()
+    user_id = str(item.get("user_id") or "").strip().lower()
+    if intent_id or tx_hash:
+        return reason, user_id, intent_id, tx_hash
+    return reason, user_id, f"event:{item.get('id')}", ""
+
+
+def _group_payment_incidents(
+    incidents: List[Dict[str, Any]],
+    *,
     reason: str = "",
     include_resolved: bool = False,
 ) -> Dict[str, Any]:
-    _require_ops(request)
-    db = DBManager()
-    incidents = db.list_payment_audit_events(
-        limit=max(1, min(int(limit or 50), 200)),
-        event_type="payment_intent_failed",
-    )
     normalized_reason = str(reason or "").strip().lower()
-    filtered = []
+    groups: Dict[Tuple[str, str, str, str], Dict[str, Any]] = {}
+    raw_total = 0
+
     for item in incidents:
         normalized_item = _normalize_payment_incident(item)
         item_reason = str(normalized_item.get("reason") or "").strip().lower()
@@ -447,19 +453,86 @@ def list_ops_payment_incidents(
             continue
         if not include_resolved and resolved:
             continue
-        filtered.append(normalized_item)
-    return {"incidents": filtered, "total": len(filtered)}
+        raw_total += 1
+
+        key = _payment_incident_group_key(normalized_item)
+        created_at = str(normalized_item.get("created_at") or "").strip()
+        event_id = int(normalized_item.get("id") or 0)
+        existing = groups.get(key)
+        if existing is None:
+            grouped = {
+                **normalized_item,
+                "occurrence_count": 1,
+                "event_ids": [event_id] if event_id > 0 else [],
+                "first_seen_at": created_at,
+                "last_seen_at": created_at,
+            }
+            groups[key] = grouped
+            continue
+
+        existing["occurrence_count"] = int(existing.get("occurrence_count") or 1) + 1
+        if event_id > 0:
+            existing.setdefault("event_ids", []).append(event_id)
+        first_seen = str(existing.get("first_seen_at") or "").strip()
+        last_seen = str(existing.get("last_seen_at") or "").strip()
+        if created_at and (not first_seen or created_at < first_seen):
+            existing["first_seen_at"] = created_at
+        if created_at and (not last_seen or created_at > last_seen):
+            existing["last_seen_at"] = created_at
+
+    grouped_items = list(groups.values())
+    grouped_items.sort(
+        key=lambda item: (
+            str(item.get("last_seen_at") or item.get("created_at") or ""),
+            int(item.get("id") or 0),
+        ),
+        reverse=True,
+    )
+    return {
+        "incidents": grouped_items,
+        "raw_total": raw_total,
+        "total": len(grouped_items),
+    }
+
+
+def list_ops_payment_incidents(
+    request: Request,
+    limit: int = 50,
+    reason: str = "",
+    include_resolved: bool = False,
+) -> Dict[str, Any]:
+    _require_ops(request)
+    db = DBManager()
+    safe_limit = max(1, min(int(limit or 50), 200))
+    incidents = db.list_payment_audit_events(
+        limit=max(safe_limit, 500),
+        event_type="payment_intent_failed",
+    )
+    grouped = _group_payment_incidents(
+        incidents,
+        reason=reason,
+        include_resolved=include_resolved,
+    )
+    return {
+        **grouped,
+        "incidents": grouped["incidents"][:safe_limit],
+    }
 
 
 def resolve_ops_payment_incident(request: Request, event_id: int) -> Dict[str, Any]:
     admin = _require_ops(request) or {}
     db = DBManager()
-    resolved = db.mark_payment_audit_event_resolved(
+    resolved_group = db.mark_related_payment_audit_events_resolved(
         event_id, str(admin.get("email") or "")
     )
-    if not resolved:
+    if not resolved_group:
         raise HTTPException(status_code=404, detail="payment_incident_not_found")
-    return {"ok": True, "incident": resolved}
+    return {
+        "ok": True,
+        "incident": resolved_group[0],
+        "resolved_count": len(resolved_group),
+        "resolved_event_ids": [int(item.get("id") or 0) for item in resolved_group],
+    }
 
 
 def list_ops_payments(
@@ -913,15 +986,12 @@ def get_ops_billing_risk(
                 )
             )
 
-    payment_incidents = db.list_payment_audit_events(
-        limit=safe_limit,
+    payment_incidents_raw = db.list_payment_audit_events(
+        limit=max(safe_limit, 500),
         event_type="payment_intent_failed",
     )
-    unresolved_incidents = [
-        item
-        for item in payment_incidents
-        if not str((item.get("payload") or {}).get("resolved_at") or "").strip()
-    ]
+    grouped_payment_incidents = _group_payment_incidents(payment_incidents_raw)
+    unresolved_incidents = grouped_payment_incidents["incidents"]
 
     issues.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
     recent_rewards = [
@@ -947,7 +1017,8 @@ def get_ops_billing_risk(
             "issues": len(issues),
             "stuck_intents": len(stuck_intents),
             "trial_gaps": len(trial_gaps),
-            "payment_incidents": len(unresolved_incidents),
+            "payment_incidents": grouped_payment_incidents["total"],
+            "payment_incident_events": grouped_payment_incidents["raw_total"],
             "points_discount_issues": len(points_issues),
             "referral_settlement_issues": len(referral_settlement_issues),
             "monthly_cap_hits": len(monthly_cap_hits),

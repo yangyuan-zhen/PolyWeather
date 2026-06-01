@@ -58,6 +58,8 @@ function paymentReasonLabel(reason?: string) {
   if (key === "tx_not_found") return "链上交易未找到";
   if (key === "tx_reverted") return "链上交易失败";
   if (key === "expired") return "订单已过期";
+  if (key === "event_mismatch") return "支付事件不匹配";
+  if (key === "direct_transfer_mismatch") return "直接转账不匹配";
   if (key === "unknown") return "未知原因";
   return key || "未知原因";
 }
@@ -134,7 +136,7 @@ export function PaymentsPageClient() {
   const reasonCounts: Record<string, number> = {};
   incidents.forEach((inc) => {
     const r = inc.reason || "unknown";
-    reasonCounts[r] = (reasonCounts[r] || 0) + 1;
+    reasonCounts[r] = (reasonCounts[r] || 0) + Math.max(1, Number(inc.occurrence_count ?? 1));
   });
 
   const incidentPieData = Object.entries(reasonCounts).map(([name, value]) => ({
@@ -318,6 +320,11 @@ export function PaymentsPageClient() {
                       <td className="py-2 pr-4 text-slate-500 font-mono">{inc.id}</td>
                       <td className="py-2 pr-4">
                         <div className="font-bold text-amber-600">{paymentReasonLabel(inc.reason)}</div>
+                        {Number(inc.occurrence_count ?? 1) > 1 ? (
+                          <div className="mt-0.5 text-[11px] font-semibold text-slate-400">
+                            同类重复 {Number(inc.occurrence_count).toLocaleString()} 次 · 最早 {compactDate(inc.first_seen_at)}
+                          </div>
+                        ) : null}
                         <div className="mt-0.5 max-w-xl truncate text-xs text-slate-500" title={inc.detail || inc.reason || ""}>
                           {inc.detail || inc.reason || "—"}
                         </div>

@@ -599,6 +599,84 @@ def test_ops_payment_incidents_expose_top_level_reason_and_filters_resolved(monk
     assert incident["resolved"] is False
 
 
+def test_ops_payment_incidents_group_duplicate_failures(monkeypatch):
+    from src.database.db_manager import DBManager
+
+    older = "2026-05-25T12:26:44"
+    newer = "2026-05-25T12:29:51"
+
+    monkeypatch.setattr(ops_api.legacy_routes, "_require_ops_admin", lambda request: {"email": "ops@example.com"})
+    monkeypatch.setattr(
+        DBManager,
+        "list_payment_audit_events",
+        lambda self, limit=50, event_type=None: [
+            {
+                "id": 275751,
+                "event_type": "payment_intent_failed",
+                "created_at": newer,
+                "payload": {
+                    "reason": "event_mismatch",
+                    "detail": "OrderPaid event mismatch",
+                    "intent_id": "intent-1",
+                    "user_id": "user-1",
+                    "tx_hash": "0x" + "1" * 64,
+                },
+            },
+            {
+                "id": 275730,
+                "event_type": "payment_intent_failed",
+                "created_at": older,
+                "payload": {
+                    "reason": "event_mismatch",
+                    "detail": "OrderPaid event mismatch",
+                    "intent_id": "intent-1",
+                    "user_id": "user-1",
+                    "tx_hash": "0x" + "1" * 64,
+                },
+            },
+        ],
+    )
+
+    payload = ops_api.list_ops_payment_incidents(None, limit=20)
+
+    assert payload["total"] == 1
+    assert payload["raw_total"] == 2
+    incident = payload["incidents"][0]
+    assert incident["id"] == 275751
+    assert incident["occurrence_count"] == 2
+    assert incident["event_ids"] == [275751, 275730]
+    assert incident["first_seen_at"] == older
+    assert incident["last_seen_at"] == newer
+
+
+def test_ops_resolve_payment_incident_marks_duplicate_group(monkeypatch):
+    from src.database.db_manager import DBManager
+
+    called = {}
+
+    monkeypatch.setattr(ops_api.legacy_routes, "_require_ops_admin", lambda request: {"email": "ops@example.com"})
+
+    def mark_related(self, event_id, resolved_by):
+        called["event_id"] = event_id
+        called["resolved_by"] = resolved_by
+        return [
+            {"id": 275751, "payload": {"resolved_at": "now"}},
+            {"id": 275730, "payload": {"resolved_at": "now"}},
+        ]
+
+    monkeypatch.setattr(
+        DBManager,
+        "mark_related_payment_audit_events_resolved",
+        mark_related,
+        raising=False,
+    )
+
+    payload = ops_api.resolve_ops_payment_incident(None, 275751)
+
+    assert called == {"event_id": 275751, "resolved_by": "ops@example.com"}
+    assert payload["resolved_count"] == 2
+
+
 def test_cities_endpoint_uses_denver_display_name_for_aurora_market():
     response = client.get("/api/cities")
     assert response.status_code == 200
@@ -1201,6 +1279,47 @@ def test_payment_runtime_endpoint_returns_shape():
     assert 'rpc' in payload
     assert 'event_loop_state' in payload
     assert 'recent_audit_events' in payload
+
+
+def test_payment_runtime_endpoint_returns_ops_summary_fields(monkeypatch):
+    from src.database.db_manager import DBManager
+
+    monkeypatch.setattr(
+        routes.PAYMENT_CHECKOUT,
+        "get_config_payload",
+        lambda: {
+            "enabled": True,
+            "chain_id": 137,
+            "receiver_contract": "0x351a1bca5f49dd0046a7cf0bafa7e12fa6441c3a",
+        },
+    )
+    monkeypatch.setattr(
+        routes.PAYMENT_CHECKOUT,
+        "get_rpc_runtime_status",
+        lambda: {"connected": True, "chain_id": 137},
+    )
+    monkeypatch.setattr(
+        DBManager,
+        "get_payment_runtime_state",
+        lambda self, key: {"last_scanned_block": 123456},
+    )
+    monkeypatch.setattr(
+        DBManager,
+        "list_payment_audit_events",
+        lambda self, limit=20, event_type=None: [
+            {"id": 1, "event_type": "event_loop_cycle", "payload": {}, "created_at": "now"},
+            {"id": 2, "event_type": "payment_intent_failed", "payload": {}, "created_at": "now"},
+        ],
+    )
+
+    response = client.get("/api/payments/runtime")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["chain_id"] == 137
+    assert payload["receiver_contract"] == "0x351a1bca5f49dd0046a7cf0bafa7e12fa6441c3a"
+    assert payload["last_scanned_block"] == 123456
+    assert payload["audit_events_count"] == 2
 
 
 def test_payment_config_does_not_require_entitlement(monkeypatch):

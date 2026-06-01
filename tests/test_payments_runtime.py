@@ -548,6 +548,52 @@ def test_payment_runtime_state_and_audit_event_roundtrip(tmp_path):
     assert events[0]["payload"]["events"] == 2
 
 
+def test_mark_related_payment_audit_events_resolved(tmp_path):
+    db_path = tmp_path / "payments.db"
+    db = DBManager(str(db_path))
+
+    common_payload = {
+        "reason": "event_mismatch",
+        "intent_id": "intent-1",
+        "user_id": "user-1",
+        "tx_hash": "0x" + "1" * 64,
+    }
+    db.append_payment_audit_event("payment_intent_failed", dict(common_payload))
+    db.append_payment_audit_event("payment_intent_failed", dict(common_payload))
+    db.append_payment_audit_event(
+        "payment_intent_failed",
+        {
+            "reason": "event_mismatch",
+            "intent_id": "intent-2",
+            "user_id": "user-1",
+            "tx_hash": "0x" + "2" * 64,
+        },
+    )
+
+    target_id = db.list_payment_audit_events(
+        limit=10,
+        event_type="payment_intent_failed",
+    )[-1]["id"]
+
+    resolved = db.mark_related_payment_audit_events_resolved(
+        target_id,
+        "ops@example.com",
+    )
+    events = db.list_payment_audit_events(limit=10, event_type="payment_intent_failed")
+    grouped = [
+        event for event in events
+        if event["payload"].get("intent_id") == "intent-1"
+    ]
+    unrelated = [
+        event for event in events
+        if event["payload"].get("intent_id") == "intent-2"
+    ][0]
+
+    assert len(resolved) == 2
+    assert all(event["payload"].get("resolved_by") == "ops@example.com" for event in grouped)
+    assert not unrelated["payload"].get("resolved_at")
+
+
 def test_paid_subscription_replaces_active_trial_immediately(monkeypatch, tmp_path):
     _payment_env(monkeypatch, tmp_path)
     service = PaymentContractCheckoutService()

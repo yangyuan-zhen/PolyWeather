@@ -85,11 +85,14 @@ export type SourceHealthPayload = {
 };
 
 export type PaymentRuntimePayload = {
-  rpc?: string;
+  rpc?: Record<string, unknown> | string;
   chain_id?: number;
   receiver_contract?: string;
   last_scanned_block?: number;
   audit_events_count?: number;
+  checkout?: Record<string, unknown>;
+  event_loop_state?: Record<string, unknown>;
+  recent_audit_events?: Array<Record<string, unknown>>;
   recent_events?: Array<Record<string, unknown>>;
 };
 
@@ -106,6 +109,10 @@ export type PaymentIncident = {
   resolved?: boolean;
   resolved_at?: string;
   resolved_by?: string;
+  occurrence_count?: number;
+  event_ids?: number[];
+  first_seen_at?: string;
+  last_seen_at?: string;
 };
 
 export type IncidentsPayload = {

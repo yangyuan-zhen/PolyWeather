@@ -33,7 +33,9 @@ export function runTests() {
       paymentsPage.includes("Intent 卡住") &&
       paymentsPage.includes("积分异常") &&
       paymentsPage.includes("推荐奖励结算") &&
-      paymentsPage.includes("月度邀请封顶"),
+      paymentsPage.includes("月度邀请封顶") &&
+      paymentsPage.includes("occurrence_count") &&
+      paymentsPage.includes("支付事件不匹配"),
     "ops payment page must surface trial, stuck intent, referral, points, and monthly-cap risk signals",
   );
   assert(

@@ -47,11 +47,19 @@ def get_payment_runtime(request: Request) -> Dict[str, Any]:
     legacy_routes._assert_entitlement(request)
     try:
         db = DBManager()
+        checkout = legacy_routes.PAYMENT_CHECKOUT.get_config_payload()
+        rpc = legacy_routes.PAYMENT_CHECKOUT.get_rpc_runtime_status()
+        event_loop_state = db.get_payment_runtime_state("payment_event_loop") or {}
+        recent_audit_events = db.list_payment_audit_events(limit=20)
         return {
-            "checkout": legacy_routes.PAYMENT_CHECKOUT.get_config_payload(),
-            "rpc": legacy_routes.PAYMENT_CHECKOUT.get_rpc_runtime_status(),
-            "event_loop_state": db.get_payment_runtime_state("payment_event_loop") or {},
-            "recent_audit_events": db.list_payment_audit_events(limit=20),
+            "checkout": checkout,
+            "rpc": rpc,
+            "event_loop_state": event_loop_state,
+            "recent_audit_events": recent_audit_events,
+            "chain_id": checkout.get("chain_id") or rpc.get("chain_id"),
+            "receiver_contract": checkout.get("receiver_contract"),
+            "last_scanned_block": event_loop_state.get("last_scanned_block"),
+            "audit_events_count": len(recent_audit_events),
         }
     except legacy_routes.PaymentCheckoutError as exc:
         _raise_payment_error(exc)

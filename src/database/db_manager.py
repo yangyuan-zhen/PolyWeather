@@ -7,7 +7,7 @@ import threading
 import time
 from collections import Counter
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List, Set
+from typing import Optional, Dict, Any, List, Set, Tuple
 from urllib.parse import urlparse
 
 import requests
@@ -1290,6 +1290,124 @@ class DBManager:
                 "payload": payload,
                 "created_at": row["created_at"],
             }
+
+    @staticmethod
+    def _payment_audit_resolution_key(
+        event_type: str,
+        payload: Dict[str, Any],
+    ) -> Tuple[str, str, str, str, str]:
+        confirm_failure = (
+            payload.get("confirm_failure")
+            if isinstance(payload.get("confirm_failure"), dict)
+            else {}
+        )
+        reason = str(
+            payload.get("reason")
+            or confirm_failure.get("reason")
+            or payload.get("error")
+            or "unknown"
+        ).strip().lower()
+        intent_id = str(
+            payload.get("intent_id")
+            or payload.get("payment_intent_id")
+            or confirm_failure.get("intent_id")
+            or ""
+        ).strip().lower()
+        user_id = str(payload.get("user_id") or "").strip().lower()
+        tx_hash = str(
+            payload.get("tx_hash")
+            or confirm_failure.get("tx_hash")
+            or ""
+        ).strip().lower()
+        return str(event_type or "").strip().lower(), reason, user_id, intent_id, tx_hash
+
+    def mark_related_payment_audit_events_resolved(
+        self,
+        event_id: int,
+        resolved_by: str,
+    ) -> List[Dict[str, Any]]:
+        safe_id = int(event_id or 0)
+        actor = str(resolved_by or "").strip().lower()
+        if safe_id <= 0 or not actor:
+            return []
+
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            target = conn.execute(
+                """
+                SELECT id, event_type, payload_json, created_at
+                FROM payment_audit_events
+                WHERE id = ?
+                LIMIT 1
+                """,
+                (safe_id,),
+            ).fetchone()
+            if not target:
+                return []
+
+            try:
+                target_payload = json.loads(str(target["payload_json"] or "{}"))
+            except Exception:
+                target_payload = {}
+            if not isinstance(target_payload, dict):
+                target_payload = {}
+
+            target_key = self._payment_audit_resolution_key(
+                str(target["event_type"] or ""),
+                target_payload,
+            )
+            if not (target_key[3] or target_key[4]):
+                single = self.mark_payment_audit_event_resolved(safe_id, actor)
+                return [single] if single else []
+
+            rows = conn.execute(
+                """
+                SELECT id, event_type, payload_json, created_at
+                FROM payment_audit_events
+                WHERE event_type = ?
+                ORDER BY id DESC
+                """,
+                (str(target["event_type"] or ""),),
+            ).fetchall()
+
+            resolved_at = datetime.now().isoformat()
+            resolved_rows: List[Dict[str, Any]] = []
+            for row in rows:
+                try:
+                    payload = json.loads(str(row["payload_json"] or "{}"))
+                except Exception:
+                    payload = {}
+                if not isinstance(payload, dict):
+                    payload = {}
+                if str(payload.get("resolved_at") or "").strip():
+                    continue
+                if self._payment_audit_resolution_key(
+                    str(row["event_type"] or ""),
+                    payload,
+                ) != target_key:
+                    continue
+
+                payload["resolved_at"] = resolved_at
+                payload["resolved_by"] = actor
+                conn.execute(
+                    """
+                    UPDATE payment_audit_events
+                    SET payload_json = ?
+                    WHERE id = ?
+                    """,
+                    (json.dumps(payload, ensure_ascii=False), int(row["id"])),
+                )
+                resolved_rows.append(
+                    {
+                        "id": int(row["id"]),
+                        "event_type": str(row["event_type"] or ""),
+                        "payload": payload,
+                        "created_at": row["created_at"],
+                    }
+                )
+
+            conn.commit()
+            return resolved_rows
 
     @staticmethod
     def _safe_week_key(value: str) -> str:
