@@ -31,6 +31,27 @@ def test_healthz_returns_ok_shape():
     assert 'cities_count' in payload
 
 
+def test_healthz_keeps_liveness_200_when_db_health_is_degraded(monkeypatch):
+    from web.services import system_api
+
+    monkeypatch.setattr(
+        system_api,
+        "build_health_payload",
+        lambda: {
+            "status": "degraded",
+            "time_utc": "2026-05-30T00:00:00+00:00",
+            "db": {"ok": False, "error": "database is locked"},
+            "state_storage_mode": "sqlite",
+            "cities_count": 50,
+        },
+    )
+
+    response = client.get("/healthz")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "degraded"
+
+
 def test_system_status_returns_summary_shape():
     response = client.get('/api/system/status')
     assert response.status_code == 200
@@ -697,41 +718,45 @@ def test_city_detail_batch_chart_scope_returns_only_chart_fields(monkeypatch):
             assert kind == "full"
             return {
                 "payload": {
-                    "city": city,
+                    "name": city,
+                    "display_name": city.title(),
+                    "local_date": "2026-05-30",
+                    "local_time": "15:20",
+                    "temp_symbol": "°C",
+                    "current": {
+                        "temp": 20.0,
+                        "settlement_source": "metar",
+                        "settlement_source_label": "METAR",
+                    },
                     "hourly": {"times": ["2026-05-30T00:00:00Z"], "temps": [20.0]},
+                    "forecast": {
+                        "today_high": 22.0,
+                        "daily": [{"date": "2026-05-30", "max_temp": 22.0}],
+                    },
+                    "multi_model": {
+                        "hourly_times": ["15:00"],
+                        "hourly_forecasts": {"ECMWF": [21.0]},
+                    },
+                    "deb": {"prediction": 21.5, "hourly_path": {"times": ["15:00"], "temps": [21.5]}},
+                    "probabilities": {"mu": 21.4, "distribution": [{"value": 21, "probability": 0.4}]},
+                    "runway_plate_history": {"01/19": [{"time": "2026-05-30T15:20:00Z", "temp": 20.1}]},
+                    "airport_current": {"temp": 20.0},
+                    "airport_primary": {"temp": 20.0},
+                    "airport_primary_today_obs": [["15:20", 20.0]],
+                    "wunderground_current": {"max_so_far": 20.5},
+                    "settlement_station": {"settlement_station_label": "Station"},
+                    "amos": {"runway_obs": {"point_temperatures": []}},
+                    "metar_today_obs": [{"time": "15:20", "temp": 20.0}],
+                    "settlement_today_obs": [],
+                    "dynamic_commentary": {"summary": "large text"},
+                    "official_nearby": [{"name": "unused"}],
+                    "taf": {"raw": "unused"},
+                    "ai_analysis": "unused",
                 }
             }
 
-    def build_detail(data, market_slug, target_date, resolution):
-        return {
-            "city": data["city"],
-            "overview": {
-                "local_date": "2026-05-30",
-                "local_time": "15:20",
-                "deb_prediction": 21.5,
-                "airport_primary_today_obs": [["15:20", 20.0]],
-            },
-            "timeseries": {
-                "hourly": data["hourly"],
-                "metar_today_obs": [{"time": "15:20", "temp": 20.0}],
-                "settlement_today_obs": [],
-                "forecast_daily": [{"date": "2026-05-30", "max_temp": 22.0}],
-            },
-            "models_hourly": {"times": ["15:00"], "curves": {"ECMWF": [21.0]}},
-            "deb": {"prediction": 21.5, "hourly_path": {"times": ["15:00"], "temps": [21.5]}},
-            "probabilities": {"mu": 21.4, "distribution": [{"value": 21, "probability": 0.4}]},
-            "runway_plate_history": {"01/19": [{"timestamp": "15:20", "temp_c": 20.1}]},
-            "runway_band_history": [{"time": "2026-05-30T15:20:00Z", "high_temp": 20.1}],
-            "airport_current": {"temp": 20.0},
-            "airport_primary": {"temp": 20.0},
-            "wunderground_current": {"max_so_far": 20.5},
-            "settlement_station": {"settlement_station_label": "Station"},
-            "amos": {"runway_obs": {"point_temperatures": []}},
-            "dynamic_commentary": {"summary": "large text"},
-            "official_nearby": [{"name": "unused"}],
-            "taf": {"raw": "unused"},
-            "ai_analysis": "unused",
-        }
+    def build_detail(_data, _market_slug, _target_date, _resolution):
+        raise AssertionError("chart scope must not build the full city detail payload")
 
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
     monkeypatch.setattr(city_api.legacy_routes, "_build_city_detail_payload", build_detail)

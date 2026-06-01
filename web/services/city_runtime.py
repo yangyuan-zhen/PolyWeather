@@ -25,6 +25,7 @@ from src.utils.refresh_policy import OBSERVATION_REFRESH_SEC, SCAN_ROWS_REFRESH_
 from web.analysis_service import (
     _analyze,
     _analyze_summary,
+    _build_city_chart_detail_payload,  # noqa: F401 - compatibility export for chart detail batches
     _build_city_detail_payload,  # noqa: F401 - compatibility export for tests and transitional routers
     _build_city_market_scan_payload,
     _build_city_summary_payload,

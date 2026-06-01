@@ -511,7 +511,7 @@ def _is_excluded_model_name(model_name: str) -> bool:
 
 def _sqlite_health() -> Dict[str, Any]:
     try:
-        with sqlite3.connect(_account_db.db_path) as conn:
+        with sqlite3.connect(_account_db.db_path, timeout=0.05) as conn:
             conn.execute("SELECT 1").fetchone()
         return {"ok": True, "db_path": _account_db.db_path}
     except Exception as exc:

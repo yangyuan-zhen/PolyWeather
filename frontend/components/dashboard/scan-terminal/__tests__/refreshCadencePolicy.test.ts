@@ -142,15 +142,15 @@ export async function runTests() {
   );
   assert(
     flushCityDetailBatchBlock.includes("if (!payload)") &&
-      flushCityDetailBatchBlock.includes("resolveCityDetailBatchWithSingleFallback") &&
-      flushCityDetailBatchBlock.includes("resolveBatchWaiters(waiters, null)"),
-    "single-city detail fallback should be reserved for whole-batch failures rather than successful batch misses",
+      flushCityDetailBatchBlock.includes("resolveAllBatchWaitersAsNull") &&
+      !flushCityDetailBatchBlock.includes("resolveCityDetailBatchWithSingleFallback"),
+    "whole-batch failures should stop at the chart batch layer instead of fanning out into single-city full-detail requests",
   );
-  const fetchHourlyBlock = chartLogicSource.match(/async function fetchHourlyForecastForCity[\s\S]*?\r?\n}\r?\n\r?\nfunction fetchCityDetailWithTimeout/)?.[0] || "";
+  const fetchHourlyBlock = chartLogicSource.match(/async function fetchHourlyForecastForCity[\s\S]*?\r?\n}\r?\n\r?\nfunction shouldPollLiveChart/)?.[0] || "";
   assert(
     fetchHourlyBlock.includes("queueCityDetailBatch(city, resParam)") &&
       !fetchHourlyBlock.includes("runQueuedHourlyDetailRequest"),
-    "first-paint and background city detail refreshes should both enter the batch queue before falling back to single requests",
+    "first-paint and background city detail refreshes should both enter the batch queue without falling back to single requests",
   );
   assert(
     dashboardSource.includes("ONLINE_USERS_REFRESH_MS = 5 * 60_000") &&

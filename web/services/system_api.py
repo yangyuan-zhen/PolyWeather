@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, Optional
 
-from fastapi import BackgroundTasks, HTTPException, Request
+from fastapi import BackgroundTasks, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import PlainTextResponse
 from loguru import logger
@@ -16,10 +16,7 @@ import web.routes as legacy_routes
 
 
 def get_health_payload() -> Dict[str, Any]:
-    payload = build_health_payload()
-    if payload.get("status") != "ok":
-        raise HTTPException(status_code=503, detail=payload)
-    return payload
+    return build_health_payload()
 
 
 async def get_system_status_payload() -> Dict[str, Any]:

@@ -37,6 +37,7 @@ from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
 from src.data_collection.city_time import get_city_utc_offset_seconds
 from src.database.runtime_state import IntradayPathSnapshotRepository
 from web.services.city_payloads import (
+    build_city_chart_detail_payload as _city_chart_payload_detail,
     build_city_detail_payload as _city_payload_detail,
     build_city_summary_payload as _city_payload_summary
 )
@@ -2310,6 +2311,13 @@ def _build_city_detail_payload(
         target_date=target_date,
         resolution=resolution,
     )
+
+
+def _build_city_chart_detail_payload(
+    data: Dict[str, Any],
+    resolution: Optional[str] = "10m",
+) -> Dict[str, Any]:
+    return _city_chart_payload_detail(data, resolution=resolution)
 
 
 

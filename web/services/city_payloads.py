@@ -161,6 +161,151 @@ def build_runway_band_history(raw_history: Dict[str, List[Dict[str, Any]]], reso
     return band_history
 
 
+def build_runway_chart_histories(
+    raw_history: Dict[str, List[Dict[str, Any]]],
+    resolution: str,
+) -> tuple[Dict[str, List[Dict[str, Any]]], List[Dict[str, Any]]]:
+    if not raw_history:
+        return {}, []
+
+    try:
+        if resolution.endswith("m"):
+            minutes = int(resolution[:-1])
+        elif resolution.endswith("h"):
+            minutes = int(resolution[:-1]) * 60
+        else:
+            minutes = 10
+    except Exception:
+        minutes = 10
+
+    seconds = max(60, minutes * 60)
+    per_runway_buckets: Dict[str, Dict[int, List[float]]] = {}
+    all_buckets: Dict[int, List[float]] = {}
+
+    for rwy, points in raw_history.items():
+        if not points:
+            continue
+        rwy_key = str(rwy or "").strip()
+        if not rwy_key:
+            continue
+        runway_buckets = per_runway_buckets.setdefault(rwy_key, {})
+        for pt in points:
+            t_str = pt.get("time") or pt.get("timestamp")
+            temp = pt.get("temp") or pt.get("temp_c") or pt.get("value")
+            if temp is None or not isinstance(t_str, str):
+                continue
+            dt = _parse_time_val(t_str)
+            if not dt:
+                continue
+            try:
+                temp_value = float(temp)
+            except Exception:
+                continue
+
+            bucket_ts = (int(dt.timestamp()) // seconds) * seconds
+            runway_buckets.setdefault(bucket_ts, []).append(temp_value)
+            all_buckets.setdefault(bucket_ts, []).append(temp_value)
+
+    aggregated_history: Dict[str, List[Dict[str, Any]]] = {}
+    for rwy, buckets in per_runway_buckets.items():
+        bucket_points = []
+        for bucket_ts in sorted(buckets.keys()):
+            temps = buckets[bucket_ts]
+            if not temps:
+                continue
+            bucket_dt = datetime.fromtimestamp(bucket_ts, tz=timezone.utc)
+            bucket_points.append(
+                {
+                    "time": bucket_dt.isoformat(),
+                    "temp": round(temps[-1], 1),
+                }
+            )
+        if bucket_points:
+            aggregated_history[rwy] = bucket_points
+
+    band_history = []
+    for bucket_ts in sorted(all_buckets.keys()):
+        temps = all_buckets[bucket_ts]
+        if not temps:
+            continue
+        bucket_dt = datetime.fromtimestamp(bucket_ts, tz=timezone.utc)
+        band_history.append(
+            {
+                "time": bucket_dt.isoformat(),
+                "high_temp": round(max(temps), 1),
+                "low_temp": round(min(temps), 1),
+                "avg_temp": round(sum(temps) / len(temps), 1),
+            }
+        )
+
+    return aggregated_history, band_history
+
+
+def build_city_chart_detail_payload(
+    data: Dict[str, Any],
+    resolution: Optional[str] = "10m",
+) -> Dict[str, Any]:
+    forecast = data.get("forecast") if isinstance(data.get("forecast"), dict) else {}
+    current = data.get("current") if isinstance(data.get("current"), dict) else {}
+    multi_model = data.get("multi_model") if isinstance(data.get("multi_model"), dict) else {}
+    runway_history, runway_band_history = build_runway_chart_histories(
+        data.get("runway_plate_history") or {},
+        resolution or "10m",
+    )
+    airport_primary_today_obs = data.get("airport_primary_today_obs") or []
+    local_date = data.get("local_date")
+    local_time = data.get("local_time")
+
+    return {
+        "city": data.get("name") or data.get("city"),
+        "fetched_at": data.get("updated_at"),
+        "local_date": local_date,
+        "local_time": local_time,
+        "overview": {
+            "name": data.get("name") or data.get("city"),
+            "display_name": data.get("display_name"),
+            "local_date": local_date,
+            "local_time": local_time,
+            "temp_symbol": data.get("temp_symbol"),
+            "current_temp": current.get("temp"),
+            "deb_prediction": (data.get("deb") or {}).get("prediction"),
+            "settlement_source": current.get("settlement_source"),
+            "settlement_source_label": current.get("settlement_source_label"),
+        },
+        "timeseries": {
+            "hourly": data.get("hourly") or {},
+            "metar_today_obs": data.get("metar_today_obs") or [],
+            "settlement_today_obs": data.get("settlement_today_obs") or [],
+            "forecast_daily": forecast.get("daily") or [],
+        },
+        "hourly": data.get("hourly") or {},
+        "models_hourly": {
+            "times": multi_model.get("hourly_times") or [],
+            "curves": {
+                model: values
+                for model, values in (multi_model.get("hourly_forecasts") or {}).items()
+                if not _is_excluded_model_name(model)
+            },
+        },
+        "deb": data.get("deb") or {},
+        "forecast": {
+            "today_high": forecast.get("today_high"),
+            "daily": forecast.get("daily") or [],
+        },
+        "multi_model_daily": data.get("multi_model_daily") or {},
+        "probabilities": data.get("probabilities") or {"mu": None, "distribution": []},
+        "runway_plate_history": runway_history,
+        "runway_band_history": runway_band_history,
+        "amos": data.get("amos") or {},
+        "airport_current": data.get("airport_current") or {},
+        "airport_primary": data.get("airport_primary") or {},
+        "airport_primary_today_obs": airport_primary_today_obs,
+        "official": {"airport_primary_today_obs": airport_primary_today_obs},
+        "wunderground_current": data.get("wunderground_current") or {},
+        "settlement_station": data.get("settlement_station") or {},
+    }
+
+
 def build_city_detail_payload(
     data: Dict[str, Any],
     market_slug: Optional[str] = None,

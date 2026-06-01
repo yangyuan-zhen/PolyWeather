@@ -259,7 +259,7 @@ export function runTests() {
   );
   assert(
     chartLogic.includes("HOURLY_DETAIL_REQUEST_TIMEOUT_MS = 12_000") &&
-      chartLogic.includes("fetchCityDetailWithTimeout") &&
+      chartLogic.includes("fetchCityDetailBatchWithTimeout") &&
       chartLogic.includes("signal: controller.signal") &&
       chartLogic.includes("controller.abort()"),
     "city detail chart fetches must have a frontend timeout so panels cannot stay on 加载图表 forever",

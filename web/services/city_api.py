@@ -146,6 +146,24 @@ async def _get_city_full_data(city: str, *, force_refresh: bool) -> Dict[str, An
     return await _refresh_city_full_data(city, False)
 
 
+async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, Any]:
+    if force_refresh:
+        return await _get_city_full_data(city, force_refresh=True)
+
+    cached_entry = await run_in_threadpool(legacy_routes._CACHE_DB.get_city_cache, "full", city)
+    if cached_entry:
+        payload = cached_entry.get("payload") or {}
+        if payload:
+            if not legacy_routes._city_cache_is_fresh(cached_entry, legacy_routes.CITY_FULL_CACHE_TTL_SEC):
+                _start_city_full_stale_refresh(city)
+            return await _overlay_cached_wunderground(city, payload)
+
+    return {
+        "name": city,
+        "display_name": str((legacy_routes.CITY_REGISTRY.get(city, {}) or {}).get("display_name") or city.title()),
+    }
+
+
 def _city_detail_payload_cache_key(
     data: Dict[str, Any],
     market_slug: Optional[str],
@@ -226,6 +244,17 @@ async def _build_city_detail_payload_cached(
                 _CITY_DETAIL_PAYLOAD_CACHE.pop(old_key, None)
                 _CITY_DETAIL_PAYLOAD_CACHE_TS.pop(old_key, None)
     return payload
+
+
+async def _build_city_chart_detail_payload(
+    data: Dict[str, Any],
+    resolution: Optional[str],
+) -> Dict[str, Any]:
+    return await run_in_threadpool(
+        legacy_routes._build_city_chart_detail_payload,
+        data,
+        resolution,
+    )
 
 
 def _default_deb_recent() -> Dict[str, object]:
@@ -577,6 +606,21 @@ async def _build_city_detail_batch_item_async(
     detail_scope: str = "full",
     timing_recorder: Optional[ServerTimingRecorder] = None,
 ) -> Tuple[str, Dict[str, Any]]:
+    if detail_scope == "chart":
+        if timing_recorder is not None:
+            data = await timing_recorder.measure_async(
+                f"chart_data_{city}",
+                lambda: _get_city_chart_data(city, force_refresh=force_refresh),
+            )
+            detail = await timing_recorder.measure_async(
+                f"chart_payload_{city}",
+                lambda: _build_city_chart_detail_payload(data, resolution),
+            )
+        else:
+            data = await _get_city_chart_data(city, force_refresh=force_refresh)
+            detail = await _build_city_chart_detail_payload(data, resolution)
+        return city, detail
+
     if timing_recorder is not None:
         data = await timing_recorder.measure_async(
             f"full_data_{city}",

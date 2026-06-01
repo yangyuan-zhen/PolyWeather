@@ -1033,16 +1033,6 @@ function primeCityDetailCache(
   return data;
 }
 
-async function fetchSingleHourlyForecastForCity(
-  city: string,
-  resolution: string,
-): Promise<HourlyForecast> {
-  const res = await fetchCityDetailWithTimeout(city, resolution);
-  if (!res || !res.ok) return null;
-  const json = await res.json() as CityDetail;
-  return primeCityDetailCache(city, resolution, json);
-}
-
 function queueCityDetailBatch(city: string, resolution: string): Promise<HourlyForecast> {
   return new Promise<HourlyForecast>((resolve, reject) => {
     const queue = _cityDetailBatchQueues.get(resolution) || {
@@ -1071,13 +1061,6 @@ function resolveBatchWaiters(
   value: HourlyForecast,
 ) {
   (waiters || []).forEach((waiter) => waiter.resolve(value));
-}
-
-function rejectBatchWaiters(
-  waiters: CityDetailBatchWaiter[] | undefined,
-  reason: unknown,
-) {
-  (waiters || []).forEach((waiter) => waiter.reject(reason));
 }
 
 function resolveCityDetailFromBatch(
@@ -1119,7 +1102,7 @@ async function flushCityDetailBatch(resolution: string) {
   try {
     const payload = await fetchCityDetailBatchWithTimeout(cities, resolution);
     if (!payload) {
-      await resolveCityDetailBatchWithSingleFallback(cities, queue, resolution);
+      resolveAllBatchWaitersAsNull(cities, queue);
       return;
     }
 
@@ -1145,29 +1128,17 @@ async function flushCityDetailBatch(resolution: string) {
       }),
     );
   } catch (error) {
-    await resolveCityDetailBatchWithSingleFallback(cities, queue, resolution, error);
+    resolveAllBatchWaitersAsNull(cities, queue);
   }
 }
 
-async function resolveCityDetailBatchWithSingleFallback(
+function resolveAllBatchWaitersAsNull(
   cities: string[],
   queue: CityDetailBatchQueue,
-  resolution: string,
-  reason?: unknown,
 ) {
-  await Promise.all(
-    cities.map(async (city) => {
-      const waiters = queue.waiters.get(city);
-      try {
-        resolveBatchWaiters(
-          waiters,
-          await runQueuedHourlyDetailRequest(() => fetchSingleHourlyForecastForCity(city, resolution)),
-        );
-      } catch (fallbackError) {
-        rejectBatchWaiters(waiters, fallbackError || reason);
-      }
-    }),
-  );
+  cities.forEach((city) => {
+    resolveBatchWaiters(queue.waiters.get(city), null);
+  });
 }
 
 function fetchCityDetailBatchWithTimeout(cities: string[], resolution: string) {
@@ -1225,17 +1196,6 @@ async function fetchHourlyForecastForCity(
 
   _hourlyRequestCache.set(requestKey, request);
   return request;
-}
-
-function fetchCityDetailWithTimeout(city: string, resolution: string) {
-  const controller = new AbortController();
-  const timeoutId = globalThis.setTimeout(() => controller.abort(), HOURLY_DETAIL_REQUEST_TIMEOUT_MS);
-  return fetch(`/api/city/${encodeURIComponent(city)}/detail?depth=full&force_refresh=false&resolution=${resolution}`, {
-    headers: { Accept: "application/json" },
-    signal: controller.signal,
-  })
-    .catch(() => null)
-    .finally(() => globalThis.clearTimeout(timeoutId));
 }
 
 function shouldPollLiveChart({
