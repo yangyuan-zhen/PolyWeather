@@ -124,6 +124,45 @@ export async function runTests() {
     "terminal auth bootstrap should accept an authenticated cookie profile immediately",
   );
 
+  const slowDegradedSession = deferred<{ data: { session: { access_token: string } | null } }>();
+  const timedCookieResult = await loadTerminalAuthProfile({
+    hasSupabasePublicEnv: true,
+    getSession: () => slowDegradedSession.promise,
+    timeoutMs: 1,
+    loadAuthProfile: (accessToken) => {
+      assert(!accessToken, "timeout fallback should use the settled cookie profile when bearer session is still pending");
+      return Promise.resolve({
+        authenticated: true,
+        user_id: "cookie-user",
+        subscription_active: null,
+        degraded_auth_profile: true,
+      });
+    },
+  });
+  assert(
+    timedCookieResult.user_id === "cookie-user" &&
+      timedCookieResult.subscription_active === null,
+    "terminal auth bootstrap timeout must resolve with a known degraded cookie profile instead of spinning forever",
+  );
+
+  const neverCookie = deferred<TerminalAuthProfilePayload>();
+  const neverSession = deferred<{ data: { session: { access_token: string } | null } }>();
+  let timeoutRejected = false;
+  try {
+    await loadTerminalAuthProfile({
+      hasSupabasePublicEnv: true,
+      getSession: () => neverSession.promise,
+      timeoutMs: 1,
+      loadAuthProfile: () => neverCookie.promise,
+    });
+  } catch (error) {
+    timeoutRejected = String(error).includes("Terminal auth bootstrap timeout");
+  }
+  assert(
+    timeoutRejected,
+    "terminal auth bootstrap must reject instead of leaving the loading screen unresolved when no profile request settles",
+  );
+
   const delayedBearerSession = deferred<{ data: { session: { access_token: string } } }>();
   let coldStartSettled = false;
   const coldStartResultPromise = loadTerminalAuthProfile({

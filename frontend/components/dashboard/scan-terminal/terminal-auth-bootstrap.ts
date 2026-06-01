@@ -17,6 +17,7 @@ type LoadTerminalAuthProfileOptions = {
     accessToken?: string | null,
     options?: { preferSnapshot?: boolean },
   ) => Promise<TerminalAuthProfilePayload>;
+  timeoutMs?: number;
 };
 
 type SettledProfile =
@@ -87,11 +88,14 @@ export async function loadTerminalAuthProfile({
   getSession,
   hasSupabasePublicEnv,
   loadAuthProfile,
+  timeoutMs = 6500,
 }: LoadTerminalAuthProfileOptions) {
   let resolvedAuthenticated = false;
   let resolveAuthenticated:
     | ((payload: TerminalAuthProfilePayload) => void)
     | null = null;
+  let latestCookiePayload: TerminalAuthProfilePayload | null = null;
+  let latestBearerPayload: TerminalAuthProfilePayload | null = null;
 
   const authenticatedProfile = new Promise<TerminalAuthProfilePayload>((resolve) => {
     resolveAuthenticated = resolve;
@@ -105,6 +109,7 @@ export async function loadTerminalAuthProfile({
 
   const cookieProfile = settleProfile(
     loadAuthProfile(null, { preferSnapshot: true }).then((payload) => {
+      latestCookiePayload = payload;
       resolveIfAuthenticated(payload);
       return payload;
     }),
@@ -120,6 +125,7 @@ export async function loadTerminalAuthProfile({
       ).trim();
       if (!accessToken) return null;
       const payload = await loadAuthProfile(accessToken, { preferSnapshot: true });
+      latestBearerPayload = payload;
       resolveIfAuthenticated(payload);
       return payload;
     })(),
@@ -129,5 +135,20 @@ export async function loadTerminalAuthProfile({
     ([cookieResult, bearerResult]) => firstKnownProfile(cookieResult, bearerResult),
   );
 
-  return Promise.race([authenticatedProfile, fallbackProfile]);
+  const timeoutProfile = new Promise<TerminalAuthProfilePayload>((resolve, reject) => {
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return;
+    globalThis.setTimeout(() => {
+      if (latestBearerPayload) {
+        resolve(latestBearerPayload);
+        return;
+      }
+      if (latestCookiePayload) {
+        resolve(latestCookiePayload);
+        return;
+      }
+      reject(new Error("Terminal auth bootstrap timeout"));
+    }, timeoutMs);
+  });
+
+  return Promise.race([authenticatedProfile, fallbackProfile, timeoutProfile]);
 }

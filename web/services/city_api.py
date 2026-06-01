@@ -27,12 +27,16 @@ _CITY_FULL_REFRESH_INFLIGHT: Dict[str, "asyncio.Task[Dict[str, Any]]"] = {}
 _CITY_FULL_STALE_REFRESH_TASKS: Dict[str, "asyncio.Task[Dict[str, Any]]"] = {}
 _CITY_FULL_REFRESH_LOCK = asyncio.Lock()
 CityDetailPayloadCacheKey = Tuple[str, str, str, str, str, int]
+CityChartDetailPayloadCacheKey = Tuple[str, str, str, int]
 CityDetailBatchResponseCacheKey = Tuple[Tuple[str, ...], bool, str, str, str, str]
 _CITY_DETAIL_PAYLOAD_CACHE: Dict[CityDetailPayloadCacheKey, Dict[str, Any]] = {}
 _CITY_DETAIL_PAYLOAD_CACHE_TS: Dict[CityDetailPayloadCacheKey, float] = {}
 _CITY_DETAIL_PAYLOAD_INFLIGHT: Dict[CityDetailPayloadCacheKey, "asyncio.Task[Dict[str, Any]]"] = {}
 _CITY_DETAIL_PAYLOAD_EPOCH: Dict[str, int] = {}
 _CITY_DETAIL_PAYLOAD_LOCK = asyncio.Lock()
+_CITY_CHART_DETAIL_PAYLOAD_CACHE: Dict[CityChartDetailPayloadCacheKey, Dict[str, Any]] = {}
+_CITY_CHART_DETAIL_PAYLOAD_CACHE_TS: Dict[CityChartDetailPayloadCacheKey, float] = {}
+_CITY_CHART_DETAIL_PAYLOAD_LOCK = asyncio.Lock()
 _CITY_DETAIL_BATCH_RESPONSE_CACHE: Dict[CityDetailBatchResponseCacheKey, Dict[str, Any]] = {}
 _CITY_DETAIL_BATCH_RESPONSE_CACHE_TS: Dict[CityDetailBatchResponseCacheKey, float] = {}
 _CITY_DETAIL_BATCH_RESPONSE_INFLIGHT: Dict[CityDetailBatchResponseCacheKey, "asyncio.Task[Dict[str, Any]]"] = {}
@@ -102,6 +106,11 @@ async def _invalidate_city_detail_payload_cache(city: str) -> None:
         for key in old_keys:
             _CITY_DETAIL_PAYLOAD_CACHE.pop(key, None)
             _CITY_DETAIL_PAYLOAD_CACHE_TS.pop(key, None)
+    async with _CITY_CHART_DETAIL_PAYLOAD_LOCK:
+        old_chart_keys = [key for key in _CITY_CHART_DETAIL_PAYLOAD_CACHE if key[0] == normalized]
+        for key in old_chart_keys:
+            _CITY_CHART_DETAIL_PAYLOAD_CACHE.pop(key, None)
+            _CITY_CHART_DETAIL_PAYLOAD_CACHE_TS.pop(key, None)
 
 
 async def _refresh_city_full_data(city: str, force_refresh: bool) -> Dict[str, Any]:
@@ -189,6 +198,27 @@ def _city_detail_payload_cache_key(
     )
 
 
+def _city_chart_detail_payload_cache_key(
+    data: Dict[str, Any],
+    resolution: Optional[str],
+) -> CityChartDetailPayloadCacheKey:
+    city = str(data.get("city") or data.get("name") or "").strip().lower()
+    fingerprint = str(
+        data.get("updated_at_ts")
+        or data.get("updated_at")
+        or data.get("local_time")
+        or data.get("local_date")
+        or id(data)
+    )
+    generation = _CITY_DETAIL_PAYLOAD_EPOCH.get(city, 0)
+    return (
+        city,
+        str(resolution or "10m"),
+        fingerprint,
+        generation,
+    )
+
+
 async def _build_city_detail_payload_cached(
     data: Dict[str, Any],
     market_slug: Optional[str],
@@ -250,11 +280,33 @@ async def _build_city_chart_detail_payload(
     data: Dict[str, Any],
     resolution: Optional[str],
 ) -> Dict[str, Any]:
-    return await run_in_threadpool(
-        legacy_routes._build_city_chart_detail_payload,
-        data,
-        resolution,
-    )
+    ttl = _city_detail_payload_cache_ttl()
+    if ttl <= 0:
+        return legacy_routes._build_city_chart_detail_payload(data, resolution)
+
+    key = _city_chart_detail_payload_cache_key(data, resolution)
+    now_ts = time.time()
+    async with _CITY_CHART_DETAIL_PAYLOAD_LOCK:
+        cached = _CITY_CHART_DETAIL_PAYLOAD_CACHE.get(key)
+        cached_ts = _CITY_CHART_DETAIL_PAYLOAD_CACHE_TS.get(key, 0.0)
+        if cached is not None and now_ts - cached_ts < ttl:
+            return cached
+
+    payload = legacy_routes._build_city_chart_detail_payload(data, resolution)
+
+    async with _CITY_CHART_DETAIL_PAYLOAD_LOCK:
+        _CITY_CHART_DETAIL_PAYLOAD_CACHE[key] = payload
+        _CITY_CHART_DETAIL_PAYLOAD_CACHE_TS[key] = time.time()
+        if len(_CITY_CHART_DETAIL_PAYLOAD_CACHE) > 256:
+            oldest_keys = sorted(
+                _CITY_CHART_DETAIL_PAYLOAD_CACHE_TS,
+                key=lambda item: _CITY_CHART_DETAIL_PAYLOAD_CACHE_TS.get(item, 0.0),
+            )[:64]
+            for old_key in oldest_keys:
+                _CITY_CHART_DETAIL_PAYLOAD_CACHE.pop(old_key, None)
+                _CITY_CHART_DETAIL_PAYLOAD_CACHE_TS.pop(old_key, None)
+    return payload
+
 
 
 def _default_deb_recent() -> Dict[str, object]:
