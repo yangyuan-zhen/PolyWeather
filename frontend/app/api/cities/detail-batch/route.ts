@@ -8,7 +8,7 @@ import {
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 const DETAIL_BATCH_PROXY_TIMEOUT_MS = Number(
-  process.env.POLYWEATHER_CITY_DETAIL_BATCH_PROXY_TIMEOUT_MS || "12000",
+  process.env.POLYWEATHER_CITY_DETAIL_BATCH_PROXY_TIMEOUT_MS || "15000",
 );
 
 export async function GET(req: NextRequest) {

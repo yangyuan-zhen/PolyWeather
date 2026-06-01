@@ -282,7 +282,11 @@ async def _build_city_chart_detail_payload(
 ) -> Dict[str, Any]:
     ttl = _city_detail_payload_cache_ttl()
     if ttl <= 0:
-        return legacy_routes._build_city_chart_detail_payload(data, resolution)
+        return await run_in_threadpool(
+            legacy_routes._build_city_chart_detail_payload,
+            data,
+            resolution,
+        )
 
     key = _city_chart_detail_payload_cache_key(data, resolution)
     now_ts = time.time()
@@ -292,7 +296,11 @@ async def _build_city_chart_detail_payload(
         if cached is not None and now_ts - cached_ts < ttl:
             return cached
 
-    payload = legacy_routes._build_city_chart_detail_payload(data, resolution)
+    payload = await run_in_threadpool(
+        legacy_routes._build_city_chart_detail_payload,
+        data,
+        resolution,
+    )
 
     async with _CITY_CHART_DETAIL_PAYLOAD_LOCK:
         _CITY_CHART_DETAIL_PAYLOAD_CACHE[key] = payload
@@ -709,11 +717,11 @@ def _city_detail_batch_concurrency() -> int:
 def _city_detail_batch_partial_timeout_seconds() -> Optional[float]:
     try:
         timeout_ms = int(
-            os.getenv("POLYWEATHER_CITY_DETAIL_BATCH_PARTIAL_TIMEOUT_MS", "8500")
-            or "8500"
+            os.getenv("POLYWEATHER_CITY_DETAIL_BATCH_PARTIAL_TIMEOUT_MS", "6000")
+            or "6000"
         )
     except ValueError:
-        timeout_ms = 8500
+        timeout_ms = 6000
     if timeout_ms <= 0:
         return None
     return max(0.001, min(60.0, timeout_ms / 1000.0))

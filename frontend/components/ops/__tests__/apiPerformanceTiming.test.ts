@@ -43,6 +43,11 @@ export function runTests() {
   assert.match(detailBatchProxy, /timing:\s*timer/);
   assert.match(
     detailBatchProxy,
+    /POLYWEATHER_CITY_DETAIL_BATCH_PROXY_TIMEOUT_MS\s*\|\|\s*"15000"/,
+    "city detail batch proxy should leave room for backend partial responses instead of aborting at the chart fetch deadline",
+  );
+  assert.match(
+    detailBatchProxy,
     /fetchCache:\s*"no-store"/,
     "city detail batch proxy should avoid caching partial backend fetches in the Next data cache",
   );

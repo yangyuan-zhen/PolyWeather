@@ -357,7 +357,7 @@ const HOURLY_FORCE_REFRESH_DEDUP_MS = 60_000;
 const _hourlyCache = new Map<string, { ts: number; data: HourlyForecast }>();
 const _hourlyRequestCache = new Map<string, Promise<HourlyForecast>>();
 const MAX_HOURLY_DETAIL_CONCURRENT_REQUESTS = 3;
-const HOURLY_DETAIL_REQUEST_TIMEOUT_MS = 12_000;
+const HOURLY_DETAIL_REQUEST_TIMEOUT_MS = 16_000;
 let _hourlyActiveDetailRequests = 0;
 const _hourlyDetailRequestQueue: Array<() => void> = [];
 const RUNWAY_LINE_COLORS = ["#00897b", "#d97706", "#7c3aed", "#0891b2", "#ea580c", "#64748b"];

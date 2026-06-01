@@ -258,7 +258,7 @@ export function runTests() {
     "single-runway charts must not show the runway-detail toggle because aggregate and individual views are visually redundant",
   );
   assert(
-    chartLogic.includes("HOURLY_DETAIL_REQUEST_TIMEOUT_MS = 12_000") &&
+    chartLogic.includes("HOURLY_DETAIL_REQUEST_TIMEOUT_MS = 16_000") &&
       chartLogic.includes("fetchCityDetailBatchWithTimeout") &&
       chartLogic.includes("signal: controller.signal") &&
       chartLogic.includes("controller.abort()"),

@@ -853,13 +853,17 @@ def test_city_detail_batch_chart_scope_returns_only_chart_fields(monkeypatch):
     assert "ai_analysis" not in detail
 
 
-def test_chart_detail_payload_avoids_threadpool_queue_and_reuses_short_cache(monkeypatch):
+def test_chart_detail_payload_uses_threadpool_and_reuses_short_cache(monkeypatch):
     import asyncio
 
     build_calls = 0
+    threadpool_calls = 0
 
-    async def fail_threadpool(*_args, **_kwargs):
-        raise AssertionError("chart payload should not wait behind the shared threadpool")
+    async def fake_run_in_threadpool(fn, *args, **kwargs):
+        nonlocal threadpool_calls
+        threadpool_calls += 1
+        await asyncio.sleep(0)
+        return fn(*args, **kwargs)
 
     def build_chart_detail(data, resolution):
         nonlocal build_calls
@@ -873,7 +877,7 @@ def test_chart_detail_payload_avoids_threadpool_queue_and_reuses_short_cache(mon
     city_api._CITY_CHART_DETAIL_PAYLOAD_CACHE.clear()
     city_api._CITY_CHART_DETAIL_PAYLOAD_CACHE_TS.clear()
     monkeypatch.setenv("POLYWEATHER_CITY_DETAIL_PAYLOAD_CACHE_TTL_SEC", "20")
-    monkeypatch.setattr(city_api, "run_in_threadpool", fail_threadpool)
+    monkeypatch.setattr(city_api, "run_in_threadpool", fake_run_in_threadpool)
     monkeypatch.setattr(city_api.legacy_routes, "_build_city_chart_detail_payload", build_chart_detail)
 
     data = {
@@ -888,6 +892,12 @@ def test_chart_detail_payload_avoids_threadpool_queue_and_reuses_short_cache(mon
     assert first == second
     assert first["resolution"] == "10m"
     assert build_calls == 1
+    assert threadpool_calls == 1
+
+
+def test_city_detail_batch_partial_timeout_default_stays_below_proxy_budget(monkeypatch):
+    monkeypatch.delenv("POLYWEATHER_CITY_DETAIL_BATCH_PARTIAL_TIMEOUT_MS", raising=False)
+    assert city_api._city_detail_batch_partial_timeout_seconds() == 6.0
 
 
 def test_city_detail_batch_endpoint_limits_backend_concurrency(monkeypatch):
