@@ -166,6 +166,13 @@ export function runTests() {
     "temperature chart canvas must be memoized so unrelated terminal state does not remount Recharts",
   );
   assert(
+    dashboardSource.includes("const TerminalSidebar = memo(function TerminalSidebar") &&
+      dashboardSource.includes("const [navExpanded, setNavExpanded] = useState(false);") &&
+      dashboardSource.includes("transition-colors duration-150") &&
+      !dashboardSource.includes("transition-all duration-200"),
+    "terminal sidebar expand state must be isolated from the chart grid and must not animate width through transition-all",
+  );
+  assert(
     __shouldKeepTemperatureChartLoadingForTest({
       row: { city: "Moscow" } as any,
       isHourlyLoading: true,

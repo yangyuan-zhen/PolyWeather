@@ -15,7 +15,7 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
-import { Fragment, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { CityListItem, ProAccessState, ScanOpportunityRow } from "@/lib/dashboard-types";
 import { getInitialLocaleFromNavigator } from "@/lib/i18n";
 import { isBrowserLocalFullAccess } from "@/lib/local-dev-access";
@@ -87,6 +87,11 @@ const TrainingDashboard = dynamic(
 );
 
 const ONLINE_USERS_REFRESH_MS = 5 * 60_000;
+const TERMINAL_NAV_ITEMS = [
+  { key: "thresholds", Icon: Activity, labelEn: "Decision", labelZh: "天气决策" },
+  { key: "training", Icon: GraduationCap, labelEn: "Training", labelZh: "训练数据" },
+  { key: "guide", Icon: BookOpenCheck, labelEn: "Guide", labelZh: "使用指南" },
+] as const;
 const AUTH_PROFILE_REQUEST_TIMEOUT_MS = 4500;
 const AUTH_DECISION_RECOVERY_MS = 10_000;
 const ACTIVE_ACCESS_CACHE_KEY = "polyweather_terminal_active_access_v1";
@@ -433,6 +438,99 @@ function EmptySlotCard({
   );
 }
 
+const TerminalSidebar = memo(function TerminalSidebar({
+  activeNavKey,
+  isEn,
+  onSelectNav,
+}: {
+  activeNavKey: string;
+  isEn: boolean;
+  onSelectNav: (key: string) => void;
+}) {
+  const [navExpanded, setNavExpanded] = useState(false);
+
+  return (
+    <aside
+      className={clsx(
+        "flex shrink-0 flex-col bg-white border-r border-[#d2d9e2] py-3 text-slate-500 transition-colors duration-150",
+        navExpanded ? "w-[172px] items-start px-3" : "w-[52px] items-center gap-2",
+      )}
+    >
+      <div className={clsx(
+        "flex items-center w-full",
+        navExpanded ? "gap-3 mb-3 px-1" : "justify-center mb-2",
+      )}>
+        <Link
+          href="/"
+          className="block h-7 w-7 shrink-0 overflow-hidden rounded transition hover:opacity-90"
+          title="PolyWeather"
+        >
+          <img src="/apple-touch-icon.png" alt="PolyWeather" className="h-full w-full object-cover" />
+        </Link>
+        {navExpanded && (
+          <span className="text-sm font-black text-slate-800 tracking-tight truncate">
+            PolyWeather
+          </span>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setNavExpanded((prev) => !prev)}
+        className={clsx(
+          "flex items-center gap-3 transition-colors hover:text-slate-800",
+          navExpanded
+            ? "w-full h-8 px-1 mb-2"
+            : "grid h-9 w-full place-items-center mb-2",
+        )}
+      >
+        {navExpanded ? (
+          <>
+            <ChevronLeft size={14} />
+            <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+              {isEn ? "Collapse" : "收起"}
+            </span>
+          </>
+        ) : (
+          <Menu size={18} />
+        )}
+      </button>
+
+      {TERMINAL_NAV_ITEMS.map(({ key, Icon, labelEn, labelZh }) => {
+        const isActive = activeNavKey === key;
+        return (
+          <button
+            key={key}
+            type="button"
+            onClick={() => onSelectNav(key)}
+            className={clsx(
+              "flex items-center gap-3 transition-colors rounded",
+              navExpanded
+                ? "w-full h-9 px-2 text-left"
+                : "grid h-9 w-full place-items-center border-l-4",
+              isActive
+                ? navExpanded
+                  ? "bg-blue-50 text-blue-600 font-bold"
+                  : "border-blue-500 bg-blue-50/50 text-blue-600"
+                : navExpanded
+                  ? "hover:bg-slate-50 hover:text-slate-900"
+                  : "border-transparent hover:bg-slate-50 hover:text-slate-700",
+            )}
+            title={isEn ? labelEn : labelZh}
+          >
+            <Icon size={16} className="shrink-0" />
+            {navExpanded && (
+              <span className="text-xs font-semibold whitespace-nowrap">
+                {isEn ? labelEn : labelZh}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </aside>
+  );
+});
+
 function PolyWeatherTerminal({
   generatedText,
   isEn,
@@ -495,9 +593,11 @@ function PolyWeatherTerminal({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [searchInputRef, setSearchQuery]);
-  const [navExpanded, setNavExpanded] = useState(false);
   const [activeNavKey, setActiveNavKey] = useState<string>("thresholds");
   const [onlineCount, setOnlineCount] = useState<number | null>(null);
+  const handleSelectNav = useCallback((key: string) => {
+    setActiveNavKey(key);
+  }, []);
 
   useEffect(() => {
     if (activeNavKey !== "thresholds") return;
@@ -576,12 +676,6 @@ function PolyWeatherTerminal({
       setActiveSearchSlotIndex(null);
     }
   };
-
-  const NAV_ITEMS = [
-    { key: "thresholds", Icon: Activity, labelEn: "Decision", labelZh: "天气决策" },
-    { key: "training", Icon: GraduationCap, labelEn: "Training", labelZh: "训练数据" },
-    { key: "guide", Icon: BookOpenCheck, labelEn: "Guide", labelZh: "使用指南" },
-  ];
 
   useEffect(() => {
     setSelectedCity(null);
@@ -706,87 +800,7 @@ function PolyWeatherTerminal({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[#e9edf3] text-[#202833]">
-      <aside
-        className={clsx(
-          "flex shrink-0 flex-col bg-white border-r border-[#d2d9e2] py-3 text-slate-500 transition-all duration-200",
-          navExpanded ? "w-[172px] items-start px-3" : "w-[52px] items-center gap-2",
-        )}
-      >
-        {/* Logo row */}
-        <div className={clsx(
-          "flex items-center w-full",
-          navExpanded ? "gap-3 mb-3 px-1" : "justify-center mb-2",
-        )}>
-          <Link
-            href="/"
-            className="block h-7 w-7 shrink-0 overflow-hidden rounded transition hover:opacity-90"
-            title="PolyWeather"
-          >
-            <img src="/apple-touch-icon.png" alt="PolyWeather" className="h-full w-full object-cover" />
-          </Link>
-          {navExpanded && (
-            <span className="text-sm font-black text-slate-800 tracking-tight truncate">
-              PolyWeather
-            </span>
-          )}
-        </div>
-
-        {/* Toggle button */}
-        <button
-          type="button"
-          onClick={() => setNavExpanded((prev) => !prev)}
-          className={clsx(
-            "flex items-center gap-3 transition-colors hover:text-slate-800",
-            navExpanded
-              ? "w-full h-8 px-1 mb-2"
-              : "grid h-9 w-full place-items-center mb-2",
-          )}
-        >
-          {navExpanded ? (
-            <>
-              <ChevronLeft size={14} />
-              <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
-                {isEn ? "Collapse" : "收起"}
-              </span>
-            </>
-          ) : (
-            <Menu size={18} />
-          )}
-        </button>
-
-        {/* Nav items */}
-        {NAV_ITEMS.map(({ key, Icon, labelEn, labelZh }) => {
-          const isActive = activeNavKey === key;
-          return (
-            <button
-              key={key}
-              type="button"
-              onClick={() => { setActiveNavKey(key); }}
-              className={clsx(
-                "flex items-center gap-3 transition-colors rounded",
-                navExpanded
-                  ? "w-full h-9 px-2 text-left"
-                  : "grid h-9 w-full place-items-center border-l-4",
-                isActive
-                  ? navExpanded
-                    ? "bg-blue-50 text-blue-600 font-bold"
-                    : "border-blue-500 bg-blue-50/50 text-blue-600"
-                  : navExpanded
-                    ? "hover:bg-slate-50 hover:text-slate-900"
-                    : "border-transparent hover:bg-slate-50 hover:text-slate-700",
-              )}
-              title={isEn ? labelEn : labelZh}
-            >
-              <Icon size={16} className="shrink-0" />
-              {navExpanded && (
-                <span className="text-xs font-semibold whitespace-nowrap">
-                  {isEn ? labelEn : labelZh}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </aside>
+      <TerminalSidebar activeNavKey={activeNavKey} isEn={isEn} onSelectNav={handleSelectNav} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-[#d2d9e2] bg-white px-4 text-slate-800">
