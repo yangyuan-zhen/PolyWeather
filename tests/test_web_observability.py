@@ -1817,6 +1817,71 @@ def test_auth_me_preserves_required_subscription_403_from_window(monkeypatch):
     assert latest_any_calls["count"] == 0
 
 
+def test_auth_me_entitlement_scope_skips_non_access_profile_sections(monkeypatch):
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "enabled", True)
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "require_subscription", True)
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "anon_key", "anon-key")
+    monkeypatch.setattr(web_core, "_SUPABASE_AUTH_REQUIRED", True)
+
+    class _Identity:
+        user_id = "user-1"
+        email = "user@example.com"
+        points = 7
+        created_at = "2026-05-01T00:00:00+00:00"
+
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "get_identity", lambda token: _Identity())
+    monkeypatch.setattr(
+        web_core.SUPABASE_ENTITLEMENT,
+        "get_subscription_window",
+        lambda user_id, respect_requirement=False, bypass_cache=False, unknown_on_error=False: {
+            "current": {
+                "plan_code": "pro_monthly",
+                "starts_at": "2026-06-01T00:00:00+00:00",
+                "expires_at": "2026-07-01T00:00:00+00:00",
+            },
+            "total_expires_at": "2026-07-01T00:00:00+00:00",
+            "queued_days": 0,
+            "queued_count": 0,
+        },
+    )
+    monkeypatch.setattr(
+        web_core.SUPABASE_ENTITLEMENT,
+        "get_referral_summary",
+        lambda user_id: (_ for _ in ()).throw(
+            AssertionError("entitlement scope must not block on referral summary"),
+        ),
+    )
+    monkeypatch.setattr(
+        routes,
+        "_resolve_auth_points",
+        lambda request: (_ for _ in ()).throw(
+            AssertionError("entitlement scope must not block on points summary"),
+        ),
+    )
+    monkeypatch.setattr(
+        routes,
+        "_resolve_weekly_profile",
+        lambda request: (_ for _ in ()).throw(
+            AssertionError("entitlement scope must not block on weekly profile"),
+        ),
+    )
+
+    response = client.get(
+        "/api/auth/me?scope=entitlement",
+        headers={"Authorization": "Bearer access-token"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["authenticated"] is True
+    assert payload["subscription_active"] is True
+    assert payload["subscription_plan_code"] == "pro_monthly"
+    assert payload["points"] == 7
+    assert payload["weekly_points"] == 0
+    assert payload["referral"] is None
+
+
 def test_backend_entitlement_token_binds_forwarded_supabase_identity(monkeypatch):
     monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "enabled", True)
     monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "supabase_url", "https://example.supabase.co")

@@ -27,6 +27,7 @@ import {
   requestWalletWithTimeout,
 } from "./payment-utils";
 import { trackAppEvent } from "@/lib/app-analytics";
+import { buildAuthMePath } from "@/lib/auth-snapshot";
 import {
   assertExpectedPaymentReceiver,
   EXPECTED_PAYMENT_RECEIVER_ADDRESS,
@@ -189,7 +190,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
       "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
     };
-    const authRes = await fetch("/api/auth/me", {
+    const authRes = await fetch(buildAuthMePath({ scope: "entitlement" }), {
       cache: "no-store",
       headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
     });

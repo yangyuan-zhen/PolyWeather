@@ -92,12 +92,27 @@ def _subscription_row_is_trial(row: Any) -> bool:
     return "trial" in plan_code or "trial" in source
 
 
+def _is_entitlement_scope(request: Request) -> bool:
+    return (
+        str(request.query_params.get("scope") or "").strip().lower()
+        == "entitlement"
+    )
+
+
+def _state_points(request: Request) -> int:
+    try:
+        return max(0, int(getattr(request.state, "auth_points", 0) or 0))
+    except Exception:
+        return 0
+
+
 def get_auth_me_payload(request: Request) -> Dict[str, Any]:
     timer = _AuthMeTimer(request)
     authenticated_for_log: Optional[bool] = None
     outcome = "ok"
     status_code = 200
     subscription_active_for_log: Optional[bool] = None
+    entitlement_scope = _is_entitlement_scope(request)
 
     try:
         request.state.skip_subscription_gate = True
@@ -230,12 +245,13 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
                     subscription_queued_count = int(
                         subscription_window.get("queued_count") or 0
                     )
-                referral = timer.measure(
-                    "referral_summary",
-                    lambda: legacy_routes.SUPABASE_ENTITLEMENT.get_referral_summary(
-                        user_id
-                    ),
-                )
+                if not entitlement_scope:
+                    referral = timer.measure(
+                        "referral_summary",
+                        lambda: legacy_routes.SUPABASE_ENTITLEMENT.get_referral_summary(
+                            user_id
+                        ),
+                    )
             except HTTPException:
                 raise
             except Exception:
@@ -253,14 +269,18 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
                 subscription_queued_count = 0
                 referral = None
 
-        points = timer.measure(
-            "auth_points",
-            lambda: legacy_routes._resolve_auth_points(request),
-        )
-        weekly_profile = timer.measure(
-            "weekly_profile",
-            lambda: legacy_routes._resolve_weekly_profile(request),
-        )
+        if entitlement_scope:
+            points = _state_points(request)
+            weekly_profile = {"weekly_points": 0, "weekly_rank": None}
+        else:
+            points = timer.measure(
+                "auth_points",
+                lambda: legacy_routes._resolve_auth_points(request),
+            )
+            weekly_profile = timer.measure(
+                "weekly_profile",
+                lambda: legacy_routes._resolve_weekly_profile(request),
+            )
 
         def resolve_telegram_pricing() -> Any:
             if not user_id:
@@ -275,7 +295,7 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
             return pricing.resolve_price_for_telegram_id(telegram_id or None)
 
         telegram_pricing = None
-        if user_id:
+        if user_id and not entitlement_scope:
             try:
                 telegram_pricing = timer.measure(
                     "telegram_pricing",

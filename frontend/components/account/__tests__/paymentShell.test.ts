@@ -299,8 +299,13 @@ export function runTests() {
       authMeRouteSource.includes("!auth.authUserId") &&
       authMeRouteSource.includes('req.headers.get("authorization")') &&
       authMeRouteSource.indexOf("authenticated: false") <
-        authMeRouteSource.indexOf("await fetch(`${API_BASE}/api/auth/me`"),
+        authMeRouteSource.indexOf("await fetch(buildBackendAuthMeUrl(req)"),
     "auth profile proxy must return unauthenticated locally for no-session Supabase requests instead of forwarding the backend entitlement token",
+  );
+  assert(
+    authMeRouteSource.includes("function buildBackendAuthMeUrl") &&
+      authMeRouteSource.includes('url.searchParams.set("scope", "entitlement")'),
+    "auth profile proxy must forward the lightweight entitlement scope to the backend auth/me endpoint",
   );
   assert(
     authMeRouteSource.includes('reason: "prefer_snapshot_fast_path"') &&

@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import type { User } from "@supabase/supabase-js";
+import {
+  buildAuthMePath,
+  mergeAccountAuthSnapshot,
+} from "@/lib/auth-snapshot";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 import type {
@@ -25,7 +30,7 @@ export interface UseAccountPaymentParams {
   backend: AuthMeResponse | null;
   user: User | null;
   setUser: (user: User | null) => void;
-  setBackend: (backend: AuthMeResponse | null) => void;
+  setBackend: Dispatch<SetStateAction<AuthMeResponse | null>>;
   setErrorText: (text: string) => void;
   setUpdatedAt: (text: string) => void;
   showOverlay: boolean;
@@ -155,21 +160,45 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
             .then(({ data: { session } }) => session?.user ?? null)
             .catch(() => null as User | null)
         : Promise.resolve(null as User | null);
-      const authHeadersPromise = buildAuthedHeaders(false);
-      const backendPromise = authHeadersPromise.then((headers) =>
-        fetch("/api/auth/me", { cache: "no-store", headers }),
-      );
-      const [localUser, backendResult] = await Promise.all([userPromise, backendPromise]);
+      const [localUser, authHeaders] = await Promise.all([
+        userPromise,
+        buildAuthedHeaders(false),
+      ]);
       setUser(localUser);
-      if (!backendResult.ok) {
-        if (retry && backendResult.status === 401) {
+
+      const readAuthSnapshot = async (
+        headers: Record<string, string>,
+        options: Parameters<typeof buildAuthMePath>[0] = {},
+      ) => {
+        const response = await fetch(buildAuthMePath(options), {
+          cache: "no-store",
+          headers,
+        });
+        if (!response.ok) {
+          const raw = (await response.text()).slice(0, 260);
+          const message = copy.httpError
+            .replace("{status}", String(response.status))
+            .replace("{raw}", raw);
+          const error = new Error(message) as Error & { status?: number };
+          error.status = response.status;
+          throw error;
+        }
+        return (await response.json()) as AuthMeResponse;
+      };
+
+      let latestHeaders = authHeaders;
+      let backendJson: AuthMeResponse;
+      try {
+        backendJson = await readAuthSnapshot(authHeaders, {
+          scope: "entitlement",
+        });
+      } catch (error) {
+        if (retry && (error as { status?: number }).status === 401) {
           await new Promise((r) => setTimeout(r, 1200));
           return fetchAuthSnapshot(false);
         }
-        const raw = (await backendResult.text()).slice(0, 260);
-        throw new Error(copy.httpError.replace("{status}", String(backendResult.status)).replace("{raw}", raw));
+        throw error;
       }
-      let backendJson = (await backendResult.json()) as AuthMeResponse;
       if (
         retry &&
         supabaseReady &&
@@ -184,23 +213,31 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
             refreshedSession?.access_token || "",
           ).trim();
           if (refreshedToken) {
-            const retriedBackendResult = await fetch("/api/auth/me", {
-              cache: "no-store",
-              headers: { Authorization: `Bearer ${refreshedToken}` },
+            latestHeaders = { Authorization: `Bearer ${refreshedToken}` };
+            const retriedBackendJson = await readAuthSnapshot(latestHeaders, {
+              scope: "entitlement",
             });
-            if (retriedBackendResult.ok) {
-              const retriedBackendJson =
-                (await retriedBackendResult.json()) as AuthMeResponse;
-              backendJson = retriedBackendJson;
-            }
+            backendJson = retriedBackendJson;
           }
         } catch {
           // Keep the first response; the UI treats a logged-in local user with
           // an unauthenticated backend snapshot as a temporary sync state.
         }
       }
-      setBackend(backendJson);
+      setBackend((previous) => mergeAccountAuthSnapshot(previous, backendJson));
       setUpdatedAt(new Date().toISOString());
+      if (backendJson.authenticated !== false) {
+        void readAuthSnapshot(latestHeaders)
+          .then((fullJson) => {
+            setBackend((previous) =>
+              mergeAccountAuthSnapshot(previous, fullJson),
+            );
+            setUpdatedAt(new Date().toISOString());
+          })
+          .catch(() => {
+            // The lightweight entitlement snapshot already resolved the UI.
+          });
+      }
       return backendJson;
     },
     [

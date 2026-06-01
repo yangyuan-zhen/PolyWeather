@@ -92,6 +92,14 @@ function formatServerTiming(stages: AuthMeTimingStage[], totalMs: number) {
     .join(", ");
 }
 
+function buildBackendAuthMeUrl(req: NextRequest) {
+  const url = new URL(`${API_BASE!.replace(/\/+$/, "")}/api/auth/me`);
+  if (req.nextUrl.searchParams.get("scope") === "entitlement") {
+    url.searchParams.set("scope", "entitlement");
+  }
+  return url.toString();
+}
+
 function finishAuthMeResponse(
   response: NextResponse,
   timer: AuthMeTimer,
@@ -486,7 +494,7 @@ export async function GET(req: NextRequest) {
     let res: Response;
     try {
       res = await timer.measure("backend_fetch", async () =>
-        await fetch(`${API_BASE}/api/auth/me`, {
+        await fetch(buildBackendAuthMeUrl(req), {
           headers: backendAuth.headers,
           cache: "no-store",
           signal: controller.signal,

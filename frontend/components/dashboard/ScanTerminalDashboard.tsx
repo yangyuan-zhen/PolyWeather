@@ -68,6 +68,7 @@ import {
   createAuthProfileRequestCache,
   loadTerminalAuthProfile,
 } from "@/components/dashboard/scan-terminal/terminal-auth-bootstrap";
+import { buildAuthMePath } from "@/lib/auth-snapshot";
 import {
   cityListItemsToScanRows,
   mergeScanRowsWithCityFallbackRows,
@@ -1217,9 +1218,10 @@ function ScanTerminalScreen() {
         : null;
       try {
         const response = await fetch(
-          options?.preferSnapshot
-            ? "/api/auth/me?prefer_snapshot=1"
-            : "/api/auth/me",
+          buildAuthMePath({
+            preferSnapshot: options?.preferSnapshot,
+            scope: "entitlement",
+          }),
           {
             cache: "no-store",
             headers,

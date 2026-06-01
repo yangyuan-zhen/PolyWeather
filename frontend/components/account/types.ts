@@ -19,6 +19,10 @@ export type AuthMeResponse = {
   subscription_queued_count?: number | null;
   telegram_pricing?: TelegramPricing | null;
   referral?: ReferralSummary | null;
+  degraded_auth_profile?: boolean | null;
+  degraded_reason?: string | null;
+  entitlement_snapshot?: boolean | null;
+  entitlement_snapshot_reason?: string | null;
 };
 
 export type ReferralSummary = {

@@ -30,7 +30,7 @@ async function warmSignupTrial(accessToken: string) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 2500);
   try {
-    await fetch(`${API_BASE}/api/auth/me`, {
+    await fetch(`${API_BASE.replace(/\/+$/, "")}/api/auth/me?scope=entitlement`, {
       cache: "no-store",
       headers,
       signal: controller.signal,
