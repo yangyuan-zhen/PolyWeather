@@ -114,6 +114,15 @@ def test_deploy_script_retries_startup_smoke_checks():
     assert 'smoke_check "frontend" "https://www.polyweather.top/" 15 3 5' in script
 
 
+def test_deploy_script_retries_compose_recreate_races():
+    script = (ROOT / "deploy.sh").read_text(encoding="utf-8")
+
+    assert "compose_up_retry()" in script
+    assert "removal of container .* is already in progress" in script
+    assert 'compose_up_retry "backend services" -d --no-deps polyweather_web polyweather' in script
+    assert 'compose_up_retry "frontend" -d --no-deps polyweather_frontend' in script
+
+
 def test_docker_compose_keeps_polyweather_ports_on_loopback():
     compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
 

@@ -30,11 +30,36 @@ rollback_to_previous() {
         echo "Rolling back to $PREVIOUS_TAG..."
         export IMAGE_TAG="$PREVIOUS_TAG"
         docker compose pull
-        docker compose up -d
+        compose_up_retry "rollback" -d
         echo "✅ Rolled back to $PREVIOUS_TAG"
     else
         echo "⚠️  No previous tag to rollback to"
     fi
+}
+
+compose_up_retry() {
+    local name="$1"
+    shift
+    local output=""
+
+    for attempt in $(seq 1 6); do
+        if output=$(docker compose up "$@" 2>&1); then
+            echo "$output"
+            return 0
+        fi
+
+        echo "$output"
+        if echo "$output" | grep -qi "removal of container .* is already in progress"; then
+            echo "Container removal is still in progress during ${name}; retry ${attempt}/6..."
+            sleep 5
+            continue
+        fi
+
+        return 1
+    done
+
+    echo "❌ docker compose up failed for ${name} after retries"
+    return 1
 }
 
 export IMAGE_TAG="$NEW_TAG"
@@ -117,10 +142,10 @@ warm_public_route() {
 }
 
 echo "Updating Redis dependency..."
-docker compose up -d polyweather_redis
+compose_up_retry "redis" -d polyweather_redis
 
 echo "Updating backend services..."
-docker compose up -d --no-deps polyweather_web polyweather
+compose_up_retry "backend services" -d --no-deps polyweather_web polyweather
 
 echo "Waiting for backend..."
 wait_for_local_service "backend healthz" "http://127.0.0.1:8000/healthz" 5 30 5 || FAILED_BACKEND=1
@@ -132,7 +157,7 @@ if [ "$FAILED_BACKEND" = "1" ]; then
 fi
 
 echo "Updating frontend..."
-docker compose up -d --no-deps polyweather_frontend
+compose_up_retry "frontend" -d --no-deps polyweather_frontend
 
 echo "Waiting for frontend..."
 wait_for_local_service "frontend root" "http://127.0.0.1:3001/" 5 40 2 || FAILED_FRONTEND=1
