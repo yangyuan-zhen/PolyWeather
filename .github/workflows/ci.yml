@@ -137,6 +137,6 @@ jobs:
           echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           scp -o StrictHostKeyChecking=accept-new deploy.sh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/deploy.sh
-          printf '%s' "$GHCR_PAT" | ssh -o StrictHostKeyChecking=accept-new ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+          printf '%s\n' "$GHCR_PAT" | ssh -o StrictHostKeyChecking=accept-new ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
             bash /tmp/deploy.sh '${{ github.sha }}'
           "

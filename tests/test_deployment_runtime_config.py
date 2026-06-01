@@ -135,7 +135,7 @@ def test_deploy_token_is_passed_over_stdin_not_process_args():
     assert 'printf \'%s\' "$GHCR_PAT" | docker login' in script
 
     assert "GHCR_PAT: ${{ secrets.GHCR_PAT }}" in workflow
-    assert 'printf \'%s\' "$GHCR_PAT" | ssh' in workflow
+    assert 'printf \'%s\\n\' "$GHCR_PAT" | ssh' in workflow
     assert "bash /tmp/deploy.sh '${{ github.sha }}'" in workflow
     assert "bash /tmp/deploy.sh '${{ secrets.GHCR_PAT }}'" not in workflow
 

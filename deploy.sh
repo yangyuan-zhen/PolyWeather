@@ -7,7 +7,11 @@ COMPOSE_DIR="/root/PolyWeather"
 LOCK_FILE="${POLYWEATHER_DEPLOY_LOCK_FILE:-/var/lock/polyweather-deploy.lock}"
 
 GHCR_PAT=""
-if ! IFS= read -r GHCR_PAT || [ -z "$GHCR_PAT" ]; then
+if ! IFS= read -r GHCR_PAT && [ -z "$GHCR_PAT" ]; then
+    echo "❌ GHCR token must be provided on stdin"
+    exit 1
+fi
+if [ -z "$GHCR_PAT" ]; then
     echo "❌ GHCR token must be provided on stdin"
     exit 1
 fi
