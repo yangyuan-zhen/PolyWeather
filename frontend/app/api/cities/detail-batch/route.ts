@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     force_refresh: forceRefresh,
     limit: req.nextUrl.searchParams.get("limit") || "12",
   });
-  for (const key of ["market_slug", "target_date", "resolution"]) {
+  for (const key of ["market_slug", "target_date", "resolution", "scope"]) {
     const value = req.nextUrl.searchParams.get(key);
     if (value) searchParams.set(key, value);
   }

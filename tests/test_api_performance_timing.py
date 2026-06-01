@@ -23,6 +23,10 @@ def test_backend_shared_timing_helper_avoids_sensitive_identity_fields():
 
 
 def test_city_detail_batch_response_includes_backend_server_timing(monkeypatch):
+    city_api._CITY_DETAIL_BATCH_RESPONSE_CACHE.clear()
+    city_api._CITY_DETAIL_BATCH_RESPONSE_CACHE_TS.clear()
+    city_api._CITY_DETAIL_BATCH_RESPONSE_INFLIGHT.clear()
+
     class FakeCache:
         def get_city_cache(self, kind, city):
             assert kind == "full"

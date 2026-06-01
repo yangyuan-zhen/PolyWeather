@@ -678,6 +678,78 @@ def test_city_detail_batch_endpoint_builds_multiple_cached_details(monkeypatch):
     assert sorted(calls) == [("paris", "10m"), ("shanghai", "10m")]
 
 
+def test_city_detail_batch_chart_scope_returns_only_chart_fields(monkeypatch):
+    monkeypatch.setattr(city_api.legacy_routes, "_assert_entitlement", lambda request: None)
+    monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "_city_cache_is_fresh",
+        lambda entry, ttl: True,
+    )
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "_overlay_latest_wunderground_current",
+        lambda city, payload: payload,
+    )
+
+    class FakeCache:
+        def get_city_cache(self, kind, city):
+            assert kind == "full"
+            return {
+                "payload": {
+                    "city": city,
+                    "hourly": {"times": ["2026-05-30T00:00:00Z"], "temps": [20.0]},
+                }
+            }
+
+    def build_detail(data, market_slug, target_date, resolution):
+        return {
+            "city": data["city"],
+            "overview": {
+                "local_date": "2026-05-30",
+                "local_time": "15:20",
+                "deb_prediction": 21.5,
+                "airport_primary_today_obs": [["15:20", 20.0]],
+            },
+            "timeseries": {
+                "hourly": data["hourly"],
+                "metar_today_obs": [{"time": "15:20", "temp": 20.0}],
+                "settlement_today_obs": [],
+                "forecast_daily": [{"date": "2026-05-30", "max_temp": 22.0}],
+            },
+            "models_hourly": {"times": ["15:00"], "curves": {"ECMWF": [21.0]}},
+            "deb": {"prediction": 21.5, "hourly_path": {"times": ["15:00"], "temps": [21.5]}},
+            "probabilities": {"mu": 21.4, "distribution": [{"value": 21, "probability": 0.4}]},
+            "runway_plate_history": {"01/19": [{"timestamp": "15:20", "temp_c": 20.1}]},
+            "runway_band_history": [{"time": "2026-05-30T15:20:00Z", "high_temp": 20.1}],
+            "airport_current": {"temp": 20.0},
+            "airport_primary": {"temp": 20.0},
+            "wunderground_current": {"max_so_far": 20.5},
+            "settlement_station": {"settlement_station_label": "Station"},
+            "amos": {"runway_obs": {"point_temperatures": []}},
+            "dynamic_commentary": {"summary": "large text"},
+            "official_nearby": [{"name": "unused"}],
+            "taf": {"raw": "unused"},
+            "ai_analysis": "unused",
+        }
+
+    monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
+    monkeypatch.setattr(city_api.legacy_routes, "_build_city_detail_payload", build_detail)
+
+    response = client.get("/api/cities/detail-batch?cities=Paris&resolution=10m&scope=chart")
+
+    assert response.status_code == 200
+    detail = response.json()["details"]["paris"]
+    assert detail["timeseries"]["hourly"]["temps"] == [20.0]
+    assert detail["models_hourly"]["curves"]["ECMWF"] == [21.0]
+    assert detail["deb"]["hourly_path"]["temps"] == [21.5]
+    assert detail["airport_primary_today_obs"] == [["15:20", 20.0]]
+    assert "dynamic_commentary" not in detail
+    assert "official_nearby" not in detail
+    assert "taf" not in detail
+    assert "ai_analysis" not in detail
+
+
 def test_city_detail_batch_endpoint_limits_backend_concurrency(monkeypatch):
     import asyncio
 

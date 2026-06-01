@@ -1179,6 +1179,7 @@ function fetchCityDetailBatchWithTimeout(cities: string[], resolution: string) {
     force_refresh: "false",
     limit: String(Math.max(cities.length, CITY_DETAIL_BATCH_MAX_CITIES)),
     resolution,
+    scope: "chart",
   });
   return fetch(`/api/cities/detail-batch?${params.toString()}`, {
     headers: { Accept: "application/json" },

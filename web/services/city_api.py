@@ -27,7 +27,7 @@ _CITY_FULL_REFRESH_INFLIGHT: Dict[str, "asyncio.Task[Dict[str, Any]]"] = {}
 _CITY_FULL_STALE_REFRESH_TASKS: Dict[str, "asyncio.Task[Dict[str, Any]]"] = {}
 _CITY_FULL_REFRESH_LOCK = asyncio.Lock()
 CityDetailPayloadCacheKey = Tuple[str, str, str, str, str, int]
-CityDetailBatchResponseCacheKey = Tuple[Tuple[str, ...], bool, str, str, str]
+CityDetailBatchResponseCacheKey = Tuple[Tuple[str, ...], bool, str, str, str, str]
 _CITY_DETAIL_PAYLOAD_CACHE: Dict[CityDetailPayloadCacheKey, Dict[str, Any]] = {}
 _CITY_DETAIL_PAYLOAD_CACHE_TS: Dict[CityDetailPayloadCacheKey, float] = {}
 _CITY_DETAIL_PAYLOAD_INFLIGHT: Dict[CityDetailPayloadCacheKey, "asyncio.Task[Dict[str, Any]]"] = {}
@@ -481,6 +481,7 @@ def _city_detail_batch_response_cache_key(
     market_slug: Optional[str],
     target_date: Optional[str],
     resolution: Optional[str],
+    scope: str,
 ) -> CityDetailBatchResponseCacheKey:
     return (
         tuple(city_names),
@@ -488,7 +489,82 @@ def _city_detail_batch_response_cache_key(
         str(market_slug or ""),
         str(target_date or ""),
         str(resolution or "10m"),
+        str(scope or "full"),
     )
+
+
+def _normalize_city_detail_scope(scope: Optional[str]) -> str:
+    raw = str(scope or "full").strip().lower()
+    if raw in {"chart", "charts", "terminal", "terminal_chart"}:
+        return "chart"
+    return "full"
+
+
+def _chart_scoped_city_detail(detail: Dict[str, Any]) -> Dict[str, Any]:
+    overview = detail.get("overview") if isinstance(detail.get("overview"), dict) else {}
+    timeseries = detail.get("timeseries") if isinstance(detail.get("timeseries"), dict) else {}
+    forecast = detail.get("forecast") if isinstance(detail.get("forecast"), dict) else {}
+    airport_primary_today_obs = (
+        detail.get("airport_primary_today_obs")
+        or overview.get("airport_primary_today_obs")
+        or []
+    )
+    forecast_daily = (
+        (forecast.get("daily") if isinstance(forecast, dict) else None)
+        or timeseries.get("forecast_daily")
+        or []
+    )
+    local_date = detail.get("local_date") or overview.get("local_date")
+    local_time = detail.get("local_time") or overview.get("local_time")
+
+    scoped = {
+        "city": detail.get("city") or overview.get("name"),
+        "fetched_at": detail.get("fetched_at"),
+        "local_date": local_date,
+        "local_time": local_time,
+        "overview": {
+            "name": overview.get("name"),
+            "display_name": overview.get("display_name"),
+            "local_date": local_date,
+            "local_time": local_time,
+            "temp_symbol": overview.get("temp_symbol"),
+            "current_temp": overview.get("current_temp"),
+            "deb_prediction": overview.get("deb_prediction"),
+            "settlement_source": overview.get("settlement_source"),
+            "settlement_source_label": overview.get("settlement_source_label"),
+        },
+        "timeseries": {
+            "hourly": timeseries.get("hourly") or detail.get("hourly") or {},
+            "metar_today_obs": timeseries.get("metar_today_obs") or [],
+            "settlement_today_obs": timeseries.get("settlement_today_obs") or [],
+            "forecast_daily": forecast_daily,
+        },
+        "hourly": timeseries.get("hourly") or detail.get("hourly") or {},
+        "models_hourly": detail.get("models_hourly") or {},
+        "deb": detail.get("deb") or {},
+        "forecast": {
+            "today_high": forecast.get("today_high") if isinstance(forecast, dict) else None,
+            "daily": forecast_daily,
+        },
+        "multi_model_daily": detail.get("multi_model_daily") or {},
+        "probabilities": detail.get("probabilities") or {"mu": None, "distribution": []},
+        "runway_plate_history": detail.get("runway_plate_history") or {},
+        "runway_band_history": detail.get("runway_band_history") or [],
+        "amos": detail.get("amos") or {},
+        "airport_current": detail.get("airport_current") or {},
+        "airport_primary": detail.get("airport_primary") or overview.get("airport_primary") or {},
+        "airport_primary_today_obs": airport_primary_today_obs,
+        "official": {"airport_primary_today_obs": airport_primary_today_obs},
+        "wunderground_current": detail.get("wunderground_current") or {},
+        "settlement_station": detail.get("settlement_station") or overview.get("settlement_station") or {},
+    }
+    return scoped
+
+
+def _apply_city_detail_scope(detail: Dict[str, Any], scope: str) -> Dict[str, Any]:
+    if scope == "chart":
+        return _chart_scoped_city_detail(detail)
+    return detail
 
 
 async def _build_city_detail_batch_item_async(
@@ -498,6 +574,7 @@ async def _build_city_detail_batch_item_async(
     market_slug: Optional[str],
     target_date: Optional[str],
     resolution: Optional[str],
+    detail_scope: str = "full",
     timing_recorder: Optional[ServerTimingRecorder] = None,
 ) -> Tuple[str, Dict[str, Any]]:
     if timing_recorder is not None:
@@ -522,7 +599,7 @@ async def _build_city_detail_batch_item_async(
             target_date,
             resolution,
         )
-    return city, detail
+    return city, _apply_city_detail_scope(detail, detail_scope)
 
 
 def _city_detail_batch_concurrency() -> int:
@@ -554,6 +631,7 @@ async def get_city_detail_batch_payload(
     market_slug: Optional[str] = None,
     target_date: Optional[str] = None,
     resolution: Optional[str] = "10m",
+    scope: Optional[str] = "full",
     limit: int = 12,
 ) -> Dict[str, Any]:
     timer = ServerTimingRecorder(
@@ -581,6 +659,7 @@ async def get_city_detail_batch_payload(
                 "missing": [],
                 "partial": False,
             }
+        detail_scope = _normalize_city_detail_scope(scope)
 
         async def _build_uncached_payload() -> Dict[str, Any]:
             semaphore = asyncio.Semaphore(_city_detail_batch_concurrency())
@@ -593,6 +672,7 @@ async def get_city_detail_batch_payload(
                         market_slug=market_slug,
                         target_date=target_date,
                         resolution=resolution,
+                        detail_scope=detail_scope,
                         timing_recorder=timer,
                     )
 
@@ -642,6 +722,7 @@ async def get_city_detail_batch_payload(
             market_slug=market_slug,
             target_date=target_date,
             resolution=resolution,
+            scope=detail_scope,
         )
         if cache_ttl > 0 and not force_refresh:
             now_ts = time.time()

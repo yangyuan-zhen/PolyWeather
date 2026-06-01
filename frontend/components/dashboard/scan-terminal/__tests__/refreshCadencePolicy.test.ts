@@ -120,6 +120,11 @@ export async function runTests() {
     "visible terminal chart detail fetches should be coalesced into one batch request and prime the shared chart cache",
   );
   assert(
+    chartLogicSource.includes('scope: "chart"') &&
+      chartLogicSource.includes("params.toString()"),
+    "terminal chart detail batches should request the slim chart scope instead of the full city detail payload",
+  );
+  assert(
     chartLogicSource.includes("CITY_DETAIL_BATCH_WINDOW_MS = 100"),
     "visible terminal chart detail fetches should use a wide enough batch window to coalesce cards mounted across adjacent frames",
   );

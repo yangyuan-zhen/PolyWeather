@@ -115,6 +115,7 @@ async def city_detail_batch(
     market_slug: Optional[str] = None,
     target_date: Optional[str] = None,
     resolution: Optional[str] = "10m",
+    scope: Optional[str] = "full",
     limit: int = 12,
 ):
     payload = await get_city_detail_batch_payload(
@@ -124,6 +125,7 @@ async def city_detail_batch(
         market_slug=market_slug,
         target_date=target_date,
         resolution=resolution,
+        scope=scope,
         limit=limit,
     )
     attach_server_timing_header(response, request, "city_detail_batch_server_timing")
