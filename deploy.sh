@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-GHCR_PAT="$1"
-NEW_TAG="${2:-latest}"
+NEW_TAG="${1:-latest}"
 TAG_FILE="/var/lib/polyweather/.current_tag"
 COMPOSE_DIR="/root/PolyWeather"
 LOCK_FILE="${POLYWEATHER_DEPLOY_LOCK_FILE:-/var/lock/polyweather-deploy.lock}"
+
+GHCR_PAT=""
+if ! IFS= read -r GHCR_PAT || [ -z "$GHCR_PAT" ]; then
+    echo "❌ GHCR token must be provided on stdin"
+    exit 1
+fi
 
 mkdir -p "$(dirname "$LOCK_FILE")"
 exec 9>"$LOCK_FILE"
@@ -14,7 +19,8 @@ if ! flock -n 9; then
     exit 1
 fi
 
-echo "$GHCR_PAT" | docker login ghcr.io -u yangyuan-zhen --password-stdin
+printf '%s' "$GHCR_PAT" | docker login ghcr.io -u yangyuan-zhen --password-stdin
+unset GHCR_PAT
 
 cd "$COMPOSE_DIR"
 git fetch origin main && git reset --hard origin/main
