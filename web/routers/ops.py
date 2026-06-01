@@ -16,6 +16,7 @@ from web.services.ops_api import (
     get_ops_source_health,
     get_ops_truth_history,
     get_ops_weekly_leaderboard,
+    list_ops_feedback,
     get_ops_user_subscriptions,
     grant_ops_points,
     transfer_ops_points,
@@ -27,6 +28,7 @@ from web.services.ops_api import (
     search_ops_users,
     update_ops_config,
     update_ops_sensitive_config,
+    update_ops_feedback_status,
     get_ops_training_accuracy,
     get_ops_telegram_audit,
 )
@@ -69,6 +71,20 @@ async def ops_search_users(request: Request, q: str = "", limit: int = 20):
 @router.get("/api/ops/leaderboard/weekly")
 async def ops_weekly_leaderboard(request: Request, limit: int = 20):
     return get_ops_weekly_leaderboard(request, limit=limit)
+
+
+@router.get("/api/ops/feedback")
+async def ops_feedback(request: Request, limit: int = 100, status: str = ""):
+    return list_ops_feedback(request, limit=limit, status=status)
+
+
+@router.post("/api/ops/feedback/{feedback_id}/status")
+async def ops_feedback_update_status(request: Request, feedback_id: int):
+    import json as _json
+    body_bytes = await request.body()
+    body = _json.loads(body_bytes.decode("utf-8") or "{}")
+    status = str(body.get("status") or "").strip()
+    return update_ops_feedback_status(request, feedback_id=feedback_id, status=status)
 
 
 @router.get("/api/ops/memberships")

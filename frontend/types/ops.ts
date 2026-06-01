@@ -136,6 +136,26 @@ export type PaymentsPayload = {
   total?: number;
 };
 
+export type UserFeedbackEntry = {
+  id: number;
+  category?: string;
+  message?: string;
+  source?: string;
+  status?: string;
+  contact?: string;
+  user_id?: string;
+  user_email?: string;
+  context?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type UserFeedbackPayload = {
+  feedback?: UserFeedbackEntry[];
+  total?: number;
+  status_counts?: Record<string, number>;
+};
+
 export type BillingRiskIssue = {
   category?: string;
   severity?: "high" | "medium" | "low" | string;

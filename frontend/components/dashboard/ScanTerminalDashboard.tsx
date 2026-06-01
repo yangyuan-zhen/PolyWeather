@@ -11,6 +11,7 @@ import {
   ChevronRight,
   GraduationCap,
   Menu,
+  MessageSquare,
   Search,
   UserRound,
   Users,
@@ -55,6 +56,10 @@ import { KoyfinRowsTable } from "@/components/dashboard/scan-terminal/KoyfinRows
 import { rowName, pct, money, temp, edgeClass } from "@/components/dashboard/scan-terminal/utils";
 import { CitySelectorDropdown } from "@/components/dashboard/scan-terminal/CitySelectorDropdown";
 import { GridLayoutSelector } from "@/components/dashboard/scan-terminal/GridLayoutSelector";
+import {
+  UserFeedbackModal,
+  type FeedbackDraft,
+} from "@/components/dashboard/scan-terminal/UserFeedbackModal";
 import {
   mergeAccessStateWithAuthPayload,
   type AuthProfilePayload,
@@ -441,10 +446,12 @@ function EmptySlotCard({
 const TerminalSidebar = memo(function TerminalSidebar({
   activeNavKey,
   isEn,
+  onFeedbackClick,
   onSelectNav,
 }: {
   activeNavKey: string;
   isEn: boolean;
+  onFeedbackClick: () => void;
   onSelectNav: (key: string) => void;
 }) {
   const [navExpanded, setNavExpanded] = useState(false);
@@ -527,6 +534,25 @@ const TerminalSidebar = memo(function TerminalSidebar({
           </button>
         );
       })}
+
+      <div className={clsx("mt-auto w-full border-t border-slate-200 pt-2", navExpanded ? "" : "px-0")}>
+        <button
+          type="button"
+          onClick={onFeedbackClick}
+          className={clsx(
+            "flex items-center gap-3 rounded text-slate-500 transition-colors hover:bg-slate-50 hover:text-blue-700",
+            navExpanded ? "h-9 w-full px-2 text-left" : "grid h-9 w-full place-items-center border-l-4 border-transparent",
+          )}
+          title={isEn ? "Feedback / Bug" : "反馈 / Bug"}
+        >
+          <MessageSquare size={16} className="shrink-0" />
+          {navExpanded && (
+            <span className="text-xs font-semibold whitespace-nowrap">
+              {isEn ? "Feedback" : "反馈 / Bug"}
+            </span>
+          )}
+        </button>
+      </div>
     </aside>
   );
 });
@@ -595,6 +621,7 @@ function PolyWeatherTerminal({
   }, [searchInputRef, setSearchQuery]);
   const [activeNavKey, setActiveNavKey] = useState<string>("thresholds");
   const [onlineCount, setOnlineCount] = useState<number | null>(null);
+  const [feedbackDraft, setFeedbackDraft] = useState<FeedbackDraft | null>(null);
   const handleSelectNav = useCallback((key: string) => {
     setActiveNavKey(key);
   }, []);
@@ -652,6 +679,47 @@ function PolyWeatherTerminal({
   const [maximizedSlotIndex, setMaximizedSlotIndex] = useState<number | null>(null);
   const [activeSearchSlotIndex, setActiveSearchSlotIndex] = useState<number | null>(null);
   const visibleSlots = useMemo(() => slots.slice(0, totalSlots), [slots, totalSlots]);
+
+  const openTerminalFeedback = useCallback(() => {
+    setFeedbackDraft({
+      category: "bug",
+      source: "terminal",
+      context: {
+        source: "terminal_sidebar",
+        active_nav: activeNavKey,
+        locale,
+        grid: `${gridCols}x${gridRows}`,
+        active_slot_index: activeSlotIndex,
+        maximized_slot_index: maximizedSlotIndex,
+        visible_slots: visibleSlots.filter(Boolean),
+        selected_city: selectedCity || "",
+        selected_region: selectedRegionKey,
+      },
+    });
+  }, [
+    activeNavKey,
+    activeSlotIndex,
+    gridCols,
+    gridRows,
+    locale,
+    maximizedSlotIndex,
+    selectedCity,
+    selectedRegionKey,
+    visibleSlots,
+  ]);
+
+  const openChartFeedback = useCallback((context: Record<string, unknown>) => {
+    setFeedbackDraft({
+      category: "bug",
+      source: "chart",
+      context: {
+        ...context,
+        active_nav: activeNavKey,
+        locale,
+        grid: `${gridCols}x${gridRows}`,
+      },
+    });
+  }, [activeNavKey, gridCols, gridRows, locale]);
 
   const handleSetGridSize = (cols: number, rows: number) => {
     const safeCols = clampGridSide(cols);
@@ -800,7 +868,12 @@ function PolyWeatherTerminal({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[#e9edf3] text-[#202833]">
-      <TerminalSidebar activeNavKey={activeNavKey} isEn={isEn} onSelectNav={handleSelectNav} />
+      <TerminalSidebar
+        activeNavKey={activeNavKey}
+        isEn={isEn}
+        onFeedbackClick={openTerminalFeedback}
+        onSelectNav={handleSelectNav}
+      />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-[#d2d9e2] bg-white px-4 text-slate-800">
@@ -872,6 +945,7 @@ function PolyWeatherTerminal({
                       allRows={filteredRegionRows}
                       compact={false}
                       disableClose={true}
+                      onReportIssue={openChartFeedback}
                     />
                   </div>
                 )}
@@ -931,6 +1005,7 @@ function PolyWeatherTerminal({
                           handleSelectCityForSlot(maximizedSlotIndex, null);
                           setMaximizedSlotIndex(null);
                         }}
+                        onReportIssue={openChartFeedback}
                         isMaximized={true}
                         disableClose={visibleSlots.filter(Boolean).length <= 1}
                       />
@@ -1019,6 +1094,7 @@ function PolyWeatherTerminal({
                               onClose={() => {
                                 handleSelectCityForSlot(slotIndex, null);
                               }}
+                              onReportIssue={openChartFeedback}
                               isMaximized={false}
                               disableClose={visibleSlots.filter(Boolean).length <= 1}
                             />
@@ -1046,6 +1122,11 @@ function PolyWeatherTerminal({
           )}
         </main>
       </div>
+      <UserFeedbackModal
+        draft={feedbackDraft}
+        isEn={isEn}
+        onClose={() => setFeedbackDraft(null)}
+      />
     </div>
   );
 }

@@ -548,6 +548,27 @@ class DBManager:
                 "CREATE INDEX IF NOT EXISTS idx_app_analytics_events_type_created_at ON app_analytics_events(event_type, created_at DESC)"
             )
             conn.execute("""
+                CREATE TABLE IF NOT EXISTS user_feedback (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    category TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    source TEXT NOT NULL DEFAULT 'terminal',
+                    status TEXT NOT NULL DEFAULT 'open',
+                    contact TEXT,
+                    user_id TEXT,
+                    user_email TEXT,
+                    context_json TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_user_feedback_status_created_at ON user_feedback(status, created_at DESC)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_user_feedback_created_at ON user_feedback(created_at DESC)"
+            )
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS supabase_bindings (
                     supabase_user_id TEXT PRIMARY KEY,
                     telegram_id INTEGER NOT NULL,
@@ -1047,6 +1068,149 @@ class DBManager:
                     }
                 )
             return out
+
+    def _feedback_row_to_dict(self, row: sqlite3.Row) -> Dict[str, Any]:
+        try:
+            context = json.loads(str(row["context_json"] or "{}"))
+        except Exception:
+            context = {}
+        return {
+            "id": int(row["id"]),
+            "category": str(row["category"] or ""),
+            "message": str(row["message"] or ""),
+            "source": str(row["source"] or ""),
+            "status": str(row["status"] or ""),
+            "contact": str(row["contact"] or ""),
+            "user_id": str(row["user_id"] or ""),
+            "user_email": str(row["user_email"] or ""),
+            "context": context if isinstance(context, dict) else {},
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+
+    def append_user_feedback(
+        self,
+        *,
+        category: str,
+        message: str,
+        source: str = "terminal",
+        contact: Optional[str] = None,
+        user_id: Optional[str] = None,
+        user_email: Optional[str] = None,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        normalized_category = str(category or "other").strip().lower()[:40] or "other"
+        normalized_message = str(message or "").strip()
+        normalized_source = str(source or "terminal").strip().lower()[:40] or "terminal"
+        normalized_contact = str(contact or "").strip()[:180]
+        normalized_user_id = str(user_id or "").strip().lower()[:128]
+        normalized_user_email = str(user_email or "").strip().lower()[:180]
+        context_payload = context if isinstance(context, dict) else {}
+        now = datetime.now().isoformat()
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                INSERT INTO user_feedback (
+                    category,
+                    message,
+                    source,
+                    status,
+                    contact,
+                    user_id,
+                    user_email,
+                    context_json,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    normalized_category,
+                    normalized_message,
+                    normalized_source,
+                    normalized_contact,
+                    normalized_user_id,
+                    normalized_user_email,
+                    json.dumps(context_payload, ensure_ascii=False, default=str),
+                    now,
+                    now,
+                ),
+            )
+            feedback_id = int(cursor.lastrowid)
+            row = conn.execute(
+                """
+                SELECT id, category, message, source, status, contact, user_id,
+                       user_email, context_json, created_at, updated_at
+                FROM user_feedback
+                WHERE id = ?
+                """,
+                (feedback_id,),
+            ).fetchone()
+            conn.commit()
+        return self._feedback_row_to_dict(row)
+
+    def list_user_feedback(
+        self,
+        *,
+        limit: int = 100,
+        status: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        safe_limit = max(1, min(int(limit or 100), 500))
+        normalized_status = str(status or "").strip().lower()
+        clauses: List[str] = []
+        params: List[Any] = []
+        if normalized_status:
+            clauses.append("status = ?")
+            params.append(normalized_status)
+        where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(safe_limit)
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                f"""
+                SELECT id, category, message, source, status, contact, user_id,
+                       user_email, context_json, created_at, updated_at
+                FROM user_feedback
+                {where_sql}
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                tuple(params),
+            ).fetchall()
+        return [self._feedback_row_to_dict(row) for row in rows]
+
+    def update_user_feedback_status(
+        self,
+        feedback_id: int,
+        *,
+        status: str,
+    ) -> Optional[Dict[str, Any]]:
+        normalized_status = str(status or "").strip().lower()
+        if not normalized_status:
+            return None
+        now = datetime.now().isoformat()
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            conn.execute(
+                """
+                UPDATE user_feedback
+                SET status = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (normalized_status, now, int(feedback_id)),
+            )
+            row = conn.execute(
+                """
+                SELECT id, category, message, source, status, contact, user_id,
+                       user_email, context_json, created_at, updated_at
+                FROM user_feedback
+                WHERE id = ?
+                """,
+                (int(feedback_id),),
+            ).fetchone()
+            conn.commit()
+        return self._feedback_row_to_dict(row) if row else None
 
     def get_app_analytics_funnel_summary(self, *, days: int = 30) -> Dict[str, Any]:
         safe_days = max(1, min(int(days or 30), 365))

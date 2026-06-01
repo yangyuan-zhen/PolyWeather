@@ -13,6 +13,7 @@ from web.core import app as core_app
 from web.routers.analytics import router as analytics_router
 from web.routers.city import router as city_router
 from web.routers.auth import router as auth_router
+from web.routers.feedback import router as feedback_router
 from web.routers.ops import router as ops_router
 from web.routers.payments import router as payments_router
 from web.routers.scan import router as scan_router
@@ -41,6 +42,7 @@ def create_app() -> FastAPI:
         core_app.include_router(system_router)
         core_app.include_router(city_router)
         core_app.include_router(auth_router)
+        core_app.include_router(feedback_router)
         core_app.include_router(analytics_router)
         core_app.include_router(scan_router)
         core_app.include_router(sse_router)

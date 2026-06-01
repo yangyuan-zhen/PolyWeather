@@ -106,6 +106,18 @@ export const opsApi = {
     if (reason) params.set("reason", reason);
     return opsFetch<Record<string, unknown>>(`/api/ops/payments/incidents?${params}`);
   },
+  feedback(limit = 100, status?: string) {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (status) params.set("status", status);
+    return opsFetch<Record<string, unknown>>(`/api/ops/feedback?${params}`);
+  },
+  updateFeedbackStatus(feedbackId: string | number, status: string) {
+    return opsFetch<Record<string, unknown>>(`/api/ops/feedback/${feedbackId}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+  },
   resolveIncident(eventId: string | number) {
     return opsFetch<Record<string, unknown>>(`/api/ops/payments/incidents/${eventId}/resolve`, {
       method: "POST",

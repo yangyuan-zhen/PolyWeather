@@ -135,6 +135,44 @@ def get_ops_weekly_leaderboard(request: Request, limit: int = 20) -> Dict[str, A
     return {"leaderboard": db.get_weekly_leaderboard(limit=limit)}
 
 
+def list_ops_feedback(
+    request: Request,
+    *,
+    limit: int = 100,
+    status: str = "",
+) -> Dict[str, Any]:
+    _require_ops(request)
+    db = DBManager()
+    rows = db.list_user_feedback(limit=limit, status=status or None)
+    status_counts: Dict[str, int] = {}
+    recent_rows = db.list_user_feedback(limit=500)
+    for row in recent_rows:
+        key = str(row.get("status") or "unknown")
+        status_counts[key] = status_counts.get(key, 0) + 1
+    return {
+        "feedback": rows,
+        "total": len(rows),
+        "status_counts": status_counts,
+    }
+
+
+def update_ops_feedback_status(
+    request: Request,
+    *,
+    feedback_id: int,
+    status: str,
+) -> Dict[str, Any]:
+    _require_ops(request)
+    normalized = str(status or "").strip().lower()
+    allowed = {"open", "triaged", "investigating", "resolved", "closed"}
+    if normalized not in allowed:
+        raise HTTPException(status_code=400, detail="unsupported feedback status")
+    updated = DBManager().update_user_feedback_status(feedback_id, status=normalized)
+    if not updated:
+        raise HTTPException(status_code=404, detail="feedback not found")
+    return {"ok": True, "feedback": updated}
+
+
 def _list_active_subscriptions_with_windows(
     limit: int,
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], bool]:

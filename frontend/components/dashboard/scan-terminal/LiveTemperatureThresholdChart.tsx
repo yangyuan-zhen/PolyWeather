@@ -1,6 +1,7 @@
 "use client";
 
 import clsx from "clsx";
+import { Bug } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 import { useLatestPatch, useSseResyncVersion } from "@/hooks/use-sse-patches";
@@ -166,6 +167,7 @@ export function LiveTemperatureThresholdChart({
   onSearchClick,
   onMaximize,
   onClose,
+  onReportIssue,
   isMaximized = false,
   disableClose = false,
   isActive = !compact,
@@ -178,6 +180,7 @@ export function LiveTemperatureThresholdChart({
   onSearchClick?: () => void;
   onMaximize?: () => void;
   onClose?: () => void;
+  onReportIssue?: (context: Record<string, unknown>) => void;
   isMaximized?: boolean;
   disableClose?: boolean;
   isActive?: boolean;
@@ -780,6 +783,54 @@ export function LiveTemperatureThresholdChart({
     setDetailRetryNonce((value) => value + 1);
   }, []);
 
+  const handleReportIssue = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    onReportIssue?.({
+      source: "chart",
+      city,
+      display_city: row ? rowName(row) : "",
+      row_id: row?.id || "",
+      slot_index: slotIndex,
+      compact,
+      is_active: isActive,
+      is_maximized: isMaximized,
+      detail_error: detailError,
+      is_hourly_loading: isHourlyLoading,
+      showing_stale_detail: showingStaleDetail,
+      target_resolution: targetResolution,
+      view_mode: viewMode,
+      loaded_local_date: chartLocalDate || "",
+      has_runway_data: hasRunwayData,
+      series: chartSeries.map((item) => item.key),
+      visible_series: activeSeries.map((item) => item.key),
+      live_temp: liveTemp,
+      current_runway_temp: currentRunwayTemp,
+      observed_high_metar: observedHighMetar,
+      observed_high_runway: observedHighRunway,
+    });
+  }, [
+    activeSeries,
+    chartLocalDate,
+    chartSeries,
+    city,
+    compact,
+    currentRunwayTemp,
+    detailError,
+    hasRunwayData,
+    isActive,
+    isHourlyLoading,
+    isMaximized,
+    liveTemp,
+    observedHighMetar,
+    observedHighRunway,
+    onReportIssue,
+    row,
+    showingStaleDetail,
+    slotIndex,
+    targetResolution,
+    viewMode,
+  ]);
+
   const panelTitle = row ? (
     <div className="flex items-center gap-1">
       <button
@@ -842,8 +893,18 @@ export function LiveTemperatureThresholdChart({
         ))}
       </div>
 
-      {(onMaximize || onClose) && (
+      {(onMaximize || onClose || onReportIssue) && (
         <div className="flex items-center gap-1">
+          {onReportIssue && (
+            <button
+              type="button"
+              onClick={handleReportIssue}
+              className="grid h-6 w-6 place-items-center rounded bg-white hover:bg-slate-50 border border-slate-200 text-slate-500 hover:text-amber-600 transition-colors shadow-sm"
+              title={isEn ? "Report this chart" : "反馈此图表"}
+            >
+              <Bug size={13} />
+            </button>
+          )}
           {onMaximize && (
             <button
               type="button"

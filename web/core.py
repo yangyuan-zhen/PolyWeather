@@ -491,6 +491,14 @@ class AnalyticsEventRequest(BaseModel):
     payload: Dict[str, Any] = Field(default_factory=dict)
 
 
+class UserFeedbackRequest(BaseModel):
+    category: str = Field(default="bug", min_length=2, max_length=40)
+    message: str = Field(..., min_length=3, max_length=5000)
+    source: str = Field(default="terminal", max_length=40)
+    contact: Optional[str] = Field(default=None, max_length=180)
+    context: Dict[str, Any] = Field(default_factory=dict)
+
+
 class GrantPointsRequest(BaseModel):
     email: str = Field(..., min_length=3)
     points: int = Field(..., gt=0, le=100000)
