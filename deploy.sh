@@ -73,6 +73,7 @@ compose_up_retry() {
 }
 
 export IMAGE_TAG="$NEW_TAG"
+export POLYWEATHER_API_BASE_URL="${POLYWEATHER_FRONTEND_INTERNAL_API_BASE_URL:-http://polyweather_web:8000}"
 pull_ok=0
 for pull_attempt in $(seq 1 6); do
     docker compose pull && pull_ok=1 && break
