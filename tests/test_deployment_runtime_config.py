@@ -149,6 +149,19 @@ def test_docker_compose_keeps_polyweather_ports_on_loopback():
     assert "\n    - 8000:8000" not in compose
 
 
+def test_web_container_raises_open_file_limit_for_sse_and_proxy_load():
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    web_block = compose.split("  polyweather_web:", 1)[1].split(
+        "\nx-polyweather-base:",
+        1,
+    )[0]
+
+    assert "ulimits:" in web_block
+    assert "nofile:" in web_block
+    assert "soft: 65535" in web_block
+    assert "hard: 65535" in web_block
+
+
 def test_city_detail_builds_deb_hourly_consensus_before_peak_window():
     source = (ROOT / "web" / "analysis_service.py").read_text(encoding="utf-8")
 
