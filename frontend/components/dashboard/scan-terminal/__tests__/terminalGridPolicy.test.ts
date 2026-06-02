@@ -58,6 +58,16 @@ export function runTests() {
     "mobile terminal should render one selected chart and suggest landscape for the full grid",
   );
   assert(
+    !dashboardSource.includes("disableClose={visibleSlots.filter(Boolean).length <= 1}"),
+    "desktop chart slots must allow clearing the last visible city so users can close a 1x1 chart",
+  );
+  assert(
+    dashboardSource.includes("readStoredTerminalSlots") &&
+      dashboardSource.includes("hasPersistedSlots") &&
+      dashboardSource.includes("shouldAutofillInitialSlots"),
+    "terminal slots must distinguish first-load default fill from a user-cleared all-empty layout",
+  );
+  assert(
     selectorSource.includes("[1, 2, 3].map") &&
       selectorSource.includes("grid grid-cols-3"),
     "grid selector must expose at most a 3 by 3 chart layout",

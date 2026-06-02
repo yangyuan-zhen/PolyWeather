@@ -269,6 +269,7 @@ const MAX_TERMINAL_GRID_SIDE = 3;
 const MAX_TERMINAL_CHARTS = 9;
 const MOBILE_TERMINAL_CHARTS = 1;
 const DEFAULT_TERMINAL_GRID_SIDE = 2;
+const TERMINAL_SLOTS_STORAGE_KEY = "polyweather_terminal_slots";
 
 function clampGridSide(value: number) {
   if (!Number.isFinite(value)) return DEFAULT_TERMINAL_GRID_SIDE;
@@ -293,6 +294,45 @@ function normalizeSlotList(slots: Array<string | null>, totalSlots: number) {
   if (slots.length === totalSlots) return slots;
   if (slots.length > totalSlots) return slots.slice(0, totalSlots);
   return [...slots, ...Array(totalSlots - slots.length).fill(null)];
+}
+
+function readStoredTerminalSlots(totalSlots = MAX_TERMINAL_CHARTS) {
+  const emptySlots = Array(totalSlots).fill(null) as Array<string | null>;
+  if (typeof window === "undefined") {
+    return { slots: emptySlots, hasPersistedSlots: false };
+  }
+  try {
+    const stored = localStorage.getItem(TERMINAL_SLOTS_STORAGE_KEY);
+    if (stored === null) return { slots: emptySlots, hasPersistedSlots: false };
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return { slots: emptySlots, hasPersistedSlots: true };
+    const normalized = parsed.map((value) => {
+      const text = String(value || "").toLowerCase().trim();
+      return text || null;
+    });
+    return {
+      slots: normalizeSlotList(normalized, totalSlots),
+      hasPersistedSlots: true,
+    };
+  } catch {
+    return { slots: emptySlots, hasPersistedSlots: false };
+  }
+}
+
+function shouldAutofillInitialSlots({
+  filteredRegionRows,
+  hasPersistedSlots,
+  slots,
+}: {
+  filteredRegionRows: ScanOpportunityRow[];
+  hasPersistedSlots: boolean;
+  slots: Array<string | null>;
+}) {
+  return (
+    !hasPersistedSlots &&
+    filteredRegionRows.length > 0 &&
+    slots.every((slot) => slot === null)
+  );
 }
 
 function t(key: keyof typeof TERM, isEn: boolean) {
@@ -662,19 +702,11 @@ function PolyWeatherTerminal({
 
   const totalSlots = getSlotCount(gridCols, gridRows);
 
+  const hasPersistedSlots = useRef(false);
   const [slots, setSlots] = useState<Array<string | null>>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("polyweather_terminal_slots");
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) {
-            return normalizeSlotList(parsed, MAX_TERMINAL_CHARTS);
-          }
-        }
-      } catch {}
-    }
-    return Array(MAX_TERMINAL_CHARTS).fill(null);
+    const stored = readStoredTerminalSlots();
+    hasPersistedSlots.current = stored.hasPersistedSlots;
+    return stored.slots;
   });
   const [activeSlotIndex, setActiveSlotIndex] = useState<number>(0);
   const [maximizedSlotIndex, setMaximizedSlotIndex] = useState<number | null>(null);
@@ -758,13 +790,20 @@ function PolyWeatherTerminal({
   }, [rows, selectedRegionKey]);
 
   useEffect(() => {
-    if (filteredRegionRows.length && slots.every((s) => s === null)) {
+    if (
+      shouldAutofillInitialSlots({
+        filteredRegionRows,
+        hasPersistedSlots: hasPersistedSlots.current,
+        slots,
+      })
+    ) {
       const next = Array(MAX_TERMINAL_CHARTS)
         .fill(null)
         .map((_, idx) => filteredRegionRows[idx]?.city || null);
       setSlots(next);
+      hasPersistedSlots.current = true;
       try {
-        localStorage.setItem("polyweather_terminal_slots", JSON.stringify(next));
+        localStorage.setItem(TERMINAL_SLOTS_STORAGE_KEY, JSON.stringify(next));
       } catch {}
     }
   }, [filteredRegionRows, slots]);
@@ -774,8 +813,9 @@ function PolyWeatherTerminal({
     const next = [...slots];
     next[index] = city;
     setSlots(next);
+    hasPersistedSlots.current = true;
     try {
-      localStorage.setItem("polyweather_terminal_slots", JSON.stringify(next));
+      localStorage.setItem(TERMINAL_SLOTS_STORAGE_KEY, JSON.stringify(next));
     } catch {}
   };
 
@@ -1008,7 +1048,6 @@ function PolyWeatherTerminal({
                         }}
                         onReportIssue={openChartFeedback}
                         isMaximized={true}
-                        disableClose={visibleSlots.filter(Boolean).length <= 1}
                       />
 
                       {activeSearchSlotIndex === maximizedSlotIndex && (
@@ -1097,7 +1136,6 @@ function PolyWeatherTerminal({
                               }}
                               onReportIssue={openChartFeedback}
                               isMaximized={false}
-                              disableClose={visibleSlots.filter(Boolean).length <= 1}
                             />
 
                             {activeSearchSlotIndex === slotIndex && (
