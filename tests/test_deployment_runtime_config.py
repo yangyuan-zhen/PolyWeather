@@ -114,6 +114,17 @@ def test_deploy_script_retries_startup_smoke_checks():
     assert 'smoke_check "frontend" "https://www.polyweather.top/" 15 3 5' in script
 
 
+def test_deploy_script_rechecks_public_smoke_before_rollback():
+    script = (ROOT / "deploy.sh").read_text(encoding="utf-8")
+
+    assert "run_public_smoke_checks()" in script
+    assert "Initial public smoke failed; retrying before rollback" in script
+    assert "PUBLIC_SMOKE_RECHECK_DELAY_SEC" in script
+    assert 'smoke_check "healthz recheck" "https://api.polyweather.top/healthz"' in script
+    assert 'smoke_check "frontend cities recheck" "https://polyweather.top/api/cities"' in script
+    assert 'smoke_check "frontend recheck" "https://www.polyweather.top/"' in script
+
+
 def test_deploy_script_retries_compose_recreate_races():
     script = (ROOT / "deploy.sh").read_text(encoding="utf-8")
 

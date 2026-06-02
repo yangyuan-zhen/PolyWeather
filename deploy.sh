@@ -151,6 +151,25 @@ warm_public_route() {
     return 0
 }
 
+PUBLIC_SMOKE_RECHECK_DELAY_SEC="${POLYWEATHER_PUBLIC_SMOKE_RECHECK_DELAY_SEC:-20}"
+
+run_public_smoke_checks() {
+    local phase="${1:-initial}"
+    local failed=0
+
+    if [ "$phase" = "recheck" ]; then
+        smoke_check "healthz recheck" "https://api.polyweather.top/healthz" 20 6 10 || failed=1
+        smoke_check "frontend cities recheck" "https://polyweather.top/api/cities" 30 8 10 || failed=1
+        smoke_check "frontend recheck" "https://www.polyweather.top/" 20 6 10 || failed=1
+    else
+        smoke_check "healthz" "https://api.polyweather.top/healthz" 15 3 5 || failed=1
+        smoke_check "frontend cities" "https://polyweather.top/api/cities" 20 5 5 || failed=1
+        smoke_check "frontend" "https://www.polyweather.top/" 15 3 5 || failed=1
+    fi
+
+    return "$failed"
+}
+
 echo "Updating Redis dependency..."
 compose_up_retry "redis" -d polyweather_redis
 
@@ -185,9 +204,14 @@ warm_public_route "local cities recent stats" "http://127.0.0.1:8000/api/cities?
 warm_public_route "cities" "https://polyweather.top/api/cities" 20 3 2
 
 FAILED=0
-smoke_check "healthz" "https://api.polyweather.top/healthz" 15 3 5 || FAILED=1
-smoke_check "frontend cities" "https://polyweather.top/api/cities" 20 5 5 || FAILED=1
-smoke_check "frontend" "https://www.polyweather.top/" 15 3 5 || FAILED=1
+run_public_smoke_checks || FAILED=1
+
+if [ "$FAILED" = "1" ]; then
+    echo "⚠️  Initial public smoke failed; retrying before rollback..."
+    sleep "$PUBLIC_SMOKE_RECHECK_DELAY_SEC"
+    FAILED=0
+    run_public_smoke_checks "recheck" || FAILED=1
+fi
 
 if [ "$FAILED" = "1" ]; then
     echo "❌ Smoke tests failed. Rolling back..."
