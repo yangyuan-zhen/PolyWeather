@@ -11,6 +11,35 @@ import {
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
+function looksLikeHtmlDocument(value: string) {
+  const text = String(value || "").trim().toLowerCase();
+  return (
+    text.startsWith("<!doctype html") ||
+    text.startsWith("<html") ||
+    /<title>[^<]*(50\d|cloudflare|polyweather\.top)/i.test(String(value || ""))
+  );
+}
+
+function submitErrorMessage(raw: string) {
+  try {
+    const parsed = JSON.parse(String(raw || "")) as {
+      detail?: unknown;
+      error?: unknown;
+      message?: unknown;
+    };
+    const message = [parsed.detail, parsed.error, parsed.message].find(
+      (item) => typeof item === "string" && item.trim(),
+    );
+    if (typeof message === "string") {
+      const trimmed = message.trim();
+      if (!looksLikeHtmlDocument(trimmed)) return trimmed.slice(0, 350);
+    }
+  } catch {
+    // Non-JSON upstream errors are commonly HTML 50x pages; do not expose them.
+  }
+  return "Payment submit upstream failed";
+}
+
 export async function POST(
   req: NextRequest,
   context: { params: Promise<{ intentId: string }> },
@@ -40,14 +69,9 @@ export async function POST(
     );
     if (!res.ok) {
       const raw = await res.text();
-      let detail = raw.slice(0, 350);
-      try {
-        const parsed = JSON.parse(raw);
-        if (parsed.detail) detail = String(parsed.detail).slice(0, 350);
-      } catch {}
       const response = buildUpstreamErrorResponse(res.status, raw, {
         detailLimit: 350,
-        error: detail || undefined,
+        error: submitErrorMessage(raw),
       });
       return applyAuthResponseCookies(response, auth.response);
     }

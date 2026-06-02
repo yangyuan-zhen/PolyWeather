@@ -28,6 +28,33 @@ function shouldExposeProxyErrorDetail() {
   );
 }
 
+function looksLikeHtmlDocument(value: string) {
+  const text = String(value || "").trim().toLowerCase();
+  return (
+    text.startsWith("<!doctype html") ||
+    text.startsWith("<html") ||
+    /<title>[^<]*(50\d|cloudflare|polyweather\.top)/i.test(String(value || ""))
+  );
+}
+
+function extractSafeUpstreamJsonMessage(rawDetail: string) {
+  try {
+    const parsed = JSON.parse(String(rawDetail || "")) as {
+      detail?: unknown;
+      error?: unknown;
+      message?: unknown;
+    };
+    const message = [parsed.detail, parsed.error, parsed.message].find(
+      (item) => typeof item === "string" && item.trim(),
+    );
+    if (typeof message !== "string") return "";
+    const trimmed = message.trim();
+    return looksLikeHtmlDocument(trimmed) ? "" : trimmed;
+  } catch {
+    return "";
+  }
+}
+
 export function clientStatusFromUpstream(status: number) {
   if (PASSTHROUGH_UPSTREAM_STATUSES.has(status)) {
     return status;
@@ -44,8 +71,9 @@ export function buildUpstreamErrorResponse(
     extraDebug?: Record<string, unknown>;
   },
 ) {
+  const safeJsonMessage = extractSafeUpstreamJsonMessage(rawDetail);
   const body: Record<string, unknown> = {
-    error: options?.error || "Upstream request failed",
+    error: options?.error || safeJsonMessage || "Upstream request failed",
     upstream_status: upstreamStatus,
   };
 

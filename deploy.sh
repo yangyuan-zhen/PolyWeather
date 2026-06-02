@@ -151,6 +151,38 @@ warm_public_route() {
     return 0
 }
 
+read_env_file_value() {
+    local key="$1"
+    if [ ! -f ".env" ]; then
+        return 0
+    fi
+    awk -F= -v key="$key" '
+        $0 ~ "^[[:space:]]*" key "[[:space:]]*=" {
+            value=$0
+            sub("^[^=]*=", "", value)
+            gsub("^[[:space:]]+|[[:space:]]+$", "", value)
+            gsub(/^["'"'"']|["'"'"']$/, "", value)
+            print value
+        }
+    ' .env | tail -n 1
+}
+
+validate_frontend_api_base_url() {
+    local api_base="${POLYWEATHER_API_BASE_URL:-}"
+    if [ -z "$api_base" ]; then
+        api_base="$(read_env_file_value "POLYWEATHER_API_BASE_URL")"
+    fi
+    local normalized
+    normalized="$(printf '%s' "$api_base" | tr '[:upper:]' '[:lower:]' | sed 's/[[:space:]]//g; s#/*$##')"
+    case "$normalized" in
+        http://polyweather.top|https://polyweather.top|http://www.polyweather.top|https://www.polyweather.top)
+            echo "❌ POLYWEATHER_API_BASE_URL must not point at the frontend site: $api_base"
+            echo "   Use the internal backend URL http://polyweather_web:8000 or the backend API host https://api.polyweather.top."
+            exit 1
+            ;;
+    esac
+}
+
 PUBLIC_SMOKE_RECHECK_DELAY_SEC="${POLYWEATHER_PUBLIC_SMOKE_RECHECK_DELAY_SEC:-20}"
 
 run_public_smoke_checks() {
@@ -169,6 +201,8 @@ run_public_smoke_checks() {
 
     return "$failed"
 }
+
+validate_frontend_api_base_url
 
 echo "Updating Redis dependency..."
 compose_up_retry "redis" -d polyweather_redis

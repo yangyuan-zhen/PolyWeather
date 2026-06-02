@@ -24,6 +24,7 @@ import {
   buildBalanceOfCalldata,
   formatTokenUnits,
   normalizePaymentError,
+  readPaymentApiErrorMessage,
   requestWalletWithTimeout,
 } from "./payment-utils";
 import { trackAppEvent } from "@/lib/app-analytics";
@@ -304,7 +305,11 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
       const headers = authHeaders || (await buildAuthedHeaders(false));
       const configRes = await fetch("/api/payments/config", { cache: "no-store", headers });
       if (!configRes.ok) {
-        const raw = (await configRes.text()).slice(0, 350);
+        const raw = await readPaymentApiErrorMessage(
+          configRes,
+          isEn ? "Payment config request failed." : "支付配置请求失败。",
+          350,
+        );
         throw new Error(copy.loadConfigFailed.replace("{raw}", raw));
       }
       const configJson = (await configRes.json()) as PaymentConfig;
@@ -373,7 +378,11 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
             await new Promise((resolve) => setTimeout(resolve, pollMs));
             continue;
           }
-          const raw = (await statusRes.text()).slice(0, 260);
+          const raw = await readPaymentApiErrorMessage(
+            statusRes,
+            isEn ? "Payment status request failed." : "支付状态请求失败。",
+            260,
+          );
           throw new Error(copy.queryIntentFailed.replace("{raw}", raw));
         }
         const statusJson = (await statusRes.json()) as IntentStatusResponse;
@@ -505,7 +514,11 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
         }),
       });
       if (!createRes.ok) {
-        const raw = (await createRes.text()).slice(0, 350);
+        const raw = await readPaymentApiErrorMessage(
+          createRes,
+          isEn ? "Payment order request failed." : "支付订单请求失败。",
+          350,
+        );
         throw new Error(copy.createIntentFailed.replace("{raw}", raw));
       }
 
@@ -584,7 +597,11 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
         method: "POST", headers: authHeaders, body: JSON.stringify({ tx_hash: txHashNorm, from_address: payingWallet }),
       });
       if (!submitRes.ok) {
-        const raw = (await submitRes.text()).slice(0, 350);
+        const raw = await readPaymentApiErrorMessage(
+          submitRes,
+          isEn ? "Payment submit request failed." : "支付提交请求失败。",
+          350,
+        );
         if (submitRes.status === 409) {
           if (handleSubmit409Ref.current) await handleSubmit409Ref.current(intentId, txHashNorm, raw);
           return;
@@ -596,7 +613,11 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
         method: "POST", headers: authHeaders, body: JSON.stringify({ tx_hash: txHashNorm }),
       });
       if (!confirmRes.ok) {
-        const raw = (await confirmRes.text()).slice(0, 350);
+        const raw = await readPaymentApiErrorMessage(
+          confirmRes,
+          isEn ? "Payment confirm request failed." : "支付确认请求失败。",
+          350,
+        );
         const lowerRaw = raw.toLowerCase();
         const maybePending =
           (confirmRes.status === 404 && !lowerRaw.includes("payment intent not found")) ||
@@ -682,7 +703,11 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
         }),
       });
       if (!createRes.ok) {
-        const raw = (await createRes.text()).slice(0, 350);
+        const raw = await readPaymentApiErrorMessage(
+          createRes,
+          isEn ? "Manual payment order request failed." : "手动转账订单请求失败。",
+          350,
+        );
         throw new Error(copy.createManualIntentFailed.replace("{raw}", raw));
       }
 
@@ -740,7 +765,11 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
         method: "POST", headers: authHeaders, body: JSON.stringify({ tx_hash: txHashNorm }),
       });
       if (!submitRes.ok) {
-        const raw = (await submitRes.text()).slice(0, 350);
+        const raw = await readPaymentApiErrorMessage(
+          submitRes,
+          isEn ? "Payment submit request failed." : "支付提交请求失败。",
+          350,
+        );
         if (submitRes.status === 409) {
           if (handleSubmit409Ref.current) await handleSubmit409Ref.current(intentIdVal, txHashNorm, raw);
           return;
@@ -751,7 +780,11 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
         method: "POST", headers: authHeaders, body: JSON.stringify({ tx_hash: txHashNorm }),
       });
       if (!confirmRes.ok) {
-        const raw = (await confirmRes.text()).slice(0, 350);
+        const raw = await readPaymentApiErrorMessage(
+          confirmRes,
+          isEn ? "Payment confirm request failed." : "支付确认请求失败。",
+          350,
+        );
         const lowerRaw = raw.toLowerCase();
         const maybePending =
           confirmRes.status === 408 ||

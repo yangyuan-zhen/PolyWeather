@@ -34,4 +34,11 @@ export function runTests() {
       deployScript.includes("https://polyweather.top/api/auth/me?prefer_snapshot=1"),
     "deploy script must warm terminal and auth snapshot routes after container replacement",
   );
+  assert(
+    deployScript.includes("validate_frontend_api_base_url") &&
+      deployScript.includes("POLYWEATHER_API_BASE_URL must not point at the frontend site") &&
+      deployScript.indexOf("validate_frontend_api_base_url") <
+        deployScript.indexOf('echo "Updating Redis dependency..."'),
+    "deploy script must reject frontend POLYWEATHER_API_BASE_URL values that point at polyweather.top and would recurse through the frontend proxy",
+  );
 }

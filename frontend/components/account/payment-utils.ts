@@ -68,27 +68,52 @@ export type NormalizedPaymentError = {
   userRejected: boolean;
 };
 
+export function looksLikeHtmlDocument(value: string) {
+  const text = String(value || "").trim().toLowerCase();
+  return (
+    text.startsWith("<!doctype html") ||
+    text.startsWith("<html") ||
+    /<title>[^<]*(50\d|cloudflare|polyweather\.top)/i.test(String(value || ""))
+  );
+}
+
+function containsCjk(value: string) {
+  return /[\u3400-\u9fff]/.test(value);
+}
+
+function safePaymentServiceUnavailableMessage(fallback: string) {
+  return containsCjk(fallback)
+    ? "支付服务暂时不可用，请稍后重试；如果已经付款，请保存 Tx Hash 联系管理员。"
+    : "Payment service is temporarily unavailable. Please retry shortly; if you already paid, keep the Tx Hash and contact support.";
+}
+
 export async function readPaymentApiErrorMessage(
   response: Response,
   fallback = "Request failed",
   limit = 300,
 ) {
-  const raw = (await response.text()).slice(0, limit);
-  if (!raw) return fallback;
+  const raw = await response.text();
+  const trimmed = String(raw || "").trim();
+  if (!trimmed) return fallback;
+  let message = "";
   try {
-    const parsed = JSON.parse(raw) as {
+    const parsed = JSON.parse(trimmed) as {
       error?: unknown;
       detail?: unknown;
       message?: unknown;
     };
-    const message = [parsed.error, parsed.detail, parsed.message].find(
+    const parsedMessage = [parsed.error, parsed.detail, parsed.message].find(
       (item) => typeof item === "string" && item.trim(),
     );
-    if (typeof message === "string") return message.trim();
+    if (typeof parsedMessage === "string") message = parsedMessage.trim();
   } catch {
-    // Fall back to the raw response body below.
+    message = trimmed;
   }
-  return raw;
+  const candidate = message || trimmed;
+  if (looksLikeHtmlDocument(candidate)) {
+    return safePaymentServiceUnavailableMessage(fallback);
+  }
+  return candidate.slice(0, limit);
 }
 
 export function normalizePaymentError(error: unknown): NormalizedPaymentError {

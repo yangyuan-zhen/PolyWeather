@@ -66,6 +66,10 @@ export function runTests() {
   const paymentFlowSource = fs.existsSync(paymentFlowPath)
     ? fs.readFileSync(paymentFlowPath, "utf8")
     : "";
+  const paymentUtilsSource = fs.readFileSync(
+    path.join(projectRoot, "components", "account", "payment-utils.ts"),
+    "utf8",
+  );
 
   // The receiver validation now lives in the extracted hook file (called
   // from createManualPaymentIntent and createIntentAndPay).
@@ -245,5 +249,35 @@ export function runTests() {
   assert(
     walletBindSource.includes("readPaymentApiErrorMessage"),
     "wallet binding errors must show the API error message instead of raw JSON",
+  );
+  assert(
+    paymentUtilsSource.includes("looksLikeHtmlDocument") &&
+      paymentUtilsSource.includes("Payment service is temporarily unavailable") &&
+      paymentUtilsSource.includes("支付服务暂时不可用"),
+    "payment API error parsing must collapse upstream HTML/Cloudflare 50x pages into a user-safe message",
+  );
+  assert(
+    paymentFlowSource.includes("readPaymentApiErrorMessage") &&
+      !paymentFlowSource.includes("(await submitRes.text()).slice(0, 350)") &&
+      !paymentFlowSource.includes("(await confirmRes.text()).slice(0, 350)"),
+    "payment submit/confirm failures must use sanitized API error messages instead of raw response text",
+  );
+  const submitRouteSource = fs.readFileSync(
+    path.join(
+      projectRoot,
+      "app",
+      "api",
+      "payments",
+      "intents",
+      "[intentId]",
+      "submit",
+      "route.ts",
+    ),
+    "utf8",
+  );
+  assert(
+    submitRouteSource.includes("Payment submit upstream failed") &&
+      !submitRouteSource.includes("error: detail || undefined"),
+    "payment submit proxy must not copy raw upstream HTML into the public error field",
   );
 }
