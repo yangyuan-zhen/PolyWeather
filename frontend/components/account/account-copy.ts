@@ -271,8 +271,8 @@ export function createAccountCopy(isEn: boolean): Record<string, string> {
       verifyUnknown: isEn ? "Unknown error" : "未知错误",
       // ── Telegram bind messages ────────────────────────────────────────
       telegramVerifySuccess: isEn
-        ? "Telegram group membership verified. Checkout follows the selected Pro plan."
-        : "Telegram 群成员验证成功，结算金额以当前选择的 Pro 套餐为准。",
+        ? "Telegram group membership verified. Member monthly price {amount} USDC is active."
+        : "Telegram 群成员验证成功，群友月付价 {amount} USDC 已生效。",
       telegramBindClickHint: isEn
         ? "Open the Telegram Bot, click Start, and confirm binding. Then refresh this page to request group entry."
         : "已打开 Telegram Bot，请在 Bot 内点击 Start 并确认绑定；完成后刷新本页再申请入群。",

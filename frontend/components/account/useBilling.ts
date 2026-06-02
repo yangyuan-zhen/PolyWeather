@@ -122,6 +122,10 @@ export function useBilling(params: UseBillingParams) {
     const listAmount =
       Number.isFinite(listAmountRaw) && listAmountRaw > 0 ? listAmountRaw : 29.9;
     const selectedPlanCode = String(selectedPlan?.plan_code || "").toLowerCase();
+    const telegramGroupPriceApplies = Boolean(
+      selectedPlanCode === "pro_monthly" &&
+        backend?.telegram_pricing?.is_group_member,
+    );
     const referral = backend?.referral;
     const referralPending = Boolean(
       referral?.applied_code ||
@@ -137,6 +141,7 @@ export function useBilling(params: UseBillingParams) {
     const referralApplies =
       selectedPlanCode === "pro_monthly" &&
       referralPending &&
+      !telegramGroupPriceApplies &&
       backend?.subscription_active !== true;
     const planAmount = referralApplies
       ? Number.isFinite(discountedMonthlyRaw) && discountedMonthlyRaw > 0
@@ -187,6 +192,7 @@ export function useBilling(params: UseBillingParams) {
     paymentConfig?.points_redemption,
     backend?.referral,
     backend?.subscription_active,
+    backend?.telegram_pricing?.is_group_member,
     selectedPlan?.plan_code,
     selectedPlan?.amount_usdc,
     totalPoints,

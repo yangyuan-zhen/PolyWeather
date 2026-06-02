@@ -23,6 +23,10 @@ export function runTests() {
     path.join(projectRoot, "components", "account", "usePaymentFlow.ts"),
     "utf8",
   );
+  const useBilling = fs.readFileSync(
+    path.join(projectRoot, "components", "account", "useBilling.ts"),
+    "utf8",
+  );
   const types = fs.readFileSync(
     path.join(projectRoot, "components", "account", "types.ts"),
     "utf8",
@@ -58,6 +62,19 @@ export function runTests() {
     !useAccountPayment.includes("monthlyPlanList") &&
       !usePaymentFlow.includes("monthlyPlanList"),
     "payment hooks must not filter checkout plans down to monthly only",
+  );
+  assert(
+    useAccountPayment.includes("applyTelegramGroupPricingToPlanList") &&
+      useAccountPayment.includes("backend?.telegram_pricing") &&
+      useAccountPayment.includes('=== "pro_monthly"') &&
+      useAccountPayment.includes("amount_usdc: telegramAmountUsdc"),
+    "account payment plan cards must display the 5 USDC Telegram group member monthly price after /bind verification",
+  );
+  assert(
+    useBilling.includes("telegramGroupPriceApplies") &&
+      useBilling.includes("backend?.telegram_pricing?.is_group_member") &&
+      useBilling.includes("!telegramGroupPriceApplies"),
+    "billing must not let referral first-month pricing override the lower Telegram group member monthly price",
   );
   assert(
     types.includes("ReferralSummary") &&

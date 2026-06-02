@@ -13,13 +13,36 @@ import type {
   AuthMeResponse,
   BoundWallet,
   PaymentConfig,
+  PaymentPlan,
   ProviderMode,
   InjectedProviderOption,
+  TelegramPricing,
 } from "./types";
 import { usePaymentState } from "./usePaymentState";
 import { useWalletBind } from "./useWalletBind";
 import { usePaymentFlow } from "./usePaymentFlow";
 import { useBilling } from "./useBilling";
+
+// ============================================================
+function telegramMemberAmountUsdc(pricing?: TelegramPricing | null) {
+  if (!pricing?.is_group_member) return "";
+  const amount = String(pricing.amount_usdc || "").trim();
+  const numeric = Number(amount);
+  return Number.isFinite(numeric) && numeric > 0 ? amount : "";
+}
+
+function applyTelegramGroupPricingToPlanList(
+  plans: PaymentPlan[],
+  pricing?: TelegramPricing | null,
+): PaymentPlan[] {
+  const telegramAmountUsdc = telegramMemberAmountUsdc(pricing);
+  if (!telegramAmountUsdc) return plans;
+  return plans.map((plan) =>
+    String(plan.plan_code || "").toLowerCase() === "pro_monthly"
+      ? { ...plan, amount_usdc: telegramAmountUsdc }
+      : plan,
+  );
+}
 
 // ============================================================
 export interface UseAccountPaymentParams {
@@ -387,7 +410,10 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
   ]);
 
   // ── Selected plan (derived, shared across sub-hooks) ───
-  const effectivePlanList = paymentConfig?.plans || [];
+  const effectivePlanList = applyTelegramGroupPricingToPlanList(
+    paymentConfig?.plans || [],
+    backend?.telegram_pricing,
+  );
   const selectedPlan = effectivePlanList.find((p) => p.plan_code === selectedPlanCode) || effectivePlanList[0];
 
   // ── useWalletBind ──────────────────────────────────────

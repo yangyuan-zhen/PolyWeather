@@ -396,7 +396,7 @@ class PaymentContractCheckoutService:
         )
         self.telegram_payment_pricing_enabled = _env_bool(
             "POLYWEATHER_PAYMENT_TELEGRAM_PRICING_ENABLED",
-            False,
+            True,
         )
         self.points_enabled = _env_bool("POLYWEATHER_PAYMENT_POINTS_ENABLED", True)
         self.points_per_usdc = max(
@@ -1696,6 +1696,8 @@ class PaymentContractCheckoutService:
         except Exception:
             telegram_id = None
         price_payload = pricing.resolve_price_for_telegram_id(telegram_id)
+        if not bool(price_payload.get("is_group_member")):
+            return out
         amount_dec = _parse_decimal(
             price_payload.get("amount_usdc"), out["amount_usdc_decimal"]
         )
