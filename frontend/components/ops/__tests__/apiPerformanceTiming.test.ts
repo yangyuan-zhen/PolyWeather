@@ -57,6 +57,26 @@ export function runTests() {
     "city detail batch proxy should be able to suppress response caching for partial payloads",
   );
   assert.match(
+    detailBatchProxy,
+    /buildCityDetailBatchTimeoutPayload/,
+    "city detail batch proxy should degrade proxy timeouts into the same partial payload shape the chart client already tolerates",
+  );
+  assert.match(
+    detailBatchProxy,
+    /missing:\s*requestedCities/,
+    "city detail batch proxy timeout fallback should mark requested cities as missing instead of surfacing a browser 504",
+  );
+  assert.match(
+    detailBatchProxy,
+    /partial:\s*true/,
+    "city detail batch proxy timeout fallback should preserve partial response semantics",
+  );
+  assert.match(
+    detailBatchProxy,
+    /status:\s*200/,
+    "city detail batch proxy timeout fallback should avoid red 504 fetch failures for optional chart enrichment",
+  );
+  assert.match(
     apiProxySource,
     /cacheControlForData\?:/,
     "generic backend JSON proxy should allow response cache policy to depend on parsed data",
@@ -65,6 +85,16 @@ export function runTests() {
   const scanTerminalProxy = readFrontend("app", "api", "scan", "terminal", "route.ts");
   assert.match(scanTerminalProxy, /createProxyTimer\(req,\s*"scan_terminal"\)/);
   assert.match(scanTerminalProxy, /timing:\s*timer/);
+  assert.match(
+    scanTerminalProxy,
+    /POLYWEATHER_SCAN_TERMINAL_PROXY_TIMEOUT_MS\s*\|\|\s*"35000"/,
+    "scan terminal proxy should allow the production backend enough time to return before the 45 second route cap",
+  );
+  assert.match(
+    scanTerminalProxy,
+    /export const maxDuration = 45/,
+    "scan terminal proxy timeout budget should remain below the Next route execution cap",
+  );
 
   const cityDetailProxy = readFrontend("app", "api", "city", "[name]", "detail", "route.ts");
   assert.match(cityDetailProxy, /createProxyTimer\(req,\s*"city_detail"\)/);

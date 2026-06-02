@@ -9,7 +9,7 @@ import {
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 const SCAN_TERMINAL_PROXY_TIMEOUT_MS = Number(
-  process.env.POLYWEATHER_SCAN_TERMINAL_PROXY_TIMEOUT_MS || "18000",
+  process.env.POLYWEATHER_SCAN_TERMINAL_PROXY_TIMEOUT_MS || "35000",
 );
 
 export const maxDuration = 45;

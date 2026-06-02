@@ -11,6 +11,38 @@ const DETAIL_BATCH_PROXY_TIMEOUT_MS = Number(
   process.env.POLYWEATHER_CITY_DETAIL_BATCH_PROXY_TIMEOUT_MS || "15000",
 );
 
+function parseRequestedCities(req: NextRequest) {
+  const requestedLimit = Number(req.nextUrl.searchParams.get("limit") || "12");
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.max(1, Math.min(24, requestedLimit))
+    : 12;
+  const seen = new Set<string>();
+  const requestedCities: string[] = [];
+
+  for (const item of (req.nextUrl.searchParams.get("cities") || "").split(
+    ",",
+  )) {
+    const city = item.trim();
+    if (!city || seen.has(city)) continue;
+    seen.add(city);
+    requestedCities.push(city);
+    if (requestedCities.length >= limit) break;
+  }
+
+  return requestedCities;
+}
+
+function buildCityDetailBatchTimeoutPayload(requestedCities: string[]) {
+  return {
+    cities: requestedCities,
+    details: {},
+    errors: {},
+    missing: requestedCities,
+    partial: true,
+    timeout: true,
+  };
+}
+
 export async function GET(req: NextRequest) {
   const timer = createProxyTimer(req, "city_detail_batch");
   if (!API_BASE) {
@@ -25,6 +57,7 @@ export async function GET(req: NextRequest) {
   }
 
   const forceRefresh = req.nextUrl.searchParams.get("force_refresh") ?? "false";
+  const requestedCities = parseRequestedCities(req);
   const cachePolicy = buildCityDetailProxyCachePolicy(forceRefresh, 15);
   const searchParams = new URLSearchParams({
     cities: req.nextUrl.searchParams.get("cities") || "",
@@ -52,6 +85,11 @@ export async function GET(req: NextRequest) {
       publicMessage: "Failed to fetch city detail batch",
       revalidateSeconds: cachePolicy.revalidateSeconds,
       signal: controller.signal,
+      timeoutResponse: () =>
+        NextResponse.json(buildCityDetailBatchTimeoutPayload(requestedCities), {
+          headers: { "Cache-Control": "no-store, max-age=0" },
+          status: 200,
+        }),
       timeoutPublicMessage: "City detail batch request timed out",
       timing: timer,
       url: `${API_BASE}/api/cities/detail-batch?${searchParams.toString()}`,

@@ -70,7 +70,7 @@ def test_scan_terminal_backend_timeout_returns_before_next_proxy_abort():
         ROOT / "web" / "services" / "scan_terminal_config.py"
     ).read_text(encoding="utf-8")
 
-    assert 'POLYWEATHER_SCAN_TERMINAL_PROXY_TIMEOUT_MS || "18000"' in route_source
+    assert 'POLYWEATHER_SCAN_TERMINAL_PROXY_TIMEOUT_MS || "35000"' in route_source
     assert '"POLYWEATHER_SCAN_TERMINAL_BUILD_TIMEOUT_SEC",\n    10,' in config_source
     assert (
         '"POLYWEATHER_SCAN_TERMINAL_PREWARM_PAYLOAD_TIMEOUT_SEC",\n    30,'

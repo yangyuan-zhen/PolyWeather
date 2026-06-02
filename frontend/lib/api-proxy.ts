@@ -124,6 +124,7 @@ export async function proxyBackendJsonGet(
     signal?: AbortSignal;
     statusOnException?: number;
     timeoutPublicMessage?: string;
+    timeoutResponse?: () => NextResponse;
     timing?: ProxyTimer;
     url: string;
   },
@@ -195,16 +196,27 @@ export async function proxyBackendJsonGet(
       : withCookies;
   } catch (error) {
     const timedOut = options.signal?.aborted === true;
-    const response = buildProxyExceptionResponse(error, {
-      publicMessage:
-        timedOut && options.timeoutPublicMessage
-          ? options.timeoutPublicMessage
-          : options.publicMessage,
-      status: timedOut ? 504 : options.statusOnException,
-    });
-    const withCookies = auth ? applyAuthResponseCookies(response, auth.response) : response;
+    const response =
+      timedOut && options.timeoutResponse
+        ? options.timeoutResponse()
+        : buildProxyExceptionResponse(error, {
+            publicMessage:
+              timedOut && options.timeoutPublicMessage
+                ? options.timeoutPublicMessage
+                : options.publicMessage,
+            status: timedOut ? 504 : options.statusOnException,
+          });
+    const withCookies = auth
+      ? applyAuthResponseCookies(response, auth.response)
+      : response;
+    const outcome =
+      timedOut && options.timeoutResponse
+        ? "timeout_fallback"
+        : timedOut
+          ? "timeout"
+          : "exception";
     return timing
-      ? finishProxyTimedResponse(withCookies, timing, timedOut ? "timeout" : "exception")
+      ? finishProxyTimedResponse(withCookies, timing, outcome)
       : withCookies;
   }
 }
