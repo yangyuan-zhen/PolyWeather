@@ -100,6 +100,16 @@ export async function runTests() {
     "forced chart detail refreshes should reuse a very recent full-detail payload instead of refetching repeatedly",
   );
   assert(
+    chartLogicSource.includes("forceRefresh: boolean") &&
+      chartLogicSource.includes('force_refresh: forceRefresh ? "true" : "false"'),
+    "ignoreCache chart detail refreshes must send force_refresh=true so fresh METAR observations bypass proxy and backend chart caches",
+  );
+  assert(
+    chartLogicSource.includes("cityDetailBatchQueueKey") &&
+      chartLogicSource.includes('forceRefresh ? "force" : "cached"'),
+    "forced and cached chart detail requests must use separate batch queues so a normal first-paint request cannot downgrade a live refresh",
+  );
+  assert(
     __shouldPollLiveChartForTest({ city: "shanghai", compact: true, isActive: false, isMaximized: false }) === true,
     "compact grid slots are visible charts and should run the no-patch fallback guard",
   );
@@ -148,7 +158,7 @@ export async function runTests() {
   );
   const fetchHourlyBlock = chartLogicSource.match(/async function fetchHourlyForecastForCity[\s\S]*?\r?\n}\r?\n\r?\nfunction shouldPollLiveChart/)?.[0] || "";
   assert(
-    fetchHourlyBlock.includes("queueCityDetailBatch(city, resParam)") &&
+    fetchHourlyBlock.includes("queueCityDetailBatch(city, resParam, forceRefresh)") &&
       !fetchHourlyBlock.includes("runQueuedHourlyDetailRequest"),
     "first-paint and background city detail refreshes should both enter the batch queue without falling back to single requests",
   );

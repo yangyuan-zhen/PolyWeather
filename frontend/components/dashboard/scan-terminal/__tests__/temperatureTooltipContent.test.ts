@@ -1,4 +1,7 @@
-import { __buildTemperatureTooltipRowsForTest } from "@/components/dashboard/scan-terminal/TemperatureTooltipContent";
+import {
+  __buildTemperatureTooltipProbabilityRowsForTest,
+  __buildTemperatureTooltipRowsForTest,
+} from "@/components/dashboard/scan-terminal/TemperatureTooltipContent";
 
 function assert(condition: unknown, message: string) {
   if (!condition) throw new Error(message);
@@ -47,5 +50,34 @@ export function runTests() {
   assert(
     rows.some((row) => row.key === "gfs" && row.value === 24.2),
     "non-runway sparse series should keep nearest-value fallback",
+  );
+
+  const probabilityRows = __buildTemperatureTooltipProbabilityRowsForTest(
+    {
+      engine: "legacy",
+      muLine: { value: 27.4, label: "Gaussian μ 27.4°C" },
+      bands: [
+        {
+          key: "legacy_probability_27_0",
+          value: 27,
+          lower: 26.5,
+          upper: 27.5,
+          probability: 0.42,
+          label: "27°C 42%",
+          opacity: 0.13,
+        },
+      ],
+    },
+    "°C",
+    true,
+  );
+
+  assert(
+    probabilityRows.some((row) => row.key === "gaussian_mu" && row.value === "27.4°C"),
+    "tooltip should expose the Gaussian μ line when the purple probability overlay is present",
+  );
+  assert(
+    probabilityRows.some((row) => row.value.includes("26.5-27.5°C") && row.value.includes("42%")),
+    "tooltip should expose purple probability-band range and probability values",
   );
 }

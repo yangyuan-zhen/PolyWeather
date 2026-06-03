@@ -986,6 +986,8 @@ type CityDetailBatchQueue = {
   cities: Set<string>;
   waiters: Map<string, CityDetailBatchWaiter[]>;
   timer: ReturnType<typeof setTimeout> | null;
+  resolution: string;
+  forceRefresh: boolean;
 };
 
 const CITY_DETAIL_BATCH_WINDOW_MS = 100;
@@ -1033,14 +1035,25 @@ function primeCityDetailCache(
   return data;
 }
 
-function queueCityDetailBatch(city: string, resolution: string): Promise<HourlyForecast> {
+function cityDetailBatchQueueKey(resolution: string, forceRefresh: boolean) {
+  return `${resolution}:${forceRefresh ? "force" : "cached"}`;
+}
+
+function queueCityDetailBatch(
+  city: string,
+  resolution: string,
+  forceRefresh: boolean,
+): Promise<HourlyForecast> {
   return new Promise<HourlyForecast>((resolve, reject) => {
-    const queue = _cityDetailBatchQueues.get(resolution) || {
+    const queueKey = cityDetailBatchQueueKey(resolution, forceRefresh);
+    const queue = _cityDetailBatchQueues.get(queueKey) || {
       cities: new Set<string>(),
       waiters: new Map<string, CityDetailBatchWaiter[]>(),
       timer: null,
+      resolution,
+      forceRefresh,
     };
-    _cityDetailBatchQueues.set(resolution, queue);
+    _cityDetailBatchQueues.set(queueKey, queue);
 
     const cityWaiters = queue.waiters.get(city) || [];
     cityWaiters.push({ resolve, reject });
@@ -1048,10 +1061,10 @@ function queueCityDetailBatch(city: string, resolution: string): Promise<HourlyF
     queue.cities.add(city);
 
     if (queue.timer === null) {
-      queue.timer = setTimeout(() => flushCityDetailBatch(resolution), CITY_DETAIL_BATCH_WINDOW_MS);
+      queue.timer = setTimeout(() => flushCityDetailBatch(queueKey), CITY_DETAIL_BATCH_WINDOW_MS);
     }
     if (queue.cities.size >= CITY_DETAIL_BATCH_MAX_CITIES) {
-      flushCityDetailBatch(resolution);
+      flushCityDetailBatch(queueKey);
     }
   });
 }
@@ -1087,10 +1100,10 @@ function resolveCityDetailFromBatch(
   return undefined;
 }
 
-async function flushCityDetailBatch(resolution: string) {
-  const queue = _cityDetailBatchQueues.get(resolution);
+async function flushCityDetailBatch(queueKey: string) {
+  const queue = _cityDetailBatchQueues.get(queueKey);
   if (!queue) return;
-  _cityDetailBatchQueues.delete(resolution);
+  _cityDetailBatchQueues.delete(queueKey);
   if (queue.timer !== null) {
     clearTimeout(queue.timer);
     queue.timer = null;
@@ -1100,7 +1113,11 @@ async function flushCityDetailBatch(resolution: string) {
   if (!cities.length) return;
 
   try {
-    const payload = await fetchCityDetailBatchWithTimeout(cities, resolution);
+    const payload = await fetchCityDetailBatchWithTimeout(
+      cities,
+      queue.resolution,
+      queue.forceRefresh,
+    );
     if (!payload) {
       resolveAllBatchWaitersAsNull(cities, queue);
       return;
@@ -1115,7 +1132,7 @@ async function flushCityDetailBatch(resolution: string) {
       cities.map(async (city) => {
         const waiters = queue.waiters.get(city);
         const detail = resolveCityDetailFromBatch(details, city);
-        const data = primeCityDetailCache(city, resolution, detail);
+        const data = primeCityDetailCache(city, queue.resolution, detail);
         if (data) {
           resolveBatchWaiters(waiters, data);
           return;
@@ -1141,13 +1158,17 @@ function resolveAllBatchWaitersAsNull(
   });
 }
 
-function fetchCityDetailBatchWithTimeout(cities: string[], resolution: string) {
+function fetchCityDetailBatchWithTimeout(
+  cities: string[],
+  resolution: string,
+  forceRefresh: boolean,
+) {
   const controller = new AbortController();
   const timeoutId = globalThis.setTimeout(() => controller.abort(), HOURLY_DETAIL_REQUEST_TIMEOUT_MS);
   const params = new URLSearchParams({
     cities: cities.join(","),
     depth: "full",
-    force_refresh: "false",
+    force_refresh: forceRefresh ? "true" : "false",
     limit: String(Math.max(cities.length, CITY_DETAIL_BATCH_MAX_CITIES)),
     resolution,
     scope: "chart",
@@ -1170,8 +1191,9 @@ async function fetchHourlyForecastForCity(
 ): Promise<HourlyForecast> {
   const resParam = options.resolution || "10m";
   const cacheKey = `${city}:${resParam}`;
+  const forceRefresh = Boolean(options.ignoreCache);
 
-  if (!options.ignoreCache) {
+  if (!forceRefresh) {
     const cached = readHourlyCacheEntry(cacheKey);
     if (cached) {
       return cached.data;
@@ -1189,7 +1211,7 @@ async function fetchHourlyForecastForCity(
   const pending = _hourlyRequestCache.get(requestKey);
   if (pending) return pending;
 
-  const request = queueCityDetailBatch(city, resParam)
+  const request = queueCityDetailBatch(city, resParam, forceRefresh)
     .finally(() => {
       _hourlyRequestCache.delete(requestKey);
     });

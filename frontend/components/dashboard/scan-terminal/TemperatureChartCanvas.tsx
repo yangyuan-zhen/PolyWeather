@@ -378,7 +378,9 @@ function TemperatureChartCanvasComponent({
                   payload={props.payload as ReadonlyArray<{ payload?: Record<string, any> }> | undefined}
                   data={zoomedData}
                   series={activeSeries}
+                  probabilityOverlay={probabilityOverlay}
                   tempSymbol={tempSymbol}
+                  isEn={isEn}
                 />
               )}
               formatter={(value: unknown) => {
