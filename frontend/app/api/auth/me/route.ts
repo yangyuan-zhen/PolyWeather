@@ -109,6 +109,7 @@ function finishAuthMeResponse(
   const total = timer.totalMs();
   const ownServerTiming = formatServerTiming(timer.stages, total);
   const backendServerTiming = String(extra?.backendServerTiming || "").trim();
+  response.headers.set("Cache-Control", "no-store");
   response.headers.set(
     "Server-Timing",
     backendServerTiming

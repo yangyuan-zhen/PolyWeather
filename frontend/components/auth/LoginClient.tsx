@@ -26,17 +26,18 @@ type Mode = "login" | "signup";
 
 type LoginClientProps = {
   nextPath: string;
+  initialError?: string;
   initialMode?: Mode;
 };
 
-export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
+export function LoginClient({ nextPath, initialError, initialMode }: LoginClientProps) {
   const router = useRouter();
   const { locale } = useI18n();
   const [mode, setMode] = useState<Mode>(initialMode ?? "login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [errorText, setErrorText] = useState("");
+  const [errorText, setErrorText] = useState(initialError || "");
   const [infoText, setInfoText] = useState("");
   const [resetSent, setResetSent] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -120,6 +121,10 @@ export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
       className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
     />
   );
+
+  useEffect(() => {
+    setErrorText(initialError || "");
+  }, [initialError]);
 
   const onResetPassword = async () => {
     setErrorText("");

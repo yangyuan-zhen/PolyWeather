@@ -33,8 +33,16 @@ export function runTests() {
     "callback",
     "route.ts",
   );
+  const loginPagePath = path.join(
+    projectRoot,
+    "app",
+    "auth",
+    "login",
+    "page.tsx",
+  );
 
   const loginClientSource = fs.readFileSync(loginClientPath, "utf8");
+  const loginPageSource = fs.readFileSync(loginPagePath, "utf8");
 
   assert(
     loginClientSource.includes("/auth/reset-password") &&
@@ -79,5 +87,23 @@ export function runTests() {
       authCallbackSource.includes("Authorization") &&
       authCallbackSource.includes("Bearer"),
     "auth callback must warm /api/auth/me with the exchanged Supabase session so new users receive the signup trial immediately",
+  );
+  assert(
+    loginPageSource.includes("error?: string") &&
+      loginPageSource.includes("normalizeAuthError") &&
+      loginPageSource.includes("params.error") &&
+      loginPageSource.includes("initialError={initialError}") &&
+      loginClientSource.includes("initialError?: string") &&
+      loginClientSource.includes("useState(initialError || \"\")"),
+    "login page must surface auth callback errors in the login form instead of silently returning users to the terminal",
+  );
+  assert(
+    authCallbackSource.includes("redirectToLoginWithError") &&
+      authCallbackSource.includes('request.nextUrl.searchParams.get("error_description")') &&
+      authCallbackSource.includes('request.nextUrl.searchParams.get("error")') &&
+      authCallbackSource.includes("exchangeError") &&
+      authCallbackSource.includes("exchangeCodeForSession(code)") &&
+      authCallbackSource.includes("auth_error"),
+    "auth callback must redirect failed OAuth/session exchanges back to login with an error message",
   );
 }

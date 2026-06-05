@@ -14,6 +14,31 @@ function normalizeNextPath(input: string | null) {
   return raw;
 }
 
+function normalizeAuthError(input: string | null) {
+  const fallback = "Authentication failed. Please sign in again.";
+  const raw = String(input || "")
+    .replace(/[\r\n]+/g, " ")
+    .trim();
+  if (!raw) return fallback;
+  return raw.slice(0, 240);
+}
+
+function redirectToLoginWithError({
+  baseUrl,
+  error,
+  nextPath,
+}: {
+  baseUrl: string;
+  error: string | null;
+  nextPath: string;
+}) {
+  const loginUrl = new URL("/auth/login", baseUrl);
+  loginUrl.searchParams.set("next", nextPath);
+  loginUrl.searchParams.set("auth_error", "1");
+  loginUrl.searchParams.set("error", normalizeAuthError(error));
+  return NextResponse.redirect(loginUrl);
+}
+
 async function warmSignupTrial(accessToken: string) {
   const token = String(accessToken || "").trim();
   if (!API_BASE || !token) return;
@@ -60,6 +85,16 @@ export async function GET(request: NextRequest) {
   const nextPath = normalizeNextPath(request.nextUrl.searchParams.get("next"));
   const baseUrl = siteUrl || request.nextUrl.origin;
   const redirectUrl = new URL(nextPath, baseUrl);
+  const callbackError =
+    request.nextUrl.searchParams.get("error_description") ||
+    request.nextUrl.searchParams.get("error");
+  if (callbackError) {
+    return redirectToLoginWithError({
+      baseUrl,
+      error: callbackError,
+      nextPath,
+    });
+  }
 
   if (!hasSupabaseServerEnv()) {
     return NextResponse.redirect(redirectUrl);
@@ -71,7 +106,22 @@ export async function GET(request: NextRequest) {
   if (code) {
     const {
       data: { session },
+      error: exchangeError,
     } = await supabase.auth.exchangeCodeForSession(code);
+    if (exchangeError) {
+      return redirectToLoginWithError({
+        baseUrl,
+        error: exchangeError.message,
+        nextPath,
+      });
+    }
+    if (!session?.access_token) {
+      return redirectToLoginWithError({
+        baseUrl,
+        error: "Authentication session was not created. Please sign in again.",
+        nextPath,
+      });
+    }
     await warmSignupTrial(session?.access_token || "");
   }
 

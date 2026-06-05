@@ -24,6 +24,12 @@ export function runTests() {
       authMeRouteSource.includes("total"),
     "/api/auth/me proxy must expose stage durations through Server-Timing for HAR inspection",
   );
+  assert(
+    authMeRouteSource.includes('response.headers.set("Cache-Control", "no-store")') &&
+      authMeRouteSource.indexOf('response.headers.set("Cache-Control", "no-store")') >
+        authMeRouteSource.indexOf("function finishAuthMeResponse"),
+    "/api/auth/me proxy must mark every auth profile response no-store so anonymous state cannot be reused after login",
+  );
   const finishStart = authMeRouteSource.indexOf("function finishAuthMeResponse");
   const finishEnd = authMeRouteSource.indexOf("async function trackAuthDiagnosticEvent");
   const finishSource =
