@@ -1696,7 +1696,7 @@ class PaymentContractCheckoutService:
         except Exception:
             telegram_id = None
         price_payload = pricing.resolve_price_for_telegram_id(telegram_id)
-        if not bool(price_payload.get("is_group_member")):
+        if not bool(price_payload.get("is_private_group_member")):
             return out
         amount_dec = _parse_decimal(
             price_payload.get("amount_usdc"), out["amount_usdc_decimal"]

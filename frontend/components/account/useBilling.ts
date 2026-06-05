@@ -19,6 +19,7 @@ import {
 } from "./constants";
 import { clearStoredPaymentRecovery, shortAddress } from "./formatters";
 import { normalizePaymentError } from "./payment-utils";
+import { isTelegramPrivateGroupPriceEligible } from "./telegram-pricing";
 import { trackAppEvent } from "@/lib/app-analytics";
 
 // ============================================================
@@ -124,7 +125,7 @@ export function useBilling(params: UseBillingParams) {
     const selectedPlanCode = String(selectedPlan?.plan_code || "").toLowerCase();
     const telegramGroupPriceApplies = Boolean(
       selectedPlanCode === "pro_monthly" &&
-        backend?.telegram_pricing?.is_group_member,
+        isTelegramPrivateGroupPriceEligible(backend?.telegram_pricing),
     );
     const referral = backend?.referral;
     const referralPending = Boolean(
@@ -192,7 +193,7 @@ export function useBilling(params: UseBillingParams) {
     paymentConfig?.points_redemption,
     backend?.referral,
     backend?.subscription_active,
-    backend?.telegram_pricing?.is_group_member,
+    backend?.telegram_pricing,
     selectedPlan?.plan_code,
     selectedPlan?.amount_usdc,
     totalPoints,
@@ -405,8 +406,9 @@ export function useBilling(params: UseBillingParams) {
           throw new Error(copy.bindFailed.replace("{raw}", raw));
         }
         const data = (await res.json()) as { telegram_pricing?: TelegramPricing | null };
-        if (data.telegram_pricing?.is_group_member) {
-          const amount = data.telegram_pricing.amount_usdc || "10";
+        const telegramPricing = data.telegram_pricing;
+        if (isTelegramPrivateGroupPriceEligible(telegramPricing)) {
+          const amount = telegramPricing?.amount_usdc || "10";
           setPaymentInfo(copy.telegramVerifySuccess.replace("{amount}", amount));
         }
         await loadSnapshot();

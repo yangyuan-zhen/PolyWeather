@@ -46,6 +46,7 @@ export type TelegramPricing = {
   telegram_id?: number | null;
   telegram_status?: string | null;
   is_group_member?: boolean;
+  is_private_group_member?: boolean;
   amount_usdc?: string;
   pricing_source?: string;
 };

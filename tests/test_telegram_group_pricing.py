@@ -74,8 +74,10 @@ def test_group_pricing_treats_member_status_as_group_member(monkeypatch):
     result = pricing.resolve_price_for_telegram_id(12345)
 
     assert result["is_group_member"] is True
+    assert result["is_private_group_member"] is True
     assert result["amount_usdc"] == "5"
     assert result["telegram_status"] == "member"
+    assert result["pricing_source"] == "telegram_private_group_member"
 
 
 def test_group_member_price_defaults_to_five_usdc(monkeypatch):
@@ -99,6 +101,7 @@ def test_group_member_price_defaults_to_five_usdc(monkeypatch):
     result = pricing.resolve_price_for_telegram_id(12345)
 
     assert result["is_group_member"] is True
+    assert result["is_private_group_member"] is True
     assert result["amount_usdc"] == "5"
 
 
@@ -124,6 +127,7 @@ def test_group_pricing_treats_left_status_as_public_price(monkeypatch):
     result = pricing.resolve_price_for_telegram_id(12345)
 
     assert result["is_group_member"] is False
+    assert result["is_private_group_member"] is False
     assert result["amount_usdc"] == "10"
     assert result["telegram_status"] == "left"
 
@@ -161,6 +165,43 @@ def test_payment_plan_uses_linked_telegram_group_price(monkeypatch, tmp_path):
             "configured": True,
             "telegram_id": telegram_id,
             "is_group_member": True,
+            "is_private_group_member": True,
+            "telegram_status": "member",
+            "amount_usdc": "5",
+            "pricing_source": "telegram_private_group_member",
+        },
+    )
+
+    plan = service._select_plan("pro_monthly")
+    priced = service._apply_telegram_group_pricing("user-1", plan)
+
+    assert priced["amount_usdc"] == "5"
+    assert priced["amount_usdc_decimal"] == Decimal("5")
+    assert priced["telegram_pricing"]["pricing_source"] == "telegram_private_group_member"
+
+
+def test_payment_plan_ignores_legacy_group_member_without_private_group_flag(monkeypatch, tmp_path):
+    monkeypatch.setenv("POLYWEATHER_PAYMENT_ENABLED", "true")
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role")
+    monkeypatch.setenv("POLYWEATHER_PAYMENT_RPC_URL", "https://rpc-1.example")
+    monkeypatch.setenv("POLYWEATHER_DB_PATH", str(tmp_path / "payments.db"))
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "bot-token")
+    monkeypatch.setenv("POLYWEATHER_TELEGRAM_GROUP_ID", "-100123")
+    monkeypatch.setenv("POLYWEATHER_GROUP_MEMBER_PRICE_USDC", "5")
+    monkeypatch.setenv(
+        "POLYWEATHER_PAYMENT_ACCEPTED_TOKENS_JSON",
+        '[{"code":"usdc_e","address":"0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174","decimals":6,"receiver_contract":"0xeD2f13Aa5fF033c58FB436E178451Cd07f693f32","is_default":true}]',
+    )
+    service = PaymentContractCheckoutService()
+    service._db.bind_supabase_identity(12345, "user-1", "u@example.com")
+
+    monkeypatch.setattr(
+        "src.auth.telegram_group_pricing.TelegramGroupPricing.resolve_price_for_telegram_id",
+        lambda self, telegram_id: {
+            "configured": True,
+            "telegram_id": telegram_id,
+            "is_group_member": True,
             "telegram_status": "member",
             "amount_usdc": "5",
             "pricing_source": "telegram_group_member",
@@ -170,9 +211,9 @@ def test_payment_plan_uses_linked_telegram_group_price(monkeypatch, tmp_path):
     plan = service._select_plan("pro_monthly")
     priced = service._apply_telegram_group_pricing("user-1", plan)
 
-    assert priced["amount_usdc"] == "5"
-    assert priced["amount_usdc_decimal"] == Decimal("5")
-    assert priced["telegram_pricing"]["pricing_source"] == "telegram_group_member"
+    assert priced["amount_usdc"] == "29.9"
+    assert priced["amount_usdc_decimal"] == Decimal("29.9")
+    assert "telegram_pricing" not in priced
 
 
 def test_payment_telegram_pricing_enabled_by_default_when_configured(monkeypatch, tmp_path):

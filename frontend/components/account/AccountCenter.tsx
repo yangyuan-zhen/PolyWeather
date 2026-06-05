@@ -62,6 +62,10 @@ import {
 import { createAccountCopy } from "./account-copy";
 import { resetWalletConnectProvider } from "./wallet";
 import { useAccountPayment } from "./useAccountPayment";
+import {
+  isTelegramPrivateGroupPriceEligible,
+  telegramPrivateGroupAmountUsdc,
+} from "./telegram-pricing";
 
 // --- Main Component ---
 
@@ -432,6 +436,12 @@ export function AccountCenter() {
         { plan_code: "pro_monthly", plan_id: 101, amount_usdc: "29.9", duration_days: 30 },
         { plan_code: "pro_quarterly", plan_id: 102, amount_usdc: "79.9", duration_days: 90 },
       ];
+  const privateTelegramGroupPriceActive = isTelegramPrivateGroupPriceEligible(
+    backend?.telegram_pricing,
+  );
+  const privateTelegramGroupAmount = telegramPrivateGroupAmountUsdc(
+    backend?.telegram_pricing,
+  );
   const referral = backend?.referral;
   const referralCode = String(referral?.code || "").trim();
   const appliedReferralCode = String(referral?.applied_code || "").trim();
@@ -1094,6 +1104,13 @@ export function AccountCenter() {
                           const code = String(plan.plan_code || "");
                           const active = code === selectedPlanCode;
                           const isQuarterly = code === "pro_quarterly";
+                          const isPrivateGroupMonthly = Boolean(
+                            code === "pro_monthly" &&
+                              privateTelegramGroupPriceActive &&
+                              privateTelegramGroupAmount &&
+                              Number(plan.amount_usdc) ===
+                                Number(privateTelegramGroupAmount),
+                          );
                           return (
                             <button
                               type="button"
@@ -1108,7 +1125,11 @@ export function AccountCenter() {
                             >
                               <div className="flex items-center justify-between gap-2 text-xs font-bold">
                                 <span>
-                                  {isQuarterly ? copy.quarterlyPlan : copy.monthlyPlan}
+                                  {isQuarterly
+                                    ? copy.quarterlyPlan
+                                    : isPrivateGroupMonthly
+                                      ? copy.privateGroupMonthlyPlan
+                                      : copy.monthlyPlan}
                                 </span>
                                 <span>{plan.amount_usdc} USDC</span>
                               </div>

@@ -97,6 +97,7 @@ class TelegramGroupPricing:
             os.getenv("TELEGRAM_CHAT_IDS"),
             os.getenv("TELEGRAM_CHAT_ID"),
         )
+        self.private_group_chat_ids = dedicated_group_chat_ids
         self.group_chat_ids = dedicated_group_chat_ids or fallback_group_chat_ids
         self.member_price = _decimal_env("POLYWEATHER_GROUP_MEMBER_PRICE_USDC", "5")
         self.public_price = _decimal_env("POLYWEATHER_PUBLIC_PRICE_USDC", "10")
@@ -139,12 +140,18 @@ class TelegramGroupPricing:
     def resolve_price_for_telegram_id(self, telegram_id: Optional[int]) -> Dict[str, Any]:
         status = self.get_member_status(int(telegram_id or 0)) if telegram_id else None
         is_member = bool(status in TELEGRAM_MEMBER_STATUSES)
-        amount = self.member_price if is_member else self.public_price
+        is_private_group_member = bool(self.private_group_chat_ids and is_member)
+        amount = self.member_price if is_private_group_member else self.public_price
         return {
             "configured": self.configured,
             "telegram_id": int(telegram_id or 0) or None,
             "telegram_status": status,
             "is_group_member": is_member,
+            "is_private_group_member": is_private_group_member,
             "amount_usdc": _format_decimal(amount),
-            "pricing_source": "telegram_group_member" if is_member else "telegram_public",
+            "pricing_source": (
+                "telegram_private_group_member"
+                if is_private_group_member
+                else "telegram_public"
+            ),
         }

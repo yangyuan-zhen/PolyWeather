@@ -22,20 +22,17 @@ import { usePaymentState } from "./usePaymentState";
 import { useWalletBind } from "./useWalletBind";
 import { usePaymentFlow } from "./usePaymentFlow";
 import { useBilling } from "./useBilling";
-
-// ============================================================
-function telegramMemberAmountUsdc(pricing?: TelegramPricing | null) {
-  if (!pricing?.is_group_member) return "";
-  const amount = String(pricing.amount_usdc || "").trim();
-  const numeric = Number(amount);
-  return Number.isFinite(numeric) && numeric > 0 ? amount : "";
-}
+import {
+  isTelegramPrivateGroupPriceEligible,
+  telegramPrivateGroupAmountUsdc,
+} from "./telegram-pricing";
 
 function applyTelegramGroupPricingToPlanList(
   plans: PaymentPlan[],
   pricing?: TelegramPricing | null,
 ): PaymentPlan[] {
-  const telegramAmountUsdc = telegramMemberAmountUsdc(pricing);
+  if (!isTelegramPrivateGroupPriceEligible(pricing)) return plans;
+  const telegramAmountUsdc = telegramPrivateGroupAmountUsdc(pricing);
   if (!telegramAmountUsdc) return plans;
   return plans.map((plan) =>
     String(plan.plan_code || "").toLowerCase() === "pro_monthly"

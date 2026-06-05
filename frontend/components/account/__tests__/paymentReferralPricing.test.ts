@@ -27,6 +27,10 @@ export function runTests() {
     path.join(projectRoot, "components", "account", "useBilling.ts"),
     "utf8",
   );
+  const telegramPricing = fs.readFileSync(
+    path.join(projectRoot, "components", "account", "telegram-pricing.ts"),
+    "utf8",
+  );
   const types = fs.readFileSync(
     path.join(projectRoot, "components", "account", "types.ts"),
     "utf8",
@@ -66,21 +70,33 @@ export function runTests() {
   assert(
     useAccountPayment.includes("applyTelegramGroupPricingToPlanList") &&
       useAccountPayment.includes("backend?.telegram_pricing") &&
+      useAccountPayment.includes("isTelegramPrivateGroupPriceEligible") &&
+      telegramPricing.includes("is_private_group_member") &&
+      telegramPricing.includes("telegram_private_group_member") &&
+      !telegramPricing.includes("is_group_member") &&
       useAccountPayment.includes('=== "pro_monthly"') &&
       useAccountPayment.includes("amount_usdc: telegramAmountUsdc"),
-    "account payment plan cards must display the 5 USDC Telegram group member monthly price after /bind verification",
+    "account payment plan cards must only display the 5 USDC private Telegram group monthly price after private /bind verification",
   );
   assert(
     useBilling.includes("telegramGroupPriceApplies") &&
-      useBilling.includes("backend?.telegram_pricing?.is_group_member") &&
+      useBilling.includes("isTelegramPrivateGroupPriceEligible") &&
+      useBilling.includes("backend?.telegram_pricing") &&
       useBilling.includes("!telegramGroupPriceApplies"),
-    "billing must not let referral first-month pricing override the lower Telegram group member monthly price",
+    "billing must not let referral first-month pricing override the lower private Telegram group monthly price",
+  );
+  assert(
+    accountCenter.includes("privateGroupMonthlyPlan") &&
+      accountCopy.includes("Private group monthly") &&
+      accountCopy.includes("私密群月付"),
+    "account plan card must label the 5 USDC price as a private Telegram group monthly price",
   );
   assert(
     types.includes("ReferralSummary") &&
       types.includes("referral?: ReferralSummary | null") &&
+      types.includes("is_private_group_member?: boolean") &&
       types.includes("duration_days: number") &&
       types.includes("max_discount_usdc_by_plan"),
-    "account auth and payment types must include referral summary and plan durations",
+    "account auth and payment types must include referral summary, private Telegram pricing, and plan durations",
   );
 }
