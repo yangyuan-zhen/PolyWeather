@@ -39,6 +39,32 @@ def test_multi_model_parser_exposes_open_recommended_models():
     assert model_keys["RDPS"] == "gem_regional"
 
 
+def test_multi_model_parser_exposes_north_america_open_meteo_models():
+    daily = {
+        "time": ["2026-06-05", "2026-06-06"],
+        "temperature_2m_max_gfs_global": [92.1, 91.4],
+        "temperature_2m_max_ncep_hrrr_conus": [92.3, None],
+        "temperature_2m_max_ncep_nbm_conus": [87.2, 88.7],
+        "temperature_2m_max_ncep_nam_conus": [87.9, 91.7],
+        "temperature_2m_max_ncep_gfs_graphcast025": [84.4, 86.1],
+        "temperature_2m_max_ncep_aigfs025": [85.9, 88.3],
+    }
+
+    dates, forecasts, metadata, model_keys = _parse_open_meteo_multi_model_daily(daily)
+
+    assert dates == ["2026-06-05", "2026-06-06"]
+    assert forecasts["2026-06-05"]["GFS Global"] == 92.1
+    assert forecasts["2026-06-05"]["HRRR"] == 92.3
+    assert forecasts["2026-06-05"]["NBM"] == 87.2
+    assert forecasts["2026-06-05"]["NAM"] == 87.9
+    assert forecasts["2026-06-05"]["GFS GraphCast"] == 84.4
+    assert forecasts["2026-06-05"]["AI-GFS"] == 85.9
+    assert "HRRR" not in forecasts["2026-06-06"]
+    assert metadata["HRRR"]["provider"] == "NOAA"
+    assert metadata["NBM"]["tier"] == "regional_north_america"
+    assert model_keys["AI-GFS"] == "ncep_aigfs025"
+
+
 def test_multi_model_order_includes_legacy_and_new_sources():
     assert "ecmwf_ifs025" in OPEN_METEO_MULTI_MODEL_ORDER
     assert "ecmwf_aifs025_single" in OPEN_METEO_MULTI_MODEL_ORDER
@@ -50,7 +76,21 @@ def test_multi_model_order_includes_legacy_and_new_sources():
     assert "gem_global" in OPEN_METEO_MULTI_MODEL_ORDER
     assert "gem_regional" in OPEN_METEO_MULTI_MODEL_ORDER
     assert "gem_hrdps_continental" in OPEN_METEO_MULTI_MODEL_ORDER
+    assert "gfs_global" in OPEN_METEO_MULTI_MODEL_ORDER
+    assert "ncep_hrrr_conus" in OPEN_METEO_MULTI_MODEL_ORDER
+    assert "ncep_nbm_conus" in OPEN_METEO_MULTI_MODEL_ORDER
+    assert "ncep_nam_conus" in OPEN_METEO_MULTI_MODEL_ORDER
+    assert "ncep_gfs_graphcast025" in OPEN_METEO_MULTI_MODEL_ORDER
+    assert "ncep_aigfs025" in OPEN_METEO_MULTI_MODEL_ORDER
     assert "jma_seamless" in OPEN_METEO_MULTI_MODEL_ORDER
+
+
+def test_multi_model_default_cache_version_refreshes_noaa_model_set(monkeypatch):
+    monkeypatch.delenv("OPEN_METEO_MULTI_MODEL_CACHE_VERSION", raising=False)
+
+    collector = WeatherDataCollector({})
+
+    assert collector.multi_model_cache_version == "v4"
 
 
 def test_madis_patch_uses_city_display_unit_for_us(monkeypatch):

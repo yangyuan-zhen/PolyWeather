@@ -13,13 +13,13 @@
 | hong kong | CoWIN 6087 | ~1 min | cowin.hku.hk, 保良局陳守仁小學，前端图表默认展示 |
 | hong kong | HKO 官方 CSV | ~10 min | data.weather.gov.hk（文件名虽含 1min，实际 10min 一报） |
 | singapore | MSS 官方 API | ~1 min | api.data.gov.sg, 站号 S24 |
-| beijing | AMSC AWOS (ZBAA) | ~1 min | 中国 |
-| shanghai | AMSC AWOS (ZSPD) | ~1 min | 中国 |
-| guangzhou | AMSC AWOS (ZGGG) | ~1 min | 中国 |
-| chengdu | AMSC AWOS (ZUUU) | ~1 min | 中国 |
-| chongqing | AMSC AWOS (ZUCK) | ~1 min | 中国 |
-| wuhan | AMSC AWOS (ZHHH) | ~1 min | 中国 |
-| qingdao | AMSC AWOS (ZSQD) | ~1 min | 中国 |
+| beijing | AMSC AWOS (ZBAA) | 3 min | 中国 |
+| shanghai | AMSC AWOS (ZSPD) | 3 min | 中国 |
+| guangzhou | AMSC AWOS (ZGGG) | 3 min | 中国 |
+| chengdu | AMSC AWOS (ZUUU) | 3 min | 中国 |
+| chongqing | AMSC AWOS (ZUCK) | 3 min | 中国 |
+| wuhan | AMSC AWOS (ZHHH) | 3 min | 中国 |
+| qingdao | AMSC AWOS (ZSQD) | 3 min | 中国 |
 
 ### Tier 2 — 5 分钟高频 (MADIS)
 
@@ -123,7 +123,8 @@ ankara, istanbul, helsinki, amsterdam, paris
 
 频率取决于源头：
 
-- AMSC / AMOS / CoWIN / MSS：源头约 1 分钟，图表按 1 分钟粒度追加。
+- AMOS / CoWIN / MSS：源头约 1 分钟，图表按 1 分钟粒度追加。
+- AMSC：中国跑道观测城市按 3 分钟采集，不再强制 60 秒刷新。
 - MADIS：源头约 5 分钟。
 - HKO / CWA / JMA / FMI / KNMI：源头约 10 分钟。
 - METAR-only 城市：按 METAR 可用频率和缓存 TTL，不伪装成 1 分钟实测。

@@ -1373,18 +1373,89 @@ def _get_airport_daily_high(city_weather: Dict[str, Any]):
     return max_so_far, max_time
 
 
-# Per-city push interval — unified to 60s, obs_time dedup prevents spam
+# Per-city push interval. The loop wakes every minute, but Telegram should
+# read recent city cache instead of acting as an upstream observation producer.
 _AIRPORT_PUSH_INTERVAL = {
-    "seoul": 60, "busan": 60, "tokyo": 60, "ankara": 60,
-    "helsinki": 60, "amsterdam": 60, "istanbul": 60, "paris": 60,
-    "hong kong": 60, "shenzhen": 60, "singapore": 60, "taipei": 60,
-    "beijing": 60, "shanghai": 60, "guangzhou": 60, "qingdao": 60,
-    "chengdu": 60, "chongqing": 60, "wuhan": 60,
-    "new york": 60, "los angeles": 60, "chicago": 60, "denver": 60,
-    "atlanta": 60, "miami": 60, "san francisco": 60, "houston": 60,
-    "dallas": 60, "austin": 60, "seattle": 60,
-    "tel aviv": 60,
+    city: 600 for city in HIGH_FREQ_AIRPORT_CITIES
 }
+_AIRPORT_PUSH_INTERVAL.update({
+    "seoul": 60,
+    "busan": 60,
+    "beijing": 180,
+    "shanghai": 180,
+    "guangzhou": 180,
+    "qingdao": 180,
+    "chengdu": 180,
+    "chongqing": 180,
+    "wuhan": 180,
+})
+
+
+def _airport_push_cache_max_age_sec(city: str) -> int:
+    interval = int(_AIRPORT_PUSH_INTERVAL.get((city or "").strip().lower(), 600) or 600)
+    return max(90, interval * 2)
+
+
+def _read_cached_airport_city_weather(city: str, max_age_sec: Optional[int] = None) -> Optional[Dict[str, Any]]:
+    """Read web city cache for Telegram without triggering collection."""
+    normalized_city = (city or "").strip().lower()
+    if not normalized_city:
+        return None
+    max_age = int(max_age_sec if max_age_sec is not None else _airport_push_cache_max_age_sec(normalized_city))
+    now_ts = time.time()
+    stale_candidate: Optional[Tuple[float, Dict[str, Any]]] = None
+    try:
+        db = DBManager()
+        for kind in ("full", "panel"):
+            entry = db.get_city_cache(kind, normalized_city)
+            if not isinstance(entry, dict):
+                continue
+            updated_at_ts = float(entry.get("updated_at_ts") or 0.0)
+            payload = entry.get("payload")
+            if updated_at_ts <= 0 or not isinstance(payload, dict):
+                continue
+            age_sec = now_ts - updated_at_ts
+            if age_sec > max_age:
+                logger.debug(
+                    "airport push cache stale city={} kind={} age_sec={} max_age_sec={}",
+                    normalized_city,
+                    kind,
+                    round(age_sec, 1),
+                    max_age,
+                )
+                if stale_candidate is None or updated_at_ts > stale_candidate[0]:
+                    stale_candidate = (updated_at_ts, dict(payload))
+                continue
+            logger.debug(
+                "airport push cache hit city={} kind={} age_sec={}",
+                normalized_city,
+                kind,
+                round(max(0.0, age_sec), 1),
+            )
+            return dict(payload)
+    except Exception as exc:
+        logger.debug("airport push city cache read failed city={}: {}", normalized_city, exc)
+    if stale_candidate is not None:
+        logger.debug("airport push using stale cache city={}", normalized_city)
+        return stale_candidate[1]
+    return None
+
+
+def _load_airport_city_weather_for_push(city: str) -> Dict[str, Any]:
+    cached = _read_cached_airport_city_weather(city)
+    if cached is not None:
+        return cached
+
+    from web.app import _analyze  # lazy import - only the bot process needs it
+
+    return _analyze(
+        city,
+        force_refresh=False,
+        force_refresh_observations_only=False,
+        detail_mode="panel",
+    )
+
+
 # Per-city temperature window threshold (°C below DEB predicted high)
 # Continental airports: wider window (temp rises steadily over land)
 # Maritime airports: narrower (sea breeze moderates temp)
@@ -1467,12 +1538,10 @@ def _process_airport_city(
     if now_ts - last_city_ts < city_interval:
         return None
 
-    from web.app import _analyze  # lazy import — only the bot process needs it
-
     city_weather: Dict[str, Any] = {}
     deb_pred: Optional[float] = None
     try:
-        city_weather = _analyze(city, force_refresh_observations_only=True)
+        city_weather = _load_airport_city_weather_for_push(city)
         deb_raw = (city_weather.get("deb") or {}).get("prediction")
         if deb_raw is not None:
             deb_pred = float(deb_raw)
@@ -1564,7 +1633,7 @@ def _process_airport_city(
             and now_ts - last_city_ts > 540):
         time.sleep(4)
         try:
-            city_weather = _analyze(city, force_refresh_observations_only=True)
+            city_weather = _load_airport_city_weather_for_push(city)
             deb_raw2 = (city_weather.get("deb") or {}).get("prediction")
             if deb_raw2 is not None:
                 deb_pred = float(deb_raw2)
@@ -1620,6 +1689,21 @@ def _process_airport_city(
     return None
 
 
+def _due_airport_cities(
+    cities: Set[str],
+    now_ts: int,
+    last_by_city: Dict[str, Any],
+) -> List[str]:
+    due: List[str] = []
+    for city in sorted(cities):
+        last_city = last_by_city.get(city) or {}
+        last_city_ts = int(last_city.get("ts") or 0)
+        city_interval = _AIRPORT_PUSH_INTERVAL.get(city, 600)
+        if now_ts - last_city_ts >= city_interval:
+            due.append(city)
+    return due
+
+
 def _run_high_freq_airport_cycle(
     bot: Any,
     config: Dict[str, Any],
@@ -1630,9 +1714,16 @@ def _run_high_freq_airport_cycle(
     now_ts = int(time.time())
     last_by_city = state.setdefault("last_by_city", {})
     max_workers = max(1, min(4, _env_int("TELEGRAM_AIRPORT_PUSH_MAX_WORKERS", 1)))
-    logger.info("airport cycle tick cities={} max_workers={}", len(HIGH_FREQ_AIRPORT_CITIES), max_workers)
+    cities = _due_airport_cities(HIGH_FREQ_AIRPORT_CITIES, now_ts, last_by_city)
+    logger.info(
+        "airport cycle tick cities={} due={} max_workers={}",
+        len(HIGH_FREQ_AIRPORT_CITIES),
+        len(cities),
+        max_workers,
+    )
+    if not cities:
+        return False
 
-    cities = sorted(HIGH_FREQ_AIRPORT_CITIES)
     pool = _get_airport_executor(max_workers)
     futures = {
         pool.submit(

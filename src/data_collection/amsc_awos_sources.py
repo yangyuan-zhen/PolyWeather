@@ -19,6 +19,7 @@ from urllib.request import Request, urlopen
 
 from loguru import logger
 
+from src.data_collection.observation_source_gate import run_observation_source
 from src.utils.metrics import record_source_call
 from src.utils.runtime_secrets import get_runtime_secret
 
@@ -339,6 +340,27 @@ class AmscAwosSourceMixin:
             return None
 
     def fetch_amsc_awos_current(
+        self,
+        city_key: str,
+        *,
+        use_fahrenheit: bool = False,
+    ) -> Optional[Dict[str, Any]]:
+        normalized_city = str(city_key or "").strip().lower()
+        interval_sec = max(
+            60,
+            int(os.getenv("POLYWEATHER_OBSERVATION_COLLECTOR_AMSC_SEC", "180") or "180"),
+        )
+        return run_observation_source(
+            "amsc_awos",
+            normalized_city,
+            interval_sec,
+            lambda: self._fetch_amsc_awos_current_uncached(
+                normalized_city,
+                use_fahrenheit=use_fahrenheit,
+            ),
+        )
+
+    def _fetch_amsc_awos_current_uncached(
         self,
         city_key: str,
         *,

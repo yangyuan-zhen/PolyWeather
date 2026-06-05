@@ -23,6 +23,7 @@ from web.routes import router as legacy_router
 from web.scan_terminal_service import start_scan_terminal_prewarm
 
 _ROUTES_REGISTERED_FLAG = "_polyweather_routes_registered"
+_OBSERVATION_COLLECTOR_STARTED_FLAG = "_polyweather_observation_collector_started"
 
 
 def _service_role() -> str:
@@ -32,6 +33,13 @@ def _service_role() -> str:
 def _scan_terminal_prewarm_enabled() -> bool:
     enabled = str(
         os.getenv("POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED") or "false"
+    ).strip().lower() in {"1", "true", "yes", "on"}
+    return enabled and _service_role() in {"web", "api", "backend"}
+
+
+def _observation_collector_enabled() -> bool:
+    enabled = str(
+        os.getenv("POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED") or "true"
     ).strip().lower() in {"1", "true", "yes", "on"}
     return enabled and _service_role() in {"web", "api", "backend"}
 
@@ -52,4 +60,17 @@ def create_app() -> FastAPI:
         setattr(core_app.state, _ROUTES_REGISTERED_FLAG, True)
         if _scan_terminal_prewarm_enabled():
             start_scan_terminal_prewarm()
+    if (
+        _observation_collector_enabled()
+        and not bool(getattr(core_app.state, _OBSERVATION_COLLECTOR_STARTED_FLAG, False))
+    ):
+        from web.core import _weather
+        from web.services.city_runtime import _refresh_city_panel_cache
+        from web.observation_collector_service import start_observation_collector_loop
+
+        thread = start_observation_collector_loop(
+            weather=_weather,
+            cache_refresher=lambda city: _refresh_city_panel_cache(city, force_refresh=False),
+        )
+        setattr(core_app.state, _OBSERVATION_COLLECTOR_STARTED_FLAG, bool(thread))
     return core_app

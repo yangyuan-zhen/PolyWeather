@@ -18,7 +18,7 @@ SCHEMA_VERSION = 1
 EVENT_TYPE = "city_observation_patch.v1"
 SOURCE_CADENCE_SECONDS = {
     "amos": 60,
-    "amsc_awos": 60,
+    "amsc_awos": 180,
     "cowin_obs": 60,
     "hko_obs": 600,
     "singapore_mss": 60,

@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import threading
 import time
+from concurrent.futures import Future
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -24,6 +25,7 @@ from web.scan_terminal_cache import (
     get_cached_scan_terminal_payload,
     get_scan_terminal_cache_entry,
     mark_scan_terminal_refreshing,
+    scan_terminal_cache_key,
     set_cached_scan_terminal_payload,
     set_scan_terminal_failure_state,
 )
@@ -38,6 +40,11 @@ from web.scan_terminal_payloads import (
     compact_ranked_scan_rows_for_payload,
 )
 from web.scan_terminal_ranker import build_ranked_scan_terminal_result
+
+_SCAN_TERMINAL_INFLIGHT_BUILD_LOCK = threading.Lock()
+_SCAN_TERMINAL_INFLIGHT_BUILDS: Dict[str, Future] = {}
+
+
 def _normalize_locale(value: Any) -> str:
     text = str(value or "").strip().lower()
     return "en-US" if text.startswith("en") else "zh-CN"
@@ -84,7 +91,7 @@ def _start_scan_terminal_background_refresh(filters: Dict[str, Any]) -> bool:
 
     def _runner() -> None:
         try:
-            _build_scan_terminal_payload_uncached(filters, force_refresh=True)
+            _build_scan_terminal_payload_singleflight(filters, force_refresh=True)
         except Exception as exc:  # pragma: no cover - defensive background guard
             logger.warning("scan terminal background refresh failed: {}", exc)
         finally:
@@ -279,6 +286,41 @@ def _build_scan_terminal_payload_uncached(
         )
 
 
+def _build_scan_terminal_payload_singleflight(
+    filters: Dict[str, Any],
+    *,
+    force_refresh: bool = False,
+) -> Dict[str, Any]:
+    cache_key = scan_terminal_cache_key(filters)
+    owner = False
+    with _SCAN_TERMINAL_INFLIGHT_BUILD_LOCK:
+        future = _SCAN_TERMINAL_INFLIGHT_BUILDS.get(cache_key)
+        if future is None:
+            owner = True
+            future = Future()
+            _SCAN_TERMINAL_INFLIGHT_BUILDS[cache_key] = future
+
+    if not owner:
+        logger.debug("scan terminal joining in-flight build key={}", cache_key)
+        return future.result()
+
+    try:
+        payload = _build_scan_terminal_payload_uncached(
+            filters,
+            force_refresh=force_refresh,
+        )
+    except Exception as exc:
+        future.set_exception(exc)
+        raise
+    else:
+        future.set_result(payload)
+        return payload
+    finally:
+        with _SCAN_TERMINAL_INFLIGHT_BUILD_LOCK:
+            if _SCAN_TERMINAL_INFLIGHT_BUILDS.get(cache_key) is future:
+                _SCAN_TERMINAL_INFLIGHT_BUILDS.pop(cache_key, None)
+
+
 def build_scan_terminal_payload(
     raw_filters: Optional[Dict[str, Any]] = None,
     *,
@@ -333,13 +375,13 @@ def build_scan_terminal_payload(
     return (
         timing_recorder.measure(
             "uncached_build",
-            lambda: _build_scan_terminal_payload_uncached(
+            lambda: _build_scan_terminal_payload_singleflight(
                 filters,
                 force_refresh=force_refresh,
             ),
         )
         if timing_recorder is not None
-        else _build_scan_terminal_payload_uncached(filters, force_refresh=force_refresh)
+        else _build_scan_terminal_payload_singleflight(filters, force_refresh=force_refresh)
     )
 
 

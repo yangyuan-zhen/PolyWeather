@@ -146,6 +146,10 @@ def test_parse_wind_plate_payload_rejects_unauthorized_or_empty_payloads():
 
 def test_fetch_amsc_official_current_uses_domestic_city_whitelist(monkeypatch):
     import src.data_collection.amsc_awos_sources as _amsc
+    from src.data_collection.observation_source_gate import reset_observation_source_gate_for_tests
+
+    monkeypatch.setenv("POLYWEATHER_OBSERVATION_SOURCE_DB_LOCK_ENABLED", "false")
+    reset_observation_source_gate_for_tests()
     monkeypatch.setattr(_amsc, "AMSC_AWOS_BASE_URL", "https://www.amsc.net.cn/gateway/api/saas/rest/amc/AwosController/getWindPlate")
     assert _amsc_supported_city_codes()["beijing"] == "ZBAA"
     assert "new york" not in _amsc_supported_city_codes()

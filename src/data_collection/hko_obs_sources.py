@@ -17,6 +17,7 @@ from typing import Any, Dict, Optional
 from loguru import logger
 
 # pyrefly: ignore [missing-import]
+from src.data_collection.observation_source_gate import run_observation_source
 from src.utils.metrics import record_source_call
 
 HKO_BASE_URL = os.getenv("HKO_BASE_URL", "").strip() or "https://data.weather.gov.hk/weatherAPI/hko_data/regional-weather"
@@ -64,6 +65,26 @@ class HkoObsSourceMixin:
         return resp.text
 
     def fetch_hko_obs_current(
+        self,
+        city: str,
+        use_fahrenheit: bool = False,
+    ) -> Optional[Dict[str, Any]]:
+        city_key = (city or "").strip().lower()
+        interval_sec = max(
+            60,
+            int(os.getenv("POLYWEATHER_OBSERVATION_COLLECTOR_HKO_SEC", "600") or "600"),
+        )
+        return run_observation_source(
+            "hko_obs",
+            city_key,
+            interval_sec,
+            lambda: self._fetch_hko_obs_current_uncached(
+                city_key,
+                use_fahrenheit=use_fahrenheit,
+            ),
+        )
+
+    def _fetch_hko_obs_current_uncached(
         self,
         city: str,
         use_fahrenheit: bool = False,

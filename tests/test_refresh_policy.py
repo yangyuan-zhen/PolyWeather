@@ -28,6 +28,7 @@ def test_backend_defaults_use_refresh_policy():
     source = weather_sources.WeatherDataCollector({})
     assert source.metar_cache_ttl_sec == METAR_POLL_TTL_SEC
     assert source.hko_obs_cache_ttl_sec == OBSERVATION_REFRESH_SEC
+    assert source.cowin_obs_cache_ttl_sec == OBSERVATION_REFRESH_SEC
     assert source.settlement_cache_ttl_sec == OBSERVATION_REFRESH_SEC
     assert source.open_meteo_cache_ttl_sec == MODEL_CACHE_TTL_SEC
     assert source.open_meteo_multi_model_cache_ttl_sec == MODEL_CACHE_TTL_SEC

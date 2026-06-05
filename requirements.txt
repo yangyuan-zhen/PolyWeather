@@ -3,6 +3,7 @@ httpx
 loguru
 pyTelegramBotAPI
 python-dotenv
+PyYAML
 netCDF4
 numpy
 web3

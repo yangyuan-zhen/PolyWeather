@@ -10,12 +10,14 @@ URL: https://madis-data.ncep.noaa.gov/madisPublic1/data/LDAD/hfmetar/netCDF/
 from __future__ import annotations
 
 import gzip
+import os
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, List
 
 from loguru import logger
 
+from src.data_collection.observation_source_gate import run_observation_source
 from src.utils.metrics import record_source_call
 
 MADIS_HFMETAR_URL = (
@@ -177,6 +179,19 @@ class MadisSourceMixin:
 
     def fetch_madis_hfmetar(self) -> List[Dict[str, Any]]:
         """Fetch latest MADIS HFMETAR data and return parsed observations."""
+        interval_sec = max(
+            60,
+            int(os.getenv("POLYWEATHER_OBSERVATION_COLLECTOR_MADIS_SEC", "300") or "300"),
+        )
+        return run_observation_source(
+            "madis_hfmetar",
+            "global",
+            interval_sec,
+            self._fetch_madis_hfmetar_uncached,
+        ) or []
+
+    def _fetch_madis_hfmetar_uncached(self) -> List[Dict[str, Any]]:
+        """Fetch latest MADIS HFMETAR data without source-level gate."""
         started = time.perf_counter()
 
         fname = self._madis_latest_file()

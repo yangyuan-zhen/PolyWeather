@@ -183,8 +183,8 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         )
         self.open_meteo_multi_model_cache_ttl_sec = min(self.open_meteo_multi_model_cache_ttl_sec, MODEL_CACHE_TTL_SEC)
         self.multi_model_cache_version = str(
-            os.getenv("OPEN_METEO_MULTI_MODEL_CACHE_VERSION", "v3")
-        ).strip() or "v3"
+            os.getenv("OPEN_METEO_MULTI_MODEL_CACHE_VERSION", "v4")
+        ).strip() or "v4"
         self._open_meteo_cache: Dict[str, Dict] = {}
         self._ensemble_cache: Dict[str, Dict] = {}
         self._multi_model_cache: Dict[str, Dict] = {}
@@ -263,8 +263,9 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         self._madis_cache_lock = threading.Lock()
         self._hko_obs_cache_lock = threading.Lock()
         self.cowin_obs_cache_ttl_sec = int(
-            os.getenv("COWIN_OBS_CACHE_TTL_SEC", "120")
+            os.getenv("COWIN_OBS_CACHE_TTL_SEC", str(OBSERVATION_REFRESH_SEC))
         )
+        self.cowin_obs_cache_ttl_sec = min(self.cowin_obs_cache_ttl_sec, OBSERVATION_REFRESH_SEC)
         self._cowin_obs_cache: Dict[str, Dict] = {}
         self._cowin_obs_cache_lock = threading.Lock()
         self.cwa_open_data_auth = (
@@ -1732,10 +1733,10 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         self._attach_wunderground_historical(results, city_lower, use_fahrenheit)
 
         if lat and lon:
-            # When force_refresh_observations_only is set (airport push loop),
-            # skip the OM fetch entirely if cached data exists — the 60 s cycle
-            # must not hammer the Open-Meteo API.  Stale model data is fine;
-            # the loop only needs fresh METAR / AMOS observations.
+            # When force_refresh_observations_only is set by an explicit
+            # observation refresh caller, skip the OM fetch entirely if cached
+            # data exists. Stale model data is fine; the caller only needs
+            # fresh METAR / AMOS observations.
             om_from_cache_only = force_refresh_observations_only
             if om_from_cache_only:
                 self._maybe_reload_open_meteo_disk_cache()

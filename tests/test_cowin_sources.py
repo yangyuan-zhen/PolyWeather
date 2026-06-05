@@ -5,6 +5,7 @@ import httpx
 
 from src.data_collection import cowin_sources
 from src.data_collection.cowin_sources import CowinSourceMixin
+from src.data_collection.observation_source_gate import reset_observation_source_gate_for_tests
 
 
 class _FakeResponse:
@@ -33,6 +34,8 @@ class _FakeCowinCollector(CowinSourceMixin):
 
 
 def test_cowin_current_retries_without_tls_verification_when_chain_is_incomplete(monkeypatch):
+    monkeypatch.setenv("POLYWEATHER_OBSERVATION_SOURCE_DB_LOCK_ENABLED", "false")
+    reset_observation_source_gate_for_tests()
     calls = []
 
     def fake_get(url, **kwargs):

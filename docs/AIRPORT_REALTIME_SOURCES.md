@@ -11,13 +11,13 @@
 | 香港 | CoWIN 6087 | 6087 | CoWIN (`cowin.hku.hk`) | 1 分钟 | 参考站温度（保良局陈守仁小学） | 免费 |
 | 香港 | HKO | HKO | HKO 官方 CSV (`data.weather.gov.hk`) | 10 分钟 | 官方气象站温度 | 免费 |
 | 台北 | 松山/中央气象署 | 466920 | CWA 开放数据 | 10 分钟 | 官方站点温度 | 免费 |
-| 北京 | 首都机场 | ZBAA | AMSC AWOS | 1 分钟 | 跑道端点气温 | 免费 |
-| 上海 | 浦东机场 | ZSPD | AMSC AWOS | 1 分钟 | 跑道端点气温 | 免费 |
-| 广州 | 白云机场 | ZGGG | AMSC AWOS | 1 分钟 | 跑道端点气温 | 免费 |
-| 成都 | 双流机场 | ZUUU | AMSC AWOS | 1 分钟 | 跑道端点气温 | 免费 |
-| 重庆 | 江北机场 | ZUCK | AMSC AWOS | 1 分钟 | 跑道端点气温 | 免费 |
-| 武汉 | 天河机场 | ZHHH | AMSC AWOS | 1 分钟 | 跑道端点气温 | 免费 |
-| 青岛 | 胶东机场 | ZSQD | AMSC AWOS | 1 分钟 | 跑道端点气温 | 免费 |
+| 北京 | 首都机场 | ZBAA | AMSC AWOS | 3 分钟 | 跑道端点气温 | 免费 |
+| 上海 | 浦东机场 | ZSPD | AMSC AWOS | 3 分钟 | 跑道端点气温 | 免费 |
+| 广州 | 白云机场 | ZGGG | AMSC AWOS | 3 分钟 | 跑道端点气温 | 免费 |
+| 成都 | 双流机场 | ZUUU | AMSC AWOS | 3 分钟 | 跑道端点气温 | 免费 |
+| 重庆 | 江北机场 | ZUCK | AMSC AWOS | 3 分钟 | 跑道端点气温 | 免费 |
+| 武汉 | 天河机场 | ZHHH | AMSC AWOS | 3 分钟 | 跑道端点气温 | 免费 |
+| 青岛 | 胶东机场 | ZSQD | AMSC AWOS | 3 分钟 | 跑道端点气温 | 免费 |
 | 东京 | 羽田 | RJTT | JMA AMeDAS (`jma.go.jp`) | 10 分钟 | 机场站点实时温度 | 免费 |
 | 安卡拉 | Esenboğa | 17128 | MGM (`servis.mgm.gov.tr`) | 5-15 分钟 | 机场站点实时温度 | 免费 |
 | 伊斯坦布尔 | 伊斯坦布尔机场 | 17058 | MGM (`servis.mgm.gov.tr`) | 5-15 分钟 | 机场站点实时温度 | 免费 |
@@ -56,11 +56,20 @@
 > `MID_TEMP` / `END_TEMP`。这些字段是跑道观测位置气温，不是道面温度。
 > 结算跑道展示使用配置的结算端点；辅助跑道只作为背景曲线。
 
-## 推送机制
+## 独立观测采集器
+
+- Web/API 进程启动 `observation-collector` 后台线程，按源频率独立采集，不依赖 Telegram 推送循环
+- 默认频率：AMOS 60s、AMSC AWOS 180s、MADIS HFMETAR 300s、CoWIN 60s、HKO 600s
+- 每次采集复用 `weather_sources.py` 现有 `_attach_*` 写入逻辑，负责写 `airport_obs_log` / `runway_obs_log` / 今日观测缓存，并通过 `/api/internal/collector-patch` 写 Redis Stream 或 SQLite event log 后广播 SSE
+- 采集成功后刷新对应城市 `panel` cache；前端继续使用 HTTP snapshot + SSE patch，不需要依赖 Telegram 触发更新
+- `observation_source_gate.py` 对 AMSC、AMOS、MADIS、HKO、CoWIN 做 per-source/per-city singleflight 和 SQLite cooldown，防止 Web 请求、collector 和兜底分析同时打同一个外部源
+
+## Telegram 推送机制
 
 - 每城按原生频率独立推送，不捆绑
-- 首尔/釜山 60s，其余 600s
+- 首尔/釜山 60s，中国 AMSC 城市 180s，其余 600s
 - 循环轮询 60s 以匹配最快频率
+- Telegram 推送优先读取网站侧 `full`/`panel` 城市缓存；缓存缺失时只做非强制 `panel` 分析兜底，不触发 `force_refresh_observations_only`
 - 仅当当前温度距 DEB 预测最高 ≤3°C 时推送
 - 确认过峰值后自动停止
 
@@ -69,7 +78,7 @@
 为了向用户提供接近行情盘的实况响应并降低服务器负载，系统使用 **HTTP snapshot + Server-Sent Events (SSE) Patch + 可重放事件日志** 架构。生产环境推荐 Redis Stream；本地或单进程可回退 SQLite event log。
 
 ### 1. 数据推送链路 (Data Pipeline)
-1. **Collector 采集端触发**：在 `weather_sources.py` 中，当高频实况源（如 AMOS, CoWIN, MADIS 等）采集到温度更新或观测时间变更时，会调用 `_emit_temperature_patch_if_changed` 过滤重复值，并异步向 `/api/internal/collector-patch` 发送 POST 报文。
+1. **Observation Collector 采集端触发**：`web.observation_collector_service` 按源频率调用采集层；在 `weather_sources.py` 中，当高频实况源（如 AMOS, AMSC, CoWIN, HKO, MADIS 等）采集到温度更新或观测时间变更时，会调用 `_emit_temperature_patch_if_changed` 过滤重复值，并异步向 `/api/internal/collector-patch` 发送 POST 报文。
 2. **标准化事件**：`realtime_patch_schema.py` 将旧 `city_patch` 或新 payload 统一成 `city_observation_patch.v1`。
 3. **事件存储**：生产环境写入 Redis Stream（`stream:city_observation`）并生成全局递增 `revision`；SQLite `observation_patch_events` 保留为本地/兜底 replay。
 4. **FastAPI SSE 广播**：FastAPI 后端的 `sse_router.py` 根据城市订阅集合向匹配连接推送 patch；断线重连时按 `since_revision` replay。

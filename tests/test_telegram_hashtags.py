@@ -1,6 +1,7 @@
 from src.utils.telegram_push import (
     HIGH_FREQ_AIRPORT_CITIES,
     HIGH_FREQ_AIRPORT_ICAO,
+    _AIRPORT_PUSH_INTERVAL,
     _build_airport_status_message,
     _compute_slope_15m,
     _run_high_freq_airport_cycle,
@@ -169,23 +170,41 @@ def test_shenzhen_is_in_high_freq_push_as_hko_station():
     assert HIGH_FREQ_AIRPORT_ICAO["shenzhen"] == "LFS"
 
 
-def test_high_freq_airport_push_forces_analysis_refresh(monkeypatch):
+def test_china_airport_push_defaults_to_three_minute_city_interval():
+    assert _AIRPORT_PUSH_INTERVAL["seoul"] == 60
+    assert _AIRPORT_PUSH_INTERVAL["busan"] == 60
+    assert _AIRPORT_PUSH_INTERVAL["shanghai"] == 180
+    assert _AIRPORT_PUSH_INTERVAL["beijing"] == 180
+    assert _AIRPORT_PUSH_INTERVAL["guangzhou"] == 180
+    assert _AIRPORT_PUSH_INTERVAL["qingdao"] == 180
+    assert _AIRPORT_PUSH_INTERVAL["chengdu"] == 180
+    assert _AIRPORT_PUSH_INTERVAL["chongqing"] == 180
+    assert _AIRPORT_PUSH_INTERVAL["wuhan"] == 180
+
+
+def test_high_freq_airport_push_prefers_fresh_city_cache(monkeypatch):
     import src.utils.telegram_push as telegram_push
     import web.app as web_app
 
-    calls = []
+    def fail_analyze(*_args, **_kwargs):
+        raise AssertionError("airport Telegram push should read fresh city cache before _analyze")
 
-    def fake_analyze(city, force_refresh=False, force_refresh_observations_only=False, **_kwargs):
-        calls.append((city, force_refresh, force_refresh_observations_only))
-        return {
-            "local_time": "12:00",
-            "current": {"temp": 31.0},
-            "deb": {"prediction": 29.0},
-            "airport_current": {"max_so_far": 30.0, "max_temp_time": "11:50", "obs_time": "12:00"},
-            "mgm_nearby": [
-                {"icao": "ZSQD", "temp": 31.0, "obs_time": "2026-05-17T04:00:00Z"},
-            ],
-        }
+    class FakeDB:
+        def get_city_cache(self, kind, city):
+            if city != "qingdao" or kind != "full":
+                return None
+            return {
+                "updated_at_ts": telegram_push.time.time(),
+                "payload": {
+                    "local_time": "12:00",
+                    "current": {"temp": 31.0},
+                    "deb": {"prediction": 29.0},
+                    "airport_current": {"max_so_far": 30.0, "max_temp_time": "11:50", "obs_time": "12:00"},
+                    "mgm_nearby": [
+                        {"icao": "ZSQD", "temp": 31.0, "obs_time": "2026-05-17T04:00:00Z"},
+                    ],
+                },
+            }
 
     class Bot:
         def __init__(self):
@@ -196,7 +215,13 @@ def test_high_freq_airport_push_forces_analysis_refresh(monkeypatch):
 
     bot = Bot()
     monkeypatch.setattr(telegram_push, "HIGH_FREQ_AIRPORT_CITIES", {"qingdao"})
-    monkeypatch.setattr(web_app, "_analyze", fake_analyze)
+    monkeypatch.setattr(telegram_push, "DBManager", lambda: FakeDB())
+    monkeypatch.setattr(
+        telegram_push,
+        "_rate_limited_send",
+        lambda bot, chat_id, message, **_kwargs: bot.send_message(chat_id, message),
+    )
+    monkeypatch.setattr(web_app, "_analyze", fail_analyze)
 
     sent = _run_high_freq_airport_cycle(
         bot=bot,
@@ -206,11 +231,94 @@ def test_high_freq_airport_push_forces_analysis_refresh(monkeypatch):
     )
 
     assert sent is True
-    # All cities processed with force_refresh_observations_only=True
-    assert len(calls) >= 1
-    assert all(c[2] is True for c in calls)
-    assert ("qingdao", False, True) in calls
     assert bot.messages
+
+
+def test_airport_push_fallback_analysis_does_not_force_observation_refresh(monkeypatch):
+    import src.utils.telegram_push as telegram_push
+    import web.app as web_app
+
+    calls = []
+
+    class FakeDB:
+        def get_city_cache(self, kind, city):
+            return None
+
+    def fake_analyze(city, force_refresh=False, force_refresh_observations_only=False, detail_mode="full", **_kwargs):
+        calls.append((city, force_refresh, force_refresh_observations_only, detail_mode))
+        return {
+            "local_time": "12:00",
+            "current": {"temp": 31.0},
+            "deb": {"prediction": 29.0},
+            "airport_current": {"max_so_far": 30.0, "max_temp_time": "11:50", "obs_time": "12:00"},
+            "mgm_nearby": [
+                {"icao": "ZSQD", "temp": 31.0, "obs_time": "2026-05-17T04:00:00Z"},
+            ],
+        }
+
+    monkeypatch.setattr(telegram_push, "DBManager", lambda: FakeDB())
+    monkeypatch.setattr(web_app, "_analyze", fake_analyze)
+
+    city_weather = telegram_push._load_airport_city_weather_for_push("qingdao")
+
+    assert city_weather["current"]["temp"] == 31.0
+    assert ("qingdao", False, False, "panel") in calls
+    assert not any(city == "qingdao" and force_obs for city, _force, force_obs, _mode in calls)
+
+
+def test_airport_push_uses_stale_cache_before_fallback_analysis(monkeypatch):
+    import src.utils.telegram_push as telegram_push
+    import web.app as web_app
+
+    def fail_analyze(*_args, **_kwargs):
+        raise AssertionError("stale city cache should still prevent Telegram fallback analysis")
+
+    class FakeDB:
+        def get_city_cache(self, kind, city):
+            if kind != "panel":
+                return None
+            return {
+                "updated_at_ts": 1.0,
+                "payload": {
+                    "local_time": "12:00",
+                    "current": {"temp": 31.0},
+                    "deb": {"prediction": 29.0},
+                    "airport_current": {"max_so_far": 30.0, "max_temp_time": "11:50", "obs_time": "12:00"},
+                    "mgm_nearby": [
+                        {"icao": "ZSQD", "temp": 31.0, "obs_time": "2026-05-17T04:00:00Z"},
+                    ],
+                },
+            }
+
+    monkeypatch.setattr(telegram_push, "DBManager", lambda: FakeDB())
+    monkeypatch.setattr(web_app, "_analyze", fail_analyze)
+
+    city_weather = telegram_push._load_airport_city_weather_for_push("qingdao")
+
+    assert city_weather["current"]["temp"] == 31.0
+
+
+def test_high_freq_airport_cycle_skips_cities_before_interval(monkeypatch):
+    import src.utils.telegram_push as telegram_push
+
+    calls = []
+    monkeypatch.setattr(telegram_push, "HIGH_FREQ_AIRPORT_CITIES", {"shanghai"})
+    monkeypatch.setattr(telegram_push.time, "time", lambda: 1000.0)
+    monkeypatch.setattr(
+        telegram_push,
+        "_process_airport_city",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+
+    dirty = telegram_push._run_high_freq_airport_cycle(
+        bot=object(),
+        config={},
+        chat_ids=["chat-1"],
+        state={"last_by_city": {"shanghai": {"ts": 999}}},
+    )
+
+    assert dirty is False
+    assert calls == []
 
 
 def test_high_freq_airport_push_workers_default_to_one_for_shared_cpu(monkeypatch):

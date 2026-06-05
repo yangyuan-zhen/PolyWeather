@@ -16,6 +16,7 @@ from urllib.parse import urlencode
 import requests
 from loguru import logger
 
+from src.data_collection.observation_source_gate import run_observation_source
 from src.utils.metrics import record_source_call
 
 COWIN_BASE_URL = os.getenv("COWIN_BASE_URL", "").strip() or "https://cowin.hku.hk"
@@ -91,6 +92,26 @@ class CowinSourceMixin:
         return local_now.strftime("%Y-%m-%d"), local_start, local_now
 
     def fetch_cowin_obs_current(
+        self,
+        city: str,
+        use_fahrenheit: bool = False,
+    ) -> Optional[Dict[str, Any]]:
+        city_key = str(city or "").strip().lower()
+        interval_sec = max(
+            30,
+            int(os.getenv("POLYWEATHER_OBSERVATION_COLLECTOR_COWIN_SEC", "60") or "60"),
+        )
+        return run_observation_source(
+            "cowin_obs",
+            city_key,
+            interval_sec,
+            lambda: self._fetch_cowin_obs_current_uncached(
+                city_key,
+                use_fahrenheit=use_fahrenheit,
+            ),
+        )
+
+    def _fetch_cowin_obs_current_uncached(
         self,
         city: str,
         use_fahrenheit: bool = False,

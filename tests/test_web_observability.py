@@ -2626,6 +2626,52 @@ def test_scan_terminal_timeout_does_not_replace_better_cached_snapshot(monkeypat
     assert [row["id"] for row in cached["rows"]] == ["old-1", "old-2"]
 
 
+def test_scan_terminal_cold_requests_share_inflight_build(monkeypatch):
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    filters = {"scan_mode": "tradable", "limit": 17, "min_edge_pct": 6.75}
+    scan_terminal_cache._SCAN_TERMINAL_CACHE.clear()
+    scan_terminal_cache._SCAN_TERMINAL_REFRESHING.clear()
+    monkeypatch.setenv("POLYWEATHER_SCAN_TERMINAL_REDIS_CACHE_ENABLED", "false")
+
+    calls = 0
+
+    def _fake_uncached(filters_arg, *, force_refresh=False, timeout_sec=None):
+        nonlocal calls
+        calls += 1
+        time.sleep(0.05)
+        return {
+            "generated_at": "2026-06-05T00:00:00Z",
+            "filters": dict(filters_arg),
+            "summary": {"candidate_total": 1},
+            "top_signal": None,
+            "rows": [{"id": "shared-row"}],
+            "status": "ready",
+            "stale": False,
+            "stale_reason": None,
+            "last_success_at": None,
+            "last_failed_at": None,
+        }
+
+    monkeypatch.setattr(
+        scan_terminal_service,
+        "_build_scan_terminal_payload_uncached",
+        _fake_uncached,
+    )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(scan_terminal_service.build_scan_terminal_payload, filters),
+            executor.submit(scan_terminal_service.build_scan_terminal_payload, filters),
+        ]
+        results = [future.result(timeout=2) for future in futures]
+
+    assert calls == 1
+    assert results[0]["rows"] == [{"id": "shared-row"}]
+    assert results[1]["rows"] == [{"id": "shared-row"}]
+
+
 def test_scan_terminal_prewarm_builds_default_terminal_payload(monkeypatch):
     calls = []
 

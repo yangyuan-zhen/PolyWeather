@@ -34,6 +34,54 @@ OPEN_METEO_MULTI_MODEL_SPECS: Dict[str, Dict[str, Any]] = {
         "resolution_km": None,
         "horizon": "16d",
     },
+    "gfs_global": {
+        "label": "GFS Global",
+        "provider": "NOAA",
+        "model": "GFS Global 0.11°/0.25°",
+        "tier": "global",
+        "resolution_km": 13,
+        "horizon": "16d",
+    },
+    "ncep_hrrr_conus": {
+        "label": "HRRR",
+        "provider": "NOAA",
+        "model": "HRRR CONUS",
+        "tier": "short_range_north_america",
+        "resolution_km": 3,
+        "horizon": "18h/48h",
+    },
+    "ncep_nbm_conus": {
+        "label": "NBM",
+        "provider": "NOAA",
+        "model": "National Blend of Models CONUS",
+        "tier": "regional_north_america",
+        "resolution_km": 2.5,
+        "horizon": "11d",
+    },
+    "ncep_nam_conus": {
+        "label": "NAM",
+        "provider": "NOAA",
+        "model": "NAM CONUS",
+        "tier": "short_range_north_america",
+        "resolution_km": 3,
+        "horizon": "60h",
+    },
+    "ncep_gfs_graphcast025": {
+        "label": "GFS GraphCast",
+        "provider": "Google/NOAA",
+        "model": "GFS GraphCast 0.25°",
+        "tier": "ai_global",
+        "resolution_km": 25,
+        "horizon": "16d",
+    },
+    "ncep_aigfs025": {
+        "label": "AI-GFS",
+        "provider": "NOAA",
+        "model": "AIGFS 0.25°",
+        "tier": "ai_global",
+        "resolution_km": 25,
+        "horizon": "16d",
+    },
     "icon_seamless": {
         "label": "ICON",
         "provider": "DWD",
@@ -784,7 +832,7 @@ class NwsOpenMeteoSourceMixin:
 
         模型列表:
         - ECMWF IFS / AIFS
-        - GFS (美国 NOAA)
+        - GFS / HRRR / NBM / NAM / AI-GFS (美国 NOAA)
         - ICON Seamless / ICON-EU / ICON-D2 (德国气象局 DWD)
         - GEM Seamless / GDPS / RDPS / HRDPS (加拿大 ECCC)
         - JMA (日本气象厅)
@@ -893,7 +941,7 @@ class NwsOpenMeteoSourceMixin:
                 "model_keys": model_keys,
                 "dates": dates,
                 "unit": "fahrenheit" if use_fahrenheit else "celsius",
-                "attribution": "Open-Meteo forecast model API; underlying models from ECMWF, DWD, ECCC, NOAA and JMA.",
+                "attribution": "Open-Meteo forecast model API; underlying models from ECMWF, DWD, ECCC, NOAA/NCEP, Google and JMA.",
             }
             with self._multi_model_cache_lock:
                 previous = self._multi_model_cache.get(cache_key)

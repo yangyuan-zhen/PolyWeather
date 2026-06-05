@@ -1,6 +1,10 @@
 import threading
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
+
+import pytest
+import yaml
 
 from src.data_collection.country_networks import build_country_network_snapshot
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
@@ -74,6 +78,17 @@ def test_paris_registry_uses_le_bourget_anchor():
     assert CITIES["paris"]["lat"] == paris["lat"]
     assert CITIES["paris"]["settlement_source"] == "aeroweb"
     assert _DummyMetarSource.CITY_TO_ICAO["paris"] == "LFPB"
+
+
+def test_new_york_config_uses_registry_airport_anchor():
+    config_path = Path(__file__).resolve().parents[1] / "config" / "config.yaml"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    city_config = next(city for city in config["cities"] if city["id"] == "new_york")
+    registry = CITY_REGISTRY["new york"]
+
+    assert city_config["latitude"] == pytest.approx(registry["lat"])
+    assert city_config["longitude"] == pytest.approx(registry["lon"])
 
 
 def test_turkey_metar_uses_fast_cache_ttl():
