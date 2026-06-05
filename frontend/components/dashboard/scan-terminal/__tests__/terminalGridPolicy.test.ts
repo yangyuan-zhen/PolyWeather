@@ -36,6 +36,10 @@ export function runTests() {
     path.join(projectRoot, "components", "dashboard", "scan-terminal", "use-scan-terminal-query.ts"),
     "utf8",
   );
+  const mobileRegionTabsSource = fs.readFileSync(
+    path.join(projectRoot, "components", "dashboard", "scan-terminal", "MobileRegionTabs.tsx"),
+    "utf8",
+  );
 
   assert(
     dashboardSource.includes("MAX_TERMINAL_CHARTS = 9"),
@@ -56,6 +60,16 @@ export function runTests() {
       dashboardSource.includes("Rotate to landscape") &&
       dashboardSource.includes("disableClose={true}"),
     "mobile terminal should render one selected chart and suggest landscape for the full grid",
+  );
+  assert(
+    dashboardSource.includes("mobile-region-tabs-shell") &&
+      dashboardSource.includes("handleMobileSelectTab") &&
+      dashboardSource.includes("mobileSelectedRowInActiveGroup") &&
+      dashboardSource.includes("mobileActiveGroup?.rows[0]") &&
+      mobileRegionTabsSource.includes("min-h-11") &&
+      mobileRegionTabsSource.includes("snap-x") &&
+      mobileRegionTabsSource.includes("aria-pressed={isActive}"),
+    "mobile region navigation must stay visible above the landscape hint, remain touch-friendly, and switch the visible chart with the active region",
   );
   assert(
     !dashboardSource.includes("disableClose={visibleSlots.filter(Boolean).length <= 1}"),

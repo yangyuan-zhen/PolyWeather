@@ -15,7 +15,7 @@ export function MobileRegionTabs({
   onSelectTab: (key: string) => void;
 }) {
   return (
-    <div className="mobile-region-tabs flex overflow-x-auto border-b border-slate-200 bg-white px-2">
+    <div className="mobile-region-tabs flex min-h-11 snap-x gap-1 overflow-x-auto border-b border-slate-200 bg-white px-2 [-webkit-overflow-scrolling:touch] [scrollbar-width:none]">
       {groups.map((g) => {
         const label = isEn ? g.labelEn : g.labelZh;
         const isActive = activeTab === g.key;
@@ -23,9 +23,10 @@ export function MobileRegionTabs({
           <button
             key={g.key}
             type="button"
+            aria-pressed={isActive}
             onClick={() => onSelectTab(g.key)}
             className={clsx(
-              "shrink-0 px-3 py-2.5 text-xs font-bold whitespace-nowrap border-b-2 transition-colors",
+              "flex min-h-11 shrink-0 snap-start items-center border-b-2 px-3 text-xs font-bold whitespace-nowrap transition-colors",
               isActive
                 ? "border-blue-600 text-blue-700"
                 : "border-transparent text-slate-500 hover:text-slate-700"

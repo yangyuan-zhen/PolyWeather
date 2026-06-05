@@ -861,24 +861,46 @@ function PolyWeatherTerminal({
     () => buildContinentGroups(filteredRegionRows, isEn),
     [filteredRegionRows, isEn]
   );
+  const mobileGroups = useMemo(
+    () => buildContinentGroups(rows, isEn),
+    [rows, isEn],
+  );
   const [mobileTab, setMobileTab] = useState<string>("active_signals");
   const mobileActiveGroup = useMemo(
-    () => continentGroups.find((g) => g.key === mobileTab) || continentGroups[0],
-    [continentGroups, mobileTab]
+    () => mobileGroups.find((g) => g.key === mobileTab) || mobileGroups[0],
+    [mobileGroups, mobileTab],
   );
   useEffect(() => {
-    if (continentGroups.length > 0 && !continentGroups.find((g) => g.key === mobileTab)) {
-      setMobileTab(continentGroups[0].key);
+    if (mobileGroups.length > 0 && !mobileGroups.find((g) => g.key === mobileTab)) {
+      setMobileTab(mobileGroups[0].key);
     }
-  }, [continentGroups, mobileTab]);
+  }, [mobileGroups, mobileTab]);
+  const mobileSelectedRowInActiveGroup = useMemo(
+    () =>
+      selectedRow && mobileActiveGroup?.rows.some((row) => row.id === selectedRow.id)
+        ? selectedRow
+        : null,
+    [mobileActiveGroup?.rows, selectedRow],
+  );
   const mobileChartRow = useMemo(
     () =>
-      selectedRow ||
-      mobileActiveGroup?.rows.slice(0, MOBILE_TERMINAL_CHARTS)[0] ||
+      mobileSelectedRowInActiveGroup ||
+      mobileActiveGroup?.rows[0] ||
       filteredRegionRows[0] ||
       null,
-    [filteredRegionRows, mobileActiveGroup?.rows, selectedRow],
+    [filteredRegionRows, mobileActiveGroup?.rows, mobileSelectedRowInActiveGroup],
   );
+  const handleMobileSelectTab = useCallback((key: string) => {
+    setMobileTab(key);
+    if (selectedRegionKey !== "all") {
+      setSelectedRegionKey("all");
+    }
+    const nextGroup = mobileGroups.find((group) => group.key === key);
+    const nextRow = nextGroup?.rows[0];
+    if (nextRow) {
+      setSelectedRow(nextRow);
+    }
+  }, [mobileGroups, selectedRegionKey, setSelectedRegionKey, setSelectedRow]);
   useEffect(() => {
     if (!filteredRegionRows.length) return;
     if (!selectedRow || !filteredRegionRows.some((row) => row.id === selectedRow.id)) {
@@ -967,16 +989,18 @@ function PolyWeatherTerminal({
             <>
               {/* Mobile layout */}
               <div className="flex flex-col gap-2 lg:hidden overflow-auto flex-1 pb-6">
-                <MobileRegionTabs
-                  activeTab={mobileTab}
-                  groups={continentGroups}
-                  isEn={isEn}
-                  onSelectTab={setMobileTab}
-                />
-                <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] font-semibold leading-4 text-blue-700">
-                  {isEn
-                    ? "Mobile renders one chart. Rotate to landscape to inspect the full terminal grid."
-                    : "手机端仅渲染 1 个图表。建议横屏查看完整终端网格。"}
+                <div className="mobile-region-tabs-shell sticky top-0 z-30 -mx-2 bg-[#eef2f6] pb-2 shadow-sm">
+                  <MobileRegionTabs
+                    activeTab={mobileTab}
+                    groups={mobileGroups}
+                    isEn={isEn}
+                    onSelectTab={handleMobileSelectTab}
+                  />
+                  <div className="mx-2 mt-1 rounded border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-semibold leading-3 text-blue-700">
+                    {isEn
+                      ? "Mobile renders one chart. Rotate to landscape for the full grid."
+                      : "手机端仅渲染 1 个图表。建议横屏查看完整终端网格。"}
+                  </div>
                 </div>
                 {mobileChartRow && (
                   <div className="h-[420px] min-h-[420px] overflow-hidden rounded border border-[#d2d9e2] bg-white">
@@ -1001,16 +1025,16 @@ function PolyWeatherTerminal({
                   ))}
                 </div>
                 {/* Mobile Selected Row Detail */}
-                {selectedRow && (
+                {mobileChartRow && (
                   <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                    <h3 className="text-sm font-black text-slate-900 mb-2">{rowName(selectedRow)}</h3>
+                    <h3 className="text-sm font-black text-slate-900 mb-2">{rowName(mobileChartRow)}</h3>
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       {[
-                        ["Obs", temp(selectedRow.current_temp, selectedRow.temp_symbol)],
-                        ["High", temp(selectedRow.current_max_so_far, selectedRow.temp_symbol)],
-                        ["DEB", temp(selectedRow.deb_prediction, selectedRow.temp_symbol)],
-                        ["Gap", temp(selectedRow.signed_gap ?? selectedRow.gap_to_target, selectedRow.temp_symbol)],
-                        ["Edge", pct(selectedRow.edge_percent)],
+                        ["Obs", temp(mobileChartRow.current_temp, mobileChartRow.temp_symbol)],
+                        ["High", temp(mobileChartRow.current_max_so_far, mobileChartRow.temp_symbol)],
+                        ["DEB", temp(mobileChartRow.deb_prediction, mobileChartRow.temp_symbol)],
+                        ["Gap", temp(mobileChartRow.signed_gap ?? mobileChartRow.gap_to_target, mobileChartRow.temp_symbol)],
+                        ["Edge", pct(mobileChartRow.edge_percent)],
                         ["Market", "--"],
                       ].map(([label, value]) => (
                         <div key={label} className="rounded border border-slate-200 bg-slate-50 p-2">
