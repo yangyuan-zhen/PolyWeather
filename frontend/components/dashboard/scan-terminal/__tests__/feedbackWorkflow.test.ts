@@ -16,14 +16,22 @@ export function runTests() {
     "utf8",
   );
   const modalPath = path.join(projectRoot, "components", "dashboard", "scan-terminal", "UserFeedbackModal.tsx");
+  const statusButtonPath = path.join(projectRoot, "components", "dashboard", "scan-terminal", "UserFeedbackStatusButton.tsx");
   const opsSidebarSource = fs.readFileSync(
     path.join(projectRoot, "components", "ops", "layout", "AdminSidebar.tsx"),
     "utf8",
   );
   const opsApiSource = fs.readFileSync(path.join(projectRoot, "lib", "ops-api.ts"), "utf8");
+  const feedbackRouteSource = fs.readFileSync(path.join(projectRoot, "app", "api", "feedback", "route.ts"), "utf8");
 
   assert(fs.existsSync(modalPath), "terminal must ship a user feedback modal component");
+  assert(fs.existsSync(statusButtonPath), "terminal must ship a user-facing feedback status notification component");
   const modalSource = fs.readFileSync(modalPath, "utf8");
+  const statusButtonSource = fs.readFileSync(statusButtonPath, "utf8");
+  const statusHelperSource = fs.readFileSync(
+    path.join(projectRoot, "components", "dashboard", "scan-terminal", "feedback-status.ts"),
+    "utf8",
+  );
 
   assert(
     dashboardSource.includes("onFeedbackClick") &&
@@ -40,9 +48,30 @@ export function runTests() {
   assert(
     modalSource.includes("/api/feedback") &&
       modalSource.includes("getAnalyticsClientId") &&
+      modalSource.includes("onSubmitted") &&
       modalSource.includes("navigator.userAgent") &&
       modalSource.includes("type=\"textarea\"") === false,
-    "feedback modal must submit to the feedback API and attach client/session diagnostics without using invalid textarea input types",
+    "feedback modal must submit to the feedback API, notify the dashboard after success, and attach client/session diagnostics without using invalid textarea input types",
+  );
+  assert(
+    feedbackRouteSource.includes("export async function GET") &&
+      feedbackRouteSource.includes("method: \"GET\"") &&
+      feedbackRouteSource.includes("limit"),
+    "feedback API proxy must expose a GET endpoint for the current user's feedback status list",
+  );
+  assert(
+    dashboardSource.includes("<UserFeedbackStatusButton") &&
+      dashboardSource.includes("feedbackRefreshKey") &&
+      dashboardSource.includes("setFeedbackRefreshKey"),
+    "terminal header must expose a small feedback status notification icon and refresh it after submissions",
+  );
+  assert(
+    statusButtonSource.includes("/api/feedback") &&
+      statusButtonSource.includes("localStorage") &&
+      statusButtonSource.includes("Bell") &&
+      statusHelperSource.includes("triaged") &&
+      statusHelperSource.includes("resolved"),
+    "feedback status notification must poll the user feedback API, badge unseen status changes, and translate handled states",
   );
   assert(
     opsSidebarSource.includes("/ops/feedback") &&

@@ -60,6 +60,7 @@ import {
   UserFeedbackModal,
   type FeedbackDraft,
 } from "@/components/dashboard/scan-terminal/UserFeedbackModal";
+import { UserFeedbackStatusButton } from "@/components/dashboard/scan-terminal/UserFeedbackStatusButton";
 import {
   mergeAccessStateWithAuthPayload,
   type AuthProfilePayload,
@@ -663,6 +664,7 @@ function PolyWeatherTerminal({
   const [activeNavKey, setActiveNavKey] = useState<string>("thresholds");
   const [onlineCount, setOnlineCount] = useState<number | null>(null);
   const [feedbackDraft, setFeedbackDraft] = useState<FeedbackDraft | null>(null);
+  const [feedbackRefreshKey, setFeedbackRefreshKey] = useState(0);
   const handleSelectNav = useCallback((key: string) => {
     setActiveNavKey(key);
   }, []);
@@ -753,6 +755,10 @@ function PolyWeatherTerminal({
       },
     });
   }, [activeNavKey, gridCols, gridRows, locale]);
+
+  const handleFeedbackSubmitted = useCallback(() => {
+    setFeedbackRefreshKey((value) => value + 1);
+  }, []);
 
   const handleSetGridSize = (cols: number, rows: number) => {
     const safeCols = clampGridSide(cols);
@@ -970,6 +976,7 @@ function PolyWeatherTerminal({
             >
               {isEn ? "中文" : "EN"}
             </button>
+            <UserFeedbackStatusButton isEn={isEn} refreshKey={feedbackRefreshKey} />
             <Link
               href="/account"
               className="grid h-7 w-7 place-items-center rounded-full border border-slate-300 bg-white text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-900"
@@ -1189,6 +1196,7 @@ function PolyWeatherTerminal({
         draft={feedbackDraft}
         isEn={isEn}
         onClose={() => setFeedbackDraft(null)}
+        onSubmitted={handleFeedbackSubmitted}
       />
     </div>
   );

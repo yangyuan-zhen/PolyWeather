@@ -63,3 +63,27 @@ def submit_user_feedback(request: Request, body: UserFeedbackRequest) -> Dict[st
         context=_bounded_context(body.context),
     )
     return {"ok": True, "feedback": feedback}
+
+
+def list_current_user_feedback(request: Request, *, limit: int = 20) -> Dict[str, Any]:
+    legacy_routes._bind_optional_supabase_identity(request)
+
+    user_id = str(getattr(request.state, "auth_user_id", "") or "").strip()
+    user_email = str(getattr(request.state, "auth_email", "") or "").strip()
+    if not user_id and not user_email:
+        raise HTTPException(status_code=401, detail="Supabase user required")
+
+    rows = DBManager().list_user_feedback(
+        limit=limit,
+        user_id=user_id,
+        user_email=user_email,
+    )
+    status_counts: Dict[str, int] = {}
+    for row in rows:
+        key = str(row.get("status") or "unknown")
+        status_counts[key] = status_counts.get(key, 0) + 1
+    return {
+        "feedback": rows,
+        "total": len(rows),
+        "status_counts": status_counts,
+    }

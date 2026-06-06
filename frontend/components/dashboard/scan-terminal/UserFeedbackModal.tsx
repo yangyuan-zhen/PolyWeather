@@ -7,6 +7,7 @@ import {
   getAnalyticsClientId,
   getAnalyticsSessionId,
 } from "@/lib/app-analytics";
+import type { UserFeedbackEntry } from "@/types/ops";
 
 export type FeedbackCategory = "bug" | "data" | "idea" | "payment" | "account" | "other";
 
@@ -48,10 +49,12 @@ export function UserFeedbackModal({
   draft,
   isEn,
   onClose,
+  onSubmitted,
 }: {
   draft: FeedbackDraft | null;
   isEn: boolean;
   onClose: () => void;
+  onSubmitted?: (entry?: UserFeedbackEntry) => void;
 }) {
   const open = Boolean(draft);
   const [category, setCategory] = useState<FeedbackCategory>("bug");
@@ -103,7 +106,11 @@ export function UserFeedbackModal({
         const detail = (await res.text().catch(() => "")).slice(0, 200);
         throw new Error(detail || `HTTP ${res.status}`);
       }
+      const payload = (await res.json().catch(() => null)) as {
+        feedback?: UserFeedbackEntry;
+      } | null;
       setSubmitted(true);
+      onSubmitted?.(payload?.feedback);
     } catch (err) {
       setError(String(err).slice(0, 220));
     } finally {
@@ -139,8 +146,8 @@ export function UserFeedbackModal({
             </div>
             <p className="mx-auto mt-2 max-w-sm text-xs leading-5 text-slate-500">
               {isEn
-                ? "We saved the report with the current terminal context."
-                : "已附带当前终端上下文保存，后续会在后台统一处理。"}
+                ? "We saved the report with the current terminal context. The bell icon will show handling updates."
+                : "已附带当前终端上下文保存。右上角铃铛会显示后续处理进度。"}
             </p>
             <button
               type="button"

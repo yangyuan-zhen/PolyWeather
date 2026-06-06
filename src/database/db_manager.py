@@ -568,6 +568,12 @@ class DBManager:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_user_feedback_created_at ON user_feedback(created_at DESC)"
             )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_user_feedback_user_created_at ON user_feedback(user_id, created_at DESC)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_user_feedback_email_created_at ON user_feedback(user_email, created_at DESC)"
+            )
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS supabase_bindings (
                     supabase_user_id TEXT PRIMARY KEY,
@@ -1155,14 +1161,27 @@ class DBManager:
         *,
         limit: int = 100,
         status: Optional[str] = None,
+        user_id: Optional[str] = None,
+        user_email: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         safe_limit = max(1, min(int(limit or 100), 500))
         normalized_status = str(status or "").strip().lower()
+        normalized_user_id = str(user_id or "").strip().lower()
+        normalized_user_email = str(user_email or "").strip().lower()
         clauses: List[str] = []
         params: List[Any] = []
         if normalized_status:
             clauses.append("status = ?")
             params.append(normalized_status)
+        identity_clauses: List[str] = []
+        if normalized_user_id:
+            identity_clauses.append("user_id = ?")
+            params.append(normalized_user_id)
+        if normalized_user_email:
+            identity_clauses.append("user_email = ?")
+            params.append(normalized_user_email)
+        if identity_clauses:
+            clauses.append(f"({' OR '.join(identity_clauses)})")
         where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         params.append(safe_limit)
         with self._get_connection() as conn:

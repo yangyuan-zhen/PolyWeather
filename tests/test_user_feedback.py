@@ -1,4 +1,10 @@
+from types import SimpleNamespace
+
+import pytest
+from fastapi import HTTPException
+
 from src.database.db_manager import DBManager
+from web.services import feedback_api
 
 
 def test_user_feedback_round_trip_includes_context_and_status(tmp_path):
@@ -45,3 +51,73 @@ def test_user_feedback_status_filter_excludes_other_statuses(tmp_path):
 
     assert [row["status"] for row in open_rows] == ["open"]
     assert open_rows[0]["message"] == "Add a dark chart grid."
+
+
+def test_user_feedback_identity_filter_returns_only_matching_user(tmp_path):
+    db = DBManager(str(tmp_path / "polyweather-feedback-identity.db"))
+    mine_by_user_id = db.append_user_feedback(
+        category="bug",
+        message="My chart needs attention.",
+        user_id="user-a",
+        user_email="a@example.com",
+    )
+    mine_by_email = db.append_user_feedback(
+        category="data",
+        message="My older email-only report.",
+        user_email="a@example.com",
+    )
+    db.append_user_feedback(
+        category="bug",
+        message="Someone else's report.",
+        user_id="user-b",
+        user_email="b@example.com",
+    )
+    db.append_user_feedback(
+        category="idea",
+        message="Anonymous report should not leak.",
+        contact="a@example.com",
+    )
+
+    rows = db.list_user_feedback(
+        limit=10,
+        user_id="user-a",
+        user_email="a@example.com",
+    )
+
+    assert [row["id"] for row in rows] == [mine_by_email["id"], mine_by_user_id["id"]]
+    assert {row["message"] for row in rows} == {
+        "My chart needs attention.",
+        "My older email-only report.",
+    }
+
+
+def test_list_current_user_feedback_requires_identity(tmp_path, monkeypatch):
+    db = DBManager(str(tmp_path / "polyweather-feedback-current-user.db"))
+    db.append_user_feedback(
+        category="bug",
+        message="Mine.",
+        user_id="user-a",
+        user_email="a@example.com",
+    )
+    db.append_user_feedback(
+        category="bug",
+        message="Not mine.",
+        user_id="user-b",
+        user_email="b@example.com",
+    )
+    monkeypatch.setattr(feedback_api, "DBManager", lambda: db)
+    monkeypatch.setattr(feedback_api.legacy_routes, "_bind_optional_supabase_identity", lambda request: None)
+
+    request = SimpleNamespace(
+        state=SimpleNamespace(auth_user_id="user-a", auth_email="a@example.com")
+    )
+
+    payload = feedback_api.list_current_user_feedback(request, limit=20)
+
+    assert payload["total"] == 1
+    assert payload["feedback"][0]["message"] == "Mine."
+
+    anonymous_request = SimpleNamespace(state=SimpleNamespace())
+    with pytest.raises(HTTPException) as exc_info:
+        feedback_api.list_current_user_feedback(anonymous_request, limit=20)
+    assert exc_info.value.status_code == 401
