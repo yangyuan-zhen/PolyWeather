@@ -48,10 +48,14 @@ export function runTests() {
   assert(
     modalSource.includes("/api/feedback") &&
       modalSource.includes("getAnalyticsClientId") &&
+      modalSource.includes("getSupabaseBrowserClient") &&
+      modalSource.includes("hasSupabasePublicEnv") &&
+      modalSource.includes(".auth.getSession()") &&
+      modalSource.includes("readOnly={Boolean(loginEmailContact)}") &&
       modalSource.includes("onSubmitted") &&
       modalSource.includes("navigator.userAgent") &&
       modalSource.includes("type=\"textarea\"") === false,
-    "feedback modal must submit to the feedback API, notify the dashboard after success, and attach client/session diagnostics without using invalid textarea input types",
+    "feedback modal must submit to the feedback API, lock contact to the login email when available, notify the dashboard after success, and attach client/session diagnostics without using invalid textarea input types",
   );
   assert(
     feedbackRouteSource.includes("export async function GET") &&

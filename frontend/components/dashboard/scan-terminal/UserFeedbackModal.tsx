@@ -7,6 +7,10 @@ import {
   getAnalyticsClientId,
   getAnalyticsSessionId,
 } from "@/lib/app-analytics";
+import {
+  getSupabaseBrowserClient,
+  hasSupabasePublicEnv,
+} from "@/lib/supabase/client";
 import type { UserFeedbackEntry } from "@/types/ops";
 
 export type FeedbackCategory = "bug" | "data" | "idea" | "payment" | "account" | "other";
@@ -60,6 +64,7 @@ export function UserFeedbackModal({
   const [category, setCategory] = useState<FeedbackCategory>("bug");
   const [message, setMessage] = useState("");
   const [contact, setContact] = useState("");
+  const [loginEmailContact, setLoginEmailContact] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -68,9 +73,35 @@ export function UserFeedbackModal({
     if (!open) return;
     setCategory(draft?.category || "bug");
     setMessage("");
+    setContact("");
+    setLoginEmailContact("");
     setError("");
     setSubmitted(false);
   }, [open, draft?.category]);
+
+  useEffect(() => {
+    if (!open || !hasSupabasePublicEnv()) return;
+    let cancelled = false;
+
+    const loadLoginEmail = async () => {
+      try {
+        const {
+          data: { session },
+        } = await getSupabaseBrowserClient().auth.getSession();
+        const email = String(session?.user?.email || "").trim();
+        if (cancelled || !email) return;
+        setLoginEmailContact(email);
+        setContact(email);
+      } catch {
+        // Feedback can still be submitted; the backend will attach auth email when present.
+      }
+    };
+
+    void loadLoginEmail();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const contextPreview = useMemo(() => {
     const context = draft?.context || {};
@@ -197,12 +228,20 @@ export function UserFeedbackModal({
 
             <label className="block">
               <span className="text-xs font-bold text-slate-600">
-                {isEn ? "Contact, optional" : "联系方式，可选"}
+                {loginEmailContact
+                  ? isEn ? "Contact (login email)" : "联系方式（登录邮箱）"
+                  : isEn ? "Contact, optional" : "联系方式，可选"}
               </span>
               <input
                 value={contact}
-                onChange={(event) => setContact(event.target.value)}
-                className="mt-1 h-9 w-full rounded border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                onChange={(event) => {
+                  if (!loginEmailContact) setContact(event.target.value);
+                }}
+                readOnly={Boolean(loginEmailContact)}
+                className={clsx(
+                  "mt-1 h-9 w-full rounded border border-slate-200 px-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100",
+                  loginEmailContact ? "bg-slate-50 text-slate-600" : "bg-white",
+                )}
                 placeholder={isEn ? "Email or Telegram" : "邮箱或 Telegram"}
               />
             </label>
