@@ -38,8 +38,8 @@ const quickStart: Record<"zh" | "en", GuideCopy[]> = {
       body: "橙色 DEB Forecast 是融合模型和日内修正后的路径，用来判断后续升温或降温空间。",
     },
     {
-      title: "最后看概率",
-      body: "紫色区域和虚线表示高概率温度带，适合判断当前实测是否偏离主预期。",
+      title: "最后看图层",
+      body: "按需打开模型线或跑道明细，用来确认当前实测是否偏离 DEB 主路径。",
     },
   ],
   en: [
@@ -56,8 +56,8 @@ const quickStart: Record<"zh" | "en", GuideCopy[]> = {
       body: "The orange DEB Forecast blends model context with intraday correction to frame the remaining move.",
     },
     {
-      title: "Check probability",
-      body: "The purple band and dotted line show the high-probability temperature zone for fast deviation checks.",
+      title: "Check layers",
+      body: "Use model lines or runway details only when needed to confirm whether live observations are drifting away from the DEB path.",
     },
   ],
 };
@@ -66,7 +66,7 @@ const legendItems: Record<"zh" | "en", GuideCopy[]> = {
   zh: [
     { title: "实测 / 结算线", body: "优先展示结算跑道、官方站或城市核心实况，用于判断已兑现温度。" },
     { title: "DEB Forecast", body: "橙色预测路径，重点看它和实测线在峰值窗口前后的分歧。" },
-    { title: "高概率带", body: "紫色带表示当前概率分布的主要落点，虚线是概率均值附近。" },
+    { title: "市场概率", body: "概率仍用于市场判断和后台分析，但默认不再占用温度主图空间。" },
     { title: "机场报文", body: "METAR / MGM 作为机场站参考，默认只在适合的城市自动显示。" },
     { title: "模型线", body: "ECMWF、GFS、ICON、GEM 等提供背景，默认弱化为辅助判断。" },
     { title: "跑道明细", body: "打开后可查看各跑道传感器，关闭后仍保留结算跑道温度。" },
@@ -74,7 +74,7 @@ const legendItems: Record<"zh" | "en", GuideCopy[]> = {
   en: [
     { title: "Live / settlement", body: "Settlement runway, official station, or core live observation used as the realized anchor." },
     { title: "DEB Forecast", body: "Orange forecast path; focus on its gap versus live observations near the peak window." },
-    { title: "Probability band", body: "Purple band marks the main probability zone, with the dotted line near the probability mean." },
+    { title: "Market probability", body: "Probability remains available for market analysis, but no longer occupies the main temperature chart by default." },
     { title: "Airport reports", body: "METAR / MGM are airport references and are auto-shown only where they are useful by default." },
     { title: "Model lines", body: "ECMWF, GFS, ICON, GEM, and related model layers provide background context." },
     { title: "Runway details", body: "When disabled, the chart still keeps the settlement runway temperature visible." },
@@ -160,8 +160,8 @@ export function UsageGuideDashboard({ isEn }: { isEn: boolean }) {
               </h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
                 {isEn
-                  ? "Start from live evidence, compare DEB, then use probability and layer toggles to confirm whether the city is moving away from the main path."
-                  : "先看实况锚点，再对照 DEB 路径，最后用概率带和图层显隐确认城市是否偏离主预期。"}
+                  ? "Start from live evidence, compare DEB, then use layer toggles to confirm whether the city is moving away from the main path."
+                  : "先看实况锚点，再对照 DEB 路径，最后用图层显隐确认城市是否偏离主预期。"}
               </p>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-bold text-slate-600">

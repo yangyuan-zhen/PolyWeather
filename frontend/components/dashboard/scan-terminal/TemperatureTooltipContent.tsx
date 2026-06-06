@@ -118,42 +118,15 @@ function buildTooltipRows(
     .filter((item): item is TooltipRow => item !== null);
 }
 
-function formatProbabilityTemp(value: number, tempSymbol: string) {
-  return `${value.toFixed(1)}${tempSymbol}`;
-}
-
 function buildTooltipProbabilityRows(
   probabilityOverlay: ProbabilityOverlay | null | undefined,
   tempSymbol: string,
   isEn: boolean,
 ): TooltipProbabilityRow[] {
-  if (!probabilityOverlay) return [];
-
-  const rows: TooltipProbabilityRow[] = [];
-  if (probabilityOverlay.muLine) {
-    rows.push({
-      key: "gaussian_mu",
-      label: isEn ? "Gaussian μ" : "高斯 μ",
-      value: formatProbabilityTemp(probabilityOverlay.muLine.value, tempSymbol),
-      color: "#7c3aed",
-    });
-  }
-
-  probabilityOverlay.bands
-    .slice()
-    .sort((left, right) => right.probability - left.probability)
-    .forEach((band) => {
-      const range = `${band.lower.toFixed(1)}-${band.upper.toFixed(1)}${tempSymbol}`;
-      const probability = `${Math.round(band.probability * 100)}%`;
-      rows.push({
-        key: band.key,
-        label: isEn ? "Probability band" : "概率温度带",
-        value: `${range} ${probability}`,
-        color: "#8b5cf6",
-      });
-    });
-
-  return rows;
+  void probabilityOverlay;
+  void tempSymbol;
+  void isEn;
+  return [];
 }
 
 export const __buildTemperatureTooltipRowsForTest = buildTooltipRows;

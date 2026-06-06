@@ -41,7 +41,7 @@ function hasDrawableTemperatureChartContent({
   probabilityOverlay: ProbabilityOverlay | null;
   zoomedData: Array<Record<string, any>>;
 }) {
-  if (probabilityOverlay?.muLine || probabilityOverlay?.bands.length) return true;
+  void probabilityOverlay;
   return activeSeries.some((series) =>
     zoomedData.some((point, index) => {
       const value = point?.[series.key] ?? series.values[index];
@@ -261,29 +261,6 @@ function TemperatureChartCanvasComponent({
           </label>
         )}
 
-        {probabilityOverlay && (
-          <span
-            className={clsx(
-              "inline-flex items-center gap-1.5 rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-bold text-violet-700",
-              canToggleRunwayDetails ? "" : "ml-auto",
-            )}
-            title={
-              probabilityOverlay.muLine
-                ? probabilityOverlay.muLine.label
-                : isEn
-                  ? "Legacy Gaussian probability bands"
-                  : "Legacy 高斯概率温度带"
-            }
-          >
-            <span className="h-2 w-2 rounded-full bg-violet-500/70" />
-            <span>{isEn ? "Gaussian" : "高斯概率"}</span>
-            {probabilityOverlay.muLine && (
-              <span className="font-mono text-violet-600">
-                μ {probabilityOverlay.muLine.value.toFixed(1)}{tempSymbol}
-              </span>
-            )}
-          </span>
-        )}
       </div>
       <div ref={chartHostRef} className={clsx("relative flex-1", compact ? "min-h-[120px]" : "min-h-[220px]")}>
         {!shouldRenderChart && <TemperatureChartSkeleton compact={compact} />}
@@ -316,16 +293,6 @@ function TemperatureChartCanvasComponent({
               domain={chartDomain}
               ticks={intDegreeTicks ?? undefined}
             />
-            {timeframe === "1D" && probabilityOverlay?.bands.map((band) => (
-              <ReferenceArea
-                key={band.key}
-                y1={band.lower}
-                y2={band.upper}
-                strokeOpacity={0}
-                fill="#8b5cf6"
-                fillOpacity={band.opacity}
-              />
-            ))}
             {timeframe === "1D" && cityThresholds.map((t, idx) => {
               const isSelected = row && (Number(row.target_threshold ?? row.target_value) === t.threshold);
               const labelText = isEn
@@ -348,20 +315,6 @@ function TemperatureChartCanvasComponent({
                 />
               );
             })}
-            {timeframe === "1D" && probabilityOverlay?.muLine && (
-              <ReferenceLine
-                y={probabilityOverlay.muLine.value}
-                stroke="#7c3aed"
-                strokeDasharray="2 3"
-                strokeWidth={1.4}
-                label={{
-                  value: compact ? undefined : probabilityOverlay.muLine.label,
-                  fill: "#7c3aed",
-                  fontSize: 9,
-                  position: "insideTopLeft",
-                }}
-              />
-            )}
             <Tooltip
               filterNull={false}
               cursor={{ stroke: "#94a3b8", strokeWidth: 1 }}
@@ -378,7 +331,7 @@ function TemperatureChartCanvasComponent({
                   payload={props.payload as ReadonlyArray<{ payload?: Record<string, any> }> | undefined}
                   data={zoomedData}
                   series={activeSeries}
-                  probabilityOverlay={probabilityOverlay}
+                  probabilityOverlay={null}
                   tempSymbol={tempSymbol}
                   isEn={isEn}
                 />

@@ -73,11 +73,7 @@ export function runTests() {
   );
 
   assert(
-    probabilityRows.some((row) => row.key === "gaussian_mu" && row.value === "27.4°C"),
-    "tooltip should expose the Gaussian μ line when the purple probability overlay is present",
-  );
-  assert(
-    probabilityRows.some((row) => row.value.includes("26.5-27.5°C") && row.value.includes("42%")),
-    "tooltip should expose purple probability-band range and probability values",
+    probabilityRows.length === 0,
+    "temperature tooltip should not show Gaussian μ or probability-band rows",
   );
 }
