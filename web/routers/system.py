@@ -8,6 +8,7 @@ from fastapi.responses import PlainTextResponse
 from web.services.dashboard_init_api import build_dashboard_init_payload
 from web.services.system_api import (
     get_health_payload,
+    get_public_update_announcement,
     get_prometheus_metrics_response,
     get_system_cache_status,
     get_system_status_payload,
@@ -25,6 +26,11 @@ async def healthz():
 @router.get("/api/system/status")
 async def system_status():
     return await get_system_status_payload()
+
+
+@router.get("/api/system/update-announcement")
+async def system_update_announcement():
+    return get_public_update_announcement()
 
 
 @router.get("/api/system/cache-status")

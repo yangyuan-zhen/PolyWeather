@@ -61,6 +61,7 @@ import {
   type FeedbackDraft,
 } from "@/components/dashboard/scan-terminal/UserFeedbackModal";
 import { UserFeedbackStatusButton } from "@/components/dashboard/scan-terminal/UserFeedbackStatusButton";
+import { UpdateAnnouncementButton } from "@/components/dashboard/scan-terminal/UpdateAnnouncementButton";
 import {
   mergeAccessStateWithAuthPayload,
   type AuthProfilePayload,
@@ -950,6 +951,9 @@ function PolyWeatherTerminal({
             <div className="hidden items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 lg:flex">
               <Activity size={13} />
               {t("dashboard", isEn)}
+            </div>
+            <div className="hidden lg:block">
+              <UpdateAnnouncementButton isEn={isEn} />
             </div>
             {onlineCount != null && (
               <div className="hidden items-center gap-1 text-[10px] font-medium text-slate-400 lg:flex">

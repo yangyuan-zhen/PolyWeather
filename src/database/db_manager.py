@@ -438,6 +438,14 @@ class DBManager:
                 )
             """)
             conn.execute("""
+                CREATE TABLE IF NOT EXISTS runtime_config (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    updated_by TEXT
+                )
+            """)
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS city_summary_cache (
                     city TEXT PRIMARY KEY,
                     payload_json TEXT NOT NULL,
@@ -867,6 +875,93 @@ class DBManager:
                 (key, json.dumps(body, ensure_ascii=False), datetime.now().isoformat()),
             )
             conn.commit()
+
+    def get_runtime_config_value(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        normalized_key = str(key or "").strip()
+        if not normalized_key:
+            return default
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """
+                SELECT value
+                FROM runtime_config
+                WHERE key = ?
+                LIMIT 1
+                """,
+                (normalized_key,),
+            ).fetchone()
+        if not row:
+            return default
+        return str(row["value"] or "")
+
+    def get_runtime_config_metadata(self, key: str) -> Dict[str, Any]:
+        normalized_key = str(key or "").strip()
+        if not normalized_key:
+            return {
+                "key": "",
+                "configured": False,
+                "value": "",
+                "updated_at": "",
+                "updated_by": "",
+                "source": "runtime_config",
+            }
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """
+                SELECT key, value, updated_at, updated_by
+                FROM runtime_config
+                WHERE key = ?
+                LIMIT 1
+                """,
+                (normalized_key,),
+            ).fetchone()
+        if not row:
+            return {
+                "key": normalized_key,
+                "configured": False,
+                "value": "",
+                "updated_at": "",
+                "updated_by": "",
+                "source": "runtime_config",
+            }
+        return {
+            "key": normalized_key,
+            "configured": True,
+            "value": str(row["value"] or ""),
+            "updated_at": str(row["updated_at"] or ""),
+            "updated_by": str(row["updated_by"] or ""),
+            "source": "runtime_config",
+        }
+
+    def set_runtime_config(
+        self,
+        key: str,
+        value: str,
+        *,
+        updated_by: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        normalized_key = str(key or "").strip()
+        if not normalized_key:
+            raise ValueError("runtime config key is required")
+        config_value = str(value or "").strip()
+        now = datetime.now().isoformat()
+        operator = str(updated_by or "").strip()
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO runtime_config (key, value, updated_at, updated_by)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET
+                    value = excluded.value,
+                    updated_at = excluded.updated_at,
+                    updated_by = excluded.updated_by
+                """,
+                (normalized_key, config_value, now, operator),
+            )
+            conn.commit()
+        return self.get_runtime_config_metadata(normalized_key)
 
     @staticmethod
     def _mask_secret_value(value: str) -> str:

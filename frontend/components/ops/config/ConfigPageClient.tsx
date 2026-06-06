@@ -9,6 +9,11 @@ type EditableConfig = {
   key: string;
   value: string;
   description: string;
+  multiline?: boolean;
+  persistent?: boolean;
+  source?: string;
+  updated_at?: string;
+  updated_by?: string;
 };
 
 type SensitiveConfig = {
@@ -73,8 +78,13 @@ export function ConfigPageClient() {
         body: JSON.stringify({ key, value: newVal }),
       });
       if (res.ok) {
+        const data = (await res.json().catch(() => null)) as Partial<EditableConfig> | null;
         setResult(`${key} 已更新`);
-        setConfigs((prev) => prev.map((c) => (c.key === key ? { ...c, value: newVal } : c)));
+        setConfigs((prev) => prev.map((c) => (
+          c.key === key
+            ? { ...c, ...(data ?? {}), value: String(data?.value ?? newVal) }
+            : c
+        )));
         setEditing((prev) => { const n = { ...prev }; delete n[key]; return n; });
       } else {
         setResult(`保存失败: ${await res.text().catch(() => "")}`);
@@ -139,28 +149,89 @@ export function ConfigPageClient() {
             <p className="text-slate-500 text-sm">配置 API 尚未就绪（需要后端支持）</p>
           ) : (
             <div className="space-y-3">
-              {configs.map((cfg) => (
-                <div key={cfg.key} className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/5 px-4 py-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-white text-sm font-medium">{cfg.key}</div>
-                    <div className="text-slate-500 text-xs mt-0.5">{cfg.description}</div>
+              {configs.map((cfg) => {
+                const currentValue = editing[cfg.key] ?? cfg.value;
+                const dirty = editing[cfg.key] != null && editing[cfg.key] !== cfg.value;
+                const persistent = Boolean(cfg.persistent || cfg.source === "runtime_config");
+                const sourceLabel = persistent
+                  ? "DB 持久化"
+                  : cfg.source === "environment"
+                    ? "环境变量"
+                    : cfg.source || "当前进程";
+
+                if (persistent) {
+                  return (
+                    <div key={cfg.key} className="rounded-lg border border-white/5 bg-white/5 px-4 py-4">
+                      <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="text-white text-sm font-medium">{cfg.key}</div>
+                            <span className="rounded-full bg-cyan-400/10 px-2 py-0.5 text-[11px] text-cyan-300">
+                              {sourceLabel}
+                            </span>
+                          </div>
+                          <div className="text-slate-500 text-xs mt-1">{cfg.description}</div>
+                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                            <span>更新人 <span className="font-mono text-slate-300">{cfg.updated_by || "-"}</span></span>
+                            <span>更新时间 <span className="font-mono text-slate-300">{cfg.updated_at || "-"}</span></span>
+                          </div>
+                        </div>
+                        <div className="flex w-full flex-col gap-2 xl:w-[560px]">
+                          {cfg.multiline ? (
+                            <textarea
+                              value={currentValue}
+                              rows={4}
+                              spellCheck={false}
+                              onChange={(e) => setEditing((prev) => ({ ...prev, [cfg.key]: e.target.value }))}
+                              className="min-h-24 w-full resize-y rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm leading-5 text-white outline-none focus:border-cyan-400/50"
+                            />
+                          ) : (
+                            <input
+                              value={currentValue}
+                              onChange={(e) => setEditing((prev) => ({ ...prev, [cfg.key]: e.target.value }))}
+                              className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white font-mono outline-none focus:border-cyan-400/50"
+                            />
+                          )}
+                          <div className="flex justify-end">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={saving || !dirty}
+                              onClick={() => handleSave(cfg.key)}
+                              className="gap-1"
+                            >
+                              <Save className="h-3 w-3" /> 保存
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={cfg.key} className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/5 px-4 py-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-white text-sm font-medium">{cfg.key}</div>
+                      <div className="text-slate-500 text-xs mt-0.5">{cfg.description}</div>
+                    </div>
+                    <input
+                      value={currentValue}
+                      onChange={(e) => setEditing((prev) => ({ ...prev, [cfg.key]: e.target.value }))}
+                      className="w-24 rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-sm text-white font-mono text-center outline-none focus:border-cyan-400/50"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={saving || !dirty}
+                      onClick={() => handleSave(cfg.key)}
+                      className="gap-1"
+                    >
+                      <Save className="h-3 w-3" /> 保存
+                    </Button>
                   </div>
-                  <input
-                    value={editing[cfg.key] ?? cfg.value}
-                    onChange={(e) => setEditing((prev) => ({ ...prev, [cfg.key]: e.target.value }))}
-                    className="w-24 rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-sm text-white font-mono text-center outline-none focus:border-cyan-400/50"
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={saving || editing[cfg.key] === cfg.value || editing[cfg.key] == null}
-                    onClick={() => handleSave(cfg.key)}
-                    className="gap-1"
-                  >
-                    <Save className="h-3 w-3" /> 保存
-                  </Button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
           {result && (
@@ -169,7 +240,7 @@ export function ConfigPageClient() {
             </p>
           )}
           <p className="mt-4 text-xs text-slate-500">
-            仅显示非敏感配置项。修改后立即影响当前后端进程；需要跨重启持久化的密钥请使用下方凭证轮换模块。
+            仅显示非敏感配置项。公告类配置写入 DB 持久化；其余短配置仍只影响当前后端进程。
           </p>
         </CardContent>
       </Card>
