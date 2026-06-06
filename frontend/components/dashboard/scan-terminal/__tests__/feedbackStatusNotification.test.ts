@@ -1,6 +1,7 @@
 import {
   buildFeedbackNotificationKey,
   countUnseenFeedbackUpdates,
+  FEEDBACK_STATUS_POLL_MS,
   feedbackStatusLabel,
 } from "@/components/dashboard/scan-terminal/feedback-status";
 
@@ -9,6 +10,7 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 export function runTests() {
+  assert(FEEDBACK_STATUS_POLL_MS === 600_000, "feedback bell background polling should run every 10 minutes");
   assert(feedbackStatusLabel("open", false) === "已收到", "open feedback should read as received to users");
   assert(feedbackStatusLabel("triaged", false) === "已确认", "triaged feedback should read as confirmed to users");
   assert(feedbackStatusLabel("investigating", false) === "处理中", "investigating feedback should read as in progress");

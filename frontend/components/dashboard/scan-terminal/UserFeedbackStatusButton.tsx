@@ -6,12 +6,12 @@ import type { UserFeedbackEntry, UserFeedbackPayload } from "@/types/ops";
 import {
   buildFeedbackNotificationKey,
   countUnseenFeedbackUpdates,
+  FEEDBACK_STATUS_POLL_MS,
   feedbackStatusLabel,
   feedbackStatusTone,
 } from "./feedback-status";
 
 const FEEDBACK_STATUS_SEEN_KEY = "polyweather_feedback_status_seen_v1";
-const FEEDBACK_STATUS_POLL_MS = 60_000;
 
 function loadSeenKeys() {
   if (typeof window === "undefined") return new Set<string>();

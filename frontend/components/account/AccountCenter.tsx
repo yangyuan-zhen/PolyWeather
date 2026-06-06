@@ -52,6 +52,7 @@ import {
   WALLETCONNECT_PROJECT_ID,
 } from "./constants";
 import { InfoRow, PlusIcon } from "./AccountInfoRow";
+import { AccountFeedbackPanel } from "./AccountFeedbackPanel";
 import {
   chainIdToDisplayName,
   clearStoredPaymentRecovery,
@@ -942,6 +943,13 @@ export function AccountCenter() {
             </div>
           )}
         </div>
+
+        <AccountFeedbackPanel
+          isEn={isEn}
+          title={copy.accountFeedbackTitle}
+          description={copy.accountFeedbackDescription}
+          refreshLabel={copy.refresh}
+        />
 
         {/* Telegram Bot Section & Payment Details */}
         {showSecondarySections ? (

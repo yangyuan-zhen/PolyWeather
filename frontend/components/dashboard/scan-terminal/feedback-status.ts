@@ -1,5 +1,7 @@
 import type { UserFeedbackEntry } from "@/types/ops";
 
+export const FEEDBACK_STATUS_POLL_MS = 10 * 60 * 1000;
+
 export function feedbackStatusLabel(status: string | undefined, isEn: boolean) {
   const key = String(status || "open").toLowerCase();
   if (key === "triaged") return isEn ? "Confirmed" : "已确认";
