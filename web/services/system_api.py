@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import time
 from typing import Any, Dict, Optional
 
@@ -11,64 +10,13 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import PlainTextResponse
 from loguru import logger
 
-from src.database.db_manager import DBManager
 from src.utils.metrics import export_prometheus_metrics
 from web.core import build_health_payload, build_system_status_payload
 import web.routes as legacy_routes
 
-_ANNOUNCEMENT_ENABLED_KEY = "POLYWEATHER_UPDATE_ANNOUNCEMENT_ENABLED"
-_ANNOUNCEMENT_TEXT_KEYS = {
-    "zh_title": "POLYWEATHER_UPDATE_ANNOUNCEMENT_TITLE_ZH",
-    "zh_body": "POLYWEATHER_UPDATE_ANNOUNCEMENT_BODY_ZH",
-    "en_title": "POLYWEATHER_UPDATE_ANNOUNCEMENT_TITLE_EN",
-    "en_body": "POLYWEATHER_UPDATE_ANNOUNCEMENT_BODY_EN",
-}
-
 
 def get_health_payload() -> Dict[str, Any]:
     return build_health_payload()
-
-
-def _runtime_or_env_value(db: DBManager, key: str) -> tuple[str, str]:
-    metadata = db.get_runtime_config_metadata(key)
-    if metadata.get("configured"):
-        return str(metadata.get("value") or ""), str(metadata.get("updated_at") or "")
-    return str(os.getenv(key) or ""), ""
-
-
-def _truthy_runtime_flag(value: str) -> bool:
-    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
-
-
-def get_public_update_announcement() -> Dict[str, Any]:
-    db = DBManager()
-    enabled_value, enabled_updated_at = _runtime_or_env_value(db, _ANNOUNCEMENT_ENABLED_KEY)
-    values: dict[str, str] = {}
-    updated_at_candidates = [enabled_updated_at]
-    for name, key in _ANNOUNCEMENT_TEXT_KEYS.items():
-        value, updated_at = _runtime_or_env_value(db, key)
-        values[name] = value
-        if updated_at:
-            updated_at_candidates.append(updated_at)
-
-    has_content = any(
-        values.get(name, "").strip()
-        for name in ("zh_title", "zh_body", "en_title", "en_body")
-    )
-    enabled = _truthy_runtime_flag(enabled_value) and has_content
-    updated_at = max((item for item in updated_at_candidates if item), default="")
-    return {
-        "enabled": enabled,
-        "zh": {
-            "title": values.get("zh_title", ""),
-            "body": values.get("zh_body", ""),
-        },
-        "en": {
-            "title": values.get("en_title", ""),
-            "body": values.get("en_body", ""),
-        },
-        "updated_at": updated_at,
-    }
 
 
 async def get_system_status_payload() -> Dict[str, Any]:

@@ -4,22 +4,52 @@ import { Megaphone, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type AnnouncementText = {
-  title?: string;
-  body?: string;
+  title: string;
+  body: string;
 };
 
-type UpdateAnnouncementPayload = {
-  enabled?: boolean;
-  zh?: AnnouncementText;
-  en?: AnnouncementText;
-  updated_at?: string;
+type StaticUpdateAnnouncement = {
+  id: string;
+  publishedAt: string;
+  expiresAt: string;
+  zh: AnnouncementText;
+  en: AnnouncementText;
 };
 
 type UpdateAnnouncementButtonProps = {
   isEn: boolean;
 };
 
-function pickAnnouncementText(payload: UpdateAnnouncementPayload, isEn: boolean) {
+const STATIC_UPDATE_ANNOUNCEMENTS: StaticUpdateAnnouncement[] = [
+  {
+    id: "feedback-status-2026-06",
+    publishedAt: "2026-06-07T00:00:00+08:00",
+    expiresAt: "2026-07-15T00:00:00+08:00",
+    zh: {
+      title: "更新公告：终端新增公告与反馈状态",
+      body:
+        "PolyWeather 天气决策台新增“更新公告”入口，后续产品更新、数据源调整和重要说明会在这里同步。\n\n" +
+        "用户反馈系统也已升级：提交反馈时会自动附带相关图表上下文，用户可以在终端右上角通知入口和账户页查看自己反馈的处理状态，包括已收到、已确认、处理中、已解决和已关闭。\n\n" +
+        "我们也在考虑对真实、可复现、有建设性价值的反馈加入积分或 Pro 天数激励。",
+    },
+    en: {
+      title: "Update: announcements and feedback status are now live",
+      body:
+        "PolyWeather Terminal now has an update announcement entry. Future product updates, data-source changes, and important notes will be shared here.\n\n" +
+        "The feedback system has also been upgraded. When users submit feedback, PolyWeather automatically attaches the relevant chart context. Users can now track their own feedback status from the terminal notification entry and the account page: received, confirmed, in progress, resolved, or closed.\n\n" +
+        "We are also considering small rewards such as points or Pro days for real, reproducible, and constructive feedback.",
+    },
+  },
+];
+
+function isActiveAnnouncement(item: StaticUpdateAnnouncement, now = Date.now()) {
+  const expiresAt = Date.parse(item.expiresAt);
+  if (!Number.isFinite(expiresAt) || expiresAt <= now) return false;
+  const publishedAt = Date.parse(item.publishedAt);
+  return !Number.isFinite(publishedAt) || publishedAt <= now;
+}
+
+function pickAnnouncementText(payload: StaticUpdateAnnouncement, isEn: boolean) {
   const primary = isEn ? payload.en : payload.zh;
   const fallback = isEn ? payload.zh : payload.en;
   return {
@@ -42,29 +72,8 @@ function formatUpdatedAt(value: string | undefined, isEn: boolean) {
 }
 
 export function UpdateAnnouncementButton({ isEn }: UpdateAnnouncementButtonProps) {
-  const [announcement, setAnnouncement] = useState<UpdateAnnouncementPayload | null>(null);
   const [open, setOpen] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadAnnouncement() {
-      try {
-        const res = await fetch("/api/system/update-announcement", { cache: "no-store" });
-        if (!res.ok) return;
-        const data = (await res.json()) as UpdateAnnouncementPayload;
-        if (!cancelled) {
-          setAnnouncement(data?.enabled ? data : null);
-        }
-      } catch {
-        if (!cancelled) setAnnouncement(null);
-      }
-    }
-    void loadAnnouncement();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -77,13 +86,17 @@ export function UpdateAnnouncementButton({ isEn }: UpdateAnnouncementButtonProps
     return () => window.removeEventListener("pointerdown", handlePointerDown);
   }, [open]);
 
+  const announcement = useMemo(
+    () => STATIC_UPDATE_ANNOUNCEMENTS.find((item) => isActiveAnnouncement(item)) ?? null,
+    [],
+  );
   const text = useMemo(
     () => (announcement ? pickAnnouncementText(announcement, isEn) : { title: "", body: "" }),
     [announcement, isEn],
   );
   const updatedAt = useMemo(
-    () => formatUpdatedAt(announcement?.updated_at, isEn),
-    [announcement?.updated_at, isEn],
+    () => formatUpdatedAt(announcement?.publishedAt, isEn),
+    [announcement?.publishedAt, isEn],
   );
 
   if (!announcement || (!text.title && !text.body)) return null;

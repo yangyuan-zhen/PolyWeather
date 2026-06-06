@@ -1206,24 +1206,6 @@ _EDITABLE_CONFIG_KEYS: dict[str, str] = {
     "POLYWEATHER_PAYMENT_POINTS_PER_USDC": "积分兑换汇率 (积分/USDC)",
     "POLYWEATHER_PAYMENT_POINTS_MAX_DISCOUNT_USDC": "积分最高抵扣金额 (USDC)",
     "POLYWEATHER_PAYMENT_DIRECT_RECEIVER_ADDRESS": "手动转账收款钱包地址",
-    "POLYWEATHER_UPDATE_ANNOUNCEMENT_ENABLED": "终端顶部更新公告开关，true/false",
-    "POLYWEATHER_UPDATE_ANNOUNCEMENT_TITLE_ZH": "更新公告中文标题",
-    "POLYWEATHER_UPDATE_ANNOUNCEMENT_BODY_ZH": "更新公告中文正文",
-    "POLYWEATHER_UPDATE_ANNOUNCEMENT_TITLE_EN": "Update announcement English title",
-    "POLYWEATHER_UPDATE_ANNOUNCEMENT_BODY_EN": "Update announcement English body",
-}
-
-_RUNTIME_CONFIG_KEYS = {
-    "POLYWEATHER_UPDATE_ANNOUNCEMENT_ENABLED",
-    "POLYWEATHER_UPDATE_ANNOUNCEMENT_TITLE_ZH",
-    "POLYWEATHER_UPDATE_ANNOUNCEMENT_BODY_ZH",
-    "POLYWEATHER_UPDATE_ANNOUNCEMENT_TITLE_EN",
-    "POLYWEATHER_UPDATE_ANNOUNCEMENT_BODY_EN",
-}
-
-_MULTILINE_CONFIG_KEYS = {
-    "POLYWEATHER_UPDATE_ANNOUNCEMENT_BODY_ZH",
-    "POLYWEATHER_UPDATE_ANNOUNCEMENT_BODY_EN",
 }
 
 _SENSITIVE_CONFIG_KEYS: dict[str, dict[str, str]] = {
@@ -1234,78 +1216,33 @@ _SENSITIVE_CONFIG_KEYS: dict[str, dict[str, str]] = {
 }
 
 
-def _runtime_config_payload(db: DBManager, key: str, description: str) -> dict[str, Any]:
-    metadata = db.get_runtime_config_metadata(key)
-    env_value = os.getenv(key)
-    has_runtime_value = bool(metadata.get("configured"))
-    return {
-        "key": key,
-        "value": str(metadata.get("value") if has_runtime_value else (env_value or "")),
-        "description": description,
-        "multiline": key in _MULTILINE_CONFIG_KEYS,
-        "persistent": True,
-        "updated_at": str(metadata.get("updated_at") or ""),
-        "updated_by": str(metadata.get("updated_by") or ""),
-        "source": "runtime_config" if has_runtime_value or env_value is None else "environment",
-    }
-
-
 def get_ops_config(request: Request) -> dict[str, Any]:
     _require_ops(request)
 
-    db: DBManager | None = None
     configs: list[dict[str, Any]] = []
     for key, desc in _EDITABLE_CONFIG_KEYS.items():
-        if key in _RUNTIME_CONFIG_KEYS:
-            if db is None:
-                db = DBManager()
-            configs.append(_runtime_config_payload(db, key, desc))
-            continue
         configs.append(
             {
                 "key": key,
                 "value": os.getenv(key) or "",
                 "description": desc,
-                "multiline": False,
-                "persistent": False,
-                "source": "environment",
             }
         )
     return {"configs": configs}
 
 
 def update_ops_config(request: Request, key: str, value: str) -> dict[str, Any]:
-    admin = _require_ops(request) or {}
+    _require_ops(request)
 
     normalized_key = str(key or "").strip()
     if normalized_key not in _EDITABLE_CONFIG_KEYS:
         raise HTTPException(
             status_code=400, detail=f"config key '{normalized_key}' is not editable"
         )
-    if normalized_key in _RUNTIME_CONFIG_KEYS:
-        try:
-            config = DBManager().set_runtime_config(
-                normalized_key,
-                str(value or ""),
-                updated_by=str(admin.get("email") or ""),
-            )
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return {
-            **config,
-            "description": _EDITABLE_CONFIG_KEYS[normalized_key],
-            "multiline": normalized_key in _MULTILINE_CONFIG_KEYS,
-            "persistent": True,
-            "ok": True,
-        }
     os.environ[normalized_key] = str(value)
     return {
         "key": normalized_key,
         "value": value,
-        "description": _EDITABLE_CONFIG_KEYS[normalized_key],
-        "multiline": False,
-        "persistent": False,
-        "source": "environment",
         "ok": True,
     }
 
