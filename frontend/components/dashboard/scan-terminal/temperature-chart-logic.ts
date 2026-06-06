@@ -845,9 +845,14 @@ function getObservationDisplayMetrics(
       null;
   }
 
+  const currentMetarTemp =
+    latestSettlement ??
+    latestMetar ??
+    airportCurrentTemp ??
+    null;
   const observedHighMetar = airportHigh ?? highSettlement ?? highMetar ?? rowMetarHigh ?? null;
 
-  return { currentRunwayTemp, observedHighMetar, observedHighRunway };
+  return { currentMetarTemp, currentRunwayTemp, observedHighMetar, observedHighRunway };
 }
 
 function selectDisplayRunwayTemp(
@@ -857,6 +862,23 @@ function selectDisplayRunwayTemp(
 ) {
   if (currentRunwayTemp !== null) return currentRunwayTemp;
   return liveTemp;
+}
+
+function selectCompactSecondaryTemp({
+  isHKO,
+  isShenzhen,
+  displayMetarTemp,
+  observedHighMetar,
+}: {
+  isHKO: boolean;
+  isShenzhen: boolean;
+  displayMetarTemp: number | null;
+  observedHighMetar: number | null;
+}) {
+  if (isHKO && !isShenzhen && displayMetarTemp !== null) {
+    return displayMetarTemp;
+  }
+  return observedHighMetar;
 }
 
 function isSettlementRunway(row: ScanOpportunityRow | null, rwy: string) {
@@ -2485,6 +2507,7 @@ export {
   normalizeCityKey,
   prefersHighFrequencyRunwayResolution,
   readSessionCache,
+  selectCompactSecondaryTemp,
   selectDisplayRunwayTemp,
   seedHourlyForecastFromRow,
   seriesStats,

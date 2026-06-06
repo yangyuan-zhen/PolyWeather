@@ -31,6 +31,7 @@ import {
   normObs,
   prefersHighFrequencyRunwayResolution,
   readSessionCache,
+  selectCompactSecondaryTemp,
   selectDisplayRunwayTemp,
   seedHourlyForecastFromRow,
   shouldPollLiveChart,
@@ -635,6 +636,7 @@ export function LiveTemperatureThresholdChart({
   }, [chartSeries, userToggledKeys, city, showRunwayDetails]);
 
   const {
+    isHKO,
     isShenzhen,
     metarHeaderLabel,
     metarHighLabel,
@@ -642,11 +644,17 @@ export function LiveTemperatureThresholdChart({
     runwayHighLabel,
   } = useMemo(() => getLiveObservationLabels(row, chartHourly), [row, chartHourly]);
 
-  const { currentRunwayTemp, observedHighMetar, observedHighRunway } = useMemo(
+  const { currentMetarTemp, currentRunwayTemp, observedHighMetar, observedHighRunway } = useMemo(
     () => getObservationDisplayMetrics(row, chartHourly, settlementPlate),
     [row, chartHourly, settlementPlate],
   );
   const displayRunwayTemp = selectDisplayRunwayTemp(liveTemp, currentRunwayTemp, hasRunwayData);
+  const displayMetarTemp = selectCompactSecondaryTemp({
+    isHKO,
+    isShenzhen,
+    displayMetarTemp: currentMetarTemp,
+    observedHighMetar,
+  });
   const wundergroundDailyHigh = getWundergroundDailyHigh(chartHourly);
 
   const localDateStr = chartLocalDate || new Date().toISOString().slice(0, 10);
@@ -805,6 +813,7 @@ export function LiveTemperatureThresholdChart({
       visible_series: activeSeries.map((item) => item.key),
       live_temp: liveTemp,
       current_runway_temp: currentRunwayTemp,
+      current_metar_temp: currentMetarTemp,
       observed_high_metar: observedHighMetar,
       observed_high_runway: observedHighRunway,
     });
@@ -814,6 +823,7 @@ export function LiveTemperatureThresholdChart({
     chartSeries,
     city,
     compact,
+    currentMetarTemp,
     currentRunwayTemp,
     detailError,
     hasRunwayData,
@@ -960,6 +970,7 @@ export function LiveTemperatureThresholdChart({
           metarHighLabel={metarHighLabel}
           isShenzhen={isShenzhen}
           displayRunwayTemp={displayRunwayTemp}
+          displayMetarTemp={displayMetarTemp}
           observedHighMetar={observedHighMetar}
           observedHighRunway={observedHighRunway}
           wundergroundDailyHigh={wundergroundDailyHigh}
@@ -1034,4 +1045,5 @@ export const __getInitialDetailLoadDelayMsForTest = getInitialDetailLoadDelayMs;
 export const __shouldFetchCityDetailForChartForTest = shouldFetchCityDetailForChart;
 export const __shouldPollLiveChartForTest = shouldPollLiveChart;
 export const __mergePatchIntoHourlyForTest = mergePatchIntoHourly;
+export const __selectCompactSecondaryTempForTest = selectCompactSecondaryTemp;
 export const __selectDisplayRunwayTempForTest = selectDisplayRunwayTemp;

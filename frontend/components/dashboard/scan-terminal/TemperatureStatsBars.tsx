@@ -76,6 +76,7 @@ export function TemperatureStatsBars({
   metarHighLabel,
   isShenzhen,
   displayRunwayTemp,
+  displayMetarTemp,
   observedHighMetar,
   observedHighRunway,
   wundergroundDailyHigh,
@@ -97,6 +98,7 @@ export function TemperatureStatsBars({
   metarHighLabel: string;
   isShenzhen: boolean;
   displayRunwayTemp: number | null;
+  displayMetarTemp: number | null;
   observedHighMetar: number | null;
   observedHighRunway: number | null;
   wundergroundDailyHigh: number | null;
@@ -129,7 +131,7 @@ export function TemperatureStatsBars({
             <span className="text-slate-300">|</span>
             <span className="font-semibold text-slate-500">
               {labels.compactSecondary}:{" "}
-              <strong className="text-blue-600 font-mono">{temp(observedHighMetar, tempSymbol)}</strong>
+              <strong className="text-blue-600 font-mono">{temp(displayMetarTemp, tempSymbol)}</strong>
             </span>
           </div>
         ) : (
