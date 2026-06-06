@@ -16,8 +16,8 @@ const COVERAGE_EN = [
   "AMSC 180s runway endpoints",
   "MADIS 300s airport observations",
   "CoWIN 60s + HKO 600s",
-  "SSE patch live terminal",
-  "Telegram reads latest cache",
+  "Live chart updates",
+  "Short Telegram alerts",
 ];
 
 const COVERAGE_ZH = [
@@ -25,8 +25,8 @@ const COVERAGE_ZH = [
   "AMSC 180s 跑道端点",
   "MADIS 300s 机场观测",
   "CoWIN 60s + HKO 600s",
-  "SSE patch 实时终端",
-  "Telegram 读取最新缓存",
+  "网页图表实时更新",
+  "Telegram 简短提醒",
 ];
 
 const PRO_FEATURES_EN = [
@@ -170,8 +170,8 @@ function WeatherWorkflowIllustration() {
       aria-hidden="true"
       className="pointer-events-none absolute inset-x-0 top-16 z-0 mx-auto hidden h-[240px] max-w-6xl overflow-hidden md:block"
     >
-      <div className="absolute left-8 top-14 h-24 w-24 rotate-[-7deg] rounded-lg border-2 border-slate-900 bg-[#fff3b0] shadow-[6px_6px_0_rgba(15,23,42,0.12)]" />
-      <div className="absolute right-14 top-10 h-20 w-28 rotate-[6deg] rounded-lg border-2 border-slate-900 bg-[#dff8ea] shadow-[6px_6px_0_rgba(15,23,42,0.12)]" />
+      <div className="landing-float absolute left-8 top-14 h-24 w-24 rotate-[-7deg] rounded-lg border-2 border-slate-900 bg-[#fff3b0] shadow-[6px_6px_0_rgba(15,23,42,0.12)]" />
+      <div className="landing-float-slow absolute right-14 top-10 h-20 w-28 rotate-[6deg] rounded-lg border-2 border-slate-900 bg-[#dff8ea] shadow-[6px_6px_0_rgba(15,23,42,0.12)]" />
     </div>
   );
 }
@@ -283,27 +283,29 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
           <WeatherWorkflowIllustration />
           <div className="relative z-10 mx-auto max-w-6xl">
             <div className="mx-auto max-w-3xl text-center">
-              <h1 className="text-5xl font-black leading-[1.04] tracking-tight text-slate-950 sm:text-6xl lg:text-7xl">
+              <h1 className="landing-rise text-5xl font-black leading-[1.04] tracking-tight text-slate-950 sm:text-6xl lg:text-7xl">
                 PolyWeather
               </h1>
-              <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-slate-600 sm:text-xl">
+              <p className="landing-rise landing-delay-1 mx-auto mt-6 max-w-2xl text-lg leading-8 text-slate-600 sm:text-xl">
                 {isEn
                   ? "A settlement-source-first terminal for temperature markets: live airport/runway observations, DEB, market buckets, and alerts in one workflow."
                   : "面向温度市场的结算源优先终端：机场/跑道实测、DEB、市场温度桶和提醒放在同一个工作流里。"}
               </p>
-              <LandingHeroActions locale={locale} />
-              <p className="mt-4 text-sm text-slate-500">
+              <div className="landing-rise landing-delay-2">
+                <LandingHeroActions locale={locale} />
+              </div>
+              <p className="landing-rise landing-delay-3 mt-4 text-sm text-slate-500">
                 {isEn
                   ? "Start with a one-time 3-day trial. Trial access matches Pro except for the paid Telegram group link."
                   : "新用户可先领一次 3 天试用。试用期权益和 Pro 一致，除了不显示付费 Telegram 群链接。"}
               </p>
             </div>
 
-            <div className="mx-auto mt-14 max-w-5xl rounded-lg border border-slate-200 bg-white p-2 shadow-[0_24px_70px_rgba(15,23,42,0.12)]">
+            <div className="landing-float-slow landing-screen-glow mx-auto mt-14 max-w-5xl rounded-lg border border-slate-200 bg-white p-2 shadow-[0_24px_70px_rgba(15,23,42,0.12)]">
               <div className="flex h-9 items-center gap-2 border-b border-slate-200 px-3">
                 <span className="h-2.5 w-2.5 rounded-full bg-[#ff6b6b]" />
                 <span className="h-2.5 w-2.5 rounded-full bg-[#ffd166]" />
-                <span className="h-2.5 w-2.5 rounded-full bg-[#06d6a0]" />
+                <span className="landing-pulse-dot h-2.5 w-2.5 rounded-full bg-[#06d6a0]" />
                 <span className="ml-2 text-xs font-semibold text-slate-400">
                   polyweather.app/terminal
                 </span>
@@ -327,7 +329,7 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
               {heroStats.map((item) => (
                 <div
                   key={item.label}
-                  className="rounded-lg border border-slate-200 bg-white px-4 py-4 shadow-sm"
+                  className="landing-hover-lift rounded-lg border border-slate-200 bg-white px-4 py-4 shadow-sm"
                 >
                   <div className="font-mono text-lg font-black text-slate-950">
                     {item.value}
@@ -354,7 +356,7 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
 
             <div className="mt-12 grid gap-4 md:grid-cols-3">
               {platformCards.map(({ body, icon, title }) => (
-                <article key={title} className="rounded-lg border border-slate-200 bg-[#fbfbfa] p-6 shadow-sm">
+                <article key={title} className="landing-hover-lift rounded-lg border border-slate-200 bg-[#fbfbfa] p-6 shadow-sm">
                   <div className="mb-5 inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-800">
                     <LandingIcon name={icon} size={19} />
                   </div>
@@ -384,17 +386,17 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                     ? [
                         "Runway-level China and Korea observation context",
                         "Hong Kong CoWIN + HKO dual-source reading",
-                        "Source-native collector cadence with SSE patch delivery",
-                        "Telegram alerts read cache instead of force-refreshing sources",
+                        "Live pages update as new source readings arrive",
+                        "Telegram sends concise alerts without noisy refresh loops",
                       ]
                     : [
                         "中国和韩国跑道级实测上下文",
                         "香港 CoWIN + HKO 双源读数",
-                        "按源频率采集，并用 SSE patch 推送",
-                        "Telegram 读取缓存，不强制刷新外部源",
+                        "源头有新读数时，网页自动补上变化",
+                        "Telegram 只发简短提醒，避免噪音刷屏",
                       ]
                   ).map((item) => (
-                    <div key={item} className="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-semibold leading-6 text-slate-700">
+                    <div key={item} className="landing-hover-lift rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-semibold leading-6 text-slate-700">
                       {item}
                     </div>
                   ))}
@@ -415,20 +417,20 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
               </h2>
               <p className="mt-4 text-sm leading-7 text-slate-600">
                 {isEn
-                  ? "Public packaging should show the actual workflow: live chart reading in the browser and concise runway alerts in Telegram."
-                  : "公开包装应该直接展示真实工作流：浏览器里读实时图表，Telegram 里接收简洁的跑道提醒。"}
+                  ? "See what you will use before subscribing: a browser terminal for live temperature evidence, plus short Telegram alerts when runway or settlement signals change."
+                  : "订阅前先看清你会用到什么：网页上看实时温度证据；跑道或结算源有变化时，在 Telegram 收到简短提醒。"}
               </p>
             </div>
 
             <div className="mt-10 grid gap-5 lg:grid-cols-[1.4fr_0.8fr]">
-              <figure className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+              <figure className="landing-hover-lift rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
                 <div className="aspect-[16/9] overflow-hidden rounded-md border border-slate-100 bg-slate-100">
                   <img
                     src="/static/web.webp"
                     width="680"
                     height="340"
                     alt={isEn ? "Realtime terminal screenshot" : "实时终端截图"}
-                    className="h-full w-full object-cover object-top"
+                    className="h-full w-full object-cover object-top transition duration-500 hover:scale-[1.015]"
                     decoding="async"
                     loading="lazy"
                     sizes="(min-width: 1024px) 760px, calc(100vw - 48px)"
@@ -439,14 +441,14 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                 </figcaption>
               </figure>
 
-              <figure className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+              <figure className="landing-hover-lift rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
                 <div className="aspect-[9/16] max-h-[520px] overflow-hidden rounded-md border border-slate-100 bg-slate-100">
                   <img
                     src="/static/tel.png"
                     width="420"
                     height="640"
                     alt={isEn ? "Telegram runway alert screenshot" : "Telegram 跑道提醒截图"}
-                    className="h-full w-full object-cover object-top"
+                    className="h-full w-full object-cover object-top transition duration-500 hover:scale-[1.015]"
                     decoding="async"
                     loading="lazy"
                     sizes="(min-width: 1024px) 340px, calc(100vw - 48px)"
@@ -471,8 +473,8 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
               </h2>
               <p className="mt-4 text-sm leading-7 text-slate-600">
                 {isEn
-                  ? "The collector writes cache and event streams first; the website consumes snapshots plus SSE patches, while Telegram reads the latest cached state."
-                  : "采集器先写缓存和事件流；网站消费完整快照 + SSE patch，Telegram 只读取最新缓存状态。"}
+                  ? "PolyWeather follows each source's real update rhythm. The website refreshes the visible charts as new readings arrive, while Telegram keeps alerts short and readable."
+                  : "PolyWeather 跟随每个数据源自己的更新节奏。网页图表会补上最新读数，Telegram 只保留短提醒，让你快速知道哪里变了。"}
               </p>
               <div className="mt-6 flex flex-wrap gap-2">
                 <Link
@@ -495,7 +497,7 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                 {coverage.map((item, index) => (
                   <div
                     key={item}
-                    className="flex items-center gap-3 rounded-md border border-slate-100 bg-[#fbfbfa] px-4 py-3"
+                    className="landing-hover-lift flex items-center gap-3 rounded-md border border-slate-100 bg-[#fbfbfa] px-4 py-3"
                   >
                     <span
                       className={`grid h-8 w-8 place-items-center rounded-md ${

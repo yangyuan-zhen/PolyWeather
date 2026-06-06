@@ -285,6 +285,133 @@
     0%, 100% { opacity: 0.3; }
     50% { opacity: 0.6; }
   }
+
+  @keyframes landingRise {
+    from {
+      opacity: 0;
+      transform: translateY(18px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes landingFloat {
+    0%,
+    100% {
+      translate: 0 0;
+    }
+    50% {
+      translate: 0 -10px;
+    }
+  }
+
+  @keyframes landingScan {
+    0% {
+      transform: translateY(-120%);
+      opacity: 0;
+    }
+    18%,
+    72% {
+      opacity: 0.48;
+    }
+    100% {
+      transform: translateY(120%);
+      opacity: 0;
+    }
+  }
+
+  @keyframes landingPulseDot {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.22);
+      transform: scale(1);
+    }
+    50% {
+      box-shadow: 0 0 0 7px rgba(37, 99, 235, 0);
+      transform: scale(1.08);
+    }
+  }
+
+  .landing-rise {
+    opacity: 0;
+    animation: landingRise 720ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .landing-delay-1 {
+    animation-delay: 100ms;
+  }
+
+  .landing-delay-2 {
+    animation-delay: 190ms;
+  }
+
+  .landing-delay-3 {
+    animation-delay: 280ms;
+  }
+
+  .landing-float {
+    animation: landingFloat 7s ease-in-out infinite;
+  }
+
+  .landing-float-slow {
+    animation: landingFloat 9s ease-in-out infinite;
+  }
+
+  .landing-hover-lift {
+    transition:
+      transform 220ms ease,
+      border-color 220ms ease,
+      box-shadow 220ms ease;
+  }
+
+  .landing-hover-lift:hover {
+    transform: translateY(-4px);
+    border-color: rgba(148, 163, 184, 0.78);
+    box-shadow: 0 18px 44px rgba(15, 23, 42, 0.1);
+  }
+
+  .landing-screen-glow {
+    position: relative;
+  }
+
+  .landing-screen-glow::after {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: 44px 8px 8px;
+    border-radius: 6px;
+    background: linear-gradient(
+      180deg,
+      transparent 0%,
+      rgba(37, 99, 235, 0.12) 48%,
+      transparent 100%
+    );
+    mix-blend-mode: multiply;
+    opacity: 0;
+    animation: landingScan 5.6s ease-in-out infinite;
+  }
+
+  .landing-pulse-dot {
+    animation: landingPulseDot 2.6s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .landing-rise,
+    .landing-float,
+    .landing-float-slow,
+    .landing-screen-glow::after,
+    .landing-pulse-dot {
+      opacity: 1;
+      animation: none;
+    }
+
+    .landing-hover-lift,
+    .landing-hover-lift:hover {
+      transform: none;
+    }
+  }
 }
 
 /* ── Reduced motion: disable all animations and transitions ── */

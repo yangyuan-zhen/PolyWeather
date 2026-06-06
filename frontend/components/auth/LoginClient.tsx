@@ -7,11 +7,8 @@ import {
   ArrowRight,
   ChevronLeft,
   Chrome,
-  CloudRain,
-  CloudSun,
   Lock,
   Mail,
-  Sun,
   Eye,
   EyeOff,
 } from "lucide-react";
@@ -51,13 +48,16 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
   
   const copy = {
     backHome: isEn ? "Back to Home" : "返回首页",
-    subtitle: isEn
-      ? "Enter the live terminal, subscription center, and Telegram entitlement workflow."
-      : "进入实时终端、订阅中心和 Telegram 权益工作流。",
+    loginSubtitle: isEn
+      ? "Sign in to continue to your weather decision terminal."
+      : "登录后进入你的天气决策终端。",
+    signupSubtitle: isEn
+      ? "Create an account and get a one-time 3-day trial. No payment required first."
+      : "创建账号后自动开启一次 3 天试用，无需先付款。",
     googleOneClick: isEn
       ? "Continue with Google"
       : "使用 Google 账号一键登录",
-    orEmail: isEn ? "Or continue with email" : "或使用邮箱",
+    orGoogle: isEn ? "Or continue with Google" : "或使用 Google",
     login: isEn ? "Sign In" : "登录",
     signup: isEn ? "Sign Up" : "注册",
     passwordLoginPlaceholder: isEn ? "Enter password" : "输入密码",
@@ -97,8 +97,6 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
     loginFailedHint: isEn
       ? "If you just signed up, please verify your email first. Check your inbox or spam folder."
       : "如果刚注册，请先点击邮箱中的验证链接。检查收件箱或垃圾邮件。",
-    
-    // New translations for Koyfin-style layouts
     workEmail: isEn ? "Work email" : "工作邮箱",
     password: isEn ? "Password" : "密码",
     welcomeBack: isEn ? "Sign in to PolyWeather" : "登录 PolyWeather",
@@ -109,12 +107,27 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
       ? "By proceeding, you agree to the Privacy Policy and Terms & Conditions."
       : "继续操作即代表您同意隐私政策与服务条款。",
     desc: isEn
-      ? "Access robust METAR observations, advanced DEB forecast blends, and structured decision context for weather risk analysis."
-      : "提供精准的机场 METAR 实况、先进的 DEB 智能融合预测和结构化决策背景，助您理清气象风险脉络。",
+      ? "Use the same terminal palette as the product: live temperature evidence, DEB paths, and settlement-source context in one calm workspace."
+      : "沿用终端界面的配色和信息密度：实时温度证据、DEB 路径和结算源背景放在一个安静工作台里。",
     trusted: isEn ? "Trusted by industry professionals" : "深受行业决策人员信赖",
   } as const;
   const submittingLabel = isLogin ? copy.loginSubmitting : copy.signupSubmitting;
   const googleSubmittingLabel = copy.googleSubmitting;
+  const formSubtitle = isLogin ? copy.loginSubtitle : copy.signupSubtitle;
+  const accessHighlights = isEn
+    ? ["Live temperature charts", "DEB forecast path", "Runway and settlement alerts"]
+    : ["实时温度图表", "DEB 预测路径", "跑道与结算提醒"];
+  const sideStats = isEn
+    ? [
+        { label: "Trial", value: "3 days" },
+        { label: "Access", value: "Terminal" },
+        { label: "Signals", value: "Runway" },
+      ]
+    : [
+        { label: "试用", value: "3 天" },
+        { label: "入口", value: "终端" },
+        { label: "提醒", value: "跑道" },
+      ];
   const loadingSpinner = (
     <span
       aria-hidden="true"
@@ -252,177 +265,110 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
   };
 
   return (
-    <div className="flex min-h-screen w-full bg-[#f8fafc] font-sans text-slate-900">
-      {/* Left Column (Shared Dark Column with Illustrative Widget) */}
-      <div className="relative hidden lg:flex lg:w-[460px] xl:w-[500px] 2xl:w-[560px] flex-col justify-between bg-gradient-to-br from-[#060913] via-[#0f1527] to-[#040815] p-10 text-white shrink-0 overflow-hidden border-r border-white/5">
-        {/* Ambient Glows */}
-        <div className="absolute -left-20 -top-20 h-96 w-96 rounded-full bg-blue-600/10 blur-[130px] pointer-events-none" />
-        <div className="absolute -right-20 -bottom-20 h-[360px] w-[360px] rounded-full bg-purple-500/10 blur-[120px] pointer-events-none" />
-        <div className="absolute top-1/2 right-0 h-[240px] w-[240px] -translate-y-1/2 rounded-full bg-amber-500/5 blur-[100px] pointer-events-none" />
-        
-        {/* Grid overlay */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
+    <div className="flex min-h-screen w-full bg-[#e9edf3] font-sans text-slate-950">
+      <aside className="hidden w-[56px] shrink-0 flex-col items-center justify-between bg-[#171d24] py-5 text-white lg:flex">
+        <Link
+          href="/"
+          aria-label="PolyWeather"
+          className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/8 text-[11px] font-black text-sky-200"
+        >
+          PW
+        </Link>
+        <div className="flex flex-col items-center gap-3">
+          <span className="h-2 w-2 rounded-full bg-[#00897b]" />
+          <span className="h-2 w-2 rounded-full bg-[#2563eb]" />
+          <span className="h-2 w-2 rounded-full bg-slate-500" />
+        </div>
+        <Link
+          href="/"
+          className="grid h-9 w-9 place-items-center rounded-lg text-slate-400 transition hover:bg-white/8 hover:text-white"
+          aria-label={copy.backHome}
+        >
+          <ChevronLeft size={18} />
+        </Link>
+      </aside>
 
-        <div className="relative z-10 flex flex-col gap-14">
+      <section className="relative hidden min-h-screen w-[44vw] max-w-[620px] shrink-0 overflow-hidden border-r border-[#d8e0ec] bg-[#171d24] p-6 text-white lg:flex lg:flex-col">
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:34px_34px]" />
+        <div className="relative z-10 flex items-center justify-between">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 text-lg font-black tracking-tight text-white transition-opacity hover:opacity-90"
+            className="inline-flex items-center gap-2 text-base font-black tracking-tight text-white transition hover:text-sky-100"
           >
-            <span className="grid h-8 w-8 place-items-center rounded-lg border border-white/15 bg-white/10 text-[11px] font-black text-cyan-200">
-              PW
-            </span>
             <span>PolyWeather</span>
           </Link>
+          <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-emerald-200">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+            Terminal
+          </span>
+        </div>
 
-          <div className="space-y-6">
-            <h2 className="text-3xl font-black leading-[1.25] tracking-tight text-white animate-fade-up [animation-delay:150ms] opacity-0">
-              {isEn ? (
-                <>
-                  Settlement-source evidence for temperature markets{" "}
-                  <span className="inline-block px-2.5 py-0.5 mt-1 rounded bg-gradient-to-r from-blue-600 to-indigo-500 text-white font-bold text-[0.9em] shadow-lg shadow-blue-600/25 animate-gradient bg-[length:200%_auto]">
-                    simplified.
-                  </span>
-                </>
-              ) : (
-                <>
-                  结算源实测与温度市场判断{" "}
-                  <span className="inline-block px-2.5 py-0.5 mt-1 rounded bg-gradient-to-r from-blue-600 to-indigo-500 text-white font-bold text-[0.9em] shadow-lg shadow-blue-600/25 animate-gradient bg-[length:200%_auto]">
-                    化繁为简。
-                  </span>
-                </>
-              )}
-            </h2>
-            <p className="text-sm leading-7 text-slate-400 max-w-md animate-fade-up [animation-delay:300ms] opacity-0">
-              {copy.desc}
-            </p>
+        <div className="relative z-10 mt-12 max-w-md">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-sky-200">
+            {isEn ? "Access Gate" : "终端入口"}
+          </p>
+          <h2 className="mt-4 text-3xl font-black leading-tight tracking-tight text-white">
+            {isEn
+              ? "Sign in where the terminal starts."
+              : "从这里进入天气决策终端。"}
+          </h2>
+          <p className="mt-4 text-sm leading-7 text-slate-300">
+            {copy.desc}
+          </p>
+        </div>
+
+        <div className="relative z-10 mt-10 overflow-hidden rounded-xl border border-white/10 bg-[#0b1220] shadow-[0_24px_60px_rgba(0,0,0,0.28)]">
+          <div className="flex h-11 items-center gap-2 border-b border-white/10 bg-[#111827] px-4">
+            <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f56]" />
+            <span className="h-2.5 w-2.5 rounded-full bg-[#ffbd2e]" />
+            <span className="h-2.5 w-2.5 rounded-full bg-[#27c93f]" />
+            <span className="ml-2 font-mono text-[10px] text-slate-400">
+              polyweather.top/terminal
+            </span>
           </div>
+          <img
+            src="/static/web.webp"
+            width="680"
+            height="340"
+            alt={isEn ? "PolyWeather terminal preview" : "PolyWeather 终端预览"}
+            className="aspect-[16/9] w-full object-cover object-top"
+            decoding="async"
+          />
         </div>
 
-        {/* High-Fidelity Mock Terminal Preview Widget */}
-        <div className="relative z-10 my-auto p-[1px] bg-gradient-to-b from-white/15 to-transparent rounded-2xl shadow-2xl overflow-hidden hover:scale-[1.01] hover:shadow-blue-500/10 transition-all duration-500 max-w-[420px] w-full animate-fade-up [animation-delay:450ms] opacity-0">
-          <div className="bg-[#0b0f19]/80 backdrop-blur-xl rounded-2xl p-6">
-            {/* Terminal Top Window Controls */}
-            <div className="flex items-center gap-1.5 mb-5">
-              <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f56]" />
-              <span className="h-2.5 w-2.5 rounded-full bg-[#ffbd2e]" />
-              <span className="h-2.5 w-2.5 rounded-full bg-[#27c93f]" />
-              <span className="ml-2 font-mono text-[9px] text-slate-500 tracking-wider">POLYWEATHER_CONSOLE_v1.7</span>
+        <div className="relative z-10 mt-5 grid grid-cols-3 gap-2">
+          {sideStats.map((item) => (
+            <div
+              key={item.label}
+              className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-3"
+            >
+              <div className="font-mono text-sm font-black text-white">{item.value}</div>
+              <div className="mt-1 text-[10px] font-bold text-slate-400">{item.label}</div>
             </div>
-
-            <div className="flex items-center justify-between border-b border-white/5 pb-3.5 mb-4">
-              <div className="flex items-center gap-2.5">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="font-mono text-[10px] uppercase tracking-wider text-slate-300">
-                  {isEn ? "Runway 02L Consensus" : "跑道 02L 实测校验"}
-                </span>
-              </div>
-              <span className="font-mono text-[9px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 tracking-wider">LIVE</span>
-            </div>
-
-            {/* Terminal metrics grid */}
-            <div className="grid grid-cols-2 gap-3 mb-5">
-              <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 mb-0.5">{isEn ? "Current Temp" : "当前温度"}</span>
-                <span className="font-mono text-base font-bold text-white tracking-tight">28.8°C</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 mb-0.5">{isEn ? "Target Threshold" : "监控阈值"}</span>
-                <span className="font-mono text-base font-bold text-rose-400 tracking-tight">30.0°C</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 mb-0.5">{isEn ? "Model Blend" : "模型融合"}</span>
-                <span className="font-mono text-base font-bold text-blue-400 tracking-tight">88.5%</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-                <span className="block text-[9px] uppercase tracking-wider text-slate-400 mb-0.5">{isEn ? "Observed Peak" : "今日最高"}</span>
-                <span className="font-mono text-base font-bold text-emerald-400 tracking-tight">29.2°C</span>
-              </div>
-            </div>
-
-            {/* SVG Interactive Line Chart Preview */}
-            <div className="mb-2">
-              <div className="flex items-center justify-between text-[9px] text-slate-400 mb-2 font-mono">
-                <span>{isEn ? "TEMP TREND (24H)" : "气温趋势 (24小时)"}</span>
-                <span className="text-blue-400 font-bold">Blend vs Obs</span>
-              </div>
-              <div className="relative h-28 w-full bg-slate-950/60 rounded-xl p-2 border border-white/5">
-                <svg className="w-full h-full" viewBox="0 0 340 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  {/* Grid Lines */}
-                  <line x1="0" y1="20" x2="340" y2="20" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-                  <line x1="0" y1="50" x2="340" y2="50" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-                  <line x1="0" y1="80" x2="340" y2="80" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-                  <line x1="85" y1="0" x2="85" y2="100" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-                  <line x1="170" y1="0" x2="170" y2="100" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-                  <line x1="255" y1="0" x2="255" y2="100" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-
-                  {/* Threshold Line (30.0°C) */}
-                  <line x1="0" y1="40" x2="340" y2="40" stroke="#f43f5e" strokeWidth="1" strokeDasharray="3 3" opacity="0.8" />
-                  <text x="5" y="36" fill="#f43f5e" className="text-[8px] font-mono font-semibold">30.0°C Target</text>
-
-                  {/* Gradient Area under Forecast */}
-                  <path
-                    d="M 0 85 Q 40 75 85 60 T 170 35 T 255 45 T 340 55 L 340 100 L 0 100 Z"
-                    fill="url(#chartGradient)"
-                    opacity="0.15"
-                  />
-
-                  {/* Forecast Line (Blue) */}
-                  <path
-                    d="M 0 85 Q 40 75 85 60 T 170 35 T 255 45 T 340 55"
-                    stroke="#3b82f6"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  />
-
-                  {/* Observation Line (Green Solid, ending at current 170px) */}
-                  <path
-                    d="M 0 87 Q 40 78 85 63 T 170 33"
-                    stroke="#10b981"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  />
-
-                  {/* Current Temp Point */}
-                  <circle cx="170" cy="33" r="4" fill="#10b981" />
-                  <circle cx="170" cy="33" r="8" stroke="#10b981" strokeWidth="1.5" className="animate-ping" opacity="0.5" />
-
-                  {/* Definitions for Gradients */}
-                  <defs>
-                    <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#3b82f6" />
-                      <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
-                    </linearGradient>
-                  </defs>
-                </svg>
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
 
-        {/* Footer */}
-        <div className="relative z-10 text-[10px] text-slate-500 font-mono">
-          {isEn ? "PolyWeather institutional analytics suite" : "PolyWeather 机构版天气决策系统"}
+        <div className="relative z-10 mt-auto flex items-center justify-between border-t border-white/10 pt-5 text-[11px] text-slate-400">
+          <span>{isEn ? "Live charts" : "实时图表"}</span>
+          <span>{isEn ? "DEB path" : "DEB 路径"}</span>
+          <span>{isEn ? "Runway alerts" : "跑道提醒"}</span>
         </div>
-      </div>
+      </section>
 
-      {/* Right Column (Forms) */}
-      <div className="flex flex-1 flex-col justify-between p-6 sm:p-10 bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#eff4f9] min-h-screen relative overflow-hidden">
-        {/* Subtle mesh background */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(15,23,42,0.01)_1px,transparent_1px),linear-gradient(to_bottom,rgba(15,23,42,0.01)_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none animate-pulse" style={{ animationDuration: '4s' }} />
-        
-        {/* Top Header Switch */}
-        <div className="relative z-10 flex justify-between lg:justify-end items-center gap-3">
-          {/* Logo on top-left for mobile only */}
+      <div className="relative flex min-h-screen flex-1 flex-col justify-between overflow-hidden bg-[#e9edf3] p-4 sm:p-6 lg:p-8">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(15,23,42,0.045)_1px,transparent_1px),linear-gradient(to_bottom,rgba(15,23,42,0.035)_1px,transparent_1px)] bg-[size:32px_32px]" />
+
+        <div className="relative z-10 flex items-center justify-between gap-3 lg:justify-end">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 text-sm font-black tracking-tight text-slate-950 transition-opacity hover:opacity-90 lg:hidden"
+            className="inline-flex items-center gap-2 text-sm font-black tracking-tight text-slate-950 transition-opacity hover:opacity-80 lg:hidden"
           >
-            <span className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 bg-white text-[10px] font-black text-sky-700 shadow-sm">
+            <span className="grid h-8 w-8 place-items-center rounded-lg border border-slate-300 bg-white text-[10px] font-black text-blue-700 shadow-sm">
               PW
             </span>
             <span className="hidden min-[360px]:inline">PolyWeather</span>
           </Link>
-          
+
           <div className="flex items-center gap-3">
             <span className="hidden text-xs text-slate-500 sm:inline">
               {isLogin ? copy.newToPoly : copy.alreadyHave}
@@ -434,28 +380,40 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
                 setInfoText("");
                 setMode(isLogin ? "signup" : "login");
               }}
-              className="whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 active:scale-[0.98]"
+              className="whitespace-nowrap rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-blue-700 active:scale-[0.98]"
             >
               {isLogin ? copy.signup : copy.login}
             </button>
           </div>
         </div>
 
-        {/* Center Form Card */}
         <div className="relative z-10 flex flex-1 items-start justify-center pt-10 sm:pt-12 lg:my-10 lg:items-center lg:pt-0">
-          <div className="w-full max-w-[440px] bg-white/90 backdrop-blur-xl border border-slate-200/50 rounded-2xl p-6 sm:p-10 shadow-[0_24px_60px_rgba(8,16,36,0.06)] animate-fade-up [animation-delay:200ms] opacity-0">
+          <div className="w-full max-w-[440px] rounded-xl border border-[#d8e0ec] bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.08)] sm:p-8">
             <div className="mb-6">
-              <h1 className="text-2xl font-black tracking-tight text-slate-900 mb-2">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-emerald-700">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                {isLogin ? copy.loginSubmit : isEn ? "3-day trial" : "3 天试用"}
+              </div>
+              <h1 className="mb-2 text-2xl font-black tracking-tight text-slate-950">
                 {isLogin ? copy.welcomeBack : copy.signUpTitle}
               </h1>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                {copy.subtitle}
+              <p className="text-sm leading-6 text-slate-600">
+                {formSubtitle}
               </p>
             </div>
 
-            <form onSubmit={(event) => void onEmailSubmit(event)} className="space-y-5">
-              <div className="space-y-2 animate-fade-up [animation-delay:350ms] opacity-0">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+            <div className="mb-6 grid gap-2">
+              {accessHighlights.map((item) => (
+                <div key={item} className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                  <span className="h-1.5 w-1.5 rounded-full bg-blue-600" />
+                  {item}
+                </div>
+              ))}
+            </div>
+
+            <form onSubmit={(event) => void onEmailSubmit(event)} className="space-y-4">
+              <div className="space-y-2">
+                <label className="block text-[11px] font-black uppercase tracking-[0.12em] text-slate-500">
                   {copy.workEmail}
                 </label>
                 <div className="relative">
@@ -466,14 +424,14 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                     placeholder="yourname@email.com"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-11 pr-4 text-sm text-slate-900 placeholder:text-slate-400 transition-all duration-200 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10"
+                    className="w-full rounded-lg border border-slate-300 bg-[#f8fafc] py-3 pl-11 pr-4 text-sm text-slate-950 placeholder:text-slate-400 transition focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10"
                   />
                 </div>
               </div>
 
-              <div className="space-y-2 animate-fade-up [animation-delay:450ms] opacity-0">
-                <div className="flex justify-between items-center">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="block text-[11px] font-black uppercase tracking-[0.12em] text-slate-500">
                     {copy.password}
                   </label>
                   {isLogin && !resetSent ? (
@@ -481,7 +439,7 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
                       type="button"
                       onClick={() => void onResetPassword()}
                       disabled={loading}
-                      className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+                      className="text-xs font-bold text-blue-600 transition hover:text-blue-700"
                     >
                       {copy.reset}
                     </button>
@@ -496,42 +454,43 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     placeholder={isLogin ? copy.passwordLoginPlaceholder : copy.passwordSignupPlaceholder}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-11 pr-11 text-sm text-slate-900 placeholder:text-slate-400 transition-all duration-200 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10"
+                    className="w-full rounded-lg border border-slate-300 bg-[#f8fafc] py-3 pl-11 pr-11 text-sm text-slate-950 placeholder:text-slate-400 transition focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-700"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
               </div>
 
-              {!isLogin && (
-                <p className="text-[11px] leading-relaxed text-slate-400">
+              {!isLogin ? (
+                <p className="text-[11px] leading-relaxed text-slate-500">
                   {copy.termsAgreement}
                 </p>
-              )}
+              ) : null}
 
               <button
                 type="submit"
                 disabled={loading}
                 aria-busy={loading}
-                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 hover:from-blue-600 hover:to-indigo-600 text-sm font-bold text-white shadow-lg shadow-slate-950/10 hover:shadow-blue-600/25 active:scale-[0.98] transition-all duration-300 disabled:opacity-50 mt-8 flex items-center justify-center gap-2 group animate-fade-up [animation-delay:550ms] opacity-0"
+                className="group mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3.5 text-sm font-black text-white shadow-[0_10px_22px_rgba(37,99,235,0.22)] transition hover:bg-blue-700 active:scale-[0.99] disabled:opacity-50"
               >
                 {loading ? loadingSpinner : null}
                 <span>{loading ? submittingLabel : (isLogin ? copy.loginSubmit : copy.signupSubmit)}</span>
-                {!loading && <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />}
+                {!loading ? <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" /> : null}
               </button>
             </form>
 
             <div className="my-6 flex items-center">
-              <div className="h-px flex-grow bg-slate-200/60" />
-              <span className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                {isEn ? "or" : "或"}
+              <div className="h-px flex-grow bg-slate-200" />
+              <span className="px-3 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+                {copy.orGoogle}
               </span>
-              <div className="h-px flex-grow bg-slate-200/60" />
+              <div className="h-px flex-grow bg-slate-200" />
             </div>
 
             <button
@@ -539,26 +498,29 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
               onClick={() => void onGoogleSignIn()}
               disabled={loading}
               aria-busy={loading}
-              className="w-full py-3 px-4 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 active:scale-[0.99] transition-all duration-150 flex items-center justify-center gap-2 disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-blue-700 active:scale-[0.99] disabled:opacity-50"
             >
               {loading ? loadingSpinner : <Chrome className="h-4 w-4 text-blue-600" />}
               <span>{loading ? googleSubmittingLabel : copy.googleOneClick}</span>
             </button>
 
-            {errorText ? <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-700 leading-normal">{errorText}</p> : null}
-            {infoText ? <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-700 leading-normal">{infoText}</p> : null}
+            {errorText ? (
+              <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs leading-normal text-rose-700">{errorText}</p>
+            ) : null}
+            {infoText ? (
+              <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs leading-normal text-emerald-700">{infoText}</p>
+            ) : null}
             {errorText && isLogin && errorText.includes("Invalid login") ? (
-              <p className="mt-2 text-center text-xs text-slate-500 leading-relaxed">{copy.loginFailedHint}</p>
+              <p className="mt-2 text-center text-xs leading-relaxed text-slate-500">{copy.loginFailedHint}</p>
             ) : null}
             {infoText === copy.signupCheckEmail ? (
-              <p className="mt-2 text-center text-xs text-slate-500 leading-relaxed">{copy.resendVerify}</p>
+              <p className="mt-2 text-center text-xs leading-relaxed text-slate-500">{copy.resendVerify}</p>
             ) : null}
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="relative z-10 text-[10px] text-slate-400 text-center font-mono">
-          © {new Date().getFullYear()} PolyWeather. All rights reserved.
+        <div className="relative z-10 text-center font-mono text-[10px] text-slate-500">
+          © {new Date().getFullYear()} PolyWeather
         </div>
       </div>
     </div>
