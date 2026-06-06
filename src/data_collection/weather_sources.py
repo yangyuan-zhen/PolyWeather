@@ -367,6 +367,66 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     for key in stale:
                         cache.pop(key, None)
 
+    def _post_temperature_patch_payload(
+        self,
+        payload: Dict[str, Any],
+        *,
+        city_value: str,
+        source_value: str,
+    ) -> bool:
+        def _env_int(name: str, default: int) -> int:
+            try:
+                return int(os.getenv(name, str(default)) or default)
+            except Exception:
+                return default
+
+        def _env_float(name: str, default: float) -> float:
+            try:
+                return float(os.getenv(name, str(default)) or default)
+            except Exception:
+                return default
+
+        attempts = max(1, _env_int("POLYWEATHER_COLLECTOR_PATCH_POST_ATTEMPTS", 3))
+        timeout_sec = max(0.1, _env_float("POLYWEATHER_COLLECTOR_PATCH_POST_TIMEOUT_SEC", 2.0))
+        backoff_sec = max(0.0, _env_float("POLYWEATHER_COLLECTOR_PATCH_POST_BACKOFF_SEC", 0.25))
+
+        last_error: Optional[BaseException] = None
+        for attempt in range(1, attempts + 1):
+            try:
+                response = requests.post(
+                    self.collector_patch_endpoint,
+                    json=payload,
+                    timeout=timeout_sec,
+                )
+                status_code = int(getattr(response, "status_code", 200) or 200)
+                if 200 <= status_code < 300:
+                    return True
+                text = str(getattr(response, "text", "") or "")[:240]
+                last_error = RuntimeError(f"status={status_code} body={text}")
+                if status_code < 500:
+                    logger.warning(
+                        "collector patch POST rejected city={} source={} status={} body={}",
+                        city_value,
+                        source_value,
+                        status_code,
+                        text,
+                    )
+                    return False
+            except Exception as exc:
+                last_error = exc
+
+            if attempt < attempts and backoff_sec > 0:
+                time.sleep(backoff_sec * attempt)
+
+        logger.warning(
+            "collector patch POST failed city={} source={} attempts={} error={}",
+            city_value,
+            source_value,
+            attempts,
+            last_error,
+        )
+        return False
+
     def _emit_temperature_patch_if_changed(
         self,
         city: str,
@@ -407,19 +467,16 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         payload = {"city": city_value, "changes": changes}
 
         def post_patch() -> None:
-            try:
-                requests.post(
-                    self.collector_patch_endpoint,
-                    json=payload,
-                    timeout=2,
-                )
-            except Exception as exc:
-                logger.debug(
-                    "collector patch POST failed city={} source={}: {}",
-                    city_value,
-                    source_value,
-                    exc,
-                )
+            sent = self._post_temperature_patch_payload(
+                payload,
+                city_value=city_value,
+                source_value=source_value,
+            )
+            if sent:
+                return
+            with self._temperature_patch_lock:
+                if self._last_emitted_temperature_patch.get(dedupe_key) == signature:
+                    self._last_emitted_temperature_patch.pop(dedupe_key, None)
 
         threading.Thread(target=post_patch, daemon=True).start()
         # MADIS cache is a single list, not a keyed dict — expire on age

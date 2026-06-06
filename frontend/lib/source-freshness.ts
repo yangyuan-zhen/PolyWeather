@@ -35,11 +35,11 @@ const SOURCE_PROFILES: Record<string, SourceProfile> = {
   amsc_awos: {
     code: "amsc_awos",
     label: "AMSC AWOS",
-    nativeUpdateIntervalSec: DASHBOARD_REFRESH_POLICY_SEC.observation,
+    nativeUpdateIntervalSec: 180,
     freshWindowSec: 180,
     expectedGraceSec: 180,
     staleAfterSec: 900,
-    pollIntervalSec: DASHBOARD_REFRESH_POLICY_SEC.observation,
+    pollIntervalSec: 180,
   },
   amos: {
     code: "amos",

@@ -16,8 +16,8 @@ const FAQ_ITEMS = [
   {
     q_zh: "Pro 包含哪些功能？",
     q_en: "What features does Pro include?",
-    a_zh: "开通后可解锁：今日日内机场报文规则分析（含高温时段）、未来日期分析、城市决策卡、全平台智能气象推送。",
-    a_en: "Unlocks: intraday METAR rule analysis (including peak window), future-date analysis, city decision cards, and cross-platform smart weather push.",
+    a_zh: "开通后可解锁：天气决策台、多城市图表巡检、未来日期分析、全平台智能气象推送。",
+    a_en: "Unlocks: weather decision terminal, multi-city chart monitoring, future-date analysis, and cross-platform smart weather push.",
   },
   {
     q_zh: "当前订阅价格是多少？",

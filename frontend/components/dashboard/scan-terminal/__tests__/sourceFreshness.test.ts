@@ -28,6 +28,7 @@ export function runTests() {
   const now = new Date("2026-05-14T12:00:00Z");
 
   assert.equal(getObservationSourceProfile("amos").nativeUpdateIntervalSec, 60);
+  assert.equal(getObservationSourceProfile("amsc_awos").nativeUpdateIntervalSec, 180);
   assert.equal(getObservationSourceProfile("metar").nativeUpdateIntervalSec, 900);
 
   const amosFresh = buildObservationFreshness({
@@ -109,4 +110,28 @@ export function runTests() {
     },
   });
   assert.equal(getObservationFreshness(amosDetail)?.source_code, "amos");
+
+  const amscDetail = detail({
+    amos: {
+      observation_time: "2026-05-14T11:57:20Z",
+      runway_obs: {
+        runway_pairs: [["35R", "17L"]],
+        temperatures: [[25.2, null]],
+      },
+      source: "amsc_awos",
+      source_label: "AMSC AWOS",
+    },
+  });
+  const amscFreshness = getObservationFreshness(amscDetail);
+  assert.equal(amscFreshness?.source_code, "amsc_awos");
+  assert.equal(amscFreshness?.native_update_interval_sec, 180);
+
+  const amscExpectedWait = buildObservationFreshness({
+    now,
+    observedAt: "2026-05-14T11:56:40Z",
+    sourceCode: "amsc_awos",
+    sourceLabel: "AMSC AWOS",
+  });
+  assert.equal(amscExpectedWait.native_update_interval_sec, 180);
+  assert.equal(amscExpectedWait.freshness_status, "expected_wait");
 }

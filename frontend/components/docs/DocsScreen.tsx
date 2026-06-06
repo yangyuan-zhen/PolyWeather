@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
+import { ArrowLeft, BookOpen, Menu } from "lucide-react";
 import styles from "./DocsLayout.module.css";
 import {
   DocsLocale,
@@ -30,6 +31,7 @@ function DocsHeader() {
 
       <div className={styles.headerActions}>
         <Link href="/" className={styles.headerGhost}>
+          <ArrowLeft size={16} aria-hidden="true" />
           {locale === "zh-CN" ? "返回主站" : "Back to App"}
         </Link>
         <div className={styles.langSwitch} role="group" aria-label="Language switch">
@@ -81,6 +83,7 @@ function DocsSidebar({
                     key={page.slug}
                     href={href}
                     className={clsx(styles.sidebarLink, currentSlug === page.slug && styles.sidebarLinkActive)}
+                    aria-current={currentSlug === page.slug ? "page" : undefined}
                     onClick={onClose}
                   >
                     {title}
@@ -114,19 +117,29 @@ function BlockRenderer({ block }: { block: DocsPageContent["sections"][number]["
       return <p className={styles.paragraph}>{block.text}</p>;
     case "callout":
       return (
-        <div className={clsx(styles.callout, block.tone === "warning" && styles.calloutWarning, block.tone === "success" && styles.calloutSuccess, (!block.tone || block.tone === "info") && styles.calloutInfo)}>
+        <div
+          className={clsx(styles.callout, block.tone === "warning" && styles.calloutWarning, block.tone === "success" && styles.calloutSuccess, (!block.tone || block.tone === "info") && styles.calloutInfo)}
+          role="note"
+        >
           {block.title ? <div className={styles.calloutTitle}>{block.title}</div> : null}
           <p className={styles.calloutText}>{block.text}</p>
         </div>
       );
     case "bullets":
-    case "steps":
       return (
-        <ul className={styles.list}>
+        <ul className={clsx(styles.list, styles.bulletList)}>
           {block.items.map((item) => (
             <li key={item}>{item}</li>
           ))}
         </ul>
+      );
+    case "steps":
+      return (
+        <ol className={clsx(styles.list, styles.stepList)}>
+          {block.items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ol>
       );
     case "link":
       return (
@@ -175,10 +188,22 @@ export function DocsScreen({ page }: { page: DocsPage }) {
         <main className={styles.content}>
           <div className={styles.contentInner}>
             <button type="button" className={clsx(styles.headerButton, styles.mobileMenuButton)} onClick={() => setMobileSidebarOpen(true)}>
-              {locale === "zh-CN" ? "打开导航" : "Open navigation"}
+              <Menu size={16} aria-hidden="true" />
+              {locale === "zh-CN" ? "目录" : "Contents"}
             </button>
-            <h1 className={styles.pageTitle}>{localizedPage.title}</h1>
-            <p className={styles.pageDescription}>{localizedPage.description}</p>
+            <div className={styles.pageIntro}>
+              <div className={styles.introKicker}>
+                <BookOpen size={16} aria-hidden="true" />
+                {locale === "zh-CN" ? "PolyWeather 产品手册" : "PolyWeather Product Manual"}
+              </div>
+              <h1 className={styles.pageTitle}>{localizedPage.title}</h1>
+              <p className={styles.pageDescription}>{localizedPage.description}</p>
+              <div className={styles.pageMeta} aria-label={locale === "zh-CN" ? "文档范围" : "Document scope"}>
+                <span>{locale === "zh-CN" ? "当前工作台" : "Current terminal"}</span>
+                <span>{locale === "zh-CN" ? `${DOCS_PAGES.length} 篇文档` : `${DOCS_PAGES.length} docs`}</span>
+                <span>{locale === "zh-CN" ? `${localizedPage.sections.length} 个章节` : `${localizedPage.sections.length} sections`}</span>
+              </div>
+            </div>
             {localizedPage.sections.map((section) => (
               <section key={section.id} id={section.id} className={styles.section}>
                 <h2 className={styles.sectionTitle}>{section.title}</h2>

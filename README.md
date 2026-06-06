@@ -5,7 +5,7 @@ Production weather-intelligence stack for temperature settlement markets.
 Official dashboard: [polyweather.top](https://polyweather.top/)
 中文说明: [README_ZH.md](README_ZH.md)
 
-Public docs center: `/docs/intro` on the main site (bilingual product documentation, including intraday analysis, calibrated probability, model stack, TAF, settlement sources, history, and extension).
+Public docs center: `/docs/intro` on the main site (bilingual product documentation for the current terminal, chart reading, realtime source cadence, settlement stations, and the browser extension).
 
 ## Product Screenshots
 
@@ -21,12 +21,11 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 
 [![Star History Chart](https://api.star-history.com/svg?repos=yangyuan-zhen/PolyWeather&type=Date)](https://star-history.com/#yangyuan-zhen/PolyWeather&Date)
 
-## Product Status (2026-05-28)
+## Product Status (2026-06-06)
 
-- Subscription live: `Pro Monthly 10 USDC`.
-- Points system live: earn via group chat, welcome bonus (+20), first-message-of-day bonus (+2), weekly participation rewards.
-- `/city` and `/deb` now free (daily cap 10 each); points redeemable for payment discount (`500 pts = 1 USDC`, max `3 USDC`).
-- Weekly leaderboard rewards restructured: smaller point bonuses for winners (200/100/50), all active users receive participation rewards.
+- Subscription live: `Pro Monthly 29.9 USDC / 30 days` and `Pro Quarterly 79.9 USDC / 90 days`.
+- Referral pricing live: invited users can get the first monthly Pro at `20 USDC`; inviters receive `3500` points after a valid first Pro payment, capped at 10 paid invites per month.
+- `/city` and `/deb` now free (daily cap 10 each); points redeemable for payment discount (`500 pts = 1 USDC`, monthly max `3 USDC`, quarterly max `8 USDC`).
 - Onchain checkout live: Polygon contract checkout (USDC / USDC.e) plus Ethereum mainnet USDC direct-transfer confirmation.
 - Auto-reconciliation live: event listener + periodic confirm loop.
 - Ops dashboard live: `/ops` for memberships, leaderboard, manual point grants, and payment incident triage.
@@ -44,10 +43,10 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 - EMOS/CRPS calibration is wired and trainable, but production should stay on `legacy` or `emos_shadow`; `emos_primary` is only for candidates that pass local offline evaluation and manual rollout.
 - Intraday analysis is now positioned as a professional meteorology read: headline, confidence, base/upside/downside paths, next observation point, evidence chain, failure modes, and confirmation rules.
 - Intraday modal now blocks stale cached detail during refresh, so users do not briefly trade off old city/date data before full detail arrives.
-- Terminal city cards now combine settlement observations, DEB hourly consensus, model cluster context, calibrated probability, and market-bucket mapping without blocking the chart on AI text generation.
+- Terminal chart/detail workflow now combines settlement observations, DEB hourly consensus, model context, probability bands, and market-bucket mapping without blocking the chart on AI text generation.
 - Terminal data uses page memory cache, browser `localStorage`, backend short-TTL cache, SSE patch replay, and foreground refresh so returning from another tab restores the latest visible chart state quickly.
 - Market bucket matching now uses the full `all_buckets` surface and strict exact / range / or-higher / or-lower direction checks, reducing bad matches to unreasonable tail buckets.
-- The card label “model-market difference” means `model probability - market-implied probability`; positive values indicate weather probability above market pricing, while negative values indicate the YES is already priced more fully.
+- The market-signal difference means `model probability - market-implied probability`; positive values indicate weather probability above market pricing, while negative values indicate the YES is already priced more fully.
 - Calibrated model probability is now the primary probability panel. It shows the active production probability engine (legacy Gaussian or EMOS), while model consensus remains a secondary reference.
 - Non-Hong Kong airport cities now ingest `TAF` and parse `FM / TEMPO / BECMG / PROB30/40`.
 - Temperature chart now overlays `TAF Timing` markers near the expected peak window.
@@ -73,7 +72,7 @@ See: [AGPL-3.0 & Commercial Boundary](docs/OPEN_CORE_POLICY.md)
 - Uses DEB (Dynamic Error Balancing) to blend multi-model highs.
 - Builds a DEB-weighted hourly consensus path for peak-window logic and chart display.
 - Generates settlement-oriented calibrated probability buckets (`mu` + bucket distribution) via legacy Gaussian or EMOS/CRPS calibration.
-- Adds city decision cards that combine live observations, expected-high centers, full market-bucket mapping, and model-market difference in one view.
+- Adds terminal chart/detail workflows that combine live observations, DEB-centered high-temperature context, market-bucket mapping, and model-market difference.
 - Reuses one analysis core across web dashboard and Telegram bot.
 - Adds payment audit trails, replay tooling, and incident visibility in ops.
 - Adds peak-window-oriented intraday analysis with meteorology headline, path buckets, evidence chain, invalidation rules, and confirmation rules.

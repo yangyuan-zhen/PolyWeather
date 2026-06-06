@@ -16,6 +16,10 @@ const ROLLING_WINDOW_BEFORE_MS = 12 * 60 * 60 * 1000;
 const ROLLING_WINDOW_AFTER_LIVE_MS = 2 * 60 * 60 * 1000;
 const ROLLING_WINDOW_AFTER_FORECAST_MS = 8 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const AMSC_RUNWAY_CITIES = new Set([
+  "beijing", "shanghai", "guangzhou", "qingdao",
+  "chengdu", "chongqing", "wuhan",
+]);
 
 const SETTLEMENT_RUNWAY_PAIRS: Record<string, Array<[string, string]>> = {
   shanghai: [["17L", "35R"]],
@@ -1298,6 +1302,9 @@ function getLiveObservationLabels(
     weatherStationCities.has(normalizedKey) ||
     /\b(mgm|turkey_mgm|jma_amedas|fmi|knmi|cowin_obs|ims|ncm|aeroweb|madis_hfmetar|singapore_mss)\b/.test(sourceTokens);
   const isRunwaySensorCity = runwaySensorCities.has(normalizedKey);
+  const isAmscRunwayCity =
+    AMSC_RUNWAY_CITIES.has(normalizedKey) ||
+    /\bamsc(?:_awos)?\b|\bawos\b/.test(sourceTokens);
   const isWeatherStation = !runwaySensorCities.has(normalizedKey)
     && !isHKO && !isShenzhen && !isTokyo && !isSingapore && !isParis && !isTaipei
     && hasRealStationNetwork;
@@ -1309,7 +1316,7 @@ function getLiveObservationLabels(
     : isParis ? "官方机场观测 (15分钟)"
     : isTaipei ? "CWA (10分钟)"
     : isWeatherStation ? "气象站实测"
-    : isRunwaySensorCity ? "跑道实测 (1分钟)"
+    : isRunwaySensorCity ? `跑道实测 (${isAmscRunwayCity ? "3分钟" : "1分钟"})`
     : "机场报文";
 
   const metarHeaderLabel = (isShenzhen || isHKO) ? "天文台实测 (10分钟)"

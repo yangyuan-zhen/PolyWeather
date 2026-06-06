@@ -103,6 +103,47 @@ def test_patch_adds_city_local_time_contract_from_observation_time():
     assert event["payload"]["observed_at_local"] == "2026-05-27T19:16:00-04:00"
 
 
+def test_patch_records_received_time_and_latency_for_late_runway_points(monkeypatch):
+    monkeypatch.setattr("web.realtime_patch_schema.time.time", lambda: 1780750864.062)
+
+    event = normalize_observation_patch(
+        {
+            "city": "Busan",
+            "changes": {
+                "temp": 23.0,
+                "obs_time": "2026-06-06T12:59:00Z",
+                "source": "amos",
+                "amos": {
+                    "runway_obs": {
+                        "point_temperatures": [{"runway": "SR/SL", "temp": 22.7}]
+                    }
+                },
+            },
+        }
+    )
+
+    assert event["received_at_utc"] == "2026-06-06T13:01:04Z"
+    assert event["latency_sec"] == 124
+    assert event["payload"]["received_at_utc"] == "2026-06-06T13:01:04Z"
+    assert event["payload"]["latency_sec"] == 124
+
+
+def test_amsc_patch_uses_three_minute_source_cadence():
+    event = normalize_observation_patch(
+        {
+            "city": "Shanghai",
+            "changes": {
+                "temp": 22.4,
+                "obs_time": "2026-06-06T13:01:00Z",
+                "source": "amsc_awos",
+            },
+        }
+    )
+
+    assert event["source_cadence_sec"] == 180
+    assert event["payload"]["source_cadence_sec"] == 180
+
+
 def test_invalid_patch_without_city_or_observation_data_is_rejected():
     with pytest.raises(PatchValidationError):
         normalize_observation_patch({"changes": {"temp": 21.0}})

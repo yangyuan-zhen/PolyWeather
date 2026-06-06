@@ -1170,6 +1170,29 @@ export function runTests() {
     "Panama City high label should use airport METAR report wording, not weather-station or runway wording",
   );
 
+  const shanghaiLabels = __getLiveObservationLabelsForTest(
+    {
+      city: "shanghai",
+      local_date: "2026-06-06",
+      local_time: "21:03",
+      tz_offset_seconds: 8 * 60 * 60,
+    } as any,
+    {
+      amos: {
+        source: "amsc_awos",
+        source_label: "AMSC AWOS",
+      },
+      airportPrimary: {
+        source_code: "amsc_awos",
+        source_label: "AMSC AWOS",
+      },
+    } as any,
+  );
+  assert(
+    shanghaiLabels.runwayHeaderLabel === "跑道实测 (3分钟)",
+    "AMSC runway cities should advertise the 3-minute source cadence instead of the AMOS 1-minute cadence",
+  );
+
   const newYorkWithMadis = __buildTemperatureChartDataForTest(
     {
       city: "new york",

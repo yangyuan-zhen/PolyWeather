@@ -12,6 +12,7 @@ const OBSERVATION_LABEL_EN: Record<string, string> = {
   "CWA (10分钟)": "CWA (10m)",
   "气象站实测": "Weather Station Live",
   "跑道实测 (1分钟)": "Runway Live (1m)",
+  "跑道实测 (3分钟)": "Runway Live (3m)",
   "机场报文": "Airport METAR",
   "METAR 结算 (30分钟)": "METAR Settlement (30m)",
 };

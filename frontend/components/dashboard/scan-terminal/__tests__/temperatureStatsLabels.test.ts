@@ -36,6 +36,18 @@ export function runTests() {
   assert(shenzhen.runwayHigh === "HKO Live", "Shenzhen high summary should translate 天文台实测");
   assert(shenzhen.metarHigh === "HKO", "Shenzhen high summary should translate 天文台");
 
+  const shanghai = __buildTemperatureStatsLabelsForTest({
+    isEn: true,
+    isShenzhen: false,
+    runwayHeaderLabel: "跑道实测 (3分钟)",
+    metarHeaderLabel: "METAR 结算 (30分钟)",
+    runwayHighLabel: "跑道实测",
+    metarHighLabel: "METAR 官方",
+  });
+
+  assert(shanghai.primary === "Runway Live (3m)", "AMSC English primary label should match 跑道实测 (3分钟)");
+  assert(shanghai.runwayHigh === "Runway", "AMSC runway high label should remain Runway");
+
   const zh = __buildTemperatureStatsLabelsForTest({
     isEn: false,
     isShenzhen: true,

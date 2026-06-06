@@ -19,8 +19,8 @@ export function createAccountCopy(isEn: boolean): Record<string, string> {
       weatherEngine: isEn ? "Weather Engine" : "气象引擎",
       intradayAnalysis: isEn ? "Intraday Analysis" : "今日内分析",
       historyFuture: isEn
-        ? "Future-date + Decision Card Analysis"
-        : "未来日期分析 + 城市决策卡",
+        ? "Future-date + Multi-city Chart Monitoring"
+        : "未来日期分析 + 多城市图表巡检",
       smartPush: isEn
         ? "Cross-platform Smart Weather Push"
         : "全平台智能气象查询",

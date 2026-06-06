@@ -80,6 +80,15 @@ def _parse_datetime(value: Any) -> Optional[datetime]:
         return None
 
 
+def _latency_seconds(received_at: datetime, observed_at: Optional[str]) -> Optional[int]:
+    observed = _parse_datetime(observed_at)
+    if observed is None:
+        return None
+    if observed.tzinfo is None:
+        observed = observed.replace(tzinfo=timezone.utc)
+    return max(0, int((received_at.astimezone(timezone.utc) - observed.astimezone(timezone.utc)).total_seconds()))
+
+
 def _normalize_observation_time_contract(city: str, source: str, obs_time: Optional[str]) -> Dict[str, Any]:
     parsed = _parse_datetime(obs_time)
     if parsed is None:
@@ -281,6 +290,17 @@ def normalize_observation_patch(patch: Dict[str, Any]) -> Dict[str, Any]:
         }
         obs_time = str(time_contract.get("observed_at_utc") or obs_time or "").strip() or None
 
+    received_at = datetime.fromtimestamp(time.time(), tz=timezone.utc).replace(microsecond=0)
+    received_at_utc = _format_utc_iso(received_at)
+    latency_sec = _latency_seconds(received_at, obs_time)
+    received_contract: Dict[str, Any] = {
+        "received_at_utc": received_at_utc,
+    }
+    if latency_sec is not None:
+        received_contract["latency_sec"] = latency_sec
+    if received_contract:
+        payload = {**payload, **received_contract}
+
     return {
         "type": EVENT_TYPE,
         "schema_type": SCHEMA_TYPE,
@@ -289,6 +309,7 @@ def normalize_observation_patch(patch: Dict[str, Any]) -> Dict[str, Any]:
         "source": source,
         "obs_time": obs_time,
         **time_contract,
-        "ts": int(time.time() * 1000),
+        **received_contract,
+        "ts": int(received_at.timestamp() * 1000),
         "payload": payload,
     }

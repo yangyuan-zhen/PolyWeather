@@ -15,7 +15,7 @@ const ScanTerminalDashboard = dynamic(
 export const metadata: Metadata = {
   title: "PolyWeather Terminal | Paid Product",
   description:
-    "Paid PolyWeather decision terminal for weather-signal analysis and city decision cards.",
+    "Paid PolyWeather decision terminal for weather-signal analysis and multi-city chart monitoring.",
 };
 
 export default function TerminalPage() {
