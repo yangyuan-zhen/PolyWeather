@@ -52,8 +52,8 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
   const copy = {
     backHome: isEn ? "Back to Home" : "返回首页",
     subtitle: isEn
-      ? "Explore weather details from every corner of the world"
-      : "探索世界每一个角落的气象细节",
+      ? "Enter the live terminal, subscription center, and Telegram entitlement workflow."
+      : "进入实时终端、订阅中心和 Telegram 权益工作流。",
     googleOneClick: isEn
       ? "Continue with Google"
       : "使用 Google 账号一键登录",
@@ -64,9 +64,9 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
     passwordSignupPlaceholder: isEn
       ? "Set at least 6 characters"
       : "设置至少 6 位密码",
-    loginSubmit: isEn ? "Start your weather decision journey" : "开启气象决策之旅",
+    loginSubmit: isEn ? "Enter PolyWeather Terminal" : "进入 PolyWeather 终端",
     loginSubmitting: isEn ? "Signing in..." : "正在登录...",
-    signupSubmit: isEn ? "Create account now" : "立即创建账号",
+    signupSubmit: isEn ? "Create account and start trial" : "创建账号并领取试用",
     signupSubmitting: isEn ? "Creating account..." : "正在创建账号...",
     googleSubmitting: isEn ? "Connecting Google..." : "正在连接 Google...",
     loginHint: isEn
@@ -101,8 +101,8 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
     // New translations for Koyfin-style layouts
     workEmail: isEn ? "Work email" : "工作邮箱",
     password: isEn ? "Password" : "密码",
-    welcomeBack: isEn ? "Welcome Back" : "欢迎回来",
-    signUpTitle: isEn ? "Sign up for your PolyWeather account" : "注册您的 PolyWeather 账户",
+    welcomeBack: isEn ? "Sign in to PolyWeather" : "登录 PolyWeather",
+    signUpTitle: isEn ? "Create your PolyWeather account" : "创建 PolyWeather 账号",
     newToPoly: isEn ? "New to PolyWeather?" : "还没有 PolyWeather 账号？",
     alreadyHave: isEn ? "Already have an account?" : "已经有账号了？",
     termsAgreement: isEn
@@ -264,22 +264,28 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
         <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
 
         <div className="relative z-10 flex flex-col gap-14">
-          <Link href="/" className="flex items-center hover:opacity-90 transition-opacity">
-            <img src="/logo.png" alt="PolyWeather" className="h-8 w-auto object-contain brightness-0 invert" />
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 text-lg font-black tracking-tight text-white transition-opacity hover:opacity-90"
+          >
+            <span className="grid h-8 w-8 place-items-center rounded-lg border border-white/15 bg-white/10 text-[11px] font-black text-cyan-200">
+              PW
+            </span>
+            <span>PolyWeather</span>
           </Link>
 
           <div className="space-y-6">
             <h2 className="text-3xl font-black leading-[1.25] tracking-tight text-white animate-fade-up [animation-delay:150ms] opacity-0">
               {isEn ? (
                 <>
-                  Weather intelligence and risk management{" "}
+                  Settlement-source evidence for temperature markets{" "}
                   <span className="inline-block px-2.5 py-0.5 mt-1 rounded bg-gradient-to-r from-blue-600 to-indigo-500 text-white font-bold text-[0.9em] shadow-lg shadow-blue-600/25 animate-gradient bg-[length:200%_auto]">
                     simplified.
                   </span>
                 </>
               ) : (
                 <>
-                  天气信息与风险管理{" "}
+                  结算源实测与温度市场判断{" "}
                   <span className="inline-block px-2.5 py-0.5 mt-1 rounded bg-gradient-to-r from-blue-600 to-indigo-500 text-white font-bold text-[0.9em] shadow-lg shadow-blue-600/25 animate-gradient bg-[length:200%_auto]">
                     化繁为简。
                   </span>
@@ -407,12 +413,18 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
         {/* Top Header Switch */}
         <div className="relative z-10 flex justify-between lg:justify-end items-center gap-3">
           {/* Logo on top-left for mobile only */}
-          <Link href="/" className="flex items-center hover:opacity-90 transition-opacity lg:hidden">
-            <img src="/logo.png" alt="PolyWeather" className="h-7 w-auto object-contain" />
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 text-sm font-black tracking-tight text-slate-950 transition-opacity hover:opacity-90 lg:hidden"
+          >
+            <span className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 bg-white text-[10px] font-black text-sky-700 shadow-sm">
+              PW
+            </span>
+            <span className="hidden min-[360px]:inline">PolyWeather</span>
           </Link>
           
           <div className="flex items-center gap-3">
-            <span className="text-xs text-slate-500">
+            <span className="hidden text-xs text-slate-500 sm:inline">
               {isLogin ? copy.newToPoly : copy.alreadyHave}
             </span>
             <button
@@ -422,7 +434,7 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
                 setInfoText("");
                 setMode(isLogin ? "signup" : "login");
               }}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 active:scale-[0.98]"
+              className="whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 active:scale-[0.98]"
             >
               {isLogin ? copy.signup : copy.login}
             </button>
@@ -430,8 +442,8 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
         </div>
 
         {/* Center Form Card */}
-        <div className="relative z-10 flex flex-1 items-center justify-center my-10">
-          <div className="w-full max-w-[440px] bg-white/90 backdrop-blur-xl border border-slate-200/50 rounded-2xl p-6 sm:p-10 shadow-[0_24px_60px_rgba(8,16,36,0.06)] animate-fade-up [animation-delay:200ms] opacity-0 transition-transform hover:-translate-y-1 hover:shadow-[0_32px_80px_rgba(8,16,36,0.08)] duration-500">
+        <div className="relative z-10 flex flex-1 items-start justify-center pt-10 sm:pt-12 lg:my-10 lg:items-center lg:pt-0">
+          <div className="w-full max-w-[440px] bg-white/90 backdrop-blur-xl border border-slate-200/50 rounded-2xl p-6 sm:p-10 shadow-[0_24px_60px_rgba(8,16,36,0.06)] animate-fade-up [animation-delay:200ms] opacity-0">
             <div className="mb-6">
               <h1 className="text-2xl font-black tracking-tight text-slate-900 mb-2">
                 {isLogin ? copy.welcomeBack : copy.signUpTitle}

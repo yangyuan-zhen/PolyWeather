@@ -249,8 +249,11 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
       <LandingAnalytics />
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-[#fbfbfa]/90 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link href="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
-            <img src="/logo.png" alt="PolyWeather" className="h-7 w-auto object-contain" />
+          <Link
+            href="/"
+            className="text-base font-black tracking-tight text-slate-950 transition-opacity hover:opacity-80 sm:text-lg"
+          >
+            PolyWeather
           </Link>
 
           <nav className="hidden items-center gap-7 text-sm font-medium text-slate-500 md:flex">

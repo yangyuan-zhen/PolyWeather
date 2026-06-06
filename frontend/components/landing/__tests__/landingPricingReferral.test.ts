@@ -49,6 +49,12 @@ export function runTests() {
   assert(!source.includes("高频刷新与 API 仍为 Pro 权益"), "landing page must not incorrectly exclude high-frequency refresh or API from trial access");
   assert(source.includes("bg-[#fbfbfa]"), "landing page must use a light Notion-style background");
   assert(source.includes("WeatherWorkflowIllustration"), "landing page must include a friendly illustration surface");
+  assert(
+    /className="text-base font-black tracking-tight text-slate-950[\s\S]*?>\s*PolyWeather\s*<\/Link>/.test(
+      source,
+    ),
+    "landing header must expose a readable PolyWeather wordmark instead of a tiny square logo image",
+  );
   assert(!fs.existsSync(publicPngPath), "heavy PNG preview must not remain in public static assets");
   assert(fs.existsSync(fixturePngPath), "PNG preview may only remain as a test fixture");
   assert(fs.existsSync(webpPath), "landing page must ship a WebP preview image for the LCP product screenshot");
