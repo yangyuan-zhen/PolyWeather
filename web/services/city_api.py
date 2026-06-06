@@ -6,6 +6,7 @@ import os
 import asyncio
 import threading
 import time
+from copy import deepcopy
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException, Request
@@ -13,6 +14,7 @@ from fastapi.concurrency import run_in_threadpool
 from loguru import logger
 
 import web.routes as legacy_routes
+from web.analysis_service import _runway_history_temp_for_city
 from web.services.request_timing import ServerTimingRecorder
 
 _RECENT_DEB_CACHE: Optional[Dict[str, Dict[str, object]]] = None
@@ -68,6 +70,65 @@ async def _overlay_cached_wunderground(city: str, payload: Dict[str, Any]) -> Di
         city,
         payload,
     )
+
+
+def _overlay_cached_runway_history_from_db(city: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(payload, dict) or not payload:
+        return payload
+    normalized_city = str(city or payload.get("name") or payload.get("city") or "").strip().lower()
+    if not normalized_city:
+        return payload
+
+    risk = payload.get("risk") if isinstance(payload.get("risk"), dict) else {}
+    city_risk = legacy_routes.CITY_RISK_PROFILES.get(normalized_city, {}) or {}
+    city_meta = legacy_routes.CITY_REGISTRY.get(normalized_city, {}) or {}
+    icao = str(
+        risk.get("icao")
+        or city_risk.get("icao")
+        or city_meta.get("icao")
+        or ""
+    ).strip().upper()
+    if not icao:
+        return payload
+
+    try:
+        rows = legacy_routes._CACHE_DB.get_runway_obs_recent(icao, minutes=36 * 60)
+    except Exception as exc:
+        logger.debug("chart runway DB overlay skipped city={} icao={}: {}", normalized_city, icao, exc)
+        return payload
+    if not rows:
+        return payload
+
+    use_fahrenheit = (
+        "F" in str(payload.get("temp_symbol") or "").upper()
+        or bool((legacy_routes.CITIES.get(normalized_city, {}) or {}).get("f"))
+    )
+    runway_history: Dict[str, List[Dict[str, Any]]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        runway = str(row.get("runway") or "").strip().upper()
+        time_val = row.get("otime_utc") or row.get("created_at")
+        if not runway or not time_val:
+            continue
+        temp_val = _runway_history_temp_for_city(normalized_city, row)
+        if temp_val is None:
+            continue
+        if use_fahrenheit:
+            temp_val = temp_val * 9.0 / 5.0 + 32.0
+        runway_history.setdefault(runway, []).append(
+            {
+                "time": str(time_val),
+                "temp": round(float(temp_val), 1),
+            }
+        )
+
+    if not runway_history:
+        return payload
+
+    next_payload = deepcopy(payload)
+    next_payload["runway_plate_history"] = runway_history
+    return next_payload
 
 
 async def _refresh_city_full_cache_singleflight(city: str, force_refresh: bool) -> Dict[str, Any]:
@@ -165,6 +226,11 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
         if payload:
             if not legacy_routes._city_cache_is_fresh(cached_entry, legacy_routes.CITY_FULL_CACHE_TTL_SEC):
                 _start_city_full_stale_refresh(city)
+            payload = await run_in_threadpool(
+                _overlay_cached_runway_history_from_db,
+                city,
+                payload,
+            )
             return await _overlay_cached_wunderground(city, payload)
 
     return {
