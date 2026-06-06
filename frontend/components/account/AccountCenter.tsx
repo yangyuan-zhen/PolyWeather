@@ -63,10 +63,6 @@ import {
 import { createAccountCopy } from "./account-copy";
 import { resetWalletConnectProvider } from "./wallet";
 import { useAccountPayment } from "./useAccountPayment";
-import {
-  isTelegramPrivateGroupPriceEligible,
-  telegramPrivateGroupAmountUsdc,
-} from "./telegram-pricing";
 
 // --- Main Component ---
 
@@ -437,12 +433,14 @@ export function AccountCenter() {
         { plan_code: "pro_monthly", plan_id: 101, amount_usdc: "29.9", duration_days: 30 },
         { plan_code: "pro_quarterly", plan_id: 102, amount_usdc: "79.9", duration_days: 90 },
       ];
-  const privateTelegramGroupPriceActive = isTelegramPrivateGroupPriceEligible(
-    backend?.telegram_pricing,
-  );
-  const privateTelegramGroupAmount = telegramPrivateGroupAmountUsdc(
-    backend?.telegram_pricing,
-  );
+  const selectedPlanDurationDays = Number(selectedPlan?.duration_days || 30);
+  const overlayPlanLabel =
+    selectedPlanCode === "pro_quarterly"
+      ? copy.quarterlyPlan
+      : copy.monthlyPlan;
+  const overlayPeriodLabel = isEn
+    ? `/ ${selectedPlanDurationDays} days`
+    : `/ ${selectedPlanDurationDays} 天`;
   const referral = backend?.referral;
   const referralCode = String(referral?.code || "").trim();
   const appliedReferralCode = String(referral?.applied_code || "").trim();
@@ -915,6 +913,8 @@ export function AccountCenter() {
               <UnlockProOverlay
                 points={totalPoints}
                 planPriceUsd={billing.planAmount}
+                planLabel={overlayPlanLabel}
+                periodLabel={overlayPeriodLabel}
                 usePoints={usePoints}
                 onToggleUsePoints={() => setUsePoints((prev) => !prev)}
                 billing={{
@@ -932,6 +932,7 @@ export function AccountCenter() {
                 payBusy={paymentBusy}
                 payLabel={hasPayingWallet ? copy.payNow : copy.connectAndPay}
                 manualPayLabel="手动转账"
+                locale={locale}
                 errorText={paymentError || undefined}
                 infoText={paymentInfo || undefined}
                 txHash={lastTxHash || undefined}
@@ -1112,13 +1113,6 @@ export function AccountCenter() {
                           const code = String(plan.plan_code || "");
                           const active = code === selectedPlanCode;
                           const isQuarterly = code === "pro_quarterly";
-                          const isPrivateGroupMonthly = Boolean(
-                            code === "pro_monthly" &&
-                              privateTelegramGroupPriceActive &&
-                              privateTelegramGroupAmount &&
-                              Number(plan.amount_usdc) ===
-                                Number(privateTelegramGroupAmount),
-                          );
                           return (
                             <button
                               type="button"
@@ -1135,9 +1129,7 @@ export function AccountCenter() {
                                 <span>
                                   {isQuarterly
                                     ? copy.quarterlyPlan
-                                    : isPrivateGroupMonthly
-                                      ? copy.privateGroupMonthlyPlan
-                                      : copy.monthlyPlan}
+                                    : copy.monthlyPlan}
                                 </span>
                                 <span>{plan.amount_usdc} USDC</span>
                               </div>

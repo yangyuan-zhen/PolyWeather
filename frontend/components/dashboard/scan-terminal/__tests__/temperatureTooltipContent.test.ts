@@ -1,4 +1,8 @@
 import {
+  readFileSync,
+} from "node:fs";
+import path from "node:path";
+import {
   __buildTemperatureTooltipProbabilityRowsForTest,
   __buildTemperatureTooltipRowsForTest,
 } from "@/components/dashboard/scan-terminal/TemperatureTooltipContent";
@@ -73,7 +77,23 @@ export function runTests() {
   );
 
   assert(
-    probabilityRows.length === 0,
-    "temperature tooltip should not show Gaussian μ or probability-band rows",
+    probabilityRows.length === 2,
+    "temperature tooltip should show Gaussian μ and the leading probability bucket as compact context",
+  );
+  assert(
+    probabilityRows.some((row) => row.key === "legacy_probability_mu" && row.value === "27.4°C") &&
+      probabilityRows.some((row) => row.key === "legacy_probability_27_0" && row.value === "42%"),
+    "temperature tooltip should format Gaussian μ and probability values without drawing a full probability band on the main chart",
+  );
+
+  const projectRoot = process.cwd();
+  const chartCanvasSource = readFileSync(
+    path.join(projectRoot, "components", "dashboard", "scan-terminal", "TemperatureChartCanvas.tsx"),
+    "utf8",
+  );
+  assert(
+    chartCanvasSource.includes("probabilityOverlay={probabilityOverlay}") &&
+      !chartCanvasSource.includes("probabilityOverlay={null}"),
+    "temperature chart canvas must pass probability overlay data into the tooltip instead of hiding Gaussian μ",
   );
 }

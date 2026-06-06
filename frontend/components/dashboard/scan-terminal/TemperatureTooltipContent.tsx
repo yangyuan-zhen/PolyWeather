@@ -123,10 +123,31 @@ function buildTooltipProbabilityRows(
   tempSymbol: string,
   isEn: boolean,
 ): TooltipProbabilityRow[] {
-  void probabilityOverlay;
-  void tempSymbol;
-  void isEn;
-  return [];
+  if (!probabilityOverlay) return [];
+  const rows: TooltipProbabilityRow[] = [];
+  const mu = validNumber(probabilityOverlay.muLine?.value);
+  if (mu !== null) {
+    rows.push({
+      key: "legacy_probability_mu",
+      label: isEn ? "Gaussian μ" : "高斯 μ",
+      value: `${mu.toFixed(1)}${tempSymbol}`,
+      color: "#8b5cf6",
+    });
+  }
+
+  const topBand = [...probabilityOverlay.bands]
+    .filter((band) => validNumber(band.probability) !== null)
+    .sort((a, b) => b.probability - a.probability)[0];
+  if (topBand) {
+    const probabilityPct = Math.round(topBand.probability * 100);
+    rows.push({
+      key: topBand.key,
+      label: topBand.label,
+      value: `${probabilityPct}%`,
+      color: "#a78bfa",
+    });
+  }
+  return rows;
 }
 
 export const __buildTemperatureTooltipRowsForTest = buildTooltipRows;

@@ -63,7 +63,6 @@ export function createAccountCopy(isEn: boolean): Record<string, string> {
       paymentMgmt: isEn ? "Payment Management" : "支付管理",
       proPlan: isEn ? "Pro Plan" : "Pro 套餐",
       monthlyPlan: isEn ? "Monthly" : "月付",
-      privateGroupMonthlyPlan: isEn ? "Private group monthly" : "私密群月付",
       quarterlyPlan: isEn ? "Quarterly" : "季度",
       trialBadge: isEn ? "3-day trial" : "3天试用",
       trialPaidGroupLocked: isEn

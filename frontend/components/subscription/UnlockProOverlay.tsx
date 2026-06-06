@@ -37,6 +37,8 @@ export type UnlockProBilling = {
 type UnlockProOverlayProps = {
   points: number;
   planPriceUsd: number;
+  planLabel?: string;
+  periodLabel?: string;
   usePoints: boolean;
   billing: UnlockProBilling;
   onToggleUsePoints: () => void;
@@ -56,6 +58,11 @@ type UnlockProOverlayProps = {
   paymentTokenLabel?: string;
 };
 
+function formatUsdcAmount(value: number) {
+  if (!Number.isFinite(value)) return "0";
+  return value.toFixed(2).replace(/\.?0+$/, "");
+}
+
 const FEATURES = {
   "zh-CN": [
     "市场扫描台 + V4-Pro 深度复核",
@@ -74,6 +81,8 @@ const FEATURES = {
 export function UnlockProOverlay({
   points,
   planPriceUsd,
+  planLabel,
+  periodLabel,
   usePoints,
   billing,
   onToggleUsePoints,
@@ -95,6 +104,13 @@ export function UnlockProOverlay({
   const isEn = locale === "en-US";
   const canUsePoints = billing.pointsEnabled && billing.isEligible;
   const featureList = FEATURES[locale] ?? FEATURES["zh-CN"];
+  const currencyLabel = "USDC";
+  const formattedPlanPrice = formatUsdcAmount(planPriceUsd);
+  const formattedFinalPrice = formatUsdcAmount(billing.finalPrice);
+  const formattedDiscount = formatUsdcAmount(billing.discountAmount);
+  const formattedMaxDiscount = formatUsdcAmount(billing.maxDiscountUsd);
+  const resolvedPlanLabel = planLabel || "Standard Pro";
+  const resolvedPeriodLabel = periodLabel || (isEn ? "/ 30 days" : "/ 30 天");
   const finalPayLabel =
     payLabel || (isEn ? "Subscribe & Activate" : "立即订阅并激活服务");
 
@@ -106,6 +122,8 @@ export function UnlockProOverlay({
   const redeemableUsdNow = billing.pointsEnabled
     ? Math.min(maxDiscountUsdInt, Math.floor(points / Math.max(1, billing.pointsPerUsd)))
     : 0;
+  const formattedRedeemableNow = formatUsdcAmount(redeemableUsdNow);
+  const formattedMaxDiscountInt = formatUsdcAmount(maxDiscountUsdInt);
   const progressPct = billing.pointsEnabled
     ? Math.min(100, Math.round((points / maxPointsForFullDiscount) * 100))
     : 0;
@@ -155,7 +173,7 @@ export function UnlockProOverlay({
         <div className={s.planCard}>
           <span className={s.planChip}>
             <Zap size={10} />
-            Standard Pro
+            {resolvedPlanLabel}
           </span>
 
           <div
@@ -166,8 +184,8 @@ export function UnlockProOverlay({
               marginTop: 12,
             }}
           >
-            <span className={s.price}>${planPriceUsd.toFixed(2)}</span>
-            <span className={s.priceSuffix}>/ {isEn ? "mo" : "月"}</span>
+            <span className={s.price}>{formattedPlanPrice}</span>
+            <span className={s.priceSuffix}>{currencyLabel} {resolvedPeriodLabel}</span>
           </div>
 
           <ul className={s.featureList}>
@@ -217,24 +235,24 @@ export function UnlockProOverlay({
               <span
                 className={`${s.discount} ${usePoints ? s.discountActive : ""}`}
               >
-                -${billing.discountAmount.toFixed(2)}
+                -{formattedDiscount}
               </span>
-              <span className={s.discountSuffix}>{isEn ? "off" : "减免"}</span>
+              <span className={s.discountSuffix}>{currencyLabel}</span>
             </div>
 
             <p className={s.pointsNote}>
               {usePoints
                 ? isEn
-                  ? `Using ${billing.pointsUsed} pts · saves $${billing.discountAmount.toFixed(2)}`
-                  : `已消耗 ${billing.pointsUsed} 积分 · 省 $${billing.discountAmount.toFixed(2)}`
+                  ? `Using ${billing.pointsUsed} pts · saves ${formattedDiscount} ${currencyLabel}`
+                  : `已消耗 ${billing.pointsUsed} 积分 · 省 ${formattedDiscount} ${currencyLabel}`
                 : isEn
-                  ? `Toggle to save up to $${billing.maxDiscountUsd.toFixed(2)}`
-                  : `开启可最多抵扣 $${billing.maxDiscountUsd.toFixed(2)}`}
+                  ? `Toggle to save up to ${formattedMaxDiscount} ${currencyLabel}`
+                  : `开启可最多抵扣 ${formattedMaxDiscount} ${currencyLabel}`}
             </p>
             <p className={s.pointsNote}>
               {isEn
-                ? `Now redeemable: $${redeemableUsdNow.toFixed(0)} / $${maxDiscountUsdInt.toFixed(0)}`
-                : `当前可抵：${redeemableUsdNow.toFixed(0)}U / ${maxDiscountUsdInt.toFixed(0)}U`}
+                ? `Now redeemable: ${formattedRedeemableNow} / ${formattedMaxDiscountInt} ${currencyLabel}`
+                : `当前可抵：${formattedRedeemableNow} / ${formattedMaxDiscountInt} ${currencyLabel}`}
             </p>
 
             <div className={s.pointsBalance}>
@@ -276,8 +294,8 @@ export function UnlockProOverlay({
                   ? "Points redemption is unavailable for this plan."
                   : "当前套餐暂不支持积分抵扣。"
                 : isEn
-                  ? `Starts at ${billing.pointsPerUsd} pts, ${billing.pointsPerUsd} pts per $1, up to $${maxDiscountUsdInt}. You have: ${points}`
-                  : `满 ${billing.pointsPerUsd} 分起兑，每 ${billing.pointsPerUsd} 分抵 1U，最多抵 ${maxDiscountUsdInt}U。当前 ${points} 分`}
+                  ? `Starts at ${billing.pointsPerUsd} pts, ${billing.pointsPerUsd} pts per 1 ${currencyLabel}, up to ${formattedMaxDiscountInt} ${currencyLabel}. You have: ${points}`
+                  : `满 ${billing.pointsPerUsd} 分起兑，每 ${billing.pointsPerUsd} 分抵 1 ${currencyLabel}，最多抵 ${formattedMaxDiscountInt} ${currencyLabel}。当前 ${points} 分`}
             </p>
 
             {billing.pointsEnabled && (
@@ -288,8 +306,8 @@ export function UnlockProOverlay({
                   </span>
                   <span>
                     {isEn
-                      ? `$${redeemableUsdNow.toFixed(0)} / $${maxDiscountUsdInt.toFixed(0)}`
-                      : `${redeemableUsdNow.toFixed(0)}U / ${maxDiscountUsdInt.toFixed(0)}U`}
+                      ? `${formattedRedeemableNow} / ${formattedMaxDiscountInt} ${currencyLabel}`
+                      : `${formattedRedeemableNow} / ${formattedMaxDiscountInt} ${currencyLabel}`}
                   </span>
                 </div>
                 <div className={s.progressTrack}>
@@ -341,15 +359,15 @@ export function UnlockProOverlay({
             )}
             {billing.discountAmount > 0 && usePoints && (
               <p className={s.summaryOriginal}>
-                ${planPriceUsd.toFixed(2)} USD
+                {formattedPlanPrice} {currencyLabel}
               </p>
             )}
           </div>
           <div className={s.summaryAmount}>
             <span className={s.summaryPrice}>
-              ${billing.finalPrice.toFixed(2)}
+              {formattedFinalPrice}
             </span>
-            <span className={s.summaryUnit}>USD</span>
+            <span className={s.summaryUnit}>{currencyLabel}</span>
           </div>
         </div>
 

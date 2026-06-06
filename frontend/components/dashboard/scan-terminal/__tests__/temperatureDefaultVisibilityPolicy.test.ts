@@ -1660,7 +1660,7 @@ export function runTests() {
   const firstBand = bandPoints[0].runway_band;
   assert(Array.isArray(firstBand) && firstBand[0] === 24.0 && firstBand[1] === 26.0, "runway_band tuple values should match input limits");
 
-  // ── Legacy Gaussian probability data should not render as a visible chart overlay ──
+  // ── Legacy Gaussian probability data should be available as compact tooltip context only ──
   const gaussianOverlayChart = __buildTemperatureChartDataForTest(
     {
       city: "toronto",
@@ -1688,9 +1688,13 @@ export function runTests() {
   ) as any;
 
   const gaussianOverlay = gaussianOverlayChart.probabilityOverlay;
-  assert(gaussianOverlay === null, "legacy Gaussian probabilities should not create visible chart overlays");
+  assert(
+    gaussianOverlay?.muLine?.label === "Gaussian μ 27.4°C" &&
+      gaussianOverlay.bands.length === 3,
+    "legacy Gaussian probabilities should remain available for compact tooltip context",
+  );
   assert(
     !gaussianOverlayChart.series.some((series: any) => String(series.key || "").includes("probability")),
-    "legacy Gaussian probability distribution should not be rendered as a time-series line",
+    "legacy Gaussian probability distribution should not be rendered as a time-series line on the main chart",
   );
 }

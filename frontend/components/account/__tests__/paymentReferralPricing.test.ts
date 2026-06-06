@@ -27,6 +27,10 @@ export function runTests() {
     path.join(projectRoot, "components", "account", "useBilling.ts"),
     "utf8",
   );
+  const unlockProOverlay = fs.readFileSync(
+    path.join(projectRoot, "components", "subscription", "UnlockProOverlay.tsx"),
+    "utf8",
+  );
   const telegramPricing = fs.readFileSync(
     path.join(projectRoot, "components", "account", "telegram-pricing.ts"),
     "utf8",
@@ -76,20 +80,30 @@ export function runTests() {
       !telegramPricing.includes("is_group_member") &&
       useAccountPayment.includes('=== "pro_monthly"') &&
       useAccountPayment.includes("amount_usdc: telegramAmountUsdc"),
-    "account payment plan cards must only display the 5 USDC private Telegram group monthly price after private /bind verification",
+    "account payment plan cards must only display the 5 USDC discounted monthly price after verified /bind eligibility",
   );
   assert(
     useBilling.includes("telegramGroupPriceApplies") &&
       useBilling.includes("isTelegramPrivateGroupPriceEligible") &&
       useBilling.includes("backend?.telegram_pricing") &&
       useBilling.includes("!telegramGroupPriceApplies"),
-    "billing must not let referral first-month pricing override the lower private Telegram group monthly price",
+    "billing must not let referral first-month pricing override the lower verified monthly price",
   );
   assert(
-    accountCenter.includes("privateGroupMonthlyPlan") &&
-      accountCopy.includes("Private group monthly") &&
-      accountCopy.includes("私密群月付"),
-    "account plan card must label the 5 USDC price as a private Telegram group monthly price",
+    !accountCenter.includes(["private", "Group", "Monthly", "Plan"].join("")) &&
+      !accountCopy.includes(["Private", "group", "monthly"].join(" ")) &&
+      !accountCopy.includes(["私", "密", "群", "月", "付"].join("")),
+    "account plan card and checkout overlay should not expose a separate discounted monthly label",
+  );
+  assert(
+    accountCenter.includes("overlayPlanLabel") &&
+      accountCenter.includes("overlayPeriodLabel") &&
+      !accountCenter.includes(`copy.${["private", "Group", "Monthly", "Plan"].join("")}`) &&
+      unlockProOverlay.includes("planLabel") &&
+      unlockProOverlay.includes("USDC") &&
+      !unlockProOverlay.includes("<span className={s.price}>${planPriceUsd.toFixed(2)}</span>") &&
+      !unlockProOverlay.includes('<span className={s.summaryUnit}>USD</span>'),
+    "checkout overlay must display payment amounts as USDC without exposing the discounted-price source label",
   );
   assert(
     types.includes("ReferralSummary") &&

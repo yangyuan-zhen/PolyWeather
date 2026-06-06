@@ -645,8 +645,8 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                 </h3>
                 <p className="mt-3 flex-1 text-sm leading-7 text-slate-600">
                   {isEn
-                    ? "For private groups that need shared access, Telegram workflow support, and manual onboarding."
-                    : "面向需要共享权限、Telegram 工作流支持和人工开通的私密团队。"}
+                    ? "For teams that need shared access, Telegram workflow support, and manual onboarding."
+                    : "面向需要共享权限、Telegram 工作流支持和人工开通的团队。"}
                 </p>
                 <div className="mt-7 rounded-md border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600">
                   {isEn

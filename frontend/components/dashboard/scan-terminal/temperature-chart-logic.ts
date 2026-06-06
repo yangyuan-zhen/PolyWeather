@@ -2179,9 +2179,9 @@ function buildFullDayChartData(
     return point;
   });
 
-  // Keep probability data in the payload for market views, but do not draw
-  // legacy Gaussian bands on the live temperature chart.
-  const probabilityOverlay = null;
+  // Keep legacy Gaussian data as compact tooltip context. It is not rendered
+  // as a time-series line on the live temperature chart.
+  const probabilityOverlay = buildLegacyGaussianProbabilityOverlay(row, hourly);
 
   return { data, series, probabilityOverlay };
 }
