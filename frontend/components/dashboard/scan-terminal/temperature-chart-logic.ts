@@ -2,6 +2,7 @@ import type {
   AmosData,
   AirportCurrentConditions,
   CityDetail,
+  CurrentConditions,
   ScanOpportunityRow,
   ForecastDay,
   DailyModelForecast,
@@ -944,6 +945,7 @@ type HourlyForecast = {
   runwayPlateHistory?: Record<string, Array<Record<string, unknown>>>;
   runwayBandHistory?: Array<{ time: string; high_temp: number; low_temp: number; avg_temp: number }>;
   amos?: AmosData | null;
+  current?: CurrentConditions | null;
   airportCurrent?: AirportCurrentConditions | null;
   airportPrimary?: AirportCurrentConditions | null;
   wundergroundCurrent?: AirportCurrentConditions | null;
@@ -970,6 +972,7 @@ function seedHourlyForecastFromRow(row: ScanOpportunityRow | null): HourlyForeca
     runwayPlateHistory: (row as any)?.runway_plate_history || undefined,
     runwayBandHistory: undefined,
     amos: null,
+    current: null,
     airportCurrent: null,
     airportPrimary: null,
     wundergroundCurrent: (row as any)?.wunderground_current || null,
@@ -1031,6 +1034,7 @@ function parseHourlyForecastFromCityDetail(json: CityDetail | null): HourlyForec
     runwayPlateHistory: (json as any)?.runway_plate_history || (json.amos as any)?.runway_plate_history || undefined,
     runwayBandHistory: (json as any)?.runway_band_history || undefined,
     amos: json.amos || null,
+    current: json.current || null,
     airportCurrent: json.airport_current || null,
     airportPrimary: json.airport_primary || null,
     wundergroundCurrent: (json as any).wunderground_current || (json as any)?.official?.wunderground_current || null,

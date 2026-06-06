@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Bug } from "lucide-react";
+import { Bug, ChevronDown, ChevronUp } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 import { useLatestPatch, useSseResyncVersion } from "@/hooks/use-sse-patches";
@@ -107,6 +107,236 @@ function getLiveTempFromHourly(data: HourlyForecast) {
 
 function getWundergroundDailyHigh(hourly: HourlyForecast) {
   return validNumber(hourly?.wundergroundCurrent?.max_so_far) ?? null;
+}
+
+type AdvancedWeatherVariableItem = {
+  key: "wind_dir" | "wind_speed" | "dewpoint" | "humidity" | "pressure";
+  label: string;
+  value: string;
+};
+
+type SourceCadenceSummary = {
+  label: string;
+  cadence: string;
+  status: string | null;
+};
+
+function formatCompactNumber(value: number, decimals = 1) {
+  const rounded = Number(value.toFixed(decimals));
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(decimals);
+}
+
+function fallbackCadenceSeconds(sourceText: string) {
+  const value = sourceText.toLowerCase();
+  if (value.includes("amos")) return 60;
+  if (value.includes("amsc")) return 180;
+  if (value.includes("madis") || value.includes("hfmetar")) return 300;
+  if (value.includes("cowin")) return 60;
+  if (value.includes("hko")) return 600;
+  if (value.includes("cwa") || value.includes("jma") || value.includes("fmi") || value.includes("knmi")) return 600;
+  if (value.includes("mgm")) return 900;
+  if (value.includes("mss") || value.includes("singapore")) return 60;
+  return null;
+}
+
+function formatCadence(seconds: number) {
+  return `${Math.round(seconds)}s`;
+}
+
+function sourceStatusLabel(status: string | null | undefined, isEn: boolean) {
+  if (!status) return null;
+  const normalized = status.toLowerCase();
+  if (normalized === "fresh") return isEn ? "fresh" : "新鲜";
+  if (normalized === "expected_wait") return isEn ? "waiting for source" : "等待源头";
+  if (normalized === "delayed") return isEn ? "delayed" : "延迟";
+  if (normalized === "stale") return isEn ? "stale" : "过旧";
+  if (normalized === "offline") return isEn ? "offline" : "离线";
+  return status;
+}
+
+function buildSourceCadenceSummary(
+  row: ScanOpportunityRow | null,
+  hourly: HourlyForecast,
+  isEn: boolean,
+): SourceCadenceSummary | null {
+  const primary = hourly?.airportPrimary || hourly?.airportCurrent || null;
+  const sourceParts = [
+    (primary as any)?.source,
+    primary?.source_code,
+    primary?.source_label,
+    primary?.station_code,
+    row?.metar_context?.source,
+    row?.metar_context?.station_label,
+    row?.airport,
+  ]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+  const sourceText = sourceParts.join(" ");
+  const nativeCadence = validNumber(primary?.freshness?.native_update_interval_sec);
+  const cadenceSeconds = nativeCadence ?? fallbackCadenceSeconds(sourceText);
+  if (cadenceSeconds === null) return null;
+
+  const label =
+    primary?.source_label ||
+    primary?.source_code ||
+    (primary as any)?.source ||
+    row?.metar_context?.station_label ||
+    row?.airport ||
+    (isEn ? "Source" : "数据源");
+  return {
+    label,
+    cadence: formatCadence(cadenceSeconds),
+    status: sourceStatusLabel(primary?.freshness?.freshness_status, isEn),
+  };
+}
+
+function buildAdvancedWeatherVariableItems(
+  row: ScanOpportunityRow | null,
+  hourly: HourlyForecast,
+  isEn: boolean,
+): AdvancedWeatherVariableItem[] {
+  const primary = hourly?.airportPrimary || hourly?.airportCurrent || null;
+  const current = hourly?.current || null;
+  const metarContext = row?.metar_context || null;
+  const tempSymbol = row?.temp_symbol || primary?.temp_symbol || "°C";
+
+  const windDir =
+    validNumber(primary?.wind_dir) ??
+    validNumber(current?.wind_dir) ??
+    validNumber(metarContext?.airport_wind_dir);
+  const windSpeed =
+    validNumber(primary?.wind_speed_kt) ??
+    validNumber(current?.wind_speed_kt) ??
+    validNumber(metarContext?.airport_wind_speed_kt);
+  const dewpoint =
+    validNumber(current?.dewpoint) ??
+    validNumber((current as any)?.dew_point) ??
+    validNumber((primary as any)?.dewpoint) ??
+    validNumber((primary as any)?.dew_point);
+  const humidity =
+    validNumber(primary?.humidity) ??
+    validNumber(current?.humidity) ??
+    validNumber(metarContext?.airport_humidity);
+  const pressure =
+    validNumber(primary?.pressure_hpa) ??
+    validNumber((current as any)?.pressure_hpa) ??
+    validNumber((current as any)?.pressure);
+
+  const items: AdvancedWeatherVariableItem[] = [];
+  if (windDir !== null) {
+    items.push({
+      key: "wind_dir",
+      label: isEn ? "Wind Dir" : "风向",
+      value: `${Math.round(windDir)}°`,
+    });
+  }
+  if (windSpeed !== null) {
+    items.push({
+      key: "wind_speed",
+      label: isEn ? "Wind Speed" : "风速",
+      value: `${formatCompactNumber(windSpeed)} kt`,
+    });
+  }
+  if (dewpoint !== null) {
+    items.push({
+      key: "dewpoint",
+      label: isEn ? "Dew Point" : "露点",
+      value: `${formatCompactNumber(dewpoint)}${tempSymbol}`,
+    });
+  }
+  if (humidity !== null) {
+    items.push({
+      key: "humidity",
+      label: isEn ? "Humidity" : "湿度",
+      value: `${formatCompactNumber(humidity)}%`,
+    });
+  }
+  if (pressure !== null) {
+    items.push({
+      key: "pressure",
+      label: isEn ? "Pressure" : "气压",
+      value: `${formatCompactNumber(pressure)} hPa`,
+    });
+  }
+  return items;
+}
+
+function SourceCadenceStrip({
+  isEn,
+  summary,
+}: {
+  isEn: boolean;
+  summary: SourceCadenceSummary | null;
+}) {
+  if (!summary) return null;
+
+  return (
+    <div className="shrink-0 border-b border-slate-200 bg-slate-50/70 px-4 py-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-600">
+        <span className="font-bold text-slate-700">
+          {isEn ? "Source" : "数据源"}: {summary.label}
+        </span>
+        <span className="font-mono font-black text-slate-900">
+          {isEn ? "native cadence" : "源头频率"} {summary.cadence}
+        </span>
+        {summary.status && (
+          <span className="rounded border border-slate-200 bg-white px-1.5 py-0.5 font-semibold text-slate-500">
+            {summary.status}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AdvancedWeatherVariablesStrip({
+  isEn,
+  items,
+}: {
+  isEn: boolean;
+  items: AdvancedWeatherVariableItem[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  if (!items.length) return null;
+
+  return (
+    <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-2">
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+        className="inline-flex min-h-9 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold text-slate-600 shadow-sm transition-colors hover:border-slate-300 hover:bg-white hover:text-slate-900"
+      >
+        <span>{isEn ? "Advanced Variables" : "高级气象变量"}</span>
+        <span className="font-mono text-slate-400">{items.length}</span>
+        {expanded ? <ChevronUp size={13} aria-hidden="true" /> : <ChevronDown size={13} aria-hidden="true" />}
+      </button>
+      {expanded && (
+        <div className="mt-2 grid gap-2 sm:grid-cols-5">
+          {items.map((item) => (
+            <div
+              key={item.key}
+              className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2"
+            >
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                {item.label}
+              </div>
+              <div className="mt-1 font-mono text-sm font-black text-slate-800">
+                {item.value}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {expanded && (
+        <p className="mt-2 text-[11px] leading-5 text-slate-500">
+          {isEn
+            ? "Context only. These variables help explain capping and boundary-layer structure; they are not settlement-temperature curves."
+            : "仅作上下文。它们用于解释压温和边界层结构，不是结算温度曲线。"}
+        </p>
+      )}
+    </div>
+  );
 }
 
 function shouldFetchCityDetailForChart({
@@ -672,6 +902,14 @@ export function LiveTemperatureThresholdChart({
   const spread = (modelMax !== null && modelMin !== null) ? modelMax - modelMin : null;
   const spreadLabel = spread === null ? "" : (spread <= 2.0 ? "低分歧" : (spread <= 4.0 ? "中等分歧" : "高分歧"));
   const spreadLabelEn = spread === null ? "" : (spread <= 2.0 ? "Low" : (spread <= 4.0 ? "Medium" : "High"));
+  const sourceCadenceSummary = useMemo(
+    () => buildSourceCadenceSummary(row, chartHourly, isEn),
+    [chartHourly, isEn, row],
+  );
+  const advancedWeatherVariables = useMemo(
+    () => buildAdvancedWeatherVariableItems(row, chartHourly, isEn),
+    [chartHourly, isEn, row],
+  );
 
   const formattedUpdateTime = useMemo(() => {
     const nowUtc = Date.now();
@@ -991,6 +1229,18 @@ export function LiveTemperatureThresholdChart({
           <ModelCurvesSummary isEn={isEn} activeSeries={activeSeries} tempSymbol={row?.temp_symbol || "°C"} />
         )}
 
+        {timeframe === "1D" && !compact && (
+          <SourceCadenceStrip isEn={isEn} summary={sourceCadenceSummary} />
+        )}
+
+        {timeframe === "1D" && !compact && (
+          <AdvancedWeatherVariablesStrip
+            key={city || "advanced-weather"}
+            isEn={isEn}
+            items={advancedWeatherVariables}
+          />
+        )}
+
         <TemperatureChartCanvas
           isEn={isEn}
           compact={compact}
@@ -1047,3 +1297,5 @@ export const __shouldPollLiveChartForTest = shouldPollLiveChart;
 export const __mergePatchIntoHourlyForTest = mergePatchIntoHourly;
 export const __selectCompactSecondaryTempForTest = selectCompactSecondaryTemp;
 export const __selectDisplayRunwayTempForTest = selectDisplayRunwayTemp;
+export const __buildAdvancedWeatherVariableItemsForTest = buildAdvancedWeatherVariableItems;
+export const __buildSourceCadenceSummaryForTest = buildSourceCadenceSummary;

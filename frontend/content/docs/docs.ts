@@ -47,8 +47,8 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "what-is-polyweather",
             title: "PolyWeather 是什么",
             blocks: [
-              { type: "paragraph", text: "PolyWeather 不是通用天气 App。它面向天气衍生品和温度市场，重点回答三个问题：今天最高温大概会落在哪个区间、机场或官方结算站会不会被压温、市场有没有明显错定价。" },
-              { type: "callout", tone: "info", title: "产品定位", text: "主站的核心价值不是报天气，而是把模型、机场主站实况、官方增强站网、机场预报和结算规则整合成交易可用的信息。" },
+              { type: "paragraph", text: "PolyWeather 不是通用天气 App。它是结算源优先的温度市场实时实测终端，面向天气衍生品和温度市场，重点回答三个问题：今天最高温大概会落在哪个区间、机场或官方结算站会不会被压温、市场有没有明显错定价。" },
+              { type: "callout", tone: "info", title: "产品定位", text: "主站的核心价值不是报天气，而是把模型、机场主站实况、官方增强站网、机场预报和结算规则整合成交易可用的信息。先确认结算源，再看 DEB、市场桶和概率。" },
             ],
           },
           {
@@ -75,8 +75,8 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "what-is-polyweather",
             title: "What PolyWeather is",
             blocks: [
-              { type: "paragraph", text: "PolyWeather is not a generic weather app. It is built for weather derivatives and temperature markets, with one job: estimate the likely high-temperature bucket, explain whether the airport or official settlement site may get capped, and surface whether the market is mispricing that outcome." },
-              { type: "callout", tone: "info", title: "Product focus", text: "The core value is not raw weather reporting. It is the conversion of models, airport-primary observations, official nearby networks, airport forecasts, and settlement rules into usable trading context." },
+              { type: "paragraph", text: "PolyWeather is not a generic weather app. It is a settlement-source-first live terminal for temperature markets, built to estimate the likely high-temperature bucket, explain whether the airport or official settlement site may get capped, and surface whether the market is mispricing that outcome." },
+              { type: "callout", tone: "info", title: "Product focus", text: "The core value is not raw weather reporting. It is the conversion of models, airport-primary observations, official nearby networks, airport forecasts, and settlement rules into usable trading context. Confirm the settlement source first, then read DEB, market buckets, and calibrated probability." },
             ],
           },
           {
@@ -91,6 +91,146 @@ export const DOCS_PAGES: DocsPage[] = [
             title: "How to read the dashboard quickly",
             blocks: [
               { type: "steps", items: ["Start with the professional meteorology read or city decision card: headline, expected-high center, base path, and next observation point.", "Use anchor status and the intraday chart to check current observations, DEB, peak window, and key bucket lines.", "Read the AI airport read, evidence chain, failure modes, and confirmation rules to see whether the path is still valid.", "Then compare calibrated probability, model spread, market bucket, and model-market difference."] },
+            ],
+          },
+        ],
+      },
+    },
+  },
+  {
+    slug: "chart-guide",
+    group: "getting-started",
+    content: {
+      "zh-CN": {
+        title: "如何读 PolyWeather 图表",
+        description: "这页解释终端温度图的图层、默认显示策略、高级气象变量和常见误读。",
+        sections: [
+          {
+            id: "read-order",
+            title: "先读什么",
+            blocks: [
+              { type: "steps", items: ["先看结算源实测：机场主站、官方站或跑道端点是不是还在更新。", "再看 DEB Forecast：它是今日最高温路径，不是已经发生的实测。", "然后看结算跑道或官方增强站网：判断当前实测是否领先、滞后或被压温。", "最后看市场桶和校准概率：判断天气概率是否已经被价格充分反映。"] },
+            ],
+          },
+          {
+            id: "layers",
+            title: "图层怎么理解",
+            blocks: [
+              { type: "bullets", items: ["结算源或参考站：默认显示，代表当前最接近结算口径的实测曲线。", "跑道明细：AMSC / AMOS 城市默认展示结算跑道，并允许展开辅助跑道作为空间背景。", "METAR / 官方增强层：用于确认机场或官方站状态，不替代明确命名的结算站。", "DEB Forecast：模型融合路径，帮助判断未来峰值窗口。", "原始模型曲线：默认隐藏，用户需要解释模型分歧时再打开。"] },
+            ],
+          },
+          {
+            id: "advanced-variables",
+            title: "高级气象变量",
+            blocks: [
+              { type: "paragraph", text: "风速、风向、露点、湿度、气压这些变量对解释压温、海风、云雨和边界层结构很有用，但它们不是温度结算曲线。" },
+              { type: "callout", tone: "info", title: "默认隐藏", text: "高级气象变量默认隐藏，只作为上下文辅助展示。这样详情面板不会继续变重，用户需要时再展开查看。" },
+            ],
+          },
+          {
+            id: "common-misreads",
+            title: "常见误读",
+            blocks: [
+              { type: "bullets", items: ["不要把概率温度带当成实测曲线。概率层只是解释概率中心和温度区间，不代表某个时刻的温度。", "不要把城区体感当成结算温度。机场市场先看机场主站或规则指定站。", "不要用固定 1 分钟预期要求所有城市。图表更新频率取决于源头原生频率。"] },
+            ],
+          },
+        ],
+      },
+      "en-US": {
+        title: "How To Read PolyWeather Charts",
+        description: "A practical guide to the terminal chart layers, default visibility, advanced weather variables, and common misreads.",
+        sections: [
+          {
+            id: "read-order",
+            title: "Read order",
+            blocks: [
+              { type: "steps", items: ["Start with the settlement-source observation: airport primary, official station, or runway endpoint.", "Read DEB Forecast next. It is the expected high-temperature path, not an observation that already happened.", "Use runway or official network overlays to decide whether the live path is leading, lagging, or capped.", "Then compare market buckets and calibrated probability to see whether the weather path is already priced."] },
+            ],
+          },
+          {
+            id: "layers",
+            title: "Chart layers",
+            blocks: [
+              { type: "bullets", items: ["Settlement or reference station: visible by default and closest to the settlement rule.", "Runway details: AMSC / AMOS cities show the settlement runway by default, with auxiliary runways available as spatial context.", "METAR / official enhancement: confirmation context for the airport or official station, not a replacement for an explicitly named settlement site.", "DEB Forecast: blended forecast path for the peak window.", "Raw model curves: hidden by default and opened only when users need model-spread context."] },
+            ],
+          },
+          {
+            id: "advanced-variables",
+            title: "Advanced weather variables",
+            blocks: [
+              { type: "paragraph", text: "Wind speed, wind direction, dew point, humidity, and pressure help explain suppression, sea-breeze timing, cloud/rain risk, and boundary-layer structure, but they are not settlement-temperature curves." },
+              { type: "callout", tone: "info", title: "Hidden by default", text: "Advanced variables stay hidden by default and are shown as context only. This keeps the detail panel readable while still making the extra variables available when needed." },
+            ],
+          },
+          {
+            id: "common-misreads",
+            title: "Common misreads",
+            blocks: [
+              { type: "bullets", items: ["Do not read probability bands as observation curves. They explain probability center and bucket context, not a timestamped temperature.", "Do not trade broad city feel as settlement temperature. Airport markets start with the airport primary or named settlement site.", "Do not expect every city to update every minute. Refresh cadence follows the source's native cadence."] },
+            ],
+          },
+        ],
+      },
+    },
+  },
+  {
+    slug: "realtime-sources",
+    group: "settlement",
+    content: {
+      "zh-CN": {
+        title: "实时数据频率",
+        description: "这页解释为什么不同城市刷新频率不同，以及网站、Telegram 和 SSE patch 之间的关系。",
+        sections: [
+          {
+            id: "source-cadence",
+            title: "按源频率采集",
+            blocks: [
+              { type: "bullets", items: ["AMOS 60s：首尔、釜山跑道传感器。", "AMSC 180s：中国内地跑道端点观测城市。", "MADIS 300s：美国高频机场观测城市。", "CoWIN 60s：香港 6087 参考站。", "HKO 600s：香港天文台官方 10 分钟层。", "CWA / JMA / FMI / KNMI / MGM：按各自官方或可用频率采集。"] },
+            ],
+          },
+          {
+            id: "pipeline",
+            title: "网站怎么更新",
+            blocks: [
+              { type: "paragraph", text: "网站不是靠 Telegram 推送循环刷新图表。独立 observation collector 按源频率采集，写缓存、DB 或 Redis，再通过 SSE patch 把 city_observation_patch.v1 推给前端。" },
+              { type: "callout", tone: "info", title: "SSE patch", text: "前端先读取完整 snapshot，之后只合并 SSE patch。只有可见图表长时间没有 patch 时，才做轻量兜底刷新。" },
+            ],
+          },
+          {
+            id: "telegram",
+            title: "Telegram 和网站的关系",
+            blocks: [
+              { type: "paragraph", text: "Telegram 只读最新缓存或 DB，不再主动强制刷新观测源。除非完全没有缓存，才允许非强制兜底分析。" },
+              { type: "paragraph", text: "Web、collector、Telegram 共享 per-city/source singleflight 和冷却，避免同时打同一个外部源。" },
+            ],
+          },
+        ],
+      },
+      "en-US": {
+        title: "Realtime Source Cadence",
+        description: "Why cities update at different speeds, and how the website, Telegram, and SSE patches relate to each other.",
+        sections: [
+          {
+            id: "source-cadence",
+            title: "Source-native cadence",
+            blocks: [
+              { type: "bullets", items: ["AMOS 60s: Seoul and Busan runway sensors.", "AMSC 180s: mainland China runway endpoint observations.", "MADIS 300s: US high-frequency airport observations.", "CoWIN 60s: Hong Kong 6087 reference station.", "HKO 600s: Hong Kong Observatory official 10-minute layer.", "CWA / JMA / FMI / KNMI / MGM: collected at their own official or available cadence."] },
+            ],
+          },
+          {
+            id: "pipeline",
+            title: "How the site updates",
+            blocks: [
+              { type: "paragraph", text: "The website does not rely on the Telegram push loop to refresh charts. The independent observation collector samples each source at its own cadence, writes cache, DB, or Redis, then sends city_observation_patch.v1 to the frontend through SSE patch." },
+              { type: "callout", tone: "info", title: "SSE patch", text: "The frontend reads a full snapshot first, then merges SSE patches. Only visible charts use a lightweight fallback refresh if patches stop for too long." },
+            ],
+          },
+          {
+            id: "telegram",
+            title: "How Telegram relates",
+            blocks: [
+              { type: "paragraph", text: "Telegram reads the latest cache or DB state and no longer force-refreshes observation sources. It only falls back to a non-forced panel analysis when no cache exists at all." },
+              { type: "paragraph", text: "Web, collector, and Telegram share per-city/source singleflight and cooldown gates so they do not hit the same external source at the same time." },
             ],
           },
         ],

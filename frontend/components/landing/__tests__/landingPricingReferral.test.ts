@@ -57,6 +57,9 @@ export function runTests() {
     "WebP preview must be materially smaller than the PNG LCP image",
   );
   assert(source.includes("/static/web.webp"), "landing page must load the lighter WebP product preview image");
+  assert(source.includes("/static/tel.png"), "landing page must include the Telegram alert screenshot");
+  assert(source.includes("#screenshots"), "landing navigation must expose the product screenshot section");
+  assert(source.includes("结算源优先") && source.includes("差异化卖点"), "landing page must explain the differentiated settlement-source positioning");
   assert(!source.includes('src="/static/web.png"'), "landing hero must not use the heavy PNG as its primary LCP image");
   assert(
     source.includes('width="680"') &&
@@ -73,6 +76,10 @@ export function runTests() {
   );
   assert(source.includes("29.9") && source.includes("30 天"), "landing page must show monthly Pro pricing");
   assert(source.includes("79.9") && source.includes("90 天"), "landing page must show quarterly Pro pricing");
+  assert(source.includes("API") && source.includes("暂不售卖"), "landing page must describe API as not currently for sale");
+  assert(!source.includes("Request API") && !source.includes("申请 API"), "landing page must not invite users to buy or request API access");
+  assert(source.includes("Team") && source.includes("团队"), "landing page must describe the Team tier");
+  assert(source.includes("Trial") && source.includes("Pro") && source.includes("API") && source.includes("Team"), "landing pricing ladder must clearly name Trial / Pro / API / Team");
   assert(source.includes("20 USDC") && source.includes("+3500 积分"), "landing page must describe referral discount and reward");
   assert(!source.includes("AI 气象证据链解读"), "legacy AI evidence-chain wording must be removed");
   assert(!source.includes("AI weather evidence"), "legacy AI evidence wording must be removed");

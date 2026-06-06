@@ -12,25 +12,25 @@ import {
 } from "@/components/landing/landingLocale";
 
 const COVERAGE_EN = [
-  "Live airport observations",
-  "DEB blend forecast",
-  "Model-implied distribution",
-  "Intraday observation windows",
-  "Deviation checks and risk thresholds",
-  "Paid Telegram alerts",
+  "AMOS 60s runway sensors",
+  "AMSC 180s runway endpoints",
+  "MADIS 300s airport observations",
+  "CoWIN 60s + HKO 600s",
+  "SSE patch live terminal",
+  "Telegram reads latest cache",
 ];
 
 const COVERAGE_ZH = [
-  "机场实况观测数据",
-  "DEB 智能融合预报",
-  "模型隐含分布预测",
-  "日内分段观测窗口",
-  "偏差校验与风控阈值",
-  "付费 Telegram 实时通知",
+  "AMOS 60s 跑道传感器",
+  "AMSC 180s 跑道端点",
+  "MADIS 300s 机场观测",
+  "CoWIN 60s + HKO 600s",
+  "SSE patch 实时终端",
+  "Telegram 读取最新缓存",
 ];
 
 const PRO_FEATURES_EN = [
-  "METAR airport observations and runway-level reference data",
+  "Settlement-source-first airport, official-station, and runway observations",
   "DEB blend forecast with model-spread context",
   "Model-implied distribution and probability estimates",
   "Intraday windows, deviation metrics, and settlement context",
@@ -39,7 +39,7 @@ const PRO_FEATURES_EN = [
 ];
 
 const PRO_FEATURES_ZH = [
-  "METAR 机场实测与跑道级参考数据",
+  "结算源优先的机场、官方站与跑道实测",
   "DEB 智能融合预报与模型分歧背景",
   "模型隐含分布预测与概率估算",
   "日内观测窗口、偏差度量与结算背景",
@@ -260,6 +260,12 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
             <a href="#coverage" className="hover:text-slate-950">
               {isEn ? "Data" : "数据"}
             </a>
+            <a href="#screenshots" className="hover:text-slate-950">
+              {isEn ? "Screens" : "截图"}
+            </a>
+            <Link href="/docs/chart-guide" className="hover:text-slate-950">
+              {isEn ? "Guide" : "读图"}
+            </Link>
             <a href="#pricing" className="hover:text-slate-950">
               {isEn ? "Pricing" : "定价"}
             </a>
@@ -279,8 +285,8 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
               </h1>
               <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-slate-600 sm:text-xl">
                 {isEn
-                  ? "A calmer way to read airport weather, model forecasts, and intraday risk before the market moves."
-                  : "用更轻松的方式阅读机场天气、模型预报和日内风险，在市场变化前完成判断。"}
+                  ? "A settlement-source-first terminal for temperature markets: live airport/runway observations, DEB, market buckets, and alerts in one workflow."
+                  : "面向温度市场的结算源优先终端：机场/跑道实测、DEB、市场温度桶和提醒放在同一个工作流里。"}
               </p>
               <LandingHeroActions locale={locale} />
               <p className="mt-4 text-sm text-slate-500">
@@ -338,8 +344,8 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
               </p>
               <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
                 {isEn
-                  ? "Like a tidy workspace for weather decisions."
-                  : "像整理好的工作区一样阅读天气决策。"}
+                  ? "Built around the station that actually matters."
+                  : "围绕真正会影响结算的站点构建。"}
               </h2>
             </div>
 
@@ -354,6 +360,100 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                 </article>
               ))}
             </div>
+
+            <div className="mt-10 rounded-lg border border-slate-200 bg-[#fbfbfa] p-5">
+              <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+                    {isEn ? "Differentiation" : "差异化卖点"}
+                  </p>
+                  <h3 className="mt-3 text-2xl font-black tracking-tight text-slate-950">
+                    {isEn ? "Settlement-source first, not generic weather." : "结算源优先，不做泛天气看板。"}
+                  </h3>
+                  <p className="mt-3 text-sm leading-7 text-slate-600">
+                    {isEn
+                      ? "The product is built around the station, runway, and update cadence that affect settlement, then layers DEB, market buckets, and alerting on top."
+                      : "产品围绕真正影响结算的站点、跑道和源头频率构建，再叠加 DEB、市场温度桶和提醒工作流。"}
+                  </p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {(isEn
+                    ? [
+                        "Runway-level China and Korea observation context",
+                        "Hong Kong CoWIN + HKO dual-source reading",
+                        "Source-native collector cadence with SSE patch delivery",
+                        "Telegram alerts read cache instead of force-refreshing sources",
+                      ]
+                    : [
+                        "中国和韩国跑道级实测上下文",
+                        "香港 CoWIN + HKO 双源读数",
+                        "按源频率采集，并用 SSE patch 推送",
+                        "Telegram 读取缓存，不强制刷新外部源",
+                      ]
+                  ).map((item) => (
+                    <div key={item} className="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-semibold leading-6 text-slate-700">
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="screenshots" className="border-b border-slate-200 bg-[#fbfbfa] px-4 py-20 sm:px-6">
+          <div className="mx-auto max-w-6xl">
+            <div className="max-w-2xl">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+                {isEn ? "Product Screenshots" : "产品截图"}
+              </p>
+              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+                {isEn ? "The terminal and alerts are the product." : "终端和提醒就是核心产品。"}
+              </h2>
+              <p className="mt-4 text-sm leading-7 text-slate-600">
+                {isEn
+                  ? "Public packaging should show the actual workflow: live chart reading in the browser and concise runway alerts in Telegram."
+                  : "公开包装应该直接展示真实工作流：浏览器里读实时图表，Telegram 里接收简洁的跑道提醒。"}
+              </p>
+            </div>
+
+            <div className="mt-10 grid gap-5 lg:grid-cols-[1.4fr_0.8fr]">
+              <figure className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+                <div className="aspect-[16/9] overflow-hidden rounded-md border border-slate-100 bg-slate-100">
+                  <img
+                    src="/static/web.webp"
+                    width="680"
+                    height="340"
+                    alt={isEn ? "Realtime terminal screenshot" : "实时终端截图"}
+                    className="h-full w-full object-cover object-top"
+                    decoding="async"
+                    loading="lazy"
+                    sizes="(min-width: 1024px) 760px, calc(100vw - 48px)"
+                  />
+                </div>
+                <figcaption className="px-2 py-3 text-xs font-semibold text-slate-500">
+                  {isEn ? "Browser terminal: settlement observations, DEB, source cadence, and market context." : "浏览器终端：结算实测、DEB、源头频率和市场上下文。"}
+                </figcaption>
+              </figure>
+
+              <figure className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+                <div className="aspect-[9/16] max-h-[520px] overflow-hidden rounded-md border border-slate-100 bg-slate-100">
+                  <img
+                    src="/static/tel.png"
+                    width="420"
+                    height="640"
+                    alt={isEn ? "Telegram runway alert screenshot" : "Telegram 跑道提醒截图"}
+                    className="h-full w-full object-cover object-top"
+                    decoding="async"
+                    loading="lazy"
+                    sizes="(min-width: 1024px) 340px, calc(100vw - 48px)"
+                  />
+                </div>
+                <figcaption className="px-2 py-3 text-xs font-semibold text-slate-500">
+                  {isEn ? "Telegram alerts: concise runway and settlement-source updates for paid users." : "Telegram 提醒：为付费用户提供简洁的跑道与结算源更新。"}
+                </figcaption>
+              </figure>
+            </div>
           </div>
         </section>
 
@@ -364,8 +464,27 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                 {isEn ? "Data Coverage" : "数据覆盖"}
               </p>
               <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-                {isEn ? "Keep the signal clear and the page approachable." : "信号清楚，页面也可以亲和。"}
+                {isEn ? "Refresh cadence follows the source, not a fake timer." : "刷新频率跟随源头，不伪装成统一定时器。"}
               </h2>
+              <p className="mt-4 text-sm leading-7 text-slate-600">
+                {isEn
+                  ? "The collector writes cache and event streams first; the website consumes snapshots plus SSE patches, while Telegram reads the latest cached state."
+                  : "采集器先写缓存和事件流；网站消费完整快照 + SSE patch，Telegram 只读取最新缓存状态。"}
+              </p>
+              <div className="mt-6 flex flex-wrap gap-2">
+                <Link
+                  href="/docs/chart-guide"
+                  className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 shadow-sm hover:border-slate-300 hover:text-slate-950"
+                >
+                  {isEn ? "Read chart guide" : "查看读图指南"}
+                </Link>
+                <Link
+                  href="/docs/realtime-sources"
+                  className="inline-flex h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 shadow-sm hover:border-slate-300 hover:text-slate-950"
+                >
+                  {isEn ? "Source cadence" : "数据源频率"}
+                </Link>
+              </div>
             </div>
 
             <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
@@ -408,7 +527,7 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
               </p>
             </div>
 
-            <div className="mt-12 grid gap-4 md:grid-cols-3">
+            <div className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <div className="flex flex-col rounded-lg border border-slate-200 bg-[#fbfbfa] p-6 shadow-sm">
                 <div className="flex items-center gap-2 text-sm font-bold text-emerald-700">
                   <LandingIcon name="clock" />
@@ -440,20 +559,31 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                   Pro
                 </div>
                 <h3 className="mt-5 text-2xl font-black text-slate-950">
-                  {isEn ? "Pro Monthly" : "Pro 月付"}
+                  Pro
                 </h3>
                 <p className="mt-3 text-sm leading-7 text-slate-600">
                   {isEn
-                    ? "Full Pro access for 30 days, including paid Telegram group eligibility."
-                    : "完整 Pro 权限 30 天，包含付费 Telegram 群准入资格。"}
+                    ? "Full terminal access, chart guides, advanced context, and paid Telegram group eligibility."
+                    : "完整终端权限、读图指南、高级上下文和付费 Telegram 群准入资格。"}
                 </p>
-                <div className="mt-7 flex items-baseline gap-2">
-                  <span className="font-mono text-5xl font-black text-slate-950">29.9</span>
-                  <span className="text-sm font-semibold text-slate-500">USDC / 30 天</span>
+                <div className="mt-7 space-y-2">
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-mono text-4xl font-black text-slate-950">29.9</span>
+                    <span className="text-sm font-semibold text-slate-500">USDC / 30 天</span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-mono text-2xl font-black text-slate-950">79.9</span>
+                    <span className="text-sm font-semibold text-slate-500">USDC / 90 天</span>
+                  </div>
                 </div>
                 <p className="mt-2 text-xs font-semibold text-slate-500">
                   {isEn ? "Referral first month: 20 USDC" : "使用邀请码首月 20 USDC"}
                 </p>
+                <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-600">
+                  {isEn
+                    ? "Invite reward: referrer gets +3500 points when invitee subscribes."
+                    : "邀请奖励：被邀请人付费后，邀请人 +3500 积分。"}
+                </div>
                 <ul className="mt-7 space-y-3 border-t border-slate-200 pt-6">
                   {(isEn ? PRO_FEATURES_EN : PRO_FEATURES_ZH).map((feature) => (
                     <li key={feature} className="flex items-start gap-3">
@@ -478,30 +608,51 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
               <div className="flex flex-col rounded-lg border border-slate-200 bg-[#fbfbfa] p-6 shadow-sm">
                 <div className="flex items-center gap-2 text-sm font-bold text-amber-700">
                   <LandingIcon name="lineChart" />
-                  {isEn ? "Quarterly" : "季度"}
+                  API
                 </div>
                 <h3 className="mt-5 text-2xl font-black text-slate-950">
-                  {isEn ? "Pro Quarterly" : "Pro 季度"}
+                  {isEn ? "API" : "API"}
                 </h3>
                 <p className="mt-3 flex-1 text-sm leading-7 text-slate-600">
                   {isEn
-                    ? "90 days of Pro access for users with steady usage. Lower cost per month."
-                    : "90 天 Pro 权限，适合稳定使用的个人和团队，折算月成本更低。"}
+                    ? "Not sold as a public product right now. The public site and Telegram workflow remain the supported product surface."
+                    : "目前不作为公开产品售卖。当前支持的产品形态仍是网站终端和 Telegram 工作流。"}
                 </p>
-                <div className="mt-7 flex items-baseline gap-2">
-                  <span className="font-mono text-5xl font-black text-slate-950">79.9</span>
-                  <span className="text-sm font-semibold text-slate-500">USDC / 90 天</span>
-                </div>
-                <div className="mt-5 rounded-md border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600">
-                  {isEn
-                    ? "Invite reward: referrer gets +3500 points when invitee subscribes."
-                    : "邀请奖励：被邀请人付费后，邀请人 +3500 积分。"}
+                <div className="mt-7 rounded-md border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600">
+                  {isEn ? "Not for sale. We will revisit API packaging only after endpoint docs, keys, limits, and support boundaries are ready." : "暂不售卖。只有接口文档、key、限额和支持边界准备好后，才重新评估 API 产品化。"}
                 </div>
                 <Link
-                  href="/account"
+                  href="/docs/realtime-sources"
                   className="mt-8 inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white text-sm font-bold text-slate-700 shadow-sm hover:border-slate-300 hover:text-slate-950"
                 >
-                  {isEn ? "Choose quarterly" : "选择季度 Pro"}
+                  {isEn ? "Read data guide" : "查看数据指南"}
+                  <LandingIcon name="arrow" size={15} />
+                </Link>
+              </div>
+
+              <div className="flex flex-col rounded-lg border border-slate-200 bg-[#fbfbfa] p-6 shadow-sm">
+                <div className="flex items-center gap-2 text-sm font-bold text-violet-700">
+                  <LandingIcon name="shield" />
+                  Team
+                </div>
+                <h3 className="mt-5 text-2xl font-black text-slate-950">
+                  {isEn ? "Team" : "团队"}
+                </h3>
+                <p className="mt-3 flex-1 text-sm leading-7 text-slate-600">
+                  {isEn
+                    ? "For private groups that need shared access, Telegram workflow support, and manual onboarding."
+                    : "面向需要共享权限、Telegram 工作流支持和人工开通的私密团队。"}
+                </p>
+                <div className="mt-7 rounded-md border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600">
+                  {isEn
+                    ? "Custom seat and group setup. Best for teams already using the terminal together."
+                    : "自定义席位和群组配置，适合已经一起使用终端的团队。"}
+                </div>
+                <Link
+                  href="/subscription-help"
+                  className="mt-8 inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white text-sm font-bold text-slate-700 shadow-sm hover:border-slate-300 hover:text-slate-950"
+                >
+                  {isEn ? "Talk to us" : "联系开通"}
                   <LandingIcon name="arrow" size={15} />
                 </Link>
               </div>
