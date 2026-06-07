@@ -1267,8 +1267,10 @@ def calculate_deb_prediction(
     adjustment when enough settled samples exist.
     """
     from src.analysis.deb_evaluation import (
+        DEB_BUCKET_CALIBRATED_VERSION,
         DEB_RAW_VERSION,
         DEB_RECENT_BIAS_CORRECTED_VERSION,
+        build_bucket_calibrated_corrector,
         build_recent_bias_corrector,
         flatten_daily_records,
     )
@@ -1297,6 +1299,14 @@ def calculate_deb_prediction(
         lookback_days=bias_lookback_days,
         min_samples=bias_min_samples,
     ).apply(city_name, raw_prediction)
+    bucket_corrected = build_bucket_calibrated_corrector(
+        history_rows,
+        lookback_days=bias_lookback_days,
+        min_samples=max(5, int(bias_min_samples or 0)),
+    ).apply(city_name, raw_prediction)
+    if int(bucket_corrected.get("samples") or 0) > 0:
+        corrected = bucket_corrected
+
     bias_adjustment = float(corrected.get("bias_adjustment") or 0.0)
     bias_samples = int(corrected.get("samples") or 0)
     if bias_samples <= 0:
@@ -1311,14 +1321,19 @@ def calculate_deb_prediction(
 
     next_weights_info = weights_info
     if abs(bias_adjustment) >= 0.05:
+        correction_label = (
+            "bucket_calibration"
+            if corrected.get("version") == DEB_BUCKET_CALIBRATED_VERSION
+            else "recent_bias"
+        )
         next_weights_info = (
             f"{weights_info or 'DEB'} | "
-            f"recent_bias({bias_adjustment:+.1f},n={bias_samples})"
+            f"{correction_label}({bias_adjustment:+.1f},n={bias_samples})"
         )
     return {
         "prediction": corrected["corrected_prediction"],
         "raw_prediction": corrected["raw_prediction"],
-        "version": DEB_RECENT_BIAS_CORRECTED_VERSION,
+        "version": corrected.get("version") or DEB_RECENT_BIAS_CORRECTED_VERSION,
         "weights_info": next_weights_info,
         "bias_adjustment": bias_adjustment,
         "bias_samples": bias_samples,

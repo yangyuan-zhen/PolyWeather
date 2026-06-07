@@ -19,11 +19,53 @@ type MetricPayload = {
   brier_score?: number;
 };
 
+type DebWindowSummary = {
+  start_date?: string | null;
+  end_date?: string | null;
+  samples?: number;
+  hits?: number;
+  hit_rate?: number | null;
+  mae?: number | null;
+  bias?: number | null;
+  city_count?: number;
+};
+
+type DebHistoricalSummary = {
+  city_count?: number;
+  avg_hit_rate?: number | null;
+  weighted_hit_rate?: number | null;
+  avg_mae?: number | null;
+  avg_days_per_city?: number;
+  sample_days?: number;
+  hits?: number;
+};
+
+type DebVersionSummary = {
+  version?: string;
+  samples?: number;
+  mae?: number | null;
+  rmse?: number | null;
+  bias?: number | null;
+  bucket_hit_rate?: number | null;
+};
+
+type DebSummaryPayload = {
+  historical?: DebHistoricalSummary;
+  recent_7d?: DebWindowSummary;
+  recent_14d?: DebWindowSummary;
+  versions?: Record<string, DebVersionSummary>;
+};
+
 type TrainingCity = {
   city_id: string;
   name: string;
   deb?: MetricPayload;
   mu?: MetricPayload;
+};
+
+type TrainingAccuracyPayload = {
+  accuracy: TrainingCity[];
+  deb_summary?: DebSummaryPayload;
 };
 
 const STAT_CARD_CLASSES: Record<string, string> = {
@@ -48,44 +90,48 @@ function barColor(hr: number) {
 const TRAINING_CACHE_KEY = "polyweather_training_accuracy_v1";
 const TRAINING_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-function readTrainingCache(): TrainingCity[] | null {
+function readTrainingCache(): TrainingAccuracyPayload | null {
   try {
     const raw = localStorage.getItem(TRAINING_CACHE_KEY);
     if (!raw) return null;
     const cached = JSON.parse(raw);
-    if (cached.ts && Date.now() - cached.ts < TRAINING_CACHE_TTL_MS && Array.isArray(cached.data)) {
-      return cached.data;
+    if (cached.ts && Date.now() - cached.ts < TRAINING_CACHE_TTL_MS) {
+      if (Array.isArray(cached.data)) return { accuracy: cached.data };
+      if (cached.data && Array.isArray(cached.data.accuracy)) return cached.data;
     }
   } catch { /* ignore */ }
   return null;
 }
 
-function writeTrainingCache(data: TrainingCity[]) {
+function writeTrainingCache(data: TrainingAccuracyPayload) {
   try {
     localStorage.setItem(TRAINING_CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
   } catch { /* ignore */ }
 }
 
 export function TrainingDashboard({ isEn }: { isEn: boolean }) {
-  const [data, setData] = useState<TrainingCity[] | null>(() => readTrainingCache());
+  const [payload, setPayload] = useState<TrainingAccuracyPayload | null>(() => readTrainingCache());
 
   useEffect(() => {
     let cancelled = false;
     fetch("/api/ops/training/accuracy", { cache: "no-store", headers: { Accept: "application/json" } })
       .then(async (res) => {
         if (!res.ok) return null;
-        return res.json() as Promise<{ accuracy: TrainingCity[] }>;
+        return res.json() as Promise<TrainingAccuracyPayload>;
       })
-      .then((payload) => {
-        if (cancelled || !payload?.accuracy) return;
-        const filtered = payload.accuracy.filter((c) => (c.deb || c.mu) && ((c.deb?.total_days ?? 0) + (c.mu?.total_days ?? 0)) >= 5);
-        setData(filtered);
-        writeTrainingCache(filtered);
+      .then((nextPayload) => {
+        if (cancelled || !nextPayload?.accuracy) return;
+        const filtered = nextPayload.accuracy.filter((c) => (c.deb || c.mu) && ((c.deb?.total_days ?? 0) + (c.mu?.total_days ?? 0)) >= 5);
+        const next = { ...nextPayload, accuracy: filtered };
+        setPayload(next);
+        writeTrainingCache(next);
       })
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);
 
+  const data = payload?.accuracy ?? null;
+  const debSummary = payload?.deb_summary;
   const debSorted = useMemo(() => (data || []).filter((c) => c.deb).sort((a, b) => (b.deb?.hit_rate ?? 0) - (a.deb?.hit_rate ?? 0)), [data]);
   const muSorted = useMemo(() => (data || []).filter((c) => c.mu).sort((a, b) => (b.mu?.hit_rate ?? 0) - (a.mu?.hit_rate ?? 0)), [data]);
 
@@ -94,8 +140,15 @@ export function TrainingDashboard({ isEn }: { isEn: boolean }) {
     const avgHit = debSorted.reduce((s, c) => s + (c.deb?.hit_rate ?? 0), 0) / debSorted.length;
     const avgMae = debSorted.reduce((s, c) => s + (c.deb?.mae ?? 0), 0) / debSorted.length;
     const avgDays = Math.round(debSorted.reduce((s, c) => s + (c.deb?.total_days ?? 0), 0) / Math.max(debSorted.length, 1));
-    return { avgHit, avgMae, avgDays, cities: debSorted.length };
-  }, [debSorted]);
+    return {
+      avgHit: debSummary?.historical?.avg_hit_rate ?? avgHit,
+      avgMae: debSummary?.historical?.avg_mae ?? avgMae,
+      avgDays: debSummary?.historical?.avg_days_per_city ?? avgDays,
+      cities: debSummary?.historical?.city_count ?? debSorted.length,
+      sampleDays: debSummary?.historical?.sample_days,
+      weightedHit: debSummary?.historical?.weighted_hit_rate,
+    };
+  }, [debSorted, debSummary]);
 
   const muStats = useMemo(() => {
     if (!muSorted.length) return null;
@@ -122,6 +175,17 @@ export function TrainingDashboard({ isEn }: { isEn: boolean }) {
     () => [...muSorted].sort((a, b) => (a.mu?.brier_score ?? 99) - (b.mu?.brier_score ?? 99)).slice(0, 18).map((c) => ({ name: c.name, value: Number((c.mu?.brier_score ?? 0).toFixed(3)) })),
     [muSorted],
   );
+  const debVersionRows = useMemo(() => {
+    const versions = debSummary?.versions || {};
+    return [
+      { key: "deb_v1_raw", label: isEn ? "Raw DEB" : "原始 DEB" },
+      { key: "deb_v1_recent_bias_corrected", label: isEn ? "Mean Bias" : "均值偏差" },
+      { key: "deb_v2_bucket_calibrated", label: isEn ? "Bucket v2" : "桶校准 v2" },
+    ].map(({ key, label }) => ({ key, label, value: versions[key] })).filter((row) => row.value);
+  }, [debSummary?.versions, isEn]);
+
+  const formatPct = (value: number | null | undefined) => value == null ? "--" : `${value.toFixed(1)}%`;
+  const formatMaybeDeg = (value: number | null | undefined, digits = 1) => value == null ? "--" : `${value.toFixed(digits)}°`;
 
   return (
     <div className="h-full overflow-auto bg-[#f5f7fa]">
@@ -143,12 +207,14 @@ export function TrainingDashboard({ isEn }: { isEn: boolean }) {
               <Thermometer size={14} className="text-amber-600" />
               {isEn ? "DEB Temperature Forecast" : "DEB 气温预报"}
             </h2>
-            <div className="grid grid-cols-4 gap-2 mb-3">
+            <div className="grid grid-cols-2 gap-2 mb-3 md:grid-cols-3 xl:grid-cols-6">
               {[
                 { icon: Hash, label: isEn ? "Cities" : "城市数", value: debStats.cities, tone: "blue" },
-                { icon: Target, label: isEn ? "Avg Hit" : "平均命中", value: `${debStats.avgHit.toFixed(1)}%`, tone: "emerald" },
+                { icon: Target, label: isEn ? "Historical Avg" : "历史平均", value: `${debStats.avgHit.toFixed(1)}%`, tone: "emerald" },
+                { icon: TrendingUp, label: isEn ? "Recent 7d" : "近7天", value: formatPct(debSummary?.recent_7d?.hit_rate), tone: "emerald" },
+                { icon: TrendingUp, label: isEn ? "Recent 14d" : "近14天", value: formatPct(debSummary?.recent_14d?.hit_rate), tone: "purple" },
                 { icon: Thermometer, label: isEn ? "Avg Error" : "平均误差", value: `${debStats.avgMae.toFixed(1)}°`, tone: "amber" },
-                { icon: TrendingUp, label: isEn ? "Avg Days/City" : "每城平均天数", value: debStats.avgDays.toLocaleString(), tone: "purple" },
+                { icon: Hash, label: isEn ? "Samples" : "样本天数", value: (debStats.sampleDays ?? debStats.avgDays).toLocaleString(), tone: "blue" },
               ].map(({ icon: Icon, label, value, tone }) => (
                 <div key={label} className={`flex items-center gap-3 rounded-lg border ${STAT_CARD_CLASSES[tone]} p-3`}>
                   <Icon size={20} className={STAT_ICON_CLASSES[tone]} />
@@ -159,6 +225,25 @@ export function TrainingDashboard({ isEn }: { isEn: boolean }) {
                 </div>
               ))}
             </div>
+            {debVersionRows.length ? (
+              <div className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+                {debVersionRows.map((row) => {
+                  const bucketRate = row.value?.bucket_hit_rate == null ? null : row.value.bucket_hit_rate * 100;
+                  return (
+                    <div key={row.key} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-[11px] font-black uppercase text-slate-500">{row.label}</span>
+                        <span className="font-mono text-sm font-black text-slate-900">{formatPct(bucketRate)}</span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between text-[11px] text-slate-500">
+                        <span>{isEn ? "MAE" : "误差"} {formatMaybeDeg(row.value?.mae, 2)}</span>
+                        <span>{isEn ? "Samples" : "样本"} {row.value?.samples ?? 0}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
             <div className="grid grid-cols-2 gap-3 mb-4">
               <ChartCard title={isEn ? "Forecast Hit Rate by City" : "预报命中率 by 城市"}>
                 <ResponsiveContainer width="100%" height="100%">

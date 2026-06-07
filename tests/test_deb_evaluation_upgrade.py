@@ -4,9 +4,11 @@ import sys
 from pathlib import Path
 
 from src.analysis.deb_evaluation import (
+    DEB_BUCKET_CALIBRATED_VERSION,
     DEB_RAW_VERSION,
     DEB_RECENT_BIAS_CORRECTED_VERSION,
     backtest_deb_versions,
+    build_bucket_calibrated_corrector,
     build_recent_bias_corrector,
     evaluate_prediction_records,
     write_backtest_report,
@@ -48,6 +50,25 @@ def test_recent_bias_corrector_uses_signed_error_without_rewriting_raw_deb():
     assert corrected["samples"] == 3
 
 
+def test_bucket_calibrated_corrector_optimizes_settlement_bucket_hits():
+    history = [
+        {"city": "ankara", "target_date": "2026-05-20", "deb_prediction": 20.4, "actual_high": 21.0},
+        {"city": "ankara", "target_date": "2026-05-21", "deb_prediction": 21.4, "actual_high": 22.0},
+        {"city": "ankara", "target_date": "2026-05-22", "deb_prediction": 22.4, "actual_high": 23.0},
+        {"city": "ankara", "target_date": "2026-05-23", "deb_prediction": 23.4, "actual_high": 24.0},
+        {"city": "ankara", "target_date": "2026-05-24", "deb_prediction": 24.4, "actual_high": 25.0},
+    ]
+
+    corrector = build_bucket_calibrated_corrector(history, lookback_days=30, min_samples=5)
+    corrected = corrector.apply("ankara", raw_prediction=25.4)
+
+    assert corrected["version"] == DEB_BUCKET_CALIBRATED_VERSION
+    assert corrected["raw_prediction"] == 25.4
+    assert corrected["corrected_prediction"] == 26.0
+    assert corrected["bias_adjustment"] == 0.6
+    assert corrected["samples"] == 5
+
+
 def test_backtest_deb_versions_compares_raw_and_bias_corrected_versions():
     history = [
         {"city": "ankara", "target_date": "2026-05-20", "deb_prediction": 20.0, "actual_high": 22.0},
@@ -61,6 +82,7 @@ def test_backtest_deb_versions_compares_raw_and_bias_corrected_versions():
     assert report["schema_version"] == "deb_backtest_report.v1"
     assert report["versions"][DEB_RAW_VERSION]["samples"] == 2
     assert report["versions"][DEB_RECENT_BIAS_CORRECTED_VERSION]["samples"] == 2
+    assert report["versions"][DEB_BUCKET_CALIBRATED_VERSION]["samples"] == 0
     assert (
         report["versions"][DEB_RECENT_BIAS_CORRECTED_VERSION]["mae"]
         < report["versions"][DEB_RAW_VERSION]["mae"]

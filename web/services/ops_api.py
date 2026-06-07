@@ -19,6 +19,19 @@ from web.core import GrantPointsRequest
 import web.routes as legacy_routes
 
 
+def _sf(value: Any) -> Optional[float]:
+    try:
+        if value is None or value == "":
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _round_metric(value: Optional[float], digits: int = 1) -> Optional[float]:
+    return None if value is None else round(float(value), digits)
+
+
 def _require_ops(request: Request) -> Dict[str, Any] | None:
     # Ops admins are authenticated via Supabase identity + email whitelist.
     # They do NOT need an active Pro subscription to manage the system.
@@ -2212,52 +2225,271 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
     }
 
 
-def get_ops_training_accuracy(request: Request) -> Dict[str, Any]:
-    from src.analysis.deb_algorithm import get_deb_accuracy, get_mu_accuracy
-    from src.data_collection.city_registry import CITY_REGISTRY
+def _evaluate_deb_records(
+    records: List[Dict[str, Any]],
+    *,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> Dict[str, Any]:
+    from src.analysis.settlement_rounding import apply_city_settlement
 
-    accuracy_data = []
-    for city_id, info in CITY_REGISTRY.items():
-        name = info.get("name") or city_id
+    hits = 0
+    total = 0
+    errors: List[float] = []
+    signed_errors: List[float] = []
+    cities = set()
+    dates = set()
+    for row in records:
+        target_date = str(row.get("target_date") or "").strip()
+        if start_date and target_date < start_date:
+            continue
+        if end_date and target_date > end_date:
+            continue
+        city = str(row.get("city") or "").strip().lower()
+        prediction = _sf(row.get("deb_prediction"))
+        actual = _sf(row.get("actual_high"))
+        if not city or not target_date or prediction is None or actual is None:
+            continue
+        try:
+            pred_bucket = apply_city_settlement(city, prediction)
+            actual_bucket = apply_city_settlement(city, actual)
+        except Exception:
+            continue
+        if pred_bucket is None or actual_bucket is None:
+            continue
+        total += 1
+        if pred_bucket == actual_bucket:
+            hits += 1
+        errors.append(abs(prediction - actual))
+        signed_errors.append(prediction - actual)
+        cities.add(city)
+        dates.add(target_date)
 
-        # Calculate DEB accuracy
-        deb_acc = get_deb_accuracy(city_id)
-        deb_payload = None
-        if deb_acc:
-            deb_payload = {
-                "hit_rate": deb_acc[0],
-                "mae": deb_acc[1],
-                "total_days": deb_acc[2],
-                "details_str": deb_acc[3],
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "samples": total,
+        "hits": hits,
+        "hit_rate": _round_metric((hits / total * 100) if total else None, 1),
+        "mae": _round_metric((sum(errors) / len(errors)) if errors else None, 2),
+        "bias": _round_metric((sum(signed_errors) / len(signed_errors)) if signed_errors else None, 2),
+        "city_count": len(cities),
+        "date_count": len(dates),
+    }
+
+
+def _build_city_deb_accuracy(city_id: str, city_rows: Dict[str, Dict[str, Any]], today_str: str) -> Optional[Dict[str, Any]]:
+    rows = []
+    for target_date, record in sorted((city_rows or {}).items()):
+        if target_date >= today_str or not isinstance(record, dict):
+            continue
+        rows.append(
+            {
+                "city": city_id,
+                "target_date": target_date,
+                "actual_high": record.get("actual_high"),
+                "deb_prediction": record.get("deb_prediction"),
             }
+        )
+    metrics = _evaluate_deb_records(rows)
+    if not metrics["samples"]:
+        return None
+    total = int(metrics["samples"])
+    hits = int(metrics["hits"])
+    mae = float(metrics["mae"] or 0.0)
+    hit_rate = float(metrics["hit_rate"] or 0.0)
+    return {
+        "hit_rate": hit_rate,
+        "mae": mae,
+        "total_days": total,
+        "hits": hits,
+        "details_str": f"过去{total}天 WU命中 {hits}/{total} ({hit_rate:.0f}%) | MAE: {mae:.1f}°",
+    }
 
-        # Calculate Mu accuracy
-        mu_acc = get_mu_accuracy(city_id)
-        mu_payload = None
-        if mu_acc:
-            mu_payload = {
-                "mae": mu_acc[0],
-                "hit_rate": mu_acc[1],
-                "brier_score": mu_acc[2],
-                "total_days": mu_acc[3],
-                "details_str": mu_acc[4],
-            }
 
+def _build_city_mu_accuracy(city_id: str, city_rows: Dict[str, Dict[str, Any]], today_str: str) -> Optional[Dict[str, Any]]:
+    from src.analysis.settlement_rounding import apply_city_settlement
+
+    errors: List[float] = []
+    hits = 0
+    total = 0
+    brier_scores: List[float] = []
+    for target_date, record in sorted((city_rows or {}).items()):
+        if target_date >= today_str or not isinstance(record, dict):
+            continue
+        actual = _sf(record.get("actual_high"))
+        mu_value = _sf(record.get("mu"))
+        if actual is None or mu_value is None:
+            continue
+        total += 1
+        errors.append(abs(mu_value - actual))
+        if apply_city_settlement(city_id, mu_value) == apply_city_settlement(city_id, actual):
+            hits += 1
+        prob_snapshot = record.get("prob_snapshot") or []
+        if isinstance(prob_snapshot, list):
+            actual_bucket = apply_city_settlement(city_id, actual)
+            score = 0.0
+            used = False
+            for entry in prob_snapshot:
+                if not isinstance(entry, dict):
+                    continue
+                predicted_p = _sf(entry.get("p")) or 0.0
+                outcome = 1.0 if entry.get("v") == actual_bucket else 0.0
+                score += (predicted_p - outcome) ** 2
+                used = True
+            if used:
+                brier_scores.append(score)
+
+    if not total:
+        return None
+    mae = sum(errors) / len(errors)
+    hit_rate = hits / total * 100
+    brier = (sum(brier_scores) / len(brier_scores)) if brier_scores else None
+    details_parts = [
+        f"μ准确率: 过去{total}天",
+        f"WU命中 {hits}/{total} ({hit_rate:.0f}%)",
+        f"MAE: {mae:.1f}°",
+    ]
+    if brier is not None:
+        details_parts.append(f"Brier: {brier:.3f}")
+    return {
+        "mae": mae,
+        "hit_rate": hit_rate,
+        "brier_score": brier,
+        "total_days": total,
+        "hits": hits,
+        "details_str": " | ".join(details_parts),
+    }
+
+
+def _build_deb_historical_summary(accuracy_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+    deb_rows = [row for row in accuracy_data if row.get("deb")]
+    if not deb_rows:
+        return {
+            "city_count": 0,
+            "avg_hit_rate": None,
+            "weighted_hit_rate": None,
+            "avg_mae": None,
+            "avg_days_per_city": 0,
+            "sample_days": 0,
+            "hits": 0,
+        }
+    sample_days = sum(int(row["deb"].get("total_days") or 0) for row in deb_rows)
+    hits = sum(int(row["deb"].get("hits") or 0) for row in deb_rows)
+    return {
+        "city_count": len(deb_rows),
+        "avg_hit_rate": _round_metric(
+            sum(float(row["deb"].get("hit_rate") or 0.0) for row in deb_rows) / len(deb_rows),
+            1,
+        ),
+        "weighted_hit_rate": _round_metric((hits / sample_days * 100) if sample_days else None, 1),
+        "avg_mae": _round_metric(
+            sum(float(row["deb"].get("mae") or 0.0) for row in deb_rows) / len(deb_rows),
+            2,
+        ),
+        "avg_days_per_city": round(sample_days / len(deb_rows)) if deb_rows else 0,
+        "sample_days": sample_days,
+        "hits": hits,
+    }
+
+
+def _flatten_training_history(history: Dict[str, Dict[str, Dict[str, Any]]], today_str: str) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for city, city_rows in (history or {}).items():
+        if not isinstance(city_rows, dict):
+            continue
+        for target_date, record in city_rows.items():
+            if not isinstance(record, dict):
+                continue
+            target_text = str(target_date or "").strip()
+            if not target_text or target_text >= today_str:
+                continue
+            rows.append(
+                {
+                    "city": str(city or "").strip().lower(),
+                    "target_date": target_text,
+                    "actual_high": record.get("actual_high"),
+                    "deb_prediction": record.get("deb_prediction"),
+                    "mu": record.get("mu"),
+                    "prob_snapshot": record.get("prob_snapshot"),
+                }
+            )
+    rows.sort(key=lambda row: (row["target_date"], row["city"]))
+    return rows
+
+
+def _build_training_accuracy_payload(
+    history: Dict[str, Dict[str, Dict[str, Any]]],
+    city_registry: Dict[str, Dict[str, Any]],
+    *,
+    today_str: Optional[str] = None,
+) -> Dict[str, Any]:
+    from src.analysis.deb_evaluation import backtest_deb_versions
+
+    today = today_str or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    accuracy_data: List[Dict[str, Any]] = []
+    for city_id, info in (city_registry or {}).items():
+        city_rows = history.get(city_id) or history.get(str(city_id).strip().lower()) or {}
+        deb_payload = _build_city_deb_accuracy(city_id, city_rows, today)
+        mu_payload = _build_city_mu_accuracy(city_id, city_rows, today)
         if deb_payload or mu_payload:
             accuracy_data.append(
-                {"city_id": city_id, "name": name, "deb": deb_payload, "mu": mu_payload}
+                {
+                    "city_id": city_id,
+                    "name": (info or {}).get("name") or city_id,
+                    "deb": deb_payload,
+                    "mu": mu_payload,
+                }
             )
 
-    # Sort by total days of DEB or Mu
     accuracy_data.sort(
-        key=lambda x: max(
-            x["deb"]["total_days"] if x["deb"] else 0,
-            x["mu"]["total_days"] if x["mu"] else 0,
+        key=lambda row: max(
+            row["deb"]["total_days"] if row.get("deb") else 0,
+            row["mu"]["total_days"] if row.get("mu") else 0,
         ),
         reverse=True,
     )
 
-    return {"accuracy": accuracy_data}
+    all_rows = _flatten_training_history(history, today)
+    today_date = datetime.strptime(today, "%Y-%m-%d").date()
+    recent_7_start = (today_date - timedelta(days=7)).isoformat()
+    recent_14_start = (today_date - timedelta(days=14)).isoformat()
+    end_date = (today_date - timedelta(days=1)).isoformat()
+    versions = backtest_deb_versions(
+        all_rows,
+        min_train_samples=2,
+    ).get("versions", {})
+
+    return {
+        "accuracy": accuracy_data,
+        "deb_summary": {
+            "historical": _build_deb_historical_summary(accuracy_data),
+            "recent_7d": _evaluate_deb_records(
+                all_rows,
+                start_date=recent_7_start,
+                end_date=end_date,
+            ),
+            "recent_14d": _evaluate_deb_records(
+                all_rows,
+                start_date=recent_14_start,
+                end_date=end_date,
+            ),
+            "versions": versions,
+        },
+    }
+
+
+def get_ops_training_accuracy(request: Request) -> Dict[str, Any]:
+    from src.analysis.deb_algorithm import load_history
+    from src.data_collection.city_registry import CITY_REGISTRY
+
+    history_file = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "data",
+        "daily_records.json",
+    )
+    history = load_history(history_file)
+    return _build_training_accuracy_payload(history, CITY_REGISTRY)
 
 
 def get_ops_telegram_audit(request: Request) -> Dict[str, Any]:

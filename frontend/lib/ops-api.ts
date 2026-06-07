@@ -154,6 +154,7 @@ export const opsApi = {
           hit_rate: number;
           mae: number;
           total_days: number;
+          hits?: number;
           details_str: string;
         } | null;
         mu?: {
@@ -161,9 +162,49 @@ export const opsApi = {
           hit_rate: number;
           brier_score: number | null;
           total_days: number;
+          hits?: number;
           details_str: string;
         } | null;
       }>;
+      deb_summary?: {
+        historical?: {
+          city_count?: number;
+          avg_hit_rate?: number | null;
+          weighted_hit_rate?: number | null;
+          avg_mae?: number | null;
+          avg_days_per_city?: number;
+          sample_days?: number;
+          hits?: number;
+        };
+        recent_7d?: {
+          start_date?: string | null;
+          end_date?: string | null;
+          samples?: number;
+          hits?: number;
+          hit_rate?: number | null;
+          mae?: number | null;
+          bias?: number | null;
+          city_count?: number;
+        };
+        recent_14d?: {
+          start_date?: string | null;
+          end_date?: string | null;
+          samples?: number;
+          hits?: number;
+          hit_rate?: number | null;
+          mae?: number | null;
+          bias?: number | null;
+          city_count?: number;
+        };
+        versions?: Record<string, {
+          version?: string;
+          samples?: number;
+          mae?: number | null;
+          rmse?: number | null;
+          bias?: number | null;
+          bucket_hit_rate?: number | null;
+        }>;
+      };
     }>("/api/ops/training/accuracy");
   },
   telegramAudit() {

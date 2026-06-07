@@ -65,20 +65,44 @@ interface CityAccuracy {
   } | null;
 }
 
+interface DebSummary {
+  historical?: {
+    avg_hit_rate?: number | null;
+    weighted_hit_rate?: number | null;
+    avg_mae?: number | null;
+    sample_days?: number;
+    city_count?: number;
+  };
+  recent_7d?: {
+    hit_rate?: number | null;
+    mae?: number | null;
+    samples?: number;
+    hits?: number;
+  };
+  recent_14d?: {
+    hit_rate?: number | null;
+    mae?: number | null;
+    samples?: number;
+    hits?: number;
+  };
+}
+
 export function TrainingPageClient() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<SystemStatusPayload | null>(null);
   const [accuracy, setAccuracy] = useState<CityAccuracy[] | null>(null);
+  const [debSummary, setDebSummary] = useState<DebSummary | null>(null);
 
   const load = async () => {
     setLoading(true);
     try {
       const [s, accData] = await Promise.all([
         opsApi.systemStatus() as Promise<SystemStatusPayload>,
-        opsApi.trainingAccuracy().catch(() => ({ accuracy: [] as CityAccuracy[] })),
+        opsApi.trainingAccuracy().catch(() => ({ accuracy: [] as CityAccuracy[], deb_summary: null })),
       ]);
       setStatus(s);
       setAccuracy((accData as { accuracy: CityAccuracy[] }).accuracy ?? []);
+      setDebSummary((accData as { deb_summary?: DebSummary | null }).deb_summary ?? null);
     } catch { /* */ }
     setLoading(false);
   };
@@ -92,8 +116,15 @@ export function TrainingPageClient() {
     const avgMae = debCities.reduce((s, c) => s + (c.deb?.mae ?? 0), 0) / debCities.length;
     const best = debCities.reduce((a, b) => ((a.deb?.hit_rate ?? 0) > (b.deb?.hit_rate ?? 0) ? a : b));
     const worst = debCities.reduce((a, b) => ((a.deb?.mae ?? 0) > (b.deb?.mae ?? 0) ? a : b));
-    return { avgHit, avgMae, best, worst };
-  }, [accuracy]);
+    return {
+      avgHit: debSummary?.historical?.avg_hit_rate ?? avgHit,
+      avgMae: debSummary?.historical?.avg_mae ?? avgMae,
+      recent7Hit: debSummary?.recent_7d?.hit_rate,
+      recent14Hit: debSummary?.recent_14d?.hit_rate,
+      best,
+      worst,
+    };
+  }, [accuracy, debSummary]);
 
   const debChartData = useMemo(() => {
     if (!accuracy?.length) return [];
@@ -172,10 +203,18 @@ export function TrainingPageClient() {
 
       {/* Accuracy KPI row */}
       {kpis ? (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
           <KpiCard
             icon={Target} color="bg-cyan-500/20 text-cyan-400"
-            label="DEB 平均命中率" value={`${kpis.avgHit.toFixed(1)}%`}
+            label="DEB 历史平均命中" value={`${kpis.avgHit.toFixed(1)}%`}
+          />
+          <KpiCard
+            icon={Target} color="bg-emerald-500/20 text-emerald-400"
+            label="近 7 天命中" value={kpis.recent7Hit == null ? "—" : `${kpis.recent7Hit.toFixed(1)}%`}
+          />
+          <KpiCard
+            icon={Activity} color="bg-violet-500/20 text-violet-400"
+            label="近 14 天命中" value={kpis.recent14Hit == null ? "—" : `${kpis.recent14Hit.toFixed(1)}%`}
           />
           <KpiCard
             icon={Activity} color="bg-blue-500/20 text-blue-400"
