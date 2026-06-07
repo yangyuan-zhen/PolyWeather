@@ -56,6 +56,22 @@ interface CityAccuracy {
     total_days: number;
     details_str: string;
   } | null;
+  deb_recent?: {
+    recent_7d?: {
+      hit_rate?: number | null;
+      samples?: number;
+      mae?: number | null;
+    };
+    recent_14d?: {
+      hit_rate?: number | null;
+      samples?: number;
+      mae?: number | null;
+    };
+    trust_tier?: string;
+    recommendation?: string;
+    bias_direction?: string;
+    reason?: string;
+  } | null;
   mu?: {
     mae: number;
     hit_rate: number;
@@ -85,6 +101,31 @@ interface DebSummary {
     samples?: number;
     hits?: number;
   };
+}
+
+function debTrustBadgeClass(tier?: string) {
+  if (tier === "high") return "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
+  if (tier === "medium") return "bg-amber-500/15 text-amber-300 border-amber-500/30";
+  if (tier === "low") return "bg-rose-500/15 text-rose-300 border-rose-500/30";
+  return "bg-slate-500/15 text-slate-300 border-slate-500/30";
+}
+
+function debTrustLabel(tier?: string) {
+  if (tier === "high") return "高可信";
+  if (tier === "medium") return "中可信";
+  if (tier === "low") return "低可信";
+  return "样本少";
+}
+
+function debRecommendationLabel(recommendation?: string) {
+  if (recommendation === "primary") return "主用";
+  if (recommendation === "supporting") return "辅助";
+  if (recommendation === "context_only") return "仅参考";
+  return "不足";
+}
+
+function formatPct(value: number | null | undefined) {
+  return value == null ? "—" : `${value.toFixed(0)}%`;
 }
 
 export function TrainingPageClient() {
@@ -279,6 +320,8 @@ export function TrainingPageClient() {
               <thead className="text-xs uppercase bg-slate-800/50 text-slate-400">
                 <tr>
                   <th scope="col" className="px-4 py-3">城市</th>
+                  <th scope="col" className="px-4 py-3 text-center">DEB 策略</th>
+                  <th scope="col" className="px-4 py-3 text-center">近 7 / 14 天</th>
                   <th scope="col" className="px-4 py-3 text-center">DEB 命中</th>
                   <th scope="col" className="px-4 py-3 text-center">DEB MAE</th>
                   <th scope="col" className="px-4 py-3 text-center">DEB 天数</th>
@@ -295,6 +338,29 @@ export function TrainingPageClient() {
                       <td className="px-4 py-3 font-medium text-white capitalize">
                         {row.name}
                         <span className="text-xs text-slate-500 block font-mono">{row.city_id}</span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {row.deb_recent ? (
+                          <span
+                            title={row.deb_recent.reason}
+                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${debTrustBadgeClass(row.deb_recent.trust_tier)}`}
+                          >
+                            {debTrustLabel(row.deb_recent.trust_tier)} · {debRecommendationLabel(row.deb_recent.recommendation)}
+                          </span>
+                        ) : (
+                          <span className="text-slate-600">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center font-mono text-xs text-slate-300">
+                        {row.deb_recent ? (
+                          <span>
+                            {formatPct(row.deb_recent.recent_7d?.hit_rate)}
+                            <span className="mx-1 text-slate-600">/</span>
+                            {formatPct(row.deb_recent.recent_14d?.hit_rate)}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       <td className="px-4 py-3 text-center">
                         {row.deb ? (
@@ -357,7 +423,7 @@ export function TrainingPageClient() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
+                    <td colSpan={10} className="px-4 py-8 text-center text-slate-500">
                       无有效准确率记录
                     </td>
                   </tr>

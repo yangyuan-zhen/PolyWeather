@@ -56,10 +56,20 @@ type DebSummaryPayload = {
   versions?: Record<string, DebVersionSummary>;
 };
 
+type DebRecentStrategy = {
+  recent_7d?: DebWindowSummary;
+  recent_14d?: DebWindowSummary;
+  trust_tier?: "high" | "medium" | "low" | "insufficient" | string;
+  recommendation?: "primary" | "supporting" | "context_only" | "insufficient" | string;
+  bias_direction?: "under" | "over" | "neutral" | "unknown" | string;
+  reason?: string;
+};
+
 type TrainingCity = {
   city_id: string;
   name: string;
   deb?: MetricPayload;
+  deb_recent?: DebRecentStrategy | null;
   mu?: MetricPayload;
 };
 
@@ -85,6 +95,27 @@ function barColor(hr: number) {
   if (hr >= 65) return "#059669";
   if (hr >= 45) return "#d97706";
   return "#dc2626";
+}
+
+function trustBadgeClass(tier?: string) {
+  if (tier === "high") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (tier === "medium") return "border-amber-200 bg-amber-50 text-amber-700";
+  if (tier === "low") return "border-rose-200 bg-rose-50 text-rose-700";
+  return "border-slate-200 bg-slate-50 text-slate-500";
+}
+
+function trustLabel(tier: string | undefined, isEn: boolean) {
+  if (tier === "high") return isEn ? "High" : "高";
+  if (tier === "medium") return isEn ? "Medium" : "中";
+  if (tier === "low") return isEn ? "Low" : "低";
+  return isEn ? "Thin" : "少";
+}
+
+function recommendationLabel(value: string | undefined, isEn: boolean) {
+  if (value === "primary") return isEn ? "Primary" : "主用";
+  if (value === "supporting") return isEn ? "Support" : "辅助";
+  if (value === "context_only") return isEn ? "Context" : "参考";
+  return isEn ? "Insufficient" : "样本少";
 }
 
 const TRAINING_CACHE_KEY = "polyweather_training_accuracy_v1";
@@ -322,12 +353,15 @@ export function TrainingDashboard({ isEn }: { isEn: boolean }) {
         )}
 
         {/* ── Combined Table ── */}
-        <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
-          <table className="w-full text-[12px] border-collapse">
+        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+          <table className="min-w-[960px] w-full text-[12px] border-collapse">
             <thead>
               <tr className="border-b border-slate-200 bg-[#f8f9fa] text-left">
                 <th className="w-10 px-3 py-2 text-center text-[11px] font-black text-slate-400">#</th>
                 <th className="px-3 py-2 text-[11px] font-black uppercase text-slate-500">{isEn ? "City" : "城市"}</th>
+                <th className="px-2 py-2 text-left text-[11px] font-black uppercase text-slate-500">{isEn ? "DEB Trust" : "DEB 信任"}</th>
+                <th className="px-2 py-2 text-right text-[11px] font-black uppercase text-slate-500">{isEn ? "7d" : "7天"}</th>
+                <th className="px-2 py-2 text-right text-[11px] font-black uppercase text-slate-500">{isEn ? "14d" : "14天"}</th>
                 <th className="px-2 py-2 text-right text-[11px] font-black uppercase text-slate-500">{isEn ? "DEB Hit" : "DEB 命中"}</th>
                 <th className="px-2 py-2 text-right text-[11px] font-black uppercase text-slate-500">{isEn ? "DEB Error" : "DEB 误差"}</th>
                 <th className="px-2 py-2 text-right text-[11px] font-black uppercase text-slate-500">{isEn ? "μ Hit" : "μ 命中"}</th>
@@ -338,12 +372,12 @@ export function TrainingDashboard({ isEn }: { isEn: boolean }) {
             <tbody className="divide-y divide-slate-100">
               {debSorted.length || muSorted.length ? (
                 (() => {
-                  const cities = new Map<string, { deb?: MetricPayload; mu?: MetricPayload; name: string }>();
-                  for (const c of debSorted) cities.set(c.city_id, { deb: c.deb, mu: c.mu, name: c.name });
+                  const cities = new Map<string, { deb?: MetricPayload; debRecent?: DebRecentStrategy | null; mu?: MetricPayload; name: string }>();
+                  for (const c of debSorted) cities.set(c.city_id, { deb: c.deb, debRecent: c.deb_recent, mu: c.mu, name: c.name });
                   for (const c of muSorted) {
                     const existing = cities.get(c.city_id);
                     if (existing) existing.mu = c.mu;
-                    else cities.set(c.city_id, { deb: c.deb, mu: c.mu, name: c.name });
+                    else cities.set(c.city_id, { deb: c.deb, debRecent: c.deb_recent, mu: c.mu, name: c.name });
                   }
                   const merged = [...cities.entries()]
                     .sort((a, b) => {
@@ -352,14 +386,30 @@ export function TrainingDashboard({ isEn }: { isEn: boolean }) {
                       return bMax - aMax;
                     })
                     .slice(0, 30);
-                  return merged.map(([cityId, { deb, mu, name }], i) => {
+                  return merged.map(([cityId, { deb, debRecent, mu, name }], i) => {
                     const debHit = deb?.hit_rate ?? 0;
                     const muHit = mu?.hit_rate ?? 0;
                     const brier = mu?.brier_score;
+                    const recent7 = debRecent?.recent_7d?.hit_rate;
+                    const recent14 = debRecent?.recent_14d?.hit_rate;
                     return (
                       <tr key={cityId} className="hover:bg-slate-50 transition-colors">
                         <td className="px-3 py-2 text-center text-[12px] font-mono text-slate-400">{i + 1}</td>
                         <td className="px-3 py-2 font-semibold text-slate-800 capitalize">{name}</td>
+                        <td className="px-2 py-2">
+                          {debRecent ? (
+                            <span
+                              className={`inline-flex min-w-[4rem] items-center justify-center rounded border px-2 py-0.5 text-[10px] font-black uppercase ${trustBadgeClass(debRecent.trust_tier)}`}
+                              title={debRecent.reason}
+                            >
+                              {trustLabel(debRecent.trust_tier, isEn)} · {recommendationLabel(debRecent.recommendation, isEn)}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">--</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono text-slate-600">{recent7 == null ? "--" : `${recent7.toFixed(0)}%`}</td>
+                        <td className="px-2 py-2 text-right font-mono text-slate-600">{recent14 == null ? "--" : `${recent14.toFixed(0)}%`}</td>
                         <td className="px-2 py-2 text-right font-mono font-bold" style={{ color: barColor(debHit) }}>
                           {deb ? `${debHit.toFixed(0)}%` : "--"}
                         </td>
@@ -375,7 +425,7 @@ export function TrainingDashboard({ isEn }: { isEn: boolean }) {
                 })()
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={10} className="px-4 py-12 text-center text-slate-400">
                     {data === null ? (isEn ? "Loading..." : "加载中...") : (isEn ? "No training data" : "暂无训练数据")}
                   </td>
                 </tr>

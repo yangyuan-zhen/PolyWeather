@@ -2280,8 +2280,12 @@ def _evaluate_deb_records(
     }
 
 
-def _build_city_deb_accuracy(city_id: str, city_rows: Dict[str, Dict[str, Any]], today_str: str) -> Optional[Dict[str, Any]]:
-    rows = []
+def _build_city_deb_rows(
+    city_id: str,
+    city_rows: Dict[str, Dict[str, Any]],
+    today_str: str,
+) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
     for target_date, record in sorted((city_rows or {}).items()):
         if target_date >= today_str or not isinstance(record, dict):
             continue
@@ -2293,6 +2297,78 @@ def _build_city_deb_accuracy(city_id: str, city_rows: Dict[str, Dict[str, Any]],
                 "deb_prediction": record.get("deb_prediction"),
             }
         )
+    return rows
+
+
+def _deb_recent_bias_direction(bias: Optional[float]) -> str:
+    if bias is None:
+        return "unknown"
+    if bias <= -0.5:
+        return "under"
+    if bias >= 0.5:
+        return "over"
+    return "neutral"
+
+
+def _build_deb_recent_trust_strategy(
+    recent_7d: Dict[str, Any],
+    recent_14d: Dict[str, Any],
+) -> Dict[str, Any]:
+    window_key = "recent_14d" if int(recent_14d.get("samples") or 0) >= int(recent_7d.get("samples") or 0) else "recent_7d"
+    metrics = recent_14d if window_key == "recent_14d" else recent_7d
+    samples = int(metrics.get("samples") or 0)
+    hit_rate = _sf(metrics.get("hit_rate"))
+    mae = _sf(metrics.get("mae"))
+    bias = _sf(metrics.get("bias"))
+
+    if samples < 3 or hit_rate is None or mae is None:
+        trust_tier = "insufficient"
+        recommendation = "insufficient"
+        reason = f"{window_key}: only {samples} settled DEB samples."
+    elif hit_rate >= 67.0 and mae <= 1.25:
+        trust_tier = "high"
+        recommendation = "primary"
+        reason = f"{window_key}: {hit_rate:.1f}% hit rate, MAE {mae:.2f}°."
+    elif hit_rate >= 34.0 and mae <= 1.75:
+        trust_tier = "medium"
+        recommendation = "supporting"
+        reason = f"{window_key}: {hit_rate:.1f}% hit rate, MAE {mae:.2f}°."
+    else:
+        trust_tier = "low"
+        recommendation = "context_only"
+        reason = f"{window_key}: {hit_rate:.1f}% hit rate, MAE {mae:.2f}°."
+
+    return {
+        "trust_tier": trust_tier,
+        "recommendation": recommendation,
+        "bias_direction": _deb_recent_bias_direction(bias),
+        "reason": reason,
+    }
+
+
+def _build_city_deb_recent_strategy(
+    city_id: str,
+    city_rows: Dict[str, Dict[str, Any]],
+    today_str: str,
+) -> Optional[Dict[str, Any]]:
+    today_date = datetime.strptime(today_str, "%Y-%m-%d").date()
+    recent_7_start = (today_date - timedelta(days=7)).isoformat()
+    recent_14_start = (today_date - timedelta(days=14)).isoformat()
+    end_date = (today_date - timedelta(days=1)).isoformat()
+    rows = _build_city_deb_rows(city_id, city_rows, today_str)
+    if not rows:
+        return None
+    recent_7d = _evaluate_deb_records(rows, start_date=recent_7_start, end_date=end_date)
+    recent_14d = _evaluate_deb_records(rows, start_date=recent_14_start, end_date=end_date)
+    return {
+        "recent_7d": recent_7d,
+        "recent_14d": recent_14d,
+        **_build_deb_recent_trust_strategy(recent_7d, recent_14d),
+    }
+
+
+def _build_city_deb_accuracy(city_id: str, city_rows: Dict[str, Dict[str, Any]], today_str: str) -> Optional[Dict[str, Any]]:
+    rows = _build_city_deb_rows(city_id, city_rows, today_str)
     metrics = _evaluate_deb_records(rows)
     if not metrics["samples"]:
         return None
@@ -2433,6 +2509,7 @@ def _build_training_accuracy_payload(
     for city_id, info in (city_registry or {}).items():
         city_rows = history.get(city_id) or history.get(str(city_id).strip().lower()) or {}
         deb_payload = _build_city_deb_accuracy(city_id, city_rows, today)
+        deb_recent = _build_city_deb_recent_strategy(city_id, city_rows, today) if deb_payload else None
         mu_payload = _build_city_mu_accuracy(city_id, city_rows, today)
         if deb_payload or mu_payload:
             accuracy_data.append(
@@ -2440,6 +2517,7 @@ def _build_training_accuracy_payload(
                     "city_id": city_id,
                     "name": (info or {}).get("name") or city_id,
                     "deb": deb_payload,
+                    "deb_recent": deb_recent,
                     "mu": mu_payload,
                 }
             )

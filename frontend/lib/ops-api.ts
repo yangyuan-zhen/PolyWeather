@@ -157,6 +157,32 @@ export const opsApi = {
           hits?: number;
           details_str: string;
         } | null;
+        deb_recent?: {
+          recent_7d?: {
+            start_date?: string | null;
+            end_date?: string | null;
+            samples?: number;
+            hits?: number;
+            hit_rate?: number | null;
+            mae?: number | null;
+            bias?: number | null;
+            city_count?: number;
+          };
+          recent_14d?: {
+            start_date?: string | null;
+            end_date?: string | null;
+            samples?: number;
+            hits?: number;
+            hit_rate?: number | null;
+            mae?: number | null;
+            bias?: number | null;
+            city_count?: number;
+          };
+          trust_tier?: string;
+          recommendation?: string;
+          bias_direction?: string;
+          reason?: string;
+        } | null;
         mu?: {
           mae: number;
           hit_rate: number;
