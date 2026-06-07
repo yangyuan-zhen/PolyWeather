@@ -1341,10 +1341,10 @@ def calculate_deb_prediction(
     """
     from src.analysis.deb_evaluation import (
         DEB_BUCKET_CALIBRATED_VERSION,
+        DEB_GUARDED_CALIBRATED_VERSION,
         DEB_RAW_VERSION,
         DEB_RECENT_BIAS_CORRECTED_VERSION,
-        build_bucket_calibrated_corrector,
-        build_recent_bias_corrector,
+        choose_guarded_deb_correction,
         flatten_daily_records,
     )
 
@@ -1376,18 +1376,14 @@ def calculate_deb_prediction(
 
     data = load_history(_get_history_file_path())
     history_rows = flatten_daily_records(data)
-    corrected = build_recent_bias_corrector(
+    corrected = choose_guarded_deb_correction(
         history_rows,
+        city_name,
+        raw_prediction,
         lookback_days=bias_lookback_days,
         min_samples=bias_min_samples,
-    ).apply(city_name, raw_prediction)
-    bucket_corrected = build_bucket_calibrated_corrector(
-        history_rows,
-        lookback_days=bias_lookback_days,
-        min_samples=max(5, int(bias_min_samples or 0)),
-    ).apply(city_name, raw_prediction)
-    if int(bucket_corrected.get("samples") or 0) > 0:
-        corrected = bucket_corrected
+        bucket_min_samples=max(5, int(bias_min_samples or 0)),
+    )
 
     bias_adjustment = float(corrected.get("bias_adjustment") or 0.0)
     bias_samples = int(corrected.get("samples") or 0)
@@ -1410,9 +1406,12 @@ def calculate_deb_prediction(
 
     next_weights_info = weights_info
     if abs(bias_adjustment) >= 0.05:
+        selected_version = corrected.get("selected_version") or corrected.get("version")
         correction_label = (
             "bucket_calibration"
-            if corrected.get("version") == DEB_BUCKET_CALIBRATED_VERSION
+            if selected_version == DEB_BUCKET_CALIBRATED_VERSION
+            else "guarded_bias"
+            if corrected.get("version") == DEB_GUARDED_CALIBRATED_VERSION
             else "recent_bias"
         )
         next_weights_info = (
@@ -1427,6 +1426,8 @@ def calculate_deb_prediction(
         "weights_info": next_weights_info,
         "bias_adjustment": bias_adjustment,
         "bias_samples": bias_samples,
+        "selected_version": corrected.get("selected_version"),
+        "guard_reason": corrected.get("guard_reason"),
         **quality,
     }
 

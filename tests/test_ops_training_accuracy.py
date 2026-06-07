@@ -37,6 +37,7 @@ def test_training_accuracy_payload_includes_recent_deb_summary():
     assert payload["deb_summary"]["recent_14d"]["samples"] == 5
     assert "deb_v1_raw" in payload["deb_summary"]["versions"]
     assert "deb_v2_bucket_calibrated" in payload["deb_summary"]["versions"]
+    assert "deb_v3_guarded_calibrated" in payload["deb_summary"]["versions"]
 
 
 def test_training_accuracy_payload_includes_city_deb_trust_strategy():

@@ -1196,6 +1196,7 @@ def _analyze(
     deb_val, deb_weights = None, ""
     deb_raw_val, deb_version = None, None
     deb_bias_adjustment, deb_bias_samples = 0.0, 0
+    deb_selected_version, deb_guard_reason = None, None
     deb_intraday_adjustment = 0.0
     deb_hourly_consensus = None
     deb_quality = {}
@@ -1205,6 +1206,8 @@ def _analyze(
             deb_val = deb_result.get("prediction")
             deb_raw_val = deb_result.get("raw_prediction")
             deb_version = deb_result.get("version")
+            deb_selected_version = deb_result.get("selected_version")
+            deb_guard_reason = deb_result.get("guard_reason")
             deb_bias_adjustment = deb_result.get("bias_adjustment") or 0.0
             deb_bias_samples = deb_result.get("bias_samples") or 0
             deb_weights = deb_result.get("weights_info") or ""
@@ -1666,6 +1669,8 @@ def _analyze(
             d_val, d_winfo = deb_val, deb_weights
             d_raw_val = deb_raw_val
             d_version = deb_version
+            d_selected_version = deb_selected_version
+            d_guard_reason = deb_guard_reason
             d_bias_adjustment = deb_bias_adjustment
             d_bias_samples = deb_bias_samples
             d_quality = dict(deb_quality)
@@ -1685,6 +1690,7 @@ def _analyze(
             
             d_val, d_winfo = None, ""
             d_raw_val, d_version = None, None
+            d_selected_version, d_guard_reason = None, None
             d_bias_adjustment, d_bias_samples = 0.0, 0
             d_quality = {}
             d_probs = []
@@ -1697,6 +1703,8 @@ def _analyze(
                         d_val = d_prediction
                         d_raw_val = deb_result.get("raw_prediction")
                         d_version = deb_result.get("version")
+                        d_selected_version = deb_result.get("selected_version")
+                        d_guard_reason = deb_result.get("guard_reason")
                         d_bias_adjustment = deb_result.get("bias_adjustment") or 0.0
                         d_bias_samples = deb_result.get("bias_samples") or 0
                         d_winfo = deb_result.get("weights_info") or ""
@@ -1731,6 +1739,8 @@ def _analyze(
                     "prediction": d_val,
                     "raw_prediction": d_raw_val,
                     "version": d_version,
+                    "selected_version": d_selected_version,
+                    "guard_reason": d_guard_reason,
                     "weights_info": d_winfo,
                     "bias_adjustment": d_bias_adjustment,
                     "bias_samples": d_bias_samples,
@@ -2223,6 +2233,7 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     deb_version = None
     deb_bias_adjustment = 0.0
     deb_bias_samples = 0
+    deb_selected_version, deb_guard_reason = None, None
     deb_quality = {}
     if current_forecasts:
         deb_result = calculate_deb_prediction(city, current_forecasts)
@@ -2230,6 +2241,8 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             deb_val = deb_result.get("prediction")
             deb_raw_val = deb_result.get("raw_prediction")
             deb_version = deb_result.get("version")
+            deb_selected_version = deb_result.get("selected_version")
+            deb_guard_reason = deb_result.get("guard_reason")
             deb_bias_adjustment = deb_result.get("bias_adjustment") or 0.0
             deb_bias_samples = deb_result.get("bias_samples") or 0
             deb_quality = {
@@ -2314,6 +2327,8 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             "prediction": _sf(deb_val),
             "raw_prediction": _sf(deb_raw_val),
             "version": deb_version,
+            "selected_version": deb_selected_version,
+            "guard_reason": deb_guard_reason,
             "bias_adjustment": deb_bias_adjustment,
             "bias_samples": deb_bias_samples,
             **deb_quality,

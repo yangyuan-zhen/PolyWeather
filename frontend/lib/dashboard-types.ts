@@ -225,6 +225,8 @@ export interface DebForecast {
   prediction: number | null;
   raw_prediction?: number | null;
   version?: string | null;
+  selected_version?: string | null;
+  guard_reason?: string | null;
   weights_info?: string | null;
   bias_adjustment?: number | null;
   bias_samples?: number | null;

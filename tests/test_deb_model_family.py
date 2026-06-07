@@ -123,7 +123,9 @@ def test_calculate_deb_prediction_keeps_raw_and_adds_versioned_bias_correction(m
 
     assert result["raw_prediction"] == 24.0
     assert result["prediction"] == 25.0
-    assert result["version"] == "deb_v1_recent_bias_corrected"
+    assert result["version"] == "deb_v3_guarded_calibrated"
+    assert result["selected_version"] == "deb_v1_recent_bias_corrected"
+    assert result["guard_reason"] == "bucket_unavailable"
     assert result["bias_adjustment"] == 1.0
     assert result["bias_samples"] == 3
 
@@ -169,7 +171,9 @@ def test_calculate_deb_prediction_prefers_bucket_calibration_when_enough_samples
 
     assert result["raw_prediction"] == 25.4
     assert result["prediction"] == 26.0
-    assert result["version"] == "deb_v2_bucket_calibrated"
+    assert result["version"] == "deb_v3_guarded_calibrated"
+    assert result["selected_version"] == "deb_v2_bucket_calibrated"
+    assert result["guard_reason"] == "bucket_same_adjustment"
     assert result["bias_adjustment"] == 0.6
     assert result["bias_samples"] == 5
 

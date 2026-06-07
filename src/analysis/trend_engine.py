@@ -448,6 +448,7 @@ def analyze_weather_trend(
     deb_version = None
     deb_bias_adjustment = 0.0
     deb_bias_samples = 0
+    deb_selected_version, deb_guard_reason = None, None
     deb_weights = ""
     deb_quality = {}
     if city_name and current_forecasts:
@@ -460,6 +461,8 @@ def analyze_weather_trend(
             deb_prediction = deb_result.get("prediction")
             deb_raw_prediction = deb_result.get("raw_prediction")
             deb_version = deb_result.get("version")
+            deb_selected_version = deb_result.get("selected_version")
+            deb_guard_reason = deb_result.get("guard_reason")
             deb_bias_adjustment = deb_result.get("bias_adjustment") or 0.0
             deb_bias_samples = deb_result.get("bias_samples") or 0
             deb_weights = deb_result.get("weights_info") or ""
@@ -998,6 +1001,8 @@ def analyze_weather_trend(
         "deb_raw_prediction": deb_raw_prediction,
         "deb_hourly_consensus": deb_hourly_consensus,
         "deb_version": deb_version,
+        "deb_selected_version": deb_selected_version,
+        "deb_guard_reason": deb_guard_reason,
         "deb_bias_adjustment": deb_bias_adjustment,
         "deb_bias_samples": deb_bias_samples,
         "deb_weights": deb_weights,

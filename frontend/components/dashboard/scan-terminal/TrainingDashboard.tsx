@@ -212,6 +212,7 @@ export function TrainingDashboard({ isEn }: { isEn: boolean }) {
       { key: "deb_v1_raw", label: isEn ? "Raw DEB" : "原始 DEB" },
       { key: "deb_v1_recent_bias_corrected", label: isEn ? "Mean Bias" : "均值偏差" },
       { key: "deb_v2_bucket_calibrated", label: isEn ? "Bucket v2" : "桶校准 v2" },
+      { key: "deb_v3_guarded_calibrated", label: isEn ? "Guarded v3" : "保护 v3" },
     ].map(({ key, label }) => ({ key, label, value: versions[key] })).filter((row) => row.value);
   }, [debSummary?.versions, isEn]);
 
