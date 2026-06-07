@@ -1249,6 +1249,79 @@ def calculate_dynamic_weight_components(
     }
 
 
+def _assess_recent_deb_quality(
+    city_name,
+    history_rows,
+    *,
+    adjustment=0.0,
+    lookback_days=30,
+):
+    city_key = str(city_name or "").strip().lower()
+    rows = [
+        row
+        for row in (history_rows or [])
+        if str(row.get("city") or "").strip().lower() == city_key
+    ]
+    rows.sort(key=lambda row: str(row.get("target_date") or ""), reverse=True)
+    recent = rows[: max(int(lookback_days or 0), 1)]
+    hits = 0
+    samples = 0
+    errors = []
+    for row in recent:
+        prediction = _sf(row.get("prediction", row.get("deb_prediction")))
+        actual = _sf(row.get("actual", row.get("actual_high")))
+        if prediction is None or actual is None:
+            continue
+        effective_prediction = prediction + float(adjustment or 0.0)
+        try:
+            pred_bucket = apply_city_settlement(city_key, effective_prediction)
+            actual_bucket = apply_city_settlement(city_key, actual)
+        except Exception:
+            continue
+        if pred_bucket is None or actual_bucket is None:
+            continue
+        samples += 1
+        if pred_bucket == actual_bucket:
+            hits += 1
+        errors.append(abs(effective_prediction - actual))
+
+    hit_rate = (hits / samples * 100.0) if samples else None
+    mae = (sum(errors) / len(errors)) if errors else None
+    if samples < 3 or hit_rate is None or mae is None:
+        tier = "insufficient"
+        recommendation = "insufficient"
+    elif hit_rate >= 67.0 and mae <= 1.25:
+        tier = "high"
+        recommendation = "primary"
+    elif hit_rate >= 34.0 and mae <= 1.75:
+        tier = "medium"
+        recommendation = "supporting"
+    else:
+        tier = "low"
+        recommendation = "context_only"
+
+    return {
+        "quality_tier": tier,
+        "recommendation": recommendation,
+        "recent_hit_rate": round(hit_rate, 1) if hit_rate is not None else None,
+        "recent_samples": samples,
+        "recent_hits": hits,
+        "recent_mae": round(mae, 2) if mae is not None else None,
+    }
+
+
+def _append_deb_quality_note(weights_info, quality):
+    tier = (quality or {}).get("quality_tier")
+    if tier not in {"low", "insufficient"}:
+        return weights_info
+    note = f"quality:{tier}"
+    if weights_info:
+        if note in weights_info:
+            return weights_info
+        return f"{weights_info} | {note}"
+    return note
+
+
 def calculate_deb_prediction(
     city_name,
     current_forecasts,
@@ -1283,13 +1356,22 @@ def calculate_deb_prediction(
         decay_factor=decay_factor,
     )
     if raw_prediction is None:
+        quality = {
+            "quality_tier": "insufficient",
+            "recommendation": "insufficient",
+            "recent_hit_rate": None,
+            "recent_samples": 0,
+            "recent_hits": 0,
+            "recent_mae": None,
+        }
         return {
             "prediction": None,
             "raw_prediction": None,
             "version": DEB_RAW_VERSION,
-            "weights_info": weights_info,
+            "weights_info": _append_deb_quality_note(weights_info, quality),
             "bias_adjustment": 0.0,
             "bias_samples": 0,
+            **quality,
         }
 
     data = load_history(_get_history_file_path())
@@ -1309,14 +1391,21 @@ def calculate_deb_prediction(
 
     bias_adjustment = float(corrected.get("bias_adjustment") or 0.0)
     bias_samples = int(corrected.get("samples") or 0)
+    quality = _assess_recent_deb_quality(
+        city_name,
+        history_rows,
+        adjustment=bias_adjustment,
+        lookback_days=bias_lookback_days,
+    )
     if bias_samples <= 0:
         return {
             "prediction": raw_prediction,
             "raw_prediction": raw_prediction,
             "version": DEB_RAW_VERSION,
-            "weights_info": weights_info,
+            "weights_info": _append_deb_quality_note(weights_info, quality),
             "bias_adjustment": 0.0,
             "bias_samples": 0,
+            **quality,
         }
 
     next_weights_info = weights_info
@@ -1330,6 +1419,7 @@ def calculate_deb_prediction(
             f"{weights_info or 'DEB'} | "
             f"{correction_label}({bias_adjustment:+.1f},n={bias_samples})"
         )
+    next_weights_info = _append_deb_quality_note(next_weights_info, quality)
     return {
         "prediction": corrected["corrected_prediction"],
         "raw_prediction": corrected["raw_prediction"],
@@ -1337,6 +1427,7 @@ def calculate_deb_prediction(
         "weights_info": next_weights_info,
         "bias_adjustment": bias_adjustment,
         "bias_samples": bias_samples,
+        **quality,
     }
 
 

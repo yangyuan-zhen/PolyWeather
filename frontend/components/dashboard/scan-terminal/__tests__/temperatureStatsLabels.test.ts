@@ -1,4 +1,4 @@
-import { __buildTemperatureStatsLabelsForTest } from "@/components/dashboard/scan-terminal/TemperatureStatsBars";
+import { __buildDebQualityLabelForTest, __buildTemperatureStatsLabelsForTest } from "@/components/dashboard/scan-terminal/TemperatureStatsBars";
 import { temp } from "@/components/dashboard/scan-terminal/utils";
 
 function assert(condition: unknown, message: string) {
@@ -63,4 +63,12 @@ export function runTests() {
   assert(temp(null, "°C") === "--", "empty temperature values should not render as 0.0°C while city detail is loading");
   assert(temp(undefined, "°C") === "--", "undefined temperature values should not render as 0.0°C while city detail is loading");
   assert(temp("", "°C") === "--", "blank temperature values should not render as 0.0°C while city detail is loading");
+  assert(
+    __buildDebQualityLabelForTest({ recommendation: "context_only" }, true) === "Context",
+    "low-confidence DEB should render as context-only guidance in English",
+  );
+  assert(
+    __buildDebQualityLabelForTest({ recommendation: "insufficient" }, false) === "样本少",
+    "thin-sample DEB should render a Chinese low-sample label",
+  );
 }

@@ -6,6 +6,7 @@ import type {
   ScanOpportunityRow,
   ForecastDay,
   DailyModelForecast,
+  DebForecast,
   DebHourlyPath,
   ProbabilityBucket,
 } from "@/lib/dashboard-types";
@@ -940,6 +941,7 @@ function runwayPatchPointsFromRunwayObs(runwayObs: any) {
 type HourlyForecast = {
   forecastTodayHigh?: number | null;
   debPrediction?: number | null;
+  debQuality?: Pick<DebForecast, "quality_tier" | "recommendation" | "recent_hit_rate" | "recent_samples" | "recent_hits" | "recent_mae"> | null;
   debHourlyPath?: DebHourlyPath | null;
   localDate?: string | null;
   localTime?: string | null;
@@ -967,6 +969,7 @@ function seedHourlyForecastFromRow(row: ScanOpportunityRow | null): HourlyForeca
   return {
     forecastTodayHigh: null,
     debPrediction: validNumber(row.deb_prediction),
+    debQuality: null,
     debHourlyPath: null,
     localDate: row.local_date || null,
     localTime: row.local_time || null,
@@ -1029,6 +1032,14 @@ function parseHourlyForecastFromCityDetail(json: CityDetail | null): HourlyForec
   return {
     forecastTodayHigh: json.forecast?.today_high ?? null,
     debPrediction: json.deb?.prediction ?? (json as any)?.overview?.deb_prediction ?? null,
+    debQuality: json.deb ? {
+      quality_tier: json.deb.quality_tier,
+      recommendation: json.deb.recommendation,
+      recent_hit_rate: json.deb.recent_hit_rate,
+      recent_samples: json.deb.recent_samples,
+      recent_hits: json.deb.recent_hits,
+      recent_mae: json.deb.recent_mae,
+    } : null,
     debHourlyPath: json.deb?.hourly_path || null,
     localDate: json.local_date || (json as any)?.overview?.local_date || null,
     localTime: json.local_time || null,
@@ -1366,6 +1377,7 @@ function mergePatchIntoHourly(
     ...(prev || {
       forecastTodayHigh: null,
       debPrediction: null,
+      debQuality: null,
       localDate: null,
       localTime: null,
       times: [],

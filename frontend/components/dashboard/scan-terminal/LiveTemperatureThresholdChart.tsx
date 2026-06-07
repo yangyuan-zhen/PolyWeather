@@ -1213,6 +1213,7 @@ export function LiveTemperatureThresholdChart({
           observedHighRunway={observedHighRunway}
           wundergroundDailyHigh={wundergroundDailyHigh}
           debVal={debVal}
+          debQuality={chartHourly?.debQuality || null}
           modelMin={modelMin}
           modelMax={modelMax}
           spread={spread}

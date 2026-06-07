@@ -174,6 +174,52 @@ def test_calculate_deb_prediction_prefers_bucket_calibration_when_enough_samples
     assert result["bias_samples"] == 5
 
 
+def test_calculate_deb_prediction_reports_recent_quality_for_effective_deb(monkeypatch):
+    monkeypatch.setattr(
+        "src.analysis.deb_algorithm.load_history",
+        lambda _: {
+            "high": {
+                "2026-04-11": {"actual_high": 21.0, "deb_prediction": 21.0},
+                "2026-04-12": {"actual_high": 22.0, "deb_prediction": 22.0},
+                "2026-04-13": {"actual_high": 23.0, "deb_prediction": 23.0},
+                "2026-04-14": {"actual_high": 24.0, "deb_prediction": 24.0},
+                "2026-04-15": {"actual_high": 25.0, "deb_prediction": 25.0},
+            },
+            "low": {
+                "2026-04-11": {"actual_high": 20.0, "deb_prediction": 16.0},
+                "2026-04-12": {"actual_high": 21.0, "deb_prediction": 26.0},
+                "2026-04-13": {"actual_high": 22.0, "deb_prediction": 18.0},
+                "2026-04-14": {"actual_high": 23.0, "deb_prediction": 28.0},
+                "2026-04-15": {"actual_high": 24.0, "deb_prediction": 20.0},
+            },
+            "thin": {
+                "2026-04-14": {"actual_high": 23.0, "deb_prediction": 23.0},
+                "2026-04-15": {"actual_high": 24.0, "deb_prediction": 24.0},
+            },
+        },
+    )
+
+    def raw(_city, _forecasts, **_kwargs):
+        return 25.0, "raw"
+
+    high = calculate_deb_prediction("high", {"ECMWF": 25.0}, raw_calculator=raw)
+    low = calculate_deb_prediction("low", {"ECMWF": 25.0}, raw_calculator=raw)
+    thin = calculate_deb_prediction("thin", {"ECMWF": 25.0}, raw_calculator=raw)
+
+    assert high["quality_tier"] == "high"
+    assert high["recommendation"] == "primary"
+    assert high["recent_hit_rate"] == 100.0
+
+    assert low["quality_tier"] == "low"
+    assert low["recommendation"] == "context_only"
+    assert low["recent_hit_rate"] == 0.0
+    assert "quality:low" in low["weights_info"]
+
+    assert thin["quality_tier"] == "insufficient"
+    assert thin["recommendation"] == "insufficient"
+    assert thin["recent_samples"] == 2
+
+
 def test_compute_hourly_model_errors_basic():
     from src.analysis.deb_algorithm import compute_hourly_model_errors
 

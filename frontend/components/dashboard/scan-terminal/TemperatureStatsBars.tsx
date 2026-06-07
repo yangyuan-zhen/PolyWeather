@@ -38,6 +38,50 @@ function highLabel(label: string, isEn: boolean) {
   return isEn ? (HIGH_LABEL_EN[label] || label) : label;
 }
 
+type DebQuality = {
+  quality_tier?: string | null;
+  recommendation?: string | null;
+  recent_hit_rate?: number | null;
+  recent_samples?: number | null;
+};
+
+function debQualityLabel(quality: DebQuality | null | undefined, isEn: boolean) {
+  const recommendation = quality?.recommendation;
+  if (recommendation === "primary") return isEn ? "Primary" : "主用";
+  if (recommendation === "supporting") return isEn ? "Support" : "辅助";
+  if (recommendation === "context_only") return isEn ? "Context" : "参考";
+  if (recommendation === "insufficient") return isEn ? "Thin" : "样本少";
+  return "";
+}
+
+function debQualityClass(quality: DebQuality | null | undefined) {
+  const tier = quality?.quality_tier;
+  if (tier === "high") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (tier === "medium") return "border-amber-200 bg-amber-50 text-amber-700";
+  if (tier === "low") return "border-rose-200 bg-rose-50 text-rose-700";
+  return "border-slate-200 bg-slate-50 text-slate-500";
+}
+
+function DebQualityBadge({ quality, isEn }: { quality?: DebQuality | null; isEn: boolean }) {
+  const label = debQualityLabel(quality, isEn);
+  if (!label) return null;
+  const hitRate = quality?.recent_hit_rate;
+  const samples = quality?.recent_samples;
+  const titleParts = [
+    isEn ? `DEB recommendation: ${label}` : `DEB 建议：${label}`,
+    hitRate == null ? null : `${hitRate.toFixed(0)}%`,
+    samples == null ? null : `n=${samples}`,
+  ].filter(Boolean);
+  return (
+    <span
+      className={clsx("ml-1.5 inline-flex items-center rounded border px-1.5 py-0.5 text-[9px] font-black uppercase leading-none", debQualityClass(quality))}
+      title={titleParts.join(" · ")}
+    >
+      {label}
+    </span>
+  );
+}
+
 function buildStatsLabels({
   isEn,
   isShenzhen,
@@ -82,6 +126,7 @@ export function TemperatureStatsBars({
   observedHighRunway,
   wundergroundDailyHigh,
   debVal,
+  debQuality,
   modelMin,
   modelMax,
   spread,
@@ -104,6 +149,7 @@ export function TemperatureStatsBars({
   observedHighRunway: number | null;
   wundergroundDailyHigh: number | null;
   debVal: number | null;
+  debQuality?: DebQuality | null;
   modelMin: number | null;
   modelMax: number | null;
   spread: number | null;
@@ -139,6 +185,7 @@ export function TemperatureStatsBars({
           <div className="flex items-center gap-4 text-[11px]">
             <span className="font-semibold text-slate-500">
               DEB: <strong className="text-orange-600 font-mono">{temp(debVal, tempSymbol)}</strong>
+              <DebQualityBadge quality={debQuality} isEn={isEn} />
             </span>
             {modelMin !== null && modelMax !== null && (
               <>
@@ -187,6 +234,7 @@ export function TemperatureStatsBars({
             <div className="flex flex-col">
               <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                 DEB Max
+                <DebQualityBadge quality={debQuality} isEn={isEn} />
               </span>
               <span className="text-2xl font-bold font-mono text-orange-600 mt-1">
                 {temp(debVal, tempSymbol)}
@@ -237,6 +285,7 @@ export function TemperatureStatsBars({
             </span>
             <strong className="text-blue-600 font-bold">
               {temp(debVal, tempSymbol)}
+              <DebQualityBadge quality={debQuality} isEn={isEn} />
             </strong>
           </div>
           <div className="flex flex-col gap-0.5">
@@ -263,3 +312,4 @@ export function TemperatureStatsBars({
 }
 
 export const __buildTemperatureStatsLabelsForTest = buildStatsLabels;
+export const __buildDebQualityLabelForTest = debQualityLabel;
