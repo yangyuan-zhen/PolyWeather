@@ -8,7 +8,7 @@
 
 ### 实时终端
 
-![PolyWeather 实时终端](frontend/public/static/web.png)
+![PolyWeather 实时终端](frontend/public/static/web.webp)
 
 ### Telegram 跑道推送
 

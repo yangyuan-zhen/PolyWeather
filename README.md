@@ -11,7 +11,7 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 
 ### Realtime Terminal
 
-![PolyWeather realtime terminal](frontend/public/static/web.png)
+![PolyWeather realtime terminal](frontend/public/static/web.webp)
 
 ### Telegram Runway Alerts
 
