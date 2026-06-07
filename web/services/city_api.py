@@ -86,12 +86,14 @@ async def _get_cached_city_payload(city: str, kind: str) -> Dict[str, Any]:
 async def _get_or_start_city_force_refresh_task(
     key: str,
     refresh_factory: Callable[[], Awaitable[Dict[str, Any]]],
-) -> "asyncio.Task[Dict[str, Any]]":
+) -> Tuple["asyncio.Task[Dict[str, Any]]", bool]:
     async with _CITY_FORCE_REFRESH_LOCK:
         task = _CITY_FORCE_REFRESH_INFLIGHT.get(key)
+        started = False
         if task is None or task.done():
             task = asyncio.create_task(refresh_factory())
             _CITY_FORCE_REFRESH_INFLIGHT[key] = task
+            started = True
 
             def _cleanup(done: "asyncio.Task[Dict[str, Any]]") -> None:
                 if _CITY_FORCE_REFRESH_INFLIGHT.get(key) is done:
@@ -102,7 +104,7 @@ async def _get_or_start_city_force_refresh_task(
                     logger.warning("city force refresh failed key={}: {}", key, exc)
 
             task.add_done_callback(_cleanup)
-        return task
+        return task, started
 
 
 async def _refresh_city_payload_with_stale_timeout(
@@ -110,7 +112,16 @@ async def _refresh_city_payload_with_stale_timeout(
     kind: str,
     refresh_factory: Callable[[], Awaitable[Dict[str, Any]]],
 ) -> Dict[str, Any]:
-    task = await _get_or_start_city_force_refresh_task(f"{kind}:{city}", refresh_factory)
+    task, started = await _get_or_start_city_force_refresh_task(f"{kind}:{city}", refresh_factory)
+    if not started:
+        cached_payload = await _get_cached_city_payload(city, kind)
+        if cached_payload:
+            logger.warning(
+                "city force refresh already running city={} kind={}; returning stale cache",
+                city,
+                kind,
+            )
+            return await _overlay_cached_wunderground(city, cached_payload)
     timeout_sec = _city_force_refresh_timeout_sec()
     try:
         return await asyncio.wait_for(asyncio.shield(task), timeout=timeout_sec)

@@ -1339,6 +1339,69 @@ def test_force_refresh_panel_returns_cached_payload_when_refresh_is_slow(monkeyp
     assert refresh_calls == 1
 
 
+def test_force_refresh_panel_returns_cached_payload_when_refresh_already_running(monkeypatch):
+    import asyncio
+
+    refresh_calls = 0
+
+    class FakeCache:
+        def get_city_cache(self, kind, city):
+            assert kind == "panel"
+            assert city == "paris"
+            return {
+                "payload": {
+                    "name": "paris",
+                    "deb": {"prediction": 20.0},
+                    "from_cache": True,
+                },
+            }
+
+    async def fake_run_in_threadpool(fn, *args, **kwargs):
+        if fn is city_api.legacy_routes._refresh_city_panel_cache:
+            await asyncio.sleep(0.08)
+        return fn(*args, **kwargs)
+
+    def refresh_panel(city, force_refresh):
+        nonlocal refresh_calls
+        refresh_calls += 1
+        return {"name": city, "deb": {"prediction": 21.0}, "from_cache": False}
+
+    city_api._CITY_FORCE_REFRESH_INFLIGHT.clear()
+
+    monkeypatch.setenv("POLYWEATHER_CITY_FORCE_REFRESH_TIMEOUT_SEC", "0.5")
+    monkeypatch.setattr(city_api, "run_in_threadpool", fake_run_in_threadpool)
+    monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
+    monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
+    monkeypatch.setattr(city_api.legacy_routes, "_overlay_latest_wunderground_current", lambda city, payload: payload)
+    monkeypatch.setattr(city_api.legacy_routes, "_refresh_city_panel_cache", refresh_panel)
+
+    async def run_requests():
+        first_task = asyncio.create_task(
+            city_api.get_city_detail_payload(
+                object(),
+                "Paris",
+                force_refresh=True,
+                depth="panel",
+            )
+        )
+        await asyncio.sleep(0.01)
+        second = await city_api.get_city_detail_payload(
+            object(),
+            "Paris",
+            force_refresh=True,
+            depth="panel",
+        )
+        first = await first_task
+        return first, second
+
+    first_result, second_result = asyncio.run(run_requests())
+
+    assert first_result["from_cache"] is False
+    assert second_result["from_cache"] is True
+    assert second_result["deb"]["prediction"] == 20.0
+    assert refresh_calls == 1
+
+
 def test_stale_panel_returns_cached_payload_while_refreshing(monkeypatch):
     import asyncio
 
