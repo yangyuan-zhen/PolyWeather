@@ -18,6 +18,8 @@ from web.services.observation_freshness import (
 from web.core import GrantPointsRequest
 import web.routes as legacy_routes
 
+_DEB_VERSION_BACKTEST_SAMPLE_LIMIT = 400
+
 
 def _sf(value: Any) -> Optional[float]:
     try:
@@ -2455,8 +2457,9 @@ def _build_training_accuracy_payload(
     recent_7_start = (today_date - timedelta(days=7)).isoformat()
     recent_14_start = (today_date - timedelta(days=14)).isoformat()
     end_date = (today_date - timedelta(days=1)).isoformat()
+    version_rows = all_rows[-_DEB_VERSION_BACKTEST_SAMPLE_LIMIT:]
     versions = backtest_deb_versions(
-        all_rows,
+        version_rows,
         min_train_samples=2,
     ).get("versions", {})
 
