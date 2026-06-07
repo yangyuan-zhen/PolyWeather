@@ -1668,6 +1668,7 @@ def _analyze(
             d_version = deb_version
             d_bias_adjustment = deb_bias_adjustment
             d_bias_samples = deb_bias_samples
+            d_quality = dict(deb_quality)
         else:
             day_m = mm_daily_raw.get(d_str, {}).copy()
             if i < len(maxtemps) and maxtemps[i] is not None:
