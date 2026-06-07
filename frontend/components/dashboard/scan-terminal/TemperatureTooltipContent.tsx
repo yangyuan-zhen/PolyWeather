@@ -77,8 +77,8 @@ export function TemperatureTooltipContent({
         </div>
       )}
       {probabilityRows.length > 0 && (
-        <div className={rows.length > 0 ? "mt-1.5 grid gap-1 border-t border-slate-100 pt-1.5" : "grid gap-1"}>
-          {probabilityRows.slice(0, 8).map((item) => (
+        <div className={rows.length > 0 ? "mt-1.5 grid max-h-[260px] gap-1 overflow-y-auto border-t border-slate-100 pt-1.5 pr-1" : "grid max-h-[260px] gap-1 overflow-y-auto pr-1"}>
+          {probabilityRows.map((item) => (
             <div key={item.key} className="flex min-w-[160px] items-center justify-between gap-4">
               <span className="inline-flex items-center gap-1.5 text-violet-700">
                 <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />
@@ -118,6 +118,18 @@ function buildTooltipRows(
     .filter((item): item is TooltipRow => item !== null);
 }
 
+function formatProbabilityRangeValue(value: number) {
+  return Number(value.toFixed(1)).toString();
+}
+
+function formatProbabilityRangeLabel(
+  lower: number,
+  upper: number,
+  tempSymbol: string,
+) {
+  return `${formatProbabilityRangeValue(lower)}-${formatProbabilityRangeValue(upper)}${tempSymbol}`;
+}
+
 function buildTooltipProbabilityRows(
   probabilityOverlay: ProbabilityOverlay | null | undefined,
   tempSymbol: string,
@@ -135,18 +147,20 @@ function buildTooltipProbabilityRows(
     });
   }
 
-  const topBand = [...probabilityOverlay.bands]
-    .filter((band) => validNumber(band.probability) !== null)
-    .sort((a, b) => b.probability - a.probability)[0];
-  if (topBand) {
-    const probabilityPct = Math.round(topBand.probability * 100);
-    rows.push({
-      key: topBand.key,
-      label: topBand.label,
-      value: `${probabilityPct}%`,
-      color: "#a78bfa",
-    });
-  }
+  rows.push(
+    ...[...probabilityOverlay.bands]
+      .filter((band) => validNumber(band.probability) !== null && band.probability > 0)
+      .sort((a, b) => a.lower - b.lower)
+      .map((band) => {
+        const probabilityPct = Math.round(band.probability * 100);
+        return {
+          key: band.key,
+          label: formatProbabilityRangeLabel(band.lower, band.upper, tempSymbol),
+          value: `${probabilityPct}%`,
+          color: "#a78bfa",
+        };
+      }),
+  );
   return rows;
 }
 
