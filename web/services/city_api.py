@@ -30,6 +30,7 @@ _CITY_FULL_STALE_REFRESH_TASKS: Dict[str, "asyncio.Task[Dict[str, Any]]"] = {}
 _CITY_FULL_REFRESH_LOCK = asyncio.Lock()
 _CITY_FORCE_REFRESH_INFLIGHT: Dict[str, "asyncio.Task[Dict[str, Any]]"] = {}
 _CITY_FORCE_REFRESH_LOCK = asyncio.Lock()
+_CITY_STALE_REFRESH_TASKS: Dict[str, "asyncio.Task[Dict[str, Any]]"] = {}
 CityDetailPayloadCacheKey = Tuple[str, str, str, str, str, int]
 CityChartDetailPayloadCacheKey = Tuple[str, str, str, int]
 CityDetailBatchResponseCacheKey = Tuple[Tuple[str, ...], bool, str, str, str, str]
@@ -142,6 +143,37 @@ async def _refresh_city_cache_with_stale_timeout(
         kind,
         lambda: run_in_threadpool(refresh_fn, city, True),
     )
+
+
+def _start_city_cache_stale_refresh(
+    city: str,
+    kind: str,
+    refresh_fn: Callable[[str, bool], Dict[str, Any]],
+) -> None:
+    normalized = str(city or "").strip().lower()
+    cache_kind = str(kind or "").strip().lower()
+    if not normalized or not cache_kind:
+        return
+    key = f"{cache_kind}:{normalized}"
+    existing = _CITY_STALE_REFRESH_TASKS.get(key)
+    if existing is not None and not existing.done():
+        return
+
+    async def _run_refresh() -> Dict[str, Any]:
+        return await run_in_threadpool(refresh_fn, normalized, False)
+
+    task = asyncio.create_task(_run_refresh())
+    _CITY_STALE_REFRESH_TASKS[key] = task
+
+    def _cleanup(done: "asyncio.Task[Dict[str, Any]]") -> None:
+        if _CITY_STALE_REFRESH_TASKS.get(key) is done:
+            _CITY_STALE_REFRESH_TASKS.pop(key, None)
+        try:
+            done.result()
+        except Exception as exc:  # pragma: no cover - defensive background guard
+            logger.warning("city stale refresh failed city={} kind={}: {}", normalized, cache_kind, exc)
+
+    task.add_done_callback(_cleanup)
 
 
 async def _overlay_cached_wunderground(city: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -613,6 +645,10 @@ async def get_city_detail_payload(
         cached_entry = await run_in_threadpool(legacy_routes._CACHE_DB.get_city_cache, "panel", city)
         if cached_entry:
             if not legacy_routes._city_cache_is_fresh(cached_entry, legacy_routes.CITY_PANEL_CACHE_TTL_SEC):
+                payload = cached_entry.get("payload") or {}
+                if payload:
+                    _start_city_cache_stale_refresh(city, "panel", legacy_routes._refresh_city_panel_cache)
+                    return await _overlay_cached_wunderground(city, payload)
                 return await run_in_threadpool(legacy_routes._refresh_city_panel_cache, city, False)
             return await _overlay_cached_wunderground(city, cached_entry.get("payload") or {})
         return await run_in_threadpool(legacy_routes._refresh_city_panel_cache, city, False)
@@ -626,6 +662,10 @@ async def get_city_detail_payload(
         cached_entry = await run_in_threadpool(legacy_routes._CACHE_DB.get_city_cache, "nearby", city)
         if cached_entry:
             if not legacy_routes._city_cache_is_fresh(cached_entry, legacy_routes.CITY_NEARBY_CACHE_TTL_SEC):
+                payload = cached_entry.get("payload") or {}
+                if payload:
+                    _start_city_cache_stale_refresh(city, "nearby", legacy_routes._refresh_city_nearby_cache)
+                    return await _overlay_cached_wunderground(city, payload)
                 return await run_in_threadpool(legacy_routes._refresh_city_nearby_cache, city, False)
             return await _overlay_cached_wunderground(city, cached_entry.get("payload") or {})
         return await run_in_threadpool(legacy_routes._refresh_city_nearby_cache, city, False)
@@ -639,6 +679,10 @@ async def get_city_detail_payload(
         cached_entry = await run_in_threadpool(legacy_routes._CACHE_DB.get_city_cache, "market", city)
         if cached_entry:
             if not legacy_routes._market_analysis_cache_is_fresh(cached_entry):
+                payload = cached_entry.get("payload") or {}
+                if payload:
+                    _start_city_cache_stale_refresh(city, "market", legacy_routes._refresh_city_market_cache)
+                    return await _overlay_cached_wunderground(city, payload)
                 return await run_in_threadpool(legacy_routes._refresh_city_market_cache, city, False)
             return await _overlay_cached_wunderground(city, cached_entry.get("payload") or {})
         return await run_in_threadpool(legacy_routes._refresh_city_market_cache, city, False)
@@ -661,6 +705,10 @@ async def get_city_summary_payload(
     cached_entry = await run_in_threadpool(legacy_routes._CACHE_DB.get_city_cache, "summary", city)
     if cached_entry:
         if not legacy_routes._city_cache_is_fresh(cached_entry, legacy_routes.CITY_SUMMARY_CACHE_TTL_SEC):
+            payload = cached_entry.get("payload") or {}
+            if payload:
+                _start_city_cache_stale_refresh(city, "summary", legacy_routes._refresh_city_summary_cache)
+                return await _overlay_cached_wunderground(city, payload)
             return await run_in_threadpool(legacy_routes._refresh_city_summary_cache, city, False)
         return await _overlay_cached_wunderground(city, cached_entry.get("payload") or {})
     return await run_in_threadpool(legacy_routes._refresh_city_summary_cache, city, False)

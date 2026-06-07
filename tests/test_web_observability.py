@@ -1339,6 +1339,59 @@ def test_force_refresh_panel_returns_cached_payload_when_refresh_is_slow(monkeyp
     assert refresh_calls == 1
 
 
+def test_stale_panel_returns_cached_payload_while_refreshing(monkeypatch):
+    import asyncio
+
+    refresh_calls = 0
+
+    class FakeCache:
+        def get_city_cache(self, kind, city):
+            assert kind == "panel"
+            assert city == "paris"
+            return {
+                "payload": {
+                    "name": "paris",
+                    "deb": {"prediction": 20.0},
+                    "from_cache": True,
+                },
+            }
+
+    async def fake_run_in_threadpool(fn, *args, **kwargs):
+        if fn is city_api.legacy_routes._refresh_city_panel_cache:
+            await asyncio.sleep(0.05)
+        return fn(*args, **kwargs)
+
+    def refresh_panel(city, force_refresh):
+        nonlocal refresh_calls
+        refresh_calls += 1
+        return {"name": city, "deb": {"prediction": 21.0}, "from_cache": False}
+
+    city_api._CITY_STALE_REFRESH_TASKS.clear()
+
+    monkeypatch.setattr(city_api, "run_in_threadpool", fake_run_in_threadpool)
+    monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
+    monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
+    monkeypatch.setattr(city_api.legacy_routes, "_city_cache_is_fresh", lambda entry, ttl: False)
+    monkeypatch.setattr(city_api.legacy_routes, "_overlay_latest_wunderground_current", lambda city, payload: payload)
+    monkeypatch.setattr(city_api.legacy_routes, "_refresh_city_panel_cache", refresh_panel)
+
+    async def run_request():
+        payload = await city_api.get_city_detail_payload(
+            object(),
+            "Paris",
+            force_refresh=False,
+            depth="panel",
+        )
+        await asyncio.sleep(0.06)
+        return payload
+
+    result = asyncio.run(run_request())
+
+    assert result["from_cache"] is True
+    assert result["deb"]["prediction"] == 20.0
+    assert refresh_calls == 1
+
+
 def test_force_refresh_full_detail_returns_cached_payload_when_refresh_is_slow(monkeypatch):
     import asyncio
 
