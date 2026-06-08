@@ -112,6 +112,7 @@ function TemperatureChartCanvasComponent({
   isHourlyLoading,
   detailError,
   showingStaleDetail,
+  showDetailErrorBadge = true,
   refAreaLeft,
   refAreaRight,
   onMouseDown,
@@ -139,6 +140,7 @@ function TemperatureChartCanvasComponent({
   isHourlyLoading: boolean;
   detailError?: string | null;
   showingStaleDetail?: boolean;
+  showDetailErrorBadge?: boolean;
   refAreaLeft: number | null;
   refAreaRight: number | null;
   onMouseDown: (event: any) => void;
@@ -223,7 +225,7 @@ function TemperatureChartCanvasComponent({
   const shouldShowBackgroundRefresh = isHourlyLoading && hasDrawableChartContent;
   const shouldShowUnavailableState = Boolean(row?.city) && Boolean(detailError) && !isHourlyLoading && !hasDrawableChartContent;
   const shouldShowBackgroundError =
-    Boolean(row?.city) && Boolean(detailError) && !isHourlyLoading && hasDrawableChartContent;
+    showDetailErrorBadge && Boolean(row?.city) && Boolean(detailError) && !isHourlyLoading && hasDrawableChartContent;
 
   return (
     <div className={clsx("relative flex flex-1 flex-col p-2", compact ? "min-h-[120px]" : "min-h-[240px]")}>

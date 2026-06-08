@@ -11,6 +11,7 @@ import { TemperatureChartCanvas } from "@/components/dashboard/scan-terminal/Tem
 import { TemperatureRunwayDetails } from "@/components/dashboard/scan-terminal/TemperatureRunwayDetails";
 import { TemperatureStatsBars } from "@/components/dashboard/scan-terminal/TemperatureStatsBars";
 import { rowName } from "@/components/dashboard/scan-terminal/utils";
+import { DASHBOARD_REFRESH_POLICY_MS } from "@/lib/refresh-policy";
 
 import {
   HOURLY_CACHE_TTL_MS,
@@ -58,6 +59,7 @@ const PEAK_GLOW_BADGE_CLASS = {
 
 const PROBABILITY_REFRESH_AFTER_PATCH_MS = 60_000;
 const FOREGROUND_FULL_DETAIL_REFRESH_DEDUP_MS = 90_000;
+const NO_PATCH_FULL_DETAIL_FALLBACK_MS = DASHBOARD_REFRESH_POLICY_MS.metar;
 const DETAIL_LOAD_BATCH_DELAY_MS = 0;
 const INITIAL_DETAIL_LOAD_SLOTS = 3;
 const DEFERRED_DETAIL_LOAD_DELAY_MS = 1_200;
@@ -663,7 +665,7 @@ export function LiveTemperatureThresholdChart({
     };
   }, [resyncVersion, city, targetResolution]);
 
-  // ── SSE fallback: only full-fetch if a visible chart has seen no patch for 2 minutes ──
+  // ── SSE fallback: only full-fetch if a visible chart has seen no patch for one METAR cadence ──
   useEffect(() => {
     if (!shouldPollLiveChart({ city, compact, isActive, isMaximized })) return;
     let cancelled = false;
@@ -687,7 +689,7 @@ export function LiveTemperatureThresholdChart({
 
     const checkFallback = () => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-      if (Date.now() - lastPatchAtRef.current < 2 * 60_000) return;
+      if (Date.now() - lastPatchAtRef.current < NO_PATCH_FULL_DETAIL_FALLBACK_MS) return;
 
       refreshFullDetail();
     };
@@ -966,6 +968,7 @@ export function LiveTemperatureThresholdChart({
   );
 
   const subtitle = row ? (isEn ? "Live & Forecast" : "实测与预测") : "";
+  const showDetailErrorBadge = !compact || isActive || isMaximized;
 
   const handleZoomReset = useCallback(() => {
     setZoomRange(null);
@@ -1259,6 +1262,7 @@ export function LiveTemperatureThresholdChart({
           isHourlyLoading={isHourlyLoading}
           detailError={detailError}
           showingStaleDetail={showingStaleDetail}
+          showDetailErrorBadge={showDetailErrorBadge}
           refAreaLeft={refAreaLeft}
           refAreaRight={refAreaRight}
           onMouseDown={handleMouseDown}

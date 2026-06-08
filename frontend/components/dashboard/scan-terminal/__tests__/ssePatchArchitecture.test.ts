@@ -148,7 +148,11 @@ export function runTests() {
   assert(chart.includes("latestPatch"), "temperature chart must react to incoming SSE patches");
   assert(chart.includes("useSseResyncVersion"), "temperature chart must resync full detail when SSE replay is incomplete");
   assert(chartLogic.includes("runway_points"), "temperature chart must merge v1 runway_points into runway history");
-  assert(chart.includes("2 * 60_000"), "temperature chart must wait two minutes without patches before full-fetch fallback");
+  assert(
+    chart.includes("DASHBOARD_REFRESH_POLICY_MS.metar") &&
+      !chart.includes("2 * 60_000"),
+    "temperature chart must wait one METAR cadence without patches before full-fetch fallback",
+  );
   assert(chart.includes("TemperatureChartCanvas"), "temperature chart shell must compose the extracted chart canvas");
   assert(chart.includes("TemperatureStatsBars"), "temperature chart shell must compose the extracted stat bars");
   assert(chart.includes("TemperatureRunwayDetails"), "temperature chart shell must compose the extracted runway panel");

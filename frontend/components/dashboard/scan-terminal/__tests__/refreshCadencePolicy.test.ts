@@ -69,8 +69,9 @@ export async function runTests() {
   assert(
     chartSource.includes("useLatestPatch") &&
       chartSource.includes("latestPatch") &&
-      chartSource.includes("2 * 60_000"),
-    "selected city chart should consume SSE patches and use a 2-minute no-patch fallback",
+      chartSource.includes("DASHBOARD_REFRESH_POLICY_MS.metar") &&
+      !chartSource.includes("2 * 60_000"),
+    "selected city chart should consume SSE patches and use a METAR-cadence no-patch fallback instead of a 2-minute forced refresh",
   );
   assert(
     chartSource.includes("preloadTemperatureChartCanvas"),
@@ -183,6 +184,12 @@ export async function runTests() {
       chartCanvasSourceIncludes(chartSource, "数据暂不可用") &&
       chartCanvasSourceIncludes(chartSource, "handleRetryDetail"),
     "city detail charts should show stale cache first and expose a retryable unavailable state",
+  );
+  assert(
+    chartSource.includes("const showDetailErrorBadge = !compact || isActive || isMaximized") &&
+      chartSource.includes("showDetailErrorBadge={showDetailErrorBadge}") &&
+      chartCanvasSourceIncludes(chartSource, "showDetailErrorBadge"),
+    "compact grid charts should only show the stale-cache retry badge on the active slot or expanded chart",
   );
   assert(
     __shouldFetchCityDetailForChartForTest({ city: "paris", documentHidden: false, isChartVisible: true }) === true,
