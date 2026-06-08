@@ -39,6 +39,10 @@ class DBManager:
         conn.execute("PRAGMA busy_timeout=5000")
         return conn
 
+    @staticmethod
+    def _is_sqlite_locked_error(exc: sqlite3.OperationalError) -> bool:
+        return "database is locked" in str(exc).lower()
+
     def _init_cache_key(self) -> str:
         return os.path.abspath(self.db_path)
 
@@ -3015,19 +3019,30 @@ class DBManager:
         pressure_hpa: Optional[float] = None,
         obs_time: str,
     ) -> None:
-        with self._get_connection() as conn:
-            conn.execute(
-                """
-                INSERT INTO airport_obs_log (icao, city, temp_c, wind_kt, pressure_hpa, obs_time)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (str(icao).strip().upper(), str(city).strip().lower(),
-                 temp_c, wind_kt, pressure_hpa, str(obs_time)),
-            )
-            conn.execute(
-                "DELETE FROM airport_obs_log WHERE created_at < datetime('now', '-2 hours')"
-            )
-            conn.commit()
+        safe_icao = str(icao).strip().upper()
+        safe_city = str(city).strip().lower()
+        try:
+            with self._get_connection() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO airport_obs_log (icao, city, temp_c, wind_kt, pressure_hpa, obs_time)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (safe_icao, safe_city, temp_c, wind_kt, pressure_hpa, str(obs_time)),
+                )
+                conn.execute(
+                    "DELETE FROM airport_obs_log WHERE created_at < datetime('now', '-2 hours')"
+                )
+                conn.commit()
+        except sqlite3.OperationalError as exc:
+            if self._is_sqlite_locked_error(exc):
+                logger.warning(
+                    "airport obs log skipped because sqlite is locked icao={} city={}",
+                    safe_icao,
+                    safe_city,
+                )
+                return
+            raise
 
     def get_airport_obs_recent(
         self, icao: str, minutes: int = 30
@@ -3068,30 +3083,41 @@ class DBManager:
         safe_otime = str(otime_utc or "").strip()
         if not safe_icao or not safe_runway or not safe_otime:
             return
-        with self._get_connection() as conn:
-            existing = conn.execute(
-                "SELECT id FROM runway_obs_log WHERE icao=? AND runway=? AND otime_utc=? LIMIT 1",
-                (safe_icao, safe_runway, safe_otime),
-            ).fetchone()
-            if existing:
+        try:
+            with self._get_connection() as conn:
+                existing = conn.execute(
+                    "SELECT id FROM runway_obs_log WHERE icao=? AND runway=? AND otime_utc=? LIMIT 1",
+                    (safe_icao, safe_runway, safe_otime),
+                ).fetchone()
+                if existing:
+                    return
+                conn.execute(
+                    """
+                    INSERT INTO runway_obs_log (
+                        icao, city, runway,
+                        tdz_temp, mid_temp, end_temp, target_runway_max,
+                        wind_dir, wind_speed, rvr, mor, humidity,
+                        otime_utc
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        safe_icao, safe_city, safe_runway,
+                        tdz_temp, mid_temp, end_temp, target_runway_max,
+                        wind_dir, wind_speed, rvr, mor, humidity,
+                        safe_otime,
+                    ),
+                )
+                conn.commit()
+        except sqlite3.OperationalError as exc:
+            if self._is_sqlite_locked_error(exc):
+                logger.warning(
+                    "runway obs log skipped because sqlite is locked icao={} city={} runway={}",
+                    safe_icao,
+                    safe_city,
+                    safe_runway,
+                )
                 return
-            conn.execute(
-                """
-                INSERT INTO runway_obs_log (
-                    icao, city, runway,
-                    tdz_temp, mid_temp, end_temp, target_runway_max,
-                    wind_dir, wind_speed, rvr, mor, humidity,
-                    otime_utc
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    safe_icao, safe_city, safe_runway,
-                    tdz_temp, mid_temp, end_temp, target_runway_max,
-                    wind_dir, wind_speed, rvr, mor, humidity,
-                    safe_otime,
-                ),
-            )
-            conn.commit()
+            raise
 
     def get_runway_obs_recent(
         self, icao: str, minutes: int = 60

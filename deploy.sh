@@ -220,6 +220,9 @@ if [ "$FAILED_BACKEND" = "1" ]; then
     exit 1
 fi
 
+echo "Updating observation collector..."
+compose_up_retry "observation collector" -d --no-deps polyweather_collector
+
 echo "Updating frontend..."
 compose_up_retry "frontend" -d --no-deps polyweather_frontend
 

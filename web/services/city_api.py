@@ -46,6 +46,9 @@ _CITY_DETAIL_BATCH_RESPONSE_CACHE: Dict[CityDetailBatchResponseCacheKey, Dict[st
 _CITY_DETAIL_BATCH_RESPONSE_CACHE_TS: Dict[CityDetailBatchResponseCacheKey, float] = {}
 _CITY_DETAIL_BATCH_RESPONSE_INFLIGHT: Dict[CityDetailBatchResponseCacheKey, "asyncio.Task[Dict[str, Any]]"] = {}
 _CITY_DETAIL_BATCH_RESPONSE_LOCK = asyncio.Lock()
+_CITY_DETAIL_BATCH_BUILD_SEMAPHORE: Optional[threading.BoundedSemaphore] = None
+_CITY_DETAIL_BATCH_BUILD_SEMAPHORE_SIZE = 0
+_CITY_DETAIL_BATCH_BUILD_SEMAPHORE_LOCK = threading.Lock()
 
 
 def _city_detail_payload_cache_ttl() -> float:
@@ -933,20 +936,38 @@ async def _build_city_detail_batch_item_async(
 
 def _city_detail_batch_concurrency() -> int:
     try:
-        value = int(os.getenv("POLYWEATHER_CITY_DETAIL_BATCH_CONCURRENCY", "3") or "3")
+        value = int(os.getenv("POLYWEATHER_CITY_DETAIL_BATCH_CONCURRENCY", "1") or "1")
     except ValueError:
-        value = 3
-    return max(1, min(6, value))
+        value = 1
+    return max(1, min(4, value))
+
+
+def _city_detail_batch_global_concurrency() -> int:
+    try:
+        value = int(os.getenv("POLYWEATHER_CITY_DETAIL_BATCH_GLOBAL_CONCURRENCY", "1") or "1")
+    except ValueError:
+        value = 1
+    return max(1, min(4, value))
+
+
+def _city_detail_batch_build_semaphore() -> threading.BoundedSemaphore:
+    global _CITY_DETAIL_BATCH_BUILD_SEMAPHORE, _CITY_DETAIL_BATCH_BUILD_SEMAPHORE_SIZE
+    size = _city_detail_batch_global_concurrency()
+    with _CITY_DETAIL_BATCH_BUILD_SEMAPHORE_LOCK:
+        if _CITY_DETAIL_BATCH_BUILD_SEMAPHORE is None or _CITY_DETAIL_BATCH_BUILD_SEMAPHORE_SIZE != size:
+            _CITY_DETAIL_BATCH_BUILD_SEMAPHORE = threading.BoundedSemaphore(size)
+            _CITY_DETAIL_BATCH_BUILD_SEMAPHORE_SIZE = size
+        return _CITY_DETAIL_BATCH_BUILD_SEMAPHORE
 
 
 def _city_detail_batch_partial_timeout_seconds() -> Optional[float]:
     try:
         timeout_ms = int(
-            os.getenv("POLYWEATHER_CITY_DETAIL_BATCH_PARTIAL_TIMEOUT_MS", "6000")
-            or "6000"
+            os.getenv("POLYWEATHER_CITY_DETAIL_BATCH_PARTIAL_TIMEOUT_MS", "3000")
+            or "3000"
         )
     except ValueError:
-        timeout_ms = 6000
+        timeout_ms = 3000
     if timeout_ms <= 0:
         return None
     return max(0.001, min(60.0, timeout_ms / 1000.0))
@@ -991,58 +1012,73 @@ async def get_city_detail_batch_payload(
         detail_scope = _normalize_city_detail_scope(scope)
 
         async def _build_uncached_payload() -> Dict[str, Any]:
-            semaphore = asyncio.Semaphore(_city_detail_batch_concurrency())
+            build_semaphore = _city_detail_batch_build_semaphore()
+            if not build_semaphore.acquire(blocking=False):
+                return {
+                    "cities": city_names,
+                    "details": {},
+                    "errors": {},
+                    "missing": list(city_names),
+                    "partial": True,
+                    "busy": True,
+                    "stale_reason": "city detail batch builder is busy",
+                }
 
-            async def _build_with_limit(city: str) -> Tuple[str, Dict[str, Any]]:
-                async with semaphore:
-                    return await _build_city_detail_batch_item_async(
-                        city,
-                        force_refresh=force_refresh,
-                        market_slug=market_slug,
-                        target_date=target_date,
-                        resolution=resolution,
-                        detail_scope=detail_scope,
-                        timing_recorder=timer,
-                    )
+            try:
+                semaphore = asyncio.Semaphore(_city_detail_batch_concurrency())
 
-            task_by_city = {
-                city: asyncio.create_task(_build_with_limit(city))
-                for city in city_names
-            }
-            task_city_lookup = {task: city for city, task in task_by_city.items()}
-            done, pending = await timer.measure_async(
-                "build_details",
-                lambda: asyncio.wait(
-                    task_by_city.values(),
-                    timeout=_city_detail_batch_partial_timeout_seconds(),
-                ),
-            )
-            details: Dict[str, Any] = {}
-            errors: Dict[str, str] = {}
-            missing: List[str] = []
-            for task in done:
-                city = task_city_lookup[task]
-                try:
-                    result_city, payload = task.result()
-                except Exception as exc:
-                    errors[city] = str(exc)
-                    continue
-                details[result_city] = payload
+                async def _build_with_limit(city: str) -> Tuple[str, Dict[str, Any]]:
+                    async with semaphore:
+                        return await _build_city_detail_batch_item_async(
+                            city,
+                            force_refresh=force_refresh,
+                            market_slug=market_slug,
+                            target_date=target_date,
+                            resolution=resolution,
+                            detail_scope=detail_scope,
+                            timing_recorder=timer,
+                        )
 
-            for task in pending:
-                city = task_city_lookup[task]
-                missing.append(city)
-                task.cancel()
+                task_by_city = {
+                    city: asyncio.create_task(_build_with_limit(city))
+                    for city in city_names
+                }
+                task_city_lookup = {task: city for city, task in task_by_city.items()}
+                done, pending = await timer.measure_async(
+                    "build_details",
+                    lambda: asyncio.wait(
+                        task_by_city.values(),
+                        timeout=_city_detail_batch_partial_timeout_seconds(),
+                    ),
+                )
+                details: Dict[str, Any] = {}
+                errors: Dict[str, str] = {}
+                missing: List[str] = []
+                for task in done:
+                    city = task_city_lookup[task]
+                    try:
+                        result_city, payload = task.result()
+                    except Exception as exc:
+                        errors[city] = str(exc)
+                        continue
+                    details[result_city] = payload
 
-            missing_set = set(missing)
-            missing = [city for city in city_names if city in missing_set]
-            return {
-                "cities": city_names,
-                "details": details,
-                "errors": errors,
-                "missing": missing,
-                "partial": bool(missing or errors),
-            }
+                for task in pending:
+                    city = task_city_lookup[task]
+                    missing.append(city)
+                    task.cancel()
+
+                missing_set = set(missing)
+                missing = [city for city in city_names if city in missing_set]
+                return {
+                    "cities": city_names,
+                    "details": details,
+                    "errors": errors,
+                    "missing": missing,
+                    "partial": bool(missing or errors),
+                }
+            finally:
+                build_semaphore.release()
 
         cache_ttl = _city_detail_batch_response_cache_ttl()
         cache_key = _city_detail_batch_response_cache_key(

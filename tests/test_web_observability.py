@@ -969,7 +969,45 @@ def test_chart_detail_payload_uses_threadpool_and_reuses_short_cache(monkeypatch
 
 def test_city_detail_batch_partial_timeout_default_stays_below_proxy_budget(monkeypatch):
     monkeypatch.delenv("POLYWEATHER_CITY_DETAIL_BATCH_PARTIAL_TIMEOUT_MS", raising=False)
-    assert city_api._city_detail_batch_partial_timeout_seconds() == 6.0
+    assert city_api._city_detail_batch_partial_timeout_seconds() == 3.0
+
+
+def test_city_detail_batch_returns_busy_when_global_builder_slot_is_full(monkeypatch):
+    import asyncio
+
+    build_calls = 0
+
+    async def build_batch_item(city, **kwargs):
+        nonlocal build_calls
+        build_calls += 1
+        return city, {"city": city}
+
+    monkeypatch.setenv("POLYWEATHER_CITY_DETAIL_BATCH_GLOBAL_CONCURRENCY", "1")
+    monkeypatch.setattr(city_api, "_CITY_DETAIL_BATCH_BUILD_SEMAPHORE", None)
+    monkeypatch.setattr(city_api, "_CITY_DETAIL_BATCH_BUILD_SEMAPHORE_SIZE", 0)
+    monkeypatch.setattr(city_api.legacy_routes, "_assert_entitlement", lambda request: None)
+    monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
+    monkeypatch.setattr(city_api, "_build_city_detail_batch_item_async", build_batch_item)
+
+    semaphore = city_api._city_detail_batch_build_semaphore()
+    assert semaphore.acquire(blocking=False) is True
+    try:
+        payload = asyncio.run(
+            city_api.get_city_detail_batch_payload(
+                object(),
+                cities="Paris,Shanghai",
+                resolution="10m",
+                limit=2,
+            )
+        )
+    finally:
+        semaphore.release()
+
+    assert payload["partial"] is True
+    assert payload["busy"] is True
+    assert payload["details"] == {}
+    assert payload["missing"] == ["paris", "shanghai"]
+    assert build_calls == 0
 
 
 def test_city_detail_batch_endpoint_limits_backend_concurrency(monkeypatch):
@@ -1039,6 +1077,7 @@ def test_city_detail_batch_returns_completed_details_when_one_city_is_slow(monke
         }
 
     monkeypatch.setenv("POLYWEATHER_CITY_DETAIL_BATCH_PARTIAL_TIMEOUT_MS", "20")
+    monkeypatch.setenv("POLYWEATHER_CITY_DETAIL_BATCH_CONCURRENCY", "2")
     monkeypatch.setattr(city_api.legacy_routes, "_assert_entitlement", lambda request: None)
     monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
     monkeypatch.setattr(city_api, "_build_city_detail_batch_item_async", build_batch_item)

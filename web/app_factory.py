@@ -41,7 +41,7 @@ def _observation_collector_enabled() -> bool:
     enabled = str(
         os.getenv("POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED") or "true"
     ).strip().lower() in {"1", "true", "yes", "on"}
-    return enabled and _service_role() in {"web", "api", "backend"}
+    return enabled and _service_role() in {"collector"}
 
 
 def create_app() -> FastAPI:

@@ -52,7 +52,7 @@ def test_scan_terminal_prewarm_only_runs_for_web_service(monkeypatch):
     assert app_factory._scan_terminal_prewarm_enabled() is True
 
 
-def test_observation_collector_only_runs_for_web_service(monkeypatch):
+def test_observation_collector_only_runs_for_collector_service(monkeypatch):
     from web import app_factory
 
     monkeypatch.delenv("POLYWEATHER_SERVICE_ROLE", raising=False)
@@ -63,22 +63,53 @@ def test_observation_collector_only_runs_for_web_service(monkeypatch):
     assert app_factory._observation_collector_enabled() is False
 
     monkeypatch.setenv("POLYWEATHER_SERVICE_ROLE", "web")
+    assert app_factory._observation_collector_enabled() is False
+
+    monkeypatch.setenv("POLYWEATHER_SERVICE_ROLE", "collector")
     assert app_factory._observation_collector_enabled() is True
 
     monkeypatch.setenv("POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED", "false")
     assert app_factory._observation_collector_enabled() is False
 
 
-def test_docker_compose_isolates_scan_terminal_prewarm_to_web_service():
+def test_docker_compose_isolates_collector_from_web_and_bot_services():
     compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    bot_block = compose.split("  polyweather:", 1)[1].split(
+        "\n  polyweather_frontend:",
+        1,
+    )[0]
+    web_block = compose.split("  polyweather_web:", 1)[1].split(
+        "\n  polyweather_collector:",
+        1,
+    )[0]
+    collector_block = compose.split("  polyweather_collector:", 1)[1].split(
+        "\nx-polyweather-base:",
+        1,
+    )[0]
 
     assert "POLYWEATHER_SERVICE_ROLE: web" in compose
     assert "POLYWEATHER_SERVICE_ROLE: bot" in compose
-    assert "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'false'" in compose
-    assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'false'" in compose
-    assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: ${POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED:-true}" in compose
-    assert "POLYWEATHER_OBSERVATION_COLLECTOR_AMSC_SEC: ${POLYWEATHER_OBSERVATION_COLLECTOR_AMSC_SEC:-180}" in compose
-    assert "POLYWEATHER_OBSERVATION_COLLECTOR_MADIS_SEC: ${POLYWEATHER_OBSERVATION_COLLECTOR_MADIS_SEC:-300}" in compose
+    assert "POLYWEATHER_SERVICE_ROLE: collector" in collector_block
+    assert "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'false'" in bot_block
+    assert "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'false'" in web_block
+    assert "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'false'" in collector_block
+    assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'false'" in bot_block
+    assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'false'" in web_block
+    assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'true'" in collector_block
+    assert "POLYWEATHER_CITY_DETAIL_BATCH_CONCURRENCY: ${POLYWEATHER_CITY_DETAIL_BATCH_CONCURRENCY:-1}" in web_block
+    assert "POLYWEATHER_CITY_DETAIL_BATCH_GLOBAL_CONCURRENCY: ${POLYWEATHER_CITY_DETAIL_BATCH_GLOBAL_CONCURRENCY:-1}" in web_block
+    assert "POLYWEATHER_CITY_DETAIL_BATCH_PARTIAL_TIMEOUT_MS: ${POLYWEATHER_CITY_DETAIL_BATCH_PARTIAL_TIMEOUT_MS:-3000}" in web_block
+    assert "UVICORN_WORKERS: ${UVICORN_WORKERS:-2}" in web_block
+    assert "POLYWEATHER_COLLECTOR_PATCH_ENDPOINT: ''" in bot_block
+    assert "POLYWEATHER_COLLECTOR_PATCH_ENDPOINT: ''" in web_block
+    assert (
+        "POLYWEATHER_COLLECTOR_PATCH_ENDPOINT: "
+        "${POLYWEATHER_COLLECTOR_PATCH_ENDPOINT:-http://polyweather_web:8000/api/internal/collector-patch}"
+        in collector_block
+    )
+    assert "command: python -m web.observation_collector_worker" in collector_block
+    assert "POLYWEATHER_OBSERVATION_COLLECTOR_AMSC_SEC: ${POLYWEATHER_OBSERVATION_COLLECTOR_AMSC_SEC:-180}" in collector_block
+    assert "POLYWEATHER_OBSERVATION_COLLECTOR_MADIS_SEC: ${POLYWEATHER_OBSERVATION_COLLECTOR_MADIS_SEC:-300}" in collector_block
 
 
 def test_scan_terminal_backend_timeout_returns_before_next_proxy_abort():
@@ -152,6 +183,7 @@ def test_deploy_script_retries_compose_recreate_races():
     assert "compose_up_retry()" in script
     assert "removal of container .* is already in progress" in script
     assert 'compose_up_retry "backend services" -d --no-deps polyweather_web polyweather' in script
+    assert 'compose_up_retry "observation collector" -d --no-deps polyweather_collector' in script
     assert 'compose_up_retry "frontend" -d --no-deps polyweather_frontend' in script
 
 

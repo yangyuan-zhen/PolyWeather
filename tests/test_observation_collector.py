@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+import sqlite3
 import time
 
 
@@ -130,3 +131,34 @@ def test_observation_collector_run_due_once_refreshes_panel_cache():
     assert collector.run_due_once(now_ts=1180.0) == 1
     assert calls == [("qingdao", False), ("qingdao", False)]
     assert refreshed == ["qingdao", "qingdao"]
+
+
+def test_observation_collector_worker_entrypoint_exists():
+    from web import observation_collector_worker
+
+    assert callable(observation_collector_worker.main)
+
+
+def test_ephemeral_observation_log_writes_skip_sqlite_lock(monkeypatch, tmp_path):
+    from src.database.db_manager import DBManager
+
+    db = DBManager(str(tmp_path / "polyweather.db"))
+
+    def locked_connection():
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(db, "_get_connection", locked_connection)
+
+    db.append_airport_obs(
+        icao="ZSQD",
+        city="qingdao",
+        temp_c=24.0,
+        obs_time="2026-06-08T04:00:00Z",
+    )
+    db.append_runway_obs(
+        icao="ZSQD",
+        city="qingdao",
+        runway="17/35",
+        target_runway_max=24.0,
+        otime_utc="2026-06-08T04:00:00Z",
+    )
