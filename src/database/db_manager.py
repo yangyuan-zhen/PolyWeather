@@ -1298,6 +1298,135 @@ class DBManager:
             conn.commit()
         return self._feedback_row_to_dict(row) if row else None
 
+    def grant_feedback_reward(
+        self,
+        feedback_id: int,
+        *,
+        points: int,
+        reason: str = "",
+    ) -> Dict[str, Any]:
+        safe_points = int(points or 0)
+        if safe_points <= 0:
+            return {"ok": False, "reason": "invalid_amount"}
+        normalized_reason = str(reason or "").strip()[:500]
+        if not normalized_reason:
+            return {"ok": False, "reason": "missing_reward_reason"}
+
+        now = datetime.now().isoformat()
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            conn.execute("BEGIN IMMEDIATE")
+            feedback_row = conn.execute(
+                """
+                SELECT id, category, message, source, status, contact, user_id,
+                       user_email, context_json, reward_points, reward_reason,
+                       rewarded_at, reward_status, created_at, updated_at
+                FROM user_feedback
+                WHERE id = ?
+                LIMIT 1
+                """,
+                (int(feedback_id),),
+            ).fetchone()
+            if not feedback_row:
+                return {"ok": False, "reason": "feedback_not_found"}
+
+            existing_points = int(feedback_row["reward_points"] or 0)
+            existing_status = str(feedback_row["reward_status"] or "").strip().lower()
+            email = str(feedback_row["user_email"] or "").strip().lower()
+            if not email:
+                return {
+                    "ok": False,
+                    "reason": "missing_feedback_user_email",
+                    "feedback": self._feedback_row_to_dict(feedback_row),
+                }
+
+            user_row = conn.execute(
+                """
+                SELECT telegram_id, username, points, supabase_email
+                FROM users
+                WHERE lower(trim(COALESCE(supabase_email, ''))) = ?
+                LIMIT 1
+                """,
+                (email,),
+            ).fetchone()
+            if not user_row:
+                user_row = conn.execute(
+                    """
+                    SELECT u.telegram_id, u.username, u.points, b.supabase_email
+                    FROM users u
+                    JOIN supabase_bindings b ON b.telegram_id = u.telegram_id
+                    WHERE lower(trim(COALESCE(b.supabase_email, ''))) = ?
+                    LIMIT 1
+                    """,
+                    (email,),
+                ).fetchone()
+            if not user_row:
+                return {
+                    "ok": False,
+                    "reason": "user_not_found",
+                    "supabase_email": email,
+                    "feedback": self._feedback_row_to_dict(feedback_row),
+                }
+
+            before = int(user_row["points"] or 0)
+            if existing_status == "granted" and existing_points > 0:
+                return {
+                    "ok": False,
+                    "reason": "already_rewarded",
+                    "feedback": self._feedback_row_to_dict(feedback_row),
+                    "points_after": before,
+                }
+
+            telegram_id = int(user_row["telegram_id"] or 0)
+            after = before + safe_points
+            conn.execute(
+                """
+                UPDATE users
+                SET points = ?
+                WHERE telegram_id = ?
+                """,
+                (after, telegram_id),
+            )
+            conn.execute(
+                """
+                UPDATE user_feedback
+                SET reward_points = ?,
+                    reward_reason = ?,
+                    reward_status = 'granted',
+                    rewarded_at = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (safe_points, normalized_reason, now, now, int(feedback_id)),
+            )
+            updated_feedback_row = conn.execute(
+                """
+                SELECT id, category, message, source, status, contact, user_id,
+                       user_email, context_json, reward_points, reward_reason,
+                       rewarded_at, reward_status, created_at, updated_at
+                FROM user_feedback
+                WHERE id = ?
+                LIMIT 1
+                """,
+                (int(feedback_id),),
+            ).fetchone()
+            conn.commit()
+
+        self._sync_points_to_supabase_user_metadata(telegram_id, force=True)
+        return {
+            "ok": True,
+            "feedback_id": int(feedback_id),
+            "telegram_id": telegram_id,
+            "username": str(user_row["username"] or ""),
+            "supabase_email": str(user_row["supabase_email"] or email),
+            "points_before": before,
+            "points_added": safe_points,
+            "points_after": after,
+            "feedback": self._feedback_row_to_dict(updated_feedback_row)
+            if updated_feedback_row
+            else None,
+        }
+
     def get_app_analytics_funnel_summary(self, *, days: int = 30) -> Dict[str, Any]:
         safe_days = max(1, min(int(days or 30), 365))
         since_dt = datetime.now() - timedelta(days=safe_days)

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Request, Response
 
-from web.core import GrantPointsRequest
+from web.core import FeedbackRewardRequest, GrantPointsRequest
 from web.services.ops_api import (
     extend_ops_subscription,
     get_ops_analytics_funnel,
@@ -28,6 +28,7 @@ from web.services.ops_api import (
     list_ops_payments,
     search_ops_users,
     update_ops_config,
+    grant_ops_feedback_reward,
     update_ops_sensitive_config,
     update_ops_feedback_status,
     get_ops_training_accuracy,
@@ -86,6 +87,20 @@ async def ops_feedback_update_status(request: Request, feedback_id: int):
     body = _json.loads(body_bytes.decode("utf-8") or "{}")
     status = str(body.get("status") or "").strip()
     return update_ops_feedback_status(request, feedback_id=feedback_id, status=status)
+
+
+@router.post("/api/ops/feedback/{feedback_id}/reward")
+async def ops_feedback_grant_reward(
+    request: Request,
+    feedback_id: int,
+    body: FeedbackRewardRequest,
+):
+    return grant_ops_feedback_reward(
+        request,
+        feedback_id=feedback_id,
+        points=body.points,
+        reason=body.reason,
+    )
 
 
 @router.get("/api/ops/memberships")

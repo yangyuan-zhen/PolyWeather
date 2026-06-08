@@ -5,6 +5,7 @@ from fastapi import HTTPException
 
 from src.database.db_manager import DBManager
 from web.services import feedback_api
+from web.services import ops_api
 
 
 def test_user_feedback_round_trip_includes_context_and_status(tmp_path):
@@ -91,6 +92,85 @@ def test_user_feedback_reward_metadata_round_trip(tmp_path):
     assert row["reward_reason"] == "Valid data freshness report"
     assert row["reward_status"] == "granted"
     assert row["rewarded_at"] == rewarded["rewarded_at"]
+
+
+def test_feedback_reward_grant_adds_points_and_marks_feedback(tmp_path):
+    db = DBManager(str(tmp_path / "polyweather-feedback-grant.db"))
+    db.upsert_user(1001, "pilot")
+    with db._get_connection() as conn:  # noqa: SLF001
+        conn.execute(
+            """
+            UPDATE users
+            SET points = ?, supabase_email = ?
+            WHERE telegram_id = ?
+            """,
+            (50, "pilot@example.com", 1001),
+        )
+        conn.commit()
+
+    created = db.append_user_feedback(
+        category="data",
+        message="Amsterdam METAR stale.",
+        user_id="user-1001",
+        user_email="pilot@example.com",
+    )
+
+    result = db.grant_feedback_reward(
+        created["id"],
+        points=300,
+        reason="Valid stale METAR report",
+    )
+
+    assert result["ok"] is True
+    assert result["points_before"] == 50
+    assert result["points_added"] == 300
+    assert result["points_after"] == 350
+    assert result["feedback"]["reward_points"] == 300
+    assert result["feedback"]["reward_reason"] == "Valid stale METAR report"
+    assert result["feedback"]["reward_status"] == "granted"
+    assert db.get_points_by_supabase_email("pilot@example.com") == 350
+
+    duplicate = db.grant_feedback_reward(
+        created["id"],
+        points=300,
+        reason="Duplicate grant should not apply",
+    )
+
+    assert duplicate["ok"] is False
+    assert duplicate["reason"] == "already_rewarded"
+    assert duplicate["points_after"] == 350
+
+
+def test_ops_feedback_reward_service_returns_operator(monkeypatch):
+    class FakeDB:
+        def grant_feedback_reward(self, feedback_id, *, points, reason):
+            return {
+                "ok": True,
+                "feedback_id": feedback_id,
+                "points_added": points,
+                "points_after": 900,
+                "feedback": {
+                    "id": feedback_id,
+                    "reward_points": points,
+                    "reward_reason": reason,
+                    "reward_status": "granted",
+                },
+            }
+
+    monkeypatch.setattr(ops_api, "_require_ops", lambda request: {"email": "ops@example.com"})
+    monkeypatch.setattr(ops_api, "DBManager", lambda: FakeDB())
+
+    payload = ops_api.grant_ops_feedback_reward(
+        object(),
+        feedback_id=42,
+        points=500,
+        reason="High impact chart bug",
+    )
+
+    assert payload["ok"] is True
+    assert payload["operator_email"] == "ops@example.com"
+    assert payload["feedback"]["reward_points"] == 500
+    assert payload["feedback"]["reward_reason"] == "High impact chart bug"
 
 
 def test_user_feedback_identity_filter_returns_only_matching_user(tmp_path):

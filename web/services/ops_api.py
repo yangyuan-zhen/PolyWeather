@@ -189,6 +189,30 @@ def update_ops_feedback_status(
     return {"ok": True, "feedback": updated}
 
 
+def grant_ops_feedback_reward(
+    request: Request,
+    *,
+    feedback_id: int,
+    points: int,
+    reason: str,
+) -> Dict[str, Any]:
+    admin = _require_ops(request) or {}
+    db = DBManager()
+    result = db.grant_feedback_reward(
+        feedback_id,
+        points=points,
+        reason=reason,
+    )
+    result["operator_email"] = admin.get("email")
+    if not result.get("ok"):
+        reason_code = str(result.get("reason") or "feedback_reward_failed")
+        status_code = 404 if reason_code in {"feedback_not_found", "user_not_found"} else 400
+        if reason_code == "already_rewarded":
+            status_code = 409
+        raise HTTPException(status_code=status_code, detail=result)
+    return result
+
+
 def _list_active_subscriptions_with_windows(
     limit: int,
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], bool]:

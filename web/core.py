@@ -504,6 +504,11 @@ class GrantPointsRequest(BaseModel):
     points: int = Field(..., gt=0, le=100000)
 
 
+class FeedbackRewardRequest(BaseModel):
+    points: int = Field(..., gt=0, le=100000)
+    reason: str = Field(..., min_length=2, max_length=500)
+
+
 def _sf(v) -> Optional[float]:
     if v is None:
         return None
