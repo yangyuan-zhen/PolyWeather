@@ -23,6 +23,10 @@ export function runTests() {
     path.join(root, "components", "landing", "LandingLocaleToggle.tsx"),
     "utf8",
   );
+  const staticCitiesSource = fs.readFileSync(
+    path.join(root, "lib", "static-cities.ts"),
+    "utf8",
+  );
   const appPageSource = fs.readFileSync(path.join(root, "app", "page.tsx"), "utf8");
   const publicPngPath = path.join(root, "public", "static", "web.png");
   const fixturePngPath = path.join(root, "components", "landing", "__tests__", "fixtures", "web.png");
@@ -65,6 +69,24 @@ export function runTests() {
   assert(source.includes("/static/web.webp"), "landing page must load the lighter WebP product preview image");
   assert(source.includes("/static/tel.png"), "landing page must include the Telegram alert screenshot");
   assert(source.includes("#screenshots"), "landing navigation must expose the product screenshot section");
+  assert(source.includes("#supported-cities"), "landing navigation must expose the supported cities section");
+  assert(source.includes('id="supported-cities"'), "landing page must include a supported cities section");
+  assert(source.includes("当前支持城市"), "landing page must tell Chinese users which cities are currently supported");
+  assert(source.includes("Supported cities"), "landing page must tell English users which cities are currently supported");
+  assert(source.includes('from "@/lib/static-cities"'), "landing supported cities must reuse the static city list instead of hand-writing coverage");
+  assert(source.includes("SUPPORTED_CITY_GROUPS"), "landing supported cities must group coverage by region for scanning");
+  assert(
+    staticCitiesSource.includes('"display_name": "Hong Kong"') &&
+      staticCitiesSource.includes('"display_name": "New York"') &&
+      staticCitiesSource.includes('"display_name": "Shanghai"'),
+    "static city fallback must include representative supported markets",
+  );
+  assert(
+    source.includes("group.cities.map") &&
+      source.includes("cityDisplayName(city)") &&
+      source.includes("{city.icao}"),
+    "landing supported cities must render names and station codes from the generated city groups",
+  );
   assert(source.includes("结算源优先") && source.includes("差异化卖点"), "landing page must explain the differentiated settlement-source positioning");
   assert(!source.includes('src="/static/web.png"'), "landing hero must not use the heavy PNG as its primary LCP image");
   assert(

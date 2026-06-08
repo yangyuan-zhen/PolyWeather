@@ -10,6 +10,8 @@ import {
   pickLandingLocale,
   type LandingLocale,
 } from "@/components/landing/landingLocale";
+import type { CityListItem } from "@/lib/dashboard-types";
+import { STATIC_CITY_LIST } from "@/lib/static-cities";
 
 const COVERAGE_EN = [
   "AMOS 60s runway sensors",
@@ -46,6 +48,52 @@ const PRO_FEATURES_ZH = [
   "付费 Telegram 群准入与提醒工作流",
   "订阅与准入问题优先支持",
 ];
+
+const SUPPORTED_CITY_GROUPS: Array<{
+  descriptionEn: string;
+  descriptionZh: string;
+  include: (city: CityListItem) => boolean;
+  labelEn: string;
+  labelZh: string;
+}> = [
+  {
+    labelEn: "Asia-Pacific",
+    labelZh: "亚太",
+    descriptionEn: "China, East Asia, Southeast Asia, South Asia, and Oceania markets.",
+    descriptionZh: "中国、东亚、东南亚、南亚与大洋洲市场。",
+    include: (city) => city.lon >= 60 || city.lon <= -170,
+  },
+  {
+    labelEn: "Europe / Middle East / Africa",
+    labelZh: "欧洲 / 中东 / 非洲",
+    descriptionEn: "Airport and official-station markets across EMEA.",
+    descriptionZh: "覆盖欧洲、中东和非洲的机场与官方站市场。",
+    include: (city) => city.lon > -30 && city.lon < 60,
+  },
+  {
+    labelEn: "Americas",
+    labelZh: "美洲",
+    descriptionEn: "North and South American temperature markets.",
+    descriptionZh: "北美与南美温度市场。",
+    include: (city) => city.lon >= -170 && city.lon <= -30,
+  },
+];
+
+const supportedCityGroups = SUPPORTED_CITY_GROUPS.map((group) => ({
+  ...group,
+  cities: STATIC_CITY_LIST.filter(group.include).sort((left, right) =>
+    cityDisplayName(left).localeCompare(cityDisplayName(right), "en"),
+  ),
+})).filter((group) => group.cities.length > 0);
+
+const supportedCityCount = supportedCityGroups.reduce(
+  (total, group) => total + group.cities.length,
+  0,
+);
+
+function cityDisplayName(city: CityListItem) {
+  return city.display_name || city.name;
+}
 
 type IconName =
   | "radar"
@@ -265,6 +313,9 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
             </a>
             <a href="#screenshots" className="hover:text-slate-950">
               {isEn ? "Screens" : "截图"}
+            </a>
+            <a href="#supported-cities" className="hover:text-slate-950">
+              {isEn ? "Cities" : "城市"}
             </a>
             <Link href="/docs/chart-guide" className="hover:text-slate-950">
               {isEn ? "Guide" : "读图"}
@@ -660,6 +711,70 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                   {isEn ? "Talk to us" : "联系开通"}
                   <LandingIcon name="arrow" size={15} />
                 </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="supported-cities" className="scroll-mt-16 border-t border-slate-200 bg-[#fbfbfa] px-4 py-20 sm:px-6">
+          <div className="mx-auto max-w-6xl">
+            <div className="grid gap-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-start">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+                  {isEn ? "Supported cities" : "当前支持城市"}
+                </p>
+                <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+                  {isEn
+                    ? `${supportedCityCount} supported temperature markets`
+                    : `目前支持 ${supportedCityCount} 个温度市场城市`}
+                </h2>
+                <p className="mt-4 text-sm leading-7 text-slate-600">
+                  {isEn
+                    ? "Coverage is generated from the same city list used by the terminal. If your market is not listed, contact us to evaluate the settlement station, source cadence, and alert workflow."
+                    : "这里复用终端同一份城市列表生成。未列出的市场可以联系评估结算站、数据源频率和提醒工作流。"}
+                </p>
+                <Link
+                  href="/terminal"
+                  className="mt-6 inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 shadow-sm hover:border-slate-300 hover:text-slate-950"
+                >
+                  {isEn ? "Open terminal" : "进入终端"}
+                  <LandingIcon name="arrow" size={15} />
+                </Link>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-3">
+                {supportedCityGroups.map((group) => (
+                  <article key={group.labelEn} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-black text-slate-950">
+                          {isEn ? group.labelEn : group.labelZh}
+                        </h3>
+                        <p className="mt-2 text-xs leading-5 text-slate-500">
+                          {isEn ? group.descriptionEn : group.descriptionZh}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-md border border-slate-200 bg-[#fbfbfa] px-2 py-1 font-mono text-xs font-black text-slate-700">
+                        {group.cities.length}
+                      </span>
+                    </div>
+                    <ul className="mt-5 space-y-2">
+                      {group.cities.map((city) => (
+                        <li
+                          key={city.name}
+                          className="flex min-h-9 items-center justify-between gap-3 border-b border-slate-100 pb-2 last:border-b-0 last:pb-0"
+                        >
+                          <span className="min-w-0 truncate text-sm font-semibold text-slate-800">
+                            {cityDisplayName(city)}
+                          </span>
+                          <span className="shrink-0 font-mono text-[11px] font-bold text-slate-400">
+                            {city.icao}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </article>
+                ))}
               </div>
             </div>
           </div>
