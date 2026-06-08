@@ -102,6 +102,8 @@ const TERMINAL_NAV_ITEMS = [
 ] as const;
 const AUTH_PROFILE_REQUEST_TIMEOUT_MS = 4500;
 const AUTH_DECISION_RECOVERY_MS = 10_000;
+const AUTH_PROFILE_RETRY_INITIAL_DELAY_MS = 5_000;
+const AUTH_PROFILE_RETRY_POLL_MS = 30_000;
 const ACTIVE_ACCESS_CACHE_KEY = "polyweather_terminal_active_access_v1";
 const ACTIVE_ACCESS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
@@ -1554,10 +1556,10 @@ function ScanTerminalScreen() {
 
     const firstRetry = window.setTimeout(() => {
       void retryAuthProfile();
-    }, 1500);
+    }, AUTH_PROFILE_RETRY_INITIAL_DELAY_MS);
     const interval = window.setInterval(() => {
       void retryAuthProfile();
-    }, 5000);
+    }, AUTH_PROFILE_RETRY_POLL_MS);
     return () => {
       cancelled = true;
       window.clearTimeout(firstRetry);

@@ -22,6 +22,32 @@ def test_backend_shared_timing_helper_avoids_sensitive_identity_fields():
     assert "email" not in source
 
 
+def test_server_timing_recorder_warns_on_slow_stages(monkeypatch):
+    import web.services.request_timing as request_timing
+
+    warnings = []
+    monkeypatch.setenv("POLYWEATHER_SLOW_STAGE_LOG_MS", "0")
+    monkeypatch.setattr(
+        request_timing.logger,
+        "warning",
+        lambda *args, **kwargs: warnings.append(args),
+    )
+
+    recorder = request_timing.ServerTimingRecorder(
+        None,
+        log_name="unit_timing",
+        prefix="unit",
+        state_attr="unit_server_timing",
+    )
+    recorder.measure("sqlite_query", lambda: None)
+    recorder.finish(outcome="ok", status_code=200)
+
+    assert warnings
+    assert warnings[0][0] == "slow_request_timing log_name={} outcome={} status_code={} slow_stages={}"
+    assert warnings[0][1] == "unit_timing"
+    assert "sqlite_query" in warnings[0][4]
+
+
 def test_city_detail_batch_response_includes_backend_server_timing(monkeypatch):
     city_api._CITY_DETAIL_BATCH_RESPONSE_CACHE.clear()
     city_api._CITY_DETAIL_BATCH_RESPONSE_CACHE_TS.clear()

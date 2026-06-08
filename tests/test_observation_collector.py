@@ -288,3 +288,38 @@ def test_ephemeral_observation_log_writes_skip_sqlite_lock(monkeypatch, tmp_path
         target_runway_max=24.0,
         otime_utc="2026-06-08T04:00:00Z",
     )
+
+
+def test_airport_obs_batch_writes_share_one_sqlite_transaction(monkeypatch, tmp_path):
+    from src.database.db_manager import DBManager
+
+    db = DBManager(str(tmp_path / "polyweather-airport-obs-batch.db"))
+    original_get_connection = db._get_connection
+    connection_calls = {"count": 0}
+
+    def counting_connection():
+        connection_calls["count"] += 1
+        return original_get_connection()
+
+    monkeypatch.setattr(db, "_get_connection", counting_connection)
+
+    db.append_airport_obs_batch(
+        [
+            {
+                "icao": "ZBAA",
+                "city": "beijing",
+                "temp_c": 24.0,
+                "obs_time": "2026-06-08T04:00:00Z",
+            },
+            {
+                "icao": "ZBAD",
+                "city": "beijing",
+                "temp_c": 25.0,
+                "obs_time": "2026-06-08T04:00:00Z",
+            },
+        ]
+    )
+
+    assert connection_calls["count"] == 1
+    assert [row["temp_c"] for row in db.get_airport_obs_recent("ZBAA", minutes=180)] == [24.0]
+    assert [row["temp_c"] for row in db.get_airport_obs_recent("ZBAD", minutes=180)] == [25.0]

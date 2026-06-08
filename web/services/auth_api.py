@@ -156,7 +156,7 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
                         lambda: legacy_routes.SUPABASE_ENTITLEMENT.get_subscription_window(
                             user_id,
                             respect_requirement=False,
-                            bypass_cache=True,
+                            bypass_cache=False,
                             unknown_on_error=True,
                         ),
                     )

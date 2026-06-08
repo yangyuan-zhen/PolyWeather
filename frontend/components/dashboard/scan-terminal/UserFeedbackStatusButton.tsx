@@ -1,17 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bell, RefreshCcw } from "lucide-react";
 import type { UserFeedbackEntry, UserFeedbackPayload } from "@/types/ops";
 import {
   buildFeedbackNotificationKey,
   countUnseenFeedbackUpdates,
+  FEEDBACK_STATUS_CACHE_TTL_MS,
   FEEDBACK_STATUS_POLL_MS,
   feedbackStatusLabel,
   feedbackStatusTone,
 } from "./feedback-status";
 
 const FEEDBACK_STATUS_SEEN_KEY = "polyweather_feedback_status_seen_v1";
+const FEEDBACK_STATUS_CACHE_KEY = "polyweather_feedback_status_cache_v1";
 
 function loadSeenKeys() {
   if (typeof window === "undefined") return new Set<string>();
@@ -31,6 +33,33 @@ function saveSeenKeys(keys: Set<string>) {
     window.localStorage.setItem(FEEDBACK_STATUS_SEEN_KEY, JSON.stringify(trimmed));
   } catch {
     // Ignore storage failures; the badge can reappear without breaking feedback status.
+  }
+}
+
+function readFeedbackStatusCache(): { entries: UserFeedbackEntry[]; ts: number } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(FEEDBACK_STATUS_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const ts = Number(parsed?.ts || 0);
+    const entries = Array.isArray(parsed?.entries) ? parsed.entries : [];
+    if (!ts || Date.now() - ts > FEEDBACK_STATUS_CACHE_TTL_MS) return null;
+    return { entries, ts };
+  } catch {
+    return null;
+  }
+}
+
+function writeFeedbackStatusCache(entries: UserFeedbackEntry[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      FEEDBACK_STATUS_CACHE_KEY,
+      JSON.stringify({ entries: entries.slice(0, 20), ts: Date.now() }),
+    );
+  } catch {
+    // Ignore storage failures; status will still refresh over the network.
   }
 }
 
@@ -57,11 +86,12 @@ export function UserFeedbackStatusButton({
   refreshKey?: number;
 }) {
   const [available, setAvailable] = useState(true);
-  const [entries, setEntries] = useState<UserFeedbackEntry[]>([]);
+  const [entries, setEntries] = useState<UserFeedbackEntry[]>(() => readFeedbackStatusCache()?.entries || []);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [seenKeys, setSeenKeys] = useState<Set<string>>(() => loadSeenKeys());
+  const lastLoadedAtRef = useRef<number>(readFeedbackStatusCache()?.ts || 0);
 
   const unseenCount = useMemo(
     () => countUnseenFeedbackUpdates(entries, seenKeys),
@@ -75,8 +105,26 @@ export function UserFeedbackStatusButton({
       ? "No submitted feedback yet."
       : "暂无已提交反馈。";
 
-  const load = useCallback(async (signal?: AbortSignal) => {
+  const load = useCallback(async (
+    signal?: AbortSignal,
+    options?: { force?: boolean },
+  ) => {
     if (typeof fetch !== "function") return;
+    const cached = readFeedbackStatusCache();
+    if (!options?.force && cached) {
+      lastLoadedAtRef.current = cached.ts;
+      setEntries(cached.entries);
+      setAvailable(true);
+      return;
+    }
+    const now = Date.now();
+    if (
+      !options?.force &&
+      lastLoadedAtRef.current &&
+      now - lastLoadedAtRef.current < FEEDBACK_STATUS_CACHE_TTL_MS
+    ) {
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch("/api/feedback?limit=12", {
@@ -93,7 +141,10 @@ export function UserFeedbackStatusButton({
         throw new Error(`HTTP ${res.status}`);
       }
       const payload = (await res.json()) as UserFeedbackPayload;
-      setEntries(Array.isArray(payload.feedback) ? payload.feedback : []);
+      const nextEntries = Array.isArray(payload.feedback) ? payload.feedback : [];
+      setEntries(nextEntries);
+      writeFeedbackStatusCache(nextEntries);
+      lastLoadedAtRef.current = Date.now();
       setAvailable(true);
       setError("");
     } catch (err) {
@@ -115,10 +166,15 @@ export function UserFeedbackStatusButton({
 
   useEffect(() => {
     const controller = new AbortController();
-    void load(controller.signal);
+    void load(controller.signal, { force: refreshKey > 0 });
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") void load();
+      if (
+        document.visibilityState === "visible" &&
+        Date.now() - lastLoadedAtRef.current >= FEEDBACK_STATUS_CACHE_TTL_MS
+      ) {
+        void load();
+      }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     const id = window.setInterval(() => {
@@ -174,7 +230,7 @@ export function UserFeedbackStatusButton({
             </div>
             <button
               type="button"
-              onClick={() => void load()}
+              onClick={() => void load(undefined, { force: true })}
               disabled={loading}
               className="grid h-7 w-7 place-items-center rounded border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
               title={isEn ? "Refresh" : "刷新"}

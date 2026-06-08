@@ -1155,17 +1155,21 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             try:
                 from src.database.db_manager import DBManager
                 db = DBManager()
+                obs_rows = []
                 for row in cluster_data:
                     icao = row.get("icao")
                     temp_c = row.get("temp_c") if "temp_c" in row else row.get("temp")
                     if icao and temp_c is not None:
-                        db.append_airport_obs(
-                            icao=str(icao),
-                            city=city_lower,
-                            temp_c=temp_c,
-                            wind_kt=row.get("wind_speed_kt"),
-                            obs_time=str(row.get("obs_time") or datetime.now().isoformat()),
+                        obs_rows.append(
+                            {
+                                "icao": str(icao),
+                                "city": city_lower,
+                                "temp_c": temp_c,
+                                "wind_kt": row.get("wind_speed_kt"),
+                                "obs_time": str(row.get("obs_time") or datetime.now().isoformat()),
+                            }
                         )
+                db.append_airport_obs_batch(obs_rows)
             except Exception:
                 logger.exception("airport_obs_log append failed for metar cluster city={}", city_lower)
 

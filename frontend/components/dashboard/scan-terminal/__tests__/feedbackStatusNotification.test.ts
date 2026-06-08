@@ -1,6 +1,10 @@
+import fs from "node:fs";
+import path from "node:path";
+
 import {
   buildFeedbackNotificationKey,
   countUnseenFeedbackUpdates,
+  FEEDBACK_STATUS_CACHE_TTL_MS,
   FEEDBACK_STATUS_POLL_MS,
   feedbackStatusLabel,
 } from "@/components/dashboard/scan-terminal/feedback-status";
@@ -10,7 +14,22 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 export function runTests() {
-  assert(FEEDBACK_STATUS_POLL_MS === 600_000, "feedback bell background polling should run every 10 minutes");
+  const projectRoot = process.cwd();
+  const statusButtonSource = fs.readFileSync(
+    path.join(projectRoot, "components", "dashboard", "scan-terminal", "UserFeedbackStatusButton.tsx"),
+    "utf8",
+  );
+
+  assert(FEEDBACK_STATUS_POLL_MS === 30 * 60 * 1000, "feedback bell background polling should run every 30 minutes");
+  assert(FEEDBACK_STATUS_CACHE_TTL_MS === 10 * 60 * 1000, "feedback bell should reuse a 10 minute local status cache");
+  assert(
+    statusButtonSource.includes("FEEDBACK_STATUS_CACHE_KEY") &&
+      statusButtonSource.includes("readFeedbackStatusCache") &&
+      statusButtonSource.includes("writeFeedbackStatusCache") &&
+      statusButtonSource.includes("lastLoadedAtRef") &&
+      statusButtonSource.includes("FEEDBACK_STATUS_CACHE_TTL_MS"),
+    "feedback status button must use a local cache and avoid refetching on every visibility resume",
+  );
   assert(feedbackStatusLabel("open", false) === "已收到", "open feedback should read as received to users");
   assert(feedbackStatusLabel("triaged", false) === "已确认", "triaged feedback should read as confirmed to users");
   assert(feedbackStatusLabel("investigating", false) === "处理中", "investigating feedback should read as in progress");

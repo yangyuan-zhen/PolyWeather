@@ -169,6 +169,12 @@ export async function runTests() {
     "terminal online-user presence should refresh slowly and pause while the browser tab is hidden",
   );
   assert(
+    dashboardSource.includes("AUTH_PROFILE_RETRY_INITIAL_DELAY_MS = 5_000") &&
+      dashboardSource.includes("AUTH_PROFILE_RETRY_POLL_MS = 30_000") &&
+      !dashboardSource.includes("}, 5000);"),
+    "terminal auth subscription retry should back off after the first retry instead of polling auth/me every 5 seconds",
+  );
+  assert(
     chartSource.includes("IntersectionObserver") &&
       chartSource.includes("shouldFetchCityDetailForChart") &&
       chartSource.includes("isChartVisible"),

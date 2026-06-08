@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import threading
 import time
@@ -12,6 +13,14 @@ from loguru import logger
 
 
 T = TypeVar("T")
+
+
+def _slow_stage_threshold_ms() -> float:
+    raw = str(os.getenv("POLYWEATHER_SLOW_STAGE_LOG_MS") or "1500").strip()
+    try:
+        return max(0.0, float(raw))
+    except (TypeError, ValueError):
+        return 1500.0
 
 
 class ServerTimingRecorder:
@@ -71,6 +80,20 @@ class ServerTimingRecorder:
             status_code,
             dict(self.timings_ms),
         )
+        threshold = _slow_stage_threshold_ms()
+        slow_stages = {
+            stage: duration
+            for stage, duration in dict(self.timings_ms).items()
+            if duration >= threshold
+        }
+        if slow_stages:
+            logger.warning(
+                "slow_request_timing log_name={} outcome={} status_code={} slow_stages={}",
+                self.log_name,
+                outcome,
+                status_code,
+                slow_stages,
+            )
 
     def _metric_name(self, stage: str) -> str:
         raw = f"{self.prefix}_{stage}"

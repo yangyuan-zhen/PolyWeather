@@ -3019,16 +3019,50 @@ class DBManager:
         pressure_hpa: Optional[float] = None,
         obs_time: str,
     ) -> None:
-        safe_icao = str(icao).strip().upper()
-        safe_city = str(city).strip().lower()
+        self.append_airport_obs_batch(
+            [
+                {
+                    "icao": icao,
+                    "city": city,
+                    "temp_c": temp_c,
+                    "wind_kt": wind_kt,
+                    "pressure_hpa": pressure_hpa,
+                    "obs_time": obs_time,
+                }
+            ]
+        )
+
+    def append_airport_obs_batch(self, rows: List[Dict[str, Any]]) -> None:
+        normalized_rows: List[Tuple[str, str, Optional[float], Optional[float], Optional[float], str]] = []
+        for row in rows or []:
+            if not isinstance(row, dict):
+                continue
+            safe_icao = str(row.get("icao") or "").strip().upper()
+            safe_city = str(row.get("city") or "").strip().lower()
+            safe_obs_time = str(row.get("obs_time") or "").strip()
+            if not safe_icao or not safe_city or not safe_obs_time:
+                continue
+            normalized_rows.append(
+                (
+                    safe_icao,
+                    safe_city,
+                    row.get("temp_c"),
+                    row.get("wind_kt"),
+                    row.get("pressure_hpa"),
+                    safe_obs_time,
+                )
+            )
+        if not normalized_rows:
+            return
+        first_icao, first_city = normalized_rows[0][0], normalized_rows[0][1]
         try:
             with self._get_connection() as conn:
-                conn.execute(
+                conn.executemany(
                     """
                     INSERT INTO airport_obs_log (icao, city, temp_c, wind_kt, pressure_hpa, obs_time)
                     VALUES (?, ?, ?, ?, ?, ?)
                     """,
-                    (safe_icao, safe_city, temp_c, wind_kt, pressure_hpa, str(obs_time)),
+                    normalized_rows,
                 )
                 conn.execute(
                     "DELETE FROM airport_obs_log WHERE created_at < datetime('now', '-2 hours')"
@@ -3038,8 +3072,8 @@ class DBManager:
             if self._is_sqlite_locked_error(exc):
                 logger.warning(
                     "airport obs log skipped because sqlite is locked icao={} city={}",
-                    safe_icao,
-                    safe_city,
+                    first_icao,
+                    first_city,
                 )
                 return
             raise
