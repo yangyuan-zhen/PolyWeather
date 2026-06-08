@@ -89,6 +89,18 @@ interface DebSummary {
     sample_days?: number;
     city_count?: number;
   };
+  usable_recent?: {
+    window?: string;
+    city_count?: number;
+    samples?: number;
+    hits?: number;
+    hit_rate?: number | null;
+    avg_mae?: number | null;
+    recommendations?: {
+      primary?: number;
+      supporting?: number;
+    };
+  };
   recent_7d?: {
     hit_rate?: number | null;
     mae?: number | null;
@@ -160,12 +172,16 @@ export function TrainingPageClient() {
     return {
       avgHit: debSummary?.historical?.avg_hit_rate ?? avgHit,
       avgMae: debSummary?.historical?.avg_mae ?? avgMae,
+      usableRecent: debSummary?.usable_recent,
       recent7Hit: debSummary?.recent_7d?.hit_rate,
       recent14Hit: debSummary?.recent_14d?.hit_rate,
       best,
       worst,
     };
   }, [accuracy, debSummary]);
+
+  const usableWindowLabel = (window?: string) =>
+    window === "recent_14d" ? "DEB 可用近 14 天命中" : "DEB 可用近 7 天命中";
 
   const debChartData = useMemo(() => {
     if (!accuracy?.length) return [];
@@ -247,7 +263,9 @@ export function TrainingPageClient() {
         <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
           <KpiCard
             icon={Target} color="bg-cyan-500/20 text-cyan-400"
-            label="DEB 历史平均命中" value={`${kpis.avgHit.toFixed(1)}%`}
+            label={usableWindowLabel(kpis.usableRecent?.window)}
+            value={kpis.usableRecent?.hit_rate == null ? "—" : `${kpis.usableRecent.hit_rate.toFixed(1)}%`}
+            sub={`可用城市 ${kpis.usableRecent?.city_count ?? 0} · 样本 ${kpis.usableRecent?.samples ?? 0} · 历史 ${kpis.avgHit.toFixed(1)}%`}
           />
           <KpiCard
             icon={Target} color="bg-emerald-500/20 text-emerald-400"

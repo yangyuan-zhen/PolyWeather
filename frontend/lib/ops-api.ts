@@ -202,6 +202,18 @@ export const opsApi = {
           sample_days?: number;
           hits?: number;
         };
+        usable_recent?: {
+          window?: string;
+          city_count?: number;
+          samples?: number;
+          hits?: number;
+          hit_rate?: number | null;
+          avg_mae?: number | null;
+          recommendations?: {
+            primary?: number;
+            supporting?: number;
+          };
+        };
         recent_7d?: {
           start_date?: string | null;
           end_date?: string | null;

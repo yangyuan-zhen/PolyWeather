@@ -90,6 +90,47 @@ def test_training_accuracy_payload_includes_city_deb_trust_strategy():
     assert rows["gamma"]["deb_recent"]["recommendation"] == "insufficient"
 
 
+def test_training_accuracy_payload_summarizes_usable_recent_deb_cities():
+    history = {
+        "alpha": {
+            "2026-06-01": {"actual_high": 20.0, "deb_prediction": 20.1},
+            "2026-06-02": {"actual_high": 21.0, "deb_prediction": 21.1},
+            "2026-06-03": {"actual_high": 22.0, "deb_prediction": 22.1},
+            "2026-06-04": {"actual_high": 23.0, "deb_prediction": 23.1},
+        },
+        "beta": {
+            "2026-06-01": {"actual_high": 30.0, "deb_prediction": 28.0},
+            "2026-06-02": {"actual_high": 31.0, "deb_prediction": 29.0},
+            "2026-06-03": {"actual_high": 32.0, "deb_prediction": 30.0},
+            "2026-06-04": {"actual_high": 33.0, "deb_prediction": 31.0},
+        },
+        "gamma": {
+            "2026-06-04": {"actual_high": 25.0, "deb_prediction": 25.1},
+        },
+    }
+    registry = {
+        "alpha": {"name": "Alpha"},
+        "beta": {"name": "Beta"},
+        "gamma": {"name": "Gamma"},
+    }
+
+    payload = _build_training_accuracy_payload(
+        history,
+        registry,
+        today_str="2026-06-07",
+    )
+
+    usable = payload["deb_summary"]["usable_recent"]
+
+    assert usable["window"] == "recent_7d"
+    assert usable["city_count"] == 1
+    assert usable["samples"] == 4
+    assert usable["hits"] == 4
+    assert usable["hit_rate"] == 100.0
+    assert usable["avg_mae"] == 0.1
+    assert usable["recommendations"] == {"primary": 1, "supporting": 0}
+
+
 def test_training_accuracy_payload_caps_version_backtest_samples(monkeypatch):
     start = date(2025, 1, 1)
     history = {

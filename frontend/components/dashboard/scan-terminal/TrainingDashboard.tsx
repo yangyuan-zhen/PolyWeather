@@ -40,6 +40,19 @@ type DebHistoricalSummary = {
   hits?: number;
 };
 
+type DebUsableRecentSummary = {
+  window?: "recent_7d" | "recent_14d" | string;
+  city_count?: number;
+  samples?: number;
+  hits?: number;
+  hit_rate?: number | null;
+  avg_mae?: number | null;
+  recommendations?: {
+    primary?: number;
+    supporting?: number;
+  };
+};
+
 type DebVersionSummary = {
   version?: string;
   samples?: number;
@@ -51,6 +64,7 @@ type DebVersionSummary = {
 
 type DebSummaryPayload = {
   historical?: DebHistoricalSummary;
+  usable_recent?: DebUsableRecentSummary;
   recent_7d?: DebWindowSummary;
   recent_14d?: DebWindowSummary;
   versions?: Record<string, DebVersionSummary>;
@@ -178,6 +192,7 @@ export function TrainingDashboard({ isEn }: { isEn: boolean }) {
       cities: debSummary?.historical?.city_count ?? debSorted.length,
       sampleDays: debSummary?.historical?.sample_days,
       weightedHit: debSummary?.historical?.weighted_hit_rate,
+      usableRecent: debSummary?.usable_recent,
     };
   }, [debSorted, debSummary]);
 
@@ -218,6 +233,10 @@ export function TrainingDashboard({ isEn }: { isEn: boolean }) {
 
   const formatPct = (value: number | null | undefined) => value == null ? "--" : `${value.toFixed(1)}%`;
   const formatMaybeDeg = (value: number | null | undefined, digits = 1) => value == null ? "--" : `${value.toFixed(digits)}°`;
+  const usableWindowLabel = (window?: string) => {
+    if (window === "recent_14d") return isEn ? "Usable 14d" : "可用近14天";
+    return isEn ? "Usable 7d" : "可用近7天";
+  };
 
   return (
     <div className="h-full overflow-auto bg-[#f5f7fa]">
@@ -242,7 +261,7 @@ export function TrainingDashboard({ isEn }: { isEn: boolean }) {
             <div className="grid grid-cols-2 gap-2 mb-3 md:grid-cols-3 xl:grid-cols-6">
               {[
                 { icon: Hash, label: isEn ? "Cities" : "城市数", value: debStats.cities, tone: "blue" },
-                { icon: Target, label: isEn ? "Historical Avg" : "历史平均", value: `${debStats.avgHit.toFixed(1)}%`, tone: "emerald" },
+                { icon: Target, label: usableWindowLabel(debStats.usableRecent?.window), value: formatPct(debStats.usableRecent?.hit_rate), tone: "emerald" },
                 { icon: TrendingUp, label: isEn ? "Recent 7d" : "近7天", value: formatPct(debSummary?.recent_7d?.hit_rate), tone: "emerald" },
                 { icon: TrendingUp, label: isEn ? "Recent 14d" : "近14天", value: formatPct(debSummary?.recent_14d?.hit_rate), tone: "purple" },
                 { icon: Thermometer, label: isEn ? "Avg Error" : "平均误差", value: `${debStats.avgMae.toFixed(1)}°`, tone: "amber" },

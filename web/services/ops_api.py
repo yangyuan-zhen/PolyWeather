@@ -2471,6 +2471,55 @@ def _build_deb_historical_summary(accuracy_data: List[Dict[str, Any]]) -> Dict[s
     }
 
 
+def _build_deb_usable_recent_summary(
+    accuracy_data: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    usable_rows = []
+    recommendations = {"primary": 0, "supporting": 0}
+    for row in accuracy_data:
+        recent = row.get("deb_recent") if isinstance(row.get("deb_recent"), dict) else None
+        if not recent:
+            continue
+        recommendation = str(recent.get("recommendation") or "").strip().lower()
+        if recommendation not in {"primary", "supporting"}:
+            continue
+        usable_rows.append(row)
+        recommendations[recommendation] += 1
+
+    def build_window(window_key: str) -> Dict[str, Any]:
+        samples = 0
+        hits = 0
+        weighted_mae = 0.0
+        city_count = 0
+        for row in usable_rows:
+            recent = row.get("deb_recent") if isinstance(row.get("deb_recent"), dict) else {}
+            metrics = recent.get(window_key) if isinstance(recent.get(window_key), dict) else {}
+            row_samples = int(metrics.get("samples") or 0)
+            if row_samples <= 0:
+                continue
+            row_hits = int(metrics.get("hits") or 0)
+            row_mae = _sf(metrics.get("mae"))
+            samples += row_samples
+            hits += row_hits
+            city_count += 1
+            if row_mae is not None:
+                weighted_mae += row_mae * row_samples
+        return {
+            "window": window_key,
+            "city_count": city_count,
+            "samples": samples,
+            "hits": hits,
+            "hit_rate": _round_metric((hits / samples * 100) if samples else None, 1),
+            "avg_mae": _round_metric((weighted_mae / samples) if samples else None, 2),
+            "recommendations": dict(recommendations),
+        }
+
+    recent_7d = build_window("recent_7d")
+    if int(recent_7d.get("samples") or 0) > 0:
+        return recent_7d
+    return build_window("recent_14d")
+
+
 def _flatten_training_history(history: Dict[str, Dict[str, Dict[str, Any]]], today_str: str) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     for city, city_rows in (history or {}).items():
@@ -2545,6 +2594,7 @@ def _build_training_accuracy_payload(
         "accuracy": accuracy_data,
         "deb_summary": {
             "historical": _build_deb_historical_summary(accuracy_data),
+            "usable_recent": _build_deb_usable_recent_summary(accuracy_data),
             "recent_7d": _evaluate_deb_records(
                 all_rows,
                 start_date=recent_7_start,
