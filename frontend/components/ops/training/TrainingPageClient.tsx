@@ -6,6 +6,7 @@ import { RefreshCcw, TrendingUp, TrendingDown, Target, Activity } from "lucide-r
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { buildDebRecentRankingRows } from "@/lib/deb-training-ranking";
 import { opsApi } from "@/lib/ops-api";
 import type { SystemStatusPayload } from "@/types/ops";
 import Link from "next/link";
@@ -183,19 +184,23 @@ export function TrainingPageClient() {
   const usableWindowLabel = (window?: string) =>
     window === "recent_14d" ? "DEB 可用近 14 天命中" : "DEB 可用近 7 天命中";
 
+  const debRecentRanked = useMemo(() => buildDebRecentRankingRows(accuracy || []), [accuracy]);
+  const debRecentRankIndex = useMemo(
+    () => new Map(debRecentRanked.map((row, index) => [row.cityId, index])),
+    [debRecentRanked],
+  );
+
   const debChartData = useMemo(() => {
-    if (!accuracy?.length) return [];
-    return accuracy
-      .filter((c) => c.deb && c.deb.total_days >= 5)
-      .sort((a, b) => (b.deb?.hit_rate ?? 0) - (a.deb?.hit_rate ?? 0))
+    return debRecentRanked
+      .slice(0, 24)
       .map((c) => ({
         name: c.name,
-        cityId: c.city_id,
-        hitRate: Number((c.deb?.hit_rate ?? 0).toFixed(1)),
-        mae: Number((c.deb?.mae ?? 0).toFixed(1)),
-        days: c.deb?.total_days ?? 0,
+        cityId: c.cityId,
+        hitRate: c.hitRate,
+        mae: c.mae,
+        days: c.samples,
       }));
-  }, [accuracy]);
+  }, [debRecentRanked]);
 
   const muChartData = useMemo(() => {
     if (!accuracy?.length) return [];
@@ -211,6 +216,18 @@ export function TrainingPageClient() {
         days: c.mu?.total_days ?? 0,
       }));
   }, [accuracy]);
+
+  const sortedAccuracy = useMemo(() => {
+    if (!accuracy?.length) return [];
+    return [...accuracy].sort((a, b) => {
+      const aDebRank = debRecentRankIndex.get(a.city_id) ?? 9999;
+      const bDebRank = debRecentRankIndex.get(b.city_id) ?? 9999;
+      if (aDebRank !== bDebRank) return aDebRank - bDebRank;
+      const aMax = Math.max(a.deb?.hit_rate ?? 0, a.mu?.hit_rate ?? 0);
+      const bMax = Math.max(b.deb?.hit_rate ?? 0, b.mu?.hit_rate ?? 0);
+      return bMax - aMax;
+    });
+  }, [accuracy, debRecentRankIndex]);
 
   if (loading) return <div className="text-slate-400 animate-pulse">加载中...</div>;
   if (!status) return <div className="text-red-400">加载失败</div>;
@@ -350,8 +367,8 @@ export function TrainingPageClient() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {accuracy && accuracy.length > 0 ? (
-                  accuracy.map((row) => (
+                {sortedAccuracy.length > 0 ? (
+                  sortedAccuracy.map((row) => (
                     <tr key={row.city_id} className="hover:bg-white/5 transition-colors">
                       <td className="px-4 py-3 font-medium text-white capitalize">
                         {row.name}

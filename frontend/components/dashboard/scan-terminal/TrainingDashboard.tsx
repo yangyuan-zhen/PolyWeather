@@ -11,6 +11,7 @@ import {
   YAxis,
 } from "recharts";
 import { TrendingUp, Target, Thermometer, Hash, BarChart3, Crosshair } from "lucide-react";
+import { buildDebRecentRankingRows } from "@/lib/deb-training-ranking";
 
 type MetricPayload = {
   hit_rate: number;
@@ -178,6 +179,11 @@ export function TrainingDashboard({ isEn }: { isEn: boolean }) {
   const data = payload?.accuracy ?? null;
   const debSummary = payload?.deb_summary;
   const debSorted = useMemo(() => (data || []).filter((c) => c.deb).sort((a, b) => (b.deb?.hit_rate ?? 0) - (a.deb?.hit_rate ?? 0)), [data]);
+  const debRecentRanked = useMemo(() => buildDebRecentRankingRows(data || []), [data]);
+  const debRecentRankIndex = useMemo(
+    () => new Map(debRecentRanked.map((row, index) => [row.cityId, index])),
+    [debRecentRanked],
+  );
   const muSorted = useMemo(() => (data || []).filter((c) => c.mu).sort((a, b) => (b.mu?.hit_rate ?? 0) - (a.mu?.hit_rate ?? 0)), [data]);
 
   const debStats = useMemo(() => {
@@ -206,12 +212,19 @@ export function TrainingDashboard({ isEn }: { isEn: boolean }) {
   }, [muSorted]);
 
   const debHitChart = useMemo(
-    () => debSorted.slice(0, 18).map((c) => ({ name: c.name, value: Number((c.deb?.hit_rate ?? 0).toFixed(1)) })),
-    [debSorted],
+    () => debRecentRanked.slice(0, 18).map((c) => ({ name: c.name, value: c.hitRate })),
+    [debRecentRanked],
   );
   const debMaeChart = useMemo(
-    () => [...debSorted].sort((a, b) => (a.deb?.mae ?? 99) - (b.deb?.mae ?? 99)).slice(0, 18).map((c) => ({ name: c.name, value: Number((c.deb?.mae ?? 0).toFixed(2)) })),
-    [debSorted],
+    () => [...debRecentRanked]
+      .sort((a, b) => {
+        if (a.usableScore !== b.usableScore) return b.usableScore - a.usableScore;
+        if (a.trustScore !== b.trustScore) return b.trustScore - a.trustScore;
+        return a.mae - b.mae;
+      })
+      .slice(0, 18)
+      .map((c) => ({ name: c.name, value: c.mae })),
+    [debRecentRanked],
   );
   const muHitChart = useMemo(
     () => muSorted.slice(0, 18).map((c) => ({ name: c.name, value: Number((c.mu?.hit_rate ?? 0).toFixed(1)) })),
@@ -296,7 +309,7 @@ export function TrainingDashboard({ isEn }: { isEn: boolean }) {
               </div>
             ) : null}
             <div className="grid grid-cols-2 gap-3 mb-4">
-              <ChartCard title={isEn ? "Forecast Hit Rate by City" : "预报命中率 by 城市"}>
+              <ChartCard title={isEn ? "Usable Recent Hit Rate by City" : "可用近期命中率 by 城市"}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={debHitChart} layout="vertical" margin={{ top: 0, right: 16, left: 48, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
@@ -307,7 +320,7 @@ export function TrainingDashboard({ isEn }: { isEn: boolean }) {
                   </BarChart>
                 </ResponsiveContainer>
               </ChartCard>
-              <ChartCard title={isEn ? "Forecast Error by City (lower = better)" : "预报误差 by 城市（越低越好）"}>
+              <ChartCard title={isEn ? "Usable Recent Error by City (lower = better)" : "可用近期误差 by 城市（越低越好）"}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={debMaeChart} layout="vertical" margin={{ top: 0, right: 16, left: 48, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
@@ -401,6 +414,9 @@ export function TrainingDashboard({ isEn }: { isEn: boolean }) {
                   }
                   const merged = [...cities.entries()]
                     .sort((a, b) => {
+                      const aDebRank = debRecentRankIndex.get(a[0]) ?? 9999;
+                      const bDebRank = debRecentRankIndex.get(b[0]) ?? 9999;
+                      if (aDebRank !== bDebRank) return aDebRank - bDebRank;
                       const aMax = Math.max(a[1].deb?.hit_rate ?? 0, a[1].mu?.hit_rate ?? 0);
                       const bMax = Math.max(b[1].deb?.hit_rate ?? 0, b[1].mu?.hit_rate ?? 0);
                       return bMax - aMax;
