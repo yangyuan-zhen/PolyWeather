@@ -7,6 +7,13 @@ import { Button } from "@/components/ui/button";
 import { opsApi } from "@/lib/ops-api";
 import type { OpsUser, LeaderboardEntry } from "@/types/ops";
 
+function leaderboardName(entry: LeaderboardEntry) {
+  const username = String(entry.username || "").trim();
+  if (username) return username;
+  if (entry.telegram_id != null) return `TG${entry.telegram_id}`;
+  return "未知用户";
+}
+
 export function UsersPageClient() {
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
@@ -130,16 +137,16 @@ export function UsersPageClient() {
         <CardHeader><CardTitle>本周排行榜 Top {leaderboard.length}</CardTitle></CardHeader>
         <CardContent>
           {leaderboard.length === 0 ? (
-            <span className="text-slate-500 text-sm">无数据</span>
+            <span className="text-slate-500 text-sm">本周暂无积分记录</span>
           ) : (
             <ol className="space-y-1">
               {leaderboard.map((entry, i) => (
                 <li key={entry.telegram_id || i} className="flex justify-between text-sm py-1.5 border-b border-white/5">
                   <span>
                     <span className="text-slate-500 w-6 inline-block">#{entry.rank ?? i + 1}</span>
-                    <span className="text-white">{entry.username ?? `TG${entry.telegram_id}`}</span>
+                    <span className="text-white">{leaderboardName(entry)}</span>
                   </span>
-                  <span className="text-cyan-400 font-medium">{entry.weekly_points ?? 0} 分</span>
+                  <span className="text-cyan-400 font-medium">本周积分 {entry.weekly_points ?? 0} 分</span>
                 </li>
               ))}
             </ol>

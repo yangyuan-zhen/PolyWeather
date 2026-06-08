@@ -2916,22 +2916,26 @@ class DBManager:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
                 """
-                SELECT
-                    username,
-                    u.points AS points,
-                    u.message_count AS message_count,
-                    u.telegram_id AS telegram_id,
-                    COALESCE(a.points,
-                        CASE
-                            WHEN u.weekly_points_week = ? THEN COALESCE(u.weekly_points, 0)
-                            ELSE 0
-                        END
-                    ) AS weekly_points
-                FROM users u
-                LEFT JOIN weekly_points_archive a
-                    ON a.telegram_id = u.telegram_id
-                    AND a.week_key = ?
-                ORDER BY weekly_points DESC, points DESC, message_count DESC
+                SELECT *
+                FROM (
+                    SELECT
+                        username,
+                        u.points AS points,
+                        u.message_count AS message_count,
+                        u.telegram_id AS telegram_id,
+                        COALESCE(a.points,
+                            CASE
+                                WHEN u.weekly_points_week = ? THEN COALESCE(u.weekly_points, 0)
+                                ELSE 0
+                            END
+                        ) AS weekly_points
+                    FROM users u
+                    LEFT JOIN weekly_points_archive a
+                        ON a.telegram_id = u.telegram_id
+                        AND a.week_key = ?
+                ) ranked
+                WHERE weekly_points > 0
+                ORDER BY weekly_points DESC, points DESC, message_count DESC, telegram_id ASC
                 LIMIT ?
                 """,
                 (week_key, week_key, limit),
