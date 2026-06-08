@@ -32,11 +32,11 @@ export function runTests() {
   assert(
     source.includes("积分奖励标准") &&
       source.includes("REWARD_GUIDELINES") &&
-      source.includes("50-100") &&
-      source.includes("200-300") &&
+      source.includes("100") &&
+      source.includes("300") &&
       source.includes("500") &&
-      source.includes("800-1000") &&
-      source.includes("1500+"),
-    "ops feedback page must document manual reward point guidelines",
+      source.includes("1000") &&
+      source.includes("1500"),
+    "ops feedback page must document fixed reward point guidelines",
   );
 }

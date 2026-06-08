@@ -194,7 +194,7 @@ def grant_ops_feedback_reward(
     *,
     feedback_id: int,
     points: int,
-    reason: str,
+    reason: str = "",
 ) -> Dict[str, Any]:
     admin = _require_ops(request) or {}
     db = DBManager()

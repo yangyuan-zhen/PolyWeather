@@ -118,7 +118,6 @@ def test_feedback_reward_grant_adds_points_and_marks_feedback(tmp_path):
     result = db.grant_feedback_reward(
         created["id"],
         points=300,
-        reason="Valid stale METAR report",
     )
 
     assert result["ok"] is True
@@ -126,14 +125,13 @@ def test_feedback_reward_grant_adds_points_and_marks_feedback(tmp_path):
     assert result["points_added"] == 300
     assert result["points_after"] == 350
     assert result["feedback"]["reward_points"] == 300
-    assert result["feedback"]["reward_reason"] == "Valid stale METAR report"
+    assert result["feedback"]["reward_reason"] == ""
     assert result["feedback"]["reward_status"] == "granted"
     assert db.get_points_by_supabase_email("pilot@example.com") == 350
 
     duplicate = db.grant_feedback_reward(
         created["id"],
         points=300,
-        reason="Duplicate grant should not apply",
     )
 
     assert duplicate["ok"] is False
@@ -143,7 +141,7 @@ def test_feedback_reward_grant_adds_points_and_marks_feedback(tmp_path):
 
 def test_ops_feedback_reward_service_returns_operator(monkeypatch):
     class FakeDB:
-        def grant_feedback_reward(self, feedback_id, *, points, reason):
+        def grant_feedback_reward(self, feedback_id, *, points, reason=""):
             return {
                 "ok": True,
                 "feedback_id": feedback_id,
@@ -164,13 +162,12 @@ def test_ops_feedback_reward_service_returns_operator(monkeypatch):
         object(),
         feedback_id=42,
         points=500,
-        reason="High impact chart bug",
     )
 
     assert payload["ok"] is True
     assert payload["operator_email"] == "ops@example.com"
     assert payload["feedback"]["reward_points"] == 500
-    assert payload["feedback"]["reward_reason"] == "High impact chart bug"
+    assert payload["feedback"]["reward_reason"] == ""
 
 
 def test_user_feedback_identity_filter_returns_only_matching_user(tmp_path):

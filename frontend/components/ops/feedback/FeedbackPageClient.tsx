@@ -18,19 +18,22 @@ const STATUS_OPTIONS = [
 
 const STATUS_UPDATE_OPTIONS = STATUS_OPTIONS.filter((item) => item.key);
 
-const REWARD_GUIDELINES = [
-  { points: "0", title: "无效/重复", detail: "重复反馈、无法复现、非问题" },
-  { points: "50-100", title: "轻量提醒", detail: "文案、体验、小范围提示" },
-  { points: "200-300", title: "可复现 Bug", detail: "加载失败、操作异常、局部影响" },
-  { points: "500", title: "有效数据问题", detail: "城市数据、图表、关键变量异常" },
-  { points: "800-1000", title: "高影响问题", detail: "支付、账号、订阅、核心终端异常" },
-  { points: "1500+", title: "重大事故", detail: "大面积不可用或严重业务损失，谨慎使用" },
+const REWARD_POINT_OPTIONS = [
+  { value: 100, label: "100 分", title: "轻量提醒" },
+  { value: 300, label: "300 分", title: "可复现 Bug" },
+  { value: 500, label: "500 分", title: "有效数据问题" },
+  { value: 1000, label: "1000 分", title: "高影响问题" },
+  { value: 1500, label: "1500 分", title: "重大事故" },
 ] as const;
 
-type RewardDraft = {
-  points: string;
-  reason: string;
-};
+const REWARD_GUIDELINES = [
+  { points: "0", title: "无效/重复", detail: "重复反馈、无法复现、非问题" },
+  { points: "100", title: "轻量提醒", detail: "文案、体验、小范围提示" },
+  { points: "300", title: "可复现 Bug", detail: "加载失败、操作异常、局部影响" },
+  { points: "500", title: "有效数据问题", detail: "城市数据、图表、关键变量异常" },
+  { points: "1000", title: "高影响问题", detail: "支付、账号、订阅、核心终端异常" },
+  { points: "1500", title: "重大事故", detail: "大面积不可用或严重业务损失，谨慎使用" },
+] as const;
 
 function compactDate(value?: string) {
   if (!value) return "—";
@@ -82,7 +85,7 @@ export function FeedbackPageClient() {
   const [payload, setPayload] = useState<UserFeedbackPayload | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [rewardingId, setRewardingId] = useState<number | null>(null);
-  const [rewardDrafts, setRewardDrafts] = useState<Record<number, RewardDraft>>({});
+  const [rewardPointsById, setRewardPointsById] = useState<Record<number, string>>({});
 
   const load = async () => {
     setLoading(true);
@@ -127,21 +130,16 @@ export function FeedbackPageClient() {
     }
   };
 
-  const updateRewardDraft = (rowId: number, patch: Partial<RewardDraft>) => {
-    setRewardDrafts((prev) => ({
+  const updateRewardPoints = (rowId: number, points: string) => {
+    setRewardPointsById((prev) => ({
       ...prev,
-      [rowId]: {
-        points: prev[rowId]?.points || "",
-        reason: prev[rowId]?.reason || "",
-        ...patch,
-      },
+      [rowId]: points,
     }));
   };
 
   const handleRewardGrant = async (row: UserFeedbackEntry) => {
-    const draft = rewardDrafts[row.id] || { points: "", reason: "" };
-    const points = Number.parseInt(draft.points, 10);
-    const reason = draft.reason.trim();
+    const selectedPoints = rewardPointsById[row.id] || String(REWARD_POINT_OPTIONS[1].value);
+    const points = Number.parseInt(selectedPoints, 10);
     if (!row.user_email) {
       setError("这条反馈没有绑定用户邮箱，不能从反馈页直接发放积分。");
       return;
@@ -150,15 +148,11 @@ export function FeedbackPageClient() {
       setError("请输入有效的奖励积分。");
       return;
     }
-    if (!reason) {
-      setError("请输入奖励原因，用户账户页会展示这条原因。");
-      return;
-    }
     setRewardingId(row.id);
     setError("");
     try {
-      await opsApi.grantFeedbackReward(row.id, points, reason);
-      setRewardDrafts((prev) => {
+      await opsApi.grantFeedbackReward(row.id, points);
+      setRewardPointsById((prev) => {
         const next = { ...prev };
         delete next[row.id];
         return next;
@@ -253,7 +247,7 @@ export function FeedbackPageClient() {
             ))}
           </div>
           <p className="mt-2 text-xs text-slate-500">
-            先确认反馈是否有效；未复现的问题可先标为已确认/处理中，奖励原因后续发放时需要写清楚。
+            先确认反馈是否有效；未复现的问题可先标为已确认/处理中，奖励发放后会自动记录到用户账户页。
           </p>
         </CardContent>
       </Card>
@@ -301,9 +295,8 @@ export function FeedbackPageClient() {
                 </thead>
                 <tbody>
                   {rows.map((row) => {
-                    const draft = rewardDrafts[row.id] || { points: "", reason: "" };
+                    const selectedPoints = rewardPointsById[row.id] || String(REWARD_POINT_OPTIONS[1].value);
                     const rewardPoints = Number(row.reward_points || 0);
-                    const rewardReason = String(row.reward_reason || "").trim();
                     const rewardStatus = String(row.reward_status || "").toLowerCase();
                     const hasReward = rewardStatus === "granted" && rewardPoints > 0;
                     return (
@@ -330,39 +323,28 @@ export function FeedbackPageClient() {
                           {row.user_email || row.user_id || "—"}
                         </td>
                         <td className="whitespace-nowrap py-3 pr-4 text-xs text-slate-500">{compactDate(row.created_at)}</td>
-                        <td className="min-w-[260px] py-3 pr-4">
+                        <td className="min-w-[170px] py-3 pr-4">
                           {hasReward ? (
                             <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs">
                               <div className="font-black text-emerald-700">
                                 已发放 +{rewardPoints.toLocaleString()} 分
                               </div>
-                              {rewardReason && (
-                                <div className="mt-1 leading-4 text-emerald-700">
-                                  {rewardReason}
-                                </div>
-                              )}
                             </div>
                           ) : (
                             <div className="space-y-1.5">
-                              <div className="flex gap-1.5">
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={100000}
-                                  value={draft.points}
-                                  onChange={(event) => updateRewardDraft(row.id, { points: event.target.value })}
-                                  placeholder="积分"
-                                  aria-label="奖励积分"
-                                  className="h-8 w-20 rounded border border-slate-200 bg-white px-2 text-xs font-bold text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                                />
-                                <input
-                                  value={draft.reason}
-                                  onChange={(event) => updateRewardDraft(row.id, { reason: event.target.value })}
-                                  placeholder="奖励原因"
-                                  aria-label="奖励原因"
-                                  className="h-8 min-w-0 flex-1 rounded border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                                />
-                              </div>
+                              <select
+                                value={selectedPoints}
+                                onChange={(event) => updateRewardPoints(row.id, event.target.value)}
+                                disabled={rewardingId === row.id || !row.user_email}
+                                className="h-8 w-full rounded border border-slate-200 bg-white px-2 text-xs font-bold text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                aria-label="奖励积分"
+                              >
+                                {REWARD_POINT_OPTIONS.map((item) => (
+                                  <option key={item.value} value={item.value}>
+                                    {item.label} · {item.title}
+                                  </option>
+                                ))}
+                              </select>
                               <Button
                                 type="button"
                                 variant="outline"

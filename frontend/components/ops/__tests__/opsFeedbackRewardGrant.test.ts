@@ -27,21 +27,33 @@ export function runTests() {
   assert(
     opsApiSource.includes("grantFeedbackReward") &&
       opsApiSource.includes("/api/ops/feedback/${feedbackId}/reward") &&
-      opsApiSource.includes("reason"),
-    "ops API client must expose grantFeedbackReward with reason",
+      opsApiSource.includes("JSON.stringify({ points })"),
+    "ops API client must expose grantFeedbackReward with fixed points only",
   );
   assert(
-    feedbackPageSource.includes("rewardDrafts") &&
+    feedbackPageSource.includes("REWARD_POINT_OPTIONS") &&
       feedbackPageSource.includes("handleRewardGrant") &&
       feedbackPageSource.includes("发放奖励") &&
-      feedbackPageSource.includes("奖励原因") &&
       feedbackPageSource.includes("opsApi.grantFeedbackReward"),
-    "ops feedback page must provide per-feedback reward grant controls",
+    "ops feedback page must provide fixed-point reward grant controls",
+  );
+  assert(
+    feedbackPageSource.includes('value: 100') &&
+      feedbackPageSource.includes('value: 300') &&
+      feedbackPageSource.includes('value: 500') &&
+      feedbackPageSource.includes('value: 1000') &&
+      feedbackPageSource.includes('value: 1500'),
+    "ops feedback page must use fixed reward point options",
+  );
+  assert(
+    !feedbackPageSource.includes("奖励原因") &&
+      !feedbackPageSource.includes("rewardDrafts") &&
+      !feedbackPageSource.includes("reason:"),
+    "ops feedback page must not ask operators for reward reasons",
   );
   assert(
     feedbackPageSource.includes("已发放") &&
-      feedbackPageSource.includes("reward_points") &&
-      feedbackPageSource.includes("reward_reason"),
+      feedbackPageSource.includes("reward_points"),
     "ops feedback page must show existing feedback reward details",
   );
 }

@@ -1309,8 +1309,6 @@ class DBManager:
         if safe_points <= 0:
             return {"ok": False, "reason": "invalid_amount"}
         normalized_reason = str(reason or "").strip()[:500]
-        if not normalized_reason:
-            return {"ok": False, "reason": "missing_reward_reason"}
 
         now = datetime.now().isoformat()
         with self._get_connection() as conn:
