@@ -562,6 +562,10 @@ class DBManager:
                     user_id TEXT,
                     user_email TEXT,
                     context_json TEXT NOT NULL,
+                    reward_points INTEGER DEFAULT 0,
+                    reward_reason TEXT DEFAULT '',
+                    rewarded_at TIMESTAMP,
+                    reward_status TEXT DEFAULT '',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -667,6 +671,10 @@ class DBManager:
             self._ensure_column(conn, "users", "daily_city_queries", "INTEGER DEFAULT 0")
             self._ensure_column(conn, "users", "daily_deb_queries", "INTEGER DEFAULT 0")
             self._ensure_column(conn, "users", "daily_queries_date", "TEXT")
+            self._ensure_column(conn, "user_feedback", "reward_points", "INTEGER DEFAULT 0")
+            self._ensure_column(conn, "user_feedback", "reward_reason", "TEXT DEFAULT ''")
+            self._ensure_column(conn, "user_feedback", "rewarded_at", "TIMESTAMP")
+            self._ensure_column(conn, "user_feedback", "reward_status", "TEXT DEFAULT ''")
             # Migrate legacy one-to-one binding column into mapping table.
             conn.execute(
                 """
@@ -1094,6 +1102,10 @@ class DBManager:
             "user_id": str(row["user_id"] or ""),
             "user_email": str(row["user_email"] or ""),
             "context": context if isinstance(context, dict) else {},
+            "reward_points": max(0, int(row["reward_points"] or 0)),
+            "reward_reason": str(row["reward_reason"] or ""),
+            "rewarded_at": row["rewarded_at"],
+            "reward_status": str(row["reward_status"] or ""),
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
         }
@@ -1151,7 +1163,8 @@ class DBManager:
             row = conn.execute(
                 """
                 SELECT id, category, message, source, status, contact, user_id,
-                       user_email, context_json, created_at, updated_at
+                       user_email, context_json, reward_points, reward_reason,
+                       rewarded_at, reward_status, created_at, updated_at
                 FROM user_feedback
                 WHERE id = ?
                 """,
@@ -1193,7 +1206,8 @@ class DBManager:
             rows = conn.execute(
                 f"""
                 SELECT id, category, message, source, status, contact, user_id,
-                       user_email, context_json, created_at, updated_at
+                       user_email, context_json, reward_points, reward_reason,
+                       rewarded_at, reward_status, created_at, updated_at
                 FROM user_feedback
                 {where_sql}
                 ORDER BY id DESC
@@ -1226,7 +1240,56 @@ class DBManager:
             row = conn.execute(
                 """
                 SELECT id, category, message, source, status, contact, user_id,
-                       user_email, context_json, created_at, updated_at
+                       user_email, context_json, reward_points, reward_reason,
+                       rewarded_at, reward_status, created_at, updated_at
+                FROM user_feedback
+                WHERE id = ?
+                """,
+                (int(feedback_id),),
+            ).fetchone()
+            conn.commit()
+        return self._feedback_row_to_dict(row) if row else None
+
+    def update_user_feedback_reward(
+        self,
+        feedback_id: int,
+        *,
+        points: int,
+        reason: str = "",
+        status: str = "granted",
+    ) -> Optional[Dict[str, Any]]:
+        safe_points = max(0, int(points or 0))
+        normalized_reason = str(reason or "").strip()[:500]
+        normalized_status = str(status or "").strip().lower()[:40]
+        if not normalized_status:
+            normalized_status = "granted" if safe_points > 0 else "skipped"
+        now = datetime.now().isoformat()
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            conn.execute(
+                """
+                UPDATE user_feedback
+                SET reward_points = ?,
+                    reward_reason = ?,
+                    reward_status = ?,
+                    rewarded_at = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    safe_points,
+                    normalized_reason,
+                    normalized_status,
+                    now,
+                    now,
+                    int(feedback_id),
+                ),
+            )
+            row = conn.execute(
+                """
+                SELECT id, category, message, source, status, contact, user_id,
+                       user_email, context_json, reward_points, reward_reason,
+                       rewarded_at, reward_status, created_at, updated_at
                 FROM user_feedback
                 WHERE id = ?
                 """,

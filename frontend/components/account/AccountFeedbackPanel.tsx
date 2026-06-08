@@ -23,6 +23,59 @@ function categoryLabel(value?: string, isEn = false) {
   return isEn ? "Other" : "其他";
 }
 
+function formatRewardPoints(points?: number, isEn = false) {
+  const raw = Number(points || 0);
+  const value = Number.isFinite(raw) ? Math.max(0, raw) : 0;
+  return isEn
+    ? `+${value.toLocaleString()} points`
+    : `+${value.toLocaleString()} 积分`;
+}
+
+function rewardStatusText(status?: string, isEn = false) {
+  const key = String(status || "").toLowerCase();
+  if (key === "pending") return isEn ? "Reward pending" : "奖励待处理";
+  if (key === "skipped") return isEn ? "No points awarded" : "未发放积分";
+  return isEn ? "Feedback reward" : "反馈奖励";
+}
+
+function renderFeedbackReward(entry: UserFeedbackEntry, isEn: boolean) {
+  const rawPoints = Number(entry.reward_points || 0);
+  const points = Number.isFinite(rawPoints) ? Math.max(0, rawPoints) : 0;
+  const rewardStatus = String(entry.reward_status || "").toLowerCase();
+  const reason = String(entry.reward_reason || "").trim();
+  if (points <= 0 && !rewardStatus && !reason) return null;
+
+  const granted = points > 0 || rewardStatus === "granted";
+  return (
+    <div
+      className={`mt-2 rounded-lg border px-3 py-2 text-xs ${
+        granted
+          ? "border-amber-200 bg-amber-50 text-amber-800"
+          : "border-slate-200 bg-slate-50 text-slate-600"
+      }`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="font-bold">{rewardStatusText(rewardStatus, isEn)}</span>
+        {points > 0 ? (
+          <span className="font-mono font-black">
+            {formatRewardPoints(points, isEn)}
+          </span>
+        ) : null}
+      </div>
+      {reason ? (
+        <div className="mt-1 leading-5 text-slate-600">
+          {isEn ? "Reason" : "奖励原因"}: {reason}
+        </div>
+      ) : null}
+      {entry.rewarded_at ? (
+        <div className="mt-1 font-mono text-[11px] text-slate-400">
+          {compactDate(entry.rewarded_at)}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function AccountFeedbackPanel({
   isEn,
   title,
@@ -129,6 +182,7 @@ export function AccountFeedbackPanel({
                 <p className="mt-2 line-clamp-2 text-sm font-semibold leading-5 text-slate-900">
                   {entry.message || (isEn ? "Feedback" : "反馈")}
                 </p>
+                {renderFeedbackReward(entry, isEn)}
               </div>
               <div className="text-xs text-slate-500 md:text-right">
                 <div className="font-mono">{compactDate(entry.updated_at)}</div>

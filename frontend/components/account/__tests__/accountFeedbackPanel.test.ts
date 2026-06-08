@@ -31,4 +31,13 @@ export function runTests() {
       !feedbackPanelSource.includes("setInterval"),
     "account feedback panel must load the current user's feedback once, support manual refresh, and avoid polling",
   );
+  assert(
+    feedbackPanelSource.includes("reward_points") &&
+      feedbackPanelSource.includes("reward_reason") &&
+      feedbackPanelSource.includes("reward_status") &&
+      feedbackPanelSource.includes("formatRewardPoints") &&
+      feedbackPanelSource.includes("renderFeedbackReward") &&
+      feedbackPanelSource.includes("奖励原因"),
+    "account feedback panel must show per-feedback reward points and reward reasons",
+  );
 }

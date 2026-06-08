@@ -197,6 +197,10 @@ export type UserFeedbackEntry = {
   user_id?: string;
   user_email?: string;
   context?: Record<string, unknown>;
+  reward_points?: number;
+  reward_reason?: string;
+  rewarded_at?: string | null;
+  reward_status?: string;
   created_at?: string;
   updated_at?: string;
 };

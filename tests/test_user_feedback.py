@@ -53,6 +53,46 @@ def test_user_feedback_status_filter_excludes_other_statuses(tmp_path):
     assert open_rows[0]["message"] == "Add a dark chart grid."
 
 
+def test_user_feedback_reward_metadata_round_trip(tmp_path):
+    db = DBManager(str(tmp_path / "polyweather-feedback-reward.db"))
+
+    created = db.append_user_feedback(
+        category="data",
+        message="Hong Kong COWIN reading was stale.",
+        user_id="user-reward",
+        user_email="reward@example.com",
+    )
+
+    assert created["reward_points"] == 0
+    assert created["reward_reason"] == ""
+    assert created["reward_status"] == ""
+    assert created["rewarded_at"] is None
+
+    rewarded = db.update_user_feedback_reward(
+        created["id"],
+        points=300,
+        reason="Valid data freshness report",
+        status="granted",
+    )
+
+    assert rewarded is not None
+    assert rewarded["reward_points"] == 300
+    assert rewarded["reward_reason"] == "Valid data freshness report"
+    assert rewarded["reward_status"] == "granted"
+    assert rewarded["rewarded_at"]
+
+    row = db.list_user_feedback(
+        limit=10,
+        user_id="user-reward",
+        user_email="reward@example.com",
+    )[0]
+    assert row["id"] == created["id"]
+    assert row["reward_points"] == 300
+    assert row["reward_reason"] == "Valid data freshness report"
+    assert row["reward_status"] == "granted"
+    assert row["rewarded_at"] == rewarded["rewarded_at"]
+
+
 def test_user_feedback_identity_filter_returns_only_matching_user(tmp_path):
     db = DBManager(str(tmp_path / "polyweather-feedback-identity.db"))
     mine_by_user_id = db.append_user_feedback(
