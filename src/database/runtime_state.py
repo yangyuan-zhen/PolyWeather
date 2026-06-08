@@ -6,6 +6,7 @@ import os
 import sqlite3
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -239,7 +240,262 @@ class RuntimeStateDB:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_intraday_path_snapshots_city_date ON intraday_path_snapshots_store(city, target_date, id DESC)"
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS observation_collector_status_store (
+                    source TEXT NOT NULL,
+                    city TEXT NOT NULL,
+                    interval_sec INTEGER NOT NULL,
+                    last_due_ts REAL,
+                    last_started_ts REAL,
+                    last_success_ts REAL,
+                    last_failure_ts REAL,
+                    last_latency_ms REAL,
+                    failure_count INTEGER NOT NULL DEFAULT 0,
+                    last_error TEXT,
+                    updated_at REAL NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    PRIMARY KEY (source, city)
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_observation_collector_status_source ON observation_collector_status_store(source, updated_at DESC)"
+            )
             conn.commit()
+
+
+def _ts_to_utc_iso(value: Any) -> Optional[str]:
+    try:
+        ts = float(value)
+    except (TypeError, ValueError):
+        return None
+    if ts <= 0:
+        return None
+    return datetime.fromtimestamp(ts, timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+class ObservationCollectorStatusRepository:
+    def __init__(self, db: Optional[RuntimeStateDB] = None):
+        self.db = db or RuntimeStateDB.instance()
+
+    def record_result(
+        self,
+        *,
+        source: str,
+        city: str,
+        interval_sec: int,
+        due_ts: float,
+        started_ts: float,
+        completed_ts: float,
+        ok: bool,
+        error: Optional[str] = None,
+    ) -> None:
+        source_key = str(source or "").strip().lower()
+        city_key = str(city or "").strip().lower()
+        if not source_key or not city_key:
+            return
+        safe_interval = max(1, int(interval_sec or 60))
+        due = float(due_ts or completed_ts)
+        started = float(started_ts or due)
+        completed = float(completed_ts or time.time())
+        latency_ms = round(max(0.0, completed - started) * 1000.0, 1)
+        error_text = None if ok else str(error or "no_results").strip()[:500]
+        payload = {
+            "source": source_key,
+            "city": city_key,
+            "ok": bool(ok),
+            "error": error_text,
+            "interval_sec": safe_interval,
+            "due_ts": due,
+            "started_ts": started,
+            "completed_ts": completed,
+        }
+        with self.db.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO observation_collector_status_store (
+                    source, city, interval_sec, last_due_ts, last_started_ts,
+                    last_success_ts, last_failure_ts, last_latency_ms,
+                    failure_count, last_error, updated_at, payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(source, city) DO UPDATE SET
+                    interval_sec = excluded.interval_sec,
+                    last_due_ts = excluded.last_due_ts,
+                    last_started_ts = excluded.last_started_ts,
+                    last_success_ts = COALESCE(excluded.last_success_ts, observation_collector_status_store.last_success_ts),
+                    last_failure_ts = COALESCE(excluded.last_failure_ts, observation_collector_status_store.last_failure_ts),
+                    last_latency_ms = excluded.last_latency_ms,
+                    failure_count = CASE
+                        WHEN excluded.last_failure_ts IS NOT NULL
+                        THEN observation_collector_status_store.failure_count + 1
+                        ELSE observation_collector_status_store.failure_count
+                    END,
+                    last_error = excluded.last_error,
+                    updated_at = excluded.updated_at,
+                    payload_json = excluded.payload_json
+                """,
+                (
+                    source_key,
+                    city_key,
+                    safe_interval,
+                    due,
+                    started,
+                    completed if ok else None,
+                    completed if not ok else None,
+                    latency_ms,
+                    0 if ok else 1,
+                    error_text,
+                    completed,
+                    json.dumps(payload, ensure_ascii=False),
+                ),
+            )
+            conn.commit()
+
+    def load_snapshot(self, *, now_ts: Optional[float] = None, limit: int = 500) -> Dict[str, Any]:
+        now = float(time.time() if now_ts is None else now_ts)
+        safe_limit = max(1, min(int(limit or 500), 1000))
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT source, city, interval_sec, last_due_ts, last_started_ts,
+                       last_success_ts, last_failure_ts, last_latency_ms,
+                       failure_count, last_error, updated_at
+                FROM observation_collector_status_store
+                ORDER BY source ASC, city ASC
+                """
+            ).fetchall()
+
+        entries: List[Dict[str, Any]] = []
+        status_counts: Dict[str, int] = {}
+        source_summary: Dict[str, Dict[str, Any]] = {}
+
+        for row in rows:
+            source = str(row["source"] or "")
+            city = str(row["city"] or "")
+            interval = max(1, int(row["interval_sec"] or 60))
+            last_due_ts = _float_or_none(row["last_due_ts"])
+            last_started_ts = _float_or_none(row["last_started_ts"])
+            last_success_ts = _float_or_none(row["last_success_ts"])
+            last_failure_ts = _float_or_none(row["last_failure_ts"])
+            updated_at_ts = _float_or_none(row["updated_at"])
+            next_due_ts = last_due_ts + interval if last_due_ts is not None else None
+            due_in_sec = round(next_due_ts - now, 1) if next_due_ts is not None else None
+            latest_failure = (
+                last_failure_ts is not None
+                and (last_success_ts is None or last_failure_ts >= last_success_ts)
+            )
+            in_cooldown = bool(latest_failure and next_due_ts is not None and next_due_ts > now)
+            if last_started_ts is None:
+                status = "never_run"
+            elif latest_failure:
+                status = "cooldown" if in_cooldown else "failed"
+            elif next_due_ts is not None and next_due_ts <= now:
+                status = "due"
+            else:
+                status = "ok"
+
+            latency = _float_or_none(row["last_latency_ms"])
+            failure_count = int(row["failure_count"] or 0)
+            entry = {
+                "source": source,
+                "city": city,
+                "interval_sec": interval,
+                "last_due_ts": last_due_ts,
+                "last_due_at": _ts_to_utc_iso(last_due_ts),
+                "last_started_ts": last_started_ts,
+                "last_started_at": _ts_to_utc_iso(last_started_ts),
+                "last_success_ts": last_success_ts,
+                "last_success_at": _ts_to_utc_iso(last_success_ts),
+                "last_failure_ts": last_failure_ts,
+                "last_failure_at": _ts_to_utc_iso(last_failure_ts),
+                "last_latency_ms": latency,
+                "failure_count": failure_count,
+                "last_error": row["last_error"],
+                "updated_at_ts": updated_at_ts,
+                "updated_at": _ts_to_utc_iso(updated_at_ts),
+                "next_due_ts": next_due_ts,
+                "next_due_at": _ts_to_utc_iso(next_due_ts),
+                "due_in_sec": due_in_sec,
+                "age_sec": round(now - last_success_ts, 1) if last_success_ts is not None else None,
+                "in_cooldown": in_cooldown,
+                "cooldown_until_ts": next_due_ts if in_cooldown else None,
+                "cooldown_until_at": _ts_to_utc_iso(next_due_ts) if in_cooldown else None,
+                "status": status,
+            }
+            entries.append(entry)
+            status_counts[status] = status_counts.get(status, 0) + 1
+
+            summary = source_summary.setdefault(
+                source,
+                {
+                    "source": source,
+                    "city_count": 0,
+                    "interval_sec": interval,
+                    "min_interval_sec": interval,
+                    "max_interval_sec": interval,
+                    "failure_count": 0,
+                    "cooldown_count": 0,
+                    "status_counts": {},
+                    "_latencies": [],
+                    "_last_success_ts": None,
+                    "_last_failure_ts": None,
+                },
+            )
+            summary["city_count"] += 1
+            summary["min_interval_sec"] = min(int(summary["min_interval_sec"]), interval)
+            summary["max_interval_sec"] = max(int(summary["max_interval_sec"]), interval)
+            summary["failure_count"] += failure_count
+            if status == "cooldown":
+                summary["cooldown_count"] += 1
+            summary["status_counts"][status] = summary["status_counts"].get(status, 0) + 1
+            if latency is not None:
+                summary["_latencies"].append(latency)
+            if last_success_ts is not None:
+                current_success = summary["_last_success_ts"]
+                summary["_last_success_ts"] = (
+                    last_success_ts if current_success is None else max(current_success, last_success_ts)
+                )
+            if last_failure_ts is not None:
+                current_failure = summary["_last_failure_ts"]
+                summary["_last_failure_ts"] = (
+                    last_failure_ts if current_failure is None else max(current_failure, last_failure_ts)
+                )
+
+        source_priority = {"failed": 5, "cooldown": 4, "never_run": 3, "due": 2, "ok": 1}
+        sources: List[Dict[str, Any]] = []
+        for summary in source_summary.values():
+            latencies = summary.pop("_latencies")
+            last_success_ts = summary.pop("_last_success_ts")
+            last_failure_ts = summary.pop("_last_failure_ts")
+            summary["avg_latency_ms"] = (
+                round(sum(latencies) / len(latencies), 1) if latencies else None
+            )
+            summary["last_success_at"] = _ts_to_utc_iso(last_success_ts)
+            summary["last_failure_at"] = _ts_to_utc_iso(last_failure_ts)
+            summary["worst_status"] = max(
+                summary["status_counts"],
+                key=lambda key: source_priority.get(str(key), 0),
+                default="unknown",
+            )
+            sources.append(summary)
+
+        return {
+            "checked_at": _ts_to_utc_iso(now),
+            "entries": entries[:safe_limit],
+            "sources": sorted(sources, key=lambda item: str(item.get("source") or "")),
+            "status_counts": status_counts,
+            "total_entries": len(entries),
+        }
+
+
+def _float_or_none(value: Any) -> Optional[float]:
+    try:
+        if value is None or value == "":
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 class DailyRecordRepository:

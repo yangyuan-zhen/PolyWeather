@@ -84,6 +84,57 @@ export type SourceHealthPayload = {
   total_cities?: number;
 };
 
+export type ObservationCollectorStatus =
+  | "ok"
+  | "due"
+  | "cooldown"
+  | "failed"
+  | "never_run"
+  | string;
+
+export type ObservationCollectorEntry = {
+  source: string;
+  city: string;
+  interval_sec?: number;
+  last_due_at?: string | null;
+  last_started_at?: string | null;
+  last_success_at?: string | null;
+  last_failure_at?: string | null;
+  last_latency_ms?: number | null;
+  failure_count?: number;
+  last_error?: string | null;
+  updated_at?: string | null;
+  next_due_at?: string | null;
+  due_in_sec?: number | null;
+  age_sec?: number | null;
+  in_cooldown?: boolean;
+  cooldown_until_at?: string | null;
+  status?: ObservationCollectorStatus;
+};
+
+export type ObservationCollectorSourceSummary = {
+  source: string;
+  city_count?: number;
+  interval_sec?: number;
+  min_interval_sec?: number;
+  max_interval_sec?: number;
+  failure_count?: number;
+  cooldown_count?: number;
+  status_counts?: Record<string, number>;
+  avg_latency_ms?: number | null;
+  last_success_at?: string | null;
+  last_failure_at?: string | null;
+  worst_status?: ObservationCollectorStatus;
+};
+
+export type ObservationCollectorStatusPayload = {
+  checked_at?: string;
+  entries?: ObservationCollectorEntry[];
+  sources?: ObservationCollectorSourceSummary[];
+  status_counts?: Record<string, number>;
+  total_entries?: number;
+};
+
 export type PaymentRuntimePayload = {
   rpc?: Record<string, unknown> | string;
   chain_id?: number;

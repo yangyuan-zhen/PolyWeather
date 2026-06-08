@@ -1,12 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, RefreshCcw, ShieldCheck, Database, Cpu, HardDrive, RadioTower } from "lucide-react";
+import { Activity, AlertTriangle, RefreshCcw, ShieldCheck, Database, Cpu, HardDrive, RadioTower } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { opsApi } from "@/lib/ops-api";
-import type { SourceHealthPayload, SystemStatusPayload, HealthPayload } from "@/types/ops";
+import type {
+  ObservationCollectorStatusPayload,
+  SourceHealthPayload,
+  SystemStatusPayload,
+  HealthPayload,
+} from "@/types/ops";
 
 function sourceStatusTone(status?: string) {
   if (status === "fresh") return "text-emerald-500";
@@ -25,10 +30,46 @@ function sourceStatusLabel(status?: string) {
   return "未知";
 }
 
+function collectorStatusTone(status?: string) {
+  if (status === "ok") return "text-emerald-500";
+  if (status === "due") return "text-blue-500";
+  if (status === "cooldown") return "text-amber-500";
+  if (status === "failed" || status === "never_run") return "text-red-500";
+  return "text-slate-500";
+}
+
+function collectorStatusLabel(status?: string) {
+  if (status === "ok") return "正常";
+  if (status === "due") return "到期";
+  if (status === "cooldown") return "冷却";
+  if (status === "failed") return "失败";
+  if (status === "never_run") return "未采集";
+  return "未知";
+}
+
 function formatAge(ageMin?: number | null) {
   if (ageMin == null) return "—";
   if (ageMin < 60) return `${Math.round(ageMin)}m`;
   return `${(ageMin / 60).toFixed(1)}h`;
+}
+
+function formatSeconds(seconds?: number | null) {
+  if (seconds == null) return "—";
+  if (seconds <= 0) return "已到期";
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+  return `${(seconds / 3600).toFixed(1)}h`;
+}
+
+function formatLatency(ms?: number | null) {
+  if (ms == null) return "—";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function formatTimestamp(value?: string | null) {
+  if (!value) return "—";
+  return value.replace("T", " ").replace("Z", "").slice(0, 19);
 }
 
 function sourceReasonLabel(reason?: string | null) {
@@ -65,20 +106,23 @@ export function SystemPageClient() {
   const [health, setHealth] = useState<HealthPayload | null>(null);
   const [status, setStatus] = useState<SystemStatusPayload | null>(null);
   const [sourceHealth, setSourceHealth] = useState<SourceHealthPayload | null>(null);
+  const [collectorStatus, setCollectorStatus] = useState<ObservationCollectorStatusPayload | null>(null);
   const [error, setError] = useState("");
 
   const load = async () => {
     setLoading(true);
     setError("");
     try {
-      const [h, s, sh] = await Promise.all([
+      const [h, s, sh, cs] = await Promise.all([
         opsApi.health(),
         opsApi.systemStatus() as Promise<SystemStatusPayload>,
         opsApi.sourceHealth(80) as Promise<SourceHealthPayload>,
+        opsApi.observationCollectorStatus(200) as Promise<ObservationCollectorStatusPayload>,
       ]);
       setHealth(h);
       setStatus(s);
       setSourceHealth(sh);
+      setCollectorStatus(cs);
     } catch (e) {
       setError(String(e).slice(0, 200));
     } finally {
@@ -100,6 +144,12 @@ export function SystemPageClient() {
 
   const dbOk = status?.db?.ok ?? health?.db?.ok;
   const cacheAnalysis = status?.cache?.analysis;
+  const collectorIssues = (collectorStatus?.entries || [])
+    .filter((entry) => {
+      const state = String(entry.status || "");
+      return ["failed", "cooldown", "never_run", "due"].includes(state) || (entry.failure_count ?? 0) > 0;
+    })
+    .slice(0, 12);
   const sourceIssues = (sourceHealth?.cities || [])
     .flatMap((city) =>
       (city.sources || [])
@@ -239,6 +289,96 @@ export function SystemPageClient() {
           </CardContent>
         </Card>
       ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-4 w-4 text-cyan-500" />
+            观测采集器
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
+            {["ok", "due", "cooldown", "failed", "never_run"].map((key) => (
+              <div key={key} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <div className="text-[11px] text-slate-500">{collectorStatusLabel(key)}</div>
+                <div className={`text-lg font-black ${collectorStatusTone(key)}`}>
+                  {collectorStatus?.status_counts?.[key] ?? 0}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {(collectorStatus?.sources || []).length ? (
+            <div className="mb-4 grid grid-cols-1 gap-3 text-xs md:grid-cols-2 xl:grid-cols-3">
+              {(collectorStatus?.sources || []).map((source) => (
+                <div key={source.source} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="font-mono text-sm font-black text-slate-800">{source.source}</span>
+                    <span className={`font-bold ${collectorStatusTone(source.worst_status)}`}>
+                      {collectorStatusLabel(source.worst_status)}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-slate-600">
+                    <span>城市 {source.city_count ?? 0}</span>
+                    <span>间隔 {source.min_interval_sec ?? source.interval_sec ?? "—"}s</span>
+                    <span>失败 {source.failure_count ?? 0}</span>
+                    <span>冷却 {source.cooldown_count ?? 0}</span>
+                    <span>延迟 {formatLatency(source.avg_latency_ms)}</span>
+                    <span title={source.last_success_at || ""}>成功 {formatTimestamp(source.last_success_at)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+              暂无后台采集状态；collector 首次写入后会显示每个 source/city 的最近采集时间、失败次数、延迟和冷却状态。
+            </div>
+          )}
+
+          {collectorIssues.length ? (
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <table className="w-full min-w-[860px] text-left text-xs">
+                <thead className="bg-slate-50 text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2">Source</th>
+                    <th className="px-3 py-2">城市</th>
+                    <th className="px-3 py-2">状态</th>
+                    <th className="px-3 py-2">最近成功</th>
+                    <th className="px-3 py-2">失败次数</th>
+                    <th className="px-3 py-2">延迟</th>
+                    <th className="px-3 py-2">下次</th>
+                    <th className="px-3 py-2">错误</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {collectorIssues.map((entry) => (
+                    <tr key={`${entry.source}-${entry.city}`} className="border-t border-slate-100">
+                      <td className="px-3 py-2 font-mono font-bold text-slate-800">{entry.source}</td>
+                      <td className="px-3 py-2 font-mono text-slate-700">{entry.city}</td>
+                      <td className={`px-3 py-2 font-bold ${collectorStatusTone(entry.status)}`}>
+                        {collectorStatusLabel(entry.status)}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-slate-600">{formatTimestamp(entry.last_success_at)}</td>
+                      <td className="px-3 py-2 font-mono text-slate-600">{entry.failure_count ?? 0}</td>
+                      <td className="px-3 py-2 font-mono text-slate-600">{formatLatency(entry.last_latency_ms)}</td>
+                      <td className="px-3 py-2 font-mono text-slate-600">{formatSeconds(entry.due_in_sec)}</td>
+                      <td className="max-w-[260px] truncate px-3 py-2 text-slate-500" title={entry.last_error || ""}>
+                        {entry.last_error || "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+              <ShieldCheck className="h-4 w-4" />
+              当前后台采集器没有失败、冷却或到期积压。
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

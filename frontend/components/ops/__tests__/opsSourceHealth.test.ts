@@ -16,6 +16,10 @@ export function runTests() {
     path.join(projectRoot, "app", "api", "ops", "source-health", "route.ts"),
     "utf8",
   );
+  const collectorRoute = fs.readFileSync(
+    path.join(projectRoot, "app", "api", "ops", "observation-collector-status", "route.ts"),
+    "utf8",
+  );
 
   assert(
     opsApi.includes("sourceHealth") &&
@@ -39,5 +43,24 @@ export function runTests() {
       nextRoute.includes("/api/ops/source-health") &&
       nextRoute.includes("no-store"),
     "source health proxy must stay ops-admin protected and uncached",
+  );
+  assert(
+    opsApi.includes("observationCollectorStatus") &&
+      opsApi.includes("/api/ops/observation-collector-status"),
+    "ops client must expose observation collector status endpoint",
+  );
+  assert(
+    systemPage.includes("观测采集器") &&
+      systemPage.includes("collectorStatus") &&
+      systemPage.includes("failure_count") &&
+      systemPage.includes("last_latency_ms") &&
+      systemPage.includes("冷却"),
+    "ops system page must show observation collector failures, latency, and cooldown status",
+  );
+  assert(
+    collectorRoute.includes("requireOpsProxyAuth") &&
+      collectorRoute.includes("/api/ops/observation-collector-status") &&
+      collectorRoute.includes("no-store"),
+    "observation collector proxy must stay ops-admin protected and uncached",
   );
 }

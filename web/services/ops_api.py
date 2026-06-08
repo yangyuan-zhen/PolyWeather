@@ -10,6 +10,7 @@ from fastapi import HTTPException, Request
 import requests as _requests
 
 from src.database.db_manager import DBManager
+from src.database.runtime_state import ObservationCollectorStatusRepository
 from src.utils.runtime_secrets import get_runtime_secret, get_runtime_secret_status
 from web.services.observation_freshness import (
     build_observation_freshness,
@@ -1958,6 +1959,15 @@ def get_ops_source_health(
         "status_counts": status_counts,
         "total_cities": len(rows),
     }
+
+
+def get_ops_observation_collector_status(
+    request: Request,
+    limit: int = 200,
+) -> dict[str, Any]:
+    _require_ops(request)
+    safe_limit = max(1, min(int(limit or 200), 500))
+    return ObservationCollectorStatusRepository().load_snapshot(limit=safe_limit)
 
 
 def get_ops_health_check(request: Request) -> dict[str, Any]:

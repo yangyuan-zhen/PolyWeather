@@ -14,6 +14,7 @@ from src.data_collection.amos_station_sources import AMOS_AIRPORT_CODES
 from src.data_collection.amsc_awos_sources import AMSC_AWOS_AIRPORTS
 from src.data_collection.city_registry import CITY_REGISTRY
 from src.data_collection.hko_obs_sources import HKO_STATIONS
+from src.database.runtime_state import ObservationCollectorStatusRepository
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -51,10 +52,12 @@ class ObservationCollector:
         weather: Any,
         profiles: Sequence[ObservationSourceProfile],
         cache_refresher: Optional[Callable[[str], Any]] = None,
+        status_recorder: Optional[ObservationCollectorStatusRepository] = None,
     ) -> None:
         self.weather = weather
         self.profiles = list(profiles)
         self.cache_refresher = cache_refresher
+        self.status_recorder = status_recorder
         self._last_run_ts: dict[tuple[str, str], float] = {}
         self._lock = threading.Lock()
 
@@ -73,18 +76,69 @@ class ObservationCollector:
 
         completed = 0
         for profile, city in due:
+            started_wall = time.time()
+            started_ts = now if now_ts is not None else started_wall
+            ok = False
+            error: Optional[str] = None
             try:
-                if self._collect_city_source(profile.source, city):
+                ok = self._collect_city_source(profile.source, city)
+                if ok:
                     completed += 1
                     self._refresh_city_cache(city)
+                else:
+                    error = "no_results"
             except Exception as exc:
+                error = str(exc) or exc.__class__.__name__
                 logger.warning(
                     "observation collector source failed source={} city={}: {}",
                     profile.source,
                     city,
                     exc,
                 )
+            finally:
+                completed_ts = started_ts + max(0.0, time.time() - started_wall)
+                self._record_source_status(
+                    profile=profile,
+                    city=city,
+                    due_ts=now,
+                    started_ts=started_ts,
+                    completed_ts=completed_ts,
+                    ok=ok,
+                    error=error,
+                )
         return completed
+
+    def _record_source_status(
+        self,
+        *,
+        profile: ObservationSourceProfile,
+        city: str,
+        due_ts: float,
+        started_ts: float,
+        completed_ts: float,
+        ok: bool,
+        error: Optional[str],
+    ) -> None:
+        if not self.status_recorder:
+            return
+        try:
+            self.status_recorder.record_result(
+                source=profile.source,
+                city=city,
+                interval_sec=profile.interval_sec,
+                due_ts=due_ts,
+                started_ts=started_ts,
+                completed_ts=completed_ts,
+                ok=ok,
+                error=error,
+            )
+        except Exception as exc:
+            logger.warning(
+                "observation collector status write failed source={} city={}: {}",
+                profile.source,
+                city,
+                exc,
+            )
 
     def _collect_city_source(self, source: str, city: str) -> bool:
         normalized_source = str(source or "").strip().lower()
@@ -162,6 +216,7 @@ def start_observation_collector_loop(
     weather: Any,
     cache_refresher: Optional[Callable[[str], Any]] = None,
     profiles: Optional[Sequence[ObservationSourceProfile]] = None,
+    status_recorder: Optional[ObservationCollectorStatusRepository] = None,
 ) -> Optional[threading.Thread]:
     if not _env_bool("POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED", True):
         return None
@@ -175,6 +230,7 @@ def start_observation_collector_loop(
         weather=weather,
         profiles=selected_profiles,
         cache_refresher=cache_refresher,
+        status_recorder=status_recorder or ObservationCollectorStatusRepository(),
     )
 
     global _COLLECTOR_THREAD

@@ -19,6 +19,9 @@ export const opsApi = {
   sourceHealth(limit = 80) {
     return opsFetch<Record<string, unknown>>(`/api/ops/source-health?limit=${limit}`);
   },
+  observationCollectorStatus(limit = 200) {
+    return opsFetch<Record<string, unknown>>(`/api/ops/observation-collector-status?limit=${limit}`);
+  },
   paymentRuntime() {
     return opsFetch<Record<string, unknown>>("/api/payments/runtime");
   },

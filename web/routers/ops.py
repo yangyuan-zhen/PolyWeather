@@ -13,6 +13,7 @@ from web.services.ops_api import (
     get_ops_memberships_overview,
     get_ops_health_check,
     get_ops_logs,
+    get_ops_observation_collector_status,
     get_ops_source_health,
     get_ops_truth_history,
     get_ops_weekly_leaderboard,
@@ -264,6 +265,14 @@ async def ops_source_health(
     limit: int = 80,
 ):
     return get_ops_source_health(request, cities=cities, limit=limit)
+
+
+@router.get("/api/ops/observation-collector-status")
+async def ops_observation_collector_status(
+    request: Request,
+    limit: int = 200,
+):
+    return get_ops_observation_collector_status(request, limit=limit)
 
 
 @router.get("/api/ops/training/accuracy")
