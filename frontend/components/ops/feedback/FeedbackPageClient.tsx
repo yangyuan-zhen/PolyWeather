@@ -16,13 +16,16 @@ const STATUS_OPTIONS = [
   { key: "closed", label: "关闭" },
 ] as const;
 
-const NEXT_STATUS: Record<string, string> = {
-  open: "triaged",
-  triaged: "investigating",
-  investigating: "resolved",
-  resolved: "closed",
-  closed: "open",
-};
+const STATUS_UPDATE_OPTIONS = STATUS_OPTIONS.filter((item) => item.key);
+
+const REWARD_GUIDELINES = [
+  { points: "0", title: "无效/重复", detail: "重复反馈、无法复现、非问题" },
+  { points: "50-100", title: "轻量提醒", detail: "文案、体验、小范围提示" },
+  { points: "200-300", title: "可复现 Bug", detail: "加载失败、操作异常、局部影响" },
+  { points: "500", title: "有效数据问题", detail: "城市数据、图表、关键变量异常" },
+  { points: "800-1000", title: "高影响问题", detail: "支付、账号、订阅、核心终端异常" },
+  { points: "1500+", title: "重大事故", detail: "大面积不可用或严重业务损失，谨慎使用" },
+] as const;
 
 function compactDate(value?: string) {
   if (!value) return "—";
@@ -67,11 +70,6 @@ function contextSummary(context?: Record<string, unknown>) {
   return pieces.length ? pieces.join(" · ") : "terminal";
 }
 
-function feedbackActionLabel(status?: string) {
-  const next = NEXT_STATUS[String(status || "open").toLowerCase()] || "triaged";
-  return statusLabel(next);
-}
-
 export function FeedbackPageClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -110,8 +108,9 @@ export function FeedbackPageClient() {
     return acc;
   }, [rows]);
 
-  const advanceStatus = async (row: UserFeedbackEntry) => {
-    const next = NEXT_STATUS[String(row.status || "open").toLowerCase()] || "triaged";
+  const changeStatus = async (row: UserFeedbackEntry, next: string) => {
+    const current = String(row.status || "open").toLowerCase();
+    if (!next || next === current) return;
     setUpdatingId(row.id);
     try {
       await opsApi.updateFeedbackStatus(row.id, next);
@@ -180,6 +179,35 @@ export function FeedbackPageClient() {
       </div>
 
       <Card>
+        <CardHeader className="pb-2">
+          <CardTitle>积分奖励标准</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
+            {REWARD_GUIDELINES.map((item) => (
+              <div
+                key={item.points}
+                className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+              >
+                <div className="font-mono text-sm font-black text-blue-700">
+                  {item.points} 分
+                </div>
+                <div className="mt-1 text-xs font-bold text-slate-900">
+                  {item.title}
+                </div>
+                <div className="mt-1 text-[11px] leading-4 text-slate-500">
+                  {item.detail}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            先确认反馈是否有效；未复现的问题可先标为已确认/处理中，奖励原因后续发放时需要写清楚。
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>反馈收件箱</CardTitle>
           <div className="flex flex-wrap gap-1.5">
@@ -245,14 +273,19 @@ export function FeedbackPageClient() {
                       </td>
                       <td className="whitespace-nowrap py-3 pr-4 text-xs text-slate-500">{compactDate(row.created_at)}</td>
                       <td className="py-3 pr-4">
-                        <button
-                          type="button"
-                          onClick={() => advanceStatus(row)}
+                        <select
+                          value={String(row.status || "open").toLowerCase()}
+                          onChange={(event) => changeStatus(row, event.target.value)}
                           disabled={updatingId === row.id}
-                          className="rounded border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
+                          className="h-8 min-w-[108px] rounded border border-slate-200 bg-white px-2 text-xs font-bold text-slate-600 outline-none transition hover:bg-slate-50 focus:border-blue-300 focus:ring-2 focus:ring-blue-100 disabled:cursor-wait disabled:opacity-60"
+                          aria-label="更新反馈状态"
                         >
-                          标为{feedbackActionLabel(row.status)}
-                        </button>
+                          {STATUS_UPDATE_OPTIONS.map((item) => (
+                            <option key={item.key} value={item.key}>
+                              {item.label}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                     </tr>
                   ))}
