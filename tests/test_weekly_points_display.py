@@ -51,3 +51,32 @@ def test_points_rank_display_uses_invite_points_copy(tmp_path):
     assert "积分获取: <code>邀请付费用户</code>" in text
     assert "本周发言积分" not in text
     assert "今日发言积分" not in text
+
+
+def test_weekly_leaderboard_excludes_zero_weekly_points_and_orders_active_users(tmp_path):
+    db = DBManager(str(tmp_path / "weekly-leaderboard.db"))
+    now = datetime.now()
+    week_key = f"{now.isocalendar()[0]}-W{now.isocalendar()[1]:02d}"
+    users = [
+        (1001, "old_high_total", 10000, 0, week_key),
+        (1002, "", 100, 8, week_key),
+        (1003, "active_winner", 200, 12, week_key),
+        (1004, "last_week_only", 900, 50, "2025-W01"),
+    ]
+    for telegram_id, username, points, weekly_points, weekly_week in users:
+        db.upsert_user(telegram_id, username)
+        with db._get_connection() as conn:  # noqa: SLF001
+            conn.execute(
+                """
+                UPDATE users
+                SET points = ?, message_count = ?, weekly_points = ?, weekly_points_week = ?
+                WHERE telegram_id = ?
+                """,
+                (points, 10, weekly_points, weekly_week, telegram_id),
+            )
+            conn.commit()
+
+    rows = db.get_weekly_leaderboard(limit=10)
+
+    assert [row["telegram_id"] for row in rows] == [1003, 1002]
+    assert [row["weekly_points"] for row in rows] == [12, 8]
