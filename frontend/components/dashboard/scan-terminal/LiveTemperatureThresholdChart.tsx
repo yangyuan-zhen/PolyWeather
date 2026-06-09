@@ -519,6 +519,18 @@ export function LiveTemperatureThresholdChart({
     return () => clearInterval(id);
   }, [row?.tz_offset_seconds]);
 
+  const applySuccessfulHourlyDetail = useCallback((data: HourlyForecast, options?: { updateLiveTemp?: boolean }) => {
+    if (!data) return;
+    hasLoadedHourlyDetailRef.current = true;
+    if (options?.updateLiveTemp) {
+      const temp = getLiveTempFromHourly(data);
+      if (temp !== null) setLiveTemp(temp);
+    }
+    setHourly(data);
+    setDetailError(null);
+    setShowingStaleDetail(false);
+  }, []);
+
   useEffect(() => {
     if (!city) {
       setIsHourlyLoading(false);
@@ -581,10 +593,7 @@ export function LiveTemperatureThresholdChart({
             setDetailError(isEn ? "Data temporarily unavailable." : "数据暂不可用");
             return;
           }
-          hasLoadedHourlyDetailRef.current = true;
-          setHourly(data);
-          setDetailError(null);
-          setShowingStaleDetail(false);
+          applySuccessfulHourlyDetail(data);
         })
         .catch(() => {
           if (!cancelled) setDetailError(isEn ? "Data temporarily unavailable." : "数据暂不可用");
@@ -610,6 +619,7 @@ export function LiveTemperatureThresholdChart({
     detailLoadReady,
     detailRetryNonce,
     isEn,
+    applySuccessfulHourlyDetail,
   ]);
 
   useEffect(() => {
@@ -635,8 +645,7 @@ export function LiveTemperatureThresholdChart({
       fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })
         .then((data) => {
           if (cancelled || !data) return;
-          hasLoadedHourlyDetailRef.current = true;
-          setHourly(data);
+          applySuccessfulHourlyDetail(data);
         })
         .catch(() => {});
     };
@@ -645,7 +654,7 @@ export function LiveTemperatureThresholdChart({
     return () => {
       cancelled = true;
     };
-  }, [latestPatch, row, city, targetResolution, compact, isActive, isMaximized]);
+  }, [latestPatch, row, city, targetResolution, compact, isActive, isMaximized, applySuccessfulHourlyDetail]);
 
   useEffect(() => {
     if (!resyncVersion || !city) return;
@@ -653,8 +662,7 @@ export function LiveTemperatureThresholdChart({
     fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })
       .then((data) => {
         if (cancelled || !data) return;
-        hasLoadedHourlyDetailRef.current = true;
-        setHourly(data);
+        applySuccessfulHourlyDetail(data);
       })
       .catch(() => {})
       .finally(() => {
@@ -663,7 +671,7 @@ export function LiveTemperatureThresholdChart({
     return () => {
       cancelled = true;
     };
-  }, [resyncVersion, city, targetResolution]);
+  }, [resyncVersion, city, targetResolution, applySuccessfulHourlyDetail]);
 
   // ── SSE fallback: only full-fetch if a visible chart has seen no patch for one METAR cadence ──
   useEffect(() => {
@@ -676,10 +684,7 @@ export function LiveTemperatureThresholdChart({
       fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })
         .then((data) => {
           if (cancelled || !data) return;
-          hasLoadedHourlyDetailRef.current = true;
-          const temp = getLiveTempFromHourly(data);
-          if (temp !== null) setLiveTemp(temp);
-          setHourly(data);
+          applySuccessfulHourlyDetail(data, { updateLiveTemp: true });
         })
         .catch(() => {})
         .finally(() => {
@@ -699,7 +704,7 @@ export function LiveTemperatureThresholdChart({
       cancelled = true;
       clearInterval(id);
     };
-  }, [city, compact, isActive, isMaximized, targetResolution]);
+  }, [city, compact, isActive, isMaximized, targetResolution, applySuccessfulHourlyDetail]);
 
   useEffect(() => {
     if (!shouldPollLiveChart({ city, compact, isActive, isMaximized })) return;
@@ -723,10 +728,7 @@ export function LiveTemperatureThresholdChart({
       fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })
         .then((data) => {
           if (cancelled || !data) return;
-          hasLoadedHourlyDetailRef.current = true;
-          const temp = getLiveTempFromHourly(data);
-          if (temp !== null) setLiveTemp(temp);
-          setHourly(data);
+          applySuccessfulHourlyDetail(data, { updateLiveTemp: true });
         })
         .catch(() => {});
     };
@@ -743,7 +745,7 @@ export function LiveTemperatureThresholdChart({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", refreshForegroundFullDetail);
     };
-  }, [city, compact, isActive, isMaximized, targetResolution]);
+  }, [city, compact, isActive, isMaximized, targetResolution, applySuccessfulHourlyDetail]);
 
   useEffect(() => {
     if (!city || !currentCityLocalDate) return;
@@ -756,8 +758,7 @@ export function LiveTemperatureThresholdChart({
     fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })
       .then((data) => {
         if (cancelled || !data) return;
-        hasLoadedHourlyDetailRef.current = true;
-        setHourly(data);
+        applySuccessfulHourlyDetail(data);
       })
       .catch(() => {
         if (!cancelled) localDayRolloverFetchDateRef.current = "";
@@ -766,7 +767,7 @@ export function LiveTemperatureThresholdChart({
     return () => {
       cancelled = true;
     };
-  }, [city, currentCityLocalDate, hourly?.localDate, row?.local_date, targetResolution]);
+  }, [city, currentCityLocalDate, hourly?.localDate, row?.local_date, targetResolution, applySuccessfulHourlyDetail]);
 
   const chartHourly = useMemo<HourlyForecast>(() => {
     if (!hourly) return hourly;

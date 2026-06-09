@@ -191,6 +191,22 @@ export async function runTests() {
       chartCanvasSourceIncludes(chartSource, "handleRetryDetail"),
     "city detail charts should show stale cache first and expose a retryable unavailable state",
   );
+  const successfulHourlyDetailBlock =
+    /const applySuccessfulHourlyDetail = useCallback\([\s\S]*?\n  \}, \[\]\);/.exec(chartSource)?.[0] || "";
+  assert(
+    successfulHourlyDetailBlock.includes("setDetailError(null)") &&
+      successfulHourlyDetailBlock.includes("setShowingStaleDetail(false)") &&
+      successfulHourlyDetailBlock.includes("setHourly(data)"),
+    "successful city detail refreshes must clear stale-cache retry state when fresh detail arrives",
+  );
+  const rawSuccessfulSetHourlyCalls = chartSource
+    .replace(successfulHourlyDetailBlock, "")
+    .match(/setHourly\(data\);/g) || [];
+  assert(
+    rawSuccessfulSetHourlyCalls.length === 0 &&
+      (chartSource.match(/applySuccessfulHourlyDetail\(data/g) || []).length >= 5,
+    "all successful city detail fetch branches should use the shared success handler",
+  );
   assert(
     chartSource.includes("const showDetailErrorBadge = !compact || isActive || isMaximized") &&
       chartSource.includes("showDetailErrorBadge={showDetailErrorBadge}") &&

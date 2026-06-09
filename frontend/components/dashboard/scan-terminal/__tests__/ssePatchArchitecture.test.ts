@@ -187,7 +187,7 @@ export function runTests() {
     !fallbackRefreshBlock.includes("setIsHourlyLoading(true)"),
     "no-patch fallback refresh should update the chart in the background without showing the loading overlay",
   );
-  const resyncBlock = chart.match(/useEffect\(\(\) => \{\s*if \(!resyncVersion \|\| !city\) return;[\s\S]*?\}, \[resyncVersion, city, targetResolution\]\);/)?.[0] || "";
+  const resyncBlock = chart.match(/useEffect\(\(\) => \{\s*if \(!resyncVersion \|\| !city\) return;[\s\S]*?\}, \[resyncVersion, city, targetResolution, applySuccessfulHourlyDetail\]\);/)?.[0] || "";
   assert(
     !resyncBlock.includes("setIsHourlyLoading(true)"),
     "SSE replay resync should refresh full detail in the background without showing the loading overlay",
@@ -240,7 +240,7 @@ export function runTests() {
       chart.includes("refreshProbabilityOverlayAfterPatch"),
     "temperature chart must trigger a throttled background probability refresh after live observation patches",
   );
-  const patchEffectBlock = chart.match(/useEffect\(\(\) => \{\s*if \(!latestPatch[\s\S]*?\}, \[latestPatch, row, city, targetResolution, compact, isActive, isMaximized\]\);/)?.[0] || "";
+  const patchEffectBlock = chart.match(/useEffect\(\(\) => \{\s*if \(!latestPatch[\s\S]*?\}, \[latestPatch, row, city, targetResolution, compact, isActive, isMaximized, applySuccessfulHourlyDetail\]\);/)?.[0] || "";
   assert(
     patchEffectBlock.includes("refreshProbabilityOverlayAfterPatch") &&
       patchEffectBlock.includes("ignoreCache: true") &&
