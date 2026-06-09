@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { I18nProvider } from "@/hooks/useI18n";
 import { AccountEntry } from "@/components/account/AccountEntry";
 
@@ -10,7 +11,9 @@ export const metadata: Metadata = {
 export default function AccountPage() {
   return (
     <I18nProvider>
-      <AccountEntry />
+      <Suspense fallback={null}>
+        <AccountEntry />
+      </Suspense>
     </I18nProvider>
   );
 }

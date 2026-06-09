@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import {
   User as UserIcon,
@@ -68,6 +68,7 @@ import { useAccountPayment } from "./useAccountPayment";
 
 export function AccountCenter() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { locale } = useI18n();
   const isEn = locale === "en-US";
   const copy = useMemo(() => createAccountCopy(isEn), [isEn]);
@@ -401,10 +402,11 @@ export function AccountCenter() {
     !isSubscribed && expiryInfo && expiryInfo.expired,
   );
   const paymentFeatureReady = paymentReadyForRecovery;
+  const canTrialUpgrade = Boolean(isSubscribed && isTrialSubscription);
   const canOpenCheckoutOverlay = Boolean(
     paymentFeatureReady &&
       !isSubscriptionUnknown &&
-      (!isSubscribed || showExpiringSoon || showExpiredReminder),
+      (canTrialUpgrade || !isSubscribed || showExpiringSoon || showExpiredReminder),
   );
   const subscriptionStatusTitle = showExpiredReminder
     ? copy.proExpiredTitle
@@ -471,6 +473,13 @@ export function AccountCenter() {
     showExpiringSoon,
     showOverlay,
   ]);
+
+  useEffect(() => {
+    if (showOverlay || !canOpenCheckoutOverlay) return;
+    if (searchParams.get("checkout") === "1") {
+      setShowOverlay(true);
+    }
+  }, [canOpenCheckoutOverlay, searchParams, showOverlay]);
 
   // ── Referral points display ────────────────────────────
   const referralRewardPointsRaw = Number(referral?.reward_points ?? 3500);

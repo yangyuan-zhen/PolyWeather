@@ -7,7 +7,7 @@ const ACCESS_TERM = {
   signInToContinue: { en: "Sign in to continue", zh: "请先登录" },
   proAccessRequired: { en: "Pro subscription required", zh: "需要开通 Pro" },
   month: { en: "/ 30 days", zh: "/ 30 天" },
-  subscribeNow: { en: "View Pro plans", zh: "查看订阅方案" },
+  subscribeNow: { en: "Subscribe & Activate", zh: "立即订阅并激活" },
   backToProduct: { en: "Back to product overview", zh: "返回产品介绍页" },
 } as const;
 
@@ -77,7 +77,7 @@ function SubscriptionGate({ isEn }: { isEn: boolean }) {
             </ul>
 
             <Link
-              href="/account"
+              href="/account?checkout=1"
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3.5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700"
             >
               <CreditCard size={16} />

@@ -40,6 +40,7 @@ export interface UsePaymentFlowParams {
   isEn: boolean;
   copy: Record<string, string>;
   backend: AuthMeResponse | null;
+  authUserId: string;
 
   // Shared payment config state
   paymentConfig: PaymentConfig | null;
@@ -122,6 +123,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
     isEn,
     copy,
     backend,
+    authUserId,
     paymentConfig,
     setPaymentConfig,
     selectedPlanCode,
@@ -528,6 +530,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
       if (!intentId || !txPayload?.to || !txPayload?.data) throw new Error(copy.intentPayloadInvalid);
       trackPaymentStart({
         entry: "account_center",
+        user_id: authUserId || null,
         plan_code: selectedPlan?.plan_code || "pro_monthly",
         intent_id: intentId,
         use_points: billing.canRedeem && usePoints,
@@ -634,6 +637,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
       setPaymentInfo(copy.paymentConfirmed.replace("{txHash}", shortAddress(txHashNorm)));
       trackPaymentSuccess({
         entry: "account_center",
+        user_id: authUserId || null,
         plan_code: selectedPlan?.plan_code || "pro_monthly",
         intent_id: intentId,
         tx_hash: txHashNorm,
@@ -732,6 +736,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
       );
       trackPaymentStart({
         entry: "account_center_manual_transfer",
+        user_id: authUserId || null,
         plan_code: selectedPlan?.plan_code || "pro_monthly",
         intent_id: intentId,
         payment_mode: "direct",
@@ -803,6 +808,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
       setTxValidation({ loading: false, checked: false });
       trackPaymentSuccess({
         entry: "account_center_manual_transfer",
+        user_id: authUserId || null,
         plan_code: selectedPlan?.plan_code || "pro_monthly",
         intent_id: intentIdVal,
         tx_hash: txHashNorm,

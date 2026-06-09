@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Crown,
   GraduationCap,
   Menu,
   MessageSquare,
@@ -612,6 +613,8 @@ function PolyWeatherTerminal({
   selectedRow,
   setSelectedRow,
   toggleLocale,
+  isTrialTerminalAccess,
+  trialSubscriptionExpiresAt,
   userLocalTime,
   searchQuery,
   setSearchQuery,
@@ -632,6 +635,8 @@ function PolyWeatherTerminal({
   selectedRow: ScanOpportunityRow | null;
   setSelectedRow: (row: ScanOpportunityRow) => void;
   toggleLocale: () => void;
+  isTrialTerminalAccess: boolean;
+  trialSubscriptionExpiresAt: string | null;
   userLocalTime: string;
   searchQuery: string;
   setSearchQuery: (val: string) => void;
@@ -668,6 +673,17 @@ function PolyWeatherTerminal({
   const [onlineCount, setOnlineCount] = useState<number | null>(null);
   const [feedbackDraft, setFeedbackDraft] = useState<FeedbackDraft | null>(null);
   const [feedbackRefreshKey, setFeedbackRefreshKey] = useState(0);
+  const trialExpiryMs = Date.parse(String(trialSubscriptionExpiresAt || ""));
+  const trialHoursLeft = Number.isFinite(trialExpiryMs)
+    ? Math.max(0, Math.ceil((trialExpiryMs - Date.now()) / 3_600_000))
+    : null;
+  const trialUpgradeLabel = isEn
+    ? trialHoursLeft != null
+      ? `Trial ${trialHoursLeft}h left`
+      : "Trial access"
+    : trialHoursLeft != null
+      ? `试用剩 ${trialHoursLeft} 小时`
+      : "试用中";
   const handleSelectNav = useCallback((key: string) => {
     setActiveNavKey(key);
   }, []);
@@ -957,6 +973,17 @@ function PolyWeatherTerminal({
             <div className="hidden lg:block">
               <UpdateAnnouncementButton isEn={isEn} />
             </div>
+            {isTrialTerminalAccess && (
+              <Link
+                href="/account?checkout=1"
+                className="inline-flex h-7 items-center gap-2 rounded border border-amber-300 bg-amber-50 px-2.5 text-[11px] font-black text-amber-800 transition hover:bg-amber-100"
+                title={isEn ? "Upgrade to Pro" : "升级 Pro"}
+              >
+                <Crown size={12} />
+                <span className="hidden sm:inline">{trialUpgradeLabel}</span>
+                <span>{isEn ? "Upgrade" : "升级"}</span>
+              </Link>
+            )}
             {onlineCount != null && (
               <div className="hidden items-center gap-1 text-[10px] font-medium text-slate-400 lg:flex">
                 <Users size={12} />
@@ -1630,6 +1657,10 @@ function ScanTerminalScreen() {
     },
     [cityFallbackRows, terminalData?.rows],
   );
+  const isTrialTerminalAccess = Boolean(
+    isPro &&
+      String(proAccess.subscriptionPlanCode || "").toLowerCase().includes("signup_trial"),
+  );
 
   const fallbackFetchedRef = useRef(false);
   useEffect(() => {
@@ -1743,6 +1774,10 @@ function ScanTerminalScreen() {
       selectedRow={selectedRow}
       setSelectedRow={handleSelectRow}
       toggleLocale={toggleLocale}
+      isTrialTerminalAccess={isTrialTerminalAccess}
+      trialSubscriptionExpiresAt={
+        proAccess.subscriptionTotalExpiresAt || proAccess.subscriptionExpiresAt
+      }
       userLocalTime={userLocalTime}
       searchQuery={searchQuery}
       setSearchQuery={setSearchQuery}

@@ -487,6 +487,7 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
     isEn,
     copy,
     backend,
+    authUserId,
     paymentConfig,
     setPaymentConfig,
     selectedPlanCode,

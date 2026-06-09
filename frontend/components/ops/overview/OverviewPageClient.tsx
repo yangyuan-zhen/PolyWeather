@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getOpsPaidConversionKpi } from "@/lib/ops-conversion";
 import { opsApi } from "@/lib/ops-api";
 import type { MembershipEntry, MembershipsPayload, SystemStatusPayload } from "@/types/ops";
 
@@ -76,10 +77,9 @@ export function OverviewPageClient() {
   const paid = memberships.filter((m) => !m.is_trial).length;
   const trials = memberships.filter((m) => m.is_trial).length;
   const steps = funnel?.steps ?? [];
-  const totalUsers = steps[0]?.count ?? 0;
   const stepByKey = Object.fromEntries(steps.map((step) => [step.key || step.label, step]));
   const payingUsers = stepByKey.payment_success?.count ?? 0;
-  const convRate = totalUsers > 0 ? ((payingUsers / totalUsers) * 100).toFixed(1) : "—";
+  const paidConversion = getOpsPaidConversionKpi(steps);
   const cache = status?.cache;
   const cacheAnalysis = cache?.analysis;
   const td = status?.training_data;
@@ -133,7 +133,7 @@ export function OverviewPageClient() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
         <KpiCard href="/ops/system" icon={Activity} label="系统" value={status?.db?.ok ? "OK" : "FAIL"} color={status?.db?.ok ? "text-emerald-400" : "text-red-400"} />
         <KpiCard href="/ops/memberships" icon={Users} label="付费会员" value={paid} color="text-cyan-400" sub={trials > 0 ? `+${trials} 体验` : undefined} />
-        <KpiCard href="/ops/analytics" icon={TrendingUp} label="30天转化" value={`${convRate}%`} color="text-blue-400" sub={`${totalUsers} → ${payingUsers}`} />
+        <KpiCard href="/ops/analytics" icon={TrendingUp} label="30天转付费" value={paidConversion.rateLabel} color="text-blue-400" sub={paidConversion.subLabel} />
         <KpiCard href="/ops/training" icon={Database} label="真值记录" value={truthRows} color="text-purple-400" sub={`${coverage?.with_truth_rows ?? 0} 城市`} />
         <KpiCard href="/ops/payments" icon={CreditCard} label="支付成功" value={payingUsers} color="text-emerald-400" sub="30天内" />
         <KpiCard href="/ops/system" icon={Cpu} label="概率引擎" value={status?.probability?.engine_mode ?? "—"} color="text-amber-400" />
