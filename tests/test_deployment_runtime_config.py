@@ -91,7 +91,11 @@ def test_docker_compose_isolates_collector_from_web_and_bot_services():
     assert "POLYWEATHER_SERVICE_ROLE: bot" in compose
     assert "POLYWEATHER_SERVICE_ROLE: collector" in collector_block
     assert "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'false'" in bot_block
-    assert "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'false'" in web_block
+    assert (
+        "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: "
+        "${POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED:-true}"
+        in web_block
+    )
     assert "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'false'" in collector_block
     assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'false'" in bot_block
     assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'false'" in web_block

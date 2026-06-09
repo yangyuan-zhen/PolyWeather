@@ -1,5 +1,6 @@
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 import sqlite3
+import threading
 import time
 
 
@@ -119,6 +120,7 @@ def test_observation_collector_run_due_once_refreshes_panel_cache():
             )
         ],
         cache_refresher=lambda city: refreshed.append(city),
+        async_cache_refresh=False,
     )
 
     assert collector.run_due_once(now_ts=1000.0) == 1
@@ -131,6 +133,62 @@ def test_observation_collector_run_due_once_refreshes_panel_cache():
     assert collector.run_due_once(now_ts=1180.0) == 1
     assert calls == [("qingdao", False), ("qingdao", False)]
     assert refreshed == ["qingdao", "qingdao"]
+
+
+def test_observation_collector_cache_refresh_does_not_block_source_polling():
+    from web.observation_collector_service import (
+        ObservationCollector,
+        ObservationSourceProfile,
+    )
+
+    calls = []
+    refresh_started = threading.Event()
+    release_refresh = threading.Event()
+    refreshed = []
+
+    class FakeWeather:
+        def _uses_fahrenheit(self, city):
+            return False
+
+        def _attach_china_amsc_awos_data(self, results, city, use_fahrenheit):
+            calls.append(city)
+            results["amsc_awos"] = {"source": "amsc_awos", "temp_c": 24.0}
+
+    def slow_cache_refresher(city):
+        refresh_started.set()
+        release_refresh.wait(timeout=2)
+        refreshed.append(city)
+
+    collector = ObservationCollector(
+        weather=FakeWeather(),
+        profiles=[
+            ObservationSourceProfile(
+                source="amsc_awos",
+                cities=("qingdao", "beijing"),
+                interval_sec=180,
+            )
+        ],
+        cache_refresher=slow_cache_refresher,
+    )
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(collector.run_due_once, now_ts=1000.0)
+        assert refresh_started.wait(timeout=1)
+        try:
+            try:
+                result = future.result(timeout=0.1)
+            except TimeoutError:
+                result = None
+        finally:
+            release_refresh.set()
+
+    assert result == 2
+    assert calls == ["qingdao", "beijing"]
+    deadline = time.time() + 2
+    while set(refreshed) != {"qingdao", "beijing"} and time.time() < deadline:
+        time.sleep(0.01)
+    assert set(refreshed) == {"qingdao", "beijing"}
+    collector.close()
 
 
 def test_observation_collector_records_source_status_to_runtime_state(tmp_path):

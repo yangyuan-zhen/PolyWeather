@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, List, Optional, Sequence, Tuple
 
@@ -53,6 +54,8 @@ class ObservationCollector:
         profiles: Sequence[ObservationSourceProfile],
         cache_refresher: Optional[Callable[[str], Any]] = None,
         status_recorder: Optional[ObservationCollectorStatusRepository] = None,
+        async_cache_refresh: Optional[bool] = None,
+        cache_refresh_workers: Optional[int] = None,
     ) -> None:
         self.weather = weather
         self.profiles = list(profiles)
@@ -60,6 +63,29 @@ class ObservationCollector:
         self.status_recorder = status_recorder
         self._last_run_ts: dict[tuple[str, str], float] = {}
         self._lock = threading.Lock()
+        self._cache_refresh_lock = threading.Lock()
+        self._cache_refresh_inflight: set[str] = set()
+        self._cache_refresh_async = (
+            _env_bool("POLYWEATHER_OBSERVATION_COLLECTOR_CACHE_REFRESH_ASYNC", True)
+            if async_cache_refresh is None
+            else bool(async_cache_refresh)
+        )
+        worker_count = max(
+            1,
+            min(
+                4,
+                int(
+                    cache_refresh_workers
+                    if cache_refresh_workers is not None
+                    else _env_int("POLYWEATHER_OBSERVATION_COLLECTOR_CACHE_REFRESH_WORKERS", 1)
+                ),
+            ),
+        )
+        self._cache_refresh_executor: Optional[ThreadPoolExecutor] = (
+            ThreadPoolExecutor(max_workers=worker_count)
+            if callable(cache_refresher) and self._cache_refresh_async
+            else None
+        )
 
     def run_due_once(self, *, now_ts: Optional[float] = None) -> int:
         now = float(time.time() if now_ts is None else now_ts)
@@ -166,10 +192,43 @@ class ObservationCollector:
     def _refresh_city_cache(self, city: str) -> None:
         if not callable(self.cache_refresher):
             return
+        normalized_city = str(city or "").strip().lower()
+        if not normalized_city:
+            return
+        if self._cache_refresh_executor is None:
+            self._refresh_city_cache_inline(normalized_city)
+            return
+        with self._cache_refresh_lock:
+            if normalized_city in self._cache_refresh_inflight:
+                return
+            self._cache_refresh_inflight.add(normalized_city)
+        try:
+            self._cache_refresh_executor.submit(self._refresh_city_cache_task, normalized_city)
+        except Exception as exc:
+            with self._cache_refresh_lock:
+                self._cache_refresh_inflight.discard(normalized_city)
+            logger.warning(
+                "observation collector cache refresh queue failed city={}: {}",
+                normalized_city,
+                exc,
+            )
+
+    def _refresh_city_cache_task(self, city: str) -> None:
+        try:
+            self._refresh_city_cache_inline(city)
+        finally:
+            with self._cache_refresh_lock:
+                self._cache_refresh_inflight.discard(city)
+
+    def _refresh_city_cache_inline(self, city: str) -> None:
         try:
             self.cache_refresher(city)
         except Exception as exc:
             logger.warning("observation collector cache refresh failed city={}: {}", city, exc)
+
+    def close(self) -> None:
+        if self._cache_refresh_executor is not None:
+            self._cache_refresh_executor.shutdown(wait=False)
 
 
 def build_observation_source_profiles() -> List[ObservationSourceProfile]:
