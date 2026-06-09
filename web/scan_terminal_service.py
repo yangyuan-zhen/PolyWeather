@@ -371,6 +371,16 @@ def build_scan_terminal_payload(
                 ),
                 failed_at=cached_entry.get("last_failed_at"),
             )
+        started = _start_scan_terminal_background_refresh(filters)
+        return build_failed_scan_terminal_payload(
+            filters=filters,
+            error_message=(
+                "市场扫描快照正在初始化"
+                if started
+                else "市场扫描快照正在刷新中"
+            ),
+            failed_at=cached_entry.get("last_failed_at"),
+        )
 
     return (
         timing_recorder.measure(

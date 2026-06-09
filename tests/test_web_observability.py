@@ -3080,7 +3080,7 @@ def test_scan_terminal_timeout_does_not_replace_better_cached_snapshot(monkeypat
     assert [row["id"] for row in cached["rows"]] == ["old-1", "old-2"]
 
 
-def test_scan_terminal_cold_requests_share_inflight_build(monkeypatch):
+def test_scan_terminal_cold_requests_start_background_build_without_blocking(monkeypatch):
     import time
     from concurrent.futures import ThreadPoolExecutor
 
@@ -3119,11 +3119,12 @@ def test_scan_terminal_cold_requests_share_inflight_build(monkeypatch):
             executor.submit(scan_terminal_service.build_scan_terminal_payload, filters),
             executor.submit(scan_terminal_service.build_scan_terminal_payload, filters),
         ]
-        results = [future.result(timeout=2) for future in futures]
+        results = [future.result(timeout=0.02) for future in futures]
 
     assert calls == 1
-    assert results[0]["rows"] == [{"id": "shared-row"}]
-    assert results[1]["rows"] == [{"id": "shared-row"}]
+    assert [result["status"] for result in results] == ["failed", "failed"]
+    assert all(result["rows"] == [] for result in results)
+    assert all("初始化" in result["stale_reason"] or "刷新中" in result["stale_reason"] for result in results)
 
 
 def test_scan_terminal_prewarm_builds_default_terminal_payload(monkeypatch):
