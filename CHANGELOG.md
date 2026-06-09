@@ -49,7 +49,7 @@
 - 一键部署脚本：deploy.sh + deploy.ps1
 
 ### 移除
-- 删除 LGBM 全部代码和模型文件，EMOS 简化为纯 legacy 高斯分桶
+- 删除 LGBM 全部代码和模型文件，概率路径收口为 legacy 高斯分桶
 - 删除 Polymarket 价格拉取与 UI 层（MarketDecisionLine）
 - 删除 Groq、Meteoblue、NMC、俄罗斯 pogodaiklimat 数据源
 - 删除预热（prewarm）系统

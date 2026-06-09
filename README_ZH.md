@@ -36,7 +36,6 @@
 - 香港默认展示 CoWIN `6087`（保良局陈守仁小学）1 分钟参考站曲线，HKO 10 分钟实测保留为官方气象层。
 - Telegram 机场/跑道推送默认中英文双语，并统一使用结算端点跑道温度计算当前值、15 分钟趋势和文案。
 - 运行态状态、缓存与核心离线训练/回填链路已完成 SQLite 主路径收口；legacy JSON/JSONL 仅保留给迁移、导出与显式回退输入。
-- EMOS/CRPS 校准链路已接通，但生产主概率保持 `legacy` 或 `emos_shadow`；`emos_primary` 只在本地离线评估通过并手动灰度后启用。
 - 官方增强站网已统一接入：
   - `MGM`（土耳其）
   - `CMA/NMC`（中国内地）
@@ -53,7 +52,7 @@
 - 终端数据同时使用页面内存缓存、浏览器 `localStorage`、后端短 TTL 缓存、SSE patch replay 和前台恢复刷新；从其他选项卡切回时会优先恢复最新可见图表状态。
 - 市场温度桶匹配已改为完整 `all_buckets` 映射，按 exact / range / or higher / or lower 方向严格匹配，避免把天气中枢错配到不合理尾部桶。
 - 市场信号中的“模型-市场差”口径为 `模型概率 - 市场隐含概率`，正值表示天气概率高于市场报价，负值表示市场已经更充分计价。
-- 概率区已改为”校准模型概率”；默认展示生产概率引擎输出（legacy 高斯或 EMOS），模型共识作为辅助参考。
+- 概率区已改为“校准模型概率”；默认展示 legacy 高斯概率引擎输出，模型共识作为辅助参考。
 - 今日日内结构解读以规则与结构化信号为主，AI 文案只作为可降级辅助层，不替代实测、DEB、TAF 或结算逻辑。
 - 前端设计系统全面重构：统一 CSS token 体系、消除 !important 滥用（134→49）、合并断点（18→10）、数百处硬编码颜色迁移至 CSS 变量、添加 ARIA 无障碍属性和键盘导航。完整审查记录见 `docs/frontend-ui-design-review.md`。
 
@@ -72,7 +71,7 @@
 - 聚合 51 个监控城市的实测与预报数据。
 - DEB（Dynamic Error Balancing）融合多模型最高温。
 - 构建 DEB 加权小时共识曲线，用于峰值窗口判断和图表默认 DEB 展示。
-- 输出结算导向校准概率分布（`mu` + 温度桶），通过 legacy 高斯或 EMOS/CRPS 校准引擎。
+- 输出结算导向校准概率分布（`mu` + 温度桶），通过 legacy 高斯校准路径。
 - 天气决策台把结构化实况、DEB 高温路径、完整市场温度桶和模型-市场差放进图表/详情工作流。
 - 图表 tooltip 展示校准高斯上下文：`mu` 加完整温度区间概率分布，不把概率温度带重新放回主图。
 - Web 仪表盘与 Telegram Bot 复用同一分析内核。
@@ -148,24 +147,6 @@ POLYWEATHER_REDIS_REQUIRED=true
 ```
 
 本地开发或严格单进程兜底可使用 `POLYWEATHER_EVENT_STORE=sqlite`。
-
-## EMOS 本地训练流程
-
-低配 VPS 只负责采集、服务和加载已通过评估的参数，不建议在 VPS 上跑 EMOS 全量训练。训练前先从 VPS 拉 SQLite 副本到本地：
-
-```powershell
-scp root@38.54.27.70:/var/lib/polyweather/polyweather.db E:\web\PolyWeather\data\polyweather-prod.db
-```
-
-本地训练：
-
-```powershell
-$env:POLYWEATHER_DB_PATH="E:\web\PolyWeather\data\polyweather-prod.db"
-$env:POLYWEATHER_RUNTIME_DATA_DIR="E:\web\PolyWeather\artifacts\local_runtime"
-python scripts\auto_retrain_probability_calibration.py --verbose --snapshot-limit 50000
-```
-
-只有 `auto_retrain_report.json` 中 `ready_for_promotion=true` 时，才允许把候选 `default.json` 传回 VPS，并优先以 `emos_shadow` 观察。
 
 ## 运维验收
 

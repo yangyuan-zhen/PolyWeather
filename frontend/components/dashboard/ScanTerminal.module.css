@@ -518,7 +518,7 @@
 }
 
 /* ══════════════════════════════════════════════════════════════
-   SCAN TERMINAL OVERRIDES — EMOS DESK
+   SCAN TERMINAL OVERRIDES
    ══════════════════════════════════════════════════════════════ */
 
 .root :global(.scan-terminal) {

@@ -54,7 +54,7 @@ def test_probability_snapshot_repository_recent_rows(tmp_path, monkeypatch):
         'raw_sigma': 1.1,
         'max_so_far': 14.9,
         'peak_status': 'before',
-        'probability_mode': 'emos_shadow',
+        'probability_mode': 'legacy',
         'prob_snapshot': [{'v': 15, 'p': 0.6}],
         'shadow_prob_snapshot': [{'v': 15, 'p': 0.4}],
     })

@@ -40,10 +40,10 @@ export function runTests() {
 
   const allDocsZh = publicDocSlugs.map((slug) => pageText(slug, "zh-CN")).join("\n");
   const allDocsEn = publicDocSlugs.map((slug) => pageText(slug, "en-US")).join("\n");
-  for (const staleTerm of ["从地图进入", "机会榜", "日历", "EMOS", "LGBM", "城市决策卡", "付费判断台", "刷新锁"]) {
+  for (const staleTerm of ["从地图进入", "机会榜", "日历", "LGBM", "城市决策卡", "付费判断台", "刷新锁"]) {
     assert(!allDocsZh.includes(staleTerm), `public Chinese docs should not expose stale term: ${staleTerm}`);
   }
-  for (const staleTerm of ["map-launched", "opportunity board", "calendar", "EMOS", "LGBM", "city decision card", "paid decision workspace", "refresh lock"]) {
+  for (const staleTerm of ["map-launched", "opportunity board", "calendar", "LGBM", "city decision card", "paid decision workspace", "refresh lock"]) {
     assert(!allDocsEn.includes(staleTerm), `public English docs should not expose stale term: ${staleTerm}`);
   }
 

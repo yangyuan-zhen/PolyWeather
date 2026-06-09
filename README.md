@@ -40,14 +40,13 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 - Hong Kong uses CoWIN station `6087` (Po Leung Kuk Choi Kai Yau School) as the 1-minute reference-station curve, with HKO 10-minute observations kept as the official meteorological layer.
 - Telegram airport/runway pushes are bilingual by default and use settlement-endpoint runway temperatures for slope/current/summary copy.
 - Runtime state, cache, and core offline training/backfill flows now use SQLite as the primary path; legacy JSON/JSONL files remain only for migration, export, and explicit fallback input.
-- EMOS/CRPS calibration is wired and trainable, but production should stay on `legacy` or `emos_shadow`; `emos_primary` is only for candidates that pass local offline evaluation and manual rollout.
 - Intraday analysis is now positioned as a professional meteorology read: headline, confidence, base/upside/downside paths, next observation point, evidence chain, failure modes, and confirmation rules.
 - Intraday modal now blocks stale cached detail during refresh, so users do not briefly trade off old city/date data before full detail arrives.
 - Terminal chart/detail workflow now combines settlement observations, DEB hourly consensus, model context, probability distribution tooltips, and market-bucket mapping without blocking the chart on AI text generation.
 - Terminal data uses page memory cache, browser `localStorage`, backend short-TTL cache, SSE patch replay, and foreground refresh so returning from another tab restores the latest visible chart state quickly.
 - Market bucket matching now uses the full `all_buckets` surface and strict exact / range / or-higher / or-lower direction checks, reducing bad matches to unreasonable tail buckets.
 - The market-signal difference means `model probability - market-implied probability`; positive values indicate weather probability above market pricing, while negative values indicate the YES is already priced more fully.
-- Calibrated model probability is now the primary probability panel. It shows the active production probability engine (legacy Gaussian or EMOS), while model consensus remains a secondary reference.
+- Calibrated model probability is now the primary probability panel. It shows the active legacy Gaussian probability engine, while model consensus remains a secondary reference.
 - Non-Hong Kong airport cities now ingest `TAF` and parse `FM / TEMPO / BECMG / PROB30/40`.
 - Temperature chart now overlays `TAF Timing` markers near the expected peak window.
 - Trade cue now combines upper-air structure, `TAF`, market crowding, and `edge_percent`.
@@ -71,7 +70,7 @@ See: [AGPL-3.0 & Commercial Boundary](docs/OPEN_CORE_POLICY.md)
 - Aggregates observations and forecasts for 51 monitored cities.
 - Uses DEB (Dynamic Error Balancing) to blend multi-model highs.
 - Builds a DEB-weighted hourly consensus path for peak-window logic and chart display.
-- Generates settlement-oriented calibrated probability buckets (`mu` + bucket distribution) via legacy Gaussian or EMOS/CRPS calibration.
+- Generates settlement-oriented calibrated probability buckets (`mu` + bucket distribution) via the legacy Gaussian calibration path.
 - Adds terminal chart/detail workflows that combine live observations, DEB-centered high-temperature context, market-bucket mapping, and model-market difference.
 - Shows calibrated Gaussian context in chart tooltips as `mu` plus the full temperature-range probability distribution, without reintroducing probability bands into the main temperature view.
 - Reuses one analysis core across web dashboard and Telegram bot.
@@ -139,7 +138,7 @@ npm run dev
 - Hong Kong keeps `HKO` official readings in dashboard and history, without falling back to airport METAR lines.
 - Intraday analysis now separates meteorology conclusion, evidence chain, invalidation rules, confirmation rules, calibrated probability, and market reference.
 - `TAF` is used as an airport-side confirmation layer, not as the main temperature model.
-- Calibrated probability uses legacy Gaussian (default) or EMOS/CRPS when evaluated; model vote counts remain an explanatory consensus line, not the final probability.
+- Calibrated probability uses the legacy Gaussian path; model vote counts remain an explanatory consensus line, not the final probability.
 - Browser extension remains a lightweight monitoring + basic-bias product, while the site holds the full analysis experience.
 - Realtime terminal charts use SSE patches plus replayable event storage; full HTTP detail remains the authoritative snapshot.
 - Chart observations are shown in the city's local time, not the browser timezone.
@@ -159,19 +158,6 @@ POLYWEATHER_REDIS_REQUIRED=true
 ```
 
 For local development or a strict single-process fallback, keep `POLYWEATHER_EVENT_STORE=sqlite`.
-
-## EMOS Local Training
-
-Do not run full EMOS retraining on a small VPS. The VPS should collect data and load approved calibration files; training should run on a local/dev machine using a copied production SQLite database:
-
-```powershell
-scp root@38.54.27.70:/var/lib/polyweather/polyweather.db E:\web\PolyWeather\data\polyweather-prod.db
-$env:POLYWEATHER_DB_PATH="E:\web\PolyWeather\data\polyweather-prod.db"
-$env:POLYWEATHER_RUNTIME_DATA_DIR="E:\web\PolyWeather\artifacts\local_runtime"
-python scripts\auto_retrain_probability_calibration.py --verbose --snapshot-limit 50000
-```
-
-Promote a generated `default.json` only when `auto_retrain_report.json` has `ready_for_promotion=true`, and prefer `emos_shadow` before enabling `emos_primary`.
 
 ## Ops Verification
 
