@@ -4,6 +4,8 @@ export type ProxyCachePolicy = {
   revalidateSeconds?: number;
 };
 
+const NO_STORE_CACHE_CONTROL = "no-store, max-age=0";
+
 export function isForceRefreshValue(value: string | null | undefined) {
   return String(value || "").trim().toLowerCase() === "true";
 }
@@ -15,7 +17,7 @@ export function buildForceRefreshProxyCachePolicy(
   if (isForceRefreshValue(forceRefresh)) {
     return {
       fetchMode: "no-store",
-      responseCacheControl: "no-store, max-age=0",
+      responseCacheControl: NO_STORE_CACHE_CONTROL,
     };
   }
   return {
@@ -35,7 +37,7 @@ export function buildCityDetailProxyCachePolicy(
   if (isForceRefreshValue(forceRefresh)) {
     return {
       fetchMode: "no-store",
-      responseCacheControl: "no-store, max-age=0",
+      responseCacheControl: NO_STORE_CACHE_CONTROL,
     };
   }
   return {
@@ -46,4 +48,19 @@ export function buildCityDetailProxyCachePolicy(
     )}`,
     revalidateSeconds,
   };
+}
+
+export function buildScanTerminalResponseCacheControl(
+  data: unknown,
+  readyCacheControl: string,
+) {
+  if (!data || typeof data !== "object") {
+    return NO_STORE_CACHE_CONTROL;
+  }
+  const payload = data as { stale?: unknown; status?: unknown };
+  const status = String(payload.status || "").trim().toLowerCase();
+  if (payload.stale === true || (status && status !== "ready")) {
+    return NO_STORE_CACHE_CONTROL;
+  }
+  return readyCacheControl;
 }

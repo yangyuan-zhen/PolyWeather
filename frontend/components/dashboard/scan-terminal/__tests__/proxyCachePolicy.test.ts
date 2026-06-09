@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import {
+  buildScanTerminalResponseCacheControl,
   buildCityDetailProxyCachePolicy,
   buildForceRefreshProxyCachePolicy,
   isForceRefreshValue,
@@ -26,6 +27,24 @@ export function runTests() {
   const scanForced = buildForceRefreshProxyCachePolicy("true", 10);
   assert.equal(scanForced.fetchMode, "no-store");
 
+  const normalScanCache = "public, max-age=0, s-maxage=300, stale-while-revalidate=900";
+  assert.equal(
+    buildScanTerminalResponseCacheControl({ status: "ready", stale: false }, normalScanCache),
+    normalScanCache,
+  );
+  assert.equal(
+    buildScanTerminalResponseCacheControl({ status: "failed", stale: false }, normalScanCache),
+    "no-store, max-age=0",
+  );
+  assert.equal(
+    buildScanTerminalResponseCacheControl({ status: "partial", stale: false }, normalScanCache),
+    "no-store, max-age=0",
+  );
+  assert.equal(
+    buildScanTerminalResponseCacheControl({ status: "ready", stale: true }, normalScanCache),
+    "no-store, max-age=0",
+  );
+
   const scanTerminalProxySource = fs.readFileSync(
     path.join(process.cwd(), "app", "api", "scan", "terminal", "route.ts"),
     "utf8",
@@ -39,6 +58,11 @@ export function runTests() {
     scanTerminalProxySource,
     /buildForceRefreshProxyCachePolicy\(forceRefresh,\s*10\)/,
     "scan terminal proxy must not use the old 10 second edge cache because it over-drives the slow scan endpoint",
+  );
+  assert.match(
+    scanTerminalProxySource,
+    /cacheControlForData:\s*\(data\)\s*=>\s*buildScanTerminalResponseCacheControl/,
+    "scan terminal proxy must not CDN-cache failed, stale, or partial business payloads",
   );
 
   const scanTerminalClientSource = fs.readFileSync(

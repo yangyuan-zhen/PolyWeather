@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { proxyBackendJsonGet } from "@/lib/api-proxy";
-import { buildForceRefreshProxyCachePolicy } from "@/lib/proxy-cache-policy";
+import {
+  buildForceRefreshProxyCachePolicy,
+  buildScanTerminalResponseCacheControl,
+} from "@/lib/proxy-cache-policy";
 import { DASHBOARD_REFRESH_POLICY_SEC } from "@/lib/refresh-policy";
 import {
   createProxyTimer,
@@ -64,6 +67,11 @@ export async function GET(req: NextRequest) {
   try {
     return await proxyBackendJsonGet(req, {
       cacheControl: cachePolicy.responseCacheControl,
+      cacheControlForData: (data) =>
+        buildScanTerminalResponseCacheControl(
+          data,
+          cachePolicy.responseCacheControl,
+        ),
       fetchCache:
         cachePolicy.fetchMode === "no-store" ? "no-store" : undefined,
       publicMessage: "Failed to fetch scan terminal data",
