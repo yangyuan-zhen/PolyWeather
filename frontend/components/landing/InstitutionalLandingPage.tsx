@@ -49,6 +49,9 @@ const PRO_FEATURES_ZH = [
   "订阅与准入问题优先支持",
 ];
 
+const CONTACT_EMAIL = "yhrsc30@gmail.com";
+const CONTACT_X_URL = "https://x.com/polyweatheryuan";
+
 const SUPPORTED_CITY_GROUPS: Array<{
   descriptionEn: string;
   descriptionZh: string;
@@ -304,7 +307,7 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
             PolyWeather
           </Link>
 
-          <nav className="hidden items-center gap-7 text-sm font-medium text-slate-500 md:flex">
+          <nav className="hidden items-center gap-6 text-sm font-medium text-slate-500 lg:flex">
             <a href="#platform" className="hover:text-slate-950">
               {isEn ? "Platform" : "平台"}
             </a>
@@ -322,6 +325,9 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
             </Link>
             <a href="#pricing" className="hover:text-slate-950">
               {isEn ? "Pricing" : "定价"}
+            </a>
+            <a href="#contact" className="hover:text-slate-950">
+              {isEn ? "Contact" : "联系"}
             </a>
           </nav>
 
@@ -776,6 +782,45 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                   </article>
                 ))}
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="contact" className="scroll-mt-16 border-t border-slate-200 bg-white px-4 py-16 sm:px-6">
+          <div className="mx-auto grid max-w-6xl gap-6 md:grid-cols-[1fr_auto] md:items-center">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+                {isEn ? "Contact" : "联系"}
+              </p>
+              <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
+                {isEn
+                  ? "Questions about access, payments, or supported markets?"
+                  : "有访问、付款或支持城市的问题？"}
+              </h2>
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600">
+                {isEn
+                  ? "Reach out directly for subscription recovery, Telegram access, city coverage, and product feedback."
+                  : "订阅恢复、Telegram 入群、城市覆盖和产品反馈，可以直接联系我。"}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-3 md:justify-end">
+              <Link
+                href={`mailto:${CONTACT_EMAIL}`}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-slate-200 bg-[#fbfbfa] px-4 py-2 text-sm font-bold text-slate-700 shadow-sm hover:border-slate-300 hover:text-slate-950"
+              >
+                {CONTACT_EMAIL}
+                <LandingIcon name="arrow" size={15} />
+              </Link>
+              <Link
+                href={CONTACT_X_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800"
+              >
+                {isEn ? "Follow on X" : "X / Twitter"}
+                <LandingIcon name="arrow" size={15} />
+              </Link>
             </div>
           </div>
         </section>

@@ -87,6 +87,11 @@ export function runTests() {
       source.includes("{city.icao}"),
     "landing supported cities must render names and station codes from the generated city groups",
   );
+  assert(source.includes("#contact"), "landing navigation must expose the contact section");
+  assert(source.includes('id="contact"'), "landing page must include a contact section");
+  assert(source.includes("yhrsc30@gmail.com"), "landing page must show the operator contact email");
+  assert(source.includes("mailto:${CONTACT_EMAIL}"), "landing contact email must be clickable");
+  assert(source.includes("https://x.com/polyweatheryuan"), "landing page must link to the PolyWeather X account");
   assert(source.includes("结算源优先") && source.includes("差异化卖点"), "landing page must explain the differentiated settlement-source positioning");
   assert(!source.includes('src="/static/web.png"'), "landing hero must not use the heavy PNG as its primary LCP image");
   assert(
