@@ -80,6 +80,7 @@ import {
 } from "@/components/dashboard/scan-terminal/city-fallback-rows";
 import { markAnalyticsOnce, trackAppEvent } from "@/lib/app-analytics";
 import { STATIC_CITY_LIST } from "@/lib/static-cities";
+import { recordTrialValueReplay } from "@/lib/trial-value-replay";
 
 const TrainingDashboard = dynamic(
   () =>
@@ -615,6 +616,7 @@ function PolyWeatherTerminal({
   toggleLocale,
   isTrialTerminalAccess,
   trialSubscriptionExpiresAt,
+  trialUserId,
   userLocalTime,
   searchQuery,
   setSearchQuery,
@@ -637,6 +639,7 @@ function PolyWeatherTerminal({
   toggleLocale: () => void;
   isTrialTerminalAccess: boolean;
   trialSubscriptionExpiresAt: string | null;
+  trialUserId: string | null;
   userLocalTime: string;
   searchQuery: string;
   setSearchQuery: (val: string) => void;
@@ -881,6 +884,23 @@ function PolyWeatherTerminal({
 
   const selectedSignal = selectedRow ? getSignalState(selectedRow) : "data" as const;
   const selectedLabel = selectedRow ? getSignalLabel(selectedSignal, isEn) : "";
+
+  useEffect(() => {
+    if (!isTrialTerminalAccess || !selectedRow) return;
+    recordTrialValueReplay({
+      userId: trialUserId,
+      cityName: rowName(selectedRow),
+      signalLabel: selectedLabel,
+      rowsAvailable: filteredRegionRows.length || rows.length,
+    });
+  }, [
+    filteredRegionRows.length,
+    isTrialTerminalAccess,
+    rows.length,
+    selectedLabel,
+    selectedRow,
+    trialUserId,
+  ]);
 
   const continentGroups = useMemo(
     () => buildContinentGroups(filteredRegionRows, isEn),
@@ -1778,6 +1798,7 @@ function ScanTerminalScreen() {
       trialSubscriptionExpiresAt={
         proAccess.subscriptionTotalExpiresAt || proAccess.subscriptionExpiresAt
       }
+      trialUserId={proAccess.userId}
       userLocalTime={userLocalTime}
       searchQuery={searchQuery}
       setSearchQuery={setSearchQuery}

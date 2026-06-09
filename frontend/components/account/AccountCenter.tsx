@@ -63,6 +63,10 @@ import {
 import { createAccountCopy } from "./account-copy";
 import { resetWalletConnectProvider } from "./wallet";
 import { useAccountPayment } from "./useAccountPayment";
+import {
+  buildTrialValueReplaySummary,
+  readTrialValueReplay,
+} from "@/lib/trial-value-replay";
 
 // --- Main Component ---
 
@@ -78,6 +82,7 @@ export function AccountCenter() {
   const [refreshing, setRefreshing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showSecondarySections, setShowSecondarySections] = useState(false);
+  const [trialValueReplay, setTrialValueReplay] = useState(() => readTrialValueReplay());
 
   // ── Shared state (declared in component, written by hook via setters) ─
   const [showOverlay, setShowOverlay] = useState(false);
@@ -445,6 +450,13 @@ export function AccountCenter() {
   const overlayPeriodLabel = isEn
     ? `/ ${selectedPlanDurationDays} days`
     : `/ ${selectedPlanDurationDays} 天`;
+  const trialValueReplaySummary = useMemo(
+    () => buildTrialValueReplaySummary(trialValueReplay, {
+      isEn,
+      trialExpiresAt: displayExpiryRaw,
+    }),
+    [displayExpiryRaw, isEn, trialValueReplay],
+  );
   const referral = backend?.referral;
   const referralCode = String(referral?.code || "").trim();
   const appliedReferralCode = String(referral?.applied_code || "").trim();
@@ -480,6 +492,24 @@ export function AccountCenter() {
       setShowOverlay(true);
     }
   }, [canOpenCheckoutOverlay, searchParams, showOverlay]);
+
+  useEffect(() => {
+    if (!isTrialSubscription) return;
+    setTrialValueReplay(readTrialValueReplay());
+  }, [authUserId, isTrialSubscription, showOverlay]);
+
+  const openTrialValueReplayCheckout = useCallback(() => {
+    trackAppEvent("paywall_feature_clicked", {
+      entry: "account_center",
+      feature: "trial_value_replay_upgrade",
+      user_id: authUserId || null,
+      replay_cities: trialValueReplay.citiesViewed.length,
+      replay_terminal_visits: trialValueReplay.terminalVisits,
+      replay_rows_available: trialValueReplay.rowsAvailableMax,
+      subscription_plan_code: planCode || null,
+    });
+    setShowOverlay(true);
+  }, [authUserId, planCode, trialValueReplay]);
 
   // ── Referral points display ────────────────────────────
   const referralRewardPointsRaw = Number(referral?.reward_points ?? 3500);
@@ -688,6 +718,45 @@ export function AccountCenter() {
               </button>
             </div>
           </div>
+        )}
+
+        {isTrialSubscription && canOpenCheckoutOverlay && (
+          <section className="lg:col-span-12 overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
+            <div className="grid gap-0 md:grid-cols-[minmax(0,1fr)_auto]">
+              <div className="min-w-0 p-6">
+                <div className="mb-3 flex flex-wrap items-center gap-2 text-xs font-black uppercase text-amber-700">
+                  <Sparkles size={15} />
+                  <span>{isEn ? "Trial value replay" : "试用价值回放"}</span>
+                  {trialValueReplaySummary.hasUsageEvidence ? (
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] text-amber-800">
+                      {isEn ? "Based on your trial" : "基于你的试用"}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="max-w-3xl text-base font-bold leading-7 text-slate-950">
+                  {trialValueReplaySummary.headline}
+                </p>
+                <div className="mt-4 grid gap-2 text-sm text-slate-600 md:grid-cols-3">
+                  {trialValueReplaySummary.bullets.map((bullet) => (
+                    <div key={bullet} className="flex min-w-0 items-start gap-2">
+                      <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-emerald-500" />
+                      <span className="min-w-0 leading-5">{bullet}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center border-t border-amber-100 bg-amber-50 p-6 md:border-l md:border-t-0">
+                <button
+                  type="button"
+                  onClick={openTrialValueReplayCheckout}
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-amber-700 md:w-auto"
+                >
+                  <Crown size={16} />
+                  {trialValueReplaySummary.primaryCta}
+                </button>
+              </div>
+            </div>
+          </section>
         )}
 
         {/* User Card */}
