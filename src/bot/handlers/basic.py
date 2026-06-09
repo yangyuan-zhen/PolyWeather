@@ -134,8 +134,8 @@ class BasicCommandHandler:
             payload = str(parts[1] if len(parts) > 1 else "").strip()
             if payload.startswith("bind_"):
                 token = payload[len("bind_") :].strip()
-                result = self._prompt_bind_from_web_token(message, token)
-                trace.set_status("ok" if result == "confirm_prompted" else "error", result)
+                result = self._bind_from_web_token(message, message.from_user, token)
+                trace.set_status("ok" if result == "bound" else "error", result)
                 return
             self.bot.reply_to(message, self.io_layer.build_welcome_text(), parse_mode="HTML")
             trace.set_status("ok")

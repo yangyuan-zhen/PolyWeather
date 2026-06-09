@@ -416,11 +416,6 @@ def bind_telegram_by_token(request: Request, body) -> Dict[str, Any]:
     if telegram_id is None:
         raise HTTPException(status_code=400, detail="invalid or expired bind token")
 
-    pricing = TelegramGroupPricing()
-    member_status = pricing.get_member_status(telegram_id) if pricing.configured else None
-    if not member_status or member_status not in ("creator", "administrator", "member"):
-        raise HTTPException(status_code=403, detail="not a group member")
-
     db.upsert_user(telegram_id, "")
     bind_result = db.bind_supabase_identity(
         telegram_id=telegram_id,
@@ -433,7 +428,7 @@ def bind_telegram_by_token(request: Request, body) -> Dict[str, Any]:
             detail=str(bind_result.get("reason") or "telegram bind failed"),
         )
 
-    price = pricing.resolve_price_for_telegram_id(telegram_id)
+    price = TelegramGroupPricing().resolve_price_for_telegram_id(telegram_id)
     return {
         "ok": True,
         "telegram_id": telegram_id,

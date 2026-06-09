@@ -1811,6 +1811,62 @@ def test_telegram_identity_endpoints_skip_subscription_gate(monkeypatch):
     assert link_payload["bot_url"].endswith("?start=bind_bind-token")
 
 
+def test_telegram_bind_by_token_does_not_require_existing_group_member(monkeypatch):
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "enabled", True)
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "require_subscription", True)
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "anon_key", "anon-key")
+    monkeypatch.setattr(web_core, "_SUPABASE_AUTH_REQUIRED", True)
+
+    class _Identity:
+        user_id = "user-1"
+        email = "user@example.com"
+        points = 0
+        created_at = "2026-05-01T00:00:00+00:00"
+
+    class _FakePricing:
+        configured = True
+
+        @staticmethod
+        def get_member_status(telegram_id):
+            raise AssertionError("bind fallback must not require existing group membership")
+
+        @staticmethod
+        def resolve_price_for_telegram_id(telegram_id):
+            return {"telegram_id": telegram_id, "pricing_source": "telegram_public"}
+
+    class _FakeDB:
+        @staticmethod
+        def consume_bind_token(token):
+            return 12345
+
+        @staticmethod
+        def upsert_user(telegram_id, username):
+            return None
+
+        @staticmethod
+        def bind_supabase_identity(*, telegram_id, supabase_user_id, supabase_email):
+            return {
+                "ok": True,
+                "telegram_id": telegram_id,
+                "supabase_user_id": supabase_user_id,
+                "supabase_email": supabase_email,
+            }
+
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "get_identity", lambda token: _Identity())
+    monkeypatch.setattr(auth_api, "TelegramGroupPricing", lambda: _FakePricing())
+    monkeypatch.setattr(auth_api, "DBManager", lambda: _FakeDB())
+
+    response = client.post(
+        "/api/auth/telegram/bind-by-token",
+        headers={"Authorization": "Bearer access-token"},
+        json={"token": "token-12345"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["telegram_id"] == 12345
+
+
 def test_auth_me_does_not_reconcile_on_status_probe(monkeypatch):
     monkeypatch.setattr(routes, "_assert_entitlement", lambda request: None)
 

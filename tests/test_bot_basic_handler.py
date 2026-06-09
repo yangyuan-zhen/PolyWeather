@@ -102,13 +102,21 @@ def test_basic_handler_diag_returns_html():
 
 def test_start_bind_token_binds_telegram_to_web_account():
     bot = DummyBot()
-    db = SimpleNamespace(
-        peek_web_bind_token=lambda token: {
+    consumed = []
+    bound = []
+
+    def _consume(token):
+        consumed.append(token)
+        return {
             "supabase_user_id": "user-1",
             "supabase_email": "u@example.com",
         }
-        if token == "abc123"
-        else None,
+
+    db = SimpleNamespace(
+        consume_web_bind_token=_consume,
+        upsert_user=lambda *_args, **_kwargs: None,
+        bind_supabase_identity=lambda **kwargs: bound.append(kwargs)
+        or {"ok": True, "reason": "bound"},
     )
     io_layer = SimpleNamespace(
         build_welcome_text=lambda: "WELCOME",
@@ -130,9 +138,11 @@ def test_start_bind_token_binds_telegram_to_web_account():
 
     handler.handle_start_help(_message("/start bind_abc123"))
 
+    assert consumed == ["abc123"]
+    assert bound[0]["telegram_id"] == 1
+    assert bound[0]["supabase_user_id"] == "user-1"
     assert len(bot.replies) == 1
-    assert "确认绑定" in bot.replies[0]["text"]
-    assert "u***@example.com" in bot.replies[0]["text"]
+    assert "账号绑定完成" in bot.replies[0]["text"]
 
 
 def test_confirm_bind_callback_consumes_token_and_binds_account():
