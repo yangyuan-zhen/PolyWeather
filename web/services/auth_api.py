@@ -459,10 +459,12 @@ def create_telegram_bot_bind_link(request: Request) -> Dict[str, Any]:
         or "polyyuanbot"
     ).strip().lstrip("@")
     bot_url = f"https://t.me/{bot_username}?start={start_param}"
+    bot_command = f"/start {start_param}"
     return {
         "ok": True,
         "token": token,
         "start_param": start_param,
+        "bot_command": bot_command,
         "bot_url": bot_url,
         "expires_in_seconds": 600,
     }

@@ -62,6 +62,10 @@ export function runTests() {
     path.join(accountDir, "usePaymentFlow.ts"),
     "utf8",
   );
+  const useBillingSource = fs.readFileSync(
+    path.join(accountDir, "useBilling.ts"),
+    "utf8",
+  );
   assert(
     (accountCenterSource.includes('import { usePaymentState } from "./usePaymentState";') ||
       hookSource.includes('import { usePaymentState } from "./usePaymentState";')) &&
@@ -192,6 +196,23 @@ export function runTests() {
       accountCenterSource.includes("data-testid=\"payment-guard-grid\"") &&
       accountCenterSource.includes('hasTelegramPanel ? "" : "sm:grid-cols-2"'),
     "payment management must only split into internal columns when it is not already sharing the row with a Telegram panel",
+  );
+  assert(
+    !accountCenterSource.includes("`/bind ${userId}${email ? ` ${email}` : \"\"}`") &&
+      !accountCenterSource.includes("/bind <supabase_user_id> <email>"),
+    "Telegram fallback copy must not expose the legacy /bind supabase_user_id command",
+  );
+  assert(
+    accountCenterSource.includes("telegramBindCommand") &&
+      accountCenterSource.includes("createTelegramBotBindCommand") &&
+      accountCenterSource.includes("handleCopyTelegramBindCommand"),
+    "account Telegram fallback copy must generate a fresh one-time /start bind token before copying",
+  );
+  assert(
+    useBillingSource.includes("bot_command") &&
+      useBillingSource.includes("createTelegramBotBindCommand") &&
+      useBillingSource.includes("telegramBindCommand"),
+    "billing hook must persist the backend /start bind token command for Telegram fallback copy",
   );
   assert(
     !appAnalyticsSource.includes('NEXT_PUBLIC_POLYWEATHER_APP_ANALYTICS === "true"') &&

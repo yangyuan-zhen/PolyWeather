@@ -1805,6 +1805,10 @@ def test_telegram_identity_endpoints_skip_subscription_gate(monkeypatch):
         headers=auth_headers,
     )
     assert link_response.status_code == 200
+    link_payload = link_response.json()
+    assert link_payload["start_param"] == "bind_bind-token"
+    assert link_payload["bot_command"] == "/start bind_bind-token"
+    assert link_payload["bot_url"].endswith("?start=bind_bind-token")
 
 
 def test_auth_me_does_not_reconcile_on_status_probe(monkeypatch):

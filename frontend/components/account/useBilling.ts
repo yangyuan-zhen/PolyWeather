@@ -23,6 +23,12 @@ import { isTelegramPrivateGroupPriceEligible } from "./telegram-pricing";
 import { trackAppEvent } from "@/lib/app-analytics";
 
 // ============================================================
+type TelegramBotBindPayload = {
+  bot_command?: string;
+  bot_url?: string;
+  start_param?: string;
+};
+
 export interface UseBillingParams {
   isEn: boolean;
   copy: Record<string, string>;
@@ -96,6 +102,7 @@ export function useBilling(params: UseBillingParams) {
   // ── Billing-specific state ────────────────────────────────
   const [reconcileBusy, setReconcileBusy] = useState(false);
   const [telegramBindUrl, setTelegramBindUrl] = useState("");
+  const [telegramBindCommand, setTelegramBindCommand] = useState("");
 
   // ── Derived values ──────────────────────────────────────
   const paymentReadyForRecovery = Boolean(paymentConfig?.enabled && paymentConfig?.configured);
@@ -273,23 +280,59 @@ export function useBilling(params: UseBillingParams) {
     [buildAuthedHeaders, copy, loadPaymentSnapshot, refreshEntitlementAfterPayment, reconcileLatestPayment],
   );
 
-  // ── openTelegramBotBindLink ──────────────────────────────
+  // ── Telegram bot bind helpers ─────────────────────────────
+  const requestTelegramBotBindPayload = useCallback(async () => {
+    const authHeaders = await buildAuthedHeaders(true, false);
+    const res = await fetch("/api/auth/telegram/bot-bind-link", {
+      method: "POST",
+      headers: authHeaders,
+    });
+    if (!res.ok) {
+      const raw = (await res.text()).slice(0, 300);
+      throw new Error(raw || copy.telegramBindFailed);
+    }
+    const data = (await res.json()) as TelegramBotBindPayload;
+    const botUrl = String(data.bot_url || "").trim();
+    const startParam = String(data.start_param || "").trim();
+    const botCommand = String(
+      data.bot_command || (startParam ? `/start ${startParam}` : ""),
+    ).trim();
+    if (!botUrl && !botCommand) throw new Error(copy.telegramBindLinkMissing);
+    setTelegramBindUrl(botUrl);
+    setTelegramBindCommand(botCommand);
+    return { botCommand, botUrl };
+  }, [
+    buildAuthedHeaders,
+    copy.telegramBindFailed,
+    copy.telegramBindLinkMissing,
+  ]);
+
+  const createTelegramBotBindCommand = async () => {
+    setTelegramBindOpening(true);
+    setPaymentError("");
+    setTelegramBindUrl("");
+    setTelegramBindCommand("");
+    try {
+      const { botCommand } = await requestTelegramBotBindPayload();
+      if (!botCommand) throw new Error(copy.telegramBindLinkMissing);
+      setPaymentInfo(copy.telegramBindCommandCopied);
+      return botCommand;
+    } catch (error) {
+      setPaymentError(normalizePaymentError(error).message);
+      return "";
+    } finally {
+      setTelegramBindOpening(false);
+    }
+  };
+
   const openTelegramBotBindLink = async () => {
     setTelegramBindOpening(true);
     setPaymentError("");
     setTelegramBindUrl("");
+    setTelegramBindCommand("");
     const popup = window.open("about:blank", "_blank", "noopener,noreferrer");
     try {
-      const authHeaders = await buildAuthedHeaders(true, false);
-      const res = await fetch("/api/auth/telegram/bot-bind-link", {
-        method: "POST", headers: authHeaders,
-      });
-      if (!res.ok) {
-        const raw = (await res.text()).slice(0, 300);
-        throw new Error(raw || copy.telegramBindFailed);
-      }
-      const data = (await res.json()) as { bot_url?: string };
-      const botUrl = String(data.bot_url || "").trim();
+      const { botUrl } = await requestTelegramBotBindPayload();
       if (!botUrl) throw new Error(copy.telegramBindLinkMissing);
       if (popup && !popup.closed) {
         popup.location.href = botUrl;
@@ -423,9 +466,11 @@ export function useBilling(params: UseBillingParams) {
   return {
     reconcileBusy,
     telegramBindUrl,
+    telegramBindCommand,
     setTelegramBindUrl,
     reconcileLatestPayment,
     handleSubmit409,
+    createTelegramBotBindCommand,
     openTelegramBotBindLink,
     paymentReadyForRecovery,
     hasRecentPaymentRecovery,

@@ -549,6 +549,7 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
     lastPaymentStartedAt,
     telegramBindOpening,
     telegramBindUrl: billing.telegramBindUrl,
+    telegramBindCommand: billing.telegramBindCommand,
     manualPayment,
     manualTxHash,
     txValidation,
@@ -622,6 +623,7 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
     submitManualPaymentTx: paymentFlow.submitManualPaymentTx,
     validateTxHash: paymentFlow.validateTxHash,
     handleOverlayCheckout: paymentFlow.handleOverlayCheckout,
+    createTelegramBotBindCommand: billing.createTelegramBotBindCommand,
     openTelegramBotBindLink: billing.openTelegramBotBindLink,
   };
 }

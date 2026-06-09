@@ -8,6 +8,7 @@ from typing import Callable
 from loguru import logger  # type: ignore
 
 from src.bot.command_parser import extract_command_name
+from src.bot.command_parser import looks_like_slash_command
 from src.bot.io_layer import BotIOLayer
 from src.bot.observability import CommandTrace
 from src.bot.runtime_coordinator import RuntimeStatus, render_runtime_status_html
@@ -86,6 +87,13 @@ class BasicCommandHandler:
         def _basic_text(message):
             self._dispatch(message)
 
+        @self.bot.message_handler(
+            content_types=["text"],
+            func=self._is_private_text_fallback,
+        )
+        def _private_text_fallback(message):
+            self.handle_private_text_fallback(message)
+
     def _dispatch(self, message: Any) -> None:
         command = extract_command_name(
             getattr(message, "text", None),
@@ -133,6 +141,31 @@ class BasicCommandHandler:
             trace.set_status("ok")
         finally:
             trace.emit()
+
+    @staticmethod
+    def _is_private_text_fallback(message: Any) -> bool:
+        text = str(getattr(message, "text", "") or "").strip()
+        chat_type = str(getattr(getattr(message, "chat", None), "type", "") or "").strip().lower()
+        return bool(text and chat_type == "private" and not looks_like_slash_command(text))
+
+    def handle_private_text_fallback(self, message: Any) -> str:
+        text = str(getattr(message, "text", "") or "").strip()
+        if looks_like_slash_command(text):
+            return "ignored:slash_command"
+        chat_type = str(getattr(getattr(message, "chat", None), "type", "") or "").strip().lower()
+        if chat_type != "private":
+            return "ignored:not_private"
+        self.bot.reply_to(
+            message,
+            (
+                "我收到了，但这不是可执行命令。\n\n"
+                "如果你正在绑定网站账号：请在网页账户页点击“复制兜底命令”，"
+                "然后把生成的 <code>/start bind_...</code> 发到这里。\n\n"
+                "也可以发送 <code>/help</code> 查看可用命令。"
+            ),
+            parse_mode="HTML",
+        )
+        return "replied"
 
     def _prompt_bind_from_web_token(self, message: Any, token: str) -> str:
         if not token:

@@ -102,6 +102,7 @@ export function AccountCenter() {
     lastPaymentStartedAt,
     telegramBindOpening,
     telegramBindUrl,
+    telegramBindCommand,
     manualPayment,
     manualTxHash,
     txValidation,
@@ -175,6 +176,7 @@ export function AccountCenter() {
     submitManualPaymentTx,
     validateTxHash,
     handleOverlayCheckout,
+    createTelegramBotBindCommand,
     openTelegramBotBindLink,
   } = useAccountPayment({
     isEn,
@@ -497,9 +499,7 @@ export function AccountCenter() {
     : monthlyReferralLimit * referralRewardPoints;
 
   // ── Telegram bind command ──────────────────────────────
-  const bindCommand = userId
-    ? `/bind ${userId}${email ? ` ${email}` : ""}`
-    : "/bind <supabase_user_id> <email>";
+  const bindCommand = telegramBindCommand || copy.telegramBindCommandPlaceholder;
 
   // ── Copy handler ──────────────────────────────────────
   const handleCopy = (text: string) => {
@@ -507,6 +507,13 @@ export function AccountCenter() {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     });
+  };
+
+  const handleCopyTelegramBindCommand = async () => {
+    if (!isAuthenticated || telegramBindOpening) return;
+    const command = await createTelegramBotBindCommand();
+    if (!command) return;
+    handleCopy(command);
   };
 
   const applyReferralCode = useCallback(async () => {
@@ -1040,8 +1047,9 @@ export function AccountCenter() {
                         : copy.telegramBotBindLink}
                     </button>
                     <button
-                      onClick={() => handleCopy(bindCommand)}
-                      className="rounded-xl border border-blue-700 bg-blue-600 p-4 text-white shadow-sm transition-all hover:bg-blue-700"
+                      onClick={() => void handleCopyTelegramBindCommand()}
+                      disabled={telegramBindOpening || !isAuthenticated}
+                      className="rounded-xl border border-blue-700 bg-blue-600 p-4 text-white shadow-sm transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                       title={copy.copyCommand}
                       aria-label={copy.copyCommand}
                     >

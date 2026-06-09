@@ -46,8 +46,14 @@ export function createAccountCopy(isEn: boolean): Record<string, string> {
         ? "Use one-click Telegram binding first to sync notifications and access. After binding, refresh this page and submit your Telegram group join request."
         : "优先使用「一键绑定 Telegram Bot」同步通知与权限。绑定完成后刷新本页，再提交 Telegram 群组入群申请。",
       telegramFallbackHint: isEn
-        ? "Fallback copy method: only use this if one-click binding does not open Telegram correctly. Copy the command below and send it to @polyyuanbot. After binding, refresh this page to show the group entry."
-        : "兜底复制方式：仅在一键绑定无法正常打开 Telegram 时使用。请复制下方命令并发送给 @polyyuanbot。绑定完成后刷新本页，即可显示入群入口。",
+        ? "Fallback copy method: click Copy to generate a 10-minute one-time /start bind command, send it to @polyyuanbot, then confirm binding in the Bot and refresh this page."
+        : "兜底复制方式：点击复制会生成 10 分钟有效的一次性 /start bind 命令。请把它发送给 @polyyuanbot，并在 Bot 内确认绑定后刷新本页。",
+      telegramBindCommandPlaceholder: isEn
+        ? "Click Copy to generate a one-time /start bind command"
+        : "点击复制生成一次性 /start bind 命令",
+      telegramBindCommandCopied: isEn
+        ? "One-time Telegram bind command generated and copied. Send it to @polyyuanbot, then confirm binding in the Bot."
+        : "一次性 Telegram 绑定命令已生成并复制。请发送给 @polyyuanbot，然后在 Bot 内确认绑定。",
       paymentManualSupport: isEn
         ? "If payment succeeds but Pro is still not activated, email yhrsc30@gmail.com. This project is currently maintained by one developer, so manual recovery may be needed in edge cases."
         : "如果付款成功后 Pro 仍未开通，请发邮件到 yhrsc30@gmail.com。当前项目由我一人维护，极少数边缘情况可能需要人工补开。给你带来的不便，敬请谅解！",
