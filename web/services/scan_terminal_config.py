@@ -31,7 +31,7 @@ SCAN_TERMINAL_PAYLOAD_TTL_SEC = min(
 )
 SCAN_TERMINAL_BUILD_TIMEOUT_SEC = _env_int(
     "POLYWEATHER_SCAN_TERMINAL_BUILD_TIMEOUT_SEC",
-    10,
+    30,
     min_value=8,
     max_value=30,
 )
@@ -43,7 +43,7 @@ SCAN_TERMINAL_PREWARM_PAYLOAD_TIMEOUT_SEC = _env_int(
 )
 SCAN_TERMINAL_MAX_WORKERS = _env_int(
     "POLYWEATHER_SCAN_TERMINAL_MAX_WORKERS",
-    8,
+    18,
     min_value=1,
-    max_value=12,
+    max_value=24,
 )

@@ -92,6 +92,8 @@ def test_docker_compose_isolates_collector_from_web_and_bot_services():
     assert "POLYWEATHER_SERVICE_ROLE: collector" in collector_block
     assert "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'false'" in bot_block
     assert "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'true'" in web_block
+    assert "POLYWEATHER_SCAN_TERMINAL_BUILD_TIMEOUT_SEC: '30'" in web_block
+    assert "POLYWEATHER_SCAN_TERMINAL_MAX_WORKERS: '18'" in web_block
     assert "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'false'" in collector_block
     assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'false'" in bot_block
     assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'false'" in web_block
@@ -123,7 +125,8 @@ def test_scan_terminal_backend_timeout_returns_before_next_proxy_abort():
     ).read_text(encoding="utf-8")
 
     assert 'POLYWEATHER_SCAN_TERMINAL_PROXY_TIMEOUT_MS || "35000"' in route_source
-    assert '"POLYWEATHER_SCAN_TERMINAL_BUILD_TIMEOUT_SEC",\n    10,' in config_source
+    assert '"POLYWEATHER_SCAN_TERMINAL_BUILD_TIMEOUT_SEC",\n    30,' in config_source
+    assert '"POLYWEATHER_SCAN_TERMINAL_MAX_WORKERS",\n    18,' in config_source
     assert (
         '"POLYWEATHER_SCAN_TERMINAL_PREWARM_PAYLOAD_TIMEOUT_SEC",\n    30,'
         in config_source
