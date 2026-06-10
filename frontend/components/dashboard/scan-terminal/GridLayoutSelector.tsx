@@ -66,7 +66,7 @@ export function GridLayoutSelector({
               setHoveredRows(0);
             }}
           >
-            {[1, 2, 3].map((r) =>
+            {[1, 2].map((r) =>
               [1, 2, 3].map((c) => {
                 const isHighlighted = c <= previewCols && r <= previewRows;
                 return (

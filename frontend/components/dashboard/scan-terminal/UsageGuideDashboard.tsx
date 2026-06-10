@@ -83,13 +83,13 @@ const legendItems: Record<"zh" | "en", GuideCopy[]> = {
 
 const operations: Record<"zh" | "en", GuideCopy[]> = {
   zh: [
-    { title: "布局", body: "右上角可切换 1x1 到 3x3，适合从单城复盘切到多城巡检。" },
+    { title: "布局", body: "右上角可切换 1x1 到 3x2，适合从单城复盘切到多城巡检。" },
     { title: "换城市", body: "点击图表标题栏城市名，在当前卡片内搜索并替换城市。" },
     { title: "高温模式", body: "卡片右上角高温按钮用于聚焦最高温兑现窗口。" },
     { title: "曲线显隐", body: "图例可自定义显示机场报文、模型线和跑道明细。" },
   ],
   en: [
-    { title: "Layout", body: "Switch from 1x1 to 3x3 in the top-right control for review or multi-city scanning." },
+    { title: "Layout", body: "Switch from 1x1 to 3x2 in the top-right control for review or multi-city scanning." },
     { title: "Change city", body: "Click the city name in a chart header to search and replace that slot." },
     { title: "High mode", body: "Use the High button to focus the chart on the high-temperature payoff window." },
     { title: "Layer toggles", body: "Use the legend to customize airport reports, model lines, and runway details." },

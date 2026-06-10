@@ -16,6 +16,10 @@ export function runTests() {
     path.join(projectRoot, "components", "dashboard", "scan-terminal", "GridLayoutSelector.tsx"),
     "utf8",
   );
+  const usageGuideSource = fs.readFileSync(
+    path.join(projectRoot, "components", "dashboard", "scan-terminal", "UsageGuideDashboard.tsx"),
+    "utf8",
+  );
   const chartSource = fs.readFileSync(
     path.join(projectRoot, "components", "dashboard", "scan-terminal", "LiveTemperatureThresholdChart.tsx"),
     "utf8",
@@ -42,17 +46,18 @@ export function runTests() {
   );
 
   assert(
-    dashboardSource.includes("MAX_TERMINAL_CHARTS = 9"),
-    "terminal dashboard must cap the desktop homepage at 9 charts",
+    dashboardSource.includes("MAX_TERMINAL_CHARTS = 6"),
+    "terminal dashboard must cap the desktop homepage at 6 charts",
   );
   assert(
     dashboardSource.includes("MOBILE_TERMINAL_CHARTS = 1"),
     "terminal dashboard must document that mobile renders exactly one chart",
   );
   assert(
-    dashboardSource.includes("clampGridSide") &&
+    dashboardSource.includes("MAX_TERMINAL_GRID_ROWS = 2") &&
+      dashboardSource.includes("clampGridRows") &&
       dashboardSource.includes("Math.min(MAX_TERMINAL_CHARTS"),
-    "terminal grid dimensions must be clamped before rendering or persisting",
+    "terminal grid dimensions must clamp saved 3x3 layouts down to the 3x2 maximum before rendering or persisting",
   );
   assert(
     dashboardSource.includes("mobileChartRow") &&
@@ -83,8 +88,17 @@ export function runTests() {
   );
   assert(
     selectorSource.includes("[1, 2, 3].map") &&
-      selectorSource.includes("grid grid-cols-3"),
-    "grid selector must expose at most a 3 by 3 chart layout",
+      selectorSource.includes("[1, 2].map") &&
+      selectorSource.includes("grid grid-cols-3") &&
+      !selectorSource.includes("[1, 2, 3].map((r)"),
+    "grid selector must expose at most a 3 by 2 chart layout",
+  );
+  assert(
+    usageGuideSource.includes("1x1 到 3x2") &&
+      usageGuideSource.includes("1x1 to 3x2") &&
+      !usageGuideSource.includes("1x1 到 3x3") &&
+      !usageGuideSource.includes("1x1 to 3x3"),
+    "terminal guide must describe the new 3x2 maximum layout instead of 3x3",
   );
   assert(
     dashboardSource.includes("if (!cityInSlot || !rowForSlot)") &&
@@ -135,7 +149,7 @@ export function runTests() {
     chartSource.includes('compact ? "min-h-0" : "min-h-[300px]"') &&
       chartCanvasSource.includes("const minChartHeight = compact ? 120 : 220") &&
       chartCanvasSource.includes('compact ? "min-h-[120px]" : "min-h-[220px]"'),
-    "compact grid charts must not force desktop minimum heights that get clipped inside 3x3 terminal slots",
+    "compact grid charts must not force desktop minimum heights that get clipped inside dense terminal slots",
   );
   const signedOutBlock = dashboardSource.slice(
     dashboardSource.indexOf('if (event === "SIGNED_OUT")'),

@@ -271,29 +271,38 @@ const TERM = {
   closed: { en: "Closed", zh: "已关闭" },
 } as const;
 
-const MAX_TERMINAL_GRID_SIDE = 3;
-const MAX_TERMINAL_CHARTS = 9;
+const MAX_TERMINAL_GRID_COLS = 3;
+const MAX_TERMINAL_GRID_ROWS = 2;
+const MAX_TERMINAL_CHARTS = 6;
 const MOBILE_TERMINAL_CHARTS = 1;
 const DEFAULT_TERMINAL_GRID_SIDE = 2;
 const TERMINAL_SLOTS_STORAGE_KEY = "polyweather_terminal_slots";
 
-function clampGridSide(value: number) {
+function clampGridDimension(value: number, max: number) {
   if (!Number.isFinite(value)) return DEFAULT_TERMINAL_GRID_SIDE;
-  return Math.max(1, Math.min(MAX_TERMINAL_GRID_SIDE, Math.floor(value)));
+  return Math.max(1, Math.min(max, Math.floor(value)));
 }
 
-function getStoredGridSide(key: string) {
+function clampGridCols(value: number) {
+  return clampGridDimension(value, MAX_TERMINAL_GRID_COLS);
+}
+
+function clampGridRows(value: number) {
+  return clampGridDimension(value, MAX_TERMINAL_GRID_ROWS);
+}
+
+function getStoredGridSide(key: string, max: number) {
   if (typeof window === "undefined") return DEFAULT_TERMINAL_GRID_SIDE;
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return DEFAULT_TERMINAL_GRID_SIDE;
-    return clampGridSide(parseInt(raw, 10));
+    return clampGridDimension(parseInt(raw, 10), max);
   } catch {}
   return DEFAULT_TERMINAL_GRID_SIDE;
 }
 
 function getSlotCount(cols: number, rows: number) {
-  return Math.min(MAX_TERMINAL_CHARTS, clampGridSide(cols) * clampGridSide(rows));
+  return Math.min(MAX_TERMINAL_CHARTS, clampGridCols(cols) * clampGridRows(rows));
 }
 
 function normalizeSlotList(slots: Array<string | null>, totalSlots: number) {
@@ -717,11 +726,11 @@ function PolyWeatherTerminal({
   }, []);
 
   const [gridCols, setGridCols] = useState<number>(() => {
-    return getStoredGridSide("polyweather_terminal_grid_cols");
+    return getStoredGridSide("polyweather_terminal_grid_cols", MAX_TERMINAL_GRID_COLS);
   });
 
   const [gridRows, setGridRows] = useState<number>(() => {
-    return getStoredGridSide("polyweather_terminal_grid_rows");
+    return getStoredGridSide("polyweather_terminal_grid_rows", MAX_TERMINAL_GRID_ROWS);
   });
 
   const totalSlots = getSlotCount(gridCols, gridRows);
@@ -783,8 +792,8 @@ function PolyWeatherTerminal({
   }, []);
 
   const handleSetGridSize = (cols: number, rows: number) => {
-    const safeCols = clampGridSide(cols);
-    const safeRows = clampGridSide(rows);
+    const safeCols = clampGridCols(cols);
+    const safeRows = clampGridRows(rows);
     const nextTotalSlots = getSlotCount(safeCols, safeRows);
     
     setGridCols(safeCols);
