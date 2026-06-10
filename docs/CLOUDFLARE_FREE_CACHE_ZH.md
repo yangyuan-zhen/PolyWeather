@@ -2,7 +2,7 @@
 
 目标：让 Cloudflare 承担公开页面、公开 API 和静态资源的重复读取，降低 VPS CPU、Next.js worker 和后端 detail-batch 压力，同时避免缓存账户、支付、反馈和实时连接。
 
-代码已通过 `Cache-Control` 与 `Cloudflare-CDN-Cache-Control` 声明 TTL。Cloudflare Dashboard 应设置为尊重源站缓存头，不要给所有 `/api/*` 统一启用 Cache Everything。
+代码已通过 `Cache-Control` 与 `Cloudflare-CDN-Cache-Control` 声明 TTL。由于免费版会严格遵守源站的 `max-age=0`，稳定公开路径的 Cache Rules 额外按状态码覆盖 Edge TTL；可能返回 partial、stale 或 failed 的接口继续尊重源站缓存头。不要给所有 `/api/*` 统一启用 Cache Everything。
 
 缓存规则只允许作用于前端域名 `polyweather.top`。`api.polyweather.top` 是带服务令牌和会员校验的后端源站，必须绕过 Cloudflare 缓存，避免缓存命中绕过后端权限检查。
 
@@ -36,30 +36,13 @@ python scripts/configure_cloudflare_free.py --apply
 
 ### 1. 缓存公开内容
 
-动作：Eligible for cache；Edge TTL 使用源站 Cache-Control。
+脚本会创建 5 条互不重叠的公开缓存规则。动作均为 Eligible for cache：
 
-把下面的公开页面、静态资源和公开数据接口合并成一条规则即可：
-
-```text
-http.host eq "polyweather.top"
-and http.request.method in {"GET" "HEAD"}
-and (
-  http.request.uri.path eq "/"
-  or starts_with(http.request.uri.path, "/_next/static/")
-  or starts_with(http.request.uri.path, "/docs/")
-  or starts_with(http.request.uri.path, "/modern/")
-  or starts_with(http.request.uri.path, "/probabilities/")
-  or starts_with(http.request.uri.path, "/subscription-help/")
-  or http.request.uri.path eq "/api/cities"
-  or http.request.uri.path eq "/api/cities/detail-batch"
-  or starts_with(http.request.uri.path, "/api/city/")
-  or http.request.uri.path eq "/api/scan/terminal"
-  or http.request.uri.path eq "/api/system/status"
-  or lower(http.request.uri.path.extension) in {
-    "js" "css" "woff" "woff2" "png" "jpg" "jpeg" "webp" "avif" "svg" "ico"
-  }
-)
-```
+- 静态资源：2xx Edge TTL 覆盖为 1 年。
+- 首页和公开文档页：2xx Edge TTL 覆盖为 10 分钟。
+- `/api/cities`：2xx Edge TTL 覆盖为 5 分钟。
+- 城市详情与 detail-batch：尊重源站成功、partial、stale 和错误缓存策略。
+- `/api/scan/terminal` 与 `/api/system/status`：尊重源站成功、busy、failed 和错误缓存策略。
 
 ### 2. 最后绕过后端域名、动态和敏感请求
 
@@ -94,7 +77,7 @@ or http.cookie contains "sb-"
 
 ### 静态资源
 
-动作：Eligible for cache；Edge TTL 使用源站 Cache-Control。
+动作：Eligible for cache；2xx Edge TTL 覆盖为一年。
 
 表达式：
 
@@ -108,11 +91,11 @@ and (
 )
 ```
 
-源站 TTL：一年 immutable。
+源站仍声明一年 immutable，Cloudflare Edge TTL 同样固定为一年。
 
 ### 公开页面
 
-动作：Eligible for cache；Edge TTL 使用源站 Cache-Control。
+动作：Eligible for cache；2xx Edge TTL 覆盖为 10 分钟。
 
 表达式：
 
@@ -131,7 +114,7 @@ and (
 
 ### 公开数据接口
 
-动作：Eligible for cache；Edge TTL 使用源站 Cache-Control。
+动作：Eligible for cache；城市列表的 2xx Edge TTL 覆盖为 5 分钟，详情、扫描和系统状态尊重源站缓存头。
 
 表达式：
 
@@ -151,7 +134,7 @@ and (
 - `/api/cities`：5 分钟，过期后可复用 1 小时。
 - 城市详情与 detail-batch：60 秒，过期后可复用 5 分钟。
 - `/api/scan/terminal`：5 分钟，过期后可复用 15 分钟。
-- partial、busy、timeout、stale、force refresh 和错误响应：`no-store`，不得缓存。
+- partial、busy、timeout、stale、force refresh 和错误响应：源站为 `no-store`，详情和扫描规则不会覆盖；force refresh 由最后一条绕过规则排除。
 
 ## 验证
 

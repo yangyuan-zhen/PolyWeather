@@ -22,24 +22,50 @@ API_BASE = "https://api.cloudflare.com/client/v4"
 MANAGED_RULE_REF_PREFIX = "polyweather_free_cache_"
 PHASE = "http_request_cache_settings"
 
-PUBLIC_CACHE_EXPRESSION = """(
+STATIC_CACHE_EXPRESSION = """(
+  http.host eq "polyweather.top"
+  and http.request.method in {"GET" "HEAD"}
+  and (
+    starts_with(http.request.uri.path, "/_next/static/")
+    or lower(http.request.uri.path.extension) in {
+      "js" "css" "woff" "woff2" "png" "jpg" "jpeg" "webp" "avif" "svg" "ico"
+    }
+  )
+)"""
+
+PUBLIC_PAGES_EXPRESSION = """(
   http.host eq "polyweather.top"
   and http.request.method in {"GET" "HEAD"}
   and (
     http.request.uri.path eq "/"
-    or starts_with(http.request.uri.path, "/_next/static/")
     or starts_with(http.request.uri.path, "/docs/")
     or starts_with(http.request.uri.path, "/modern/")
     or starts_with(http.request.uri.path, "/probabilities/")
     or starts_with(http.request.uri.path, "/subscription-help/")
-    or http.request.uri.path eq "/api/cities"
-    or http.request.uri.path eq "/api/cities/detail-batch"
+  )
+)"""
+
+CITIES_EXPRESSION = """(
+  http.host eq "polyweather.top"
+  and http.request.method in {"GET" "HEAD"}
+  and http.request.uri.path eq "/api/cities"
+)"""
+
+CITY_DETAIL_EXPRESSION = """(
+  http.host eq "polyweather.top"
+  and http.request.method in {"GET" "HEAD"}
+  and (
+    http.request.uri.path eq "/api/cities/detail-batch"
     or starts_with(http.request.uri.path, "/api/city/")
-    or http.request.uri.path eq "/api/scan/terminal"
+  )
+)"""
+
+SCAN_EXPRESSION = """(
+  http.host eq "polyweather.top"
+  and http.request.method in {"GET" "HEAD"}
+  and (
+    http.request.uri.path eq "/api/scan/terminal"
     or http.request.uri.path eq "/api/system/status"
-    or lower(http.request.uri.path.extension) in {
-      "js" "css" "woff" "woff2" "png" "jpg" "jpeg" "webp" "avif" "svg" "ico"
-    }
   )
 )"""
 
@@ -80,16 +106,33 @@ def _compact_expression(expression: str) -> str:
     return " ".join(line.strip() for line in expression.splitlines() if line.strip())
 
 
+def _cache_rule(ref: str, description: str, expression: str, ttl: int | None = None) -> Dict[str, Any]:
+    action_parameters: Dict[str, Any] = {"cache": True}
+    if ttl is not None:
+        action_parameters["edge_ttl"] = {
+            "mode": "respect_origin",
+            "status_code_ttl": [
+                {"status_code_range": {"from": 200, "to": 299}, "value": ttl},
+                {"status_code_range": {"from": 300}, "value": 0},
+            ],
+        }
+    return {
+        "ref": f"{MANAGED_RULE_REF_PREFIX}{ref}",
+        "description": description,
+        "expression": _compact_expression(expression),
+        "action": "set_cache_settings",
+        "action_parameters": action_parameters,
+        "enabled": True,
+    }
+
+
 def build_managed_cache_rules() -> List[Dict[str, Any]]:
     return [
-        {
-            "ref": f"{MANAGED_RULE_REF_PREFIX}public",
-            "description": "PolyWeather: cache public pages, assets, and public data APIs",
-            "expression": _compact_expression(PUBLIC_CACHE_EXPRESSION),
-            "action": "set_cache_settings",
-            "action_parameters": {"cache": True},
-            "enabled": True,
-        },
+        _cache_rule("static", "PolyWeather: cache immutable static assets for one year", STATIC_CACHE_EXPRESSION, 31536000),
+        _cache_rule("pages", "PolyWeather: cache public pages for ten minutes", PUBLIC_PAGES_EXPRESSION, 600),
+        _cache_rule("cities", "PolyWeather: cache the public city list for five minutes", CITIES_EXPRESSION, 300),
+        _cache_rule("city_detail", "PolyWeather: cache public city detail when the origin allows it", CITY_DETAIL_EXPRESSION),
+        _cache_rule("scan", "PolyWeather: cache scan and system status when the origin allows it", SCAN_EXPRESSION),
         {
             "ref": f"{MANAGED_RULE_REF_PREFIX}bypass",
             "description": "PolyWeather: bypass backend, sensitive, realtime, and force-refresh requests",
