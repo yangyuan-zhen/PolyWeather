@@ -116,6 +116,29 @@ jobs:
           docker push "${IMAGE_TAG}:latest"
           docker push "${IMAGE_TAG}:${GITHUB_SHA}"
 
+  cloudflare-cache-rules:
+    needs: [python-quality]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply Cloudflare cache rules
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+        run: |
+          if [ -z "${CLOUDFLARE_API_TOKEN}" ]; then
+            echo "CLOUDFLARE_API_TOKEN is not configured; skipping Cache Rules sync"
+            exit 0
+          fi
+          if [ -z "${CLOUDFLARE_ZONE_ID}" ]; then
+            echo "CLOUDFLARE_ZONE_ID is not configured; skipping Cache Rules sync"
+            exit 0
+          fi
+          python scripts/configure_cloudflare_free.py --apply
+
   deploy:
     needs: [build-and-push]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -138,18 +161,3 @@ jobs:
           printf '%s\n' "$GHCR_PAT" | ssh -o StrictHostKeyChecking=accept-new ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
             bash /tmp/deploy.sh '${{ github.sha }}'
           "
-
-      - name: Apply Cloudflare cache rules
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-        run: |
-          if [ -z "${CLOUDFLARE_API_TOKEN}" ]; then
-            echo "CLOUDFLARE_API_TOKEN is not configured; skipping Cache Rules sync"
-            exit 0
-          fi
-          if [ -z "${CLOUDFLARE_ZONE_ID}" ]; then
-            echo "CLOUDFLARE_ZONE_ID is not configured; skipping Cache Rules sync"
-            exit 0
-          fi
-          python scripts/configure_cloudflare_free.py --apply
