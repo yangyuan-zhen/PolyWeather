@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import time
 
 import src.auth.supabase_entitlement as entitlement_module
 from src.auth.supabase_entitlement import SupabaseEntitlementService
@@ -185,6 +186,78 @@ def test_subscription_window_can_report_unknown_on_transient_query_failure(monke
 
     assert window["unknown"] is True
     assert window["rows"] is None
+
+
+def test_subscription_access_window_uses_single_current_subscription_query(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "anon-key")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role")
+
+    service = SupabaseEntitlementService()
+
+    def _fake_get(url, headers=None, params=None, timeout=None):
+        assert params["select"] == "plan_code,source,starts_at,expires_at"
+        assert str(params["starts_at"]).startswith("lte.")
+        assert params["limit"] == "1"
+        return _Response(
+            200,
+            [
+                {
+                    "plan_code": "pro_monthly",
+                    "source": "payment_contract",
+                    "starts_at": "2026-03-01T00:00:00+00:00",
+                    "expires_at": "2099-04-01T00:00:00+00:00",
+                }
+            ],
+        )
+
+    monkeypatch.setattr(entitlement_module.requests, "get", _fake_get)
+
+    window = service.get_subscription_access_window(
+        "user-1",
+        respect_requirement=False,
+        unknown_on_error=True,
+    )
+
+    assert window["current"]["plan_code"] == "pro_monthly"
+    assert window["queued_days"] == 0
+    assert window["rows"] == [window["current"]]
+
+
+def test_subscription_access_window_reuses_cached_current_row(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "anon-key")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role")
+
+    service = SupabaseEntitlementService()
+    current = {
+        "plan_code": "pro_monthly",
+        "source": "payment_contract",
+        "starts_at": "2026-03-01T00:00:00+00:00",
+        "expires_at": "2099-04-01T00:00:00+00:00",
+    }
+    service._sub_cache["user-1"] = {
+        "active": True,
+        "row": current,
+        "ts": time.time(),
+    }
+
+    monkeypatch.setattr(
+        entitlement_module.requests,
+        "get",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("cached access window must not hit Supabase"),
+        ),
+    )
+
+    window = service.get_subscription_access_window(
+        "user-1",
+        respect_requirement=False,
+        unknown_on_error=True,
+    )
+
+    assert window["current"] == current
+    assert window["total_expires_at"] == current["expires_at"]
 
 
 def test_list_subscription_windows_selects_only_batch_window_fields(monkeypatch):

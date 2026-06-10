@@ -2129,7 +2129,7 @@ def test_auth_me_uses_subscription_window_as_required_subscription_gate(monkeypa
     assert payload["subscription_queued_days"] == 30
 
 
-def test_auth_me_entitlement_scope_reuses_subscription_window_cache(monkeypatch):
+def test_auth_me_entitlement_scope_reuses_subscription_access_window_cache(monkeypatch):
     monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "enabled", True)
     monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "require_subscription", False)
     monkeypatch.setattr(web_core, "_SUPABASE_AUTH_REQUIRED", False)
@@ -2142,16 +2142,15 @@ def test_auth_me_entitlement_scope_reuses_subscription_window_cache(monkeypatch)
 
     calls = []
 
-    def _subscription_window(
+    def _subscription_access_window(
         user_id,
         respect_requirement=False,
-        bypass_cache=False,
         unknown_on_error=False,
     ):
         calls.append(
             {
                 "user_id": user_id,
-                "bypass_cache": bypass_cache,
+                "respect_requirement": respect_requirement,
                 "unknown_on_error": unknown_on_error,
             }
         )
@@ -2166,7 +2165,12 @@ def test_auth_me_entitlement_scope_reuses_subscription_window_cache(monkeypatch)
 
     monkeypatch.setattr(routes, "_assert_entitlement", lambda request: None)
     monkeypatch.setattr(routes, "_bind_optional_supabase_identity", _bind_identity)
-    monkeypatch.setattr(routes.SUPABASE_ENTITLEMENT, "get_subscription_window", _subscription_window)
+    monkeypatch.setattr(
+        routes.SUPABASE_ENTITLEMENT,
+        "get_subscription_access_window",
+        _subscription_access_window,
+        raising=False,
+    )
 
     response = client.get("/api/auth/me?scope=entitlement")
 
@@ -2174,7 +2178,163 @@ def test_auth_me_entitlement_scope_reuses_subscription_window_cache(monkeypatch)
     assert calls == [
         {
             "user_id": "user-1",
-            "bypass_cache": False,
+            "respect_requirement": False,
+            "unknown_on_error": True,
+        }
+    ]
+
+
+def test_auth_me_entitlement_scope_defers_signup_trial_grant(monkeypatch):
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "enabled", True)
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "require_subscription", False)
+    monkeypatch.setattr(web_core, "_SUPABASE_AUTH_REQUIRED", False)
+    monkeypatch.setattr(routes, "_resolve_auth_points", lambda request: 0)
+
+    def _bind_identity(request):
+        request.state.auth_user_id = "user-1"
+        request.state.auth_email = "user@example.com"
+        request.state.auth_points = 0
+
+    scheduled = []
+
+    def _start_signup_trial_background(user_id, email):
+        scheduled.append((user_id, email))
+        return True
+
+    monkeypatch.setattr(routes, "_assert_entitlement", lambda request: None)
+    monkeypatch.setattr(routes, "_bind_optional_supabase_identity", _bind_identity)
+    monkeypatch.setattr(
+        auth_api,
+        "_start_signup_trial_background",
+        _start_signup_trial_background,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        routes.SUPABASE_ENTITLEMENT,
+        "ensure_signup_trial",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("entitlement scope must not block on signup trial writes"),
+        ),
+    )
+    monkeypatch.setattr(
+        routes.SUPABASE_ENTITLEMENT,
+        "get_subscription_access_window",
+        lambda user_id, respect_requirement=False, bypass_cache=False, unknown_on_error=False: {},
+        raising=False,
+    )
+
+    response = client.get("/api/auth/me?scope=entitlement")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["subscription_active"] is None
+    assert scheduled == [("user-1", "user@example.com")]
+
+
+def test_signup_trial_background_grant_is_singleflight_and_cooled_down(monkeypatch):
+    with auth_api._SIGNUP_TRIAL_INFLIGHT_LOCK:
+        auth_api._SIGNUP_TRIAL_INFLIGHT.clear()
+        auth_api._SIGNUP_TRIAL_RECENT_ATTEMPTS.clear()
+
+    submitted = []
+    ensure_calls = []
+
+    class _FakeExecutor:
+        def submit(self, fn):
+            submitted.append(fn)
+            return object()
+
+    monkeypatch.setattr(auth_api, "_SIGNUP_TRIAL_EXECUTOR", _FakeExecutor())
+    monkeypatch.setattr(auth_api, "_signup_trial_background_cooldown_sec", lambda: 300.0)
+    monkeypatch.setattr(
+        routes.SUPABASE_ENTITLEMENT,
+        "ensure_signup_trial",
+        lambda user_id, email: ensure_calls.append((user_id, email)),
+    )
+
+    assert auth_api._start_signup_trial_background("user-1", "user@example.com") is True
+    assert auth_api._start_signup_trial_background("user-1", "user@example.com") is False
+    assert len(submitted) == 1
+
+    submitted[0]()
+
+    assert ensure_calls == [("user-1", "user@example.com")]
+    assert auth_api._start_signup_trial_background("user-1", "user@example.com") is False
+    assert len(submitted) == 1
+
+
+def test_auth_me_entitlement_scope_uses_access_window_fast_path(monkeypatch):
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "enabled", True)
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "require_subscription", False)
+    monkeypatch.setattr(web_core, "_SUPABASE_AUTH_REQUIRED", False)
+    monkeypatch.setattr(routes, "_resolve_auth_points", lambda request: 0)
+
+    def _bind_identity(request):
+        request.state.auth_user_id = "user-1"
+        request.state.auth_email = "user@example.com"
+        request.state.auth_points = 0
+
+    fast_calls = []
+
+    def _access_window(user_id, respect_requirement=False, unknown_on_error=False):
+        fast_calls.append(
+            {
+                "user_id": user_id,
+                "respect_requirement": respect_requirement,
+                "unknown_on_error": unknown_on_error,
+            }
+        )
+        return {
+            "current": {
+                "plan_code": "pro_monthly",
+                "source": "payment_contract",
+                "starts_at": "2026-06-01T00:00:00+00:00",
+                "expires_at": "2026-07-01T00:00:00+00:00",
+            },
+            "total_expires_at": "2026-07-01T00:00:00+00:00",
+            "queued_days": 0,
+            "queued_count": 0,
+        }
+
+    monkeypatch.setattr(routes, "_assert_entitlement", lambda request: None)
+    monkeypatch.setattr(routes, "_bind_optional_supabase_identity", _bind_identity)
+    monkeypatch.setattr(
+        auth_api,
+        "_start_signup_trial_background",
+        lambda *args: (_ for _ in ()).throw(
+            AssertionError("active entitlement must not schedule signup trial work"),
+        ),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        routes.SUPABASE_ENTITLEMENT,
+        "ensure_signup_trial",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        routes.SUPABASE_ENTITLEMENT,
+        "get_subscription_access_window",
+        _access_window,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        routes.SUPABASE_ENTITLEMENT,
+        "get_subscription_window",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("entitlement scope should use the current-access fast path"),
+        ),
+    )
+
+    response = client.get("/api/auth/me?scope=entitlement")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["subscription_active"] is True
+    assert payload["subscription_plan_code"] == "pro_monthly"
+    assert fast_calls == [
+        {
+            "user_id": "user-1",
+            "respect_requirement": False,
             "unknown_on_error": True,
         }
     ]
@@ -2397,7 +2557,7 @@ def test_auth_me_entitlement_scope_skips_non_access_profile_sections(monkeypatch
     monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "get_identity", lambda token: _Identity())
     monkeypatch.setattr(
         web_core.SUPABASE_ENTITLEMENT,
-        "get_subscription_window",
+        "get_subscription_access_window",
         lambda user_id, respect_requirement=False, bypass_cache=False, unknown_on_error=False: {
             "current": {
                 "plan_code": "pro_monthly",
@@ -2408,6 +2568,7 @@ def test_auth_me_entitlement_scope_skips_non_access_profile_sections(monkeypatch
             "queued_days": 0,
             "queued_count": 0,
         },
+        raising=False,
     )
     monkeypatch.setattr(
         web_core.SUPABASE_ENTITLEMENT,

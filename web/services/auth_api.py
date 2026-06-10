@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import os
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, Optional, TypeVar
 
 from fastapi import HTTPException, Request
@@ -15,6 +18,38 @@ import web.routes as legacy_routes
 
 
 T = TypeVar("T")
+
+
+def _signup_trial_background_workers() -> int:
+    try:
+        return max(
+            1,
+            int(os.getenv("POLYWEATHER_SIGNUP_TRIAL_BACKGROUND_WORKERS", "2") or "2"),
+        )
+    except Exception:
+        return 2
+
+
+def _signup_trial_background_cooldown_sec() -> float:
+    try:
+        return max(
+            0.0,
+            float(
+                os.getenv("POLYWEATHER_SIGNUP_TRIAL_BACKGROUND_COOLDOWN_SEC", "300")
+                or "300"
+            ),
+        )
+    except Exception:
+        return 300.0
+
+
+_SIGNUP_TRIAL_EXECUTOR = ThreadPoolExecutor(
+    max_workers=_signup_trial_background_workers(),
+    thread_name_prefix="signup-trial",
+)
+_SIGNUP_TRIAL_INFLIGHT: set[str] = set()
+_SIGNUP_TRIAL_RECENT_ATTEMPTS: Dict[str, float] = {}
+_SIGNUP_TRIAL_INFLIGHT_LOCK = threading.Lock()
 
 
 class _AuthMeTimer:
@@ -99,6 +134,49 @@ def _is_entitlement_scope(request: Request) -> bool:
     )
 
 
+def _start_signup_trial_background(user_id: str, email: Optional[str]) -> bool:
+    user_key = str(user_id or "").strip()
+    if not user_key:
+        return False
+    now_ts = time.time()
+    with _SIGNUP_TRIAL_INFLIGHT_LOCK:
+        if user_key in _SIGNUP_TRIAL_INFLIGHT:
+            return False
+        last_attempt = _SIGNUP_TRIAL_RECENT_ATTEMPTS.get(user_key)
+        if (
+            last_attempt is not None
+            and now_ts - last_attempt < _signup_trial_background_cooldown_sec()
+        ):
+            return False
+        _SIGNUP_TRIAL_INFLIGHT.add(user_key)
+        _SIGNUP_TRIAL_RECENT_ATTEMPTS[user_key] = now_ts
+        if len(_SIGNUP_TRIAL_RECENT_ATTEMPTS) > 4096:
+            oldest_key = min(
+                _SIGNUP_TRIAL_RECENT_ATTEMPTS,
+                key=lambda item: _SIGNUP_TRIAL_RECENT_ATTEMPTS[item],
+            )
+            _SIGNUP_TRIAL_RECENT_ATTEMPTS.pop(oldest_key, None)
+
+    def _run() -> None:
+        try:
+            legacy_routes.SUPABASE_ENTITLEMENT.ensure_signup_trial(user_key, email)
+        except Exception as exc:  # pragma: no cover - defensive background guard
+            logger.warning("signup trial background grant failed user_id={}: {}", user_key, exc)
+        finally:
+            with _SIGNUP_TRIAL_INFLIGHT_LOCK:
+                _SIGNUP_TRIAL_INFLIGHT.discard(user_key)
+
+    try:
+        _SIGNUP_TRIAL_EXECUTOR.submit(_run)
+    except Exception as exc:
+        with _SIGNUP_TRIAL_INFLIGHT_LOCK:
+            _SIGNUP_TRIAL_INFLIGHT.discard(user_key)
+            _SIGNUP_TRIAL_RECENT_ATTEMPTS.pop(user_key, None)
+        logger.warning("signup trial background submit failed user_id={}: {}", user_key, exc)
+        return False
+    return True
+
+
 def _state_points(request: Request) -> int:
     try:
         return max(0, int(getattr(request.state, "auth_points", 0) or 0))
@@ -143,23 +221,37 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
 
         if legacy_routes.SUPABASE_ENTITLEMENT.enabled and user_id:
             try:
-                timer.measure(
-                    "ensure_signup_trial",
-                    lambda: legacy_routes.SUPABASE_ENTITLEMENT.ensure_signup_trial(
-                        user_id,
-                        email,
-                    ),
-                )
-                try:
-                    subscription_window = timer.measure(
-                        "subscription_window",
-                        lambda: legacy_routes.SUPABASE_ENTITLEMENT.get_subscription_window(
+                if not entitlement_scope:
+                    timer.measure(
+                        "ensure_signup_trial",
+                        lambda: legacy_routes.SUPABASE_ENTITLEMENT.ensure_signup_trial(
                             user_id,
-                            respect_requirement=False,
-                            bypass_cache=False,
-                            unknown_on_error=True,
+                            email,
                         ),
                     )
+                try:
+                    if entitlement_scope and hasattr(
+                        legacy_routes.SUPABASE_ENTITLEMENT,
+                        "get_subscription_access_window",
+                    ):
+                        subscription_window = timer.measure(
+                            "subscription_window",
+                            lambda: legacy_routes.SUPABASE_ENTITLEMENT.get_subscription_access_window(
+                                user_id,
+                                respect_requirement=False,
+                                unknown_on_error=True,
+                            ),
+                        )
+                    else:
+                        subscription_window = timer.measure(
+                            "subscription_window",
+                            lambda: legacy_routes.SUPABASE_ENTITLEMENT.get_subscription_window(
+                                user_id,
+                                respect_requirement=False,
+                                bypass_cache=False,
+                                unknown_on_error=True,
+                            ),
+                        )
                 except TypeError:
                     subscription_window = timer.measure(
                         "subscription_window",
@@ -207,6 +299,14 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
                     None if subscription_window_unknown else bool(latest_subscription)
                 )
                 subscription_active_for_log = subscription_active
+                if entitlement_scope and subscription_active is not True:
+                    trial_grant_started = timer.measure(
+                        "schedule_signup_trial",
+                        lambda: _start_signup_trial_background(user_id, email),
+                    )
+                    if trial_grant_started and subscription_active is False:
+                        subscription_active = None
+                        subscription_active_for_log = None
                 if subscription_required and subscription_active is False:
                     raise HTTPException(status_code=403, detail="Subscription required")
 

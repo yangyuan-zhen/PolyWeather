@@ -1430,28 +1430,44 @@ class SupabaseEntitlementService:
         self,
         user_id: str,
     ) -> Optional[Dict[str, object]]:
+        row, _ok = self._query_latest_active_subscription_result(user_id)
+        return row
+
+    def _query_latest_active_subscription_result(
+        self,
+        user_id: str,
+        bypass_cache: bool = False,
+    ) -> Tuple[Optional[Dict[str, object]], bool]:
         if not user_id:
-            return None
+            return None, True
         if not self.service_role_key:
             logger.warning("SUPABASE_SERVICE_ROLE_KEY is missing")
-            return None
+            return None, False
 
         now_ts = time.time()
-        with self._sub_cache_lock:
-            cached = self._sub_cache.get(user_id)
-            if cached and now_ts - float(cached.get("ts") or 0) < self.sub_cache_ttl_sec:
-                row = cached.get("row")
-                if isinstance(row, dict):
-                    return row
-                return None
-        with self._active_subscription_bool_cache_lock:
-            cached_bool = self._active_subscription_bool_cache.get(user_id)
-            if (
-                cached_bool
-                and now_ts - float(cached_bool.get("ts") or 0) < self.sub_cache_ttl_sec
-                and cached_bool.get("active") is False
-            ):
-                return None
+        if not bypass_cache:
+            with self._sub_cache_lock:
+                cached = self._sub_cache.get(user_id)
+                if cached and now_ts - float(cached.get("ts") or 0) < self.sub_cache_ttl_sec:
+                    rows = cached.get("rows")
+                    if isinstance(rows, list):
+                        return (
+                            self._pick_latest_current_subscription(
+                                [row for row in rows if isinstance(row, dict)]
+                            ),
+                            True,
+                        )
+                    if "row" in cached:
+                        row = cached.get("row")
+                        return row if isinstance(row, dict) else None, True
+            with self._active_subscription_bool_cache_lock:
+                cached_bool = self._active_subscription_bool_cache.get(user_id)
+                if (
+                    cached_bool
+                    and now_ts - float(cached_bool.get("ts") or 0) < self.sub_cache_ttl_sec
+                    and cached_bool.get("active") is False
+                ):
+                    return None, True
 
         try:
             now = datetime.now(timezone.utc)
@@ -1477,8 +1493,7 @@ class SupabaseEntitlementService:
                     user_id,
                     response.status_code,
                 )
-                row = None
-                rows: List[Dict[str, object]] = []
+                return None, False
             else:
                 data = response.json() if response.content else []
                 rows = [item for item in data if isinstance(item, dict)] if isinstance(data, list) else []
@@ -1490,10 +1505,89 @@ class SupabaseEntitlementService:
                     "row": row,
                     "ts": now_ts,
                 }
-            return row
+            return row, True
         except Exception as exc:
             logger.warning(f"supabase subscription query error user_id={user_id}: {exc}")
-            return None
+            return None, False
+
+    def _subscription_access_window_from_current(
+        self,
+        row: Optional[Dict[str, object]],
+    ) -> Dict[str, object]:
+        if not isinstance(row, dict):
+            return {}
+        expires_at = row.get("expires_at")
+        starts_at = row.get("starts_at")
+        return {
+            "current": row,
+            "current_expires_at": expires_at,
+            "current_starts_at": starts_at,
+            "total_expires_at": expires_at,
+            "queued_days": 0,
+            "queued_count": 0,
+            "rows": [row],
+        }
+
+    def _cached_subscription_access_window(
+        self,
+        user_id: str,
+    ) -> Tuple[Dict[str, object], bool]:
+        now_ts = time.time()
+        with self._sub_cache_lock:
+            cached = self._sub_cache.get(user_id)
+            if not cached or now_ts - float(cached.get("ts") or 0) >= self.sub_cache_ttl_sec:
+                return {}, False
+            rows = cached.get("rows")
+            if isinstance(rows, list):
+                return (
+                    self._subscription_window_from_rows(
+                        [row for row in rows if isinstance(row, dict)]
+                    ),
+                    True,
+                )
+            if "row" in cached:
+                row = cached.get("row")
+                return (
+                    self._subscription_access_window_from_current(
+                        row if isinstance(row, dict) else None
+                    ),
+                    True,
+                )
+        return {}, False
+
+    def get_subscription_access_window(
+        self,
+        user_id: str,
+        respect_requirement: bool = True,
+        bypass_cache: bool = False,
+        unknown_on_error: bool = False,
+    ) -> Dict[str, object]:
+        if respect_requirement and not self.require_subscription:
+            return {}
+        user_key = str(user_id or "").strip()
+        if not user_key:
+            return {}
+        if not bypass_cache:
+            cached_window, found = self._cached_subscription_access_window(user_key)
+            if found:
+                return cached_window
+
+        row, query_ok = self._query_latest_active_subscription_result(
+            user_key,
+            bypass_cache=True,
+        )
+        if not query_ok and unknown_on_error:
+            return {
+                "unknown": True,
+                "current": None,
+                "current_expires_at": None,
+                "current_starts_at": None,
+                "total_expires_at": None,
+                "queued_days": 0,
+                "queued_count": 0,
+                "rows": None,
+            }
+        return self._subscription_access_window_from_current(row)
 
     def _query_active_subscription_rows_result(
         self,
