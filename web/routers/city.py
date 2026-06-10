@@ -4,6 +4,11 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Query, Request, Response
 
+from web.services.cache_headers import (
+    apply_cache_control,
+    apply_no_store,
+    public_edge_cache_control,
+)
 from web.services.city_api import (
     get_city_detail_batch_payload,
     get_city_detail_aggregate_payload,
@@ -15,6 +20,14 @@ from web.services.city_realtime_stream import get_realtime_stream_payload
 from web.services.request_timing import attach_server_timing_header
 
 router = APIRouter(tags=["city"])
+
+CITY_LIST_CACHE_CONTROL = public_edge_cache_control(300, 3600)
+CITY_DETAIL_CACHE_CONTROL = public_edge_cache_control(
+    60,
+    300,
+    browser_max_age_seconds=30,
+)
+
 
 def _all_city_keys() -> List[str]:
     from src.data_collection.city_registry import CITY_REGISTRY
@@ -36,8 +49,10 @@ _MODEL_RANGE_NAMES: Dict[str, str] = {c: _city_display_name(c) for c in _MODEL_R
 
 
 @router.get("/api/cities")
-async def list_cities(request: Request):
-    return await list_cities_payload(request)
+async def list_cities(request: Request, response: Response):
+    payload = await list_cities_payload(request)
+    apply_cache_control(response.headers, CITY_LIST_CACHE_CONTROL)
+    return payload
 
 
 def _extract_city_model_range(city: str, _force_refresh: bool) -> Optional[Dict[str, Any]]:
@@ -128,6 +143,12 @@ async def city_detail_batch(
         scope=scope,
         limit=limit,
     )
+    if force_refresh or bool(payload.get("partial")) or bool(payload.get("busy")) or bool(
+        payload.get("timeout")
+    ):
+        apply_no_store(response.headers)
+    else:
+        apply_cache_control(response.headers, CITY_DETAIL_CACHE_CONTROL)
     attach_server_timing_header(response, request, "city_detail_batch_server_timing")
     return payload
 
@@ -135,31 +156,43 @@ async def city_detail_batch(
 @router.get("/api/city/{name}")
 async def city_detail(
     request: Request,
+    response: Response,
     background_tasks: BackgroundTasks,
     name: str,
     force_refresh: bool = False,
     depth: str = "panel",
 ):
-    return await get_city_detail_payload(
+    payload = await get_city_detail_payload(
         request,
         name,
         force_refresh=force_refresh,
         depth=depth,
     )
+    if force_refresh:
+        apply_no_store(response.headers)
+    else:
+        apply_cache_control(response.headers, CITY_DETAIL_CACHE_CONTROL)
+    return payload
 
 
 @router.get("/api/city/{name}/summary")
 async def city_summary(
     request: Request,
+    response: Response,
     background_tasks: BackgroundTasks,
     name: str,
     force_refresh: bool = False,
 ):
-    return await get_city_summary_payload(
+    payload = await get_city_summary_payload(
         request,
         name,
         force_refresh=force_refresh,
     )
+    if force_refresh:
+        apply_no_store(response.headers)
+    else:
+        apply_cache_control(response.headers, CITY_DETAIL_CACHE_CONTROL)
+    return payload
 
 
 @router.get("/api/city/{name}/detail")
@@ -180,6 +213,10 @@ async def city_detail_aggregate(
         target_date=target_date,
         resolution=resolution,
     )
+    if force_refresh:
+        apply_no_store(response.headers)
+    else:
+        apply_cache_control(response.headers, CITY_DETAIL_CACHE_CONTROL)
     attach_server_timing_header(response, request, "city_detail_server_timing")
     return payload
 

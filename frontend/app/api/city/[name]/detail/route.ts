@@ -49,7 +49,7 @@ export async function GET(
 
   const { name } = await timer.measure("route_params", () => context.params);
   const forceRefresh = req.nextUrl.searchParams.get("force_refresh") ?? "false";
-  const cachePolicy = buildCityDetailProxyCachePolicy(forceRefresh, 15);
+  const cachePolicy = buildCityDetailProxyCachePolicy(forceRefresh);
   const depth = req.nextUrl.searchParams.get("depth");
   const marketSlug = req.nextUrl.searchParams.get("market_slug");
   const targetDate = req.nextUrl.searchParams.get("target_date");
@@ -82,7 +82,7 @@ export async function GET(
         headers: auth.headers,
         ...(cachePolicy.fetchMode === "no-store"
           ? { cache: "no-store" as const }
-          : { next: { revalidate: cachePolicy.revalidateSeconds ?? 15 } }),
+          : { next: { revalidate: cachePolicy.revalidateSeconds ?? 60 } }),
       }),
     );
     const backendServerTiming = res.headers.get("server-timing") || "";

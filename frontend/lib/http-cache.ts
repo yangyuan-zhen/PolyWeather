@@ -28,6 +28,7 @@ export function buildCachedJsonResponse(
   const etag = buildEtag(body);
   const headers = new Headers({
     "Cache-Control": cacheControl,
+    "Cloudflare-CDN-Cache-Control": cacheControl,
     ETag: etag,
     "Content-Type": "application/json; charset=utf-8",
   });

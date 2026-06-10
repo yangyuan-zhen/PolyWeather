@@ -1,12 +1,15 @@
 import { NextRequest } from "next/server";
 import { proxyBackendJsonGet } from "@/lib/api-proxy";
 import { buildCachedJsonResponse } from "@/lib/http-cache";
+import {
+  buildCityListCacheControl,
+  buildStaticCityListFallbackCacheControl,
+} from "@/lib/proxy-cache-policy";
 import { STATIC_CITY_LIST } from "@/lib/static-cities";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
-const CITIES_CACHE_CONTROL = "public, max-age=0, s-maxage=60, stale-while-revalidate=300";
-const STATIC_CITIES_CACHE_CONTROL =
-  "public, max-age=0, s-maxage=300, stale-while-revalidate=3600";
+const CITIES_CACHE_CONTROL = buildCityListCacheControl();
+const STATIC_CITIES_CACHE_CONTROL = buildStaticCityListFallbackCacheControl();
 const CITIES_BACKEND_TIMEOUT_MS = Number(
   process.env.POLYWEATHER_CITIES_BACKEND_TIMEOUT_MS || 1000,
 );

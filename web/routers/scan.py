@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
+from web.services.cache_headers import NO_STORE_CACHE_CONTROL, public_edge_cache_control
 from web.services.scan_api import (
     get_scan_terminal_overview_payload,
     get_scan_terminal_payload,
@@ -12,6 +13,8 @@ from web.services.scan_api import (
 from web.services.request_timing import attach_server_timing_header
 
 router = APIRouter(tags=["scan"])
+
+SCAN_TERMINAL_CACHE_CONTROL = public_edge_cache_control(300, 900)
 
 
 @router.get("/api/scan/terminal")
@@ -46,10 +49,17 @@ async def scan_terminal(
         region=region or trading_region or None,
         timezone_offset_seconds=timezone_offset_seconds,
     )
+    status = str(payload.get("status") or "").strip().lower()
+    cache_control = (
+        SCAN_TERMINAL_CACHE_CONTROL
+        if not force_refresh and status == "ready" and payload.get("stale") is not True
+        else NO_STORE_CACHE_CONTROL
+    )
     response = JSONResponse(
         content=payload,
         headers={
-            "Cache-Control": "public, s-maxage=30, stale-while-revalidate=120",
+            "Cache-Control": cache_control,
+            "Cloudflare-CDN-Cache-Control": cache_control,
         },
     )
     attach_server_timing_header(response, request, "scan_terminal_server_timing")

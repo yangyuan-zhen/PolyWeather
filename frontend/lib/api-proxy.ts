@@ -9,6 +9,7 @@ import {
   finishProxyTimedResponse,
   type ProxyTimer,
 } from "@/lib/proxy-timing";
+import { NO_STORE_CACHE_CONTROL } from "@/lib/proxy-cache-policy";
 
 const PASSTHROUGH_UPSTREAM_STATUSES = new Set([
   400,
@@ -85,6 +86,10 @@ export function buildUpstreamErrorResponse(
   }
 
   return NextResponse.json(body, {
+    headers: {
+      "Cache-Control": NO_STORE_CACHE_CONTROL,
+      "Cloudflare-CDN-Cache-Control": NO_STORE_CACHE_CONTROL,
+    },
     status: clientStatusFromUpstream(upstreamStatus),
   });
 }
@@ -106,7 +111,13 @@ export function buildProxyExceptionResponse(
     body.detail = String(error);
   }
 
-  return NextResponse.json(body, { status: options.status ?? 500 });
+  return NextResponse.json(body, {
+    headers: {
+      "Cache-Control": NO_STORE_CACHE_CONTROL,
+      "Cloudflare-CDN-Cache-Control": NO_STORE_CACHE_CONTROL,
+    },
+    status: options.status ?? 500,
+  });
 }
 
 export async function proxyBackendJsonGet(
@@ -185,7 +196,10 @@ export async function proxyBackendJsonGet(
         ? buildCachedJsonResponse(req, data, responseCacheControl)
         : NextResponse.json(data, {
             headers: responseCacheControl
-              ? { "Cache-Control": responseCacheControl }
+              ? {
+                  "Cache-Control": responseCacheControl,
+                  "Cloudflare-CDN-Cache-Control": responseCacheControl,
+                }
               : undefined,
           });
     const withCookies = applyAuthResponseCookies(response, auth.response);

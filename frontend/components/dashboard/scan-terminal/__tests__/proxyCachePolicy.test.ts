@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import {
+  buildCityListCacheControl,
   buildScanTerminalResponseCacheControl,
   buildCityDetailProxyCachePolicy,
   buildForceRefreshProxyCachePolicy,
+  buildPublicEdgeCacheControl,
   isForceRefreshValue,
+  NO_STORE_CACHE_CONTROL,
 } from "@/lib/proxy-cache-policy";
 
 export function runTests() {
@@ -18,11 +21,21 @@ export function runTests() {
   assert.match(forced.responseCacheControl, /no-store/);
   assert.equal(forced.revalidateSeconds, undefined);
 
-  const cached = buildCityDetailProxyCachePolicy("false", 15);
+  const cached = buildCityDetailProxyCachePolicy("false");
   assert.equal(cached.fetchMode, "revalidate");
-  assert.equal(cached.revalidateSeconds, 15);
-  assert.match(cached.responseCacheControl, /max-age=15/);
-  assert.match(cached.responseCacheControl, /s-maxage=15/);
+  assert.equal(cached.revalidateSeconds, 60);
+  assert.match(cached.responseCacheControl, /max-age=30/);
+  assert.match(cached.responseCacheControl, /s-maxage=60/);
+  assert.match(cached.responseCacheControl, /stale-while-revalidate=300/);
+
+  assert.equal(
+    buildPublicEdgeCacheControl(60, 300),
+    "public, max-age=0, s-maxage=60, stale-while-revalidate=300",
+  );
+  assert.equal(
+    buildCityListCacheControl(),
+    "public, max-age=0, s-maxage=300, stale-while-revalidate=3600",
+  );
 
   const scanForced = buildForceRefreshProxyCachePolicy("true", 10);
   assert.equal(scanForced.fetchMode, "no-store");
@@ -34,15 +47,15 @@ export function runTests() {
   );
   assert.equal(
     buildScanTerminalResponseCacheControl({ status: "failed", stale: false }, normalScanCache),
-    "no-store, max-age=0",
+    NO_STORE_CACHE_CONTROL,
   );
   assert.equal(
     buildScanTerminalResponseCacheControl({ status: "partial", stale: false }, normalScanCache),
-    "no-store, max-age=0",
+    NO_STORE_CACHE_CONTROL,
   );
   assert.equal(
     buildScanTerminalResponseCacheControl({ status: "ready", stale: true }, normalScanCache),
-    "no-store, max-age=0",
+    NO_STORE_CACHE_CONTROL,
   );
 
   const scanTerminalProxySource = fs.readFileSync(

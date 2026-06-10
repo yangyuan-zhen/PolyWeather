@@ -83,6 +83,8 @@ def test_events_endpoint_replays_only_requested_cities(monkeypatch):
     )
 
     assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-cache, no-transform"
+    assert response.headers["cloudflare-cdn-cache-control"] == "no-store"
     assert captured == {
         "cities": {"taipei", "hong kong"},
         "since_revision": 42,

@@ -147,6 +147,7 @@ async def sse_events(
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",
+            "Cloudflare-CDN-Cache-Control": "no-store",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
             "Access-Control-Allow-Origin": origin if allowed else "https://polyweather.top",

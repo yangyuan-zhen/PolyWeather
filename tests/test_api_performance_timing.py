@@ -84,6 +84,10 @@ def test_city_detail_batch_response_includes_backend_server_timing(monkeypatch):
     assert "city_detail_batch_full_data_paris" in server_timing
     assert "city_detail_batch_detail_payload_paris" in server_timing
     assert "city_detail_batch_total" in server_timing
+    assert response.headers["cache-control"] == (
+        "public, max-age=30, s-maxage=60, stale-while-revalidate=300"
+    )
+    assert response.headers["cloudflare-cdn-cache-control"] == response.headers["cache-control"]
 
 
 def test_city_detail_response_includes_backend_server_timing(monkeypatch):
@@ -125,7 +129,12 @@ def test_scan_terminal_response_includes_backend_server_timing(monkeypatch):
     monkeypatch.setattr(
         scan_api.legacy_routes,
         "build_scan_terminal_payload",
-        lambda filters, force_refresh=False, timing_recorder=None: {"rows": [], "filters": filters},
+        lambda filters, force_refresh=False, timing_recorder=None: {
+            "rows": [],
+            "filters": filters,
+            "status": "ready",
+            "stale": False,
+        },
     )
 
     response = client.get("/api/scan/terminal?limit=1")
@@ -135,6 +144,30 @@ def test_scan_terminal_response_includes_backend_server_timing(monkeypatch):
     assert "scan_terminal_assert_entitlement" in server_timing
     assert "scan_terminal_build_payload" in server_timing
     assert "scan_terminal_total" in server_timing
+    assert response.headers["cache-control"] == (
+        "public, max-age=0, s-maxage=300, stale-while-revalidate=900"
+    )
+    assert response.headers["cloudflare-cdn-cache-control"] == response.headers["cache-control"]
+
+
+def test_scan_terminal_stale_response_is_not_cached(monkeypatch):
+    monkeypatch.setattr(scan_api.legacy_routes, "_assert_entitlement", lambda request: None)
+    monkeypatch.setattr(
+        scan_api.legacy_routes,
+        "build_scan_terminal_payload",
+        lambda filters, force_refresh=False, timing_recorder=None: {
+            "rows": [],
+            "filters": filters,
+            "status": "ready",
+            "stale": True,
+        },
+    )
+
+    response = client.get("/api/scan/terminal?limit=1")
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store, max-age=0"
+    assert response.headers["cloudflare-cdn-cache-control"] == "no-store, max-age=0"
 
 
 def test_online_users_response_includes_backend_server_timing():

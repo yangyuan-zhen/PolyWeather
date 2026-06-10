@@ -101,6 +101,16 @@ export function runTests() {
     /cacheControlForData\?:/,
     "generic backend JSON proxy should allow response cache policy to depend on parsed data",
   );
+  assert.match(
+    apiProxySource,
+    /Cloudflare-CDN-Cache-Control/,
+    "generic backend JSON proxy should expose Cloudflare-specific cache directives",
+  );
+  assert.match(
+    apiProxySource,
+    /NO_STORE_CACHE_CONTROL/,
+    "generic backend JSON proxy errors must remain non-cacheable when Cache Everything is enabled",
+  );
 
   const scanTerminalProxy = readFrontend("app", "api", "scan", "terminal", "route.ts");
   assert.match(scanTerminalProxy, /createProxyTimer\(req,\s*"scan_terminal"\)/);

@@ -139,7 +139,7 @@ export async function GET(
   const { name } = await context.params;
   const forceRefresh = req.nextUrl.searchParams.get("force_refresh") ?? "false";
   const depth = req.nextUrl.searchParams.get("depth") ?? "panel";
-  const cachePolicy = buildCityDetailProxyCachePolicy(forceRefresh, 15);
+  const cachePolicy = buildCityDetailProxyCachePolicy(forceRefresh);
   const url = `${API_BASE}/api/city/${encodeURIComponent(name)}?force_refresh=${forceRefresh}&depth=${encodeURIComponent(depth)}`;
 
   try {
@@ -150,7 +150,7 @@ export async function GET(
       headers: auth.headers,
       ...(cachePolicy.fetchMode === "no-store"
         ? { cache: "no-store" as const }
-        : { next: { revalidate: cachePolicy.revalidateSeconds ?? 15 } }),
+        : { next: { revalidate: cachePolicy.revalidateSeconds ?? 60 } }),
     });
     if (!res.ok) {
       const raw = await res.text();
@@ -159,7 +159,7 @@ export async function GET(
         headers: auth.headers,
         ...(cachePolicy.fetchMode === "no-store"
           ? { cache: "no-store" as const }
-          : { next: { revalidate: 10 } }),
+          : { next: { revalidate: cachePolicy.revalidateSeconds ?? 60 } }),
       });
       if (summaryRes.ok) {
         const summaryData = await summaryRes.json();
@@ -168,7 +168,7 @@ export async function GET(
           buildFallbackCityDetail(name, depth, summaryData),
           cachePolicy.fetchMode === "no-store"
             ? cachePolicy.responseCacheControl
-            : "public, max-age=0, s-maxage=10, stale-while-revalidate=30",
+            : cachePolicy.responseCacheControl,
         );
         response.headers.set("X-PolyWeather-Fallback", "summary");
         return applyAuthResponseCookies(response, auth.response);
