@@ -72,8 +72,7 @@ export async function GET(req: NextRequest) {
           data,
           cachePolicy.responseCacheControl,
         ),
-      fetchCache:
-        cachePolicy.fetchMode === "no-store" ? "no-store" : undefined,
+      fetchCache: "no-store",
       publicMessage: "Failed to fetch scan terminal data",
       revalidateSeconds: cachePolicy.revalidateSeconds,
       signal: controller.signal,

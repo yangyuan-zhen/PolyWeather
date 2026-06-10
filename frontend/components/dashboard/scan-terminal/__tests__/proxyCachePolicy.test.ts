@@ -77,6 +77,11 @@ export function runTests() {
     /cacheControlForData:\s*\(data\)\s*=>\s*buildScanTerminalResponseCacheControl/,
     "scan terminal proxy must not CDN-cache failed, stale, or partial business payloads",
   );
+  assert.match(
+    scanTerminalProxySource,
+    /fetchCache:\s*"no-store"/,
+    "scan terminal proxy must not put failed or initializing payloads into the Next data cache",
+  );
 
   const scanTerminalClientSource = fs.readFileSync(
     path.join(
