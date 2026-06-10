@@ -6,6 +6,7 @@ import {
 } from "@/lib/refresh-policy";
 import { scanTerminalQueryPolicy } from "@/components/dashboard/scan-terminal/scan-terminal-client";
 import {
+  __buildChartFreshnessContextForTest,
   __getInitialDetailLoadDelayMsForTest,
   __shouldFetchCityDetailForChartForTest,
   __shouldPollLiveChartForTest,
@@ -15,9 +16,11 @@ import {
   HOURLY_CACHE_TTL_MS,
   __resolveCityDetailFromBatchForTest,
   __readHourlyCacheEntryForTest,
+  __rememberCityDetailBatchDiagnosticsForTest,
   __resetHourlyDetailRequestQueueForTest,
   __runQueuedHourlyDetailRequestForTest,
   clearCityDetailCache,
+  readCityDetailBatchDiagnostics,
 } from "@/components/dashboard/scan-terminal/temperature-chart-logic";
 
 function assert(condition: unknown, message: string) {
@@ -120,6 +123,90 @@ export async function runTests() {
     "compact grid slots are visible charts and should run the no-patch fallback guard",
   );
   assert(
+    typeof __buildChartFreshnessContextForTest === "function",
+    "temperature charts should expose a structured freshness context for feedback diagnostics",
+  );
+  const degradedFreshness = __buildChartFreshnessContextForTest(
+    {
+      rowAppliedAtMs: 1_000,
+      rowObservationTime: "12:45",
+      ssePatchAppliedAtMs: 5_000,
+      sseObservedAt: "2026-06-10T04:48:00Z",
+      sseRevision: 42,
+      detailRequestedAtMs: 7_000,
+      detailResolvedAtMs: null,
+      detailErrorAtMs: 9_000,
+      detailStatus: "degraded",
+      detailSource: "partial_or_timeout",
+      sseEmittedAtMs: 5_500,
+      sseServerToClientLatencySec: 5,
+      sseCollectorToClientLatencySec: 60,
+      sseSourceToCollectorLatencySec: 64,
+    },
+    11_000,
+  );
+  assert(
+    degradedFreshness.live_path === "sse" &&
+      degradedFreshness.live_age_sec === 6 &&
+      degradedFreshness.row_applied_age_sec === 10 &&
+      degradedFreshness.sse_patch_age_sec === 6,
+    "freshness context should make the newest live row/SSE path observable independently of detail loading",
+  );
+  assert(
+    degradedFreshness.detail_status === "degraded" &&
+      degradedFreshness.detail_source === "partial_or_timeout" &&
+      degradedFreshness.detail_request_age_sec === 4 &&
+      degradedFreshness.detail_error_age_sec === 2 &&
+      degradedFreshness.detail_age_sec === null,
+    "freshness context should report degraded full-detail state without implying the live point is unavailable",
+  );
+  assert(
+    degradedFreshness.sse_emitted_at_ms === 5_500 &&
+      degradedFreshness.sse_server_to_client_latency_sec === 5 &&
+      degradedFreshness.sse_collector_to_client_latency_sec === 60 &&
+      degradedFreshness.sse_source_to_collector_latency_sec === 64,
+    "freshness context should expose SSE delivery and collector latency diagnostics",
+  );
+  __rememberCityDetailBatchDiagnosticsForTest("Paris", "10m", {
+    response_source: "next_proxy_timeout",
+    partial_reason: "proxy_timeout",
+    city_status: { paris: { status: "proxy_timeout" } },
+  });
+  const rememberedBatchDiagnostics = readCityDetailBatchDiagnostics("paris", "10m");
+  assert(
+    rememberedBatchDiagnostics?.response_source === "next_proxy_timeout" &&
+      rememberedBatchDiagnostics?.city_status?.paris?.status === "proxy_timeout",
+    "chart logic should retain the latest detail-batch diagnostics for feedback context",
+  );
+  assert(
+    chartSource.includes("readCityDetailBatchDiagnostics") &&
+      chartSource.includes("detail_batch_diagnostics"),
+    "temperature chart feedback context should include the latest detail-batch diagnostics",
+  );
+  const rowWinsFreshness = __buildChartFreshnessContextForTest(
+    {
+      rowAppliedAtMs: 10_000,
+      rowObservationTime: "12:50",
+      ssePatchAppliedAtMs: 5_000,
+      sseObservedAt: "2026-06-10T04:48:00Z",
+      sseRevision: 42,
+      sseEmittedAtMs: null,
+      sseServerToClientLatencySec: null,
+      sseCollectorToClientLatencySec: null,
+      sseSourceToCollectorLatencySec: null,
+      detailRequestedAtMs: null,
+      detailResolvedAtMs: null,
+      detailErrorAtMs: null,
+      detailStatus: "idle",
+      detailSource: "none",
+    },
+    11_000,
+  );
+  assert(
+    rowWinsFreshness.live_path === "row" && rowWinsFreshness.live_age_sec === 1,
+    "freshness context should report the newest live path when a scan-row update is newer than the last SSE patch",
+  );
+  assert(
     __shouldPollLiveChartForTest({ city: "shanghai", compact: false, isActive: false, isMaximized: false }) === false,
     "inactive non-compact charts should not run live polling",
   );
@@ -192,7 +279,7 @@ export async function runTests() {
   );
   assert(
     chartSource.includes("allowStale: true") &&
-      chartCanvasSourceIncludes(chartSource, "数据暂不可用") &&
+      chartCanvasSourceIncludes(chartSource, "详情暂不可用") &&
       chartCanvasSourceIncludes(chartSource, "handleRetryDetail"),
     "city detail charts should show stale cache first and expose a retryable unavailable state",
   );

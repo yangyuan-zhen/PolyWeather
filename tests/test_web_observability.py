@@ -1012,6 +1012,13 @@ def test_city_detail_batch_returns_busy_when_global_builder_slot_is_full(monkeyp
     assert payload["busy"] is True
     assert payload["details"] == {}
     assert payload["missing"] == ["paris", "shanghai"]
+    assert payload["diagnostics"]["partial_reason"] == "busy"
+    assert payload["diagnostics"]["response_source"] == "busy"
+    assert payload["diagnostics"]["requested_count"] == 2
+    assert payload["diagnostics"]["completed_count"] == 0
+    assert payload["diagnostics"]["missing_count"] == 2
+    assert payload["diagnostics"]["city_status"]["paris"]["status"] == "busy"
+    assert payload["diagnostics"]["city_status"]["shanghai"]["status"] == "busy"
     assert build_calls == 0
 
 
@@ -1102,6 +1109,17 @@ def test_city_detail_batch_returns_completed_details_when_one_city_is_slow(monke
     assert payload["partial"] is True
     assert payload["missing"] == ["slow"]
     assert payload["errors"] == {}
+    assert payload["diagnostics"]["partial_reason"] == "timeout"
+    assert payload["diagnostics"]["requested_count"] == 3
+    assert payload["diagnostics"]["completed_count"] == 2
+    assert payload["diagnostics"]["missing_count"] == 1
+    assert payload["diagnostics"]["error_count"] == 0
+    assert payload["diagnostics"]["batch_concurrency"] == 2
+    assert payload["diagnostics"]["partial_timeout_ms"] == 20
+    assert payload["diagnostics"]["city_status"]["fast"]["status"] == "ok"
+    assert payload["diagnostics"]["city_status"]["other"]["status"] == "ok"
+    assert payload["diagnostics"]["city_status"]["slow"]["status"] == "timeout"
+    assert isinstance(payload["diagnostics"]["city_status"]["fast"]["duration_ms"], (int, float))
     assert "slow" not in completed
 
 

@@ -33,6 +33,15 @@ function parseRequestedCities(req: NextRequest) {
 }
 
 function buildCityDetailBatchTimeoutPayload(requestedCities: string[]) {
+  const city_status = Object.fromEntries(
+    requestedCities.map((city) => [
+      city,
+      {
+        status: "proxy_timeout",
+        duration_ms: null,
+      },
+    ]),
+  );
   return {
     cities: requestedCities,
     details: {},
@@ -40,6 +49,18 @@ function buildCityDetailBatchTimeoutPayload(requestedCities: string[]) {
     missing: requestedCities,
     partial: true,
     timeout: true,
+    diagnostics: {
+      version: 1,
+      response_source: "next_proxy_timeout",
+      partial: true,
+      partial_reason: "proxy_timeout",
+      requested_count: requestedCities.length,
+      completed_count: 0,
+      missing_count: requestedCities.length,
+      error_count: 0,
+      proxy_timeout_ms: DETAIL_BATCH_PROXY_TIMEOUT_MS,
+      city_status,
+    },
   };
 }
 

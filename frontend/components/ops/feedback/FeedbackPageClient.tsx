@@ -78,6 +78,111 @@ function contextSummary(context?: Record<string, unknown>) {
   return pieces.length ? pieces.join(" · ") : "terminal";
 }
 
+function objectRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function finiteNumber(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function formatSeconds(value: unknown) {
+  const number = finiteNumber(value);
+  return number === null ? null : `${number}s`;
+}
+
+function latencyTone(value: unknown) {
+  const number = finiteNumber(value);
+  if (number === null) return "border-slate-200 bg-slate-50 text-slate-600";
+  if (number >= 300) return "border-red-200 bg-red-50 text-red-700";
+  if (number >= 60) return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-emerald-200 bg-emerald-50 text-emerald-700";
+}
+
+function feedbackFreshnessBadges(context?: Record<string, unknown>) {
+  const freshness = objectRecord(context?.freshness);
+  const detailBatchDiagnostics = objectRecord(context?.detail_batch_diagnostics);
+  const badges: Array<{ key: string; label: string; tone: string }> = [];
+
+  const livePath = String(freshness?.live_path || context?.live_path || "").trim();
+  const liveAge = formatSeconds(freshness?.live_age_sec ?? context?.live_age_sec);
+  if (livePath) {
+    badges.push({
+      key: "live",
+      label: liveAge ? `实时 ${livePath} ${liveAge}` : `实时 ${livePath}`,
+      tone: latencyTone(freshness?.live_age_sec ?? context?.live_age_sec),
+    });
+  }
+
+  const detailStatus = String(freshness?.detail_status || context?.detail_status || "").trim();
+  const detailSource = String(freshness?.detail_source || context?.detail_source || "").trim();
+  if (detailStatus) {
+    badges.push({
+      key: "detail",
+      label: detailSource ? `详情 ${detailStatus}/${detailSource}` : `详情 ${detailStatus}`,
+      tone: ["degraded", "stale_cache"].includes(detailStatus)
+        ? "border-amber-200 bg-amber-50 text-amber-700"
+        : "border-slate-200 bg-slate-50 text-slate-600",
+    });
+  }
+
+  const sseServerToClientLatency = formatSeconds(freshness?.sse_server_to_client_latency_sec);
+  if (sseServerToClientLatency) {
+    badges.push({
+      key: "sse-server",
+      label: `SSE ${sseServerToClientLatency}`,
+      tone: latencyTone(freshness?.sse_server_to_client_latency_sec),
+    });
+  }
+
+  const sseCollectorToClientLatency = formatSeconds(freshness?.sse_collector_to_client_latency_sec);
+  if (sseCollectorToClientLatency) {
+    badges.push({
+      key: "sse-collector",
+      label: `采集到前端 ${sseCollectorToClientLatency}`,
+      tone: latencyTone(freshness?.sse_collector_to_client_latency_sec),
+    });
+  }
+
+  const sseSourceToCollectorLatency = formatSeconds(freshness?.sse_source_to_collector_latency_sec);
+  if (sseSourceToCollectorLatency) {
+    badges.push({
+      key: "sse-source",
+      label: `源到采集 ${sseSourceToCollectorLatency}`,
+      tone: latencyTone(freshness?.sse_source_to_collector_latency_sec),
+    });
+  }
+
+  const partialReason = String(detailBatchDiagnostics?.partial_reason || "").trim();
+  const responseSource = String(detailBatchDiagnostics?.response_source || "").trim();
+  if (partialReason || responseSource) {
+    badges.push({
+      key: "batch",
+      label: responseSource
+        ? `批量 ${partialReason || "ok"} · ${responseSource}`
+        : `批量 ${partialReason}`,
+      tone: partialReason
+        ? "border-amber-200 bg-amber-50 text-amber-700"
+        : "border-slate-200 bg-slate-50 text-slate-600",
+    });
+  }
+
+  const missingCount = finiteNumber(detailBatchDiagnostics?.missing_count);
+  const errorCount = finiteNumber(detailBatchDiagnostics?.error_count);
+  if (missingCount || errorCount) {
+    badges.push({
+      key: "batch-counts",
+      label: `缺失 ${missingCount || 0} · 错误 ${errorCount || 0}`,
+      tone: "border-red-200 bg-red-50 text-red-700",
+    });
+  }
+
+  return badges;
+}
+
 export function FeedbackPageClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -299,6 +404,7 @@ export function FeedbackPageClient() {
                     const rewardPoints = Number(row.reward_points || 0);
                     const rewardStatus = String(row.reward_status || "").toLowerCase();
                     const hasReward = rewardStatus === "granted" && rewardPoints > 0;
+                    const freshnessBadges = feedbackFreshnessBadges(row.context);
                     return (
                       <tr key={row.id} className="border-b border-slate-100 align-top">
                         <td className="py-3 pr-4">
@@ -316,6 +422,18 @@ export function FeedbackPageClient() {
                           {Boolean(row.context?.detail_error) && (
                             <div className="mt-1 max-w-xs text-xs text-amber-700">
                               {String(row.context?.detail_error || "").slice(0, 120)}
+                            </div>
+                          )}
+                          {freshnessBadges.length > 0 && (
+                            <div className="mt-2 flex max-w-xs flex-wrap gap-1.5">
+                              {freshnessBadges.map((item) => (
+                                <span
+                                  key={item.key}
+                                  className={`rounded border px-1.5 py-0.5 text-[10px] font-bold ${item.tone}`}
+                                >
+                                  {item.label}
+                                </span>
+                              ))}
                             </div>
                           )}
                         </td>

@@ -39,4 +39,15 @@ export function runTests() {
       source.includes("1500"),
     "ops feedback page must document fixed reward point guidelines",
   );
+  assert(
+    source.includes("feedbackFreshnessBadges") &&
+      source.includes("freshness?.live_path") &&
+      source.includes("freshness?.live_age_sec") &&
+      source.includes("sse_server_to_client_latency_sec") &&
+      source.includes("sse_collector_to_client_latency_sec") &&
+      source.includes("sse_source_to_collector_latency_sec") &&
+      source.includes("detail_batch_diagnostics") &&
+      source.includes("partial_reason"),
+    "ops feedback page must summarize live freshness, SSE latency and detail-batch diagnostics",
+  );
 }

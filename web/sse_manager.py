@@ -162,6 +162,11 @@ class SseManager:
 
     @staticmethod
     def _format_event(event: dict[str, Any]) -> str:
+        if str(event.get("type") or "").startswith("city_observation_patch"):
+            event = {
+                **event,
+                "sse_emitted_at_ms": int(time.time() * 1000),
+            }
         return f"data: {json.dumps(event, ensure_ascii=False, separators=(',', ':'))}\n\n"
 
 

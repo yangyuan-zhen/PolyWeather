@@ -15,6 +15,13 @@ export type CityPatch = {
   changes: Record<string, unknown>;
   revision: number;
   ts?: number;
+  delivery?: {
+    client_received_at_ms: number;
+    sse_emitted_at_ms?: number | null;
+    server_to_client_latency_sec?: number | null;
+    collector_to_client_latency_sec?: number | null;
+    source_to_collector_latency_sec?: number | null;
+  };
 };
 
 type ObservationPatchV1 = {
@@ -30,6 +37,7 @@ type ObservationPatchV1 = {
   source_cadence_sec?: number | null;
   revision?: number;
   ts?: number;
+  sse_emitted_at_ms?: number | null;
   payload?: Record<string, unknown>;
 };
 
@@ -103,6 +111,34 @@ function buildSseUrl(baseUrl: string) {
 function resolveSseReplayLimit(cityCount: number) {
   const requested = Math.max(1, cityCount) * SSE_REPLAY_EVENTS_PER_CITY;
   return Math.max(SSE_REPLAY_BASE_LIMIT, Math.min(SSE_REPLAY_MAX_LIMIT, requested));
+}
+
+function finiteNumber(value: unknown): number | null {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function latencySeconds(fromMs: number | null, toMs: number) {
+  if (fromMs === null) return null;
+  return Math.max(0, Math.round((toMs - fromMs) / 1000));
+}
+
+function buildPatchDelivery(
+  patch: Partial<CityPatch> & ObservationPatchV1,
+  clientReceivedAtMs: number,
+  payload?: Record<string, unknown>,
+) {
+  const sseEmittedAtMs = finiteNumber(patch.sse_emitted_at_ms);
+  const collectorReceivedAtMs = finiteNumber(patch.ts);
+  const sourceToCollectorLatencySec =
+    finiteNumber(payload?.latency_sec) ?? finiteNumber((patch.changes as Record<string, unknown> | undefined)?.latency_sec);
+  return {
+    client_received_at_ms: clientReceivedAtMs,
+    sse_emitted_at_ms: sseEmittedAtMs,
+    server_to_client_latency_sec: latencySeconds(sseEmittedAtMs, clientReceivedAtMs),
+    collector_to_client_latency_sec: latencySeconds(collectorReceivedAtMs, clientReceivedAtMs),
+    source_to_collector_latency_sec: sourceToCollectorLatencySec,
+  };
 }
 
 function currentConnectionKey() {
@@ -219,7 +255,10 @@ function registerCitySubscription(city: string) {
   };
 }
 
-function normalizeLegacyPatch(patch: Partial<CityPatch>): CityPatch | null {
+function normalizeLegacyPatch(
+  patch: Partial<CityPatch> & ObservationPatchV1,
+  clientReceivedAtMs: number,
+): CityPatch | null {
   const city = normalizeCityKey(patch.city);
   const changes = patch.changes;
   const revision = Number(patch.revision);
@@ -232,10 +271,14 @@ function normalizeLegacyPatch(patch: Partial<CityPatch>): CityPatch | null {
     changes: changes as Record<string, unknown>,
     revision,
     ts: typeof patch.ts === "number" ? patch.ts : Date.now(),
+    delivery: buildPatchDelivery(patch, clientReceivedAtMs),
   };
 }
 
-function normalizeV1Patch(patch: ObservationPatchV1): CityPatch | null {
+function normalizeV1Patch(
+  patch: ObservationPatchV1,
+  clientReceivedAtMs: number,
+): CityPatch | null {
   const city = normalizeCityKey(patch.city);
   const revision = Number(patch.revision);
   const payload = patch.payload;
@@ -262,17 +305,19 @@ function normalizeV1Patch(patch: ObservationPatchV1): CityPatch | null {
     changes,
     revision,
     ts: typeof patch.ts === "number" ? patch.ts : Date.now(),
+    delivery: buildPatchDelivery(patch, clientReceivedAtMs, payload),
   };
 }
 
 function normalizeIncomingPatch(payload: unknown): CityPatch | null {
   if (!payload || typeof payload !== "object") return null;
   const patch = payload as Partial<CityPatch> & ObservationPatchV1;
+  const clientReceivedAtMs = Date.now();
   if (patch.type === "city_patch" || !patch.type) {
-    return normalizeLegacyPatch(patch);
+    return normalizeLegacyPatch(patch, clientReceivedAtMs);
   }
   if (patch.type === V1_EVENT_TYPE) {
-    return normalizeV1Patch(patch);
+    return normalizeV1Patch(patch, clientReceivedAtMs);
   }
   return null;
 }

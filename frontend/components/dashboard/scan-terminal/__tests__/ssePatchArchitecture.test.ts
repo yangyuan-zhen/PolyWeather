@@ -1,5 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import {
+  __applySsePatchForTest,
+  getLatestPatchesSnapshot,
+} from "@/hooks/use-sse-patches";
 
 function assert(condition: unknown, message: string) {
   if (!condition) throw new Error(message);
@@ -127,6 +131,36 @@ export function runTests() {
       !subscriptionBlock.includes("ensureSsePatchConnection();"),
     "city subscription mount/unmount should schedule one coalesced SSE reconnect instead of reconnecting per chart",
   );
+  const originalDateNow = Date.now;
+  try {
+    Date.now = () => 1_000_000;
+    __applySsePatchForTest({
+      type: "city_observation_patch.v1",
+      city: "Latency City",
+      source: "amsc_awos",
+      obs_time: "2026-06-10T04:50:00Z",
+      observed_at_utc: "2026-06-10T04:50:00Z",
+      revision: 987001,
+      ts: 940_000,
+      sse_emitted_at_ms: 995_000,
+      payload: {
+        temp: 30.5,
+        latency_sec: 64,
+        received_at_utc: "2026-06-10T04:51:04Z",
+      },
+    });
+    const latencyPatch = getLatestPatchesSnapshot().get("latency city") as any;
+    assert(
+      latencyPatch?.delivery?.client_received_at_ms === 1_000_000 &&
+        latencyPatch?.delivery?.sse_emitted_at_ms === 995_000 &&
+        latencyPatch?.delivery?.server_to_client_latency_sec === 5 &&
+        latencyPatch?.delivery?.collector_to_client_latency_sec === 60 &&
+        latencyPatch?.delivery?.source_to_collector_latency_sec === 64,
+      "frontend patch hook should retain SSE delivery latency diagnostics for feedback context",
+    );
+  } finally {
+    Date.now = originalDateNow;
+  }
 
   const bffEventsRoute = readFrontendFile("app", "api", "events", "route.ts");
   assert(bffEventsRoute.includes("searchParams"), "Next.js SSE proxy must forward query parameters to FastAPI");
@@ -249,7 +283,9 @@ export function runTests() {
       chart.includes("refreshProbabilityOverlayAfterPatch"),
     "temperature chart must trigger a throttled background probability refresh after live observation patches",
   );
-  const patchEffectBlock = chart.match(/useEffect\(\(\) => \{\s*if \(!latestPatch[\s\S]*?\}, \[latestPatch, row, city, targetResolution, compact, isActive, isMaximized, applySuccessfulHourlyDetail\]\);/)?.[0] || "";
+  const patchEffectBlock = chart.match(
+    /useEffect\(\(\) => \{\s*if \(!latestPatch[\s\S]*?refreshProbabilityOverlayAfterPatch\(\);[\s\S]*?\}, \[[^\]]*latestPatch[^\]]*applySuccessfulHourlyDetail[^\]]*\]\);/,
+  )?.[0] || "";
   assert(
     patchEffectBlock.includes("refreshProbabilityOverlayAfterPatch") &&
       patchEffectBlock.includes("ignoreCache: true") &&

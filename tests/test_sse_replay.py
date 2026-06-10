@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from web.app import app
 from web.routers import sse_router
+from web.sse_manager import SseManager
 
 
 def _decode_sse_events(text: str):
@@ -13,6 +14,25 @@ def _decode_sse_events(text: str):
             continue
         events.append(json.loads(frame[len("data: "):]))
     return events
+
+
+def test_sse_format_event_stamps_emit_time_for_latency_diagnostics(monkeypatch):
+    monkeypatch.setattr("web.sse_manager.time.time", lambda: 1780750904.5)
+
+    frame = SseManager._format_event(
+        {
+            "type": "city_observation_patch.v1",
+            "revision": 123,
+            "city": "busan",
+            "source": "amos",
+            "ts": 1780750864062,
+            "payload": {"temp": 23.0},
+        }
+    )
+
+    event = _decode_sse_events(frame)[0]
+    assert event["sse_emitted_at_ms"] == 1780750904500
+    assert event["payload"]["temp"] == 23.0
 
 
 def test_events_endpoint_replays_only_requested_cities(monkeypatch):

@@ -372,6 +372,43 @@ const SESSION_CACHE_PREFIX = "polyweather_city_detail_v1:";
 const SESSION_CACHE_TTL_MS = DASHBOARD_REFRESH_POLICY_MS.metar;
 
 type HourlyCacheEntry = { ts: number; data: HourlyForecast };
+type CityDetailBatchDiagnostics = Record<string, any>;
+type CityDetailBatchDiagnosticsEntry = { ts: number; data: CityDetailBatchDiagnostics };
+
+const _cityDetailBatchDiagnosticsCache = new Map<string, CityDetailBatchDiagnosticsEntry>();
+
+function cityDetailBatchDiagnosticsKey(city: string, resolution: string) {
+  return `${normalizeCityKey(city)}:${resolution || "10m"}`;
+}
+
+function rememberCityDetailBatchDiagnostics(
+  city: string,
+  resolution: string,
+  diagnostics: unknown,
+) {
+  if (!diagnostics || typeof diagnostics !== "object") return;
+  const key = cityDetailBatchDiagnosticsKey(city, resolution);
+  if (!key.startsWith(":")) {
+    _cityDetailBatchDiagnosticsCache.set(key, {
+      ts: Date.now(),
+      data: diagnostics as CityDetailBatchDiagnostics,
+    });
+  }
+}
+
+function readCityDetailBatchDiagnostics(
+  city: string,
+  resolution: string,
+): CityDetailBatchDiagnostics | null {
+  const key = cityDetailBatchDiagnosticsKey(city, resolution);
+  const entry = _cityDetailBatchDiagnosticsCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - Number(entry.ts || 0) >= HOURLY_CACHE_TTL_MS) {
+    _cityDetailBatchDiagnosticsCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
 
 function isFreshHourlyCacheEntry(
   entry: HourlyCacheEntry | null | undefined,
@@ -459,6 +496,7 @@ function runQueuedHourlyDetailRequest<T>(task: () => Promise<T>): Promise<T> {
 export function clearCityDetailCache() {
   _hourlyCache.clear();
   _hourlyRequestCache.clear();
+  _cityDetailBatchDiagnosticsCache.clear();
   if (typeof window !== "undefined") {
     try {
       for (let i = sessionStorage.length - 1; i >= 0; i--) {
@@ -1288,6 +1326,7 @@ type HourlyForecastFetchOptions = {
 type CityDetailBatchPayload = {
   cities?: string[];
   details?: Record<string, CityDetail | null | undefined>;
+  diagnostics?: CityDetailBatchDiagnostics;
   errors?: Record<string, string>;
   missing?: string[];
   partial?: boolean;
@@ -1449,6 +1488,7 @@ async function flushCityDetailBatch(queueKey: string) {
     }
 
     const details = payload?.details || {};
+    const diagnostics = payload?.diagnostics || null;
     const partialMissingCities =
       payload?.partial === true
         ? new Set((payload.missing || []).map((city) => normalizeCityKey(city)))
@@ -1456,6 +1496,7 @@ async function flushCityDetailBatch(queueKey: string) {
     await Promise.all(
       cities.map(async (city) => {
         const waiters = queue.waiters.get(city);
+        rememberCityDetailBatchDiagnostics(city, queue.resolution, diagnostics);
         const detail = resolveCityDetailFromBatch(details, city);
         const data = primeCityDetailCache(city, queue.resolution, detail);
         if (data) {
@@ -2817,6 +2858,7 @@ export {
   normObs,
   normalizeCityKey,
   prefersHighFrequencyRunwayResolution,
+  readCityDetailBatchDiagnostics,
   readSessionCache,
   selectCompactSecondaryTemp,
   selectDisplayRunwayTemp,
@@ -2824,6 +2866,7 @@ export {
   seriesStats,
   shouldPollLiveChart,
   validNumber,
+  rememberCityDetailBatchDiagnostics as __rememberCityDetailBatchDiagnosticsForTest,
 };
 
 export type { EvidenceSeries, HourlyForecast, PeakGlowMeta, PeakGlowState, ProbabilityOverlay };

@@ -73,6 +73,26 @@ export function runTests() {
   );
   assert.match(
     detailBatchProxy,
+    /diagnostics:\s*{/,
+    "city detail batch proxy timeout fallback should include structured diagnostics",
+  );
+  assert.match(
+    detailBatchProxy,
+    /response_source:\s*"next_proxy_timeout"/,
+    "city detail batch proxy timeout diagnostics should identify the proxy timeout layer",
+  );
+  assert.match(
+    detailBatchProxy,
+    /partial_reason:\s*"proxy_timeout"/,
+    "city detail batch proxy timeout diagnostics should distinguish proxy timeout from backend partial timeout",
+  );
+  assert.match(
+    detailBatchProxy,
+    /city_status/,
+    "city detail batch proxy timeout diagnostics should include per-city status",
+  );
+  assert.match(
+    detailBatchProxy,
     /status:\s*200/,
     "city detail batch proxy timeout fallback should avoid red 504 fetch failures for optional chart enrichment",
   );

@@ -111,6 +111,7 @@ function TemperatureChartCanvasComponent({
   showRunwayDetails,
   isHourlyLoading,
   detailError,
+  detailStatus,
   showingStaleDetail,
   showDetailErrorBadge = true,
   refAreaLeft,
@@ -139,6 +140,7 @@ function TemperatureChartCanvasComponent({
   showRunwayDetails: boolean;
   isHourlyLoading: boolean;
   detailError?: string | null;
+  detailStatus?: string | null;
   showingStaleDetail?: boolean;
   showDetailErrorBadge?: boolean;
   refAreaLeft: number | null;
@@ -226,6 +228,10 @@ function TemperatureChartCanvasComponent({
   const shouldShowUnavailableState = Boolean(row?.city) && Boolean(detailError) && !isHourlyLoading && !hasDrawableChartContent;
   const shouldShowBackgroundError =
     showDetailErrorBadge && Boolean(row?.city) && Boolean(detailError) && !isHourlyLoading && hasDrawableChartContent;
+  const backgroundErrorLabel =
+    showingStaleDetail || detailStatus === "stale_cache"
+      ? (isEn ? "Detail cache" : "详情缓存")
+      : (isEn ? "Detail degraded" : "详情降级");
 
   return (
     <div className={clsx("relative flex flex-1 flex-col p-2", compact ? "min-h-[120px]" : "min-h-[240px]")}>
@@ -389,7 +395,7 @@ function TemperatureChartCanvasComponent({
         {shouldShowUnavailableState && (
           <div className="absolute inset-0 z-10 grid place-items-center px-4 text-center">
             <div className="max-w-[260px] rounded border border-amber-200 bg-amber-50/95 px-3 py-2 text-[11px] font-semibold text-amber-700 shadow-sm">
-              <div>{isEn ? "Data temporarily unavailable" : "数据暂不可用"}</div>
+              <div>{isEn ? "Detail temporarily unavailable" : "详情暂不可用"}</div>
               <button
                 type="button"
                 onClick={onRetryDetail}
@@ -410,7 +416,7 @@ function TemperatureChartCanvasComponent({
       </div>
       {shouldShowBackgroundError && (
         <div className="absolute right-3 top-12 z-10 inline-flex items-center gap-1.5 rounded border border-amber-200 bg-amber-50/95 px-2 py-1 text-[10px] font-semibold text-amber-700 shadow-sm">
-          <span>{showingStaleDetail ? (isEn ? "Showing cache" : "显示缓存") : (isEn ? "Update failed" : "更新失败")}</span>
+          <span>{backgroundErrorLabel}</span>
           <button
             type="button"
             onClick={onRetryDetail}
