@@ -74,7 +74,13 @@ export async function runTests() {
       chartSource.includes("latestPatch") &&
       chartSource.includes("DASHBOARD_REFRESH_POLICY_MS.metar") &&
       !chartSource.includes("2 * 60_000"),
-    "selected city chart should consume SSE patches and use a METAR-cadence no-patch fallback instead of a 2-minute forced refresh",
+    "selected city chart should consume SSE patches and keep METAR cadence for heavy probability refreshes instead of a 2-minute forced refresh",
+  );
+  assert(
+    chartSource.includes("NO_PATCH_CACHED_DETAIL_REFRESH_MS = DASHBOARD_REFRESH_POLICY_MS.observation") &&
+      chartSource.includes("refreshCachedDetail") &&
+      chartSource.includes("fetchHourlyForecastForCity(city, { resolution: targetResolution })"),
+    "visible charts should do a lightweight cached detail refresh every observation cadence when no SSE patch arrives",
   );
   assert(
     chartSource.includes("preloadTemperatureChartCanvas"),

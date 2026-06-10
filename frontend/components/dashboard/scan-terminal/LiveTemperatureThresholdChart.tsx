@@ -62,7 +62,7 @@ const PEAK_GLOW_BADGE_CLASS = {
 
 const PROBABILITY_REFRESH_AFTER_PATCH_MS = DASHBOARD_REFRESH_POLICY_MS.metar;
 const FOREGROUND_FULL_DETAIL_REFRESH_DEDUP_MS = 90_000;
-const NO_PATCH_FULL_DETAIL_FALLBACK_MS = DASHBOARD_REFRESH_POLICY_MS.metar;
+const NO_PATCH_CACHED_DETAIL_REFRESH_MS = DASHBOARD_REFRESH_POLICY_MS.observation;
 const DETAIL_LOAD_BATCH_DELAY_MS = 0;
 const INITIAL_DETAIL_LOAD_SLOTS = 3;
 const DEFERRED_DETAIL_LOAD_DELAY_MS = 1_200;
@@ -913,17 +913,17 @@ export function LiveTemperatureThresholdChart({
     };
   }, [resyncVersion, city, targetResolution, markDetailDegraded, markDetailRequest, applySuccessfulHourlyDetail]);
 
-  // ── SSE fallback: only full-fetch if a visible chart has seen no patch for one METAR cadence ──
+  // ── SSE fallback: visible charts refresh cached detail at observation cadence if patches stop. ──
   useEffect(() => {
     if (!shouldPollLiveChart({ city, compact, isActive, isMaximized })) return;
     let cancelled = false;
 
-    const refreshFullDetail = () => {
+    const refreshCachedDetail = () => {
       const now = Date.now();
       lastPatchAtRef.current = now;
-      markDetailRequest("force_refresh");
+      markDetailRequest("network");
 
-      fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })
+      fetchHourlyForecastForCity(city, { resolution: targetResolution })
         .then((data) => {
           if (cancelled) return;
           if (!data) {
@@ -944,9 +944,9 @@ export function LiveTemperatureThresholdChart({
 
     const checkFallback = () => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-      if (Date.now() - lastPatchAtRef.current < NO_PATCH_FULL_DETAIL_FALLBACK_MS) return;
+      if (Date.now() - lastPatchAtRef.current < NO_PATCH_CACHED_DETAIL_REFRESH_MS) return;
 
-      refreshFullDetail();
+      refreshCachedDetail();
     };
 
     const id = setInterval(checkFallback, 60_000);

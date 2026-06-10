@@ -194,7 +194,11 @@ export function runTests() {
   assert(
     chart.includes("DASHBOARD_REFRESH_POLICY_MS.metar") &&
       !chart.includes("2 * 60_000"),
-    "temperature chart must wait one METAR cadence without patches before full-fetch fallback",
+    "temperature chart must keep METAR cadence for heavy patch-triggered probability refreshes",
+  );
+  assert(
+    chart.includes("NO_PATCH_CACHED_DETAIL_REFRESH_MS = DASHBOARD_REFRESH_POLICY_MS.observation"),
+    "temperature chart must use observation cadence for lightweight cached no-patch refreshes",
   );
   assert(chart.includes("TemperatureChartCanvas"), "temperature chart shell must compose the extracted chart canvas");
   assert(chart.includes("TemperatureStatsBars"), "temperature chart shell must compose the extracted stat bars");
@@ -225,10 +229,12 @@ export function runTests() {
     chart.includes("ignoreCache: true") && chart.includes("currentCityLocalDate !== loadedLocalDate"),
     "temperature chart must background-refresh full city detail when the city-local day rolls over",
   );
-  const fallbackRefreshBlock = chart.match(/const refreshFullDetail = \(\) => \{[\s\S]*?\n    \};/)?.[0] || "";
+  const fallbackRefreshBlock = chart.match(/const refreshCachedDetail = \(\) => \{[\s\S]*?\n    \};/)?.[0] || "";
   assert(
-    !fallbackRefreshBlock.includes("setIsHourlyLoading(true)"),
-    "no-patch fallback refresh should update the chart in the background without showing the loading overlay",
+    fallbackRefreshBlock.includes("fetchHourlyForecastForCity(city, { resolution: targetResolution })") &&
+      !fallbackRefreshBlock.includes("ignoreCache: true") &&
+      !fallbackRefreshBlock.includes("setIsHourlyLoading(true)"),
+    "no-patch fallback refresh should update the chart through cached batch detail without force-refreshing or showing the loading overlay",
   );
   const resyncBlock = chart.match(/useEffect\(\(\) => \{\s*if \(!resyncVersion \|\| !city\) return;[\s\S]*?\}, \[resyncVersion, city, targetResolution, applySuccessfulHourlyDetail\]\);/)?.[0] || "";
   assert(
