@@ -23,10 +23,14 @@ def test_cloudflare_managed_rules_apply_path_specific_edge_ttls_then_bypass_sens
     ] == [31536000, 600, 300]
     for rule in rules[:3]:
         assert rule["action_parameters"]["cache"] is True
+        assert rule["action_parameters"]["browser_ttl"] == {"mode": "respect_origin"}
         assert rule["action_parameters"]["edge_ttl"]["mode"] == "respect_origin"
         assert rule["action_parameters"]["edge_ttl"]["status_code_ttl"][1]["value"] == 0
     for rule in rules[3:-1]:
-        assert rule["action_parameters"] == {"cache": True}
+        assert rule["action_parameters"] == {
+            "cache": True,
+            "browser_ttl": {"mode": "respect_origin"},
+        }
     assert rules[-1]["action_parameters"]["cache"] is False
     assert 'http.host eq "api.polyweather.top"' in rules[-1]["expression"]
     assert 'http.request.uri.query contains "force_refresh=true"' in rules[-1]["expression"]

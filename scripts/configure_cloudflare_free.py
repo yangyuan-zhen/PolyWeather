@@ -107,7 +107,10 @@ def _compact_expression(expression: str) -> str:
 
 
 def _cache_rule(ref: str, description: str, expression: str, ttl: int | None = None) -> Dict[str, Any]:
-    action_parameters: Dict[str, Any] = {"cache": True}
+    action_parameters: Dict[str, Any] = {
+        "cache": True,
+        "browser_ttl": {"mode": "respect_origin"},
+    }
     if ttl is not None:
         action_parameters["edge_ttl"] = {
             "mode": "respect_origin",

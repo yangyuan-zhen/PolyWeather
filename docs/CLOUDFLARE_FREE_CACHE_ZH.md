@@ -57,6 +57,8 @@ python scripts/configure_cloudflare_free.py --apply
 - 城市详情与 detail-batch：尊重源站成功、partial、stale 和错误缓存策略。
 - `/api/scan/terminal` 与 `/api/system/status`：尊重源站成功、busy、failed 和错误缓存策略。
 
+所有公开缓存规则都显式设置 Browser TTL 为 Respect origin，避免 Cloudflare 免费版默认 Browser Cache TTL 把 HTML 或数据接口改成 4 小时本地缓存。
+
 ### 2. 最后绕过后端域名、动态和敏感请求
 
 动作：Bypass cache
