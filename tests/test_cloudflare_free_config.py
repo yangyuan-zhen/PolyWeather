@@ -2,6 +2,7 @@ from scripts.configure_cloudflare_free import (
     MANAGED_RULE_REF_PREFIX,
     build_managed_cache_rules,
     merge_managed_rules,
+    resolve_zone_id,
 )
 
 
@@ -63,3 +64,11 @@ def test_cloudflare_rule_merge_preserves_unmanaged_rules_and_puts_bypass_last():
         f"{MANAGED_RULE_REF_PREFIX}bypass",
     ]
     assert merged[-1]["action_parameters"]["cache"] is False
+
+
+def test_resolve_zone_id_uses_explicit_zone_id_without_listing_zones():
+    class FailingApi:
+        def request(self, *_args, **_kwargs):
+            raise AssertionError("explicit zone id should not require zone list access")
+
+    assert resolve_zone_id(FailingApi(), "polyweather.top", "zone_123") == "zone_123"

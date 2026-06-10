@@ -142,6 +142,8 @@ def test_deploy_workflow_applies_cloudflare_rules_when_token_is_available():
     workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
     assert "CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}" in workflow
+    assert "CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}" in workflow
+    assert "CLOUDFLARE_ZONE_ID is not configured" in workflow
     assert "python scripts/configure_cloudflare_free.py --apply" in workflow
 
 

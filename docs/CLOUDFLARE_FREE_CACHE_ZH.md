@@ -22,17 +22,30 @@
 
 按以下顺序创建。Cloudflare 同一阶段最后匹配的规则生效，因此绕过规则必须放在公开缓存规则之后。免费版规则数量有限，因此使用路径集合合并表达式。
 
-也可以使用仓库内脚本自动创建或更新规则。脚本会保留非 PolyWeather 规则，并把绕过规则放在最后：
+也可以使用仓库内脚本自动创建或更新规则。脚本会保留非 PolyWeather 规则，并把绕过规则放在最后。
+
+Cloudflare 新版 Token UI 中，文档里的 Cache Rules 权限通常显示为：
+
+- 权限策略资源：`指定域名` -> `polyweather.top`
+- `Cache & Performance` -> `Cache Settings` -> `Edit`
+
+为了避免 Token 还需要列出 Zone，请同时在 GitHub Secrets 配置 `CLOUDFLARE_ZONE_ID`。Zone ID 在 Cloudflare 进入 `polyweather.top` 后，右侧 API 区域或 Overview 页面可以复制。
+
+GitHub Actions 需要两个仓库 Secret：
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ZONE_ID`
 
 ```powershell
-$env:CLOUDFLARE_API_TOKEN="<具有 Cache Rules Edit 权限的 token>"
+$env:CLOUDFLARE_API_TOKEN="<具有 Cache Settings Edit 权限的 token>"
+$env:CLOUDFLARE_ZONE_ID="<polyweather.top 的 Zone ID>"
 python scripts/configure_cloudflare_free.py
 python scripts/configure_cloudflare_free.py --apply
 ```
 
 第一条命令只输出计划；只有带 `--apply` 才会修改 Cloudflare。
 
-部署流水线也会执行同一脚本。给 GitHub 仓库增加名为 `CLOUDFLARE_API_TOKEN` 的 Secret 后，后续每次成功部署都会同步 Cache Rules；未配置时流水线会明确跳过。
+部署流水线也会执行同一脚本。给 GitHub 仓库增加 `CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ZONE_ID` 两个 Secret 后，后续每次成功部署都会同步 Cache Rules；未配置时流水线会明确跳过，不影响主站部署。
 
 ### 1. 缓存公开内容
 
