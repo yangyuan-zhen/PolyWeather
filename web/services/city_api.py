@@ -936,17 +936,17 @@ async def _build_city_detail_batch_item_async(
 
 def _city_detail_batch_concurrency() -> int:
     try:
-        value = int(os.getenv("POLYWEATHER_CITY_DETAIL_BATCH_CONCURRENCY", "1") or "1")
+        value = int(os.getenv("POLYWEATHER_CITY_DETAIL_BATCH_CONCURRENCY", "3") or "3")
     except ValueError:
-        value = 1
+        value = 3
     return max(1, min(4, value))
 
 
 def _city_detail_batch_global_concurrency() -> int:
     try:
-        value = int(os.getenv("POLYWEATHER_CITY_DETAIL_BATCH_GLOBAL_CONCURRENCY", "1") or "1")
+        value = int(os.getenv("POLYWEATHER_CITY_DETAIL_BATCH_GLOBAL_CONCURRENCY", "2") or "2")
     except ValueError:
-        value = 1
+        value = 2
     return max(1, min(4, value))
 
 
@@ -963,11 +963,11 @@ def _city_detail_batch_build_semaphore() -> threading.BoundedSemaphore:
 def _city_detail_batch_partial_timeout_seconds() -> Optional[float]:
     try:
         timeout_ms = int(
-            os.getenv("POLYWEATHER_CITY_DETAIL_BATCH_PARTIAL_TIMEOUT_MS", "3000")
-            or "3000"
+            os.getenv("POLYWEATHER_CITY_DETAIL_BATCH_PARTIAL_TIMEOUT_MS", "8000")
+            or "8000"
         )
     except ValueError:
-        timeout_ms = 3000
+        timeout_ms = 8000
     if timeout_ms <= 0:
         return None
     return max(0.001, min(60.0, timeout_ms / 1000.0))

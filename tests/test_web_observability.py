@@ -969,7 +969,12 @@ def test_chart_detail_payload_uses_threadpool_and_reuses_short_cache(monkeypatch
 
 def test_city_detail_batch_partial_timeout_default_stays_below_proxy_budget(monkeypatch):
     monkeypatch.delenv("POLYWEATHER_CITY_DETAIL_BATCH_PARTIAL_TIMEOUT_MS", raising=False)
-    assert city_api._city_detail_batch_partial_timeout_seconds() == 3.0
+    monkeypatch.delenv("POLYWEATHER_CITY_DETAIL_BATCH_CONCURRENCY", raising=False)
+    monkeypatch.delenv("POLYWEATHER_CITY_DETAIL_BATCH_GLOBAL_CONCURRENCY", raising=False)
+
+    assert city_api._city_detail_batch_concurrency() == 3
+    assert city_api._city_detail_batch_global_concurrency() == 2
+    assert city_api._city_detail_batch_partial_timeout_seconds() == 8.0
 
 
 def test_city_detail_batch_returns_busy_when_global_builder_slot_is_full(monkeypatch):
