@@ -925,6 +925,93 @@ def test_chart_scope_overlays_collector_runway_history_from_db(monkeypatch):
     assert history[-1] == {"time": "2026-06-06T05:28:00+00:00", "temp": 24.8}
 
 
+def test_chart_data_cache_hit_does_not_start_full_stale_refresh(monkeypatch):
+    import asyncio
+
+    class FakeCache:
+        def get_city_cache(self, kind, city):
+            assert kind == "full"
+            return {
+                "payload": {
+                    "name": city,
+                    "display_name": city.title(),
+                    "hourly": {"times": ["13:00"], "temps": [25.0]},
+                },
+            }
+
+        def get_runway_obs_recent(self, icao, minutes=60):
+            return []
+
+    monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "_city_cache_is_fresh",
+        lambda entry, ttl: False,
+    )
+    monkeypatch.setattr(
+        city_api,
+        "_start_city_full_stale_refresh",
+        lambda city: (_ for _ in ()).throw(AssertionError("chart scope must not start full stale refresh")),
+    )
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "_overlay_latest_wunderground_current",
+        lambda city, payload: payload,
+    )
+
+    payload = asyncio.run(city_api._get_city_chart_data("paris", force_refresh=False))
+
+    assert payload["hourly"]["temps"] == [25.0]
+
+
+def test_chart_data_returns_cached_payload_when_optional_overlay_times_out(monkeypatch):
+    import asyncio
+
+    class FakeCache:
+        def get_city_cache(self, kind, city):
+            assert kind == "full"
+            return {
+                "payload": {
+                    "name": city,
+                    "display_name": city.title(),
+                    "risk": {"icao": "ZSPD"},
+                    "hourly": {"times": ["13:00"], "temps": [25.0]},
+                    "runway_plate_history": {
+                        "35R/17L": [{"time": "2026-06-06T05:21:00+00:00", "temp": 24.2}]
+                    },
+                },
+            }
+
+        def get_runway_obs_recent(self, icao, minutes=60):
+            return [
+                {
+                    "runway": "35R/17L",
+                    "target_runway_max": 24.8,
+                    "otime_utc": "2026-06-06T05:28:00+00:00",
+                }
+            ]
+
+    async def fake_run_in_threadpool(fn, *args, **kwargs):
+        if fn is city_api._overlay_cached_runway_history_from_db:
+            await asyncio.sleep(0.05)
+        return fn(*args, **kwargs)
+
+    monkeypatch.setenv("POLYWEATHER_CITY_CHART_OPTIONAL_OVERLAY_TIMEOUT_MS", "1")
+    monkeypatch.setattr(city_api, "run_in_threadpool", fake_run_in_threadpool)
+    monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "_overlay_latest_wunderground_current",
+        lambda city, payload: payload,
+    )
+
+    payload = asyncio.run(city_api._get_city_chart_data("shanghai", force_refresh=False))
+
+    assert payload["runway_plate_history"]["35R/17L"] == [
+        {"time": "2026-06-06T05:21:00+00:00", "temp": 24.2}
+    ]
+
+
 def test_chart_detail_payload_uses_threadpool_and_reuses_short_cache(monkeypatch):
     import asyncio
 

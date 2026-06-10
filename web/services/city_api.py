@@ -78,6 +78,49 @@ def _city_force_refresh_timeout_sec() -> float:
     return max(0.01, min(30.0, value))
 
 
+def _city_chart_optional_overlay_timeout_sec() -> float:
+    try:
+        timeout_ms = int(
+            os.getenv("POLYWEATHER_CITY_CHART_OPTIONAL_OVERLAY_TIMEOUT_MS", "500")
+            or "500"
+        )
+    except ValueError:
+        timeout_ms = 500
+    return max(0.001, min(3.0, timeout_ms / 1000.0))
+
+
+async def _run_optional_city_chart_overlay(
+    *,
+    city: str,
+    overlay_name: str,
+    payload: Dict[str, Any],
+    fn: Callable[..., Dict[str, Any]],
+    args: Tuple[Any, ...],
+) -> Dict[str, Any]:
+    timeout_sec = _city_chart_optional_overlay_timeout_sec()
+    try:
+        return await asyncio.wait_for(
+            run_in_threadpool(fn, *args),
+            timeout=timeout_sec,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "city chart optional overlay timed out city={} overlay={} timeout_sec={}; returning cached payload",
+            city,
+            overlay_name,
+            timeout_sec,
+        )
+        return payload
+    except Exception as exc:
+        logger.debug(
+            "city chart optional overlay skipped city={} overlay={}: {}",
+            city,
+            overlay_name,
+            exc,
+        )
+        return payload
+
+
 async def _get_cached_city_payload(city: str, kind: str) -> Dict[str, Any]:
     cached_entry = await run_in_threadpool(legacy_routes._CACHE_DB.get_city_cache, kind, city)
     if not isinstance(cached_entry, dict):
@@ -354,14 +397,20 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
     if cached_entry:
         payload = cached_entry.get("payload") or {}
         if payload:
-            if not legacy_routes._city_cache_is_fresh(cached_entry, legacy_routes.CITY_FULL_CACHE_TTL_SEC):
-                _start_city_full_stale_refresh(city)
-            payload = await run_in_threadpool(
-                _overlay_cached_runway_history_from_db,
-                city,
-                payload,
+            payload = await _run_optional_city_chart_overlay(
+                city=city,
+                overlay_name="runway_history",
+                payload=payload,
+                fn=_overlay_cached_runway_history_from_db,
+                args=(city, payload),
             )
-            return await _overlay_cached_wunderground(city, payload)
+            return await _run_optional_city_chart_overlay(
+                city=city,
+                overlay_name="wunderground_current",
+                payload=payload,
+                fn=legacy_routes._overlay_latest_wunderground_current,
+                args=(city, payload),
+            )
 
     return {
         "name": city,
