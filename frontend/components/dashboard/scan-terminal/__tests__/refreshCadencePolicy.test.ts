@@ -91,8 +91,8 @@ export async function runTests() {
   );
   assert(
     chartSource.includes("fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })") &&
-      chartSource.includes("setHourly(data)"),
-    "visible chart fallback must refresh the full city detail payload at the current chart resolution when SSE patches stop",
+      chartSource.includes("setHourly((prev) => mergeHourlyWithLiveObservations(dataWithCurrentRow, prev, row))"),
+    "visible chart fallback must refresh full city detail at the current chart resolution while preserving newer live observations",
   );
   assert(
     chartSource.includes("PROBABILITY_REFRESH_AFTER_PATCH_MS = DASHBOARD_REFRESH_POLICY_MS.metar") &&
@@ -197,11 +197,11 @@ export async function runTests() {
     "city detail charts should show stale cache first and expose a retryable unavailable state",
   );
   const successfulHourlyDetailBlock =
-    /const applySuccessfulHourlyDetail = useCallback\([\s\S]*?\n  \}, \[\]\);/.exec(chartSource)?.[0] || "";
+    /const applySuccessfulHourlyDetail = useCallback\([\s\S]*?\n  \}, \[row\]\);/.exec(chartSource)?.[0] || "";
   assert(
     successfulHourlyDetailBlock.includes("setDetailError(null)") &&
       successfulHourlyDetailBlock.includes("setShowingStaleDetail(false)") &&
-      successfulHourlyDetailBlock.includes("setHourly(data)"),
+      successfulHourlyDetailBlock.includes("mergeHourlyWithLiveObservations(dataWithCurrentRow, prev, row)"),
     "successful city detail refreshes must clear stale-cache retry state when fresh detail arrives",
   );
   const rawSuccessfulSetHourlyCalls = chartSource

@@ -3,7 +3,9 @@ import type { CityDetail } from "@/lib/dashboard-types";
 import { buildDebBaselinePath } from "@/lib/temperature-chart-paths";
 import {
   buildFullDayChartData,
+  mergeHourlyWithLiveObservations,
   mergePatchIntoHourly,
+  mergeRowObservationIntoHourly,
   seedHourlyForecastFromRow,
 } from "@/components/dashboard/scan-terminal/temperature-chart-logic";
 
@@ -292,5 +294,44 @@ export function runTests() {
   assert(
     patchedRunway?.values.some((value) => value === 28.8),
     "SSE runway patches must append directly to the chart series without waiting for a force-refreshed detail payload",
+  );
+
+  const guangzhouLaterRow = {
+    ...guangzhouRow,
+    current_temp: 29.1,
+    local_time: "12:51",
+    sse_revision: 43,
+    metar_context: {
+      ...guangzhouRow.metar_context,
+      airport_current_temp: 29.1,
+      airport_obs_time: "12:51",
+      airport_max_so_far: 29.1,
+    },
+  } as any;
+  const guangzhouRowMerged = mergeRowObservationIntoHourly(seededGuangzhou, guangzhouLaterRow);
+  const guangzhouRowMergedChart = buildFullDayChartData(guangzhouLaterRow, guangzhouRowMerged, false);
+  const rowMergedRunway = guangzhouRowMergedChart.series.find((item) => item.key === "runway_02L_20R");
+  assert(
+    rowMergedRunway?.values.some((value) => value === 29.1),
+    "same-city scan row observation changes must merge into chart state without requiring an active-slot click",
+  );
+
+  const staleDetail = {
+    ...seededGuangzhou,
+    forecastDaily: [{ date: "2026-06-10", max_temp: 31, min_temp: 24 }] as any,
+    probabilities: { engine: "legacy", distribution: [{ value: 30, probability: 0.4 }] },
+    runwayPlateHistory: {
+      "02L/20R": [{ timestamp: "12:45", temp_c: 28.4, value: 28.4 }],
+    },
+    airportPrimaryTodayObs: [["12:45", 28.4]],
+    airportCurrent: { temp: 28.4, obs_time: "12:45", max_so_far: 29 },
+    airportPrimary: { temp: 28.4, obs_time: "12:45", max_so_far: 29 },
+  } as any;
+  const mergedAfterStaleDetail = mergeHourlyWithLiveObservations(staleDetail, guangzhouPatched, guangzhouRow);
+  const mergedAfterStaleDetailChart = buildFullDayChartData(guangzhouRow, mergedAfterStaleDetail, false);
+  const preservedPatchRunway = mergedAfterStaleDetailChart.series.find((item) => item.key === "runway_02L_20R");
+  assert(
+    preservedPatchRunway?.values.some((value) => value === 28.8),
+    "stale full-detail responses must not overwrite a newer live SSE observation point",
   );
 }

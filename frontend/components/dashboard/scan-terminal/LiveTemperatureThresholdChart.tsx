@@ -28,7 +28,9 @@ import {
   getObservationDisplayMetrics,
   getVisibleTemperatureSeries,
   isTemperatureSeriesVisibleByDefault,
+  mergeHourlyWithLiveObservations,
   mergePatchIntoHourly,
+  mergeRowObservationIntoHourly,
   normObs,
   prefersHighFrequencyRunwayResolution,
   readSessionCache,
@@ -105,6 +107,31 @@ function formatCityLocalDate(tzOffsetSeconds: number | null | undefined) {
 
 function getLiveTempFromHourly(data: HourlyForecast) {
   return validNumber(data?.airportCurrent?.temp) ?? validNumber(data?.airportPrimary?.temp) ?? null;
+}
+
+function rowObservationSignature(row: ScanOpportunityRow | null) {
+  if (!row) return "";
+  const metarContext = row.metar_context || null;
+  const pieces = [
+    row.city,
+    row.current_temp,
+    row.current_max_so_far,
+    row.local_time,
+    (row as any).sse_revision,
+    metarContext?.airport_current_temp,
+    metarContext?.airport_max_so_far,
+    metarContext?.airport_obs_time,
+    metarContext?.last_temp,
+    metarContext?.last_time,
+    metarContext?.last_observation_time,
+    metarContext?.source,
+    metarContext?.station_label,
+  ];
+  const hasObservation =
+    validNumber(row.current_temp) !== null ||
+    validNumber(metarContext?.airport_current_temp) !== null ||
+    validNumber(metarContext?.last_temp) !== null;
+  return hasObservation ? pieces.map((piece) => String(piece ?? "")).join("|") : "";
 }
 
 function getWundergroundDailyHigh(hourly: HourlyForecast) {
@@ -437,6 +464,7 @@ export function LiveTemperatureThresholdChart({
   const lastAppliedPatchRevisionRef = useRef<number>(0);
   const lastProbabilityRefreshAtRef = useRef<number>(0);
   const lastForegroundRefreshAtRef = useRef<number>(0);
+  const lastRowObservationSignatureRef = useRef<string>("");
   const localDayRolloverFetchDateRef = useRef<string>("");
   const [isChartVisible, setIsChartVisible] = useState(
     () => typeof IntersectionObserver === "undefined",
@@ -457,6 +485,7 @@ export function LiveTemperatureThresholdChart({
   const [currentCityLocalDate, setCurrentCityLocalDate] = useState(() =>
     formatCityLocalDate(row?.tz_offset_seconds),
   );
+  const currentRowObservationSignature = useMemo(() => rowObservationSignature(row), [row]);
 
   useEffect(() => {
     setUserToggledKeys({});
@@ -475,6 +504,7 @@ export function LiveTemperatureThresholdChart({
     lastAppliedPatchRevisionRef.current = 0;
     lastProbabilityRefreshAtRef.current = 0;
     lastForegroundRefreshAtRef.current = 0;
+    lastRowObservationSignatureRef.current = "";
     localDayRolloverFetchDateRef.current = "";
     setCurrentCityLocalDate(formatCityLocalDate(row?.tz_offset_seconds));
   }, [city, detailLoadDelayMs]);
@@ -521,15 +551,27 @@ export function LiveTemperatureThresholdChart({
 
   const applySuccessfulHourlyDetail = useCallback((data: HourlyForecast, options?: { updateLiveTemp?: boolean }) => {
     if (!data) return;
+    const rowSeed = seedHourlyForecastFromRow(row);
+    const dataWithCurrentRow = mergeHourlyWithLiveObservations(data, rowSeed, row);
     hasLoadedHourlyDetailRef.current = true;
     if (options?.updateLiveTemp) {
-      const temp = getLiveTempFromHourly(data);
+      const temp = getLiveTempFromHourly(dataWithCurrentRow);
       if (temp !== null) setLiveTemp(temp);
     }
-    setHourly(data);
+    setHourly((prev) => mergeHourlyWithLiveObservations(dataWithCurrentRow, prev, row));
     setDetailError(null);
     setShowingStaleDetail(false);
-  }, []);
+  }, [row]);
+
+  useEffect(() => {
+    if (!city || !currentRowObservationSignature) return;
+    if (lastRowObservationSignatureRef.current === currentRowObservationSignature) return;
+    lastRowObservationSignatureRef.current = currentRowObservationSignature;
+    const rowSeed = seedHourlyForecastFromRow(row);
+    const temp = getLiveTempFromHourly(rowSeed);
+    if (temp !== null) setLiveTemp(temp);
+    setHourly((prev) => mergeRowObservationIntoHourly(prev ?? rowSeed, row));
+  }, [city, currentRowObservationSignature, row]);
 
   useEffect(() => {
     if (!city) {
