@@ -193,8 +193,8 @@ export function createAccountCopy(isEn: boolean): Record<string, string> {
         ? "Your wallet needs a small amount of POL for gas fees; USDC alone may not complete authorization or payment. Please confirm your wallet is on Polygon network and keep some POL before paying."
         : "钱包里需要少量 POL 作为 gas 手续费；只有 USDC 可能无法完成授权或支付。请确认当前钱包在 Polygon 网络，并预留一点 POL 后再支付。",
       paymentManualDesc: isEn
-        ? "Option 2: Transfer directly to the platform's receiver contract without binding a wallet. After the transfer, submit the transaction hash (Tx Hash) and the system will verify and activate Pro automatically."
-        : "方式二：无需将钱包绑定到账号，直接向平台收款合约转账。转账完成后提交交易哈希（Tx Hash）系统会自动验签并开通 Pro。",
+        ? "Option 2: Transfer directly to the platform's receiver address without binding a wallet. After the transfer, submit the transaction hash (Tx Hash) and the system will verify and activate Pro automatically."
+        : "方式二：无需将钱包绑定到账号，直接向平台收款地址转账。转账完成后提交交易哈希（Tx Hash）系统会自动验签并开通 Pro。",
       paymentManualTitle: isEn
         ? "Manual Transfer (No Wallet Binding)"
         : "手动转账（无需绑定钱包）",

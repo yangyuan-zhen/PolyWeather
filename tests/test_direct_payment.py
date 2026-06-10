@@ -1,4 +1,10 @@
-from src.payments.contract_checkout import PaymentContractCheckoutService, PaymentIntentRecord
+import pytest
+
+from src.payments.contract_checkout import (
+    PaymentCheckoutError,
+    PaymentContractCheckoutService,
+    PaymentIntentRecord,
+)
 
 
 ETHEREUM_USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
@@ -67,6 +73,50 @@ def test_config_payload_exposes_polygon_and_ethereum_payment_routes(
     assert eth_token["address"] == ETHEREUM_USDC.lower()
     assert eth_token["supports_direct_transfer"] is True
     assert eth_token["supports_contract_checkout"] is False
+
+
+def test_matching_direct_receiver_disables_contract_checkout_by_default(
+    monkeypatch, tmp_path
+):
+    _setup_multichain_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+
+    polygon_token = next(
+        row for row in service.get_config_payload()["tokens"] if row["chain_id"] == 137
+    )
+
+    assert polygon_token["direct_receiver_address"] == RECEIVER.lower()
+    assert polygon_token["supports_direct_transfer"] is True
+    assert polygon_token["supports_contract_checkout"] is False
+    with pytest.raises(PaymentCheckoutError) as exc:
+        service.create_intent("user-1", "pro_monthly", payment_mode="strict")
+    assert exc.value.status_code == 400
+    assert "manual transfer only" in exc.value.detail
+
+
+def test_explicit_contract_checkout_support_overrides_matching_direct_receiver(
+    monkeypatch, tmp_path
+):
+    _setup_multichain_env(monkeypatch, tmp_path)
+    monkeypatch.setenv(
+        "POLYWEATHER_PAYMENT_ACCEPTED_TOKENS_JSON",
+        (
+            "["
+            f'{{"code":"usdc_polygon","symbol":"USDC","name":"USDC on Polygon",'
+            f'"chain_id":137,"chain_code":"polygon","chain_name":"Polygon",'
+            f'"address":"{POLYGON_USDC}","decimals":6,'
+            f'"receiver_contract":"{RECEIVER}",'
+            f'"direct_receiver_address":"{RECEIVER}",'
+            f'"supports_contract_checkout":true,'
+            f'"supports_direct_transfer":true,"is_default":true}}'
+            "]"
+        ),
+    )
+    service = PaymentContractCheckoutService()
+
+    token = service.get_config_payload()["tokens"][0]
+
+    assert token["supports_contract_checkout"] is True
 
 
 def test_create_direct_intent_can_target_ethereum_usdc(monkeypatch, tmp_path):

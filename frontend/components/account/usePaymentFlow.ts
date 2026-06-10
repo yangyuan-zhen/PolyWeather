@@ -480,11 +480,13 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
         ) ||
         latestTokens.find((token) => Number(token.chain_id || targetChainId) === targetChainId);
       if (selectedLatestToken?.supports_contract_checkout === false) {
-        throw new Error(
+        setPaymentInfo(
           isEn
             ? `${selectedLatestToken.chain_name || chainIdToDisplayName(targetChainId)} ${selectedLatestToken.symbol || "USDC"} supports manual transfer only.`
-            : `${selectedLatestToken.chain_name || chainIdToDisplayName(targetChainId)} ${selectedLatestToken.symbol || "USDC"} 仅支持手动转账。`,
+            : `${selectedLatestToken.chain_name || chainIdToDisplayName(targetChainId)} ${selectedLatestToken.symbol || "USDC"} 当前仅支持手动转账。`,
         );
+        await createManualPaymentIntent();
+        return;
       }
       const expectedReceiver = String(selectedLatestToken?.receiver_contract || latestConfig.receiver_contract || "").toLowerCase();
       assertExpectedPaymentReceiver(expectedReceiver, "payment receiver contract");

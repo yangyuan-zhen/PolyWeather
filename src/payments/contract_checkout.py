@@ -109,6 +109,21 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return str(raw).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _config_bool(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "on"}:
+        return True
+    if text in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
 def _env_int(name: str, default: int) -> int:
     raw = os.getenv(name)
     if raw is None:
@@ -650,9 +665,22 @@ class PaymentContractCheckoutService:
             )
         except Exception:
             confirmations = None
-        supports_direct_transfer = bool(row.get("supports_direct_transfer", True))
-        supports_contract_checkout = bool(
-            row.get("supports_contract_checkout", row.get("supports_contract", chain_id == self.chain_id))
+        supports_direct_transfer = _config_bool(
+            row.get("supports_direct_transfer"),
+            True,
+        )
+        contract_support_raw = row.get(
+            "supports_contract_checkout",
+            row.get("supports_contract"),
+        )
+        same_direct_receiver = bool(
+            receiver_contract
+            and direct_receiver_address
+            and receiver_contract == direct_receiver_address
+        )
+        supports_contract_checkout = _config_bool(
+            contract_support_raw,
+            bool(chain_id == self.chain_id and receiver_contract and not same_direct_receiver),
         )
         return PaymentTokenConfig(
             code=code,
