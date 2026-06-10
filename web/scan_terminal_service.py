@@ -43,6 +43,10 @@ from web.scan_terminal_ranker import build_ranked_scan_terminal_result
 
 _SCAN_TERMINAL_INFLIGHT_BUILD_LOCK = threading.Lock()
 _SCAN_TERMINAL_INFLIGHT_BUILDS: Dict[str, Future] = {}
+SCAN_TERMINAL_STALE_SUCCESS_MAX_AGE_SEC = max(
+    SCAN_TERMINAL_PAYLOAD_TTL_SEC * 2,
+    600,
+)
 
 
 def _normalize_locale(value: Any) -> str:
@@ -59,6 +63,15 @@ def _normalize_city_key(value: Any) -> str:
 def _rows_count(payload: Dict[str, Any]) -> int:
     rows = payload.get("rows")
     return len(rows) if isinstance(rows, list) else 0
+
+
+def _success_payload_within_stale_window(cached_entry: Dict[str, Any]) -> bool:
+    timestamp = cached_entry.get("success_t") or cached_entry.get("t")
+    try:
+        success_ts = float(timestamp)
+    except Exception:
+        return True
+    return (time.time() - success_ts) <= float(SCAN_TERMINAL_STALE_SUCCESS_MAX_AGE_SEC)
 
 
 def _build_stale_payload_for_timeout_if_better_cached(
@@ -361,7 +374,11 @@ def build_scan_terminal_payload(
             else get_scan_terminal_cache_entry(filters) or {}
         )
         success_payload = cached_entry.get("success_payload")
-        if isinstance(success_payload, dict) and success_payload:
+        if (
+            isinstance(success_payload, dict)
+            and success_payload
+            and _success_payload_within_stale_window(cached_entry)
+        ):
             started = _start_scan_terminal_background_refresh(filters)
             return build_stale_scan_terminal_payload(
                 filters=filters,

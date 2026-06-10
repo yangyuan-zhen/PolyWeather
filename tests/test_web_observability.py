@@ -3127,6 +3127,46 @@ def test_scan_terminal_cold_requests_start_background_build_without_blocking(mon
     assert all("初始化" in result["stale_reason"] or "刷新中" in result["stale_reason"] for result in results)
 
 
+def test_scan_terminal_nonforce_ignores_ancient_success_snapshot(monkeypatch):
+    filters = {"scan_mode": "tradable", "limit": 17, "min_edge_pct": 6.75}
+    old_success_t = 1780839484.0
+
+    monkeypatch.setattr(
+        scan_terminal_service,
+        "get_cached_scan_terminal_payload",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        scan_terminal_service,
+        "get_scan_terminal_cache_entry",
+        lambda *_args, **_kwargs: {
+            "t": old_success_t,
+            "success_t": old_success_t,
+            "success_payload": {
+                "generated_at": "2026-06-07T13:38:04.694350Z",
+                "rows": [{"id": "chengdu:2026-06-07", "city": "chengdu", "current_temp": 21.0}],
+                "summary": {"candidate_total": 1},
+            },
+        },
+    )
+    monkeypatch.setattr(
+        scan_terminal_service.time,
+        "time",
+        lambda: old_success_t + scan_terminal_service.SCAN_TERMINAL_PAYLOAD_TTL_SEC * 3,
+    )
+    monkeypatch.setattr(
+        scan_terminal_service,
+        "_start_scan_terminal_background_refresh",
+        lambda *_args, **_kwargs: True,
+    )
+
+    payload = scan_terminal_service.build_scan_terminal_payload(filters)
+
+    assert payload["status"] == "failed"
+    assert payload["rows"] == []
+    assert payload["summary"]["candidate_total"] == 0
+
+
 def test_scan_terminal_prewarm_builds_default_terminal_payload(monkeypatch):
     calls = []
 

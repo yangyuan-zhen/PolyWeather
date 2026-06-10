@@ -1088,6 +1088,16 @@ function mergeRunwayPlateHistory(
   return Object.keys(result).length ? result : undefined;
 }
 
+function hourlyLocalDatesConflict(
+  base: HourlyForecast,
+  live: HourlyForecast,
+  row: ScanOpportunityRow | null,
+) {
+  const baseDate = String(base?.localDate || "").trim();
+  const liveDate = String(live?.localDate || row?.local_date || "").trim();
+  return Boolean(baseDate && liveDate && baseDate !== liveDate);
+}
+
 function rowLooksLikeRunwaySensor(row: ScanOpportunityRow | null) {
   const cityKey = normalizeCityKey(row?.city);
   const sourceText = [
@@ -1235,6 +1245,7 @@ function mergeHourlyWithLiveObservations(
 ): HourlyForecast {
   if (!base) return live;
   if (!live) return base;
+  if (hourlyLocalDatesConflict(base, live, row)) return base;
   const localDate = base.localDate || live.localDate || row?.local_date || null;
   const runwayPlateHistory = mergeRunwayPlateHistory(base.runwayPlateHistory, live.runwayPlateHistory);
   const amos = runwayPlateHistory

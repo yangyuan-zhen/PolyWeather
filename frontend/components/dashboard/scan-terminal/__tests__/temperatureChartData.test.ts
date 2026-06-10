@@ -334,4 +334,72 @@ export function runTests() {
     preservedPatchRunway?.values.some((value) => value === 28.8),
     "stale full-detail responses must not overwrite a newer live SSE observation point",
   );
+
+  const chengduDetail = {
+    forecastTodayHigh: null,
+    debPrediction: 31,
+    debQuality: null,
+    debHourlyPath: null,
+    localDate: "2026-06-10",
+    localTime: "13:46",
+    times: [],
+    temps: [],
+    modelCurves: undefined,
+    runwayPlateHistory: {
+      "02L/20R": [
+        { timestamp: "13:35", temp_c: 29.6, value: 29.6 },
+        { timestamp: "13:39", temp_c: 29.8, value: 29.8 },
+        { timestamp: "13:43", temp_c: 30.4, value: 30.4 },
+      ],
+    },
+    runwayBandHistory: undefined,
+    amos: null,
+    current: null,
+    airportCurrent: { temp: 28, obs_time: "13:00", max_so_far: 28 },
+    airportPrimary: { temp: 28, obs_time: "13:00", max_so_far: 28 },
+    forecastDaily: [],
+    multiModelDaily: {},
+    probabilities: null,
+    airportPrimaryTodayObs: [["13:00", 28]],
+  } as any;
+  const staleChengduRow = {
+    city: "chengdu",
+    local_date: "2026-06-07",
+    local_time: "21:37",
+    current_temp: 21.0,
+    current_max_so_far: 25.0,
+    temp_symbol: "°C",
+    tz_offset_seconds: 8 * 3600,
+    runway_plate_history: {
+      "02L/20R": [
+        { time: "2026-06-07T13:20:00+00:00", temp: 21.2 },
+        { time: "2026-06-07T13:30:00+00:00", temp: 21.4 },
+      ],
+    },
+  } as any;
+  const chengduMerged = mergeRowObservationIntoHourly(chengduDetail, staleChengduRow);
+  const chengduChart = buildFullDayChartData(
+    {
+      city: "chengdu",
+      local_date: "2026-06-10",
+      local_time: "13:46",
+      temp_symbol: "°C",
+      tz_offset_seconds: 8 * 3600,
+    } as any,
+    chengduMerged,
+    false,
+  );
+  const chengduSettlementRunway = chengduChart.series.find((item) => item.key === "runway_02L_20R");
+  assert(
+    chengduSettlementRunway?.values.some((value) => value === 30.4),
+    "current-date Chengdu detail runway history should remain visible after receiving a stale scan row",
+  );
+  assert(
+    !chengduSettlementRunway?.values.some((value) => value !== null && value <= 22),
+    "stale previous-day Chengdu scan rows must not append a fake latest runway point to current-date detail",
+  );
+  assert(
+    chengduMerged?.airportCurrent?.temp === 28,
+    "stale previous-day scan rows must not replace current-date detail airport conditions",
+  );
 }
