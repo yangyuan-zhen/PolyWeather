@@ -1,7 +1,11 @@
 import { getTemperatureChartData } from "@/lib/chart-utils";
 import type { CityDetail } from "@/lib/dashboard-types";
 import { buildDebBaselinePath } from "@/lib/temperature-chart-paths";
-import { buildFullDayChartData } from "@/components/dashboard/scan-terminal/temperature-chart-logic";
+import {
+  buildFullDayChartData,
+  mergePatchIntoHourly,
+  seedHourlyForecastFromRow,
+} from "@/components/dashboard/scan-terminal/temperature-chart-logic";
 
 function assert(condition: unknown, message: string) {
   if (!condition) throw new Error(message);
@@ -246,5 +250,47 @@ export function runTests() {
   assert(
     normalBaseline.debPast.some((t) => t != null) && normalBaseline.debFuture.some((t) => t != null),
     "Normal city: both past and future portions should have data",
+  );
+
+  const guangzhouRow = {
+    city: "guangzhou",
+    local_date: "2026-06-10",
+    local_time: "12:45",
+    current_temp: 28.4,
+    current_max_so_far: 29,
+    temp_symbol: "°C",
+    tz_offset_seconds: 8 * 3600,
+    metar_context: {
+      source: "amsc_awos",
+      station_label: "AMSC AWOS",
+      airport_current_temp: 28.4,
+      airport_obs_time: "12:45",
+      airport_max_so_far: 29,
+    },
+  } as any;
+  const seededGuangzhou = seedHourlyForecastFromRow(guangzhouRow);
+  const guangzhouLiveChart = buildFullDayChartData(guangzhouRow, seededGuangzhou, false);
+  const guangzhouSettlementRunway = guangzhouLiveChart.series.find((item) => item.key === "runway_02L_20R");
+  assert(
+    guangzhouSettlementRunway?.values.some((value) => value === 28.4),
+    "row-seeded runway cities must plot the latest scan-row observation immediately instead of waiting for city detail",
+  );
+
+  const guangzhouPatched = mergePatchIntoHourly(seededGuangzhou, {
+    city: "guangzhou",
+    revision: 42,
+    changes: {
+      temp: 28.8,
+      observed_at_local: "12:48",
+      obs_time: "12:48",
+      source: "amsc_awos",
+      runway_points: [{ runway: "02L/20R", temp: 28.8 }],
+    },
+  });
+  const guangzhouPatchedChart = buildFullDayChartData(guangzhouRow, guangzhouPatched, false);
+  const patchedRunway = guangzhouPatchedChart.series.find((item) => item.key === "runway_02L_20R");
+  assert(
+    patchedRunway?.values.some((value) => value === 28.8),
+    "SSE runway patches must append directly to the chart series without waiting for a force-refreshed detail payload",
   );
 }

@@ -95,6 +95,11 @@ export async function runTests() {
     "visible chart fallback must refresh the full city detail payload at the current chart resolution when SSE patches stop",
   );
   assert(
+    chartSource.includes("PROBABILITY_REFRESH_AFTER_PATCH_MS = DASHBOARD_REFRESH_POLICY_MS.metar") &&
+      !chartSource.includes("PROBABILITY_REFRESH_AFTER_PATCH_MS = 60_000"),
+    "live observation patches should update the plotted line immediately and throttle heavy probability/detail refreshes to METAR cadence",
+  );
+  assert(
     chartLogicSource.includes("HOURLY_FORCE_REFRESH_DEDUP_MS") &&
       chartLogicSource.includes("maxAgeMs: HOURLY_FORCE_REFRESH_DEDUP_MS") &&
       chartLogicSource.includes("recentlyRefreshed.data"),

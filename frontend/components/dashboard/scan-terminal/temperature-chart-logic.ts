@@ -597,7 +597,7 @@ function filterRunwayHistoryToLocalDay(
       ...item,
       points: filterTimelinePointsToLocalDay(item.points, bounds),
     }))
-    .filter((item) => item.points.length > 1);
+    .filter((item) => item.points.length > 0);
 }
 
 function formatTimestamp(ts: number): string {
@@ -938,6 +938,103 @@ function runwayPatchPointsFromRunwayObs(runwayObs: any) {
     .filter((point: any): point is { runway: string; temp: number; target_runway_max: number } => point !== null);
 }
 
+function rowCurrentObservation(row: ScanOpportunityRow | null) {
+  if (!row) return null;
+  const metarContext = row.metar_context || null;
+  const temp =
+    validNumber(row.current_temp) ??
+    validNumber(metarContext?.airport_current_temp) ??
+    validNumber(metarContext?.last_temp);
+  const time =
+    metarContext?.airport_obs_time ||
+    metarContext?.last_observation_time ||
+    metarContext?.last_time ||
+    row.local_time ||
+    null;
+  if (temp === null || !time) return null;
+  const maxSoFar =
+    validNumber(row.current_max_so_far) ??
+    validNumber(metarContext?.airport_max_so_far) ??
+    validNumber(metarContext?.max_temp) ??
+    temp;
+  return {
+    temp,
+    time: String(time),
+    maxSoFar,
+    sourceCode: String(metarContext?.source || "").trim() || null,
+    sourceLabel: String(metarContext?.station_label || metarContext?.source || "").trim() || null,
+  };
+}
+
+function appendRawObservationPoint(
+  points: RawObsPoint[] | null | undefined,
+  time: string,
+  temp: number,
+) {
+  const merged = [...(points || [])];
+  const normalizedTime = String(time || "").trim();
+  if (!normalizedTime) return merged;
+  const exists = merged
+    .map(normalizeRawObsPoint)
+    .some((point) => point?.time === normalizedTime && validNumber(point.temp) === temp);
+  if (!exists) merged.push([normalizedTime, temp]);
+  return merged.slice(-MAX_OBS_POINTS);
+}
+
+function rowLooksLikeRunwaySensor(row: ScanOpportunityRow | null) {
+  const cityKey = normalizeCityKey(row?.city);
+  const sourceText = [
+    row?.metar_context?.source,
+    row?.metar_context?.station,
+    row?.metar_context?.station_label,
+    row?.airport,
+  ]
+    .map((value) => String(value || "").toLowerCase())
+    .join(" ");
+  return (
+    AMSC_RUNWAY_CITIES.has(cityKey) ||
+    sourceText.includes("amsc") ||
+    sourceText.includes("awos") ||
+    sourceText.includes("runway")
+  );
+}
+
+function seedRunwayPlateHistoryFromRow(
+  row: ScanOpportunityRow | null,
+  existing: Record<string, Array<Record<string, unknown>>> | undefined,
+) {
+  const current = rowCurrentObservation(row);
+  const cityKey = normalizeCityKey(row?.city);
+  const settlementPairs = SETTLEMENT_RUNWAY_PAIRS[cityKey] || [];
+  if (!current || !settlementPairs.length || !rowLooksLikeRunwaySensor(row)) {
+    return existing;
+  }
+
+  const history: Record<string, Array<Record<string, unknown>>> = {};
+  Object.entries(existing || {}).forEach(([rwy, points]) => {
+    if (Array.isArray(points)) history[rwy] = [...points];
+  });
+
+  settlementPairs.forEach((pair) => {
+    const rwy = `${normalizeRunwayLabel(pair[0])}/${normalizeRunwayLabel(pair[1])}`;
+    const rwyHistory = history[rwy] || [];
+    const exists = rwyHistory.some((point) => {
+      return point.timestamp === current.time || point.time === current.time || point.observed_at === current.time;
+    });
+    if (exists) return;
+    history[rwy] = [
+      ...rwyHistory,
+      {
+        timestamp: current.time,
+        temp_c: current.temp,
+        value: current.temp,
+      },
+    ].slice(-MAX_OBS_POINTS);
+  });
+
+  return Object.keys(history).length ? history : existing;
+}
+
 type HourlyForecast = {
   forecastTodayHigh?: number | null;
   debPrediction?: number | null;
@@ -966,6 +1063,32 @@ type HourlyForecast = {
 
 function seedHourlyForecastFromRow(row: ScanOpportunityRow | null): HourlyForecast {
   if (!row) return null;
+  const current = rowCurrentObservation(row);
+  const sourceCode = current?.sourceCode || undefined;
+  const sourceLabel = current?.sourceLabel || undefined;
+  const airportCurrent = current
+    ? {
+        temp: current.temp,
+        obs_time: current.time,
+        max_so_far: current.maxSoFar,
+        source_code: sourceCode,
+        source_label: sourceLabel,
+      }
+    : null;
+  const airportPrimary = current
+    ? {
+        temp: current.temp,
+        obs_time: current.time,
+        max_so_far: current.maxSoFar,
+        source_code: sourceCode,
+        source_label: sourceLabel,
+        source: sourceCode,
+      }
+    : null;
+  const seededRunwayPlateHistory = seedRunwayPlateHistoryFromRow(
+    row,
+    (row as any)?.runway_plate_history || undefined,
+  );
   return {
     forecastTodayHigh: null,
     debPrediction: validNumber(row.deb_prediction),
@@ -976,12 +1099,12 @@ function seedHourlyForecastFromRow(row: ScanOpportunityRow | null): HourlyForeca
     times: [],
     temps: [],
     modelCurves: undefined,
-    runwayPlateHistory: (row as any)?.runway_plate_history || undefined,
+    runwayPlateHistory: seededRunwayPlateHistory,
     runwayBandHistory: undefined,
     amos: null,
     current: null,
-    airportCurrent: null,
-    airportPrimary: null,
+    airportCurrent,
+    airportPrimary,
     wundergroundCurrent: (row as any)?.wunderground_current || null,
     forecastDaily: [],
     multiModelDaily: {},
@@ -992,7 +1115,9 @@ function seedHourlyForecastFromRow(row: ScanOpportunityRow | null): HourlyForeca
     },
     settlementTodayObs: row.settlement_today_obs || row.metar_context?.settlement_today_obs || undefined,
     metarTodayObs: row.metar_today_obs || row.metar_context?.today_obs || row.metar_recent_obs || row.metar_context?.recent_obs || undefined,
-    airportPrimaryTodayObs: undefined,
+    airportPrimaryTodayObs: current
+      ? appendRawObservationPoint(undefined, current.time, current.temp)
+      : undefined,
   };
 }
 
@@ -1942,7 +2067,7 @@ function buildFullDayChartData(
     localDayBounds,
   );
   const runwayHistorySeries = filterRunwayHistoryToLocalDay(
-    buildRunwayHistorySeries(row, hourly, tzOffset, localDateStr, 2, isEn),
+    buildRunwayHistorySeries(row, hourly, tzOffset, localDateStr, 1, isEn),
     localDayBounds,
   );
 
