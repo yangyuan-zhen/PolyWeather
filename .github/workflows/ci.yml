@@ -138,3 +138,13 @@ jobs:
           printf '%s\n' "$GHCR_PAT" | ssh -o StrictHostKeyChecking=accept-new ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
             bash /tmp/deploy.sh '${{ github.sha }}'
           "
+
+      - name: Apply Cloudflare cache rules
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "${CLOUDFLARE_API_TOKEN}" ]; then
+            echo "CLOUDFLARE_API_TOKEN is not configured; skipping Cache Rules sync"
+            exit 0
+          fi
+          python scripts/configure_cloudflare_free.py --apply

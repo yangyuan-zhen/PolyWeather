@@ -104,7 +104,7 @@ def _start_scan_terminal_background_refresh(filters: Dict[str, Any]) -> bool:
 
     def _runner() -> None:
         try:
-            _build_scan_terminal_payload_singleflight(filters, force_refresh=True)
+            _build_scan_terminal_payload_singleflight(filters, force_refresh=False)
         except Exception as exc:  # pragma: no cover - defensive background guard
             logger.warning("scan terminal background refresh failed: {}", exc)
         finally:

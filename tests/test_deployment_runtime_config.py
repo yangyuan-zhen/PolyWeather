@@ -138,6 +138,13 @@ def test_scan_terminal_backend_timeout_returns_before_next_proxy_abort():
     )
 
 
+def test_deploy_workflow_applies_cloudflare_rules_when_token_is_available():
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    assert "CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}" in workflow
+    assert "python scripts/configure_cloudflare_free.py --apply" in workflow
+
+
 def test_probability_engine_uses_enriched_multi_model_snapshot():
     source = (ROOT / "web" / "analysis_service.py").read_text(encoding="utf-8")
 

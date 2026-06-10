@@ -3398,6 +3398,41 @@ def test_scan_terminal_cold_requests_start_background_build_without_blocking(mon
     assert all("初始化" in result["stale_reason"] or "刷新中" in result["stale_reason"] for result in results)
 
 
+def test_scan_terminal_background_refresh_reuses_cached_city_data(monkeypatch):
+    filters = {"scan_mode": "tradable", "limit": 17, "min_edge_pct": 6.75}
+    calls = []
+
+    monkeypatch.setattr(
+        scan_terminal_service,
+        "mark_scan_terminal_refreshing",
+        lambda _filters: True,
+    )
+    monkeypatch.setattr(
+        scan_terminal_service,
+        "clear_scan_terminal_refreshing",
+        lambda _filters: None,
+    )
+    monkeypatch.setattr(
+        scan_terminal_service,
+        "_build_scan_terminal_payload_singleflight",
+        lambda filters_arg, *, force_refresh=False: calls.append(
+            (dict(filters_arg), force_refresh)
+        ),
+    )
+
+    class _ImmediateThread:
+        def __init__(self, *, target, name, daemon):
+            self._target = target
+
+        def start(self):
+            self._target()
+
+    monkeypatch.setattr(scan_terminal_service.threading, "Thread", _ImmediateThread)
+
+    assert scan_terminal_service._start_scan_terminal_background_refresh(filters) is True
+    assert calls == [(filters, False)]
+
+
 def test_scan_terminal_nonforce_ignores_ancient_success_snapshot(monkeypatch):
     filters = {"scan_mode": "tradable", "limit": 17, "min_edge_pct": 6.75}
     old_success_t = 1780839484.0

@@ -10,6 +10,7 @@ from web.scan_terminal_payloads import (
     SCAN_PAYLOAD_FULL_RUNWAY_HISTORY_ROWS,
 )
 from web.scan_terminal_ranker import build_ranked_scan_terminal_result
+from web import scan_terminal_city_row
 from web.scan_terminal_city_row import _build_quick_row
 from web.routers.scan import router as scan_router
 from web.scan_terminal_service import _scan_terminal_prewarm_filters
@@ -79,6 +80,43 @@ def test_scan_terminal_prewarm_covers_default_api_limit():
 
     assert 25 in limits
     assert 180 in limits
+
+
+def test_scan_city_terminal_rows_reuses_persisted_panel_cache(monkeypatch):
+    payload = {
+        "display_name": "Paris",
+        "local_date": "2026-06-10",
+        "local_time": "12:00",
+        "current": {"temp": 18.0},
+        "risk": {},
+        "deb": {"prediction": 20.0},
+        "probabilities": {},
+        "multi_model": {},
+    }
+
+    class _Cache:
+        @staticmethod
+        def get_city_cache(kind, city):
+            assert (kind, city) == ("panel", "paris")
+            return {"payload": payload}
+
+    monkeypatch.setattr(scan_terminal_city_row, "_PANEL_CACHE_DB", _Cache())
+    monkeypatch.setattr(
+        scan_terminal_city_row,
+        "_analyze",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("non-force scan must not fetch external sources")
+        ),
+    )
+
+    result = scan_terminal_city_row._scan_city_terminal_rows(
+        "paris",
+        {"market_type": "maxtemp"},
+        force_refresh=False,
+    )
+
+    assert result["city"] == "paris"
+    assert result["rows"][0]["current_temp"] == 18.0
 
 
 def test_scan_router_does_not_expose_terminal_ai_endpoint():

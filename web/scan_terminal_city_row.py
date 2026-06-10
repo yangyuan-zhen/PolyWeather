@@ -5,6 +5,7 @@ import re
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
+from src.database.db_manager import DBManager
 from web.core import CITIES, _sf as _safe_float
 from web.analysis_service import _analyze
 from web.scan_terminal_filters import (
@@ -16,6 +17,7 @@ from web.services.city_payloads import aggregate_runway_history
 
 SCAN_ROW_RUNWAY_HISTORY_RESOLUTION = "10m"
 SCAN_ROW_MAX_RUNWAY_POINTS = 144
+_PANEL_CACHE_DB = DBManager()
 
 
 def _compact_runway_plate_history_for_scan(raw_history: Any) -> Dict[str, List[Dict[str, Any]]]:
@@ -171,11 +173,18 @@ def _scan_city_terminal_rows_quick(
 ) -> Dict[str, Any]:
     """Fast path that returns cached analysis rows only — returns a single row per city
     with cached analysis data (Obs, DEB, probabilities) but no market prices."""
-    data = _analyze(
-        city,
-        force_refresh=force_refresh,
-        detail_mode="panel",
-    )
+    data: Dict[str, Any] = {}
+    if not force_refresh:
+        cached_entry = _PANEL_CACHE_DB.get_city_cache("panel", city)
+        cached_payload = cached_entry.get("payload") if isinstance(cached_entry, dict) else None
+        if isinstance(cached_payload, dict):
+            data = cached_payload
+    if not data:
+        data = _analyze(
+            city,
+            force_refresh=force_refresh,
+            detail_mode="panel",
+        )
     row = _build_quick_row(city=city, data=data)
     return {
         "city": city,

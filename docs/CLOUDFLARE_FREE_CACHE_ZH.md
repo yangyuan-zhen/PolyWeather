@@ -20,9 +20,48 @@
 
 ## Cache Rules
 
-按以下顺序创建，绕过规则必须放在公开缓存规则之前。免费版规则数量有限，因此使用路径集合合并表达式。
+按以下顺序创建。Cloudflare 同一阶段最后匹配的规则生效，因此绕过规则必须放在公开缓存规则之后。免费版规则数量有限，因此使用路径集合合并表达式。
 
-### 1. 绕过后端域名、动态和敏感请求
+也可以使用仓库内脚本自动创建或更新规则。脚本会保留非 PolyWeather 规则，并把绕过规则放在最后：
+
+```powershell
+$env:CLOUDFLARE_API_TOKEN="<具有 Cache Rules Edit 权限的 token>"
+python scripts/configure_cloudflare_free.py
+python scripts/configure_cloudflare_free.py --apply
+```
+
+第一条命令只输出计划；只有带 `--apply` 才会修改 Cloudflare。
+
+部署流水线也会执行同一脚本。给 GitHub 仓库增加名为 `CLOUDFLARE_API_TOKEN` 的 Secret 后，后续每次成功部署都会同步 Cache Rules；未配置时流水线会明确跳过。
+
+### 1. 缓存公开内容
+
+动作：Eligible for cache；Edge TTL 使用源站 Cache-Control。
+
+把下面的公开页面、静态资源和公开数据接口合并成一条规则即可：
+
+```text
+http.host eq "polyweather.top"
+and http.request.method in {"GET" "HEAD"}
+and (
+  http.request.uri.path eq "/"
+  or starts_with(http.request.uri.path, "/_next/static/")
+  or starts_with(http.request.uri.path, "/docs/")
+  or starts_with(http.request.uri.path, "/modern/")
+  or starts_with(http.request.uri.path, "/probabilities/")
+  or starts_with(http.request.uri.path, "/subscription-help/")
+  or http.request.uri.path eq "/api/cities"
+  or http.request.uri.path eq "/api/cities/detail-batch"
+  or starts_with(http.request.uri.path, "/api/city/")
+  or http.request.uri.path eq "/api/scan/terminal"
+  or http.request.uri.path eq "/api/system/status"
+  or lower(http.request.uri.path.extension) in {
+    "js" "css" "woff" "woff2" "png" "jpg" "jpeg" "webp" "avif" "svg" "ico"
+  }
+)
+```
+
+### 2. 最后绕过后端域名、动态和敏感请求
 
 动作：Bypass cache
 
@@ -51,7 +90,9 @@ or any(http.request.headers["authorization"][*] ne "")
 or http.cookie contains "sb-"
 ```
 
-### 2. 缓存静态资源
+## 缓存 TTL
+
+### 静态资源
 
 动作：Eligible for cache；Edge TTL 使用源站 Cache-Control。
 
@@ -69,7 +110,7 @@ and (
 
 源站 TTL：一年 immutable。
 
-### 3. 缓存公开页面
+### 公开页面
 
 动作：Eligible for cache；Edge TTL 使用源站 Cache-Control。
 
@@ -88,7 +129,7 @@ and (
 
 源站 TTL：10 分钟，过期后允许后台刷新 1 小时。
 
-### 4. 缓存公开数据接口
+### 公开数据接口
 
 动作：Eligible for cache；Edge TTL 使用源站 Cache-Control。
 
