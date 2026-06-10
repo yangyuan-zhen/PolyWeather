@@ -49,6 +49,49 @@ function buildRuntimeContext(extra: Record<string, unknown>) {
   };
 }
 
+function looksLikeHtmlDocument(value: string) {
+  const text = String(value || "").trim().toLowerCase();
+  return (
+    text.startsWith("<!doctype html") ||
+    text.startsWith("<html") ||
+    text.includes("<html ") ||
+    text.includes("cloudflare")
+  );
+}
+
+function extractFeedbackErrorMessage(raw: string) {
+  try {
+    const parsed = JSON.parse(String(raw || "")) as {
+      detail?: unknown;
+      error?: unknown;
+      message?: unknown;
+    };
+    const value = [parsed.detail, parsed.error, parsed.message].find((item) => {
+      return typeof item === "string" && item.trim();
+    });
+    if (typeof value !== "string") return "";
+    const message = value.replace(/\s+/g, " ").trim();
+    return looksLikeHtmlDocument(message) ? "" : message;
+  } catch {
+    return "";
+  }
+}
+
+function formatFeedbackSubmitError(status: number, raw: string, isEn: boolean) {
+  const jsonMessage = extractFeedbackErrorMessage(raw);
+  if (jsonMessage) return jsonMessage.slice(0, 180);
+
+  if (looksLikeHtmlDocument(raw)) {
+    return isEn
+      ? `Service is temporarily unavailable. Please retry in a moment. (HTTP ${status})`
+      : `服务暂时不可用，请稍后重试。（HTTP ${status}）`;
+  }
+
+  const message = String(raw || "").replace(/\s+/g, " ").trim();
+  if (message) return `${message.slice(0, 180)} (HTTP ${status})`;
+  return `HTTP ${status}`;
+}
+
 export function UserFeedbackModal({
   draft,
   isEn,
@@ -134,8 +177,8 @@ export function UserFeedbackModal({
         }),
       });
       if (!res.ok) {
-        const detail = (await res.text().catch(() => "")).slice(0, 200);
-        throw new Error(detail || `HTTP ${res.status}`);
+        const raw = await res.text().catch(() => "");
+        throw new Error(formatFeedbackSubmitError(res.status, raw, isEn));
       }
       const payload = (await res.json().catch(() => null)) as {
         feedback?: UserFeedbackEntry;
@@ -143,7 +186,8 @@ export function UserFeedbackModal({
       setSubmitted(true);
       onSubmitted?.(payload?.feedback);
     } catch (err) {
-      setError(String(err).slice(0, 220));
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message.slice(0, 220));
     } finally {
       setSubmitting(false);
     }

@@ -58,6 +58,12 @@ export function runTests() {
     "feedback modal must submit to the feedback API, lock contact to the login email when available, notify the dashboard after success, and attach client/session diagnostics without using invalid textarea input types",
   );
   assert(
+    modalSource.includes("formatFeedbackSubmitError") &&
+      modalSource.includes("looksLikeHtmlDocument") &&
+      !modalSource.includes("throw new Error(detail || `HTTP ${res.status}`)"),
+    "feedback modal must not expose raw Cloudflare/HTML error pages to users",
+  );
+  assert(
     feedbackRouteSource.includes("export async function GET") &&
       feedbackRouteSource.includes("method: \"GET\"") &&
       feedbackRouteSource.includes("limit"),

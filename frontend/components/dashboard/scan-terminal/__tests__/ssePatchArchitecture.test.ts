@@ -78,6 +78,15 @@ export function runTests() {
   assert(nginx.includes("location /api/events"), "Nginx deploy config must route /api/events separately");
   assert(nginx.includes("proxy_buffering off"), "Nginx /api/events must disable proxy buffering for SSE");
   assert(nginx.includes("proxy_read_timeout 86400s"), "Nginx /api/events must keep SSE connections open");
+  const frontendServerStart = nginx.indexOf("server_name polyweather.top www.polyweather.top");
+  const apiServerStart = nginx.indexOf("server_name api.polyweather.top");
+  const frontendServer = nginx.slice(frontendServerStart, apiServerStart);
+  assert(
+    frontendServer.includes("location /api/events") &&
+      frontendServer.includes("proxy_pass http://127.0.0.1:8000") &&
+      frontendServer.indexOf("location /api/events") < frontendServer.indexOf("location / {"),
+    "Nginx frontend host must route /api/events directly to FastAPI before the generic Next.js location",
+  );
 
   const weatherSources = readRepoFile("src", "data_collection", "weather_sources.py");
   assert(weatherSources.includes("_emit_temperature_patch_if_changed"), "collector must centralize temperature patch emission");
