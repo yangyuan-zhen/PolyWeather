@@ -84,6 +84,36 @@ export function runTests() {
   assert(correctedDebSeries, "corrected hourly DEB path should still render as DEB Forecast");
   assert(correctedDebValues.includes(28.0), `chart should use backend deb.hourly_path before rebuilding a shifted curve; got ${correctedDebValues.join(",")}`);
 
+  const independentModelTimelineChart = buildFullDayChartData(
+    {
+      city: "madrid",
+      local_date: "2026-06-11",
+      local_time: "20:00",
+      temp_symbol: "°C",
+      tz_offset_seconds: 2 * 3600,
+    } as any,
+    {
+      forecastTodayHigh: 31,
+      debPrediction: 31,
+      localDate: "2026-06-11",
+      localTime: "20:00",
+      times: ["08:00", "09:00", "10:00"],
+      temps: [20, 25, 22],
+      modelTimes: ["15:00", "16:00", "17:00"],
+      modelCurves: {
+        ECMWF: [24, 32, 25],
+      },
+    } as any,
+    true,
+  );
+  const independentModelPeak = independentModelTimelineChart.data.find(
+    (point) => point.model_curve_ECMWF === 32,
+  );
+  assert(
+    independentModelPeak?.label === "16:00:00",
+    `multi-model curves must use models_hourly.times instead of hourly.times; got ${independentModelPeak?.label}`,
+  );
+
   const correctedDetailChart = getTemperatureChartData(
     {
       name: "shanghai",

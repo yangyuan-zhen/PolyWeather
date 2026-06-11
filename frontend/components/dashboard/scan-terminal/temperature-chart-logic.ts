@@ -1199,6 +1199,7 @@ type HourlyForecast = {
   localTime?: string | null;
   times: string[];
   temps: Array<number | null>;
+  modelTimes?: string[];
   modelCurves?: Record<string, Array<number | null>>;
   runwayPlateHistory?: Record<string, Array<Record<string, unknown>>>;
   runwayBandHistory?: Array<{ time: string; high_temp: number; low_temp: number; avg_temp: number }>;
@@ -1253,6 +1254,7 @@ function seedHourlyForecastFromRow(row: ScanOpportunityRow | null): HourlyForeca
     localTime: row.local_time || null,
     times: [],
     temps: [],
+    modelTimes: undefined,
     modelCurves: undefined,
     runwayPlateHistory: seededRunwayPlateHistory,
     runwayBandHistory: undefined,
@@ -1368,6 +1370,7 @@ function parseHourlyForecastFromCityDetail(json: CityDetail | null): HourlyForec
     localTime: json.local_time || null,
     times: hourlySource.times || [],
     temps: hourlySource.temps || [],
+    modelTimes: (json.models_hourly ?? (json as any)?.timeseries?.models_hourly)?.times || undefined,
     modelCurves: (json.models_hourly ?? (json as any)?.timeseries?.models_hourly)?.curves || undefined,
     runwayPlateHistory: (json as any)?.runway_plate_history || (json.amos as any)?.runway_plate_history || undefined,
     runwayBandHistory: (json as any)?.runway_band_history || undefined,
@@ -2161,6 +2164,14 @@ function addHourlyTimesToTimeline(
   });
 }
 
+function resolveModelCurveTimes(
+  hourly: HourlyForecast,
+  modelTemps: Array<number | null>,
+) {
+  if (hourly?.modelTimes?.length) return hourly.modelTimes;
+  return hourly?.times?.length === modelTemps.length ? hourly.times : [];
+}
+
 function probabilityBucketValue(bucket: ProbabilityBucket) {
   return validNumber(bucket.value ?? (bucket as any).temp ?? (bucket as any).temperature);
 }
@@ -2354,9 +2365,16 @@ function buildFullDayChartData(
   if (debTimes.length && debTemps.length) {
     addHourlyTimesToTimeline(timelineSet, debTimes, debTemps, tzOffset, localDateStr, localDayBounds);
   }
-  if (hourly?.times?.length && hourly?.modelCurves) {
+  if (hourly?.modelCurves) {
     Object.values(hourly.modelCurves).forEach((modelTemps) => {
-      addHourlyTimesToTimeline(timelineSet, hourly.times, modelTemps, tzOffset, localDateStr, localDayBounds);
+      addHourlyTimesToTimeline(
+        timelineSet,
+        resolveModelCurveTimes(hourly, modelTemps),
+        modelTemps,
+        tzOffset,
+        localDateStr,
+        localDayBounds,
+      );
     });
   }
 
@@ -2460,12 +2478,20 @@ function buildFullDayChartData(
     }
 
     // Per-model curves
-    if (hourly?.times?.length && hourly.modelCurves) {
+    if (hourly?.modelCurves) {
       const modelColors = ["#2563eb", "#7c3aed", "#059669", "#d97706", "#dc2626", "#0891b2"];
       Object.keys(hourly.modelCurves).forEach((model, idx) => {
         const modelTemps = hourly.modelCurves![model];
         if (!modelTemps?.length) return;
-        const vals = valuesForHourlyTimes(n, indexByTs, hourly.times, modelTemps, tzOffset, localDateStr, localDayBounds);
+        const vals = valuesForHourlyTimes(
+          n,
+          indexByTs,
+          resolveModelCurveTimes(hourly, modelTemps),
+          modelTemps,
+          tzOffset,
+          localDateStr,
+          localDayBounds,
+        );
         if (vals.some((v) => v !== null)) {
           series.push({
             key: `model_curve_${model}`,
