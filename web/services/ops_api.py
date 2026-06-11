@@ -2082,9 +2082,10 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
     # MADIS (NOAA)
     try:
         t0 = _time.perf_counter()
-        r = _r.get(
+        r = _r.head(
             "https://madis-data.ncep.noaa.gov/madisPublic1/data/LDAD/hfmetar/netCDF/",
             timeout=timeout,
+            allow_redirects=True,
         )
         results["madis"] = {
             "ok": r.ok,
