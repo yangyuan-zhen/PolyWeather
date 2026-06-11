@@ -1733,6 +1733,7 @@ def _process_airport_city(
     # Send to all target chats
     sent = False
     for chat_id in chat_ids:
+        thread_id = 0
         try:
             kwargs = {}
             thread_id = _resolve_thread_id(chat_id, city)
@@ -1741,6 +1742,25 @@ def _process_airport_city(
             _rate_limited_send(bot, chat_id, message, **kwargs)
             sent = True
         except Exception as exc:
+            if thread_id and "message thread not found" in str(exc).lower():
+                logger.warning(
+                    "airport push thread missing; retrying main chat city={} chat_id={} thread_id={}",
+                    city,
+                    chat_id,
+                    thread_id,
+                )
+                try:
+                    _rate_limited_send(bot, chat_id, message)
+                    sent = True
+                    continue
+                except Exception as fallback_exc:
+                    logger.warning(
+                        "airport push main chat fallback failed city={} chat_id={}: {}",
+                        city,
+                        chat_id,
+                        fallback_exc,
+                    )
+                    continue
             logger.warning("airport push failed city={} chat_id={}: {}", city, chat_id, exc)
 
     if sent:
