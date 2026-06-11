@@ -251,6 +251,41 @@ def test_high_freq_airport_push_prefers_fresh_city_cache(monkeypatch):
     assert bot.messages
 
 
+def test_airport_push_prefers_cache_with_newest_observation(monkeypatch):
+    import src.utils.telegram_push as telegram_push
+
+    now = telegram_push.time.time()
+
+    class FakeDB:
+        def get_city_cache(self, kind, city):
+            assert city == "shanghai"
+            if kind == "full":
+                return {
+                    "updated_at_ts": now,
+                    "payload": {
+                        "current": {"temp": 31.0},
+                        "airport_primary": {"temp": 31.0, "obs_time": "15:00"},
+                    },
+                }
+            return {
+                "updated_at_ts": now - 120,
+                "payload": {
+                    "current": {"temp": 31.4},
+                    "amos": {"observation_time": "2026-06-11T07:42:00+00:00"},
+                    "airport_primary": {
+                        "temp": 31.4,
+                        "obs_time": "2026-06-11T07:42:00+00:00",
+                    },
+                },
+            }
+
+    monkeypatch.setattr(telegram_push, "DBManager", lambda: FakeDB())
+
+    city_weather = telegram_push._read_cached_airport_city_weather("shanghai")
+
+    assert city_weather["airport_primary"]["temp"] == 31.4
+
+
 def test_airport_push_fallback_analysis_does_not_force_observation_refresh(monkeypatch):
     import src.utils.telegram_push as telegram_push
     import web.app as web_app

@@ -1409,6 +1409,25 @@ def _airport_push_cache_max_age_sec(city: str) -> int:
     return max(90, interval * 2)
 
 
+def _cached_payload_observation_epoch(payload: Dict[str, Any]) -> Optional[int]:
+    amos = payload.get("amos") or {}
+    airport_primary = payload.get("airport_primary") or {}
+    airport_current = payload.get("airport_current") or {}
+    current = payload.get("current") or {}
+    candidates = [
+        amos.get("observation_time"),
+        airport_primary.get("obs_time"),
+        airport_current.get("obs_time"),
+        current.get("obs_time"),
+    ]
+    parsed = [
+        timestamp
+        for timestamp in (_parse_observation_time_epoch(value) for value in candidates)
+        if timestamp is not None
+    ]
+    return max(parsed) if parsed else None
+
+
 def _read_cached_airport_city_weather(city: str, max_age_sec: Optional[int] = None) -> Optional[Dict[str, Any]]:
     """Read web city cache for Telegram without triggering collection."""
     normalized_city = (city or "").strip().lower()
@@ -1416,7 +1435,7 @@ def _read_cached_airport_city_weather(city: str, max_age_sec: Optional[int] = No
         return None
     max_age = int(max_age_sec if max_age_sec is not None else _airport_push_cache_max_age_sec(normalized_city))
     now_ts = time.time()
-    stale_candidate: Optional[Tuple[float, Dict[str, Any]]] = None
+    candidates: List[Tuple[int, int, float, str, Dict[str, Any]]] = []
     try:
         db = DBManager()
         for kind in ("full", "panel"):
@@ -1428,6 +1447,7 @@ def _read_cached_airport_city_weather(city: str, max_age_sec: Optional[int] = No
             if updated_at_ts <= 0 or not isinstance(payload, dict):
                 continue
             age_sec = now_ts - updated_at_ts
+            is_fresh = age_sec <= max_age
             if age_sec > max_age:
                 logger.debug(
                     "airport push cache stale city={} kind={} age_sec={} max_age_sec={}",
@@ -1436,21 +1456,32 @@ def _read_cached_airport_city_weather(city: str, max_age_sec: Optional[int] = No
                     round(age_sec, 1),
                     max_age,
                 )
-                if stale_candidate is None or updated_at_ts > stale_candidate[0]:
-                    stale_candidate = (updated_at_ts, dict(payload))
-                continue
-            logger.debug(
-                "airport push cache hit city={} kind={} age_sec={}",
-                normalized_city,
-                kind,
-                round(max(0.0, age_sec), 1),
+            observation_ts = _cached_payload_observation_epoch(payload)
+            candidates.append(
+                (
+                    int(observation_ts or 0),
+                    1 if is_fresh else 0,
+                    updated_at_ts,
+                    kind,
+                    dict(payload),
+                )
             )
-            return dict(payload)
     except Exception as exc:
         logger.debug("airport push city cache read failed city={}: {}", normalized_city, exc)
-    if stale_candidate is not None:
-        logger.debug("airport push using stale cache city={}", normalized_city)
-        return stale_candidate[1]
+    if candidates:
+        observation_ts, is_fresh, updated_at_ts, kind, payload = max(
+            candidates,
+            key=lambda item: (item[0], item[1], item[2]),
+        )
+        logger.debug(
+            "airport push cache selected city={} kind={} age_sec={} observation_ts={} fresh={}",
+            normalized_city,
+            kind,
+            round(max(0.0, now_ts - updated_at_ts), 1),
+            observation_ts or None,
+            bool(is_fresh),
+        )
+        return payload
     return None
 
 
