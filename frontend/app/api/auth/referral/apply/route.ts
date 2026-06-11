@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   applyAuthResponseCookies,
   buildBackendRequestHeaders,
+  buildJsonBackendRequestHeaders,
 } from "@/lib/backend-auth";
 import {
   buildProxyExceptionResponse,
@@ -22,10 +23,7 @@ export async function POST(req: NextRequest) {
     const body = await req.text();
     const res = await fetch(`${API_BASE}/api/auth/referral/apply`, {
       method: "POST",
-      headers: {
-        ...auth.headers,
-        "Content-Type": "application/json",
-      },
+      headers: buildJsonBackendRequestHeaders(auth.headers),
       body,
       cache: "no-store",
     });

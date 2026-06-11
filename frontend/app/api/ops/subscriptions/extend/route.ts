@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { applyAuthResponseCookies, buildBackendRequestHeaders } from "@/lib/backend-auth";
+import { applyAuthResponseCookies, buildBackendRequestHeaders, buildJsonBackendRequestHeaders } from "@/lib/backend-auth";
 import { buildProxyExceptionResponse } from "@/lib/api-proxy";
 import { requireOpsProxyAuth } from "@/lib/ops-proxy-auth";
 
@@ -14,9 +14,9 @@ export async function POST(req: NextRequest) {
     if (authError) return authError;
 
     const body = await req.text();
-    const headers: Record<string, string> = { ...auth.headers as Record<string, string>, "Content-Type": "application/json" };
+    const headers = buildJsonBackendRequestHeaders(auth.headers);
     if (ENTITLEMENT_TOKEN) {
-      headers.Authorization = `Bearer ${ENTITLEMENT_TOKEN}`;
+      headers.set("Authorization", `Bearer ${ENTITLEMENT_TOKEN}`);
     }
     const res = await fetch(`${API_BASE}/api/ops/subscriptions/extend`, {
       method: "POST", headers, body, cache: "no-store",

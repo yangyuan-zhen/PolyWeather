@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   applyAuthResponseCookies,
   buildBackendRequestHeaders,
+  buildJsonBackendRequestHeaders,
 } from "@/lib/backend-auth";
 import { buildProxyExceptionResponse } from "@/lib/api-proxy";
 import { requireOpsProxyAuth } from "@/lib/ops-proxy-auth";
@@ -166,7 +167,7 @@ export async function POST(req: NextRequest) {
 
     const res = await fetch(`${API_BASE}/api/ops/subscriptions/grant`, {
       method: "POST",
-      headers: { ...(auth.headers as Record<string, string>), "Content-Type": "application/json" },
+      headers: buildJsonBackendRequestHeaders(auth.headers),
       body,
       cache: "no-store",
     });

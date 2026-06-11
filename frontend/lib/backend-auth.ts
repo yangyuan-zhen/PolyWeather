@@ -125,6 +125,12 @@ export function applyAuthResponseCookies(
   return target;
 }
 
+export function buildJsonBackendRequestHeaders(headers: HeadersInit) {
+  const result = new Headers(headers);
+  result.set("Content-Type", "application/json");
+  return result;
+}
+
 export function requireBackendAuthUser(auth: BackendHeaderBuildResult) {
   if (auth.authUserId) return null;
   return applyAuthResponseCookies(

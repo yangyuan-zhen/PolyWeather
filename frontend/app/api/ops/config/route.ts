@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { applyAuthResponseCookies, buildBackendRequestHeaders } from "@/lib/backend-auth";
+import { applyAuthResponseCookies, buildBackendRequestHeaders, buildJsonBackendRequestHeaders } from "@/lib/backend-auth";
 import { buildProxyExceptionResponse } from "@/lib/api-proxy";
 import { requireOpsProxyAuth } from "@/lib/ops-proxy-auth";
 
@@ -28,7 +28,7 @@ export async function PUT(req: NextRequest) {
     if (authError) return authError;
 
     const body = await req.text();
-    const res = await fetch(BACKEND, { method: "PUT", headers: { ...auth.headers, "Content-Type": "application/json" }, body, cache: "no-store" });
+    const res = await fetch(BACKEND, { method: "PUT", headers: buildJsonBackendRequestHeaders(auth.headers), body, cache: "no-store" });
     const raw = await res.text();
     const response = new NextResponse(raw, { status: res.status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
     return applyAuthResponseCookies(response, auth.response);
