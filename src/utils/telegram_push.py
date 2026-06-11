@@ -287,6 +287,22 @@ def _parse_iso_datetime_utc(value: Any) -> Optional[datetime]:
     return dt.astimezone(timezone.utc)
 
 
+def _parse_observation_time_epoch(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        numeric = float(text)
+        if numeric >= 1_000_000_000:
+            return int(numeric)
+    except (TypeError, ValueError):
+        pass
+    parsed = _parse_iso_datetime_utc(text)
+    return int(parsed.timestamp()) if parsed is not None else None
+
+
 def _parse_city_list(raw: Optional[str]) -> List[str]:
     if not raw:
         return list(CITY_REGISTRY.keys())
@@ -597,6 +613,9 @@ HIGH_FREQ_AIRPORT_CITIES = {
     "new york", "los angeles", "chicago", "denver", "atlanta",
     "miami", "san francisco", "houston", "dallas", "austin", "seattle",
     "tel aviv",
+}
+CHINA_HIGH_FREQ_AIRPORT_CITIES = {
+    "beijing", "shanghai", "guangzhou", "qingdao", "chengdu", "chongqing", "wuhan",
 }
 HIGH_FREQ_AIRPORT_ICAO = {
     "seoul": "RKSI", "singapore": "WSSS", "busan": "RKPK", "tokyo": "44166",
@@ -1381,13 +1400,7 @@ _AIRPORT_PUSH_INTERVAL = {
 _AIRPORT_PUSH_INTERVAL.update({
     "seoul": 60,
     "busan": 60,
-    "beijing": 180,
-    "shanghai": 180,
-    "guangzhou": 180,
-    "qingdao": 180,
-    "chengdu": 180,
-    "chongqing": 180,
-    "wuhan": 180,
+    **{city: 60 for city in CHINA_HIGH_FREQ_AIRPORT_CITIES},
 })
 
 
@@ -1534,6 +1547,10 @@ def _process_airport_city(
     """
     last_city_ts = int(last_city.get("ts") or 0)
     last_obs_time = str(last_city.get("obs_time") or "")
+    last_obs_ts = (
+        _parse_observation_time_epoch(last_city.get("obs_ts"))
+        or _parse_observation_time_epoch(last_obs_time)
+    )
     city_interval = _AIRPORT_PUSH_INTERVAL.get(city, 600)
     if now_ts - last_city_ts < city_interval:
         return None
@@ -1601,6 +1618,7 @@ def _process_airport_city(
         current_temp = airport_primary.get("temp") or (city_weather.get("current") or {}).get("temp")
         if not current_obs_time:
             current_obs_time = str(airport_primary.get("obs_time") or "")
+    current_obs_ts = _parse_observation_time_epoch(current_obs_time)
     source_label = ""  # human-readable data source for Paris messages
     arome_temp_val = None  # AROME HD temperature for display (always fetched for comparison)
     aeroweb_available = False
@@ -1656,7 +1674,20 @@ def _process_airport_city(
                 return None
         except Exception:
             return None
-    elif current_obs_time and last_obs_time and current_obs_time == last_obs_time:
+    current_obs_ts = _parse_observation_time_epoch(current_obs_time)
+    if (
+        current_obs_ts is not None
+        and last_obs_ts is not None
+        and current_obs_ts <= last_obs_ts
+    ):
+        logger.debug(
+            "airport push skipped stale observation city={} current_obs_time={} last_obs_time={}",
+            city,
+            current_obs_time,
+            last_obs_time,
+        )
+        return None
+    if current_obs_time and last_obs_time and current_obs_time == last_obs_time:
         return None
 
     obs_local = (
@@ -1684,7 +1715,15 @@ def _process_airport_city(
     if sent:
         logger.info("airport status pushed city={} temp={} deb={} obs_time={}",
                      city, current_temp, deb_pred, current_obs_time)
-        return (city, {"ts": now_ts, "active": True, "obs_time": current_obs_time})
+        return (
+            city,
+            {
+                "ts": now_ts,
+                "active": True,
+                "obs_time": current_obs_time,
+                "obs_ts": current_obs_ts,
+            },
+        )
 
     return None
 
@@ -1695,7 +1734,10 @@ def _due_airport_cities(
     last_by_city: Dict[str, Any],
 ) -> List[str]:
     due: List[str] = []
-    for city in sorted(cities):
+    for city in sorted(
+        cities,
+        key=lambda item: (0 if item in CHINA_HIGH_FREQ_AIRPORT_CITIES else 1, item),
+    ):
         last_city = last_by_city.get(city) or {}
         last_city_ts = int(last_city.get("ts") or 0)
         city_interval = _AIRPORT_PUSH_INTERVAL.get(city, 600)

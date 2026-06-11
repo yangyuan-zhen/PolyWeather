@@ -110,7 +110,8 @@ def test_docker_compose_isolates_collector_from_web_and_bot_services():
         in collector_block
     )
     assert "command: python -m web.observation_collector_worker" in collector_block
-    assert "POLYWEATHER_OBSERVATION_COLLECTOR_AMSC_SEC: ${POLYWEATHER_OBSERVATION_COLLECTOR_AMSC_SEC:-180}" in collector_block
+    assert "POLYWEATHER_OBSERVATION_COLLECTOR_AMSC_SEC: ${POLYWEATHER_OBSERVATION_COLLECTOR_AMSC_SEC:-60}" in collector_block
+    assert "TELEGRAM_AIRPORT_PUSH_INTERVAL_SEC: ${POLYWEATHER_BOT_AIRPORT_PUSH_INTERVAL_SEC:-60}" in bot_block
     assert "POLYWEATHER_OBSERVATION_COLLECTOR_MADIS_SEC: ${POLYWEATHER_OBSERVATION_COLLECTOR_MADIS_SEC:-300}" in collector_block
 
 
