@@ -165,11 +165,9 @@ def test_singapore_is_in_telegram_push_city_lists():
     assert HIGH_FREQ_AIRPORT_ICAO["singapore"] == "WSSS"
 
 
-def test_shenzhen_is_in_high_freq_push_as_hko_station():
-    # shenzhen uses LFS / HKO 1-min data (formerly lau fau shan)
-    assert "shenzhen" in HIGH_FREQ_AIRPORT_CITIES
-    assert "shenzhen" in HIGH_FREQ_AIRPORT_ICAO
-    assert HIGH_FREQ_AIRPORT_ICAO["shenzhen"] == "LFS"
+def test_shenzhen_is_not_in_airport_push_city_lists():
+    assert "shenzhen" not in HIGH_FREQ_AIRPORT_CITIES
+    assert "shenzhen" not in HIGH_FREQ_AIRPORT_ICAO
 
 
 def test_china_airport_push_defaults_to_one_minute_city_interval():
@@ -433,7 +431,7 @@ def test_airport_push_retries_main_chat_when_forum_thread_is_missing(monkeypatch
     monkeypatch.setattr(telegram_push, "_rate_limited_send", fake_send)
 
     result = telegram_push._process_airport_city(
-        "shenzhen",
+        "hong kong",
         now_ts=1781164400,
         last_city={},
         chat_ids=["chat-1"],

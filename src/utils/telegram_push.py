@@ -608,7 +608,7 @@ def _alert_signature(alert_payload: Dict[str, Any]) -> str:
 
 HIGH_FREQ_AIRPORT_CITIES = {
     "seoul", "singapore", "busan", "tokyo", "ankara", "helsinki", "amsterdam",
-    "istanbul", "paris", "hong kong", "shenzhen", "taipei",
+    "istanbul", "paris", "hong kong", "taipei",
     "beijing", "shanghai", "guangzhou", "qingdao", "chengdu", "chongqing", "wuhan",
     "new york", "los angeles", "chicago", "denver", "atlanta",
     "miami", "san francisco", "houston", "dallas", "austin", "seattle",
@@ -620,7 +620,7 @@ CHINA_HIGH_FREQ_AIRPORT_CITIES = {
 HIGH_FREQ_AIRPORT_ICAO = {
     "seoul": "RKSI", "singapore": "WSSS", "busan": "RKPK", "tokyo": "44166",
     "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058",
-    "paris": "LFPB", "hong kong": "HKO", "shenzhen": "LFS", "taipei": "466920",
+    "paris": "LFPB", "hong kong": "HKO", "taipei": "466920",
     "beijing": "ZBAA", "shanghai": "ZSPD", "guangzhou": "ZGGG", "qingdao": "ZSQD",
     "chengdu": "ZUUU", "chongqing": "ZUCK", "wuhan": "ZHHH",
     "new york": "KLGA", "los angeles": "KLAX", "chicago": "KORD",
@@ -1125,7 +1125,7 @@ def _build_airport_status_message(
     _AIRPORT_EN = {"seoul": "Incheon", "singapore": "Changi", "busan": "Gimhae", "tokyo": "Haneda",
                    "ankara": "Esenboğa", "helsinki": "Vantaa", "amsterdam": "Schiphol",
                    "istanbul": "Airport", "paris": "Le Bourget",
-                   "hong kong": "Observatory", "shenzhen": "LFS Observatory",
+                   "hong kong": "Observatory",
                    "taipei": "Songshan", "beijing": "Capital", "shanghai": "Pudong",
                    "guangzhou": "Baiyun", "qingdao": "Jiaodong",
                    "chengdu": "Shuangliu", "chongqing": "Jiangbei", "wuhan": "Tianhe",
@@ -1507,7 +1507,7 @@ def _load_airport_city_weather_for_push(city: str) -> Dict[str, Any]:
 _AIRPORT_HEAT_THRESHOLD = {
     "seoul": 3.0, "ankara": 3.0, "istanbul": 3.0, "paris": 3.0,
     "busan": 2.0, "tokyo": 2.0, "amsterdam": 2.0, "helsinki": 2.0,
-    "hong kong": 1.5, "shenzhen": 1.5, "taipei": 1.5,
+    "hong kong": 1.5, "taipei": 1.5,
 }
 
 
@@ -1675,8 +1675,8 @@ def _process_airport_city(
     elif current_temp is None or deb_pred is None:
         return None
 
-    # Dedup: same observation → skip (with delayed retry for HK / LFS)
-    _CITIES_WITH_DELAYED_API = {"hong kong", "shenzhen"}
+    # Dedup: same observation → skip (with delayed retry for HKO)
+    _CITIES_WITH_DELAYED_API = {"hong kong"}
     if (current_obs_time and last_obs_time and current_obs_time == last_obs_time
             and city in _CITIES_WITH_DELAYED_API
             and now_ts - last_city_ts > 540):
