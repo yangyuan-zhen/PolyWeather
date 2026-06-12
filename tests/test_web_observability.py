@@ -1063,7 +1063,7 @@ def test_city_detail_batch_partial_timeout_default_stays_below_proxy_budget(monk
     monkeypatch.delenv("POLYWEATHER_CITY_DETAIL_BATCH_GLOBAL_CONCURRENCY", raising=False)
     monkeypatch.delenv("POLYWEATHER_CITY_DETAIL_BATCH_QUEUE_WAIT_MS", raising=False)
 
-    assert city_api._city_detail_batch_concurrency() == 2
+    assert city_api._city_detail_batch_concurrency() == 1
     assert city_api._city_detail_batch_global_concurrency() == 1
     assert city_api._city_detail_batch_queue_wait_seconds() == 3.0
     assert city_api._city_detail_batch_partial_timeout_seconds() == 8.0

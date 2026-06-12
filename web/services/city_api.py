@@ -987,9 +987,9 @@ async def _build_city_detail_batch_item_async(
 
 def _city_detail_batch_concurrency() -> int:
     try:
-        value = int(os.getenv("POLYWEATHER_CITY_DETAIL_BATCH_CONCURRENCY", "2") or "2")
+        value = int(os.getenv("POLYWEATHER_CITY_DETAIL_BATCH_CONCURRENCY", "1") or "1")
     except ValueError:
-        value = 2
+        value = 1
     return max(1, min(4, value))
 
 

@@ -93,12 +93,12 @@ def test_docker_compose_isolates_collector_from_web_and_bot_services():
     assert "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'false'" in bot_block
     assert "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'false'" in web_block
     assert "POLYWEATHER_SCAN_TERMINAL_BUILD_TIMEOUT_SEC: '30'" in web_block
-    assert "POLYWEATHER_SCAN_TERMINAL_MAX_WORKERS: ${POLYWEATHER_SCAN_TERMINAL_MAX_WORKERS:-2}" in web_block
+    assert "POLYWEATHER_SCAN_TERMINAL_MAX_WORKERS: ${POLYWEATHER_SCAN_TERMINAL_MAX_WORKERS:-1}" in web_block
     assert "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'false'" in collector_block
     assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'false'" in bot_block
     assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'false'" in web_block
     assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'true'" in collector_block
-    assert "POLYWEATHER_CITY_DETAIL_BATCH_CONCURRENCY: ${POLYWEATHER_CITY_DETAIL_BATCH_CONCURRENCY:-2}" in web_block
+    assert "POLYWEATHER_CITY_DETAIL_BATCH_CONCURRENCY: ${POLYWEATHER_CITY_DETAIL_BATCH_CONCURRENCY:-1}" in web_block
     assert "POLYWEATHER_CITY_DETAIL_BATCH_GLOBAL_CONCURRENCY: ${POLYWEATHER_CITY_DETAIL_BATCH_GLOBAL_CONCURRENCY:-1}" in web_block
     assert "POLYWEATHER_CITY_DETAIL_BATCH_QUEUE_WAIT_MS: ${POLYWEATHER_CITY_DETAIL_BATCH_QUEUE_WAIT_MS:-3000}" in web_block
     assert "POLYWEATHER_CITY_DETAIL_BATCH_PARTIAL_TIMEOUT_MS: ${POLYWEATHER_CITY_DETAIL_BATCH_PARTIAL_TIMEOUT_MS:-8000}" in web_block
@@ -128,7 +128,7 @@ def test_scan_terminal_backend_timeout_returns_before_next_proxy_abort():
 
     assert 'POLYWEATHER_SCAN_TERMINAL_PROXY_TIMEOUT_MS || "35000"' in route_source
     assert '"POLYWEATHER_SCAN_TERMINAL_BUILD_TIMEOUT_SEC",\n    30,' in config_source
-    assert '"POLYWEATHER_SCAN_TERMINAL_MAX_WORKERS",\n    2,' in config_source
+    assert '"POLYWEATHER_SCAN_TERMINAL_MAX_WORKERS",\n    1,' in config_source
     assert (
         '"POLYWEATHER_SCAN_TERMINAL_PREWARM_PAYLOAD_TIMEOUT_SEC",\n    30,'
         in config_source
