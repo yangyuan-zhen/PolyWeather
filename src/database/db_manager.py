@@ -427,6 +427,39 @@ class DBManager:
                 )
             """)
             conn.execute("""
+                CREATE TABLE IF NOT EXISTS user_growth_snapshots (
+                    snapshot_date TEXT PRIMARY KEY,
+                    total_registered INTEGER NOT NULL DEFAULT 0,
+                    verified_users INTEGER NOT NULL DEFAULT 0,
+                    ever_signed_in INTEGER NOT NULL DEFAULT 0,
+                    source TEXT NOT NULL DEFAULT 'supabase_auth_admin',
+                    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS growth_milestone_runs (
+                    milestone INTEGER PRIMARY KEY,
+                    verified_users INTEGER NOT NULL DEFAULT 0,
+                    reward_days INTEGER NOT NULL DEFAULT 0,
+                    rewarded_count INTEGER NOT NULL DEFAULT 0,
+                    failed_count INTEGER NOT NULL DEFAULT 0,
+                    summary_json TEXT,
+                    settled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS growth_milestone_payouts (
+                    milestone INTEGER NOT NULL,
+                    supabase_user_id TEXT NOT NULL,
+                    reward_days INTEGER NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL DEFAULT '',
+                    error TEXT NOT NULL DEFAULT '',
+                    expires_at TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (milestone, supabase_user_id)
+                )
+            """)
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS payment_runtime_state (
                     state_key TEXT PRIMARY KEY,
                     payload_json TEXT NOT NULL,
@@ -3202,6 +3235,174 @@ class DBManager:
                     force=True,
                 )
             return True
+
+    def record_user_growth_snapshot(
+        self,
+        *,
+        snapshot_date: str,
+        total_registered: int,
+        verified_users: int,
+        ever_signed_in: int,
+        source: str = "supabase_auth_admin",
+    ) -> None:
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO user_growth_snapshots (
+                    snapshot_date, total_registered, verified_users,
+                    ever_signed_in, source, recorded_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(snapshot_date) DO UPDATE SET
+                    total_registered = excluded.total_registered,
+                    verified_users = excluded.verified_users,
+                    ever_signed_in = excluded.ever_signed_in,
+                    source = excluded.source,
+                    recorded_at = excluded.recorded_at
+                """,
+                (
+                    str(snapshot_date or "").strip(),
+                    max(0, int(total_registered or 0)),
+                    max(0, int(verified_users or 0)),
+                    max(0, int(ever_signed_in or 0)),
+                    str(source or "supabase_auth_admin"),
+                    datetime.now().isoformat(),
+                ),
+            )
+            conn.commit()
+
+    def list_user_growth_snapshots(self, limit: int = 90) -> List[Dict[str, Any]]:
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT snapshot_date, total_registered, verified_users,
+                       ever_signed_in, source, recorded_at
+                FROM user_growth_snapshots
+                ORDER BY snapshot_date DESC
+                LIMIT ?
+                """,
+                (max(1, min(int(limit or 90), 1000)),),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def is_growth_milestone_settled(self, milestone: int) -> bool:
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM growth_milestone_runs WHERE milestone = ? LIMIT 1",
+                (int(milestone),),
+            ).fetchone()
+            return bool(row)
+
+    def has_growth_milestone_payout(self, milestone: int, supabase_user_id: str) -> bool:
+        with self._get_connection() as conn:
+            row = conn.execute(
+                """
+                SELECT 1 FROM growth_milestone_payouts
+                WHERE milestone = ? AND supabase_user_id = ? AND status = 'granted'
+                LIMIT 1
+                """,
+                (int(milestone), str(supabase_user_id or "").strip().lower()),
+            ).fetchone()
+            return bool(row)
+
+    def list_growth_milestone_payouts(self, milestone: int) -> List[Dict[str, Any]]:
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT milestone, supabase_user_id, reward_days, status,
+                       error, expires_at, updated_at
+                FROM growth_milestone_payouts
+                WHERE milestone = ?
+                ORDER BY supabase_user_id ASC
+                """,
+                (int(milestone),),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def record_growth_milestone_payout(
+        self,
+        milestone: int,
+        supabase_user_id: str,
+        reward_days: int,
+        status: str,
+        error: str,
+        *,
+        expires_at: str = "",
+    ) -> bool:
+        user_id = str(supabase_user_id or "").strip().lower()
+        if not user_id:
+            return False
+        with self._get_connection() as conn:
+            existing = conn.execute(
+                """
+                SELECT status FROM growth_milestone_payouts
+                WHERE milestone = ? AND supabase_user_id = ?
+                LIMIT 1
+                """,
+                (int(milestone), user_id),
+            ).fetchone()
+            if existing and str(existing[0] or "").strip().lower() == "granted":
+                return False
+            conn.execute(
+                """
+                INSERT INTO growth_milestone_payouts (
+                    milestone, supabase_user_id, reward_days, status,
+                    error, expires_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(milestone, supabase_user_id) DO UPDATE SET
+                    reward_days = excluded.reward_days,
+                    status = excluded.status,
+                    error = excluded.error,
+                    expires_at = excluded.expires_at,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    int(milestone),
+                    user_id,
+                    max(0, int(reward_days or 0)),
+                    str(status or ""),
+                    str(error or ""),
+                    str(expires_at or ""),
+                    datetime.now().isoformat(),
+                ),
+            )
+            conn.commit()
+            return True
+
+    def mark_growth_milestone_settled(
+        self,
+        milestone: int,
+        verified_users: int,
+        reward_days: int,
+        rewarded_count: int,
+        failed_count: int,
+        summary: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        summary_json = json.dumps(summary or {}, ensure_ascii=False)
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO growth_milestone_runs (
+                    milestone, verified_users, reward_days, rewarded_count,
+                    failed_count, summary_json, settled_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(milestone) DO NOTHING
+                """,
+                (
+                    int(milestone),
+                    max(0, int(verified_users or 0)),
+                    max(0, int(reward_days or 0)),
+                    max(0, int(rewarded_count or 0)),
+                    max(0, int(failed_count or 0)),
+                    summary_json,
+                    datetime.now().isoformat(),
+                ),
+            )
+            conn.commit()
 
     def append_airport_obs(
         self,

@@ -1,0 +1,10 @@
+[
+  {
+    "recorded_at": "2026-06-12T23:32:49+08:00",
+    "total_registered_users": 588,
+    "verified_users": 573,
+    "ever_signed_in_users": 561,
+    "source": "supabase_auth_admin",
+    "note": "Baseline recorded before verified-user growth milestone rewards launched."
+  }
+]

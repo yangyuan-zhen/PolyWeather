@@ -19,6 +19,7 @@ def test_startup_coordinator_respects_disable_flags(monkeypatch):
     loop_map = runtime.loop_map()
 
     assert "weekly_reward" in loop_map
+    assert "growth_milestone_reward" in loop_map
     assert "polygon_wallet_watch" not in loop_map
 
 

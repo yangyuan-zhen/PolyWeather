@@ -71,6 +71,7 @@ def validate_runtime_env(
     entitlement_guard = _env_bool("POLYWEATHER_REQUIRE_ENTITLEMENT", False)
     payment_enabled = _env_bool("POLYWEATHER_PAYMENT_ENABLED", False)
     weekly_reward_enabled = _env_bool("POLYWEATHER_WEEKLY_REWARD_ENABLED", False)
+    growth_reward_enabled = _env_bool("POLYWEATHER_GROWTH_REWARD_ENABLED", False)
 
     if component_key == "bot":
         missing = _missing(["TELEGRAM_BOT_TOKEN"])
@@ -85,7 +86,12 @@ def validate_runtime_env(
         missing = _missing(["SUPABASE_URL", "SUPABASE_ANON_KEY"])
         if missing:
             report.errors.append(f"已启用鉴权，但缺少变量: {', '.join(missing)}")
-        if auth_required or auth_require_subscription or weekly_reward_enabled:
+        if (
+            auth_required
+            or auth_require_subscription
+            or weekly_reward_enabled
+            or growth_reward_enabled
+        ):
             missing = _missing(["SUPABASE_SERVICE_ROLE_KEY"])
             if missing:
                 report.errors.append(f"当前鉴权/订阅能力需要变量: {', '.join(missing)}")
