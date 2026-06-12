@@ -43,7 +43,7 @@ SCAN_TERMINAL_PREWARM_PAYLOAD_TIMEOUT_SEC = _env_int(
 )
 SCAN_TERMINAL_MAX_WORKERS = _env_int(
     "POLYWEATHER_SCAN_TERMINAL_MAX_WORKERS",
-    8,
+    2,
     min_value=1,
     max_value=12,
 )
