@@ -52,7 +52,18 @@ def test_healthz_keeps_liveness_200_when_db_health_is_degraded(monkeypatch):
     assert response.json()["status"] == "degraded"
 
 
-def test_system_status_returns_summary_shape():
+def test_system_status_requires_ops_admin():
+    response = client.get('/api/system/status')
+    assert response.status_code in {401, 403, 503}
+
+
+def test_system_status_returns_summary_shape_for_ops_admin(monkeypatch):
+    monkeypatch.setattr(
+        routes,
+        "_require_ops_admin",
+        lambda request: {"user_id": "admin-user", "email": "admin@example.com"},
+    )
+
     response = client.get('/api/system/status')
     assert response.status_code == 200
     payload = response.json()
@@ -93,10 +104,29 @@ def test_observation_freshness_accepts_epoch_seconds():
     assert payload["observed_at"].startswith("2026-")
 
 
-def test_metrics_endpoint_returns_prometheus_payload():
+def test_metrics_endpoint_requires_ops_admin():
+    response = client.get('/metrics')
+    assert response.status_code in {401, 403, 503}
+
+
+def test_metrics_endpoint_returns_prometheus_payload_for_ops_admin(monkeypatch):
+    monkeypatch.setattr(
+        routes,
+        "_require_ops_admin",
+        lambda request: {"user_id": "admin-user", "email": "admin@example.com"},
+    )
+
     response = client.get('/metrics')
     assert response.status_code == 200
     assert 'polyweather_http_requests_total' in response.text
+
+
+def test_system_cache_status_requires_ops_admin(monkeypatch):
+    monkeypatch.setattr(routes, "_assert_entitlement", lambda request: None)
+
+    response = client.get("/api/system/cache-status?cities=shanghai")
+
+    assert response.status_code in {401, 403, 503}
 
 
 def test_standard_growth_funnel_events_are_trackable():

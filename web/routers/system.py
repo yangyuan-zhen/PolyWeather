@@ -23,8 +23,8 @@ async def healthz():
 
 
 @router.get("/api/system/status")
-async def system_status():
-    return await get_system_status_payload()
+async def system_status(request: Request):
+    return await get_system_status_payload(request)
 
 
 @router.get("/api/system/cache-status")
@@ -42,8 +42,8 @@ async def system_priority_warm(
 
 
 @router.get("/metrics", response_class=PlainTextResponse)
-async def metrics():
-    return get_prometheus_metrics_response()
+async def metrics(request: Request):
+    return get_prometheus_metrics_response(request)
 
 
 @router.get("/api/dashboard/init")

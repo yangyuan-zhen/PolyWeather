@@ -186,6 +186,7 @@ export function runTests() {
     "app/api/ops/users/route.ts",
     "app/api/ops/users/grant-points/route.ts",
     "app/api/ops/view-logs/route.ts",
+    "app/api/system/status/route.ts",
   ]) {
     const routeSource = fs.readFileSync(path.join(projectRoot, route), "utf8");
     assert(
@@ -211,14 +212,10 @@ export function runTests() {
   const optionalRefreshIndex = middlewareSource.indexOf(
     "function shouldRefreshOptionalSupabaseSession",
   );
-  const systemStatusPublicIndex = middlewareSource.indexOf(
-    'pathname === "/api/system/status"',
-  );
   assert(
-    systemStatusPublicIndex >= 0 &&
-      optionalRefreshIndex >= 0 &&
-      systemStatusPublicIndex < optionalRefreshIndex,
-    "middleware must treat public system status as public API instead of optional Supabase session refresh",
+    optionalRefreshIndex >= 0 &&
+      !middlewareSource.includes('pathname === "/api/system/status"'),
+    "middleware must not treat system status as public after it becomes an ops-only API",
   );
 
   for (const route of paymentRoutes) {

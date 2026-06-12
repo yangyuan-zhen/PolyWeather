@@ -36,7 +36,6 @@ function isPublicApi(pathname: string) {
     pathname === "/api/cities" ||
     pathname === "/api/payments/config" ||
     pathname === "/api/scan/terminal" ||
-    pathname === "/api/system/status" ||
     pathname === "/api/vitals" ||
     /^\/api\/city\/[^/]+$/i.test(pathname) ||
     /^\/api\/city\/[^/]+\/summary$/i.test(pathname) ||
