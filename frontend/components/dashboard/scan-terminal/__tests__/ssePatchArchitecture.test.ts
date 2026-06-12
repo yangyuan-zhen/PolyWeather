@@ -231,10 +231,10 @@ export function runTests() {
   );
   const fallbackRefreshBlock = chart.match(/const refreshCachedDetail = \(\) => \{[\s\S]*?\n    \};/)?.[0] || "";
   assert(
-    fallbackRefreshBlock.includes("fetchHourlyForecastForCity(city, { resolution: targetResolution })") &&
+    fallbackRefreshBlock.includes("fetchHourlyForecastForCity(city, { bypassLocalCache: true, resolution: targetResolution })") &&
       !fallbackRefreshBlock.includes("ignoreCache: true") &&
       !fallbackRefreshBlock.includes("setIsHourlyLoading(true)"),
-    "no-patch fallback refresh should update the chart through cached batch detail without force-refreshing or showing the loading overlay",
+    "no-patch fallback refresh should revalidate through cached backend detail without force-refreshing sources or showing the loading overlay",
   );
   const resyncBlock = chart.match(/useEffect\(\(\) => \{\s*if \(!resyncVersion \|\| !city\) return;[\s\S]*?\}, \[resyncVersion, city, targetResolution, applySuccessfulHourlyDetail\]\);/)?.[0] || "";
   assert(

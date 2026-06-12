@@ -41,7 +41,7 @@ class BotEntitlementService:
             "POLYWEATHER_BOT_USE_SUPABASE_ENTITLEMENT",
             SUPABASE_ENTITLEMENT.enabled,
         )
-        commands = protected_commands or ("/city", "/deb")
+        commands = protected_commands or ()
         self.protected_commands: Set[str] = {str(c).strip().lower() for c in commands if str(c).strip()}
 
     def check(self, user_id: int, command_label: str) -> EntitlementDecision:

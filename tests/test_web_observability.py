@@ -925,8 +925,10 @@ def test_chart_scope_overlays_collector_runway_history_from_db(monkeypatch):
     assert history[-1] == {"time": "2026-06-06T05:28:00+00:00", "temp": 24.8}
 
 
-def test_chart_data_cache_hit_does_not_start_full_stale_refresh(monkeypatch):
+def test_chart_data_cache_hit_starts_full_stale_refresh(monkeypatch):
     import asyncio
+
+    refresh_calls = []
 
     class FakeCache:
         def get_city_cache(self, kind, city):
@@ -951,7 +953,7 @@ def test_chart_data_cache_hit_does_not_start_full_stale_refresh(monkeypatch):
     monkeypatch.setattr(
         city_api,
         "_start_city_full_stale_refresh",
-        lambda city: (_ for _ in ()).throw(AssertionError("chart scope must not start full stale refresh")),
+        refresh_calls.append,
     )
     monkeypatch.setattr(
         city_api.legacy_routes,
@@ -962,6 +964,7 @@ def test_chart_data_cache_hit_does_not_start_full_stale_refresh(monkeypatch):
     payload = asyncio.run(city_api._get_city_chart_data("paris", force_refresh=False))
 
     assert payload["hourly"]["temps"] == [25.0]
+    assert refresh_calls == ["paris"]
 
 
 def test_chart_data_returns_cached_payload_when_optional_overlay_times_out(monkeypatch):
@@ -1058,10 +1061,55 @@ def test_city_detail_batch_partial_timeout_default_stays_below_proxy_budget(monk
     monkeypatch.delenv("POLYWEATHER_CITY_DETAIL_BATCH_PARTIAL_TIMEOUT_MS", raising=False)
     monkeypatch.delenv("POLYWEATHER_CITY_DETAIL_BATCH_CONCURRENCY", raising=False)
     monkeypatch.delenv("POLYWEATHER_CITY_DETAIL_BATCH_GLOBAL_CONCURRENCY", raising=False)
+    monkeypatch.delenv("POLYWEATHER_CITY_DETAIL_BATCH_QUEUE_WAIT_MS", raising=False)
 
     assert city_api._city_detail_batch_concurrency() == 3
     assert city_api._city_detail_batch_global_concurrency() == 2
+    assert city_api._city_detail_batch_queue_wait_seconds() == 3.0
     assert city_api._city_detail_batch_partial_timeout_seconds() == 8.0
+
+
+def test_city_detail_batch_waits_briefly_for_global_builder_slot(monkeypatch):
+    import asyncio
+    import threading
+
+    build_calls = 0
+
+    async def build_batch_item(city, **kwargs):
+        nonlocal build_calls
+        build_calls += 1
+        return city, {"city": city}
+
+    monkeypatch.setenv("POLYWEATHER_CITY_DETAIL_BATCH_GLOBAL_CONCURRENCY", "1")
+    monkeypatch.setenv("POLYWEATHER_CITY_DETAIL_BATCH_QUEUE_WAIT_MS", "200")
+    monkeypatch.setattr(city_api, "_CITY_DETAIL_BATCH_BUILD_SEMAPHORE", None)
+    monkeypatch.setattr(city_api, "_CITY_DETAIL_BATCH_BUILD_SEMAPHORE_SIZE", 0)
+    monkeypatch.setattr(city_api.legacy_routes, "_assert_entitlement", lambda request: None)
+    monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
+    monkeypatch.setattr(city_api, "_build_city_detail_batch_item_async", build_batch_item)
+
+    semaphore = city_api._city_detail_batch_build_semaphore()
+    assert semaphore.acquire(blocking=False) is True
+    release_timer = threading.Timer(0.02, semaphore.release)
+    release_timer.start()
+    try:
+        payload = asyncio.run(
+            city_api.get_city_detail_batch_payload(
+                object(),
+                cities="Wait-Paris,Wait-Shanghai",
+                resolution="10m",
+                limit=2,
+            )
+        )
+    finally:
+        release_timer.join(timeout=1)
+
+    assert payload["partial"] is False
+    assert payload.get("busy") is not True
+    assert sorted(payload["details"]) == ["wait-paris", "wait-shanghai"]
+    assert payload["missing"] == []
+    assert payload["diagnostics"]["response_source"] == "fresh_build"
+    assert build_calls == 2
 
 
 def test_city_detail_batch_returns_busy_when_global_builder_slot_is_full(monkeypatch):
@@ -1075,6 +1123,7 @@ def test_city_detail_batch_returns_busy_when_global_builder_slot_is_full(monkeyp
         return city, {"city": city}
 
     monkeypatch.setenv("POLYWEATHER_CITY_DETAIL_BATCH_GLOBAL_CONCURRENCY", "1")
+    monkeypatch.setenv("POLYWEATHER_CITY_DETAIL_BATCH_QUEUE_WAIT_MS", "10")
     monkeypatch.setattr(city_api, "_CITY_DETAIL_BATCH_BUILD_SEMAPHORE", None)
     monkeypatch.setattr(city_api, "_CITY_DETAIL_BATCH_BUILD_SEMAPHORE_SIZE", 0)
     monkeypatch.setattr(city_api.legacy_routes, "_assert_entitlement", lambda request: None)
@@ -1087,7 +1136,7 @@ def test_city_detail_batch_returns_busy_when_global_builder_slot_is_full(monkeyp
         payload = asyncio.run(
             city_api.get_city_detail_batch_payload(
                 object(),
-                cities="Paris,Shanghai",
+                cities="Busy-Paris,Busy-Shanghai",
                 resolution="10m",
                 limit=2,
             )
@@ -1098,14 +1147,14 @@ def test_city_detail_batch_returns_busy_when_global_builder_slot_is_full(monkeyp
     assert payload["partial"] is True
     assert payload["busy"] is True
     assert payload["details"] == {}
-    assert payload["missing"] == ["paris", "shanghai"]
+    assert payload["missing"] == ["busy-paris", "busy-shanghai"]
     assert payload["diagnostics"]["partial_reason"] == "busy"
     assert payload["diagnostics"]["response_source"] == "busy"
     assert payload["diagnostics"]["requested_count"] == 2
     assert payload["diagnostics"]["completed_count"] == 0
     assert payload["diagnostics"]["missing_count"] == 2
-    assert payload["diagnostics"]["city_status"]["paris"]["status"] == "busy"
-    assert payload["diagnostics"]["city_status"]["shanghai"]["status"] == "busy"
+    assert payload["diagnostics"]["city_status"]["busy-paris"]["status"] == "busy"
+    assert payload["diagnostics"]["city_status"]["busy-shanghai"]["status"] == "busy"
     assert build_calls == 0
 
 

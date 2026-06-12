@@ -1321,6 +1321,7 @@ function mergeRowObservationIntoHourly(
 }
 
 type HourlyForecastFetchOptions = {
+  bypassLocalCache?: boolean;
   ignoreCache?: boolean;
   resolution?: string;
 };
@@ -1561,13 +1562,14 @@ async function fetchHourlyForecastForCity(
   const resParam = options.resolution || "10m";
   const cacheKey = `${city}:${resParam}`;
   const forceRefresh = Boolean(options.ignoreCache);
+  const bypassLocalCache = forceRefresh || Boolean(options.bypassLocalCache);
 
-  if (!forceRefresh) {
+  if (!bypassLocalCache) {
     const cached = readHourlyCacheEntry(cacheKey);
     if (cached) {
       return cached.data;
     }
-  } else {
+  } else if (forceRefresh) {
     const recentlyRefreshed = readHourlyCacheEntry(cacheKey, {
       maxAgeMs: HOURLY_FORCE_REFRESH_DEDUP_MS,
     });
@@ -1576,7 +1578,11 @@ async function fetchHourlyForecastForCity(
     }
   }
 
-  const requestKey = options.ignoreCache ? `${city}:${resParam}:live` : `${city}:${resParam}`;
+  const requestKey = forceRefresh
+    ? `${city}:${resParam}:live`
+    : bypassLocalCache
+      ? `${city}:${resParam}:revalidate`
+      : `${city}:${resParam}`;
   const pending = _hourlyRequestCache.get(requestKey);
   if (pending) return pending;
 

@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
 from loguru import logger
 
 from src.bot.settings import (
-    CITY_DAILY_FREE_LIMIT,
-    DEB_DAILY_FREE_LIMIT,
     GROUP_MESSAGE_POINTS_ENABLED,
     MESSAGE_COOLDOWN_SEC,
     MESSAGE_DAILY_CAP,
@@ -194,28 +191,20 @@ class BotIOLayer:
 
     def build_welcome_text(self) -> str:
         return (
-            "🚀 <b>PolyWeather 天气查询机器人</b>\n\n"
+            "🚀 <b>PolyWeather 机器人</b>\n\n"
             "可用指令:\n"
-            f"/city [城市名] 或 /pwcity [城市名] - 查询城市天气预测与实测 (免费, 每日 {CITY_DAILY_FREE_LIMIT} 次)\n"
-            f"/deb [城市名] 或 /pwdeb [城市名] - 查看 DEB 融合预测准确率 (免费, 每日 {DEB_DAILY_FREE_LIMIT} 次)\n"
-            "/markets - 私聊机器人查看当前市场监控摘要\n"
             "/top - 查看积分排行榜\n"
             "/id - 获取当前聊天的 Chat ID\n\n"
             "/diag - 查看 Bot 启动诊断\n\n"
             "/bind - 绑定 Supabase 账号（可选）\n"
             "/unbind - 解除当前 Telegram 与网页账号绑定\n\n"
             "🔗 机器人: <a href=\"https://t.me/polyyuanbot\">@polyyuanbot</a>\n"
-            "👥 社群: <a href=\"https://t.me/+Io5H9oVHFmVjOTQ5\">加入 Telegram 群组</a>\n\n"
-            "📌 <i>私有频道用于接收自动推送；手动查看市场概览请私聊机器人发送 <code>/markets</code>。</i>\n\n"
-            "示例: <code>/city 伦敦</code> 或 <code>/pwcity 伦敦</code>\n"
-            "💡 <i>提示: 积分现在通过邀请制度获得；有效邀请完成首次 Pro 付款后，邀请人获得积分奖励。</i>"
+            "👥 社群: <a href=\"https://t.me/+Io5H9oVHFmVjOTQ5\">加入 Telegram 群组</a>"
         )
 
     def build_points_rank_text(self, user: Any) -> str:
         self.db.upsert_user(user.id, self.display_name(user))
         user_info = self.db.get_user(user.id)
-        now = datetime.now()
-        today_str = now.strftime("%Y-%m-%d")
 
         leaderboard = self.db.get_leaderboard(limit=5)
         rank_text = "🏆 <b>PolyWeather 用户积分排行</b>\n"
@@ -227,17 +216,12 @@ class BotIOLayer:
             rank_text += f"{medal} {username}: <b>{points}</b> 分\n"
 
         if user_info:
-            daily_queries_date = str(user_info.get("daily_queries_date") or "")
-            city_used = int(user_info.get("daily_city_queries") or 0) if daily_queries_date == today_str else 0
-            deb_used = int(user_info.get("daily_deb_queries") or 0) if daily_queries_date == today_str else 0
-
             rank_text += "────────────────────\n"
             rank_text += (
                 "👤 <b>我的状态：</b>\n"
                 f"┣ 累计积分: <code>{user_info['points']}</code>\n"
                 "┣ 积分获取: <code>邀请付费用户</code>\n"
-                "┣ 抵扣规则: <code>500分 = 1 USDC，单笔最多抵3U</code>\n"
-                f"┗ /city 免费 ({city_used}/{CITY_DAILY_FREE_LIMIT}) | /deb 免费 ({deb_used}/{DEB_DAILY_FREE_LIMIT})"
+                "┗ 抵扣规则: <code>500分 = 1 USDC，单笔最多抵3U</code>"
             )
         return rank_text
 

@@ -79,7 +79,7 @@ def test_basic_handler_diag_returns_html():
         started_at="2026-03-12 00:00:00 UTC",
         loops=[],
         command_access_mode="group_member",
-        protected_commands=["/city", "/deb"],
+        protected_commands=[],
         required_group_chat_id="-1001234567890",
     )
     bot = DummyBot()
@@ -131,7 +131,7 @@ def test_start_bind_token_binds_telegram_to_web_account():
             started_at="2026-03-12 00:00:00 UTC",
             loops=[],
             command_access_mode="group_member",
-            protected_commands=["/city", "/deb"],
+            protected_commands=[],
             required_group_chat_id="-1001234567890",
         ),
     )
@@ -173,7 +173,7 @@ def test_confirm_bind_callback_consumes_token_and_binds_account():
             started_at="2026-03-12 00:00:00 UTC",
             loops=[],
             command_access_mode="group_member",
-            protected_commands=["/city", "/deb"],
+            protected_commands=[],
             required_group_chat_id="-1001234567890",
         ),
     )
@@ -204,7 +204,7 @@ def test_private_text_fallback_replies_with_binding_help():
             started_at="2026-03-12 00:00:00 UTC",
             loops=[],
             command_access_mode="group_member",
-            protected_commands=["/city", "/deb"],
+            protected_commands=[],
             required_group_chat_id="-1001234567890",
         ),
     )
@@ -230,7 +230,7 @@ def test_private_text_fallback_ignores_slash_commands():
             started_at="2026-03-12 00:00:00 UTC",
             loops=[],
             command_access_mode="group_member",
-            protected_commands=["/city", "/deb"],
+            protected_commands=[],
             required_group_chat_id="-1001234567890",
         ),
     )
@@ -241,7 +241,7 @@ def test_private_text_fallback_ignores_slash_commands():
     assert bot.replies == []
 
 
-def test_basic_handler_markets_returns_summary():
+def test_basic_handler_ignores_removed_markets_command():
     bot = DummyBot()
     io_layer = SimpleNamespace(
         build_welcome_text=lambda: "WELCOME",
@@ -254,44 +254,16 @@ def test_basic_handler_markets_returns_summary():
             started_at="2026-03-12 00:00:00 UTC",
             loops=[],
             command_access_mode="group_member",
-            protected_commands=["/city", "/deb"],
+            protected_commands=[],
             required_group_chat_id="-1001234567890",
         ),
         config={},
     )
 
-    handler.handle_markets(_message("/markets"))
+    handler._dispatch(_message("/markets"))
 
-    assert len(bot.replies) == 1
-    assert "市场概览" in bot.replies[0]["text"]
-    assert "已移除" in bot.replies[0]["text"]
-
-
-def test_basic_handler_markets_rejects_channel_chat():
-    bot = DummyBot()
-    io_layer = SimpleNamespace(
-        build_welcome_text=lambda: "WELCOME",
-        build_points_rank_text=lambda _user: "TOP",
-    )
-    handler = BasicCommandHandler(
-        bot=bot,
-        io_layer=io_layer,
-        runtime_status_provider=lambda: RuntimeStatus(
-            started_at="2026-03-12 00:00:00 UTC",
-            loops=[],
-            command_access_mode="group_member",
-            protected_commands=["/city", "/deb"],
-            required_group_chat_id="-1001234567890",
-        ),
-        config={},
-    )
-
-    msg = _message("/markets")
-    msg.chat = SimpleNamespace(id=-1001, type="channel")
-    handler.handle_markets(msg)
-
-    assert len(bot.replies) == 1
-    assert "仅支持私聊机器人查询" in bot.replies[0]["text"]
+    assert bot.replies == []
+    assert bot.sent_messages == []
 
 
 def _join_request(user_id: int = 12345, chat_id: int = -100123):
@@ -324,7 +296,7 @@ def test_join_request_auto_approves_bound_active_pro_user(monkeypatch):
             started_at="2026-03-12 00:00:00 UTC",
             loops=[],
             command_access_mode="group_member",
-            protected_commands=["/city", "/deb"],
+            protected_commands=[],
             required_group_chat_id="-100123",
         ),
         entitlement_service=entitlement,
@@ -354,7 +326,7 @@ def test_join_request_keeps_unbound_user_pending_by_default(monkeypatch):
             started_at="2026-03-12 00:00:00 UTC",
             loops=[],
             command_access_mode="group_member",
-            protected_commands=["/city", "/deb"],
+            protected_commands=[],
             required_group_chat_id="-100123",
         ),
         entitlement_service=entitlement,
@@ -389,7 +361,7 @@ def test_join_request_keeps_trial_user_pending(monkeypatch):
             started_at="2026-03-12 00:00:00 UTC",
             loops=[],
             command_access_mode="group_member",
-            protected_commands=["/city", "/deb"],
+            protected_commands=[],
             required_group_chat_id="-100123",
         ),
         entitlement_service=entitlement,
@@ -429,7 +401,7 @@ def test_join_request_approves_trial_user_with_queued_paid_subscription(monkeypa
             started_at="2026-03-12 00:00:00 UTC",
             loops=[],
             command_access_mode="group_member",
-            protected_commands=["/city", "/deb"],
+            protected_commands=[],
             required_group_chat_id="-100123",
         ),
         entitlement_service=entitlement,
@@ -469,7 +441,7 @@ def test_join_request_uses_subscription_window_without_latest_fallback(monkeypat
             started_at="2026-03-12 00:00:00 UTC",
             loops=[],
             command_access_mode="group_member",
-            protected_commands=["/city", "/deb"],
+            protected_commands=[],
             required_group_chat_id="-100123",
         ),
         entitlement_service=entitlement,
@@ -499,7 +471,7 @@ def test_join_request_can_decline_ineligible_user_when_configured(monkeypatch):
             started_at="2026-03-12 00:00:00 UTC",
             loops=[],
             command_access_mode="group_member",
-            protected_commands=["/city", "/deb"],
+            protected_commands=[],
             required_group_chat_id="-100123",
         ),
         entitlement_service=entitlement,

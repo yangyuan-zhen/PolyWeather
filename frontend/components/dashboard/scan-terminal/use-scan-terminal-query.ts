@@ -103,6 +103,8 @@ export function useScanTerminalQuery({
   } = useRemoteDataQuery<ScanTerminalResponse>();
 
   const lastForcedScanRefreshAtRef = useRef(0);
+  const lastForegroundScanRefreshAtRef = useRef(0);
+  const lastScanSuccessAtRef = useRef(0);
   const patchVersion = useSsePatchVersion();
   const [cachedRows, setCachedRows] = useState<ScanTerminalResponse | null>(() => {
     if (typeof window !== "undefined") {
@@ -140,7 +142,11 @@ export function useScanTerminalQuery({
             tradingRegion,
           }),
         showLoading,
-        onSuccess: (data) => { writeScanCache(data, tradingRegion || ""); setCachedRows(data); },
+        onSuccess: (data) => {
+          lastScanSuccessAtRef.current = Date.now();
+          writeScanCache(data, tradingRegion || "");
+          setCachedRows(data);
+        },
       });
     },
     [isPro, proAccessLoading, run, timezoneOffsetSeconds, tradingRegion],
@@ -171,6 +177,34 @@ export function useScanTerminalQuery({
     }
     void fetchScanTerminal({ forceRefresh: true, showLoading: true });
   }, [fetchScanTerminal, terminalData]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    if (proAccessLoading || !isPro) return;
+
+    const handleForegroundScanRefresh = () => {
+      if (document.visibilityState !== "visible") return;
+      if (scanRemote.status === "loading") return;
+      const now = Date.now();
+      if (now - lastForegroundScanRefreshAtRef.current < 30_000) return;
+      if (
+        lastScanSuccessAtRef.current > 0 &&
+        now - lastScanSuccessAtRef.current < SCAN_CACHE_TTL_MS
+      ) {
+        return;
+      }
+
+      lastForegroundScanRefreshAtRef.current = now;
+      void fetchScanTerminal({ forceRefresh: false, showLoading: false });
+    };
+
+    document.addEventListener("visibilitychange", handleForegroundScanRefresh);
+    window.addEventListener("focus", handleForegroundScanRefresh);
+    return () => {
+      document.removeEventListener("visibilitychange", handleForegroundScanRefresh);
+      window.removeEventListener("focus", handleForegroundScanRefresh);
+    };
+  }, [fetchScanTerminal, isPro, proAccessLoading, scanRemote.status]);
 
   // Preload adjacent regions in idle time for instant tab switches
   useEffect(() => {

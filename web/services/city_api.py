@@ -397,6 +397,8 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
     if cached_entry:
         payload = cached_entry.get("payload") or {}
         if payload:
+            if not legacy_routes._city_cache_is_fresh(cached_entry, legacy_routes.CITY_FULL_CACHE_TTL_SEC):
+                _start_city_full_stale_refresh(city)
             payload = await _run_optional_city_chart_overlay(
                 city=city,
                 overlay_name="runway_history",
@@ -999,6 +1001,17 @@ def _city_detail_batch_global_concurrency() -> int:
     return max(1, min(4, value))
 
 
+def _city_detail_batch_queue_wait_seconds() -> float:
+    try:
+        wait_ms = int(
+            os.getenv("POLYWEATHER_CITY_DETAIL_BATCH_QUEUE_WAIT_MS", "3000")
+            or "3000"
+        )
+    except ValueError:
+        wait_ms = 3000
+    return max(0.0, min(5.0, wait_ms / 1000.0))
+
+
 def _city_detail_batch_build_semaphore() -> threading.BoundedSemaphore:
     global _CITY_DETAIL_BATCH_BUILD_SEMAPHORE, _CITY_DETAIL_BATCH_BUILD_SEMAPHORE_SIZE
     size = _city_detail_batch_global_concurrency()
@@ -1146,7 +1159,16 @@ async def get_city_detail_batch_payload(
 
         async def _build_uncached_payload() -> Dict[str, Any]:
             build_semaphore = _city_detail_batch_build_semaphore()
-            if not build_semaphore.acquire(blocking=False):
+            queue_wait_seconds = _city_detail_batch_queue_wait_seconds()
+            acquired = await timer.measure_async(
+                "wait_builder_slot",
+                lambda: run_in_threadpool(
+                    build_semaphore.acquire,
+                    True,
+                    queue_wait_seconds,
+                ),
+            )
+            if not acquired:
                 missing = list(city_names)
                 errors: Dict[str, str] = {}
                 details: Dict[str, Any] = {}

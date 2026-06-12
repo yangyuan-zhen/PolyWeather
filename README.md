@@ -25,7 +25,7 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 
 - Subscription live: `Pro Monthly 29.9 USDC / 30 days` and `Pro Quarterly 79.9 USDC / 90 days`.
 - Referral pricing live: invited users can get the first monthly Pro at `20 USDC`; inviters receive `3500` points after a valid first Pro payment, capped at 10 paid invites per month.
-- `/city` and `/deb` now free (daily cap 10 each); points redeemable for payment discount (`500 pts = 1 USDC`, monthly max `3 USDC`, quarterly max `8 USDC`). Useful user feedback can also receive manual point rewards through ops.
+- Points are redeemable for payment discounts (`500 pts = 1 USDC`, monthly max `3 USDC`, quarterly max `8 USDC`). Useful user feedback can also receive manual point rewards through ops.
 - Onchain checkout live: Polygon contract checkout (USDC / USDC.e) plus Ethereum mainnet USDC direct-transfer confirmation.
 - Auto-reconciliation live: event listener + periodic confirm loop.
 - Ops dashboard live: `/ops` for memberships, leaderboard, user feedback triage, manual point grants, and payment incident triage.
@@ -195,8 +195,6 @@ Production payment routes are configured by the backend. Polygon remains the def
 
 | Command | Purpose |
 | :-- | :-- |
-| `/city <name>` | City real-time analysis |
-| `/deb <name>` | DEB historical reconciliation |
 | `/top` | User leaderboard |
 | `/id` | Show current chat ID |
 | `/diag` | Startup diagnostics |

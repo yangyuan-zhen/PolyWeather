@@ -20,6 +20,7 @@ import {
   __resetHourlyDetailRequestQueueForTest,
   __runQueuedHourlyDetailRequestForTest,
   clearCityDetailCache,
+  fetchHourlyForecastForCity,
   readCityDetailBatchDiagnostics,
 } from "@/components/dashboard/scan-terminal/temperature-chart-logic";
 
@@ -65,6 +66,13 @@ export async function runTests() {
     "scan list should subscribe to SSE patch state instead of running a 5-minute interval",
   );
   assert(
+    querySource.includes("handleForegroundScanRefresh") &&
+      querySource.includes('document.visibilityState !== "visible"') &&
+      querySource.includes("SCAN_CACHE_TTL_MS") &&
+      querySource.includes("fetchScanTerminal({ forceRefresh: false, showLoading: false })"),
+    "scan list should silently revalidate stale rows when a long-hidden browser tab returns to the foreground",
+  );
+  assert(
     chartLogicSource.includes("DASHBOARD_REFRESH_POLICY_MS.metar") &&
       !chartSource.includes("window.setInterval"),
     "selected city detail chart cache should align with 5-minute scan/metar cadence",
@@ -79,8 +87,10 @@ export async function runTests() {
   assert(
     chartSource.includes("NO_PATCH_CACHED_DETAIL_REFRESH_MS = DASHBOARD_REFRESH_POLICY_MS.observation") &&
       chartSource.includes("refreshCachedDetail") &&
-      chartSource.includes("fetchHourlyForecastForCity(city, { resolution: targetResolution })"),
-    "visible charts should do a lightweight cached detail refresh every observation cadence when no SSE patch arrives",
+      chartSource.includes("fetchHourlyForecastForCity(city, { bypassLocalCache: true, resolution: targetResolution })") &&
+      chartLogicSource.includes("options.bypassLocalCache") &&
+      chartLogicSource.includes("const forceRefresh = Boolean(options.ignoreCache)"),
+    "visible charts should bypass the five-minute browser detail cache every observation cadence without force-refreshing backend sources",
   );
   assert(
     chartSource.includes("preloadTemperatureChartCanvas"),
@@ -442,6 +452,7 @@ export async function runTests() {
 
   const originalWindow = (globalThis as any).window;
   const originalSessionStorage = (globalThis as any).sessionStorage;
+  const originalFetch = (globalThis as any).fetch;
   const store = new Map<string, string>();
   (globalThis as any).window = {};
   (globalThis as any).sessionStorage = {
@@ -462,6 +473,50 @@ export async function runTests() {
     },
   };
   try {
+    clearCityDetailCache();
+    const revalidationUrls: string[] = [];
+    let revalidationFetches = 0;
+    (globalThis as any).fetch = async (url: string) => {
+      revalidationFetches += 1;
+      revalidationUrls.push(String(url));
+      return {
+        ok: true,
+        json: async () => ({
+          cities: ["fallback-revalidate"],
+          details: {
+            "fallback-revalidate": {
+              city: "fallback-revalidate",
+              hourly: {
+                times: ["00:00"],
+                temps: [revalidationFetches],
+              },
+            },
+          },
+          errors: {},
+          missing: [],
+          partial: false,
+        }),
+      };
+    };
+
+    const firstDetail = await fetchHourlyForecastForCity("fallback-revalidate", { resolution: "10m" });
+    const cachedDetail = await fetchHourlyForecastForCity("fallback-revalidate", { resolution: "10m" });
+    const revalidatedDetail = await fetchHourlyForecastForCity("fallback-revalidate", {
+      bypassLocalCache: true,
+      resolution: "10m",
+    });
+    assert(
+      firstDetail?.temps[0] === 1 &&
+        cachedDetail?.temps[0] === 1 &&
+        revalidatedDetail?.temps[0] === 2 &&
+        revalidationFetches === 2,
+      "bypassLocalCache should revalidate cached chart detail through the network",
+    );
+    assert(
+      revalidationUrls.every((url) => url.includes("force_refresh=false")),
+      "bypassLocalCache must not force-refresh backend observation sources",
+    );
+
     clearCityDetailCache();
     const cacheKey = "paris:10m";
     store.set(
@@ -490,6 +545,7 @@ export async function runTests() {
     clearCityDetailCache();
     (globalThis as any).window = originalWindow;
     (globalThis as any).sessionStorage = originalSessionStorage;
+    (globalThis as any).fetch = originalFetch;
   }
 }
 

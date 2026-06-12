@@ -1,98 +1,67 @@
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from src.bot.handlers.city import CityCommandHandler
-from src.bot.handlers.deb import DebCommandHandler
-from src.bot.services.city_command_service import CityReportResult, CityResolveResult
-from src.bot.services.deb_command_service import DebReportResult
+from src.bot.orchestrator import _register_handlers
+from src.bot.runtime_coordinator import RuntimeStatus
 
 
-def _message(text: str):
-    return SimpleNamespace(
-        text=text,
-        from_user=SimpleNamespace(id=123, username="tester", first_name="Tester"),
-        chat=SimpleNamespace(id=999),
-        entities=[],
+class RecordingBot:
+    def __init__(self):
+        self.command_handlers = []
+
+    def message_handler(self, *args, **kwargs):
+        commands = kwargs.get("commands")
+        if commands:
+            self.command_handlers.extend(commands)
+
+        def _decorator(func):
+            return func
+
+        return _decorator
+
+    def chat_join_request_handler(self, *args, **kwargs):
+        def _decorator(func):
+            return func
+
+        return _decorator
+
+    def callback_query_handler(self, *args, **kwargs):
+        def _decorator(func):
+            return func
+
+        return _decorator
+
+def test_register_handlers_does_not_expose_removed_query_commands():
+    bot = RecordingBot()
+    io_layer = SimpleNamespace(
+        build_welcome_text=Mock(return_value="WELCOME"),
+        build_points_rank_text=Mock(return_value="TOP"),
+        track_group_text_activity=Mock(),
     )
-
-
-def test_city_handler_missing_city_shows_usage():
-    bot = SimpleNamespace()
-    guard = SimpleNamespace(
-        check_daily_query_limit=Mock(return_value=True),
-        ensure_access_and_points=Mock(return_value=True),
-    )
-    city_service = SimpleNamespace(resolve_city=Mock(), build_report=Mock())
-    io_layer = SimpleNamespace(send_query_message=Mock())
-    handler = CityCommandHandler(
-        bot=bot,
-        guard=guard,
-        city_service=city_service,
-        io_layer=io_layer,
-    )
-
-    handler.handle(_message("/city"))
-
-    assert io_layer.send_query_message.call_count == 1
-    assert "请输入城市名称" in io_layer.send_query_message.call_args[0][1]
-    assert guard.ensure_access_and_points.call_count == 0
-
-
-def test_city_handler_happy_path_pushes_progress_and_report():
-    bot = SimpleNamespace()
-    guard = SimpleNamespace(
-        check_daily_query_limit=Mock(return_value=True),
-        ensure_access_and_points=Mock(return_value=True),
-    )
-    city_service = SimpleNamespace(
-        resolve_city=Mock(
-            return_value=CityResolveResult(
-                ok=True,
-                city_name="london",
-                supported_cities=["london"],
+    startup_coordinator = SimpleNamespace(
+        get_runtime_status=Mock(
+            return_value=RuntimeStatus(
+                started_at="2026-06-13 00:00:00 UTC",
+                loops=[],
+                command_access_mode="public",
+                protected_commands=[],
+                required_group_chat_id="",
             )
-        ),
-        build_report=Mock(return_value=CityReportResult(ok=True, report="CITY_REPORT")),
+        )
     )
-    io_layer = SimpleNamespace(send_query_message=Mock())
-    handler = CityCommandHandler(
+
+    _register_handlers(
         bot=bot,
-        guard=guard,
-        city_service=city_service,
+        config={},
         io_layer=io_layer,
+        guard=SimpleNamespace(),
+        city_service=SimpleNamespace(),
+        deb_service=SimpleNamespace(),
+        startup_coordinator=startup_coordinator,
     )
 
-    handler.handle(_message("/city london"))
-
-    assert io_layer.send_query_message.call_count == 2
-    first_call = io_layer.send_query_message.call_args_list[0]
-    second_call = io_layer.send_query_message.call_args_list[1]
-    assert "正在查询 London 的天气数据" in first_call.args[1]
-    assert second_call.args[1] == "CITY_REPORT"
-    assert second_call.kwargs["parse_mode"] == "HTML"
-
-
-def test_deb_handler_history_missing_returns_hint():
-    bot = SimpleNamespace()
-    guard = SimpleNamespace(
-        check_daily_query_limit=Mock(return_value=True),
-        ensure_access_and_points=Mock(return_value=True),
-    )
-    deb_service = SimpleNamespace(
-        resolve_city=Mock(return_value="ankara"),
-        has_history=Mock(return_value=False),
-        build_report=Mock(return_value=DebReportResult(ok=True, report="DEB_REPORT")),
-    )
-    io_layer = SimpleNamespace(send_query_message=Mock())
-    handler = DebCommandHandler(
-        bot=bot,
-        guard=guard,
-        deb_service=deb_service,
-        io_layer=io_layer,
-    )
-
-    handler.handle(_message("/deb ankara"))
-
-    assert io_layer.send_query_message.call_count == 1
-    assert "暂无 ankara 的历史数据" in io_layer.send_query_message.call_args[0][1]
-    assert guard.ensure_access_and_points.call_count == 0
+    assert "city" not in bot.command_handlers
+    assert "pwcity" not in bot.command_handlers
+    assert "deb" not in bot.command_handlers
+    assert "pwdeb" not in bot.command_handlers
+    assert "markets" not in bot.command_handlers

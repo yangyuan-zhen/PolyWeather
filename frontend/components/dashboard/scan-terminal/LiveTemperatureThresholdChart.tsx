@@ -923,7 +923,7 @@ export function LiveTemperatureThresholdChart({
       lastPatchAtRef.current = now;
       markDetailRequest("network");
 
-      fetchHourlyForecastForCity(city, { resolution: targetResolution })
+      fetchHourlyForecastForCity(city, { bypassLocalCache: true, resolution: targetResolution })
         .then((data) => {
           if (cancelled) return;
           if (!data) {

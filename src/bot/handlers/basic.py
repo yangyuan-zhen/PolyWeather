@@ -17,7 +17,6 @@ from src.auth.telegram_group_pricing import TelegramGroupPricing, TELEGRAM_MEMBE
 from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
 
 _BASIC_COMMANDS = {"start", "help", "id", "top", "diag", "bind", "unbind"}
-_BASIC_COMMANDS = {"start", "help", "id", "top", "diag", "bind", "unbind", "markets"}
 
 
 class BasicCommandHandler:
@@ -58,10 +57,6 @@ class BasicCommandHandler:
 
         @self.bot.message_handler(commands=["unbind"])
         def _unbind(message):
-            self._dispatch(message)
-
-        @self.bot.message_handler(commands=["markets"])
-        def _markets(message):
             self._dispatch(message)
 
         if hasattr(self.bot, "chat_join_request_handler"):
@@ -123,9 +118,6 @@ class BasicCommandHandler:
         if command == "unbind":
             self.handle_unbind(message)
             return
-        if command == "markets":
-            self.handle_markets(message)
-            return
 
     def handle_start_help(self, message: Any) -> None:
         trace = CommandTrace("/start", message)
@@ -141,7 +133,6 @@ class BasicCommandHandler:
             trace.set_status("ok")
         finally:
             trace.emit()
-
     @staticmethod
     def _is_private_text_fallback(message: Any) -> bool:
         text = str(getattr(message, "text", "") or "").strip()
@@ -551,27 +542,5 @@ class BasicCommandHandler:
                 "✅ 已解除当前 Telegram 与网页账号的绑定。",
             )
             trace.set_status("ok", "unbound")
-        finally:
-            trace.emit()
-
-    def handle_markets(self, message: Any) -> None:
-        trace = CommandTrace("/markets", message)
-        try:
-            chat_type = str(getattr(getattr(message, "chat", None), "type", "") or "").strip().lower()
-            if chat_type and chat_type != "private":
-                self.bot.reply_to(
-                    message,
-                    "ℹ️ `/markets` 仅支持私聊机器人查询。",
-                    parse_mode="Markdown",
-                )
-                trace.set_status("blocked", f"unsupported_chat_type:{chat_type}")
-                return
-
-            self.bot.reply_to(
-                message,
-                "ℹ️ 市场概览 (Focus Digest) 功能已移除。\n频道继续接收关键市场警报推送；如需查看当前市场状态，请访问 https://polyweather.top/",
-                disable_web_page_preview=True,
-            )
-            trace.set_status("ok", "removed")
         finally:
             trace.emit()
