@@ -1101,6 +1101,13 @@ class SupabaseEntitlementService:
             "points_after": after,
         }
 
+    def grant_points_to_user(
+        self,
+        user_id: str,
+        points: int,
+    ) -> Dict[str, object]:
+        return self._grant_referral_points(user_id, points)
+
     def _record_referral_resolution_event(
         self,
         *,

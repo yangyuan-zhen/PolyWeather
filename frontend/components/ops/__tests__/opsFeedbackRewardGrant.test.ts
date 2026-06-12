@@ -56,4 +56,10 @@ export function runTests() {
       feedbackPageSource.includes("reward_points"),
     "ops feedback page must show existing feedback reward details",
   );
+  assert(
+    feedbackPageSource.includes("actionError") &&
+      feedbackPageSource.includes("奖励发放失败：") &&
+      feedbackPageSource.includes("加载失败："),
+    "ops feedback page must distinguish reward action failures from list loading failures",
+  );
 }

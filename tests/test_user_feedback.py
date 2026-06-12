@@ -170,6 +170,64 @@ def test_ops_feedback_reward_service_returns_operator(monkeypatch):
     assert payload["feedback"]["reward_reason"] == ""
 
 
+def test_ops_feedback_reward_falls_back_to_supabase_user_without_telegram_binding(monkeypatch):
+    updated_feedback = {
+        "id": 19,
+        "user_id": "supabase-user-19",
+        "user_email": "927794117@qq.com",
+        "reward_points": 500,
+        "reward_reason": "",
+        "reward_status": "granted",
+    }
+
+    class FakeDB:
+        def grant_feedback_reward(self, feedback_id, *, points, reason=""):
+            return {
+                "ok": False,
+                "reason": "user_not_found",
+                "feedback": {
+                    "id": feedback_id,
+                    "user_id": "supabase-user-19",
+                    "user_email": "927794117@qq.com",
+                },
+            }
+
+        def update_user_feedback_reward(self, feedback_id, *, points, reason="", status="granted"):
+            assert feedback_id == 19
+            assert points == 500
+            assert reason == ""
+            assert status == "granted"
+            return updated_feedback
+
+    class FakeEntitlement:
+        def grant_points_to_user(self, user_id, points):
+            assert user_id == "supabase-user-19"
+            assert points == 500
+            return {
+                "ok": True,
+                "source": "supabase_metadata",
+                "points_before": 100,
+                "points_added": 500,
+                "points_after": 600,
+            }
+
+    monkeypatch.setattr(ops_api, "_require_ops", lambda request: {"email": "ops@example.com"})
+    monkeypatch.setattr(ops_api, "DBManager", lambda: FakeDB())
+    monkeypatch.setattr(ops_api.legacy_routes, "SUPABASE_ENTITLEMENT", FakeEntitlement())
+
+    payload = ops_api.grant_ops_feedback_reward(
+        object(),
+        feedback_id=19,
+        points=500,
+    )
+
+    assert payload["ok"] is True
+    assert payload["source"] == "supabase_metadata"
+    assert payload["points_after"] == 600
+    assert payload["feedback"] == updated_feedback
+    assert payload["operator_email"] == "ops@example.com"
+
+
 def test_user_feedback_identity_filter_returns_only_matching_user(tmp_path):
     db = DBManager(str(tmp_path / "polyweather-feedback-identity.db"))
     mine_by_user_id = db.append_user_feedback(

@@ -185,7 +185,8 @@ function feedbackFreshnessBadges(context?: Record<string, unknown>) {
 
 export function FeedbackPageClient() {
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [filter, setFilter] = useState("");
   const [payload, setPayload] = useState<UserFeedbackPayload | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
@@ -194,12 +195,12 @@ export function FeedbackPageClient() {
 
   const load = async () => {
     setLoading(true);
-    setError("");
+    setLoadError("");
     try {
       const data = (await opsApi.feedback(120, filter)) as UserFeedbackPayload;
       setPayload(data);
     } catch (err) {
-      setError(String(err).slice(0, 220));
+      setLoadError(String(err).slice(0, 220));
     } finally {
       setLoading(false);
     }
@@ -246,15 +247,15 @@ export function FeedbackPageClient() {
     const selectedPoints = rewardPointsById[row.id] || String(REWARD_POINT_OPTIONS[1].value);
     const points = Number.parseInt(selectedPoints, 10);
     if (!row.user_email) {
-      setError("这条反馈没有绑定用户邮箱，不能从反馈页直接发放积分。");
+      setActionError("这条反馈没有绑定用户邮箱，不能从反馈页直接发放积分。");
       return;
     }
     if (!Number.isFinite(points) || points <= 0) {
-      setError("请输入有效的奖励积分。");
+      setActionError("请输入有效的奖励积分。");
       return;
     }
     setRewardingId(row.id);
-    setError("");
+    setActionError("");
     try {
       await opsApi.grantFeedbackReward(row.id, points);
       setRewardPointsById((prev) => {
@@ -264,7 +265,7 @@ export function FeedbackPageClient() {
       });
       await load();
     } catch (err) {
-      setError(String(err).slice(0, 220));
+      setActionError(String(err).slice(0, 220));
     } finally {
       setRewardingId(null);
     }
@@ -283,9 +284,15 @@ export function FeedbackPageClient() {
         </Button>
       </div>
 
-      {error && (
+      {loadError && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          加载失败：{error}
+          加载失败：{loadError}
+        </div>
+      )}
+
+      {actionError && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          奖励发放失败：{actionError}
         </div>
       )}
 

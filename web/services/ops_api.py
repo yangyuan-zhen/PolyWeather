@@ -203,6 +203,33 @@ def grant_ops_feedback_reward(
         points=points,
         reason=reason,
     )
+    if not result.get("ok") and str(result.get("reason") or "") == "user_not_found":
+        feedback = result.get("feedback") if isinstance(result.get("feedback"), dict) else {}
+        reward_status = str(feedback.get("reward_status") or "").strip().lower()
+        reward_points = int(feedback.get("reward_points") or 0)
+        supabase_user_id = str(feedback.get("user_id") or "").strip().lower()
+        if supabase_user_id and not (reward_status == "granted" and reward_points > 0):
+            try:
+                fallback = legacy_routes.SUPABASE_ENTITLEMENT.grant_points_to_user(
+                    supabase_user_id,
+                    points,
+                )
+            except Exception as exc:
+                fallback = {"ok": False, "reason": f"supabase_points_grant_failed:{exc}"}
+            if fallback.get("ok"):
+                updated_feedback = db.update_user_feedback_reward(
+                    feedback_id,
+                    points=points,
+                    reason=reason,
+                    status="granted",
+                )
+                result = {
+                    **fallback,
+                    "ok": True,
+                    "feedback_id": int(feedback_id),
+                    "supabase_user_id": supabase_user_id,
+                    "feedback": updated_feedback,
+                }
     result["operator_email"] = admin.get("email")
     if not result.get("ok"):
         reason_code = str(result.get("reason") or "feedback_reward_failed")
