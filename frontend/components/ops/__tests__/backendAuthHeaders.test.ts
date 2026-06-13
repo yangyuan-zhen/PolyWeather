@@ -37,4 +37,17 @@ export function runTests() {
       helperSource.includes('result.set("Content-Type", "application/json")'),
     "backend auth must expose a safe JSON header builder",
   );
+
+  assert(
+    helperSource.includes("getVerifiedBearerIdentity") &&
+      helperSource.includes("/auth/v1/user") &&
+      helperSource.includes("apikey: anonKey") &&
+      helperSource.includes("incomingAuth") &&
+      helperSource.includes("const identity = await getVerifiedBearerIdentity(incomingAuth)") &&
+      helperSource.includes("headers.set(FORWARDED_SUPABASE_USER_ID_HEADER, identity.userId)") &&
+      helperSource.includes("headers.set(FORWARDED_SUPABASE_EMAIL_HEADER, identity.email)") &&
+      helperSource.includes("authUserId: identity?.userId || null") &&
+      helperSource.includes("authEmail: identity?.email || null"),
+    "backend auth helper must verify incoming Supabase bearer tokens and forward trusted user identity headers to backend services",
+  );
 }

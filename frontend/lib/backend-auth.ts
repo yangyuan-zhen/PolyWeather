@@ -18,6 +18,11 @@ type HeaderBuildOptions = {
   includeSupabaseIdentity?: boolean;
 };
 
+type VerifiedBearerIdentity = {
+  email: string;
+  userId: string;
+};
+
 function extractBearerToken(headerValue: string | null) {
   if (!headerValue) return "";
   const parts = headerValue.trim().split(/\s+/);
@@ -25,6 +30,40 @@ function extractBearerToken(headerValue: string | null) {
     return parts[1];
   }
   return "";
+}
+
+async function getVerifiedBearerIdentity(
+  accessToken: string,
+): Promise<VerifiedBearerIdentity | null> {
+  const token = String(accessToken || "").trim();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  if (!token || !supabaseUrl || !anonKey) return null;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 4000);
+  try {
+    const res = await fetch(`${supabaseUrl.replace(/\/+$/, "")}/auth/v1/user`, {
+      cache: "no-store",
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${token}`,
+      },
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    const user = await res.json();
+    const userId = String(user?.id || "").trim();
+    if (!userId) return null;
+    return {
+      email: String(user?.email || "").trim(),
+      userId,
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function hasSupabaseSessionCookie(request: NextRequest) {
@@ -54,11 +93,18 @@ export async function buildBackendRequestHeaders(
   const incomingAuth = extractBearerToken(request.headers.get("authorization"));
   if (incomingAuth) {
     headers.set("Authorization", `Bearer ${incomingAuth}`);
+    const identity = await getVerifiedBearerIdentity(incomingAuth);
+    if (identity?.userId) {
+      headers.set(FORWARDED_SUPABASE_USER_ID_HEADER, identity.userId);
+      if (identity.email) {
+        headers.set(FORWARDED_SUPABASE_EMAIL_HEADER, identity.email);
+      }
+    }
     return {
       headers,
       response: null,
-      authUserId: null,
-      authEmail: null,
+      authUserId: identity?.userId || null,
+      authEmail: identity?.email || null,
       hasBearerAuth: true,
     };
   }

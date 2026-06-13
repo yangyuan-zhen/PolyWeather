@@ -343,7 +343,7 @@ export function runTests() {
   assert(
     backendAuthSource.includes("headers.set(FORWARDED_SUPABASE_USER_ID_HEADER") &&
       backendAuthSource.includes("headers.set(FORWARDED_SUPABASE_EMAIL_HEADER") &&
-      backendAuthSource.indexOf("headers.set(FORWARDED_SUPABASE_USER_ID_HEADER") >
+      backendAuthSource.lastIndexOf("headers.set(FORWARDED_SUPABASE_USER_ID_HEADER") >
         backendAuthSource.indexOf("const sessionUser = session?.user"),
     "backend proxy must forward Supabase session user id/email with the backend token so Python can skip duplicate /auth/v1/user validation",
   );
