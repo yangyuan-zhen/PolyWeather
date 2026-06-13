@@ -45,7 +45,7 @@ _HTTP_SESSION_LOCK = threading.Lock()
 # Bot send_message rate limiter: max N messages per second across all threads
 _SEND_MSG_LOCK = threading.Lock()
 _SEND_MSG_LAST_TS: float = 0.0
-_SEND_MSG_MIN_INTERVAL_SEC = float(os.getenv("TELEGRAM_SEND_RATE_LIMIT_SEC", "0.05"))
+_SEND_MSG_MIN_INTERVAL_SEC = float(os.getenv("TELEGRAM_SEND_RATE_LIMIT_SEC", "1.1"))
 
 
 def _get_http_session() -> requests_lib.Session:
