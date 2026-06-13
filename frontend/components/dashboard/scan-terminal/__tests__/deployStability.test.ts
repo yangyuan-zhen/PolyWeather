@@ -29,10 +29,11 @@ export function runTests() {
     "deploy script must wait for the local frontend before relying on Cloudflare/public smoke checks",
   );
   assert(
-    deployScript.includes("wait_for_scan_terminal_ready") &&
+    deployScript.includes("wait_for_scan_terminal_snapshot") &&
       deployScript.includes("http://127.0.0.1:3001/api/scan/terminal") &&
-      deployScript.includes('"status":"ready"'),
-    "deploy script must wait for the scan terminal snapshot to be ready so first users do not see initialization payloads",
+      deployScript.includes('"status":"ready"') &&
+      deployScript.includes("http=401"),
+    "deploy script must wait for the scan terminal snapshot to be ready or protected before public warmup",
   );
   assert(
     deployScript.includes("warm_public_route") &&
