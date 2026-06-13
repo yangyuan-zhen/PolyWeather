@@ -758,6 +758,145 @@ def test_cities_endpoint_does_not_block_on_recent_deb_index(monkeypatch):
     assert denver["deb_recent_sample_count"] == 0
 
 
+def test_bot_deb_requires_entitlement(monkeypatch):
+    monkeypatch.setenv("POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN", "test-token")
+
+    response = client.get("/api/bot/deb?cities=seoul")
+
+    assert response.status_code in {401, 403, 503}
+
+
+def test_bot_deb_returns_cached_city_predictions_without_refresh(monkeypatch):
+    monkeypatch.setenv("POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN", "test-token")
+    monkeypatch.setattr(city_api.legacy_routes, "_assert_entitlement", lambda request: None)
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "CITIES",
+        {
+            "seoul": {"f": False, "tz": 9 * 3600},
+            "busan": {"f": False, "tz": 9 * 3600},
+            "denver": {"f": True, "tz": -6 * 3600},
+        },
+        raising=False,
+    )
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "CITY_REGISTRY",
+        {
+            "seoul": {"display_name": "Seoul", "use_fahrenheit": False},
+            "busan": {"display_name": "Busan", "use_fahrenheit": False},
+            "denver": {"display_name": "Denver", "use_fahrenheit": True},
+        },
+        raising=False,
+    )
+
+    class FakeCache:
+        def __init__(self):
+            self.calls = []
+
+        def get_city_cache(self, kind, city):
+            self.calls.append((kind, city))
+            payloads = {
+                ("summary", "seoul"): {
+                    "payload": {
+                        "name": "seoul",
+                        "display_name": "Seoul",
+                        "local_time": "18:30",
+                        "temp_symbol": "°C",
+                        "current": {"temp": 23.0},
+                        "deb": {
+                            "prediction": 27.7,
+                            "version": "deb_v3_guarded_calibrated",
+                            "quality_tier": "medium",
+                            "recent_hit_rate": 58.3,
+                        },
+                    },
+                    "updated_at": "2026-06-13T09:30:00+00:00",
+                    "updated_at_ts": 1781343000.0,
+                },
+                ("panel", "busan"): {
+                    "payload": {
+                        "name": "busan",
+                        "display_name": "Busan",
+                        "local_date": "2026-06-13",
+                        "local_time": "18:32",
+                        "temp_symbol": "°C",
+                        "current": {"temp": 22.5},
+                        "deb": {
+                            "prediction": 26.2,
+                            "version": "deb_v3_guarded_calibrated",
+                            "quality_tier": "high",
+                            "recent_hit_rate": 71.4,
+                        },
+                    },
+                    "updated_at": "2026-06-13T09:32:00+00:00",
+                    "updated_at_ts": 1781343120.0,
+                },
+                ("summary", "denver"): {
+                    "payload": {
+                        "name": "denver",
+                        "display_name": "Denver",
+                        "local_date": "2026-06-13",
+                        "local_time": "03:30",
+                        "temp_symbol": "°F",
+                        "current": {"temp": 73.4},
+                        "deb": {
+                            "prediction": 82.6,
+                            "version": "deb_v3_guarded_calibrated",
+                            "quality_tier": "low",
+                            "recent_hit_rate": 25.0,
+                        },
+                    },
+                    "updated_at": "2026-06-13T09:30:00+00:00",
+                    "updated_at_ts": 1781343000.0,
+                },
+            }
+            return payloads.get((kind, city))
+
+    fake_cache = FakeCache()
+    monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", fake_cache)
+
+    def fail_refresh(*_args, **_kwargs):
+        raise AssertionError("bot DEB endpoint must not refresh city caches")
+
+    monkeypatch.setattr(city_api.legacy_routes, "_refresh_city_summary_cache", fail_refresh)
+    monkeypatch.setattr(city_api.legacy_routes, "_refresh_city_panel_cache", fail_refresh)
+    monkeypatch.setattr(city_api.legacy_routes, "_refresh_city_full_cache", fail_refresh)
+
+    response = client.get(
+        "/api/bot/deb?cities=seoul,busan,unknown,denver",
+        headers={"x-polyweather-entitlement": "test-token"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["count"] == 3
+    assert payload["missing"] == ["unknown"]
+    assert payload["cities"]["seoul"] == {
+        "local_date": "2026-06-13",
+        "local_time": "18:30",
+        "display_name": "Seoul",
+        "temp_unit": "C",
+        "deb_prediction": 27.7,
+        "deb_prediction_c": 27.7,
+        "deb_version": "deb_v3_guarded_calibrated",
+        "quality_tier": "medium",
+        "recent_hit_rate": 58.3,
+        "settlement_bucket": 28,
+        "settlement_rule": "wu_round",
+        "current_temp": 23.0,
+        "current_temp_c": 23.0,
+        "source_updated_at": "2026-06-13T09:30:00+00:00",
+        "cache_kind": "summary",
+    }
+    assert payload["cities"]["busan"]["cache_kind"] == "panel"
+    assert payload["cities"]["busan"]["settlement_bucket"] == 26
+    assert payload["cities"]["denver"]["temp_unit"] == "F"
+    assert payload["cities"]["denver"]["deb_prediction_c"] == 28.1
+    assert payload["cities"]["denver"]["current_temp_c"] == 23.0
+    assert ("full", "seoul") not in fake_cache.calls
+
+
 def test_city_detail_batch_endpoint_builds_multiple_cached_details(monkeypatch):
     calls = []
 
