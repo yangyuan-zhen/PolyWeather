@@ -2301,6 +2301,7 @@ class PaymentContractCheckoutService:
 
             receiver_match = event_to == expected_receiver
             amount_match = event_amount >= expected_amount
+            sender_is_receiver = event_from == expected_receiver
 
             checks["event"] = "Transfer"
             checks["event_from"] = event_from
@@ -2310,12 +2311,20 @@ class PaymentContractCheckoutService:
             checks["expected_amount"] = str(expected_amount)
             checks["receiver_match"] = receiver_match
             checks["amount_match"] = amount_match
+            checks["sender_is_receiver"] = sender_is_receiver
 
             if not receiver_match:
                 return {
                     "valid": False,
                     "reason": "receiver_mismatch",
                     "detail": f"Transfer went to {event_to}, expected {expected_receiver}",
+                    "checks": checks,
+                }
+            if sender_is_receiver:
+                return {
+                    "valid": False,
+                    "reason": "direct_self_transfer",
+                    "detail": "Transfer sender and receiver are both the payment receiver address.",
                     "checks": checks,
                 }
             if not amount_match:
@@ -3087,6 +3096,23 @@ class PaymentContractCheckoutService:
                 )
         else:
             self._require_user_wallet(user_id, effective_payer)
+        if is_direct and event_payer == intent.receiver_address:
+            self._mark_intent_failed(
+                user_id=user_id,
+                intent=intent,
+                tx_hash=tx_hash_text,
+                reason="direct_self_transfer",
+                detail="Transfer sender and receiver are both the payment receiver address.",
+                extra={
+                    "from_address": tx_from,
+                    "event_payer": event_payer,
+                    "receiver_actual": tx_to,
+                },
+            )
+            raise PaymentCheckoutError(
+                400,
+                "direct_self_transfer: Transfer sender and receiver are both the payment receiver address.",
+            )
         if not event_match:
             self._mark_intent_failed(
                 user_id=user_id,

@@ -4,7 +4,6 @@ import { useCallback, useMemo } from "react";
 import type {
   AuthMeResponse,
   BoundWallet,
-  ConnectBindOptions,
   CreatedIntent,
   EvmProvider,
   IntentStatusResponse,
@@ -69,7 +68,6 @@ export interface UsePaymentFlowParams {
   setLastIntentId: (v: string) => void;
   setLastTxHash: (v: string) => void;
   setLastPaymentStartedAt: (v: number) => void;
-  setShowOverlay: (v: boolean) => void;
   setManualPayment: (v: CreatedIntent["direct_payment"] | null) => void;
   setManualTxHash: (v: string) => void;
   setTxValidation: (v: PaymentTxValidationState) => void;
@@ -110,7 +108,7 @@ export interface UsePaymentFlowParams {
   ensureTargetChain: (eth: EvmProvider, targetChainId: number, chain?: PaymentChainOption) => Promise<void>;
 
   // Ref-wrapped cross-hook callbacks
-  connectAndBindWalletRef: React.MutableRefObject<((mode?: ProviderMode, options?: ConnectBindOptions) => Promise<boolean>) | null>;
+  connectAndBindWalletRef: React.MutableRefObject<((mode?: ProviderMode) => Promise<boolean>) | null>;
   handleSubmit409Ref: React.MutableRefObject<((intentId: string, txHashNorm: string, raw: string) => Promise<void>) | null>;
 
   // Wallet provider helpers
@@ -143,7 +141,6 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
     setLastIntentId,
     setLastTxHash,
     setLastPaymentStartedAt,
-    setShowOverlay,
     setManualPayment,
     setManualTxHash,
     setTxValidation,
@@ -727,7 +724,6 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
       setLastIntentId(intentId);
       setManualPayment(direct);
       setPaymentMethodTab("manual");
-      setShowOverlay(false);
       const chainName = direct.chain_name || chainIdToDisplayName(direct.chain_id);
       setPaymentInfo(
         copy.manualOrderCreated
@@ -833,44 +829,34 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
         return;
       }
       setTxValidation({ loading: true, checked: false });
+      const controller = new AbortController();
+      const timeoutId = globalThis.setTimeout(() => controller.abort(), 12000);
       try {
         const headers = await buildAuthedHeaders(true, true);
         const res = await fetch(`/api/payments/intents/${intentId}/validate`, {
-          method: "POST", headers, body: JSON.stringify({ tx_hash: hashNorm }),
+          method: "POST",
+          headers,
+          body: JSON.stringify({ tx_hash: hashNorm }),
+          signal: controller.signal,
         });
         const json = (await res.json()) as {
           valid?: boolean; reason?: string; detail?: string; checks?: Record<string, unknown>;
         };
         setTxValidation({ loading: false, checked: true, valid: Boolean(json.valid), reason: json.reason, detail: json.detail, checks: json.checks });
       } catch {
-        setTxValidation({ loading: false, checked: false });
+        setTxValidation({
+          loading: false,
+          checked: true,
+          valid: false,
+          reason: "validation_unavailable",
+          detail: copy.verifyUnavailable,
+        });
+      } finally {
+        globalThis.clearTimeout(timeoutId);
       }
     },
-    [buildAuthedHeaders],
+    [buildAuthedHeaders, copy.verifyUnavailable],
   );
-
-  // ── handleOverlayCheckout ──────────────────────────────
-  const handleOverlayCheckout = async () => {
-    if (!paymentHostAllowed) {
-      setPaymentError(copy.paymentHostBlocked.replace("{host}", allowedPaymentHosts[0] || "polyweather.top"));
-      return;
-    }
-    if (!authIsAuthenticated) {
-      setPaymentError(copy.loginBeforePay);
-      return;
-    }
-    if (!hasPayingWallet) {
-      setPaymentInfo(copy.openBindFlow);
-      if (connectAndBindWalletRef.current) {
-        const bound = await connectAndBindWalletRef.current(providerMode, { openOverlayAfterBind: true });
-        if (!bound) return;
-      }
-      setPaymentInfo(copy.walletBoundCreatingOrder);
-      await createIntentAndPay();
-      return;
-    }
-    await createIntentAndPay();
-  };
 
   // ==========================================================
   return {
@@ -880,7 +866,6 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
     createManualPaymentIntent,
     submitManualPaymentTx,
     validateTxHash,
-    handleOverlayCheckout,
     availableTokenList,
     availableChainList,
     selectedPaymentChain,

@@ -16,8 +16,8 @@ const FAQ_ITEMS = [
   {
     q_zh: "Pro 包含哪些功能？",
     q_en: "What features does Pro include?",
-    a_zh: "开通后可解锁：天气决策台、多城市图表巡检、未来日期分析、全平台智能气象推送。",
-    a_en: "Unlocks: weather decision terminal, multi-city chart monitoring, future-date analysis, and cross-platform smart weather push.",
+    a_zh: "开通后可解锁：结算源优先终端、多城市图表巡检、未来日期分析、Telegram 缓存推送。",
+    a_en: "Unlocks: settlement-source-first terminal, multi-city chart monitoring, future-date analysis, and Telegram cached alerts.",
   },
   {
     q_zh: "当前订阅价格是多少？",

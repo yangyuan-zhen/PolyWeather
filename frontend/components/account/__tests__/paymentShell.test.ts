@@ -152,14 +152,10 @@ export function runTests() {
   );
 
   assert(
-    accountCenterSource.includes(
-      'import { UnlockProOverlay } from "@/components/subscription/UnlockProOverlay";',
-    ),
-    "checkout overlay must be in the account bundle, not lazy-loaded after the user clicks pay",
-  );
-  assert(
-    !/const\s+UnlockProOverlay\s*=\s*dynamic\s*\(/.test(accountCenterSource),
-    "checkout overlay must not be dynamically imported; stale deployments can make the lazy chunk fail at pay time",
+    !accountCenterSource.includes("UnlockProOverlay") &&
+      !accountCenterSource.includes("showOverlay") &&
+      accountCenterSource.includes("focusPaymentManagement"),
+    "account page must use the payment management section as the only checkout surface instead of a fixed Pro overlay",
   );
   assert(
     !/STATIC_ASSETS\s*=\s*\[[^\]]*["']\/_next\//s.test(serviceWorkerSource),
@@ -415,6 +411,12 @@ export function runTests() {
     (paymentFlowSource.match(/await buildAuthedHeaders\(true, true\);/g) || [])
       .length >= 3,
     "manual payment mutations must require a valid Supabase bearer token instead of forwarding unauthenticated requests that surface raw backend JSON",
+  );
+  assert(
+    accountCenterSource.includes("manualTxHashReady") &&
+      accountCenterSource.includes("/^0x[a-fA-F0-9]{64}$/") &&
+      !accountCenterSource.includes("txValidation.valid === true)"),
+    "manual transfer submit button must allow a well-formed tx hash even when advisory pre-validation is unavailable",
   );
   assert(
     paymentFlowSource.includes("verifyPaymentAuthReady") &&

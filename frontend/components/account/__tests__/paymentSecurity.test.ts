@@ -80,10 +80,14 @@ export function runTests() {
     "AccountCenter must validate backend-returned manual payment receiver before displaying it",
   );
   assert(
-    /!\(\s*txValidation\.checked\s*&&\s*txValidation\.valid === true\s*\)/.test(
-      accountCenterSource,
-    ),
-    "manual payment submit button must require checked && valid === true",
+    accountCenterSource.includes("manualTxHashReady") &&
+      accountCenterSource.includes("/^0x[a-fA-F0-9]{64}$/") &&
+      !/!\(\s*txValidation\.checked\s*&&\s*txValidation\.valid === true\s*\)/.test(
+        accountCenterSource,
+      ) &&
+      paymentFlowSource.includes("const submitRes = await fetch(`/api/payments/intents/${intentIdVal}/submit`") &&
+      paymentFlowSource.includes("const confirmRes = await fetch(`/api/payments/intents/${intentIdVal}/confirm`"),
+    "manual payment submit button may proceed with a well-formed tx hash, but backend submit/confirm must remain the authority",
   );
   assert(
     paymentFlowSource.includes("validateTxHash") &&

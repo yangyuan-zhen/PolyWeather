@@ -27,10 +27,6 @@ export function runTests() {
     path.join(projectRoot, "components", "account", "useBilling.ts"),
     "utf8",
   );
-  const unlockProOverlay = fs.readFileSync(
-    path.join(projectRoot, "components", "subscription", "UnlockProOverlay.tsx"),
-    "utf8",
-  );
   const telegramPricing = fs.readFileSync(
     path.join(projectRoot, "components", "account", "telegram-pricing.ts"),
     "utf8",
@@ -93,17 +89,16 @@ export function runTests() {
     !accountCenter.includes(["private", "Group", "Monthly", "Plan"].join("")) &&
       !accountCopy.includes(["Private", "group", "monthly"].join(" ")) &&
       !accountCopy.includes(["私", "密", "群", "月", "付"].join("")),
-    "account plan card and checkout overlay should not expose a separate discounted monthly label",
+    "account plan card should not expose a separate discounted monthly label",
   );
   assert(
-    accountCenter.includes("overlayPlanLabel") &&
-      accountCenter.includes("overlayPeriodLabel") &&
+    accountCenter.includes("displayPlanList.map") &&
+      accountCenter.includes("plan.amount_usdc") &&
+      accountCenter.includes("USDC") &&
       !accountCenter.includes(`copy.${["private", "Group", "Monthly", "Plan"].join("")}`) &&
-      unlockProOverlay.includes("planLabel") &&
-      unlockProOverlay.includes("USDC") &&
-      !unlockProOverlay.includes("<span className={s.price}>${planPriceUsd.toFixed(2)}</span>") &&
-      !unlockProOverlay.includes('<span className={s.summaryUnit}>USD</span>'),
-    "checkout overlay must display payment amounts as USDC without exposing the discounted-price source label",
+      !accountCenter.includes("overlayPlanLabel") &&
+      !accountCenter.includes("overlayPeriodLabel"),
+    "payment management must display payment amounts as USDC without relying on the removed checkout overlay",
   );
   assert(
     types.includes("ReferralSummary") &&

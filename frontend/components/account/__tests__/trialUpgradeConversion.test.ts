@@ -28,14 +28,14 @@ export function runTests() {
     accountCenter.includes("canTrialUpgrade") &&
       accountCenter.includes("isTrialSubscription") &&
       accountCenter.includes("canTrialUpgrade || !isSubscribed"),
-    "trial subscribers must be allowed to open the Pro checkout before expiry",
+    "trial subscribers must be allowed to enter payment management before expiry",
   );
 
   assert(
     accountCenter.includes("useSearchParams") &&
       accountCenter.includes('searchParams.get("checkout") === "1"') &&
-      accountCenter.includes("setShowOverlay(true)"),
-    "account page must support /account?checkout=1 for direct upgrade entry",
+      accountCenter.includes("focusPaymentManagement"),
+    "account page must support /account?checkout=1 by focusing payment management",
   );
 
   assert(

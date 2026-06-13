@@ -262,6 +262,9 @@ export function createAccountCopy(isEn: boolean): Record<string, string> {
         ? "Please enter a valid tx hash."
         : "请输入有效的 tx hash。",
       verifying: isEn ? "Verifying..." : "验证中...",
+      verifyUnavailable: isEn
+        ? "Pre-check is temporarily unavailable. You can still submit; the backend will verify on-chain before activation."
+        : "预验证暂时不可用。你仍可提交，后端会在开通前再次链上校验。",
       verifyAddressMatch: isEn
         ? "Receiver address and amount match"
         : "收款地址和金额匹配",
@@ -277,6 +280,9 @@ export function createAccountCopy(isEn: boolean): Record<string, string> {
       verifyTxReverted: isEn
         ? "This transaction was reverted."
         : "该交易已回滚",
+      verifySelfTransfer: isEn
+        ? "This is a receiver self-transfer, not a user payment. Please transfer from your own wallet to the receiver address."
+        : "这笔是收款地址自转，不是用户付款。请从你自己的钱包转到收款地址。",
       verifyFailed: isEn ? "Verification failed: " : "验证失败: ",
       verifyUnknown: isEn ? "Unknown error" : "未知错误",
       // ── Telegram bind messages ────────────────────────────────────────

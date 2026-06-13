@@ -523,6 +523,111 @@ def test_submit_rejects_mined_direct_tx_when_receiver_mismatches(monkeypatch, tm
         raise AssertionError("expected receiver mismatch rejection")
 
 
+def test_validate_direct_transfer_rejects_receiver_self_transfer(monkeypatch, tmp_path):
+    _setup_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    tx_hash = "0x" + "9" * 64
+    receiver = "0xed2f13aa5ff033c58fb436e178451cd07f693f32"
+    intent = PaymentIntentRecord(
+        intent_id="intent-direct-self",
+        order_id_hex="0x" + "1" * 64,
+        plan_code="pro_monthly",
+        plan_id=101,
+        chain_id=137,
+        amount_units=5000000,
+        amount_usdc="5",
+        token_address="0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+        token_decimals=6,
+        token_symbol="USDC.e",
+        receiver_address=receiver,
+        status="created",
+        payment_mode="direct",
+        allowed_wallet=None,
+        expires_at="2099-01-01T00:00:00+00:00",
+        tx_hash=None,
+        metadata={},
+    )
+
+    class FakeEth:
+        def get_transaction_receipt(self, _tx_hash):
+            return {"status": 1, "to": intent.token_address, "blockNumber": 123}
+
+    class FakeWeb3:
+        eth = FakeEth()
+
+    monkeypatch.setattr(service, "_get_web3", lambda *args, **kwargs: FakeWeb3())
+    monkeypatch.setattr(
+        service,
+        "_extract_direct_transfer_event",
+        lambda *args, **kwargs: {
+            "from": receiver,
+            "to": receiver,
+            "amount_units": 5000000,
+            "token_address": intent.token_address,
+        },
+    )
+
+    result = service._validate_loaded_intent_tx(intent, tx_hash)
+
+    assert result["valid"] is False
+    assert result["reason"] == "direct_self_transfer"
+
+
+def test_submit_rejects_direct_receiver_self_transfer(monkeypatch, tmp_path):
+    _setup_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    tx_hash = "0x" + "9" * 64
+
+    monkeypatch.setattr(
+        service,
+        "get_intent",
+        lambda user_id, intent_id: service._serialize_intent(
+            {
+                "id": intent_id,
+                "plan_code": "pro_monthly",
+                "plan_id": 101,
+                "chain_id": 137,
+                "token_address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+                "receiver_address": "0xeD2f13Aa5fF033c58FB436E178451Cd07f693f32",
+                "amount_units": "5000000",
+                "payment_mode": "direct",
+                "allowed_wallet": None,
+                "order_id_hex": "0x" + "1" * 64,
+                "status": "created",
+                "expires_at": "2099-01-01T00:00:00+00:00",
+                "tx_hash": None,
+                "metadata": {},
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        service,
+        "_validate_loaded_intent_tx",
+        lambda *args, **kwargs: {
+            "valid": False,
+            "reason": "direct_self_transfer",
+            "detail": "Transfer sender and receiver are both the payment receiver address.",
+        },
+    )
+
+    def fake_rest(method, table, **kwargs):
+        if method == "GET" and table == "payment_transactions":
+            return []
+        if method == "GET" and table == "payment_intents":
+            return []
+        raise AssertionError(f"self-transfer must not mutate {table}")
+
+    monkeypatch.setattr(service, "_rest", fake_rest)
+
+    try:
+        service.submit_intent_tx("user-1", "intent-direct-self", tx_hash, "")
+    except Exception as exc:
+        assert getattr(exc, "status_code", None) == 400
+        assert "direct_self_transfer" in getattr(exc, "detail", "")
+    else:
+        raise AssertionError("expected direct receiver self-transfer rejection")
+
+
 
 def test_confirm_direct_transfer_uses_erc20_transfer_without_wallet_binding(monkeypatch, tmp_path):
     _setup_env(monkeypatch, tmp_path)
@@ -624,6 +729,95 @@ def test_confirm_direct_transfer_uses_erc20_transfer_without_wallet_binding(monk
         if call[0] == "POST" and call[1] == "payment_transactions"
     )
     assert transaction_write[2]["prefer"] == "resolution=merge-duplicates,return=minimal"
+
+
+def test_confirm_direct_transfer_rejects_receiver_self_transfer(monkeypatch, tmp_path):
+    _setup_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    tx_hash = "0x" + "4" * 64
+    receiver = "0xed2f13aa5ff033c58fb436e178451cd07f693f32"
+    intent = PaymentIntentRecord(
+        intent_id="intent-direct-self-confirm",
+        order_id_hex="0x" + "1" * 64,
+        plan_code="pro_monthly",
+        plan_id=101,
+        chain_id=137,
+        amount_units=5000000,
+        amount_usdc="5",
+        token_address="0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+        token_decimals=6,
+        token_symbol="USDC.e",
+        receiver_address=receiver,
+        status="submitted",
+        payment_mode="direct",
+        allowed_wallet=None,
+        expires_at="2099-01-01T00:00:00+00:00",
+        tx_hash=tx_hash,
+        metadata={},
+    )
+    failed = {}
+
+    monkeypatch.setattr(service, "get_intent", lambda user_id, intent_id: intent)
+
+    class _Eth:
+        chain_id = 137
+        block_number = 20
+
+        @staticmethod
+        def get_transaction(_tx_hash):
+            return {
+                "to": intent.token_address,
+                "from": receiver,
+            }
+
+    class _Web3:
+        eth = _Eth()
+
+        @staticmethod
+        def is_connected():
+            return True
+
+    monkeypatch.setattr(service, "_get_web3", lambda *args, **kwargs: _Web3())
+    monkeypatch.setattr(
+        service,
+        "_wait_receipt",
+        lambda _tx_hash, *args, **kwargs: {
+            "status": 1,
+            "to": intent.token_address,
+            "from": receiver,
+            "blockNumber": 10,
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "_extract_direct_transfer_event",
+        lambda receipt, local_intent: {
+            "from": receiver,
+            "to": receiver,
+            "token_address": local_intent.token_address,
+            "amount_units": local_intent.amount_units,
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "_mark_intent_failed",
+        lambda **kwargs: failed.update(kwargs),
+    )
+
+    def fake_rest(method, table, **kwargs):
+        if method == "GET" and table in {"payment_transactions", "payment_intents"}:
+            return []
+        raise AssertionError((method, table, kwargs))
+
+    monkeypatch.setattr(service, "_rest", fake_rest)
+
+    with pytest.raises(PaymentCheckoutError) as exc:
+        service.confirm_intent_tx("user-1", intent.intent_id, tx_hash)
+
+    assert exc.value.status_code == 400
+    assert "direct_self_transfer" in exc.value.detail
+    assert failed["reason"] == "direct_self_transfer"
+
 
 def test_submit_rejects_tx_hash_used_by_another_intent(monkeypatch, tmp_path):
     _setup_env(monkeypatch, tmp_path)

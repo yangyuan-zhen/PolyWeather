@@ -41,11 +41,9 @@ import {
 } from "@/lib/supabase/client";
 import { markAnalyticsOnce, trackAppEvent } from "@/lib/app-analytics";
 import { useI18n } from "@/hooks/useI18n";
-import { UnlockProOverlay } from "@/components/subscription/UnlockProOverlay";
 
 import type { AuthMeResponse } from "./types";
 import {
-  SUBSCRIPTION_HELP_HREF,
   TELEGRAM_BOT_URL,
   TELEGRAM_GROUP_URL,
   TELEGRAM_TOPICS_GROUP_URL,
@@ -85,7 +83,6 @@ export function AccountCenter() {
   const [trialValueReplay, setTrialValueReplay] = useState(() => readTrialValueReplay());
 
   // ── Shared state (declared in component, written by hook via setters) ─
-  const [showOverlay, setShowOverlay] = useState(false);
   const [usePoints, setUsePoints] = useState(true);
   const [errorText, setErrorText] = useState("");
   const [updatedAt, setUpdatedAt] = useState<string>("");
@@ -104,7 +101,6 @@ export function AccountCenter() {
     paymentInfo,
     paymentError,
     lastIntentId,
-    lastTxHash,
     lastPaymentStartedAt,
     telegramBindOpening,
     telegramBindUrl,
@@ -158,7 +154,6 @@ export function AccountCenter() {
     allowedPaymentHosts,
     currentPaymentHost,
     paymentHostAllowed,
-    selectedPlan,
     selectedPaymentToken,
     selectedTokenLabel,
     availableTokenList,
@@ -168,7 +163,6 @@ export function AccountCenter() {
     resolvedSelectedTokenAddress,
     paymentReceiverAddress,
     paymentWalletLabel,
-    hasPayingWallet,
     totalPoints,
     billing,
 
@@ -177,11 +171,9 @@ export function AccountCenter() {
     loadPaymentSnapshot,
     connectAndBindWallet,
     handleUnbindWallet,
-    createIntentAndPay,
     createManualPaymentIntent,
     submitManualPaymentTx,
     validateTxHash,
-    handleOverlayCheckout,
     createTelegramBotBindCommand,
     openTelegramBotBindLink,
   } = useAccountPayment({
@@ -195,8 +187,6 @@ export function AccountCenter() {
     setBackend,
     setErrorText,
     setUpdatedAt,
-    showOverlay,
-    setShowOverlay,
     usePoints,
     setUsePoints,
   });
@@ -408,7 +398,7 @@ export function AccountCenter() {
   );
   const paymentFeatureReady = paymentReadyForRecovery;
   const canTrialUpgrade = Boolean(isSubscribed && isTrialSubscription);
-  const canOpenCheckoutOverlay = Boolean(
+  const canStartPayment = Boolean(
     paymentFeatureReady &&
       (canTrialUpgrade || !isSubscribed || showExpiringSoon || showExpiredReminder),
   );
@@ -441,14 +431,7 @@ export function AccountCenter() {
         { plan_code: "pro_monthly", plan_id: 101, amount_usdc: "29.9", duration_days: 30 },
         { plan_code: "pro_quarterly", plan_id: 102, amount_usdc: "79.9", duration_days: 90 },
       ];
-  const selectedPlanDurationDays = Number(selectedPlan?.duration_days || 30);
-  const overlayPlanLabel =
-    selectedPlanCode === "pro_quarterly"
-      ? copy.quarterlyPlan
-      : copy.monthlyPlan;
-  const overlayPeriodLabel = isEn
-    ? `/ ${selectedPlanDurationDays} days`
-    : `/ ${selectedPlanDurationDays} 天`;
+  const manualTxHashReady = /^0x[a-fA-F0-9]{64}$/.test(manualTxHash.trim());
   const trialValueReplaySummary = useMemo(
     () => buildTrialValueReplaySummary(trialValueReplay, {
       isEn,
@@ -466,9 +449,7 @@ export function AccountCenter() {
       referralCodeInput.trim(),
   );
 
-  // ── Payment overlay tracking effect ──────────────────────
-  useEffect(() => {
-    if (!showOverlay || !canOpenCheckoutOverlay) return;
+  const focusPaymentManagement = useCallback(() => {
     trackAppEvent("paywall_viewed", {
       entry: "account_center",
       user_state: isAuthenticated ? "logged_in" : "guest",
@@ -476,26 +457,25 @@ export function AccountCenter() {
       expiring_soon: showExpiringSoon,
       subscription_plan_code: planCode || null,
     });
+    const paymentSection = document.getElementById("payment-management");
+    paymentSection?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [
     isAuthenticated,
-    canOpenCheckoutOverlay,
     planCode,
     showExpiredReminder,
     showExpiringSoon,
-    showOverlay,
   ]);
 
   useEffect(() => {
-    if (showOverlay || !canOpenCheckoutOverlay) return;
     if (searchParams.get("checkout") === "1") {
-      setShowOverlay(true);
+      window.setTimeout(focusPaymentManagement, 0);
     }
-  }, [canOpenCheckoutOverlay, searchParams, showOverlay]);
+  }, [focusPaymentManagement, searchParams]);
 
   useEffect(() => {
     if (!isTrialSubscription) return;
     setTrialValueReplay(readTrialValueReplay());
-  }, [authUserId, isTrialSubscription, showOverlay]);
+  }, [authUserId, isTrialSubscription]);
 
   const openTrialValueReplayCheckout = useCallback(() => {
     trackAppEvent("paywall_feature_clicked", {
@@ -507,8 +487,8 @@ export function AccountCenter() {
       replay_rows_available: trialValueReplay.rowsAvailableMax,
       subscription_plan_code: planCode || null,
     });
-    setShowOverlay(true);
-  }, [authUserId, planCode, trialValueReplay]);
+    focusPaymentManagement();
+  }, [authUserId, focusPaymentManagement, planCode, trialValueReplay]);
 
   // ── Referral points display ────────────────────────────
   const referralRewardPointsRaw = Number(referral?.reward_points ?? 3500);
@@ -641,9 +621,10 @@ export function AccountCenter() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {!showOverlay && canOpenCheckoutOverlay && (
+          {canStartPayment && (
             <button
-              onClick={() => setShowOverlay(true)}
+              type="button"
+              onClick={focusPaymentManagement}
               className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700 transition-all hover:bg-amber-100"
             >
               <Crown size={16} />{" "}
@@ -709,7 +690,7 @@ export function AccountCenter() {
               </div>
               <button
                 type="button"
-                onClick={() => setShowOverlay(true)}
+                onClick={focusPaymentManagement}
                 className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-bold text-amber-800 transition-all hover:bg-amber-100"
               >
                 <Crown size={16} />
@@ -719,7 +700,7 @@ export function AccountCenter() {
           </div>
         )}
 
-        {isTrialSubscription && canOpenCheckoutOverlay && (
+        {isTrialSubscription && canStartPayment && (
           <section className="lg:col-span-12 overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
             <div className="grid gap-0 md:grid-cols-[minmax(0,1fr)_auto]">
               <div className="min-w-0 p-6">
@@ -899,7 +880,7 @@ export function AccountCenter() {
         {/* Subscription Info & Paywall */}
         <div className="lg:col-span-12 relative">
           <div
-            className={`grid grid-cols-1 md:grid-cols-2 gap-6 transition-all duration-700 ${canOpenCheckoutOverlay && showOverlay ? "blur-md grayscale-[0.3] opacity-30 select-none pointer-events-none" : ""}`}
+            className="grid grid-cols-1 md:grid-cols-2 gap-6 transition-all duration-700"
           >
             <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
               <h3 className="mb-4 text-sm font-bold uppercase text-blue-700">
@@ -990,43 +971,6 @@ export function AccountCenter() {
               ) : null}
             </section>
           </div>
-
-          {/* Paywall Mask */}
-          {canOpenCheckoutOverlay && showOverlay && (
-            <div className="absolute inset-0 z-30 flex items-center justify-center p-4">
-              <UnlockProOverlay
-                points={totalPoints}
-                planPriceUsd={billing.planAmount}
-                planLabel={overlayPlanLabel}
-                periodLabel={overlayPeriodLabel}
-                usePoints={usePoints}
-                onToggleUsePoints={() => setUsePoints((prev) => !prev)}
-                billing={{
-                  pointsEnabled: billing.pointsEnabled,
-                  isEligible: billing.canRedeem,
-                  pointsUsed: billing.pointsUsed,
-                  discountAmount: billing.discountAmount,
-                  finalPrice: billing.payAmount,
-                  maxDiscountUsd: billing.maxDiscountUsdc,
-                  pointsPerUsd: billing.pointsPerUsdc,
-                }}
-                onPay={() => void handleOverlayCheckout()}
-                onManualPay={() => void createManualPaymentIntent()}
-                onClose={() => setShowOverlay(false)}
-                payBusy={paymentBusy}
-                payLabel={hasPayingWallet ? copy.payNow : copy.connectAndPay}
-                manualPayLabel="手动转账"
-                locale={locale}
-                errorText={paymentError || undefined}
-                infoText={paymentInfo || undefined}
-                txHash={lastTxHash || undefined}
-                chainId={selectedPaymentChainId || paymentConfig?.chain_id || 137}
-                paymentTokenLabel={selectedTokenLabel}
-                faqHref={SUBSCRIPTION_HELP_HREF}
-                telegramGroupUrl=""
-              />
-            </div>
-          )}
         </div>
 
         <AccountFeedbackPanel
@@ -1058,8 +1002,8 @@ export function AccountCenter() {
                   </p>
                   <button
                     type="button"
-                    onClick={() => setShowOverlay(true)}
-                    disabled={!canOpenCheckoutOverlay}
+                    onClick={focusPaymentManagement}
+                    disabled={!canStartPayment}
                     className="mt-5 inline-flex items-center gap-2 rounded-xl border border-amber-700 bg-amber-600 px-4 py-3 text-xs font-bold text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Crown size={14} />
@@ -1183,6 +1127,7 @@ export function AccountCenter() {
                   </div>
                 ) : null}
                 <div
+                  id="payment-management"
                   data-testid="payment-management-grid"
                   className={`grid gap-6 lg:items-start ${
                     hasTelegramPanel ? "" : "lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]"
@@ -1695,6 +1640,10 @@ export function AccountCenter() {
                                         ? copy
                                             .verifyAmountLow
                                         : txValidation.reason ===
+                                            "direct_self_transfer"
+                                          ? copy
+                                              .verifySelfTransfer
+                                        : txValidation.reason ===
                                             "tx_reverted"
                                           ? copy
                                               .verifyTxReverted
@@ -1711,11 +1660,7 @@ export function AccountCenter() {
                               onClick={() =>
                                 void submitManualPaymentTx()
                               }
-                              disabled={
-                                paymentBusy ||
-                                !(txValidation.checked &&
-                                  txValidation.valid === true)
-                              }
+                              disabled={paymentBusy || !manualTxHashReady}
                               className="w-full rounded-xl border border-emerald-700 bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition-all hover:bg-emerald-700 disabled:opacity-50"
                             >
                               {copy.paymentManualSubmit}

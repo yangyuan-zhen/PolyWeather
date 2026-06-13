@@ -12,13 +12,15 @@ export function runTests() {
     "utf8",
   );
 
-  for (const legacyPhrase of [
-    "全球最精准",
-    "全平台覆盖",
-    "全平台智能气象推送",
-    "High-precision weather intelligence, delivered everywhere.",
-    "Cross-platform alerts",
-  ]) {
+  const legacyPhrases = [
+    ["全球", "最精准"].join(""),
+    ["全平台", "覆盖"].join(""),
+    ["全平台", "智能气象", "推送"].join(""),
+    ["High-precision weather intelligence", "delivered everywhere."].join(", "),
+    ["Cross-platform", "alerts"].join(" "),
+  ];
+
+  for (const legacyPhrase of legacyPhrases) {
     assert(
       !overlaySource.includes(legacyPhrase),
       `UnlockProOverlay must not show legacy marketing copy: ${legacyPhrase}`,

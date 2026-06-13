@@ -208,10 +208,6 @@ export type Eip6963ProviderDetail = {
   provider: EvmProvider;
 };
 
-export type ConnectBindOptions = {
-  openOverlayAfterBind?: boolean;
-};
-
 export type PaymentRecoveryState = {
   intentId: string;
   txHash: string;

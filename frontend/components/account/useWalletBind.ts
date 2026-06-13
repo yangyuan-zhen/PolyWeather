@@ -3,7 +3,6 @@
 import { useCallback, useEffect } from "react";
 import type {
   BoundWallet,
-  ConnectBindOptions,
   Eip6963ProviderDetail,
   EvmProvider,
   InjectedProviderOption,
@@ -56,7 +55,6 @@ export interface UseWalletBindParams {
   setPaymentBusy: (v: boolean) => void;
   setPaymentInfo: (v: string) => void;
   setPaymentError: (v: string) => void;
-  setShowOverlay: (v: boolean) => void;
   clearPaymentMessages: () => void;
 
   // Derived values from master
@@ -91,7 +89,6 @@ export function useWalletBind(params: UseWalletBindParams) {
     setPaymentBusy,
     setPaymentInfo,
     setPaymentError,
-    setShowOverlay,
     clearPaymentMessages,
     authIsAuthenticated,
     getValidAccessToken,
@@ -258,7 +255,7 @@ export function useWalletBind(params: UseWalletBindParams) {
   };
 
   // ── connectAndBindWallet ────────────────────────────────
-  const connectAndBindWallet = async (mode: ProviderMode = "auto", options: ConnectBindOptions = {}): Promise<boolean> => {
+  const connectAndBindWallet = async (mode: ProviderMode = "auto"): Promise<boolean> => {
     clearPaymentMessages();
     if (!authIsAuthenticated) {
       setPaymentError(copy.loginBeforeBind);
@@ -292,9 +289,8 @@ export function useWalletBind(params: UseWalletBindParams) {
       if (existingWallet) {
         setWalletAddress(address);
         setSelectedWallet(address);
-        setPaymentInfo(`${walletLabel} 已绑定: ${shortAddress(address)}。${binanceBindHint || "现在可点击“立即订阅并激活服务”。"}`);
+        setPaymentInfo(`${walletLabel} 已绑定: ${shortAddress(address)}。${binanceBindHint || "可在支付管理继续支付。"}`);
         await Promise.all([loadSnapshot(), loadPaymentSnapshot()]);
-        if (options.openOverlayAfterBind) setShowOverlay(true);
         setPaymentBusy(false);
         return true;
       }
@@ -332,9 +328,8 @@ export function useWalletBind(params: UseWalletBindParams) {
         throw new Error(copy.verifyFailedRaw.replace("{raw}", message));
       }
 
-      setPaymentInfo(`${walletLabel} 绑定成功: ${shortAddress(address)}。${binanceBindHint || "现在可点击“立即订阅并激活服务”。"}`);
+      setPaymentInfo(`${walletLabel} 绑定成功: ${shortAddress(address)}。${binanceBindHint || "可在支付管理继续支付。"}`);
       setProviderMode(providerSelection.mode);
-      if (options.openOverlayAfterBind) setShowOverlay(true);
       await Promise.all([loadSnapshot(), loadPaymentSnapshot()]);
       return true;
     } catch (error) {
