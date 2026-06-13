@@ -299,6 +299,13 @@ export async function runTests() {
       chartCanvasSourceIncludes(chartSource, "handleRetryDetail"),
     "city detail charts should show stale cache first and expose a retryable unavailable state",
   );
+  assert(
+    chartSource.includes("TRANSIENT_DETAIL_RETRY_DELAY_MS") &&
+      chartSource.includes("scheduleTransientDetailRetry") &&
+      chartSource.includes("fetchHourlyForecastForCity(city, { bypassLocalCache: true, resolution: targetResolution })") &&
+      chartSource.includes("!retryScheduled"),
+    "cold partial detail-batch misses should stay in loading state and retry cached detail once before showing unavailable",
+  );
   const successfulHourlyDetailBlock =
     /const applySuccessfulHourlyDetail = useCallback\([\s\S]*?\n  \}, \[row\]\);/.exec(chartSource)?.[0] || "";
   assert(
