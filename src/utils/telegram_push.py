@@ -1768,23 +1768,12 @@ def _process_airport_city(
         except Exception as exc:
             if thread_id and "message thread not found" in str(exc).lower():
                 logger.warning(
-                    "airport push thread missing; retrying main chat city={} chat_id={} thread_id={}",
+                    "airport push skipped missing forum thread city={} chat_id={} thread_id={}",
                     city,
                     chat_id,
                     thread_id,
                 )
-                try:
-                    _rate_limited_send(bot, chat_id, message)
-                    sent = True
-                    continue
-                except Exception as fallback_exc:
-                    logger.warning(
-                        "airport push main chat fallback failed city={} chat_id={}: {}",
-                        city,
-                        chat_id,
-                        fallback_exc,
-                    )
-                    continue
+                continue
             logger.warning("airport push failed city={} chat_id={}: {}", city, chat_id, exc)
 
     if sent:

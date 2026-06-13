@@ -403,7 +403,7 @@ def test_airport_push_rejects_observation_older_than_last_push(monkeypatch):
     assert result is None
 
 
-def test_airport_push_retries_main_chat_when_forum_thread_is_missing(monkeypatch):
+def test_airport_push_does_not_retry_general_when_forum_thread_is_missing(monkeypatch):
     import src.utils.telegram_push as telegram_push
 
     calls = []
@@ -438,11 +438,8 @@ def test_airport_push_retries_main_chat_when_forum_thread_is_missing(monkeypatch
         bot=object(),
     )
 
-    assert result is not None
-    assert calls == [
-        ("chat-1", {"message_thread_id": 99}),
-        ("chat-1", {}),
-    ]
+    assert result is None
+    assert calls == [("chat-1", {"message_thread_id": 99})]
 
 
 def test_airport_push_does_not_fall_back_to_general_when_forum_mapping_is_missing(monkeypatch):
