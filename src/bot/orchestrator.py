@@ -13,6 +13,20 @@ from src.utils.config_validation import validate_or_raise
 from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _wait_forever() -> None:
+    import time
+
+    while True:
+        time.sleep(3600)
+
+
 def _register_handlers(
     bot: Any,
     config: dict[str, Any],
@@ -73,4 +87,8 @@ def start_bot() -> None:
         started_count,
         len(runtime_status.loops),
     )
+    if not _env_bool("TELEGRAM_BOT_POLLING_ENABLED", True):
+        logger.warning("Telegram bot polling disabled; background loops remain active")
+        _wait_forever()
+        return
     bot.infinity_polling(allowed_updates=["message", "callback_query", "chat_join_request"])
