@@ -18,7 +18,7 @@ from src.database.runtime_state import (
     get_state_storage_mode,
 )
 from src.data_collection.city_registry import CITY_REGISTRY
-from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
+from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env, parse_telegram_chat_ids
 from src.utils.telegram_i18n import (
     copy_text as _copy,
     is_bilingual as _is_bilingual,
@@ -33,7 +33,7 @@ _CITY_THREAD_IDS_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "data", "city_thread_ids.json",
 )
-_FORUM_CHAT_ID = "-1003927451869"
+_DEFAULT_FORUM_CHAT_ID = "-1003927451869"
 _city_thread_ids: dict = {}
 
 # Shared HTTP session for AROME and auxiliary queries (connection reuse)
@@ -106,9 +106,25 @@ def _load_city_thread_ids() -> dict:
     return {}
 
 
+def _forum_chat_ids() -> Set[str]:
+    return set(
+        parse_telegram_chat_ids(
+            os.getenv("TELEGRAM_FORUM_CHAT_ID"),
+            os.getenv("POLYWEATHER_TELEGRAM_TOPICS_GROUP_ID"),
+            os.getenv("POLYWEATHER_TELEGRAM_GROUP_ID"),
+            _DEFAULT_FORUM_CHAT_ID,
+        )
+    )
+
+
+def _is_forum_chat_id(chat_id: Any) -> bool:
+    chat_key = str(chat_id or "").strip()
+    return bool(chat_key and chat_key in _forum_chat_ids())
+
+
 def _resolve_thread_id(chat_id: str, city: str) -> int:
     """Return message_thread_id for a given chat and city, or 0 if not a forum topic."""
-    if chat_id != _FORUM_CHAT_ID:
+    if not _is_forum_chat_id(chat_id):
         return 0
     mapping = _load_city_thread_ids()
     city_key = (city or "").strip().lower()
@@ -1739,6 +1755,14 @@ def _process_airport_city(
             thread_id = _resolve_thread_id(chat_id, city)
             if thread_id:
                 kwargs["message_thread_id"] = thread_id
+            elif _is_forum_chat_id(chat_id):
+                logger.warning(
+                    "airport push skipped missing forum thread mapping city={} chat_id={} mapping_cities={}",
+                    city,
+                    chat_id,
+                    len(_load_city_thread_ids()),
+                )
+                continue
             _rate_limited_send(bot, chat_id, message, **kwargs)
             sent = True
         except Exception as exc:

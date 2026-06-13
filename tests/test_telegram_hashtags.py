@@ -445,6 +445,44 @@ def test_airport_push_retries_main_chat_when_forum_thread_is_missing(monkeypatch
     ]
 
 
+def test_airport_push_does_not_fall_back_to_general_when_forum_mapping_is_missing(monkeypatch):
+    import src.utils.telegram_push as telegram_push
+
+    calls = []
+
+    monkeypatch.setattr(
+        telegram_push,
+        "_load_airport_city_weather_for_push",
+        lambda _city: {
+            "local_time": "15:22",
+            "current": {"temp": 30.0},
+            "deb": {"prediction": 31.0},
+            "airport_primary": {
+                "temp": 30.0,
+                "obs_time": "2026-06-11T07:52:00+00:00",
+            },
+        },
+    )
+    monkeypatch.setattr(telegram_push, "_resolve_thread_id", lambda _chat, _city: 0)
+    monkeypatch.setattr(telegram_push, "_is_forum_chat_id", lambda _chat: True)
+    monkeypatch.setattr(
+        telegram_push,
+        "_rate_limited_send",
+        lambda _bot, chat_id, _message, **kwargs: calls.append((chat_id, kwargs)),
+    )
+
+    result = telegram_push._process_airport_city(
+        "chengdu",
+        now_ts=1781164400,
+        last_city={},
+        chat_ids=["-1003927451869"],
+        bot=object(),
+    )
+
+    assert result is None
+    assert calls == []
+
+
 def test_high_freq_airport_push_workers_default_to_one_for_shared_cpu(monkeypatch):
     source = Path("src/utils/telegram_push.py").read_text(encoding="utf-8")
     assert 'TELEGRAM_AIRPORT_PUSH_MAX_WORKERS", 1' in source

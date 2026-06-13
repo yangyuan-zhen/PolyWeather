@@ -172,6 +172,16 @@ def test_deploy_script_retries_image_pull_for_registry_propagation():
     assert "docker compose pull && pull_ok=1 && break" in script
 
 
+def test_deploy_script_syncs_city_thread_ids_into_runtime_volume():
+    script = (ROOT / "deploy.sh").read_text(encoding="utf-8")
+
+    assert "sync_city_thread_ids()" in script
+    assert 'repo_file="$COMPOSE_DIR/data/city_thread_ids.json"' in script
+    assert 'target_file="$runtime_dir/city_thread_ids.json"' in script
+    assert "merged.update(target_data)" in script
+    assert script.index("sync_city_thread_ids") < script.index("Updating Redis dependency")
+
+
 def test_deploy_script_retries_startup_smoke_checks():
     script = (ROOT / "deploy.sh").read_text(encoding="utf-8")
 

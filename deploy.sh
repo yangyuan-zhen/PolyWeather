@@ -29,6 +29,61 @@ unset GHCR_PAT
 cd "$COMPOSE_DIR"
 git fetch origin main && git reset --hard origin/main
 
+sync_city_thread_ids() {
+    local runtime_dir="${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}"
+    local repo_file="$COMPOSE_DIR/data/city_thread_ids.json"
+    local target_file="$runtime_dir/city_thread_ids.json"
+
+    if [ ! -f "$repo_file" ]; then
+        echo "No repository city_thread_ids.json to sync"
+        return 0
+    fi
+
+    mkdir -p "$runtime_dir"
+    REPO_CITY_THREAD_IDS_FILE="$repo_file" TARGET_CITY_THREAD_IDS_FILE="$target_file" python - <<'PY'
+import json
+import os
+import time
+
+repo_file = os.environ["REPO_CITY_THREAD_IDS_FILE"]
+target_file = os.environ["TARGET_CITY_THREAD_IDS_FILE"]
+
+with open(repo_file, "r", encoding="utf-8") as f:
+    repo_data = json.load(f)
+if not isinstance(repo_data, dict):
+    raise SystemExit("repository city_thread_ids.json must contain an object")
+
+target_data = {}
+if os.path.isfile(target_file) and os.path.getsize(target_file) > 0:
+    try:
+        with open(target_file, "r", encoding="utf-8") as f:
+            loaded = json.load(f)
+        if isinstance(loaded, dict):
+            target_data = loaded
+        else:
+            raise ValueError("target file is not an object")
+    except Exception as exc:
+        backup = f"{target_file}.invalid.{int(time.time())}"
+        os.replace(target_file, backup)
+        print(f"Backed up invalid city_thread_ids.json to {backup}: {exc}")
+
+merged = dict(repo_data)
+merged.update(target_data)
+
+if merged != target_data:
+    tmp_file = f"{target_file}.tmp"
+    with open(tmp_file, "w", encoding="utf-8") as f:
+        json.dump(merged, f, ensure_ascii=False, indent=2, sort_keys=True)
+        f.write("\n")
+    os.replace(tmp_file, target_file)
+    print(f"Synced city_thread_ids.json: {len(target_data)} -> {len(merged)} cities")
+else:
+    print(f"city_thread_ids.json already up to date: {len(target_data)} cities")
+PY
+}
+
+sync_city_thread_ids
+
 PREVIOUS_TAG=""
 if [ -f "$TAG_FILE" ]; then
     PREVIOUS_TAG=$(cat "$TAG_FILE")
