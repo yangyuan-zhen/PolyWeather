@@ -137,25 +137,25 @@ function UnauthenticatedGate({
                 ? "The weather terminal is for verified subscribers only."
                 : "天气决策台仅对已验证的付费用户开放。"}
             </p>
-            <Link
+            <a
               href="/auth/login?next=%2Fterminal"
               className="mt-6 flex items-center justify-center gap-2 rounded-xl bg-slate-900 py-3 text-sm font-black text-white transition hover:bg-slate-700"
             >
               <LogIn size={15} />
               {isEn ? "Log in" : "登录"}
-            </Link>
-            <Link
+            </a>
+            <a
               href="/auth/login?next=%2Fterminal&mode=signup"
               className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-slate-300 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
             >
               {isEn ? "Create an account" : "注册账号"}
-            </Link>
-            <Link
+            </a>
+            <a
               href="/"
               className="mt-4 block text-xs text-slate-400 hover:text-slate-700 transition-colors"
             >
               {isEn ? "← Learn about PolyWeather" : "← 了解 PolyWeather"}
-            </Link>
+            </a>
           </div>
         </section>
       </main>
