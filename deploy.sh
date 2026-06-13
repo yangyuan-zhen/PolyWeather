@@ -127,10 +127,54 @@ compose_up_retry() {
     return 1
 }
 
+read_env_file_value() {
+    local key="$1"
+    if [ ! -f ".env" ]; then
+        return 0
+    fi
+    awk -F= -v key="$key" '
+        $0 ~ "^[[:space:]]*" key "[[:space:]]*=" {
+            value=$0
+            sub("^[^=]*=", "", value)
+            gsub("^[[:space:]]+|[[:space:]]+$", "", value)
+            gsub(/^["'"'"']|["'"'"']$/, "", value)
+            print value
+        }
+    ' .env | tail -n 1
+}
+
+resolve_env_value() {
+    local primary_key="$1"
+    local fallback_key="${2:-}"
+    local value="${!primary_key:-}"
+
+    if [ -z "$value" ]; then
+        value="$(read_env_file_value "$primary_key")"
+    fi
+    if [ -z "$value" ] && [ -n "$fallback_key" ]; then
+        value="${!fallback_key:-}"
+        if [ -z "$value" ]; then
+            value="$(read_env_file_value "$fallback_key")"
+        fi
+    fi
+
+    printf '%s' "$value"
+}
+
 export IMAGE_TAG="$NEW_TAG"
 export POLYWEATHER_API_BASE_URL="${POLYWEATHER_FRONTEND_INTERNAL_API_BASE_URL:-http://polyweather_web:8000}"
-export SUPABASE_URL="${SUPABASE_URL:-${NEXT_PUBLIC_SUPABASE_URL:-}}"
-export SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}}"
+resolved_supabase_url="$(resolve_env_value "SUPABASE_URL" "NEXT_PUBLIC_SUPABASE_URL")"
+resolved_supabase_anon_key="$(resolve_env_value "SUPABASE_ANON_KEY" "NEXT_PUBLIC_SUPABASE_ANON_KEY")"
+if [ -n "$resolved_supabase_url" ]; then
+    export SUPABASE_URL="$resolved_supabase_url"
+else
+    unset SUPABASE_URL
+fi
+if [ -n "$resolved_supabase_anon_key" ]; then
+    export SUPABASE_ANON_KEY="$resolved_supabase_anon_key"
+else
+    unset SUPABASE_ANON_KEY
+fi
 pull_ok=0
 for pull_attempt in $(seq 1 6); do
     docker compose pull && pull_ok=1 && break
@@ -246,22 +290,6 @@ wait_for_scan_terminal_snapshot() {
 
     echo "❌ $name did not return status=ready or http=401"
     return 1
-}
-
-read_env_file_value() {
-    local key="$1"
-    if [ ! -f ".env" ]; then
-        return 0
-    fi
-    awk -F= -v key="$key" '
-        $0 ~ "^[[:space:]]*" key "[[:space:]]*=" {
-            value=$0
-            sub("^[^=]*=", "", value)
-            gsub("^[[:space:]]+|[[:space:]]+$", "", value)
-            gsub(/^["'"'"']|["'"'"']$/, "", value)
-            print value
-        }
-    ' .env | tail -n 1
 }
 
 validate_frontend_api_base_url() {

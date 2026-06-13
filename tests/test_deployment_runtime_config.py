@@ -192,6 +192,21 @@ def test_deploy_script_retries_image_pull_for_registry_propagation():
     assert "docker compose pull && pull_ok=1 && break" in script
 
 
+def test_deploy_script_exports_backend_supabase_env_from_env_file():
+    script = (ROOT / "deploy.sh").read_text(encoding="utf-8")
+
+    assert "read_env_file_value()" in script
+    assert "resolve_env_value()" in script
+    assert 'resolve_env_value "SUPABASE_URL" "NEXT_PUBLIC_SUPABASE_URL"' in script
+    assert 'resolve_env_value "SUPABASE_ANON_KEY" "NEXT_PUBLIC_SUPABASE_ANON_KEY"' in script
+    assert 'export SUPABASE_URL="$resolved_supabase_url"' in script
+    assert 'export SUPABASE_ANON_KEY="$resolved_supabase_anon_key"' in script
+    assert "unset SUPABASE_URL" in script
+    assert "unset SUPABASE_ANON_KEY" in script
+    assert script.index("read_env_file_value()") < script.index('export IMAGE_TAG="$NEW_TAG"')
+    assert script.index('resolve_env_value "SUPABASE_URL"') < script.index("pull_ok=0")
+
+
 def test_deploy_script_syncs_city_thread_ids_into_runtime_volume():
     script = (ROOT / "deploy.sh").read_text(encoding="utf-8")
 
@@ -321,11 +336,13 @@ def test_frontend_and_web_share_supabase_forwarded_identity_secrets():
         "POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN: ${POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN}"
         in web_block
     )
-    assert 'export SUPABASE_URL="${SUPABASE_URL:-${NEXT_PUBLIC_SUPABASE_URL:-}}"' in script
+    assert 'resolve_env_value "SUPABASE_URL" "NEXT_PUBLIC_SUPABASE_URL"' in script
+    assert 'export SUPABASE_URL="$resolved_supabase_url"' in script
     assert (
-        'export SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}}"'
+        'resolve_env_value "SUPABASE_ANON_KEY" "NEXT_PUBLIC_SUPABASE_ANON_KEY"'
         in script
     )
+    assert 'export SUPABASE_ANON_KEY="$resolved_supabase_anon_key"' in script
 
 
 def test_web_container_raises_open_file_limit_for_sse_and_proxy_load():
