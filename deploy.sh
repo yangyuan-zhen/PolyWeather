@@ -40,7 +40,7 @@ sync_city_thread_ids() {
     fi
 
     mkdir -p "$runtime_dir"
-    REPO_CITY_THREAD_IDS_FILE="$repo_file" TARGET_CITY_THREAD_IDS_FILE="$target_file" python - <<'PY'
+    REPO_CITY_THREAD_IDS_FILE="$repo_file" TARGET_CITY_THREAD_IDS_FILE="$target_file" python3 - <<'PY'
 import json
 import os
 import time
