@@ -29,10 +29,17 @@ export function runTests() {
     "deploy script must wait for the local frontend before relying on Cloudflare/public smoke checks",
   );
   assert(
+    deployScript.includes("wait_for_scan_terminal_ready") &&
+      deployScript.includes("http://127.0.0.1:3001/api/scan/terminal") &&
+      deployScript.includes('"status":"ready"'),
+    "deploy script must wait for the scan terminal snapshot to be ready so first users do not see initialization payloads",
+  );
+  assert(
     deployScript.includes("warm_public_route") &&
       deployScript.includes("https://polyweather.top/terminal") &&
+      deployScript.includes("https://polyweather.top/api/scan/terminal") &&
       deployScript.includes("https://polyweather.top/api/auth/me?prefer_snapshot=1"),
-    "deploy script must warm terminal and auth snapshot routes after container replacement",
+    "deploy script must warm terminal, scan terminal, and auth snapshot routes after container replacement",
   );
   assert(
     deployScript.includes("validate_frontend_api_base_url") &&

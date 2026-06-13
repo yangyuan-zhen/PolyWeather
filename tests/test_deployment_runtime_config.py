@@ -83,6 +83,10 @@ def test_docker_compose_isolates_collector_from_web_and_bot_services():
         1,
     )[0]
     collector_block = compose.split("  polyweather_collector:", 1)[1].split(
+        "\n  polyweather_warmer:",
+        1,
+    )[0]
+    warmer_block = compose.split("  polyweather_warmer:", 1)[1].split(
         "\nx-polyweather-base:",
         1,
     )[0]
@@ -90,16 +94,24 @@ def test_docker_compose_isolates_collector_from_web_and_bot_services():
     assert "POLYWEATHER_SERVICE_ROLE: web" in compose
     assert "POLYWEATHER_SERVICE_ROLE: bot" in compose
     assert "POLYWEATHER_SERVICE_ROLE: collector" in collector_block
+    assert "POLYWEATHER_SERVICE_ROLE: warmer" in warmer_block
+    assert "redis-server --appendonly yes --maxmemory ${POLYWEATHER_REDIS_MAXMEMORY:-512mb} --maxmemory-policy noeviction" in compose
     assert "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'false'" in bot_block
-    assert "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'false'" in web_block
+    assert "POLYWEATHER_EVENT_STORE: ${POLYWEATHER_EVENT_STORE:-redis}" in web_block
+    assert "POLYWEATHER_REDIS_REQUIRED: ${POLYWEATHER_REDIS_REQUIRED:-true}" in web_block
+    assert "POLYWEATHER_REDIS_STREAM_MAXLEN: ${POLYWEATHER_REDIS_STREAM_MAXLEN:-100000}" in web_block
+    assert "POLYWEATHER_SCAN_TERMINAL_REDIS_CACHE_ENABLED: ${POLYWEATHER_SCAN_TERMINAL_REDIS_CACHE_ENABLED:-true}" in web_block
+    assert "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: ${POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED:-false}" in web_block
     assert "POLYWEATHER_SCAN_TERMINAL_BUILD_TIMEOUT_SEC: '30'" in web_block
-    assert "POLYWEATHER_SCAN_TERMINAL_MAX_WORKERS: ${POLYWEATHER_SCAN_TERMINAL_MAX_WORKERS:-1}" in web_block
+    assert "POLYWEATHER_SCAN_TERMINAL_MAX_WORKERS: ${POLYWEATHER_SCAN_TERMINAL_MAX_WORKERS:-4}" in web_block
     assert "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'false'" in collector_block
+    assert "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'false'" in warmer_block
     assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'false'" in bot_block
     assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'false'" in web_block
     assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'true'" in collector_block
-    assert "POLYWEATHER_CITY_DETAIL_BATCH_CONCURRENCY: ${POLYWEATHER_CITY_DETAIL_BATCH_CONCURRENCY:-1}" in web_block
-    assert "POLYWEATHER_CITY_DETAIL_BATCH_GLOBAL_CONCURRENCY: ${POLYWEATHER_CITY_DETAIL_BATCH_GLOBAL_CONCURRENCY:-1}" in web_block
+    assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'false'" in warmer_block
+    assert "POLYWEATHER_CITY_DETAIL_BATCH_CONCURRENCY: ${POLYWEATHER_CITY_DETAIL_BATCH_CONCURRENCY:-2}" in web_block
+    assert "POLYWEATHER_CITY_DETAIL_BATCH_GLOBAL_CONCURRENCY: ${POLYWEATHER_CITY_DETAIL_BATCH_GLOBAL_CONCURRENCY:-2}" in web_block
     assert "POLYWEATHER_CITY_DETAIL_BATCH_QUEUE_WAIT_MS: ${POLYWEATHER_CITY_DETAIL_BATCH_QUEUE_WAIT_MS:-3000}" in web_block
     assert "POLYWEATHER_CITY_DETAIL_BATCH_PARTIAL_TIMEOUT_MS: ${POLYWEATHER_CITY_DETAIL_BATCH_PARTIAL_TIMEOUT_MS:-8000}" in web_block
     assert "UVICORN_WORKERS: ${UVICORN_WORKERS:-2}" in web_block
@@ -111,7 +123,15 @@ def test_docker_compose_isolates_collector_from_web_and_bot_services():
         in collector_block
     )
     assert "command: python -m web.observation_collector_worker" in collector_block
+    assert "command: python -m web.cache_warmer_worker" in warmer_block
     assert "POLYWEATHER_OBSERVATION_COLLECTOR_AMSC_SEC: ${POLYWEATHER_OBSERVATION_COLLECTOR_AMSC_SEC:-60}" in collector_block
+    assert "POLYWEATHER_OBSERVATION_COLLECTOR_CACHE_REFRESH_WORKERS: ${POLYWEATHER_OBSERVATION_COLLECTOR_CACHE_REFRESH_WORKERS:-2}" in collector_block
+    assert "POLYWEATHER_WARMER_ENABLED: ${POLYWEATHER_WARMER_ENABLED:-true}" in warmer_block
+    assert "POLYWEATHER_WARMER_TICK_SEC: ${POLYWEATHER_WARMER_TICK_SEC:-60}" in warmer_block
+    assert "POLYWEATHER_WARMER_SCAN_INTERVAL_SEC: ${POLYWEATHER_WARMER_SCAN_INTERVAL_SEC:-300}" in warmer_block
+    assert "POLYWEATHER_WARMER_CITY_INTERVAL_SEC: ${POLYWEATHER_WARMER_CITY_INTERVAL_SEC:-60}" in warmer_block
+    assert "POLYWEATHER_WARMER_CITY_BATCH_SIZE: ${POLYWEATHER_WARMER_CITY_BATCH_SIZE:-8}" in warmer_block
+    assert "cpus: ${POLYWEATHER_WARMER_CPUS:-0.75}" in warmer_block
     assert "TELEGRAM_AIRPORT_PUSH_INTERVAL_SEC: ${POLYWEATHER_BOT_AIRPORT_PUSH_INTERVAL_SEC:-60}" in bot_block
     assert "POLYWEATHER_OBSERVATION_COLLECTOR_MADIS_SEC: ${POLYWEATHER_OBSERVATION_COLLECTOR_MADIS_SEC:-300}" in collector_block
 
@@ -186,8 +206,13 @@ def test_deploy_script_retries_startup_smoke_checks():
     script = (ROOT / "deploy.sh").read_text(encoding="utf-8")
 
     assert "smoke_check()" in script
+    assert "wait_for_scan_terminal_ready()" in script
+    assert '"status":"ready"' in script
+    assert 'wait_for_scan_terminal_ready "scan terminal snapshot" "http://127.0.0.1:3001/api/scan/terminal"' in script
+    assert script.index("wait_for_scan_terminal_ready") < script.index("run_public_smoke_checks")
     assert 'smoke_check "healthz" "https://api.polyweather.top/healthz" 15 3 5' in script
     assert 'warm_public_route "local cities recent stats" "http://127.0.0.1:8000/api/cities?refresh_deb_recent=1"' in script
+    assert 'warm_public_route "scan terminal" "https://polyweather.top/api/scan/terminal"' in script
     assert 'smoke_check "local cities" "http://127.0.0.1:8000/api/cities" 10 6 3' not in script
     assert 'smoke_check "frontend cities" "https://polyweather.top/api/cities" 20 5 5' in script
     assert 'smoke_check "frontend" "https://www.polyweather.top/" 15 3 5' in script
@@ -211,6 +236,7 @@ def test_deploy_script_retries_compose_recreate_races():
     assert "removal of container .* is already in progress" in script
     assert 'compose_up_retry "backend services" -d --no-deps polyweather_web polyweather' in script
     assert 'compose_up_retry "observation collector" -d --no-deps polyweather_collector' in script
+    assert 'compose_up_retry "cache warmer" -d --no-deps polyweather_warmer' in script
     assert 'compose_up_retry "frontend" -d --no-deps polyweather_frontend' in script
 
 
