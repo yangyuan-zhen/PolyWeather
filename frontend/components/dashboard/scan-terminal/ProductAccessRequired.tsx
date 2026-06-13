@@ -1,13 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { LockKeyhole, CreditCard, LogIn } from "lucide-react";
+import {
+  AlertTriangle,
+  CreditCard,
+  LogIn,
+  RefreshCw,
+} from "lucide-react";
 
 const ACCESS_TERM = {
   signInToContinue: { en: "Sign in to continue", zh: "请先登录" },
-  proAccessRequired: { en: "Pro subscription required", zh: "需要开通 Pro" },
+  proAccessRequired: {
+    en: "Subscription expired",
+    zh: "订阅已过期",
+  },
   month: { en: "/ 30 days", zh: "/ 30 天" },
-  subscribeNow: { en: "Subscribe & Activate", zh: "立即订阅并激活" },
+  subscribeNow: {
+    en: "Renew and restore access",
+    zh: "续费并恢复访问",
+  },
   backToProduct: { en: "Back to product overview", zh: "返回产品介绍页" },
 } as const;
 
@@ -15,8 +26,37 @@ function t(key: keyof typeof ACCESS_TERM, isEn: boolean) {
   return isEn ? ACCESS_TERM[key].en : ACCESS_TERM[key].zh;
 }
 
+function isExpiredSubscription(expiresAt?: string | null) {
+  if (!expiresAt) return false;
+  const timestamp = Date.parse(expiresAt);
+  return Number.isFinite(timestamp) && timestamp <= Date.now();
+}
+
+function formatSubscriptionDate(expiresAt: string | null | undefined, isEn: boolean) {
+  if (!expiresAt) return "";
+  const timestamp = Date.parse(expiresAt);
+  if (!Number.isFinite(timestamp)) return "";
+  try {
+    return new Intl.DateTimeFormat(isEn ? "en-US" : "zh-CN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }).format(new Date(timestamp));
+  } catch {
+    return "";
+  }
+}
+
 // ─── Layer 2: Authenticated but no active subscription ───────────────────────
-function SubscriptionGate({ isEn }: { isEn: boolean }) {
+function SubscriptionGate({
+  isEn,
+  subscriptionExpiresAt,
+}: {
+  isEn: boolean;
+  subscriptionExpiresAt?: string | null;
+}) {
+  const expired = isExpiredSubscription(subscriptionExpiresAt);
+  const expiryLabel = formatSubscriptionDate(subscriptionExpiresAt, isEn);
   const features = isEn
     ? [
         "Real-time station, METAR, and runway signals",
@@ -33,25 +73,57 @@ function SubscriptionGate({ isEn }: { isEn: boolean }) {
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center bg-[#e9edf3] p-6">
-      <div className="w-full max-w-lg">
+      <div className="w-full max-w-xl">
         <div className="mb-6 flex items-center justify-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold uppercase tracking-wider text-amber-700">
-            <LockKeyhole size={12} />
-            {t("proAccessRequired", isEn)}
+          <span className="inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-black uppercase tracking-wider text-amber-800">
+            <AlertTriangle size={13} />
+            {expired
+              ? t("proAccessRequired", isEn)
+              : isEn
+                ? "No active subscription"
+                : "无有效订阅"}
           </span>
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-6 text-white">
+          <div className="border-b border-amber-200 bg-amber-50 px-8 py-5 text-amber-950">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">
+                  {isEn ? "Access paused" : "终端访问已暂停"}
+                </p>
+                <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950">
+                  {expired
+                    ? isEn
+                      ? "Your subscription has expired"
+                      : "订阅已过期，终端访问已暂停"
+                    : isEn
+                      ? "No active Pro subscription"
+                      : "未检测到有效订阅"}
+                </h1>
+              </div>
+              <span className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-black text-amber-800">
+                {expiryLabel
+                  ? isEn
+                    ? `Expired ${expiryLabel}`
+                    : `到期日 ${expiryLabel}`
+                  : isEn
+                    ? "Action required"
+                    : "需要处理"}
+              </span>
+            </div>
+          </div>
+
+          <div className="px-8 pt-6">
             <h1 className="text-xl font-black tracking-tight">
               {isEn
-                ? "Unlock the Weather Terminal"
-                : "解锁天气决策台"}
+                ? "Renew to restore the Weather Terminal"
+                : "续费后恢复天气决策台访问"}
             </h1>
-            <p className="mt-1 text-sm text-blue-100">
+            <p className="mt-2 text-sm leading-6 text-slate-600">
               {isEn
-                ? "Your account is verified. One step away from full access."
-                : "账号已验证，只差一步即可获得完整访问权限。"}
+                ? "Your account is verified, but it does not currently have an active subscription. Renewing restores live temperature evidence, DEB paths, runway alerts, and paid Telegram/API access."
+                : "你的账号已验证，但当前没有有效订阅。续费后会立即恢复实时温度、DEB 路径、跑道提醒和付费 Telegram/API 权益。"}
             </p>
           </div>
 
@@ -78,16 +150,40 @@ function SubscriptionGate({ isEn }: { isEn: boolean }) {
 
             <Link
               href="/account?checkout=1"
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3.5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 py-3.5 text-sm font-black text-white shadow-sm transition hover:bg-slate-800"
             >
               <CreditCard size={16} />
               {t("subscribeNow", isEn)}
             </Link>
 
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-black text-slate-700">
+                {isEn
+                  ? "Already paid but still blocked?"
+                  : "已有付款但未恢复？"}
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-xs font-black text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+                >
+                  <RefreshCw size={14} />
+                  {isEn ? "Refresh access" : "刷新权限"}
+                </button>
+                <Link
+                  href="/account"
+                  className="flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-xs font-black text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+                >
+                  {isEn ? "Open account center" : "账户中心"}
+                </Link>
+              </div>
+            </div>
+
             <p className="mt-4 text-center text-[11px] text-slate-400">
               {isEn
-                ? "Cancel anytime · No hidden fees · Instant access after payment"
-                : "随时取消 · 无隐藏费用 · 付款后立即解锁"}
+                ? "Access resumes automatically after payment confirmation"
+                : "付款确认后会自动恢复访问"}
             </p>
           </div>
         </div>
@@ -166,10 +262,12 @@ function UnauthenticatedGate({
 export function ProductAccessRequired({
   isAuthenticated,
   isEn,
+  subscriptionExpiresAt,
   userLocalTime,
 }: {
   isAuthenticated: boolean;
   isEn: boolean;
+  subscriptionExpiresAt?: string | null;
   userLocalTime: string;
 }) {
   if (!isAuthenticated) {
@@ -186,7 +284,10 @@ export function ProductAccessRequired({
           </Link>
           <div className="font-mono text-sm text-slate-300">{userLocalTime}</div>
         </header>
-        <SubscriptionGate isEn={isEn} />
+        <SubscriptionGate
+          isEn={isEn}
+          subscriptionExpiresAt={subscriptionExpiresAt}
+        />
       </main>
     </div>
   );

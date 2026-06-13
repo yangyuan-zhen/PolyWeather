@@ -1787,6 +1787,9 @@ function ScanTerminalScreen() {
       <ProductAccessRequired
         isAuthenticated={isAuthenticated}
         isEn={isEn}
+        subscriptionExpiresAt={
+          proAccess.subscriptionTotalExpiresAt || proAccess.subscriptionExpiresAt
+        }
         userLocalTime={userLocalTime}
       />
     );

@@ -32,9 +32,9 @@ export function runTests() {
 
   assert(
     productAccess.includes('href="/account?checkout=1"') &&
-      productAccess.includes("Subscribe & Activate") &&
-      productAccess.includes("立即订阅并激活"),
-    "expired terminal gate must send users directly to the checkout entry, not a generic account page",
+      productAccess.includes("Renew and restore access") &&
+      productAccess.includes("续费并恢复访问"),
+    "expired terminal gate must send users directly to the checkout entry with renewal recovery copy, not a generic account page",
   );
 
   assert(
