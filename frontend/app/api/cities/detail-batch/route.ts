@@ -106,6 +106,7 @@ export async function GET(req: NextRequest) {
           ? NO_STORE_CACHE_CONTROL
           : cachePolicy.responseCacheControl,
       fetchCache: "no-store",
+      includeSupabaseIdentity: true,
       publicMessage: "Failed to fetch city detail batch",
       revalidateSeconds: cachePolicy.revalidateSeconds,
       signal: controller.signal,

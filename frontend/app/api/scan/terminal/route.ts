@@ -75,6 +75,7 @@ export async function GET(req: NextRequest) {
       fetchCache: "no-store",
       publicMessage: "Failed to fetch scan terminal data",
       revalidateSeconds: cachePolicy.revalidateSeconds,
+      includeSupabaseIdentity: true,
       signal: controller.signal,
       timeoutPublicMessage: "Scan terminal request timed out",
       timing: timer,

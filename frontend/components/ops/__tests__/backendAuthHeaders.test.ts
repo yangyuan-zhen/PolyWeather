@@ -50,4 +50,21 @@ export function runTests() {
       helperSource.includes("authEmail: identity?.email || null"),
     "backend auth helper must verify incoming Supabase bearer tokens and forward trusted user identity headers to backend services",
   );
+
+  const scanTerminalRoute = fs.readFileSync(
+    path.join(projectRoot, "app", "api", "scan", "terminal", "route.ts"),
+    "utf8",
+  );
+  const cityDetailBatchRoute = fs.readFileSync(
+    path.join(projectRoot, "app", "api", "cities", "detail-batch", "route.ts"),
+    "utf8",
+  );
+  assert(
+    scanTerminalRoute.includes("includeSupabaseIdentity: true"),
+    "scan terminal proxy must forward the Supabase identity; otherwise paid users hit backend 401 even when /api/auth/me is active",
+  );
+  assert(
+    cityDetailBatchRoute.includes("includeSupabaseIdentity: true"),
+    "city detail batch proxy must forward the Supabase identity; otherwise paid users see empty charts with backend 401",
+  );
 }
