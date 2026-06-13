@@ -7,6 +7,10 @@ import {
   feedbackStatusLabel,
   feedbackStatusTone,
 } from "@/components/dashboard/scan-terminal/feedback-status";
+import {
+  getSupabaseBrowserClient,
+  hasSupabasePublicEnv,
+} from "@/lib/supabase/client";
 
 function compactDate(value?: string) {
   if (!value) return "--";
@@ -97,9 +101,27 @@ export function AccountFeedbackPanel({
     setLoading(true);
     setError("");
     try {
+      if (!hasSupabasePublicEnv()) {
+        setAvailable(false);
+        setEntries([]);
+        return;
+      }
+      const {
+        data: { session },
+      } = await getSupabaseBrowserClient().auth.getSession();
+      if (signal?.aborted) return;
+      const accessToken = String(session?.access_token || "").trim();
+      if (!accessToken) {
+        setAvailable(false);
+        setEntries([]);
+        return;
+      }
       const res = await fetch("/api/feedback?limit=10", {
         cache: "no-store",
-        headers: { Accept: "application/json" },
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
         signal,
       });
       if (res.status === 401 || res.status === 403) {

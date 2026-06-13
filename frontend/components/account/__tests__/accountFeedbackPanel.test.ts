@@ -31,6 +31,20 @@ export function runTests() {
       !feedbackPanelSource.includes("setInterval"),
     "account feedback panel must load the current user's feedback once, support manual refresh, and avoid polling",
   );
+  const sessionLookupIndex = feedbackPanelSource.indexOf(".auth.getSession()");
+  const feedbackFetchIndex = feedbackPanelSource.indexOf("/api/feedback?limit=10");
+  assert(
+    feedbackPanelSource.includes("getSupabaseBrowserClient") &&
+      feedbackPanelSource.includes("hasSupabasePublicEnv") &&
+      sessionLookupIndex >= 0 &&
+      feedbackFetchIndex >= 0 &&
+      sessionLookupIndex < feedbackFetchIndex &&
+      feedbackPanelSource.includes("accessToken") &&
+      feedbackPanelSource.includes("Authorization: `Bearer ${accessToken}`") &&
+      feedbackPanelSource.includes("if (!accessToken)") &&
+      feedbackPanelSource.includes("setAvailable(false)"),
+    "account feedback panel must avoid unauthenticated 401 requests by checking the browser session before fetching feedback",
+  );
   assert(
     feedbackPanelSource.includes("reward_points") &&
       feedbackPanelSource.includes("reward_reason") &&
