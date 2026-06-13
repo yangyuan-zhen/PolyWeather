@@ -4,6 +4,7 @@ import { createSupabaseRouteClient, hasSupabaseServerEnv } from "@/lib/supabase/
 import { getConfiguredSiteUrl } from "@/lib/site-url";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
+const TERMINAL_CHECKOUT_PATH = "/account?checkout=1";
 
 function normalizeNextPath(input: string | null) {
   const fallback = "/";
@@ -23,6 +24,14 @@ function normalizeAuthError(input: string | null) {
   return raw.slice(0, 240);
 }
 
+function isTerminalNextPath(pathname: string) {
+  return pathname === "/terminal" || pathname.startsWith("/terminal/");
+}
+
+type AuthProfilePayload = {
+  subscription_active?: boolean | null;
+};
+
 function redirectToLoginWithError({
   baseUrl,
   error,
@@ -39,9 +48,9 @@ function redirectToLoginWithError({
   return NextResponse.redirect(loginUrl);
 }
 
-async function warmSignupTrial(accessToken: string) {
+async function warmSignupTrial(accessToken: string): Promise<AuthProfilePayload | null> {
   const token = String(accessToken || "").trim();
-  if (!API_BASE || !token) return;
+  if (!API_BASE || !token) return null;
 
   const headers = new Headers({
     Accept: "application/json",
@@ -55,16 +64,40 @@ async function warmSignupTrial(accessToken: string) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 2500);
   try {
-    await fetch(`${API_BASE.replace(/\/+$/, "")}/api/auth/me?scope=entitlement`, {
+    const response = await fetch(`${API_BASE.replace(/\/+$/, "")}/api/auth/me?scope=entitlement`, {
       cache: "no-store",
       headers,
       signal: controller.signal,
     });
+    if (!response.ok) {
+      return { subscription_active: false };
+    }
+    return await response.json();
   } catch {
     // The account/terminal bootstrap will retry. Callback must not strand login.
+    return null;
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+async function resolvePostAuthRedirect({
+  accessToken,
+  baseUrl,
+  nextPath,
+}: {
+  accessToken: string;
+  baseUrl: string;
+  nextPath: string;
+}) {
+  const profile = await warmSignupTrial(accessToken);
+  if (!isTerminalNextPath(nextPath)) {
+    return new URL(nextPath, baseUrl);
+  }
+
+  const redirectPath =
+    profile?.subscription_active === false ? TERMINAL_CHECKOUT_PATH : nextPath;
+  return new URL(redirectPath, baseUrl);
 }
 
 export async function GET(request: NextRequest) {
@@ -122,7 +155,12 @@ export async function GET(request: NextRequest) {
         nextPath,
       });
     }
-    await warmSignupTrial(session?.access_token || "");
+    const finalRedirectUrl = await resolvePostAuthRedirect({
+      accessToken: session.access_token,
+      baseUrl,
+      nextPath,
+    });
+    response.headers.set("Location", finalRedirectUrl.toString());
   }
 
   return response;
