@@ -243,9 +243,29 @@ export function runTests() {
     walletChallengeRouteSource.includes("retryable: true"),
     "wallet challenge proxy exception response must mark transient failures as retryable",
   );
+  const walletVerifyRouteSource = fs.readFileSync(
+    path.join(projectRoot, "app/api/payments/wallets/verify/route.ts"),
+    "utf8",
+  );
+  assert(
+    walletVerifyRouteSource.includes("fetchWalletVerifyWithRetry"),
+    "wallet verify proxy must retry a transient backend connection failure before blocking wallet binding",
+  );
+  assert(
+    walletVerifyRouteSource.includes("Invalid wallet verify request"),
+    "wallet verify proxy must return a client error for malformed JSON instead of a generic payment failure",
+  );
+  assert(
+    walletVerifyRouteSource.includes("retryable: true"),
+    "wallet verify proxy exception response must mark transient failures as retryable",
+  );
   assert(
     walletBindSource.includes("readPaymentApiErrorMessage"),
     "wallet binding errors must show the API error message instead of raw JSON",
+  );
+  assert(
+    walletBindSource.includes("钱包验证服务暂时不可用"),
+    "wallet binding HTML/50x fallback should stay localized in the Chinese account UI",
   );
   assert(
     paymentUtilsSource.includes("looksLikeHtmlDocument") &&

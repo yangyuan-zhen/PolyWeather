@@ -304,7 +304,12 @@ export function useWalletBind(params: UseWalletBindParams) {
         method: "POST", headers: authHeaders, body: JSON.stringify({ address }),
       });
       if (!challengeRes.ok) {
-        const message = await readPaymentApiErrorMessage(challengeRes);
+        const message = await readPaymentApiErrorMessage(
+          challengeRes,
+          isEn
+            ? "Wallet challenge service is temporarily unavailable."
+            : "钱包验证服务暂时不可用。",
+        );
         throw new Error(copy.challengeFailed.replace("{raw}", message));
       }
 
@@ -318,7 +323,12 @@ export function useWalletBind(params: UseWalletBindParams) {
         method: "POST", headers: authHeaders, body: JSON.stringify({ address, nonce, signature }),
       });
       if (!verifyRes.ok) {
-        const message = await readPaymentApiErrorMessage(verifyRes);
+        const message = await readPaymentApiErrorMessage(
+          verifyRes,
+          isEn
+            ? "Wallet verify service is temporarily unavailable."
+            : "钱包验证服务暂时不可用。",
+        );
         throw new Error(copy.verifyFailedRaw.replace("{raw}", message));
       }
 

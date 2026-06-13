@@ -10,6 +10,42 @@ import {
 } from "@/lib/api-proxy";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
+const BACKEND_RETRY_DELAY_MS = 250;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWalletVerifyWithRetry(
+  url: string,
+  init: RequestInit,
+  attempts = 2,
+) {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await fetch(url, init);
+    } catch (error) {
+      lastError = error;
+      if (attempt >= attempts) break;
+      await sleep(BACKEND_RETRY_DELAY_MS * attempt);
+    }
+  }
+  throw lastError;
+}
+
+function logWalletVerifyProxyError(
+  error: unknown,
+  authDebug: Record<string, unknown>,
+) {
+  const source = error as { name?: unknown; message?: unknown; cause?: unknown };
+  console.error("[payment-wallet-verify-proxy-exception]", {
+    error_name: String(source?.name || "Error"),
+    error_message: String(source?.message || error || "unknown"),
+    error_cause: source?.cause ? String(source.cause) : "",
+    ...authDebug,
+  });
+}
 
 export async function POST(req: NextRequest) {
   if (!API_BASE) {
@@ -18,31 +54,45 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
+  let body: unknown;
   try {
-    const body = await req.json();
+    body = await req.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid wallet verify request" },
+      { status: 400 },
+    );
+  }
+  let authDebug: Record<string, unknown> = {};
+  try {
     const auth = await buildBackendRequestHeaders(req);
     const authError = requireBackendPaymentAuth(auth);
     if (authError) return authError;
     const proxiedHeaders = new Headers(auth.headers);
     proxiedHeaders.set("Content-Type", "application/json");
-    const res = await fetch(`${API_BASE}/api/payments/wallets/verify`, {
-      method: "POST",
-      headers: proxiedHeaders,
-      body: JSON.stringify(body ?? {}),
-      cache: "no-store",
-    });
+    authDebug = {
+      incoming_has_authorization: Boolean(
+        String(req.headers.get("authorization") || "").trim(),
+      ),
+      has_authorization: proxiedHeaders.has("authorization"),
+      has_entitlement: proxiedHeaders.has("x-polyweather-entitlement"),
+      has_forwarded_user_id: proxiedHeaders.has("x-polyweather-auth-user-id"),
+      has_forwarded_email: proxiedHeaders.has("x-polyweather-auth-email"),
+    };
+    const res = await fetchWalletVerifyWithRetry(
+      `${API_BASE}/api/payments/wallets/verify`,
+      {
+        method: "POST",
+        headers: proxiedHeaders,
+        body: JSON.stringify(body ?? {}),
+        cache: "no-store",
+      },
+    );
     if (!res.ok) {
       const raw = await res.text();
       const response = buildUpstreamErrorResponse(res.status, raw, {
         detailLimit: 350,
-        extraDebug: {
-            has_authorization: proxiedHeaders.has("authorization"),
-            has_entitlement: proxiedHeaders.has("x-polyweather-entitlement"),
-            has_forwarded_user_id: proxiedHeaders.has(
-              "x-polyweather-auth-user-id",
-            ),
-            has_forwarded_email: proxiedHeaders.has("x-polyweather-auth-email"),
-        },
+        extraDebug: authDebug,
       });
       return applyAuthResponseCookies(response, auth.response);
     }
@@ -50,8 +100,12 @@ export async function POST(req: NextRequest) {
     const response = NextResponse.json(data);
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {
+    logWalletVerifyProxyError(error, authDebug);
     return buildProxyExceptionResponse(error, {
-      publicMessage: "Failed to verify wallet binding",
+      status: 502,
+      publicMessage:
+        "Wallet verify service is temporarily unavailable. Please retry.",
+      extra: { retryable: true },
     });
   }
 }
