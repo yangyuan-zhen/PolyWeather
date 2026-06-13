@@ -169,20 +169,6 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
     }
   };
 
-  useEffect(() => {
-    if (!supabaseReady) return;
-    const run = async () => {
-      const supabase = getSupabaseBrowserClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session?.user) {
-        router.replace(nextPath);
-      }
-    };
-    void run();
-  }, [nextPath, router, supabaseReady]);
-
   const onGoogleSignIn = async () => {
     setErrorText("");
     setInfoText("");
