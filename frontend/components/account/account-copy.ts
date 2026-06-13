@@ -165,10 +165,10 @@ export function createAccountCopy(isEn: boolean): Record<string, string> {
         : "钱包已绑定，正在创建订单并发起支付...",
       proMember: "PRO MEMBER",
       proPendingSync: isEn ? "Activated (pending sync)" : "已开通（待同步）",
-      subscriptionChecking: isEn ? "Checking subscription" : "订阅同步中",
+      subscriptionChecking: isEn ? "Status pending" : "状态待确认",
       subscriptionUnknown: isEn
-        ? "Subscription status is syncing. Please refresh shortly."
-        : "订阅状态正在同步，请稍后刷新。",
+        ? "Subscription status is not confirmed yet. Refresh or renew directly."
+        : "订阅状态暂未确认，可刷新或直接续费。",
       noProSubscription: isEn ? "No Pro subscription" : "暂无 Pro 订阅",
       proEndsSoonTitle: isEn ? "Pro renewal due soon" : "Pro 即将到期",
       proEndsSoonBody: isEn

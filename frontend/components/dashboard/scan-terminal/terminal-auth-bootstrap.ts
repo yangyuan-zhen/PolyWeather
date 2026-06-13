@@ -96,6 +96,7 @@ export async function loadTerminalAuthProfile({
     | null = null;
   let latestCookiePayload: TerminalAuthProfilePayload | null = null;
   let latestBearerPayload: TerminalAuthProfilePayload | null = null;
+  let sessionSettled = !hasSupabasePublicEnv;
 
   const authenticatedProfile = new Promise<TerminalAuthProfilePayload>((resolve) => {
     resolveAuthenticated = resolve;
@@ -119,6 +120,7 @@ export async function loadTerminalAuthProfile({
     (async () => {
       if (!hasSupabasePublicEnv) return null;
       const sessionResult = await getSession();
+      sessionSettled = true;
       if (resolvedAuthenticated) return null;
       const accessToken = String(
         sessionResult?.data?.session?.access_token || "",
@@ -140,6 +142,14 @@ export async function loadTerminalAuthProfile({
     globalThis.setTimeout(() => {
       if (latestBearerPayload) {
         resolve(latestBearerPayload);
+        return;
+      }
+      if (
+        latestCookiePayload?.authenticated === false &&
+        hasSupabasePublicEnv &&
+        !sessionSettled
+      ) {
+        reject(new Error("Terminal auth bootstrap timeout"));
         return;
       }
       if (latestCookiePayload) {

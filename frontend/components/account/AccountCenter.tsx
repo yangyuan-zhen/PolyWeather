@@ -410,7 +410,6 @@ export function AccountCenter() {
   const canTrialUpgrade = Boolean(isSubscribed && isTrialSubscription);
   const canOpenCheckoutOverlay = Boolean(
     paymentFeatureReady &&
-      !isSubscriptionUnknown &&
       (canTrialUpgrade || !isSubscribed || showExpiringSoon || showExpiredReminder),
   );
   const subscriptionStatusTitle = showExpiredReminder

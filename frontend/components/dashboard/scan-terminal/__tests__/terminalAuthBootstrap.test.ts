@@ -228,6 +228,46 @@ export async function runTests() {
     "terminal auth bootstrap must not resolve to an anonymous paywall when a bearer session exists but the auth profile request is transiently failing",
   );
 
+  const unresolvedSession = deferred<{ data: { session: { access_token: string } | null } }>();
+  let anonymousResolvedBeforeSession = false;
+  try {
+    const maybeAnonymous = await loadTerminalAuthProfile({
+      hasSupabasePublicEnv: true,
+      getSession: () => unresolvedSession.promise,
+      timeoutMs: 1,
+      loadAuthProfile: (accessToken) => {
+        assert(!accessToken, "cookie-only anonymous probe should not receive a bearer token");
+        return Promise.resolve({
+          authenticated: false,
+          subscription_active: false,
+          points: 0,
+        });
+      },
+    });
+    anonymousResolvedBeforeSession = maybeAnonymous.authenticated === false;
+  } catch {}
+  assert(
+    !anonymousResolvedBeforeSession,
+    "terminal auth bootstrap must not show the signed-out gate while the local Supabase session is still unresolved",
+  );
+
+  const signedOutProfile = await loadTerminalAuthProfile({
+    hasSupabasePublicEnv: true,
+    getSession: () => Promise.resolve({ data: { session: null } }),
+    loadAuthProfile: (accessToken) => {
+      assert(!accessToken, "signed-out profile should be resolved through the cookie probe only");
+      return Promise.resolve({
+        authenticated: false,
+        subscription_active: false,
+        points: 0,
+      });
+    },
+  });
+  assert(
+    signedOutProfile.authenticated === false,
+    "terminal auth bootstrap must still resolve a confirmed signed-out browser as unauthenticated",
+  );
+
   assert(
     isSubscriptionRequiredBackendResponse(
       403,

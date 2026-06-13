@@ -254,6 +254,17 @@ export function runTests() {
     "account center must distinguish unknown subscription sync state from a confirmed unsubscribed account",
   );
   assert(
+    !accountCenterSource.includes("paymentFeatureReady &&\n      !isSubscriptionUnknown") &&
+      !accountCenterSource.includes("paymentFeatureReady &&\r\n      !isSubscriptionUnknown"),
+    "account center must not block checkout when an authenticated user's subscription status is temporarily unknown",
+  );
+  assert(
+    accountFeatureSource.includes("状态待确认") &&
+      accountFeatureSource.includes("刷新或直接续费") &&
+      !accountFeatureSource.includes("订阅状态正在同步，请稍后刷新。"),
+    "account unknown subscription copy must tell users to refresh or renew instead of waiting indefinitely",
+  );
+  assert(
     hookSource.includes("backendJson.authenticated === false") &&
       hookSource.includes("refreshSession()") &&
       hookSource.includes("retriedBackendJson"),
