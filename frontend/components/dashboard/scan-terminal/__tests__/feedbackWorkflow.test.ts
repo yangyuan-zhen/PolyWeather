@@ -70,6 +70,12 @@ export function runTests() {
     "feedback API proxy must expose a GET endpoint for the current user's feedback status list",
   );
   assert(
+    feedbackRouteSource.includes("emptyFeedbackResponse") &&
+      feedbackRouteSource.includes("if (!auth.authUserId)") &&
+      !feedbackRouteSource.includes("const authError = requireBackendPaymentAuth(auth);"),
+    "feedback GET proxy must return an empty optional list instead of surfacing a 401 when no Supabase user identity is verified",
+  );
+  assert(
     dashboardSource.includes("<UserFeedbackStatusButton") &&
       dashboardSource.includes("feedbackRefreshKey") &&
       dashboardSource.includes("setFeedbackRefreshKey"),

@@ -1,4 +1,4 @@
-$VPS = "root@38.54.27.70"
+$VPS = "root@172.245.214.111"
 $PROJECT = "/root/PolyWeather"
 
 Write-Host "🚀 Deploying to $VPS..." -ForegroundColor Cyan

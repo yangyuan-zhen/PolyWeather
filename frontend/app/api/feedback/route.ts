@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   applyAuthResponseCookies,
   buildBackendRequestHeaders,
-  requireBackendPaymentAuth,
 } from "@/lib/backend-auth";
 import {
   buildProxyExceptionResponse,
@@ -10,6 +9,21 @@ import {
 } from "@/lib/api-proxy";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
+
+function emptyFeedbackResponse() {
+  return NextResponse.json(
+    {
+      feedback: [],
+      total: 0,
+      status_counts: {},
+    },
+    {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    },
+  );
+}
 
 export async function GET(req: NextRequest) {
   if (!API_BASE) {
@@ -22,8 +36,9 @@ export async function GET(req: NextRequest) {
   let auth: Awaited<ReturnType<typeof buildBackendRequestHeaders>> | null = null;
   try {
     auth = await buildBackendRequestHeaders(req);
-    const authError = requireBackendPaymentAuth(auth);
-    if (authError) return authError;
+    if (!auth.authUserId) {
+      return applyAuthResponseCookies(emptyFeedbackResponse(), auth.response);
+    }
 
     const upstream = new URL(`${API_BASE}/api/feedback`);
     const limit = req.nextUrl.searchParams.get("limit");

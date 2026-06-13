@@ -257,6 +257,18 @@ def test_deploy_token_is_passed_over_stdin_not_process_args():
     assert "bash /tmp/deploy.sh '${{ secrets.GHCR_PAT }}'" not in workflow
 
 
+def test_deployment_helpers_do_not_reference_retired_vps_ip():
+    retired_ip = "38.54.27.70"
+    deploy_ps1 = (ROOT / "deploy.ps1").read_text(encoding="utf-8")
+    cache_script = (ROOT / "scripts" / "validate_frontend_cache.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert retired_ip not in deploy_ps1
+    assert retired_ip not in cache_script
+    assert 'BASE_URL="${1:-https://polyweather.top}"' in cache_script
+
+
 def test_docker_compose_keeps_polyweather_ports_on_loopback():
     compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
 

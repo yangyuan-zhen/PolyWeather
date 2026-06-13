@@ -2,7 +2,7 @@
 
 set -u
 
-BASE_URL="${1:-http://38.54.27.70:8000}"
+BASE_URL="${1:-https://polyweather.top}"
 CURL_BIN="${CURL_BIN:-curl}"
 
 PASS_COUNT=0
