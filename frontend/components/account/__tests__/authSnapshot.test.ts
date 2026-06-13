@@ -1,6 +1,7 @@
 import {
   buildAuthMePath,
   mergeAccountAuthSnapshot,
+  shouldResolveAccountUnknownWithFullProfile,
 } from "@/lib/auth-snapshot";
 import type { AuthSnapshotLike } from "@/lib/auth-snapshot";
 
@@ -63,5 +64,34 @@ export function runTests() {
   assert(
     inactive.subscription_active === false,
     "account snapshot merge must still accept a confirmed inactive subscription response",
+  );
+
+  assert(
+    shouldResolveAccountUnknownWithFullProfile(
+      { authenticated: true, subscription_active: null },
+      true,
+    ),
+    "account center must resolve an unknown local-user subscription snapshot with the full auth profile",
+  );
+  assert(
+    !shouldResolveAccountUnknownWithFullProfile(
+      { authenticated: true, subscription_active: false },
+      true,
+    ),
+    "account center must not re-resolve an explicitly inactive subscription snapshot",
+  );
+  assert(
+    !shouldResolveAccountUnknownWithFullProfile(
+      { authenticated: false, subscription_active: null },
+      true,
+    ),
+    "account center must not re-resolve an unauthenticated backend snapshot",
+  );
+  assert(
+    !shouldResolveAccountUnknownWithFullProfile(
+      { authenticated: true, subscription_active: null },
+      false,
+    ),
+    "account center must only resolve unknown subscription snapshots when a local Supabase user exists",
   );
 }

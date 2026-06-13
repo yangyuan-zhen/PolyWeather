@@ -6,6 +6,7 @@ import type { User } from "@supabase/supabase-js";
 import {
   buildAuthMePath,
   mergeAccountAuthSnapshot,
+  shouldResolveAccountUnknownWithFullProfile,
 } from "@/lib/auth-snapshot";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -244,9 +245,19 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
           // an unauthenticated backend snapshot as a temporary sync state.
         }
       }
+      let resolvedWithFullProfile = false;
+      if (shouldResolveAccountUnknownWithFullProfile(backendJson, Boolean(localUser))) {
+        try {
+          backendJson = await readAuthSnapshot(latestHeaders);
+          resolvedWithFullProfile = true;
+        } catch {
+          // Keep the explicit unknown state only when the full account profile
+          // cannot be read; the refresh button can retry the same path.
+        }
+      }
       setBackend((previous) => mergeAccountAuthSnapshot(previous, backendJson));
       setUpdatedAt(new Date().toISOString());
-      if (backendJson.authenticated !== false) {
+      if (backendJson.authenticated !== false && !resolvedWithFullProfile) {
         void readAuthSnapshot(latestHeaders)
           .then((fullJson) => {
             setBackend((previous) =>

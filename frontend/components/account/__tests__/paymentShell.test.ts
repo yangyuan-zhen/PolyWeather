@@ -260,6 +260,13 @@ export function runTests() {
     "account snapshot loader must retry with a refreshed Supabase token when local user exists but /api/auth/me reports unauthenticated",
   );
   assert(
+    hookSource.includes("shouldResolveAccountUnknownWithFullProfile") &&
+      hookSource.includes("backendJson = await readAuthSnapshot(latestHeaders);") &&
+      hookSource.indexOf("shouldResolveAccountUnknownWithFullProfile") <
+        hookSource.indexOf("setBackend((previous) => mergeAccountAuthSnapshot(previous, backendJson))"),
+    "account snapshot loader must resolve unknown entitlement-scope results through full auth/me before rendering account status",
+  );
+  assert(
     hookSource.includes("refreshEntitlementAfterPayment") &&
       paymentFlowSource.includes("refreshEntitlementAfterPayment") &&
       paymentFlowSource.includes("await refreshEntitlementAfterPayment();") &&

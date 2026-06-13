@@ -40,6 +40,17 @@ export function isUnknownSubscriptionSnapshot(
   );
 }
 
+export function shouldResolveAccountUnknownWithFullProfile(
+  snapshot: AuthSnapshotLike | null | undefined,
+  localUserPresent: boolean,
+) {
+  return Boolean(
+    localUserPresent &&
+      snapshot?.authenticated !== false &&
+      isUnknownSubscriptionSnapshot(snapshot),
+  );
+}
+
 export function mergeAccountAuthSnapshot<T extends AuthSnapshotLike>(
   previous: T | null | undefined,
   next: T,
