@@ -2,6 +2,7 @@ requests
 httpx
 loguru
 pyTelegramBotAPI
+telethon
 python-dotenv
 PyYAML
 netCDF4
