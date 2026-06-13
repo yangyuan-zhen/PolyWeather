@@ -206,10 +206,11 @@ def test_deploy_script_retries_startup_smoke_checks():
     script = (ROOT / "deploy.sh").read_text(encoding="utf-8")
 
     assert "smoke_check()" in script
-    assert "wait_for_scan_terminal_ready()" in script
+    assert "wait_for_scan_terminal_snapshot()" in script
     assert '"status":"ready"' in script
-    assert 'wait_for_scan_terminal_ready "scan terminal snapshot" "http://127.0.0.1:3001/api/scan/terminal"' in script
-    assert script.index("wait_for_scan_terminal_ready") < script.index("run_public_smoke_checks")
+    assert "http=401" in script
+    assert 'wait_for_scan_terminal_snapshot "scan terminal snapshot" "http://127.0.0.1:3001/api/scan/terminal"' in script
+    assert script.index("wait_for_scan_terminal_snapshot") < script.index("run_public_smoke_checks")
     assert 'smoke_check "healthz" "https://api.polyweather.top/healthz" 15 3 5' in script
     assert 'warm_public_route "local cities recent stats" "http://127.0.0.1:8000/api/cities?refresh_deb_recent=1"' in script
     assert 'warm_public_route "scan terminal" "https://polyweather.top/api/scan/terminal"' in script
