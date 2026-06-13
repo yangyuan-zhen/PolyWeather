@@ -233,15 +233,15 @@ def _bind_forwarded_supabase_identity(request: Request) -> bool:
 
 
 def _bind_optional_supabase_identity(request: Request) -> None:
+    if _bind_forwarded_supabase_identity(request):
+        return
     if not SUPABASE_ENTITLEMENT.configured:
         return
     access_token = extract_bearer_token(request.headers.get("authorization"))
     if not access_token:
-        _bind_forwarded_supabase_identity(request)
         return
     identity = SUPABASE_ENTITLEMENT.get_identity(access_token)
     if not identity:
-        _bind_forwarded_supabase_identity(request)
         return
     request.state.auth_user_id = identity.user_id
     request.state.auth_email = identity.email

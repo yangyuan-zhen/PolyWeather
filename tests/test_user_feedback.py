@@ -2,8 +2,10 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+from starlette.requests import Request
 
 from src.database.db_manager import DBManager
+import web.core as web_core
 from web.services import feedback_api
 from web.services import ops_api
 
@@ -296,3 +298,42 @@ def test_list_current_user_feedback_requires_identity(tmp_path, monkeypatch):
     with pytest.raises(HTTPException) as exc_info:
         feedback_api.list_current_user_feedback(anonymous_request, limit=20)
     assert exc_info.value.status_code == 401
+
+
+def test_list_current_user_feedback_accepts_forwarded_identity_when_supabase_unconfigured(
+    tmp_path, monkeypatch
+):
+    db = DBManager(str(tmp_path / "polyweather-feedback-forwarded.db"))
+    db.append_user_feedback(
+        category="bug",
+        message="Forwarded identity feedback.",
+        user_id="user-a",
+        user_email="a@example.com",
+    )
+    db.append_user_feedback(
+        category="bug",
+        message="Other user feedback.",
+        user_id="user-b",
+        user_email="b@example.com",
+    )
+    monkeypatch.setattr(feedback_api, "DBManager", lambda: db)
+    monkeypatch.setattr(web_core, "_ENTITLEMENT_TOKEN", "backend-token")
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "supabase_url", "")
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "anon_key", "")
+
+    request = Request(
+        {
+            "type": "http",
+            "headers": [
+                (b"x-polyweather-entitlement", b"backend-token"),
+                (b"x-polyweather-auth-user-id", b"user-a"),
+                (b"x-polyweather-auth-email", b"a@example.com"),
+                (b"authorization", b"Bearer access-token"),
+            ],
+        }
+    )
+
+    payload = feedback_api.list_current_user_feedback(request, limit=20)
+
+    assert payload["total"] == 1
+    assert payload["feedback"][0]["message"] == "Forwarded identity feedback."

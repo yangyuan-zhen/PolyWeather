@@ -297,6 +297,36 @@ def test_frontend_proxy_uses_internal_backend_url_not_public_site():
     )
 
 
+def test_frontend_and_web_share_supabase_forwarded_identity_secrets():
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    script = (ROOT / "deploy.sh").read_text(encoding="utf-8")
+    frontend_block = compose.split("  polyweather_frontend:", 1)[1].split(
+        "\n  polyweather_web:",
+        1,
+    )[0]
+    web_block = compose.split("  polyweather_web:", 1)[1].split(
+        "\n  polyweather_collector:",
+        1,
+    )[0]
+
+    assert (
+        "POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN: ${POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN}"
+        in frontend_block
+    )
+    assert "SUPABASE_URL: ${SUPABASE_URL}" in web_block
+    assert "SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}" in web_block
+    assert "SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}" in web_block
+    assert (
+        "POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN: ${POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN}"
+        in web_block
+    )
+    assert 'export SUPABASE_URL="${SUPABASE_URL:-${NEXT_PUBLIC_SUPABASE_URL:-}}"' in script
+    assert (
+        'export SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}}"'
+        in script
+    )
+
+
 def test_web_container_raises_open_file_limit_for_sse_and_proxy_load():
     compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
     web_block = compose.split("  polyweather_web:", 1)[1].split(

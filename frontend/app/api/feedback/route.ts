@@ -50,6 +50,9 @@ export async function GET(req: NextRequest) {
       cache: "no-store",
     });
     const raw = await res.text();
+    if (res.status === 401 || res.status === 403) {
+      return applyAuthResponseCookies(emptyFeedbackResponse(), auth.response);
+    }
     if (!res.ok) {
       return applyAuthResponseCookies(
         buildUpstreamErrorResponse(res.status, raw, {

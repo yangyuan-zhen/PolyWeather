@@ -72,6 +72,7 @@ export function runTests() {
   assert(
     feedbackRouteSource.includes("emptyFeedbackResponse") &&
       feedbackRouteSource.includes("if (!auth.authUserId)") &&
+      feedbackRouteSource.includes("if (res.status === 401 || res.status === 403)") &&
       !feedbackRouteSource.includes("const authError = requireBackendPaymentAuth(auth);"),
     "feedback GET proxy must return an empty optional list instead of surfacing a 401 when no Supabase user identity is verified",
   );
