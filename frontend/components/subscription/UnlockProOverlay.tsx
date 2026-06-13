@@ -65,16 +65,16 @@ function formatUsdcAmount(value: number) {
 
 const FEATURES = {
   "zh-CN": [
-    "市场扫描台 + V4-Pro 深度复核",
-    "今日日内机场报文规则分析（含高温时段）",
-    "多城市图表巡检 + 未来日期分析",
-    "全平台智能气象推送",
+    "Terminal：市场温度与城市机会扫描",
+    "机场 / 跑道实测：METAR + 结算源优先",
+    "DEB 路径与高温时段复核",
+    "Telegram 提醒与账户权益同步",
   ],
   "en-US": [
-    "Market Scan Terminal + V4-Pro review",
-    "Intraday METAR rule-based analysis with peak-time window",
-    "Multi-city chart monitoring + future-date analysis",
-    "Cross-platform alerts",
+    "Terminal: market temperature and city signal scanning",
+    "Airport / runway observations: METAR + settlement-source-first",
+    "DEB paths and peak-temperature window review",
+    "Telegram alerts and entitlement sync",
   ],
 };
 
@@ -158,12 +158,12 @@ export function UnlockProOverlay({
           <span className={s.badgeText}>Pro</span>
         </div>
         <h2 className={s.title}>
-          {isEn ? "Unlock PolyWeather Pro" : "解锁 PolyWeather Pro"}
+          {isEn ? "Activate PolyWeather Pro" : "确认开通 PolyWeather Pro"}
         </h2>
         <p className={s.subtitle}>
           {isEn
-            ? "High-precision weather intelligence, delivered everywhere."
-            : "全球最精准的高精度气象推送，全平台覆盖"}
+            ? "Confirm your subscription for the settlement-source-first terminal: observations, DEB paths, city charts, and alerts."
+            : "确认订阅结算源优先的天气决策终端：实测观测、DEB 路径、城市图表和提醒。"}
         </p>
       </div>
 
