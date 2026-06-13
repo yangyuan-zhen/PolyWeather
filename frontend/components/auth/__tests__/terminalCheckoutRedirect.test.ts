@@ -20,19 +20,22 @@ export function runTests() {
     loginClientSource.includes("TERMINAL_CHECKOUT_PATH") &&
       loginClientSource.includes('"/account?checkout=1"') &&
       loginClientSource.includes("resolvePostLoginRedirect") &&
-      loginClientSource.includes("subscription_active === false") &&
+      loginClientSource.includes("subscription_active === true") &&
+      loginClientSource.includes("return TERMINAL_CHECKOUT_PATH") &&
       loginClientSource.includes("router.replace(redirectPath)") &&
+      !loginClientSource.includes("if (!response.ok) return nextPath;") &&
+      !loginClientSource.includes("catch {\n    return nextPath;") &&
       !loginClientSource.includes("router.replace(nextPath);\n        return;"),
-    "email/password terminal login must send non-members to the checkout account page instead of blindly returning to /terminal",
+    "email/password terminal login must only enter /terminal after confirmed active subscription; unknown or inactive users go to checkout",
   );
 
   assert(
     authCallbackSource.includes("resolvePostAuthRedirect") &&
       authCallbackSource.includes("TERMINAL_CHECKOUT_PATH") &&
       authCallbackSource.includes('"/account?checkout=1"') &&
-      authCallbackSource.includes("subscription_active === false") &&
+      authCallbackSource.includes("subscription_active === true") &&
       authCallbackSource.includes("NextResponse.redirect(redirectUrl)") &&
       authCallbackSource.includes("await resolvePostAuthRedirect"),
-    "OAuth terminal callback must send non-members to the checkout account page instead of blindly returning to /terminal",
+    "OAuth terminal callback must only enter /terminal after confirmed active subscription; unknown or inactive users go to checkout",
   );
 }

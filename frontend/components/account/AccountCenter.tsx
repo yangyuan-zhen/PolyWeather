@@ -675,7 +675,7 @@ export function AccountCenter() {
             </button>
           ) : (
             <Link
-              href="/auth/login?next=%2Faccount"
+              href="/auth/login?next=%2Faccount%3Fcheckout%3D1"
               className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition-all hover:bg-blue-100"
             >
               <LogIn size={16} /> {copy.signIn}

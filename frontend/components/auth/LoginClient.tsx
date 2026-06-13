@@ -51,13 +51,13 @@ async function resolvePostLoginRedirect({
         Authorization: `Bearer ${token}`,
       },
     });
-    if (!response.ok) return nextPath;
+    if (!response.ok) return TERMINAL_CHECKOUT_PATH;
     const payload = await response.json();
-    return payload?.subscription_active === false
-      ? TERMINAL_CHECKOUT_PATH
-      : nextPath;
+    return payload?.subscription_active === true
+      ? nextPath
+      : TERMINAL_CHECKOUT_PATH;
   } catch {
-    return nextPath;
+    return TERMINAL_CHECKOUT_PATH;
   }
 }
 

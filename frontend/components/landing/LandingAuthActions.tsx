@@ -126,7 +126,7 @@ export function LandingHeaderActions({ locale }: { locale: LandingLocale }) {
             <ArrowIcon />
           </Link>
           <Link
-            href="/account"
+            href="/account?checkout=1"
             className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-slate-300 hover:text-slate-950"
             title={isEn ? "Account" : "账户"}
             aria-label={isEn ? "Account" : "账户"}
@@ -181,7 +181,7 @@ export function LandingHeroActions({ locale }: { locale: LandingLocale }) {
         <ArrowIcon />
       </Link>
       <Link
-        href="/account"
+        href="/account?checkout=1"
         className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm hover:border-slate-300 hover:text-slate-950"
       >
         {isEn ? "Subscribe / account" : "订阅 / 账户"}

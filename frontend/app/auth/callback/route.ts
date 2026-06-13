@@ -96,7 +96,7 @@ async function resolvePostAuthRedirect({
   }
 
   const redirectPath =
-    profile?.subscription_active === false ? TERMINAL_CHECKOUT_PATH : nextPath;
+    profile?.subscription_active === true ? nextPath : TERMINAL_CHECKOUT_PATH;
   return new URL(redirectPath, baseUrl);
 }
 

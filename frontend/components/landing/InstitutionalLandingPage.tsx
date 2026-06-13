@@ -659,7 +659,7 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                   ))}
                 </ul>
                 <Link
-                  href="/account"
+                  href="/account?checkout=1"
                   className="mt-8 inline-flex h-11 items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-bold text-white hover:bg-slate-800"
                 >
                   {isEn ? "Subscribe monthly" : "订阅月付 Pro"}
