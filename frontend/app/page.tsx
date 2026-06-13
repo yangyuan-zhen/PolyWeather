@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { InstitutionalLandingPage } from "@/components/landing/InstitutionalLandingPage";
+import { LANDING_LOCALE_QUERY_PARAM } from "@/components/landing/landingLocale";
 
 export const metadata: Metadata = {
   title: "PolyWeather | Institutional Weather Signal Intelligence",
@@ -32,6 +33,8 @@ export default async function HomePage({
     const qs = usp.toString();
     redirect(`/auth/callback${qs ? `?${qs}` : ""}`);
   }
+  const rawLandingLocale = params[LANDING_LOCALE_QUERY_PARAM];
+  const landingLocale = Array.isArray(rawLandingLocale) ? rawLandingLocale[0] : rawLandingLocale;
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "WebApplication",
@@ -68,7 +71,7 @@ export default async function HomePage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <InstitutionalLandingPage />
+      <InstitutionalLandingPage queryLocale={landingLocale} />
     </>
   );
 }

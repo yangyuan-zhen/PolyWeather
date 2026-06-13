@@ -23,6 +23,10 @@ export function runTests() {
     path.join(root, "components", "landing", "LandingLocaleToggle.tsx"),
     "utf8",
   );
+  const localeHelperSource = fs.readFileSync(
+    path.join(root, "components", "landing", "landingLocale.ts"),
+    "utf8",
+  );
   const staticCitiesSource = fs.readFileSync(
     path.join(root, "lib", "static-cities.ts"),
     "utf8",
@@ -48,6 +52,18 @@ export function runTests() {
   assert(!authActionsSource.includes("lucide-react"), "auth island must avoid shipping lucide-react");
   assert(!localeToggleSource.includes("lucide-react"), "locale island must avoid shipping lucide-react");
   assert(!analyticsSource.includes("lucide-react"), "analytics island must avoid shipping lucide-react");
+  assert(
+    localeToggleSource.includes("new URL(window.location.href)") &&
+      localeToggleSource.includes("LANDING_LOCALE_QUERY_PARAM") &&
+      localeToggleSource.includes("window.location.assign(url.toString())"),
+    "landing locale toggle must navigate with an explicit locale query so CDN-cached HTML cannot ignore cookie-only changes",
+  );
+  assert(
+    localeHelperSource.includes("queryLocale") &&
+      source.includes("resolveLandingLocale(queryLocale") &&
+      appPageSource.includes("<InstitutionalLandingPage queryLocale={landingLocale} />"),
+    "landing route must prefer an explicit locale query before cookie or Accept-Language",
+  );
   assert(source.includes("3 天免费试用"), "landing page must advertise the 3-day trial");
   assert(source.includes("试用期权益和 Pro 一致，除了不显示付费 Telegram 群链接"), "landing page must state trial access matches Pro except the paid group link");
   assert(!source.includes("高频刷新与 API 仍为 Pro 权益"), "landing page must not incorrectly exclude high-frequency refresh or API from trial access");

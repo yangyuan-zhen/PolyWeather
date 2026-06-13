@@ -1,6 +1,7 @@
 export type LandingLocale = "zh-CN" | "en-US";
 
 export const LANDING_LOCALE_COOKIE = "polyweather.locale";
+export const LANDING_LOCALE_QUERY_PARAM = "locale";
 export const DEFAULT_LANDING_LOCALE: LandingLocale = "zh-CN";
 
 export function normalizeLandingLocale(value: string | null | undefined): LandingLocale | null {
@@ -16,9 +17,13 @@ export function normalizeLandingLocale(value: string | null | undefined): Landin
 }
 
 export function pickLandingLocale(
+  queryLocale: string | null | undefined,
   cookieLocale: string | null | undefined,
   acceptLanguage: string | null | undefined,
 ): LandingLocale {
+  const fromQuery = normalizeLandingLocale(queryLocale);
+  if (fromQuery) return fromQuery;
+
   const fromCookie = normalizeLandingLocale(cookieLocale);
   if (fromCookie) return fromCookie;
 

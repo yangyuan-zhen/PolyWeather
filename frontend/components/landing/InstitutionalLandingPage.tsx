@@ -227,9 +227,10 @@ function WeatherWorkflowIllustration() {
   );
 }
 
-async function resolveLandingLocale(): Promise<LandingLocale> {
+async function resolveLandingLocale(queryLocale?: string | null): Promise<LandingLocale> {
   const [cookieStore, headerStore] = await Promise.all([cookies(), headers()]);
   return pickLandingLocale(
+    queryLocale,
     cookieStore.get(LANDING_LOCALE_COOKIE)?.value,
     headerStore.get("accept-language"),
   );
@@ -829,7 +830,11 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
   );
 }
 
-export async function InstitutionalLandingPage() {
-  const locale = await resolveLandingLocale();
+export async function InstitutionalLandingPage({
+  queryLocale,
+}: {
+  queryLocale?: string | null;
+} = {}) {
+  const locale = await resolveLandingLocale(queryLocale);
   return <InstitutionalLandingScreen locale={locale} />;
 }
