@@ -17,6 +17,7 @@ from src.database.runtime_state import (
     TelegramAlertStateRepository,
     get_state_storage_mode,
 )
+from src.data_collection.city_registry import ALIASES
 from src.data_collection.city_registry import CITY_REGISTRY
 from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env, parse_telegram_chat_ids
 from src.utils.telegram_i18n import (
@@ -35,6 +36,7 @@ _CITY_THREAD_IDS_PATH = os.path.join(
 )
 _DEFAULT_FORUM_CHAT_ID = "-1003927451869"
 _city_thread_ids: dict = {}
+_CITY_THREAD_IDS_LOCK = threading.Lock()
 
 # Shared HTTP session for AROME and auxiliary queries (connection reuse)
 _HTTP_SESSION: Optional[requests_lib.Session] = None
@@ -104,6 +106,75 @@ def _load_city_thread_ids() -> dict:
             except Exception as exc:
                 logger.warning("failed to load city_thread_ids from {}: {}", path, exc)
     return {}
+
+
+def normalize_airport_push_city(raw: str) -> str:
+    city = str(raw or "").strip().lower().replace("-", " ")
+    city = re.sub(r"\s+", " ", city)
+    compact = city.replace(" ", "")
+    city = ALIASES.get(city, ALIASES.get(compact, city))
+    if city not in HIGH_FREQ_AIRPORT_CITIES:
+        city = {
+            candidate.replace(" ", ""): candidate
+            for candidate in HIGH_FREQ_AIRPORT_CITIES
+        }.get(compact, city)
+    if city in HIGH_FREQ_AIRPORT_CITIES:
+        return city
+    return ""
+
+
+def _city_thread_ids_write_path() -> str:
+    env_path = str(os.getenv("POLYWEATHER_CITY_THREAD_IDS_PATH") or "").strip()
+    if env_path:
+        return env_path
+    for path in (
+        "/var/lib/polyweather/city_thread_ids.json",
+        "/app/data/city_thread_ids.json",
+        _CITY_THREAD_IDS_PATH,
+    ):
+        if os.path.isfile(path):
+            return path
+    return "/var/lib/polyweather/city_thread_ids.json"
+
+
+def record_city_thread_id(city: str, thread_id: int) -> dict:
+    """Persist a forum topic mapping and update the in-process cache."""
+
+    global _city_thread_ids
+    normalized_city = normalize_airport_push_city(city)
+    if not normalized_city:
+        raise ValueError(f"unsupported airport push city: {city}")
+    try:
+        normalized_thread_id = int(thread_id)
+    except Exception as exc:
+        raise ValueError(f"invalid message_thread_id: {thread_id}") from exc
+    if normalized_thread_id <= 0:
+        raise ValueError(f"invalid message_thread_id: {thread_id}")
+
+    with _CITY_THREAD_IDS_LOCK:
+        path = _city_thread_ids_write_path()
+        mapping = dict(_load_city_thread_ids())
+        mapping[normalized_city] = normalized_thread_id
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp_path = f"{path}.tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(mapping, f, ensure_ascii=False, indent=2, sort_keys=True)
+            f.write("\n")
+        os.replace(tmp_path, path)
+        _city_thread_ids = mapping
+        logger.info(
+            "recorded forum topic mapping city={} thread_id={} path={} total={}",
+            normalized_city,
+            normalized_thread_id,
+            path,
+            len(mapping),
+        )
+        return {
+            "city": normalized_city,
+            "thread_id": normalized_thread_id,
+            "path": path,
+            "total": len(mapping),
+        }
 
 
 def _forum_chat_ids() -> Set[str]:
@@ -626,6 +697,7 @@ HIGH_FREQ_AIRPORT_CITIES = {
     "seoul", "singapore", "busan", "tokyo", "ankara", "helsinki", "amsterdam",
     "istanbul", "paris", "hong kong", "taipei",
     "beijing", "shanghai", "guangzhou", "qingdao", "chengdu", "chongqing", "wuhan",
+    "shenzhen",
     "new york", "los angeles", "chicago", "denver", "atlanta",
     "miami", "san francisco", "houston", "dallas", "austin", "seattle",
     "tel aviv",
@@ -638,7 +710,7 @@ HIGH_FREQ_AIRPORT_ICAO = {
     "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058",
     "paris": "LFPB", "hong kong": "HKO", "taipei": "466920",
     "beijing": "ZBAA", "shanghai": "ZSPD", "guangzhou": "ZGGG", "qingdao": "ZSQD",
-    "chengdu": "ZUUU", "chongqing": "ZUCK", "wuhan": "ZHHH",
+    "chengdu": "ZUUU", "chongqing": "ZUCK", "wuhan": "ZHHH", "shenzhen": "LFS",
     "new york": "KLGA", "los angeles": "KLAX", "chicago": "KORD",
     "denver": "KBKF", "atlanta": "KATL", "miami": "KMIA",
     "san francisco": "KSFO", "houston": "KHOU", "dallas": "KDAL",
@@ -1145,6 +1217,7 @@ def _build_airport_status_message(
                    "taipei": "Songshan", "beijing": "Capital", "shanghai": "Pudong",
                    "guangzhou": "Baiyun", "qingdao": "Jiaodong",
                    "chengdu": "Shuangliu", "chongqing": "Jiangbei", "wuhan": "Tianhe",
+                   "shenzhen": "Lau Fau Shan",
                    "new york": "LaGuardia", "los angeles": "LAX", "chicago": "O'Hare",
                    "denver": "Buckley", "atlanta": "Hartsfield", "miami": "Intl",
                    "san francisco": "SFO", "houston": "Hobby", "dallas": "Love Field",

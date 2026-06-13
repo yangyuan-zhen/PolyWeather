@@ -5,6 +5,7 @@ from src.utils.telegram_push import (
     _build_airport_status_message,
     _compute_slope_15m,
     _due_airport_cities,
+    normalize_airport_push_city,
     _parse_observation_time_epoch,
     _run_high_freq_airport_cycle,
     _telegram_push_language,
@@ -165,9 +166,14 @@ def test_singapore_is_in_telegram_push_city_lists():
     assert HIGH_FREQ_AIRPORT_ICAO["singapore"] == "WSSS"
 
 
-def test_shenzhen_is_not_in_airport_push_city_lists():
-    assert "shenzhen" not in HIGH_FREQ_AIRPORT_CITIES
-    assert "shenzhen" not in HIGH_FREQ_AIRPORT_ICAO
+def test_shenzhen_lau_fau_shan_topic_is_in_airport_push_city_lists():
+    assert normalize_airport_push_city("LauFauShan") == "shenzhen"
+    assert normalize_airport_push_city("HongKong") == "hong kong"
+    assert normalize_airport_push_city("NewYork") == "new york"
+    assert normalize_airport_push_city("LosAngeles") == "los angeles"
+    assert normalize_airport_push_city("SanFrancisco") == "san francisco"
+    assert "shenzhen" in HIGH_FREQ_AIRPORT_CITIES
+    assert HIGH_FREQ_AIRPORT_ICAO["shenzhen"] == "LFS"
 
 
 def test_china_airport_push_defaults_to_one_minute_city_interval():
@@ -180,6 +186,10 @@ def test_china_airport_push_defaults_to_one_minute_city_interval():
     assert _AIRPORT_PUSH_INTERVAL["chengdu"] == 60
     assert _AIRPORT_PUSH_INTERVAL["chongqing"] == 60
     assert _AIRPORT_PUSH_INTERVAL["wuhan"] == 60
+
+
+def test_shenzhen_lau_fau_shan_push_uses_hko_ten_minute_interval():
+    assert _AIRPORT_PUSH_INTERVAL["shenzhen"] == 600
 
 
 def test_airport_push_prioritizes_china_markets():

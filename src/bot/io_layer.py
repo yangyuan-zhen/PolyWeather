@@ -197,7 +197,8 @@ class BotIOLayer:
             "/id - 获取当前聊天的 Chat ID\n\n"
             "/diag - 查看 Bot 启动诊断\n\n"
             "/bind - 绑定 Supabase 账号（可选）\n"
-            "/unbind - 解除当前 Telegram 与网页账号绑定\n\n"
+            "/unbind - 解除当前 Telegram 与网页账号绑定\n"
+            "/bindtopic <city> - 管理员在子话题内绑定城市推送\n\n"
             "🔗 机器人: <a href=\"https://t.me/polyyuanbot\">@polyyuanbot</a>\n"
             "👥 社群: <a href=\"https://t.me/+Io5H9oVHFmVjOTQ5\">加入 Telegram 群组</a>"
         )

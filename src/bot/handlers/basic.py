@@ -9,14 +9,34 @@ from loguru import logger  # type: ignore
 
 from src.bot.command_parser import extract_command_name
 from src.bot.command_parser import looks_like_slash_command
+from src.bot.command_parser import split_command_and_args
 from src.bot.io_layer import BotIOLayer
 from src.bot.observability import CommandTrace
 from src.bot.runtime_coordinator import RuntimeStatus, render_runtime_status_html
 from src.auth.supabase_entitlement import SUPABASE_ENTITLEMENT
 from src.auth.telegram_group_pricing import TelegramGroupPricing, TELEGRAM_MEMBER_STATUSES
-from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
+from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env, parse_telegram_chat_ids
 
-_BASIC_COMMANDS = {"start", "help", "id", "top", "diag", "bind", "unbind"}
+_BASIC_COMMANDS = {"start", "help", "id", "top", "diag", "bind", "unbind", "bindtopic"}
+
+
+def normalize_airport_push_city(raw: str) -> str:
+    from src.utils.telegram_push import normalize_airport_push_city as _normalize
+
+    return _normalize(raw)
+
+
+def record_city_thread_id(city: str, thread_id: int) -> dict:
+    from src.utils.telegram_push import record_city_thread_id as _record
+
+    return _record(city, thread_id)
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
 class BasicCommandHandler:
@@ -57,6 +77,10 @@ class BasicCommandHandler:
 
         @self.bot.message_handler(commands=["unbind"])
         def _unbind(message):
+            self._dispatch(message)
+
+        @self.bot.message_handler(commands=["bindtopic"])
+        def _bindtopic(message):
             self._dispatch(message)
 
         if hasattr(self.bot, "chat_join_request_handler"):
@@ -118,6 +142,9 @@ class BasicCommandHandler:
         if command == "unbind":
             self.handle_unbind(message)
             return
+        if command == "bindtopic":
+            self.handle_bindtopic(message)
+            return
 
     def handle_start_help(self, message: Any) -> None:
         trace = CommandTrace("/start", message)
@@ -157,6 +184,83 @@ class BasicCommandHandler:
             parse_mode="HTML",
         )
         return "replied"
+
+    def _configured_forum_chat_ids(self) -> set[str]:
+        return set(
+            parse_telegram_chat_ids(
+                os.getenv("TELEGRAM_FORUM_CHAT_ID"),
+                os.getenv("POLYWEATHER_TELEGRAM_TOPICS_GROUP_ID"),
+                os.getenv("POLYWEATHER_TELEGRAM_GROUP_ID"),
+                os.getenv("TELEGRAM_CHAT_IDS"),
+                os.getenv("TELEGRAM_CHAT_ID"),
+            )
+        )
+
+    def _can_bind_topic(self, message: Any) -> bool:
+        if not _env_bool("POLYWEATHER_TOPIC_BIND_ADMIN_ONLY", True):
+            return True
+        chat = getattr(message, "chat", None)
+        user = getattr(message, "from_user", None)
+        chat_id = getattr(chat, "id", None)
+        user_id = getattr(user, "id", None)
+        if chat_id is None or user_id is None or not hasattr(self.bot, "get_chat_member"):
+            return False
+        try:
+            member = self.bot.get_chat_member(chat_id, user_id)
+        except Exception as exc:
+            logger.warning("bindtopic admin check failed chat_id={} user_id={}: {}", chat_id, user_id, exc)
+            return False
+        status = str(getattr(member, "status", "") or "").strip().lower()
+        return status in {"creator", "administrator"}
+
+    def handle_bindtopic(self, message: Any) -> str:
+        trace = CommandTrace("/bindtopic", message)
+        try:
+            chat = getattr(message, "chat", None)
+            chat_id = getattr(chat, "id", None)
+            chat_type = str(getattr(chat, "type", "") or "").strip().lower()
+            if chat_type not in {"group", "supergroup"} or chat_id is None:
+                self.bot.reply_to(message, "❌ 请在目标 Telegram 群子话题里执行 /bindtopic <city>。")
+                trace.set_status("blocked", "not_group_topic")
+                return "not_group_topic"
+            configured_chat_ids = self._configured_forum_chat_ids()
+            if configured_chat_ids and str(chat_id) not in configured_chat_ids:
+                self.bot.reply_to(message, "❌ 当前群不在推送目标配置里，已拒绝绑定。")
+                trace.set_status("blocked", "chat_not_configured")
+                return "chat_not_configured"
+            thread_id = int(getattr(message, "message_thread_id", 0) or 0)
+            if thread_id <= 0:
+                self.bot.reply_to(message, "❌ 请进入具体子话题后再执行 /bindtopic <city>。")
+                trace.set_status("blocked", "missing_thread_id")
+                return "missing_thread_id"
+            if not self._can_bind_topic(message):
+                self.bot.reply_to(message, "❌ 只有群管理员可以绑定推送子话题。")
+                trace.set_status("blocked", "unauthorized")
+                return "unauthorized"
+            _command, raw_city = split_command_and_args(getattr(message, "text", "") or "")
+            city = normalize_airport_push_city(raw_city)
+            if not city:
+                self.bot.reply_to(
+                    message,
+                    "❌ 未识别城市。用法：<code>/bindtopic seoul</code> 或 <code>/bindtopic LauFauShan</code>",
+                    parse_mode="HTML",
+                )
+                trace.set_status("blocked", "unsupported_city")
+                return "unsupported_city"
+            result = record_city_thread_id(city, thread_id)
+            self.bot.reply_to(
+                message,
+                (
+                    "✅ 已绑定推送子话题\n"
+                    f"city=<code>{html.escape(city)}</code>\n"
+                    f"thread_id=<code>{int(result.get('thread_id') or thread_id)}</code>"
+                ),
+                parse_mode="HTML",
+            )
+            trace.set_status("ok", city)
+            return "bound"
+        finally:
+            trace.emit()
 
     def _prompt_bind_from_web_token(self, message: Any, token: str) -> str:
         if not token:
