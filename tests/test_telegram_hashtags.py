@@ -335,6 +335,84 @@ def test_airport_push_without_cache_uses_canonical_latest_not_analysis(monkeypat
     assert city_weather["current"]["freshness"]["freshness_status"] == "fresh"
 
 
+def test_airport_push_prefers_newer_amsc_canonical_over_stale_cache(monkeypatch):
+    import src.utils.telegram_push as telegram_push
+
+    class FakeDB:
+        def get_city_cache(self, kind, city):
+            if kind != "panel":
+                return None
+            assert city == "qingdao"
+            return {
+                "updated_at_ts": 1000.0,
+                "payload": {
+                    "local_time": "12:00",
+                    "current": {
+                        "temp": 29.0,
+                        "source_code": "metar",
+                        "observed_at": "2026-06-14T04:00:00+00:00",
+                    },
+                    "airport_primary": {
+                        "temp": 29.0,
+                        "source_code": "metar",
+                        "obs_time": "2026-06-14T04:00:00+00:00",
+                    },
+                    "deb": {"prediction": 31.5},
+                },
+            }
+
+        def get_canonical_temperature(self, city):
+            assert city == "qingdao"
+            return {
+                "payload": {
+                    "city": "qingdao",
+                    "value": 30.8,
+                    "source": "amsc_awos",
+                    "source_label": "AMSC AWOS runway-point air temperature",
+                    "source_role": "settlement_proxy",
+                    "observed_at": "2026-06-14T10:44:00+00:00",
+                    "observed_at_local": "18:44",
+                    "freshness_sec": 30,
+                    "freshness_status": "fresh",
+                    "fetched_at": "2026-06-14T10:44:30+00:00",
+                    "confidence": 0.92,
+                },
+            }
+
+        def get_latest_raw_observation(self, source, city):
+            assert (source, city) == ("amsc_awos", "qingdao")
+            return {
+                "payload": {
+                    "source": "amsc_awos",
+                    "temp_c": 30.8,
+                    "observation_time": "2026-06-14T18:44:00+08:00",
+                    "runway_obs": {
+                        "runway_pairs": [("16", "34")],
+                        "temperatures": [(30.8, None)],
+                        "point_temperatures": [
+                            {
+                                "runway": "16/34",
+                                "tdz_temp": 30.2,
+                                "mid_temp": 30.8,
+                                "end_temp": 30.6,
+                                "target_runway_max": 30.6,
+                            }
+                        ],
+                    },
+                }
+            }
+
+    monkeypatch.setattr(telegram_push, "DBManager", lambda: FakeDB())
+
+    city_weather = telegram_push._load_airport_city_weather_for_push("qingdao")
+
+    assert city_weather["current"]["source_code"] == "amsc_awos"
+    assert city_weather["current"]["temp"] == 30.8
+    assert city_weather["deb"]["prediction"] == 31.5
+    assert city_weather["amos"]["source"] == "amsc_awos"
+    assert city_weather["amos"]["runway_obs"]["point_temperatures"][0]["runway"] == "16/34"
+
+
 def test_airport_push_without_cache_or_canonical_skips_analysis(monkeypatch):
     import src.utils.telegram_push as telegram_push
     import web.app as web_app

@@ -1577,12 +1577,36 @@ def _read_cached_airport_city_weather(city: str, max_age_sec: Optional[int] = No
     return None
 
 
-def _read_canonical_airport_city_weather(city: str) -> Optional[Dict[str, Any]]:
+def _attach_latest_raw_observation_payload(
+    db: Any,
+    city: str,
+    payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    canonical = payload.get("canonical_temperature") or {}
+    source = str(canonical.get("source") or "").strip().lower()
+    if source != "amsc_awos":
+        return payload
+    getter = getattr(db, "get_latest_raw_observation", None)
+    if not callable(getter):
+        return payload
+    try:
+        row = getter("amsc_awos", city)
+    except Exception as exc:
+        logger.debug("airport push latest raw observation read failed city={}: {}", city, exc)
+        return payload
+    raw_payload = row.get("payload") if isinstance(row, dict) else None
+    if isinstance(raw_payload, dict) and raw_payload:
+        payload = dict(payload)
+        payload["amos"] = dict(raw_payload)
+    return payload
+
+
+def _read_canonical_airport_city_weather(city: str, db: Optional[Any] = None) -> Optional[Dict[str, Any]]:
     normalized_city = (city or "").strip().lower()
     if not normalized_city:
         return None
     try:
-        db = DBManager()
+        db = db or DBManager()
         getter = getattr(db, "get_canonical_temperature", None)
         if not callable(getter):
             return None
@@ -1595,17 +1619,58 @@ def _read_canonical_airport_city_weather(city: str) -> Optional[Dict[str, Any]]:
     canonical = row.get("payload") or row
     if not isinstance(canonical, dict):
         return None
-    return build_city_weather_from_canonical(normalized_city, canonical)
+    payload = build_city_weather_from_canonical(normalized_city, canonical)
+    if not isinstance(payload, dict):
+        return None
+    return _attach_latest_raw_observation_payload(db, normalized_city, payload)
+
+
+def _merge_airport_push_context(
+    latest_payload: Dict[str, Any],
+    cached_payload: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    if not isinstance(cached_payload, dict) or not cached_payload:
+        return latest_payload
+    merged = dict(latest_payload)
+
+    def has_useful_context(value: Any) -> bool:
+        if isinstance(value, dict):
+            return any(item not in (None, "", [], {}) for item in value.values())
+        if isinstance(value, list):
+            return bool(value)
+        return value is not None
+
+    for key in (
+        "deb",
+        "multi_model",
+        "multi_model_daily",
+        "forecast",
+        "probabilities",
+        "peak",
+        "local_time",
+        "local_date",
+        "temp_symbol",
+        "risk",
+    ):
+        value = cached_payload.get(key)
+        if not has_useful_context(value):
+            continue
+        if key not in merged or not has_useful_context(merged.get(key)):
+            merged[key] = value
+    return merged
 
 
 def _load_airport_city_weather_for_push(city: str) -> Dict[str, Any]:
     cached = _read_cached_airport_city_weather(city)
-    if cached is not None:
-        return cached
-
     canonical = _read_canonical_airport_city_weather(city)
     if canonical is not None:
-        return canonical
+        cached_ts = _cached_payload_observation_epoch(cached or {})
+        canonical_ts = _cached_payload_observation_epoch(canonical)
+        if cached is None or (canonical_ts or 0) > (cached_ts or 0):
+            return _merge_airport_push_context(canonical, cached)
+
+    if cached is not None:
+        return cached
 
     raise RuntimeError(f"no cached city weather for airport push city={city}")
 
