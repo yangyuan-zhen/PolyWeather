@@ -763,7 +763,7 @@ async def get_city_detail_payload(
             _request_city_cache_refresh(city, "market")
             return canonical_payload
         return _queue_and_build_initializing_city_payload(city, kind="market")
-    return await run_in_threadpool(legacy_routes._analyze, city, force_refresh, False, detail_mode)
+    return _queue_and_build_initializing_city_payload(city, kind=detail_mode)
 
 
 async def get_city_summary_payload(

@@ -53,7 +53,7 @@ def test_city_payloads_expose_wunderground_current():
     assert detail["timeseries"]["wunderground_today_obs"] == [{"time": "13:30", "temp": 26}]
 
 
-def test_api_payload_overlays_latest_wunderground_state(monkeypatch):
+def test_api_payload_overlay_uses_cached_wunderground_state_without_fetch(monkeypatch):
     stale_payload = {
         "name": "guangzhou",
         "temp_symbol": "°C",
@@ -78,26 +78,21 @@ def test_api_payload_overlays_latest_wunderground_state(monkeypatch):
         },
     }
 
-    def fake_fetch(city: str, *, use_fahrenheit: bool, utc_offset: int):
-        assert city == "guangzhou"
-        assert use_fahrenheit is False
-        assert utc_offset == 28800
-        return {
-            "source": "wunderground_historical",
-            "station_code": "ZGGG",
-            "temp": 38,
-            "max_so_far": 38,
-            "today_obs": [{"time": "15:17", "temp": 38}],
-        }
+    fetch_calls = []
 
-    monkeypatch.setattr(city_runtime._weather, "fetch_wunderground_historical", fake_fetch)
+    def fail_fetch(*args, **kwargs):
+        fetch_calls.append((args, kwargs))
+        raise AssertionError("city API overlay must not fetch Wunderground directly")
+
+    monkeypatch.setattr(city_runtime._weather, "fetch_wunderground_historical", fail_fetch)
 
     overlay = getattr(city_runtime, "_overlay_latest_wunderground_current", None)
-    assert callable(overlay), "city API must overlay cached payloads with latest WU state"
+    assert callable(overlay), "city API must preserve cached WU state without direct fetch"
     payload = overlay("guangzhou", stale_payload)
 
-    assert payload["wunderground_current"]["temp"] == 38
-    assert payload["wunderground_current"]["max_so_far"] == 38
-    assert payload["official"]["wunderground_current"]["max_so_far"] == 38
-    assert payload["timeseries"]["wunderground_today_obs"] == [{"time": "15:17", "temp": 38}]
+    assert payload["wunderground_current"]["temp"] == 36
+    assert payload["wunderground_current"]["max_so_far"] == 36
+    assert payload["official"]["wunderground_current"]["max_so_far"] == 36
+    assert payload["timeseries"]["wunderground_today_obs"] == [{"time": "14:00", "temp": 36}]
     assert stale_payload["wunderground_current"]["max_so_far"] == 36
+    assert fetch_calls == []

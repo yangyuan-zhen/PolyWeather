@@ -99,7 +99,7 @@ def test_refresh_city_panel_cache_persists_canonical_temperature(monkeypatch):
         lambda city, force_refresh=False, detail_mode="panel": _sample_panel_payload(),
     )
 
-    payload = city_runtime._refresh_city_panel_cache("shanghai")
+    payload = city_runtime._refresh_city_panel_cache("shanghai", allow_external_fetch=True)
 
     assert payload["canonical_temperature"]["value"] == 31.2
     assert payload["canonical_temperature"]["source"] == "amsc_awos"
@@ -107,6 +107,46 @@ def test_refresh_city_panel_cache_persists_canonical_temperature(monkeypatch):
     assert payload["canonical_temperature"]["source_role"] == "settlement_proxy"
     assert writes["canonical"][0] == "shanghai"
     assert writes["canonical"][1]["observed_at"] == "2026-06-14T01:01:00+00:00"
+
+
+def test_refresh_city_panel_cache_defaults_to_queue_without_sync_analyze(monkeypatch):
+    import web.services.city_runtime as city_runtime
+
+    enqueued = []
+
+    class FakeDB:
+        def get_city_cache(self, kind, city):
+            assert kind == "panel"
+            assert city == "shanghai"
+            return None
+
+        def get_canonical_temperature(self, city):
+            assert city == "shanghai"
+            return None
+
+        def enqueue_observation_refresh_request(self, **kwargs):
+            enqueued.append(kwargs)
+            return True
+
+    def fail_analyze(*_args, **_kwargs):
+        raise AssertionError("business cache refresh must not call _analyze by default")
+
+    monkeypatch.setattr(city_runtime, "_CACHE_DB", FakeDB())
+    monkeypatch.setattr(city_runtime, "_analyze", fail_analyze)
+
+    payload = city_runtime._refresh_city_panel_cache("shanghai")
+
+    assert payload["status"] == "initializing"
+    assert payload["stale_reason"] == "collector_refresh_queued"
+    assert payload["current"]["observation_status"] == "initializing"
+    assert enqueued == [
+        {
+            "city": "shanghai",
+            "kind": "panel",
+            "priority": "high",
+            "reason": "cold_start",
+        }
+    ]
 
 
 def test_city_panel_cold_cache_returns_canonical_latest_without_sync_refresh(monkeypatch):

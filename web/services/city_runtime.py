@@ -32,6 +32,7 @@ from web.analysis_service import (
 )
 from web.services.canonical_temperature import (
     attach_canonical_temperature,
+    build_city_weather_from_canonical,
     store_canonical_temperature_from_payload,
 )
 from web.scan_terminal_service import build_scan_terminal_payload  # noqa: F401 - compatibility export for tests and transitional routers
@@ -59,7 +60,7 @@ from web.core import (
     _resolve_auth_points,  # noqa: F401 - compatibility export for tests and transitional routers
     _resolve_weekly_profile,  # noqa: F401 - compatibility export for tests and transitional routers
     _sf,
-    _weather,
+    _weather,  # noqa: F401 - compatibility export for tests and transitional routers
 )
 
 router = APIRouter()
@@ -287,7 +288,155 @@ def _attach_and_store_canonical_temperature(city: str, payload: dict) -> dict:
     return payload
 
 
-def _refresh_city_summary_cache(city: str, force_refresh: bool = False) -> dict:
+def _enqueue_city_observation_refresh(city: str, kind: str, *, reason: str) -> bool:
+    try:
+        enqueue = getattr(_CACHE_DB, "enqueue_observation_refresh_request", None)
+        if not callable(enqueue):
+            return False
+        return bool(
+            enqueue(
+                city=str(city or "").strip().lower(),
+                kind=kind,
+                priority="high",
+                reason=reason,
+            )
+        )
+    except Exception as exc:
+        logger.debug("city cache collector enqueue skipped city={} kind={}: {}", city, kind, exc)
+        return False
+
+
+def _cached_city_payload(kind: str, city: str) -> dict:
+    try:
+        entry = _CACHE_DB.get_city_cache(kind, city)
+    except Exception as exc:
+        logger.debug("city cache read skipped city={} kind={}: {}", city, kind, exc)
+        return {}
+    if not isinstance(entry, dict):
+        return {}
+    payload = entry.get("payload")
+    return deepcopy(payload) if isinstance(payload, dict) else {}
+
+
+def _canonical_city_payload(city: str, *, detail_depth: str) -> dict:
+    try:
+        row = _CACHE_DB.get_canonical_temperature(city)
+    except Exception as exc:
+        logger.debug("canonical city cache read skipped city={}: {}", city, exc)
+        return {}
+    if not isinstance(row, dict):
+        return {}
+    canonical = row.get("payload") or row
+    if not isinstance(canonical, dict):
+        return {}
+    payload = build_city_weather_from_canonical(city, canonical)
+    if not isinstance(payload, dict) or not payload:
+        return {}
+
+    city_meta = CITY_REGISTRY.get(city, {}) or {}
+    city_info = CITIES.get(city, {}) or {}
+    risk = CITY_RISK_PROFILES.get(city, {}) or {}
+    payload.update(
+        {
+            "city": city,
+            "detail_depth": detail_depth,
+            "display_name": str(city_meta.get("display_name") or city_meta.get("name") or city.title()),
+            "lat": city_info.get("lat"),
+            "lon": city_info.get("lon"),
+            "temp_symbol": canonical.get("temp_symbol") or payload.get("temp_symbol") or ("\u00b0F" if city_info.get("f") else "\u00b0C"),
+            "risk": {
+                "level": risk.get("risk_level", "low"),
+                "emoji": risk.get("risk_emoji", ""),
+                "airport": risk.get("airport_name", ""),
+                "icao": risk.get("icao", ""),
+                "distance_km": risk.get("distance_km", 0),
+                "warning": risk.get("warning", ""),
+            },
+            "probabilities": payload.get("probabilities") or {"mu": None, "distribution": []},
+        }
+    )
+    return payload
+
+
+def _initializing_city_payload(city: str, *, detail_depth: str) -> dict:
+    city_meta = CITY_REGISTRY.get(city, {}) or {}
+    city_info = CITIES.get(city, {}) or {}
+    risk = CITY_RISK_PROFILES.get(city, {}) or {}
+    return {
+        "city": city,
+        "name": city,
+        "display_name": str(city_meta.get("display_name") or city_meta.get("name") or city.title()),
+        "detail_depth": detail_depth,
+        "status": "initializing",
+        "stale": True,
+        "stale_reason": "collector_refresh_queued",
+        "lat": city_info.get("lat"),
+        "lon": city_info.get("lon"),
+        "temp_symbol": "\u00b0F" if city_info.get("f") else "\u00b0C",
+        "risk": {
+            "level": risk.get("risk_level", "low"),
+            "emoji": risk.get("risk_emoji", ""),
+            "airport": risk.get("airport_name", ""),
+            "icao": risk.get("icao", ""),
+            "distance_km": risk.get("distance_km", 0),
+            "warning": risk.get("warning", ""),
+        },
+        "current": {
+            "temp": None,
+            "source_code": None,
+            "settlement_source": None,
+            "settlement_source_label": None,
+            "obs_time": None,
+            "freshness": {
+                "freshness_status": "missing",
+                "freshness_reason": "collector_refresh_queued",
+            },
+            "observation_status": "initializing",
+        },
+        "airport_current": {},
+        "airport_primary": {},
+        "canonical_temperature": None,
+        "deb": {"prediction": None},
+        "probabilities": {"mu": None, "distribution": []},
+        "hourly": {"times": [], "temps": []},
+        "multi_model_daily": {},
+    }
+
+
+def _queued_city_cache_payload(city: str, kind: str, *, force_refresh: bool = False) -> dict:
+    normalized = str(city or "").strip().lower()
+    cached = _cached_city_payload(kind, normalized)
+    if cached:
+        if force_refresh:
+            _enqueue_city_observation_refresh(normalized, kind, reason="force_refresh")
+        return cached
+
+    canonical_payload = _canonical_city_payload(normalized, detail_depth=kind)
+    if canonical_payload:
+        _enqueue_city_observation_refresh(
+            normalized,
+            kind,
+            reason="force_refresh" if force_refresh else "canonical_fallback",
+        )
+        return canonical_payload
+
+    _enqueue_city_observation_refresh(
+        normalized,
+        kind,
+        reason="force_refresh" if force_refresh else "cold_start",
+    )
+    return _initializing_city_payload(normalized, detail_depth=kind)
+
+
+def _refresh_city_summary_cache(
+    city: str,
+    force_refresh: bool = False,
+    *,
+    allow_external_fetch: bool = False,
+) -> dict:
+    if not allow_external_fetch:
+        return _queued_city_cache_payload(city, "summary", force_refresh=force_refresh)
+
     data = _analyze_summary(city, force_refresh=force_refresh)
     _attach_and_store_canonical_temperature(city, data)
     payload = _build_city_summary_payload(data)
@@ -303,7 +452,15 @@ def _refresh_city_summary_cache(city: str, force_refresh: bool = False) -> dict:
     return payload
 
 
-def _refresh_city_panel_cache(city: str, force_refresh: bool = False) -> dict:
+def _refresh_city_panel_cache(
+    city: str,
+    force_refresh: bool = False,
+    *,
+    allow_external_fetch: bool = False,
+) -> dict:
+    if not allow_external_fetch:
+        return _queued_city_cache_payload(city, "panel", force_refresh=force_refresh)
+
     payload = _analyze(city, force_refresh=force_refresh, detail_mode="panel")
     _attach_and_store_canonical_temperature(city, payload)
     _CACHE_DB.set_city_cache(
@@ -316,7 +473,15 @@ def _refresh_city_panel_cache(city: str, force_refresh: bool = False) -> dict:
     return payload
 
 
-def _refresh_city_nearby_cache(city: str, force_refresh: bool = False) -> dict:
+def _refresh_city_nearby_cache(
+    city: str,
+    force_refresh: bool = False,
+    *,
+    allow_external_fetch: bool = False,
+) -> dict:
+    if not allow_external_fetch:
+        return _queued_city_cache_payload(city, "nearby", force_refresh=force_refresh)
+
     payload = _analyze(city, force_refresh=force_refresh, detail_mode="nearby")
     _attach_and_store_canonical_temperature(city, payload)
     _CACHE_DB.set_city_cache(
@@ -329,7 +494,15 @@ def _refresh_city_nearby_cache(city: str, force_refresh: bool = False) -> dict:
     return payload
 
 
-def _refresh_city_market_cache(city: str, force_refresh: bool = False) -> dict:
+def _refresh_city_market_cache(
+    city: str,
+    force_refresh: bool = False,
+    *,
+    allow_external_fetch: bool = False,
+) -> dict:
+    if not allow_external_fetch:
+        return _queued_city_cache_payload(city, "market", force_refresh=force_refresh)
+
     payload = _analyze(city, force_refresh=force_refresh, detail_mode="market")
     _attach_and_store_canonical_temperature(city, payload)
     now_ts = time.time()
@@ -346,7 +519,15 @@ def _refresh_city_market_cache(city: str, force_refresh: bool = False) -> dict:
     return payload
 
 
-def _refresh_city_full_cache(city: str, force_refresh: bool = False) -> dict:
+def _refresh_city_full_cache(
+    city: str,
+    force_refresh: bool = False,
+    *,
+    allow_external_fetch: bool = False,
+) -> dict:
+    if not allow_external_fetch:
+        return _queued_city_cache_payload(city, "full", force_refresh=force_refresh)
+
     payload = _analyze(city, force_refresh=force_refresh, detail_mode="full")
     _attach_and_store_canonical_temperature(city, payload)
     _CACHE_DB.set_city_cache(
@@ -379,27 +560,11 @@ def _overlay_wunderground_current(payload: dict, wunderground: dict) -> dict:
 def _overlay_latest_wunderground_current(city: str, payload: dict) -> dict:
     if not isinstance(payload, dict):
         return payload
-    city_key = str(city or payload.get("name") or payload.get("city") or "").strip().lower()
-    if city_key not in CITIES:
-        return deepcopy(payload)
-    try:
-        utc_offset = int(
-            payload.get("utc_offset_seconds")
-            or (payload.get("overview") or {}).get("utc_offset_seconds")
-            or get_city_utc_offset_seconds(city_key)
-            or 0
-        )
-    except Exception:
-        utc_offset = get_city_utc_offset_seconds(city_key)
-    try:
-        latest_wu = _weather.fetch_wunderground_historical(
-            city_key,
-            use_fahrenheit=bool(CITIES[city_key].get("f")),
-            utc_offset=utc_offset,
-        )
-    except Exception as exc:
-        logger.warning("latest WU overlay failed city={} error={}", city_key, exc)
-        return deepcopy(payload)
+    latest_wu = payload.get("wunderground_current")
+    if not isinstance(latest_wu, dict) or not latest_wu:
+        official = payload.get("official")
+        if isinstance(official, dict):
+            latest_wu = official.get("wunderground_current")
     if not isinstance(latest_wu, dict) or not latest_wu:
         return deepcopy(payload)
     return _overlay_wunderground_current(payload, latest_wu)
