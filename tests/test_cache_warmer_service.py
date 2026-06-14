@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from web.cache_warmer_service import CacheWarmer, build_priority_city_batch
+from web.cache_warmer_service import CacheWarmer, build_default_cache_warmer, build_priority_city_batch
 
 
 def test_priority_city_batch_prefers_local_active_hours_over_night():
@@ -49,6 +49,37 @@ def test_cache_warmer_warms_scan_and_city_panel_without_force_refresh():
     assert completed == 2
     assert scan_calls == [({}, False)]
     assert city_calls == [("alpha day", False)]
+
+
+def test_default_cache_warmer_enqueues_city_refresh_without_direct_panel_refresh(monkeypatch):
+    import web.cache_warmer_service as cache_warmer_service
+    from web.services import city_runtime
+
+    enqueued = []
+
+    class FakeDB:
+        @staticmethod
+        def enqueue_observation_refresh_request(**kwargs):
+            enqueued.append(kwargs)
+            return True
+
+    def fail_refresh(*_args, **_kwargs):
+        raise AssertionError("default cache warmer must not directly refresh city panel")
+
+    monkeypatch.setattr(cache_warmer_service, "_CACHE_WARMER_DB", FakeDB(), raising=False)
+    monkeypatch.setattr(city_runtime, "_refresh_city_panel_cache", fail_refresh)
+
+    warmer = build_default_cache_warmer()
+
+    assert warmer.city_panel_warmer("shenzhen", force_refresh=False) is True
+    assert enqueued == [
+        {
+            "city": "shenzhen",
+            "kind": "panel",
+            "priority": "normal",
+            "reason": "cache_warmer",
+        }
+    ]
 
 
 def test_cache_warmer_skips_work_when_intervals_are_not_due():

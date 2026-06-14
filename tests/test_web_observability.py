@@ -1716,13 +1716,14 @@ def test_stale_city_detail_uses_cached_full_payload_while_refreshing(monkeypatch
 
     assert result["live_temp"] == 20.0
     assert build_inputs == [20.0]
-    assert refresh_calls == 1
+    assert refresh_calls == 0
 
 
 def test_force_refresh_panel_returns_cached_payload_when_refresh_is_slow(monkeypatch):
     import asyncio
 
     refresh_calls = 0
+    enqueued = []
 
     class FakeCache:
         def get_city_cache(self, kind, city):
@@ -1735,6 +1736,10 @@ def test_force_refresh_panel_returns_cached_payload_when_refresh_is_slow(monkeyp
                     "from_cache": True,
                 },
             }
+
+        def enqueue_observation_refresh_request(self, **kwargs):
+            enqueued.append(kwargs)
+            return True
 
     async def fake_run_in_threadpool(fn, *args, **kwargs):
         if fn is city_api.legacy_routes._refresh_city_panel_cache:
@@ -1767,13 +1772,22 @@ def test_force_refresh_panel_returns_cached_payload_when_refresh_is_slow(monkeyp
 
     assert result["from_cache"] is True
     assert result["deb"]["prediction"] == 20.0
-    assert refresh_calls == 1
+    assert refresh_calls == 0
+    assert enqueued == [
+        {
+            "city": "paris",
+            "kind": "panel",
+            "priority": "high",
+            "reason": "force_refresh",
+        }
+    ]
 
 
 def test_force_refresh_panel_returns_cached_payload_when_refresh_already_running(monkeypatch):
     import asyncio
 
     refresh_calls = 0
+    enqueued = []
 
     class FakeCache:
         def get_city_cache(self, kind, city):
@@ -1786,6 +1800,10 @@ def test_force_refresh_panel_returns_cached_payload_when_refresh_already_running
                     "from_cache": True,
                 },
             }
+
+        def enqueue_observation_refresh_request(self, **kwargs):
+            enqueued.append(kwargs)
+            return True
 
     async def fake_run_in_threadpool(fn, *args, **kwargs):
         if fn is city_api.legacy_routes._refresh_city_panel_cache:
@@ -1827,16 +1845,31 @@ def test_force_refresh_panel_returns_cached_payload_when_refresh_already_running
 
     first_result, second_result = asyncio.run(run_requests())
 
-    assert first_result["from_cache"] is False
+    assert first_result["from_cache"] is True
     assert second_result["from_cache"] is True
     assert second_result["deb"]["prediction"] == 20.0
-    assert refresh_calls == 1
+    assert refresh_calls == 0
+    assert enqueued == [
+        {
+            "city": "paris",
+            "kind": "panel",
+            "priority": "high",
+            "reason": "force_refresh",
+        },
+        {
+            "city": "paris",
+            "kind": "panel",
+            "priority": "high",
+            "reason": "force_refresh",
+        },
+    ]
 
 
 def test_stale_panel_returns_cached_payload_while_refreshing(monkeypatch):
     import asyncio
 
     refresh_calls = 0
+    enqueued = []
 
     class FakeCache:
         def get_city_cache(self, kind, city):
@@ -1849,6 +1882,10 @@ def test_stale_panel_returns_cached_payload_while_refreshing(monkeypatch):
                     "from_cache": True,
                 },
             }
+
+        def enqueue_observation_refresh_request(self, **kwargs):
+            enqueued.append(kwargs)
+            return True
 
     async def fake_run_in_threadpool(fn, *args, **kwargs):
         if fn is city_api.legacy_routes._refresh_city_panel_cache:
@@ -1883,7 +1920,15 @@ def test_stale_panel_returns_cached_payload_while_refreshing(monkeypatch):
 
     assert result["from_cache"] is True
     assert result["deb"]["prediction"] == 20.0
-    assert refresh_calls == 1
+    assert refresh_calls == 0
+    assert enqueued == [
+        {
+            "city": "paris",
+            "kind": "panel",
+            "priority": "high",
+            "reason": "stale_refresh",
+        }
+    ]
 
 
 def test_force_refresh_full_detail_returns_cached_payload_when_refresh_is_slow(monkeypatch):
@@ -1891,6 +1936,7 @@ def test_force_refresh_full_detail_returns_cached_payload_when_refresh_is_slow(m
 
     refresh_calls = 0
     build_inputs = []
+    enqueued = []
 
     class FakeCache:
         def get_city_cache(self, kind, city):
@@ -1902,6 +1948,10 @@ def test_force_refresh_full_detail_returns_cached_payload_when_refresh_is_slow(m
                     "hourly": {"times": ["2026-05-30T00:00:00Z"], "temps": [20.0]},
                 },
             }
+
+        def enqueue_observation_refresh_request(self, **kwargs):
+            enqueued.append(kwargs)
+            return True
 
     async def fake_run_in_threadpool(fn, *args, **kwargs):
         if fn is city_api.legacy_routes._refresh_city_full_cache:
@@ -1948,7 +1998,15 @@ def test_force_refresh_full_detail_returns_cached_payload_when_refresh_is_slow(m
 
     assert result["live_temp"] == 20.0
     assert build_inputs == [20.0]
-    assert refresh_calls == 1
+    assert refresh_calls == 0
+    assert enqueued == [
+        {
+            "city": "paris",
+            "kind": "full",
+            "priority": "high",
+            "reason": "force_refresh",
+        }
+    ]
 
 
 def test_force_refresh_cold_city_detail_returns_initializing_without_full_refresh(monkeypatch):

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import re
 import threading
 import time
 from datetime import datetime
@@ -20,9 +19,11 @@ except Exception:
 
     ZoneInfo = None  # type: ignore[assignment]
 
+from src.database.db_manager import DBManager
 from src.data_collection.city_registry import CITY_REGISTRY
 from src.data_collection.weather_sources import WeatherDataCollector
 from src.utils.telegram_i18n import copy_text, normalize_push_language, telegram_push_language
+from web.services.canonical_temperature import build_city_weather_from_canonical
 
 TARGET_CITIES: List[str] = [
     "beijing",
@@ -46,18 +47,7 @@ CITY_NAME_ZH: Dict[str, str] = {
     "qingdao": "青岛",
 }
 
-# weather.com.cn city codes
-CMA_CITY_CODES: Dict[str, str] = {
-    "beijing": "101010100",
-    "shanghai": "101020100",
-    "guangzhou": "101280101",
-    "chengdu": "101270101",
-    "chongqing": "101040100",
-    "wuhan": "101200101",
-    "qingdao": "101120201",
-}
-
-_CMA_FORECAST_URL = "http://www.weather.com.cn/weather/{code}.shtml"
+_DAILY_REPORT_DB = DBManager()
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -82,85 +72,119 @@ def _daily_report_language() -> str:
     )
 
 
-def _fetch_cma_forecast(city_key: str) -> Optional[Dict[str, Any]]:
-    """Scrape today's forecast from weather.com.cn (CMA)."""
-    code = CMA_CITY_CODES.get(city_key)
-    if not code:
-        return None
-
-    url = _CMA_FORECAST_URL.format(code=code)
+def _safe_float(value: Any) -> Optional[float]:
     try:
-        resp = httpx.get(
-            url,
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
-                ),
-            },
-            timeout=httpx.Timeout(timeout=10.0, connect=5.0, read=10.0),
-            follow_redirects=True,
+        if value is None or value == "":
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _enqueue_daily_report_refresh(city_key: str) -> None:
+    enqueue = getattr(_DAILY_REPORT_DB, "enqueue_observation_refresh_request", None)
+    if not callable(enqueue):
+        return
+    try:
+        enqueue(
+            city=city_key,
+            kind="panel",
+            priority="normal",
+            reason="daily_weather_report",
         )
-        resp.raise_for_status()
-        html = resp.text
     except Exception as exc:
-        logger.warning(
-            "daily_weather_report: CMA fetch failed for {}: {}", city_key, exc
+        logger.debug("daily_weather_report: refresh enqueue skipped city={}: {}", city_key, exc)
+
+
+def _load_cached_city_payload(city_key: str) -> Optional[Dict[str, Any]]:
+    getter = getattr(_DAILY_REPORT_DB, "get_city_cache", None)
+    if callable(getter):
+        for kind in ("panel", "full", "summary"):
+            try:
+                entry = getter(kind, city_key)
+            except Exception as exc:
+                logger.debug(
+                    "daily_weather_report: city cache read skipped city={} kind={}: {}",
+                    city_key,
+                    kind,
+                    exc,
+                )
+                continue
+            payload = entry.get("payload") if isinstance(entry, dict) else None
+            if isinstance(payload, dict):
+                return payload
+
+    canonical_getter = getattr(_DAILY_REPORT_DB, "get_canonical_temperature", None)
+    if callable(canonical_getter):
+        try:
+            canonical_entry = canonical_getter(city_key)
+        except Exception as exc:
+            logger.debug("daily_weather_report: canonical read skipped city={}: {}", city_key, exc)
+            canonical_entry = None
+        canonical = (
+            canonical_entry.get("payload")
+            if isinstance(canonical_entry, dict) and isinstance(canonical_entry.get("payload"), dict)
+            else canonical_entry
         )
-        return None
+        payload = (
+            build_city_weather_from_canonical(city_key, canonical)
+            if isinstance(canonical, dict)
+            else None
+        )
+        if payload:
+            return payload
 
-    # Parse today's weather block from the 7-day forecast page.
-    # The HTML structure has entries like:
-    #   <p class="wea">晴转多云</p>
-    #   <p class="tem"><span>25℃</span> / <i>19℃</i></p>
-    # We target the first occurrence (today).
-
-    weather = _extract_first(html, r'<p[^>]*class="wea"[^>]*>([^<]+)</p>')
-    tem_text = _extract_first(html, r'<p[^>]*class="tem"[^>]*>(.+?)</p>')
-
-    high_str: Optional[str] = None
-    low_str: Optional[str] = None
-
-    if tem_text:
-        # Strip all HTML tags, then find numbers followed by degree
-        clean = re.sub(r"<[^>]+>", " ", tem_text)
-        nums = re.findall(r"(-?\d+)\s*(?:℃|°C|°c|°)?", clean)
-        if len(nums) >= 1:
-            high_str = nums[0]
-        if len(nums) >= 2:
-            low_str = nums[1]
-
-    if not weather and not high_str:
-        return None
-
-    result: Dict[str, Any] = {"source": "cma"}
-    if weather:
-        result["weather"] = weather.strip()
-    if high_str:
-        try:
-            result["forecast_high"] = float(high_str)
-        except (TypeError, ValueError):
-            result["forecast_high"] = None
-    if low_str:
-        try:
-            result["forecast_low"] = float(low_str)
-        except (TypeError, ValueError):
-            result["forecast_low"] = None
-
-    logger.info(
-        "daily_weather_report: CMA parsed {} weather={} high={} low={}",
-        city_key,
-        result.get("weather"),
-        result.get("forecast_high"),
-        result.get("forecast_low"),
-    )
-    return result
+    _enqueue_daily_report_refresh(city_key)
+    return None
 
 
-def _extract_first(html: str, pattern: str) -> Optional[str]:
-    m = re.search(pattern, html, re.IGNORECASE | re.DOTALL)
-    return m.group(1) if m else None
+def _daily_report_forecast_high(payload: Dict[str, Any]) -> Optional[float]:
+    deb = payload.get("deb") if isinstance(payload.get("deb"), dict) else {}
+    value = _safe_float(deb.get("prediction"))
+    if value is not None:
+        return value
+
+    local_date = str(payload.get("local_date") or "").strip()
+    multi_model_daily = payload.get("multi_model_daily")
+    if isinstance(multi_model_daily, dict):
+        dates = [local_date] if local_date in multi_model_daily else sorted(multi_model_daily.keys())
+        for date_key in dates:
+            entry = multi_model_daily.get(date_key)
+            if not isinstance(entry, dict):
+                continue
+            daily_deb = entry.get("deb") if isinstance(entry.get("deb"), dict) else {}
+            value = _safe_float(daily_deb.get("prediction"))
+            if value is not None:
+                return value
+            models = entry.get("models") if isinstance(entry.get("models"), dict) else {}
+            values = sorted(
+                value
+                for value in (_safe_float(item) for item in models.values())
+                if value is not None
+            )
+            if values:
+                return values[len(values) // 2]
+
+    current = payload.get("current") if isinstance(payload.get("current"), dict) else {}
+    for key in ("max_so_far", "max_temp_so_far", "temp"):
+        value = _safe_float(current.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _daily_report_weather_text(payload: Dict[str, Any]) -> str:
+    current = payload.get("current") if isinstance(payload.get("current"), dict) else {}
+    for value in (
+        payload.get("weather"),
+        payload.get("weather_desc"),
+        current.get("wx_desc"),
+        current.get("weather"),
+    ):
+        text = str(value or "").strip()
+        if text:
+            return text
+    return "?"
 
 
 def _fetch_city_data(
@@ -170,80 +194,30 @@ def _fetch_city_data(
     info = CITY_REGISTRY.get(city_key)
     name_en = str((info or {}).get("name") or city_key.title())
 
-    # 1. Try CMA first for weather description
-    cma = _fetch_cma_forecast(city_key)
-
-    # 2. Get Open-Meteo data for temperature fallback
-    om_high = None
-    if info:
-        try:
-            results = collector.fetch_all_sources(
-                city_key,
-                lat=info["lat"],
-                lon=info["lon"],
-                include_taf=False,
-                include_ensemble=False,
-                include_multi_model=False,
-            )
-            if isinstance(results, dict):
-                om = results.get("open-meteo", {})
-                daily = om.get("daily", {}) if isinstance(om, dict) else {}
-                daily_highs = daily.get("temperature_2m_max", []) or []
-                om_high = daily_highs[0] if daily_highs else None
-        except Exception as exc:
-            logger.warning(
-                "daily_weather_report: OM fetch failed for {}: {}", city_key, exc
-            )
-
-    # Use CMA weather + CMA high, fall back to OM high
-    weather: Optional[str] = None
-    forecast_high: Optional[float] = None
-
-    if cma:
-        weather = cma.get("weather")
-        forecast_high = cma.get("forecast_high")
-    if forecast_high is None:
-        forecast_high = om_high
-
-    if not weather and not forecast_high:
+    payload = _load_cached_city_payload(city_key)
+    if not payload:
         return None
 
+    forecast_high = _daily_report_forecast_high(payload)
+    if forecast_high is None:
+        _enqueue_daily_report_refresh(city_key)
+        return None
+    weather = _daily_report_weather_text(payload)
+
     logger.info(
-        "daily_weather_report: {} weather={} high={} (cma_ok={})",
+        "daily_weather_report: {} weather={} high={} cache_only=true",
         city_key,
-        weather or "?",
+        weather,
         forecast_high,
-        bool(cma and cma.get("weather")),
     )
 
     return {
         "city": city_key,
         "name": name,
         "name_en": name_en,
-        "weather": weather or "?",
+        "weather": weather,
         "forecast_high": forecast_high,
     }
-
-
-def _wmo_to_weather(code: Any) -> str:
-    """Translate WMO weather code to Chinese (fallback only)."""
-    try:
-        c = int(code or 0)
-    except (TypeError, ValueError):
-        return "未知"
-    if c == 0:
-        return "晴"
-    if 1 <= c <= 3:
-        return "多云"
-    if c in (45, 48):
-        return "雾"
-    if 51 <= c <= 67:
-        return "雨"
-    if 71 <= c <= 86:
-        return "雪"
-    if 95 <= c <= 99:
-        return "雷暴"
-    return "阴"
 
 
 def _build_ai_prompt(

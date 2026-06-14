@@ -195,15 +195,11 @@ def _request_city_cache_refresh(
     kind: str,
     refresh_fn: Callable[[str, bool], Dict[str, Any]],
 ) -> None:
-    if _enqueue_collector_refresh_request(city, kind):
-        return
-    _start_city_cache_stale_refresh(city, kind, refresh_fn)
+    _enqueue_collector_refresh_request(city, kind)
 
 
 def _request_city_full_refresh(city: str) -> None:
-    if _enqueue_collector_refresh_request(city, "full"):
-        return
-    _start_city_full_stale_refresh(city)
+    _enqueue_collector_refresh_request(city, "full")
 
 
 def _build_initializing_city_payload(city: str, *, detail_depth: str) -> Dict[str, Any]:
@@ -298,44 +294,13 @@ async def _refresh_city_payload_with_stale_timeout(
             return canonical_payload
         return _queue_and_build_initializing_city_payload(city, kind=kind)
 
-    task, started = await _get_or_start_city_force_refresh_task(f"{kind}:{city}", refresh_factory)
-    if not started:
-        if cached_before_refresh:
-            logger.warning(
-                "city force refresh already running city={} kind={}; returning stale cache",
-                city,
-                kind,
-            )
-            return await _overlay_cached_wunderground(city, cached_before_refresh)
-    canonical_payload = await _get_canonical_city_payload(city, detail_depth=kind)
-    if canonical_payload:
-        _enqueue_collector_refresh_request(city, kind, reason="force_refresh")
-        logger.warning(
-            "city force refresh returning canonical latest while refresh runs city={} kind={}",
-            city,
-            kind,
-        )
-        return canonical_payload
-    timeout_sec = _city_force_refresh_timeout_sec()
-    try:
-        return await asyncio.wait_for(asyncio.shield(task), timeout=timeout_sec)
-    except asyncio.TimeoutError:
-        cached_payload = await _get_cached_city_payload(city, kind)
-        if cached_payload:
-            logger.warning(
-                "city force refresh timed out city={} kind={} timeout_sec={}; returning stale cache",
-                city,
-                kind,
-                timeout_sec,
-            )
-            return await _overlay_cached_wunderground(city, cached_payload)
-        return await task
-    except Exception:
-        cached_payload = await _get_cached_city_payload(city, kind)
-        if cached_payload:
-            logger.warning("city force refresh failed city={} kind={}; returning stale cache", city, kind)
-            return await _overlay_cached_wunderground(city, cached_payload)
-        raise
+    _enqueue_collector_refresh_request(city, kind, reason="force_refresh")
+    logger.warning(
+        "city force refresh queued collector refresh city={} kind={}; returning cached payload",
+        city,
+        kind,
+    )
+    return await _overlay_cached_wunderground(city, cached_before_refresh)
 
 
 async def _refresh_city_cache_with_stale_timeout(
@@ -359,26 +324,7 @@ def _start_city_cache_stale_refresh(
     cache_kind = str(kind or "").strip().lower()
     if not normalized or not cache_kind:
         return
-    key = f"{cache_kind}:{normalized}"
-    existing = _CITY_STALE_REFRESH_TASKS.get(key)
-    if existing is not None and not existing.done():
-        return
-
-    async def _run_refresh() -> Dict[str, Any]:
-        return await run_in_threadpool(refresh_fn, normalized, False)
-
-    task = asyncio.create_task(_run_refresh())
-    _CITY_STALE_REFRESH_TASKS[key] = task
-
-    def _cleanup(done: "asyncio.Task[Dict[str, Any]]") -> None:
-        if _CITY_STALE_REFRESH_TASKS.get(key) is done:
-            _CITY_STALE_REFRESH_TASKS.pop(key, None)
-        try:
-            done.result()
-        except Exception as exc:  # pragma: no cover - defensive background guard
-            logger.warning("city stale refresh failed city={} kind={}: {}", normalized, cache_kind, exc)
-
-    task.add_done_callback(_cleanup)
+    _enqueue_collector_refresh_request(normalized, cache_kind, reason="stale_refresh")
 
 
 async def _overlay_cached_wunderground(city: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -500,22 +446,7 @@ def _start_city_full_stale_refresh(city: str) -> None:
     normalized = str(city or "").strip().lower()
     if not normalized:
         return
-    existing = _CITY_FULL_STALE_REFRESH_TASKS.get(normalized)
-    if existing is not None and not existing.done():
-        return
-
-    task = asyncio.create_task(_refresh_city_full_data(city, False))
-    _CITY_FULL_STALE_REFRESH_TASKS[normalized] = task
-
-    def _cleanup(done: "asyncio.Task[Dict[str, Any]]") -> None:
-        if _CITY_FULL_STALE_REFRESH_TASKS.get(normalized) is done:
-            _CITY_FULL_STALE_REFRESH_TASKS.pop(normalized, None)
-        try:
-            done.result()
-        except Exception as exc:  # pragma: no cover - defensive background guard
-            logger.warning("city full stale refresh failed city={}: {}", city, exc)
-
-    task.add_done_callback(_cleanup)
+    _enqueue_collector_refresh_request(normalized, "full", reason="stale_refresh")
 
 
 async def _get_city_full_data(city: str, *, force_refresh: bool) -> Dict[str, Any]:

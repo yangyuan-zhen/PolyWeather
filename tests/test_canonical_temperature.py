@@ -89,7 +89,7 @@ def test_refresh_city_panel_cache_persists_canonical_temperature(monkeypatch):
 def test_city_panel_cold_cache_returns_canonical_latest_without_sync_refresh(monkeypatch):
     import web.services.city_api as city_api
 
-    started = []
+    enqueued = []
 
     class FakeDB:
         def get_city_cache(self, kind, city):
@@ -113,8 +113,12 @@ def test_city_panel_cold_cache_returns_canonical_latest_without_sync_refresh(mon
                     "freshness_status": "fresh",
                     "fetched_at": "2026-06-14T01:02:03+00:00",
                     "confidence": 0.92,
+                    }
                 }
-            }
+
+        def enqueue_observation_refresh_request(self, **kwargs):
+            enqueued.append(kwargs)
+            return True
 
     def fail_refresh(*_args, **_kwargs):
         raise AssertionError("cold panel cache must not synchronously refresh when canonical latest exists")
@@ -122,11 +126,6 @@ def test_city_panel_cold_cache_returns_canonical_latest_without_sync_refresh(mon
     monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeDB())
     monkeypatch.setattr(city_api.legacy_routes, "_refresh_city_panel_cache", fail_refresh)
-    monkeypatch.setattr(
-        city_api,
-        "_start_city_cache_stale_refresh",
-        lambda city, kind, refresh_fn: started.append((city, kind, refresh_fn)),
-    )
 
     payload = asyncio.run(
         city_api.get_city_detail_payload(
@@ -140,13 +139,20 @@ def test_city_panel_cold_cache_returns_canonical_latest_without_sync_refresh(mon
     assert payload["current"]["temp"] == 31.2
     assert payload["canonical_temperature"]["source"] == "amsc_awos"
     assert payload["detail_depth"] == "panel"
-    assert [(city, kind) for city, kind, _ in started] == [("shanghai", "panel")]
+    assert enqueued == [
+        {
+            "city": "shanghai",
+            "kind": "panel",
+            "priority": "high",
+            "reason": "canonical_fallback",
+        }
+    ]
 
 
 def test_city_full_cold_cache_returns_canonical_latest_without_sync_refresh(monkeypatch):
     import web.services.city_api as city_api
 
-    started = []
+    enqueued = []
 
     class FakeDB:
         def get_city_cache(self, kind, city):
@@ -170,28 +176,38 @@ def test_city_full_cold_cache_returns_canonical_latest_without_sync_refresh(monk
                     "freshness_status": "fresh",
                     "fetched_at": "2026-06-14T01:02:03+00:00",
                     "confidence": 0.92,
+                    }
                 }
-            }
+
+        def enqueue_observation_refresh_request(self, **kwargs):
+            enqueued.append(kwargs)
+            return True
 
     def fail_refresh(*_args, **_kwargs):
         raise AssertionError("cold full cache must not synchronously refresh when canonical latest exists")
 
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeDB())
     monkeypatch.setattr(city_api.legacy_routes, "_refresh_city_full_cache", fail_refresh)
-    monkeypatch.setattr(city_api, "_start_city_full_stale_refresh", lambda city: started.append(city))
 
     payload = asyncio.run(city_api._get_city_full_data("shanghai", force_refresh=False))
 
     assert payload["current"]["temp"] == 31.2
     assert payload["canonical_temperature"]["source"] == "amsc_awos"
     assert payload["detail_depth"] == "full"
-    assert started == ["shanghai"]
+    assert enqueued == [
+        {
+            "city": "shanghai",
+            "kind": "full",
+            "priority": "high",
+            "reason": "canonical_fallback",
+        }
+    ]
 
 
 def test_city_nearby_and_market_cold_cache_return_canonical_latest_without_sync_refresh(monkeypatch):
     import web.services.city_api as city_api
 
-    started = []
+    enqueued = []
     requested_kinds = []
 
     class FakeDB:
@@ -215,8 +231,12 @@ def test_city_nearby_and_market_cold_cache_return_canonical_latest_without_sync_
                     "freshness_status": "fresh",
                     "fetched_at": "2026-06-14T01:02:03+00:00",
                     "confidence": 0.92,
+                    }
                 }
-            }
+
+        def enqueue_observation_refresh_request(self, **kwargs):
+            enqueued.append(kwargs)
+            return True
 
     def fail_refresh(*_args, **_kwargs):
         raise AssertionError("cold city cache must not synchronously refresh when canonical latest exists")
@@ -226,11 +246,6 @@ def test_city_nearby_and_market_cold_cache_return_canonical_latest_without_sync_
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeDB())
     monkeypatch.setattr(city_api.legacy_routes, "_refresh_city_nearby_cache", fail_refresh)
     monkeypatch.setattr(city_api.legacy_routes, "_refresh_city_market_cache", fail_refresh)
-    monkeypatch.setattr(
-        city_api,
-        "_start_city_cache_stale_refresh",
-        lambda city, kind, refresh_fn: started.append((city, kind, refresh_fn)),
-    )
 
     nearby = asyncio.run(
         city_api.get_city_detail_payload(object(), "Shanghai", force_refresh=False, depth="nearby")
@@ -243,9 +258,19 @@ def test_city_nearby_and_market_cold_cache_return_canonical_latest_without_sync_
     assert market["detail_depth"] == "market"
     assert nearby["current"]["temp"] == 31.2
     assert market["current"]["temp"] == 31.2
-    assert [(city, kind) for city, kind, _ in started] == [
-        ("shanghai", "nearby"),
-        ("shanghai", "market"),
+    assert enqueued == [
+        {
+            "city": "shanghai",
+            "kind": "nearby",
+            "priority": "high",
+            "reason": "canonical_fallback",
+        },
+        {
+            "city": "shanghai",
+            "kind": "market",
+            "priority": "high",
+            "reason": "canonical_fallback",
+        },
     ]
     assert requested_kinds == [("nearby", "shanghai"), ("market", "shanghai")]
 
