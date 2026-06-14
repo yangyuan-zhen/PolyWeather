@@ -1,6 +1,6 @@
 import { getTemperatureChartData } from "@/lib/chart-utils";
 import type { CityDetail } from "@/lib/dashboard-types";
-import { buildDebBaselinePath } from "@/lib/temperature-chart-paths";
+import { buildChartTimeAxis, buildDebBaselinePath } from "@/lib/temperature-chart-paths";
 import {
   buildFullDayChartData,
   mergeHourlyWithLiveObservations,
@@ -21,6 +21,47 @@ function assertNear(actual: number, expected: number, tolerance: number, message
 }
 
 export function runTests() {
+  const fullDayHourlyTimes = Array.from(
+    { length: 24 },
+    (_, hour) => `${String(hour).padStart(2, "0")}:00`,
+  );
+  const fullDayHourlyTemps = Array.from({ length: 24 }, (_, hour) => hour);
+  const fullDayAxis = buildChartTimeAxis(fullDayHourlyTimes, fullDayHourlyTemps, null, false);
+  assert(fullDayAxis.times.length === 48, "detail mini chart axis should expose all 48 half-hour slots");
+  assert(fullDayAxis.times[47] === "23:30", "detail mini chart axis should end at 23:30");
+  assert(fullDayAxis.temps[47] === 23, "23:30 should fall back to the 23:00 hourly temperature");
+
+  const lateNightDetailChart = getTemperatureChartData(
+    {
+      name: "late-night-city",
+      display_name: "Late Night City",
+      local_date: "2026-05-16",
+      local_time: "23:55",
+      temp_symbol: "°C",
+      hourly: {
+        times: fullDayHourlyTimes,
+        temps: fullDayHourlyTemps,
+      },
+      forecast: { today_high: 23 },
+      deb: { prediction: 23 },
+      metar_today_obs: [{ time: "23:55", temp: 24.5 }],
+    } as CityDetail,
+    "zh-CN",
+  );
+  assert(lateNightDetailChart, "late-night detail chart should exist");
+  assert(lateNightDetailChart?.times.at(-1) === "23:30", "detail mini chart should keep 23:30 as the final slot");
+  assert(lateNightDetailChart?.xMax === 1410, "detail mini chart xMax should be 23:30 expressed as minutes");
+  const lateNightSlot = lateNightDetailChart?.times.indexOf("23:30") ?? -1;
+  assert(lateNightSlot === 47, "23:30 should be the last detail chart slot");
+  assert(
+    lateNightDetailChart?.datasets.metarPoints[lateNightSlot] === 24.5,
+    "23:55 observations should land in the 23:30 slot instead of being compressed to 23:00 or wrapped to 00:00",
+  );
+  assert(
+    lateNightDetailChart?.datasets.metarPoints[0] == null,
+    "23:55 observations should not wrap to the 00:00 slot",
+  );
+
   const chartData = getTemperatureChartData(
     {
       name: "test-city",

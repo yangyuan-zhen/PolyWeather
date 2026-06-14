@@ -178,16 +178,14 @@ export function buildChartTimeAxis(
     const hh = String(h).padStart(2, "0");
     times.push(`${hh}:00`);
     temps.push(getHourTemp(h));
-    if (h < 23) {
-      const a = getHourTemp(h);
-      const b = getHourTemp(h + 1);
-      times.push(`${hh}:30`);
-      temps.push(
-        a != null && b != null
-          ? Number((a + (b - a) * 0.5).toFixed(1))
-          : a ?? b,
-      );
-    }
+    const a = getHourTemp(h);
+    const b = getHourTemp(h + 1);
+    times.push(`${hh}:30`);
+    temps.push(
+      a != null && b != null
+        ? Number((a + (b - a) * 0.5).toFixed(1))
+        : a ?? b,
+    );
   }
 
   return { times, temps };
