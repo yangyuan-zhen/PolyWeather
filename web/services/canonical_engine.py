@@ -8,6 +8,7 @@ from src.data_collection.city_registry import CITY_REGISTRY
 from web.services.analysis_utils import parse_utc_datetime
 from web.services.canonical_temperature import build_canonical_temperature
 from web.services.observation_freshness import build_observation_freshness
+from web.realtime_patch_schema import normalize_observation_patch
 
 
 _SETTLEMENT_SOURCE_ADAPTERS = {
@@ -156,6 +157,47 @@ def build_canonical_temperature_from_observations(
         return None
     candidates.sort(key=lambda item: item[0], reverse=True)
     return candidates[0][1]
+
+
+def build_realtime_event_from_canonical(canonical: dict[str, Any]) -> Optional[dict[str, Any]]:
+    if not isinstance(canonical, dict):
+        return None
+    try:
+        value = float(canonical.get("value"))
+    except (TypeError, ValueError):
+        return None
+    city = _normalized_city(canonical.get("city"))
+    source = _normalized_source(canonical.get("source"))
+    if not city or not source:
+        return None
+    unit = "fahrenheit" if str(canonical.get("temp_symbol") or "").upper().endswith("F") else "celsius"
+    payload: dict[str, Any] = {
+        "temp": value,
+        "unit": unit,
+    }
+    station_code = str(canonical.get("station_code") or "").strip()
+    if station_code:
+        payload["station_code"] = station_code
+    station_label = str(canonical.get("station_name") or canonical.get("source_label") or "").strip()
+    if station_label:
+        payload["station_label"] = station_label
+    for key in ("freshness_status", "source_role"):
+        text = str(canonical.get(key) or "").strip()
+        if text:
+            payload[key] = text
+    for key in ("freshness_sec", "confidence"):
+        value_meta = canonical.get(key)
+        if value_meta is not None and value_meta != "":
+            payload[key] = value_meta
+    return normalize_observation_patch(
+        {
+            "type": "city_observation_patch.v1",
+            "city": city,
+            "source": source,
+            "obs_time": canonical.get("observed_at"),
+            "payload": payload,
+        }
+    )
 
 
 def refresh_canonical_temperature_from_latest(db: Any, city: str) -> Optional[dict[str, Any]]:

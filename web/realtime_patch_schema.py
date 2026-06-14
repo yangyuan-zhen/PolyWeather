@@ -240,6 +240,14 @@ def _payload_from_v1(raw_payload: Any) -> Dict[str, Any]:
         payload["runway_points"] = runway_points
     if isinstance(raw_payload.get("hourly"), dict):
         payload["hourly"] = raw_payload["hourly"]
+    for key in ("freshness_status", "source_role"):
+        value = raw_payload.get(key)
+        if isinstance(value, str) and value.strip():
+            payload[key] = value.strip()
+    for key in ("freshness_sec", "confidence"):
+        value = _finite_number(raw_payload.get(key))
+        if value is not None:
+            payload[key] = int(value) if key == "freshness_sec" else value
     return payload
 
 

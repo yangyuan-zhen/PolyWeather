@@ -460,6 +460,69 @@ def test_observation_collector_recomputes_canonical_from_raw_latest_settlement_s
     assert canonical["payload"]["value"] == 28.1
 
 
+def test_observation_collector_appends_realtime_event_after_canonical_refresh(tmp_path):
+    from src.database.db_manager import DBManager
+    from web.observation_collector_service import (
+        ObservationCollector,
+        ObservationSourceProfile,
+    )
+
+    db = DBManager(str(tmp_path / "polyweather.db"))
+    appended = []
+    broadcasted = []
+
+    class FakeEventStore:
+        uses_external_live_fanout = False
+
+        def append_event(self, event):
+            appended.append(event)
+            return {**event, "revision": 7}
+
+    class FakeWeather:
+        def _uses_fahrenheit(self, city):
+            return False
+
+        def _attach_hko_obs_official_nearby(self, results, city, use_fahrenheit):
+            results["hko_obs_nearby"] = [
+                {
+                    "source": "hko_obs",
+                    "source_label": "HKO",
+                    "temperature_c": 28.1,
+                    "observation_time": "2026-06-14T01:00:00+00:00",
+                    "station_code": "LFS",
+                    "station_name": "Lau Fau Shan",
+                },
+                {
+                    "source": "hko_obs",
+                    "source_label": "HKO",
+                    "temperature_c": 27.6,
+                    "observation_time": "2026-06-14T01:00:00+00:00",
+                    "station_code": "HKO",
+                    "station_name": "Hong Kong Observatory",
+                },
+            ]
+
+    collector = ObservationCollector(
+        weather=FakeWeather(),
+        profiles=[ObservationSourceProfile("hko_obs", ("shenzhen",), 600)],
+        observation_store=db,
+        realtime_event_store=FakeEventStore(),
+        realtime_broadcaster=lambda event: broadcasted.append(event),
+        async_cache_refresh=False,
+    )
+
+    assert collector.run_due_once(now_ts=1000.0) == 1
+
+    assert len(appended) == 1
+    event = appended[0]
+    assert event["type"] == "city_observation_patch.v1"
+    assert event["city"] == "shenzhen"
+    assert event["source"] == "hko_obs"
+    assert event["payload"]["temp"] == 28.1
+    assert event["payload"]["station_code"] == "LFS"
+    assert broadcasted == [{**event, "revision": 7}]
+
+
 def test_observation_collector_records_no_results_source_health(tmp_path):
     from src.database.db_manager import DBManager
     from web.observation_collector_service import (

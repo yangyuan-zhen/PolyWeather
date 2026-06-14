@@ -18,13 +18,17 @@ from src.data_collection.hko_obs_sources import HKO_STATIONS
 from src.database.db_manager import DBManager
 from src.database.runtime_state import ObservationCollectorStatusRepository
 from web.services.analysis_utils import parse_utc_datetime
-from web.services.canonical_engine import refresh_canonical_temperature_from_latest
+from web.services.canonical_engine import (
+    build_realtime_event_from_canonical,
+    refresh_canonical_temperature_from_latest,
+)
 from web.services.canonical_temperature import build_canonical_temperature
 from web.services.observation_freshness import build_observation_freshness
 from web.services.observation_source_adapters import (
     ObservationRecord,
     collect_observation_source,
 )
+from web.realtime_event_store_factory import create_realtime_event_store
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -64,6 +68,8 @@ class ObservationCollector:
         cache_refresher: Optional[Callable[[str], Any]] = None,
         status_recorder: Optional[ObservationCollectorStatusRepository] = None,
         observation_store: Optional[Any] = None,
+        realtime_event_store: Optional[Any] = None,
+        realtime_broadcaster: Optional[Callable[[dict[str, Any]], Any]] = None,
         async_cache_refresh: Optional[bool] = None,
         cache_refresh_workers: Optional[int] = None,
     ) -> None:
@@ -72,6 +78,8 @@ class ObservationCollector:
         self.cache_refresher = cache_refresher
         self.status_recorder = status_recorder
         self.observation_store = observation_store
+        self.realtime_event_store = realtime_event_store
+        self.realtime_broadcaster = realtime_broadcaster
         self._last_run_ts: dict[tuple[str, str], float] = {}
         self._lock = threading.Lock()
         self._cache_refresh_lock = threading.Lock()
@@ -332,6 +340,7 @@ class ObservationCollector:
             return
         try:
             setter(record.city, canonical)
+            self._append_realtime_event(canonical)
         except Exception as exc:
             logger.debug(
                 "canonical temperature write skipped source={} city={}: {}",
@@ -339,6 +348,26 @@ class ObservationCollector:
                 record.city,
                 exc,
             )
+
+    def _append_realtime_event(self, canonical: dict[str, Any]) -> None:
+        store = self.realtime_event_store
+        appender = getattr(store, "append_event", None)
+        if not callable(appender):
+            return
+        event = build_realtime_event_from_canonical(canonical)
+        if not event:
+            return
+        try:
+            stored_event = appender(event)
+        except Exception as exc:
+            logger.debug("realtime event append skipped city={}: {}", canonical.get("city"), exc)
+            return
+        broadcaster = self.realtime_broadcaster
+        if callable(broadcaster) and not bool(getattr(store, "uses_external_live_fanout", False)):
+            try:
+                broadcaster(stored_event)
+            except Exception as exc:
+                logger.debug("realtime event broadcast skipped city={}: {}", canonical.get("city"), exc)
 
     def _store_raw_observation_status(
         self,
@@ -409,8 +438,10 @@ class ObservationCollector:
         if wrote:
             refreshed_cities: set[str] = set()
             for city in {record.city for record in written_records}:
-                if refresh_canonical_temperature_from_latest(self.observation_store, city):
+                canonical = refresh_canonical_temperature_from_latest(self.observation_store, city)
+                if canonical:
                     refreshed_cities.add(city)
+                    self._append_realtime_event(canonical)
             for record in written_records:
                 if record.city not in refreshed_cities:
                     self._store_canonical_temperature_from_observation(
@@ -508,6 +539,8 @@ def start_observation_collector_loop(
     profiles: Optional[Sequence[ObservationSourceProfile]] = None,
     status_recorder: Optional[ObservationCollectorStatusRepository] = None,
     observation_store: Optional[Any] = None,
+    realtime_event_store: Optional[Any] = None,
+    realtime_broadcaster: Optional[Callable[[dict[str, Any]], Any]] = None,
 ) -> Optional[threading.Thread]:
     if not _env_bool("POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED", True):
         return None
@@ -523,6 +556,8 @@ def start_observation_collector_loop(
         cache_refresher=cache_refresher,
         status_recorder=status_recorder or ObservationCollectorStatusRepository(),
         observation_store=observation_store or DBManager(),
+        realtime_event_store=realtime_event_store or create_realtime_event_store(),
+        realtime_broadcaster=realtime_broadcaster,
     )
 
     global _COLLECTOR_THREAD

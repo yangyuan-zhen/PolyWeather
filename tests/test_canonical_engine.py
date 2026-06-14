@@ -81,3 +81,34 @@ def test_canonical_engine_ignores_failed_latest_rows():
     assert canonical is not None
     assert canonical["source"] == "madis_hfmetar"
     assert canonical["value"] == 24.0
+
+
+def test_canonical_engine_builds_realtime_event_from_canonical():
+    from web.services.canonical_engine import build_realtime_event_from_canonical
+
+    event = build_realtime_event_from_canonical(
+        {
+            "city": "shenzhen",
+            "value": 28.1,
+            "temp_symbol": "°C",
+            "source": "hko_obs",
+            "station_code": "LFS",
+            "station_name": "Lau Fau Shan",
+            "observed_at": "2026-06-14T01:00:00+00:00",
+            "freshness_sec": 300,
+            "freshness_status": "fresh",
+            "confidence": 0.9,
+        }
+    )
+
+    assert event is not None
+    assert event["type"] == "city_observation_patch.v1"
+    assert event["city"] == "shenzhen"
+    assert event["source"] == "hko_obs"
+    assert event["obs_time"] == "2026-06-14T01:00:00Z"
+    assert event["payload"]["temp"] == 28.1
+    assert event["payload"]["station_code"] == "LFS"
+    assert event["payload"]["station_label"] == "Lau Fau Shan"
+    assert event["payload"]["unit"] == "celsius"
+    assert event["payload"]["freshness_status"] == "fresh"
+    assert event["payload"]["confidence"] == 0.9
