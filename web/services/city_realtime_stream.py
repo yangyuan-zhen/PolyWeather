@@ -1,9 +1,8 @@
 """Lightweight realtime temperature stream for scrolling chart.
 
-Maintains per-city deque buffers (max 1440 points) fed by _analyze()
-refreshes.  The /api/city/{name}/realtime-stream endpoint reads from
-these buffers and returns a simple {points, thresholds} payload that
-the frontend RealtimeScrollChart polls every 30 seconds.
+Maintains per-city deque buffers (max 1440 points) fed by cached latest
+observations. The polling endpoint must not trigger external weather
+fetches; collectors and cache refreshers feed DB state.
 """
 
 from __future__ import annotations
@@ -13,12 +12,14 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 
-from web.analysis_service import _analyze
+from src.database.db_manager import DBManager
 
 # Per-city ring buffers: city_name → deque of {timestamp, temp, source}
 _STREAM_BUFFERS: Dict[str, collections.deque] = {}
 _BUFFER_LOCK = threading.Lock()
 _MAXLEN = 1440
+_CACHE_DB = DBManager()
+_analyze = None  # compatibility placeholder for older tests/monkeypatches
 
 
 def _best_temp(data: Dict[str, Any]) -> Optional[float]:
@@ -76,19 +77,63 @@ def _extract_thresholds(data: Dict[str, Any]) -> List[Dict[str, Any]]:
     return thresholds
 
 
+def _cached_city_payload(city: str) -> Dict[str, Any]:
+    normalized_city = str(city or "").strip().lower()
+    if not normalized_city:
+        return {}
+    for kind in ("panel", "full"):
+        try:
+            entry = _CACHE_DB.get_city_cache(kind, normalized_city)
+        except Exception:
+            continue
+        if not isinstance(entry, dict):
+            continue
+        payload = entry.get("payload") or {}
+        if isinstance(payload, dict) and payload:
+            return payload
+    return {}
+
+
+def _latest_canonical_point(city: str) -> Optional[Dict[str, Any]]:
+    normalized_city = str(city or "").strip().lower()
+    if not normalized_city:
+        return None
+    try:
+        row = _CACHE_DB.get_canonical_temperature(normalized_city)
+    except Exception:
+        return None
+    if not isinstance(row, dict):
+        return None
+    canonical = row.get("payload") or row
+    if not isinstance(canonical, dict):
+        return None
+    try:
+        temp = float(canonical.get("value"))
+    except (TypeError, ValueError):
+        return None
+    timestamp = str(
+        canonical.get("observed_at")
+        or canonical.get("observed_at_local")
+        or canonical.get("fetched_at")
+        or time.strftime("%H:%M:%S")
+    )
+    source = str(canonical.get("source") or "canonical")
+    return {"timestamp": timestamp, "temp": round(temp, 1), "source": source}
+
+
 def capture_sample(city: str) -> None:
     """Record one sample for *city* into its ring buffer."""
-    try:
-        data = _analyze(city, force_refresh=False, detail_mode="panel")
-    except Exception:
-        return
-
-    temp = _best_temp(data)
-    if temp is None:
-        return
-
-    ts = time.strftime("%H:%M:%S")
-    point = {"timestamp": ts, "temp": round(temp, 1), "source": "metar"}
+    point = _latest_canonical_point(city)
+    if point is None:
+        data = _cached_city_payload(city)
+        temp = _best_temp(data)
+        if temp is None:
+            return
+        current = data.get("current") if isinstance(data, dict) else {}
+        source = "cache"
+        if isinstance(current, dict):
+            source = str(current.get("source_code") or current.get("settlement_source") or source)
+        point = {"timestamp": time.strftime("%H:%M:%S"), "temp": round(temp, 1), "source": source}
 
     with _BUFFER_LOCK:
         buf = _STREAM_BUFFERS.get(city)
@@ -107,11 +152,6 @@ def get_realtime_stream_payload(city: str) -> Dict[str, Any]:
         buf = _STREAM_BUFFERS.get(city)
         points = list(buf) if buf else []
 
-    # Build thresholds from cached analysis
-    try:
-        data = _analyze(city, force_refresh=False, detail_mode="panel")
-        thresholds = _extract_thresholds(data)
-    except Exception:
-        thresholds = []
+    thresholds = _extract_thresholds(_cached_city_payload(city))
 
     return {"points": points, "thresholds": thresholds}

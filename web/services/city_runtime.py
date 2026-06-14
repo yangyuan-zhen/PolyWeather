@@ -30,6 +30,10 @@ from web.analysis_service import (
     _build_city_market_scan_payload,
     _build_city_summary_payload,
 )
+from web.services.canonical_temperature import (
+    attach_canonical_temperature,
+    store_canonical_temperature_from_payload,
+)
 from web.scan_terminal_service import build_scan_terminal_payload  # noqa: F401 - compatibility export for tests and transitional routers
 from web.core import (
     CITIES,
@@ -275,9 +279,23 @@ def _refresh_market_scan_payload_from_cached_analysis(
     return payload.get("market_scan_payload") or {}
 
 
+def _attach_and_store_canonical_temperature(city: str, payload: dict) -> dict:
+    if not isinstance(payload, dict):
+        return payload
+    attach_canonical_temperature(payload, city=city)
+    try:
+        store_canonical_temperature_from_payload(_CACHE_DB, city, payload)
+    except Exception as exc:
+        logger.debug("canonical temperature store skipped city={}: {}", city, exc)
+    return payload
+
+
 def _refresh_city_summary_cache(city: str, force_refresh: bool = False) -> dict:
     data = _analyze_summary(city, force_refresh=force_refresh)
+    _attach_and_store_canonical_temperature(city, data)
     payload = _build_city_summary_payload(data)
+    if data.get("canonical_temperature"):
+        payload["canonical_temperature"] = data["canonical_temperature"]
     _CACHE_DB.set_city_cache(
         "summary",
         city,
@@ -290,6 +308,7 @@ def _refresh_city_summary_cache(city: str, force_refresh: bool = False) -> dict:
 
 def _refresh_city_panel_cache(city: str, force_refresh: bool = False) -> dict:
     payload = _analyze(city, force_refresh=force_refresh, detail_mode="panel")
+    _attach_and_store_canonical_temperature(city, payload)
     _CACHE_DB.set_city_cache(
         "panel",
         city,
@@ -302,6 +321,7 @@ def _refresh_city_panel_cache(city: str, force_refresh: bool = False) -> dict:
 
 def _refresh_city_nearby_cache(city: str, force_refresh: bool = False) -> dict:
     payload = _analyze(city, force_refresh=force_refresh, detail_mode="nearby")
+    _attach_and_store_canonical_temperature(city, payload)
     _CACHE_DB.set_city_cache(
         "nearby",
         city,
@@ -314,6 +334,7 @@ def _refresh_city_nearby_cache(city: str, force_refresh: bool = False) -> dict:
 
 def _refresh_city_market_cache(city: str, force_refresh: bool = False) -> dict:
     payload = _analyze(city, force_refresh=force_refresh, detail_mode="market")
+    _attach_and_store_canonical_temperature(city, payload)
     now_ts = time.time()
     payload["market_analysis_cached_at"] = datetime.now().isoformat()
     payload["market_analysis_cached_at_ts"] = now_ts
@@ -330,6 +351,7 @@ def _refresh_city_market_cache(city: str, force_refresh: bool = False) -> dict:
 
 def _refresh_city_full_cache(city: str, force_refresh: bool = False) -> dict:
     payload = _analyze(city, force_refresh=force_refresh, detail_mode="full")
+    _attach_and_store_canonical_temperature(city, payload)
     _CACHE_DB.set_city_cache(
         "full",
         city,

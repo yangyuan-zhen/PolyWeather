@@ -15,6 +15,7 @@ from src.data_collection.amos_station_sources import AMOS_AIRPORT_CODES
 from src.data_collection.amsc_awos_sources import AMSC_AWOS_AIRPORTS
 from src.data_collection.city_registry import CITY_REGISTRY
 from src.data_collection.hko_obs_sources import HKO_STATIONS
+from src.database.db_manager import DBManager
 from src.database.runtime_state import ObservationCollectorStatusRepository
 
 
@@ -54,6 +55,7 @@ class ObservationCollector:
         profiles: Sequence[ObservationSourceProfile],
         cache_refresher: Optional[Callable[[str], Any]] = None,
         status_recorder: Optional[ObservationCollectorStatusRepository] = None,
+        observation_store: Optional[Any] = None,
         async_cache_refresh: Optional[bool] = None,
         cache_refresh_workers: Optional[int] = None,
     ) -> None:
@@ -61,6 +63,7 @@ class ObservationCollector:
         self.profiles = list(profiles)
         self.cache_refresher = cache_refresher
         self.status_recorder = status_recorder
+        self.observation_store = observation_store
         self._last_run_ts: dict[tuple[str, str], float] = {}
         self._lock = threading.Lock()
         self._cache_refresh_lock = threading.Lock()
@@ -89,7 +92,7 @@ class ObservationCollector:
 
     def run_due_once(self, *, now_ts: Optional[float] = None) -> int:
         now = float(time.time() if now_ts is None else now_ts)
-        due: List[tuple[ObservationSourceProfile, str]] = []
+        due: List[tuple[ObservationSourceProfile, str, Optional[int]]] = []
         with self._lock:
             for profile in self.profiles:
                 interval = max(1, int(profile.interval_sec or 60))
@@ -98,10 +101,12 @@ class ObservationCollector:
                     last_ts = float(self._last_run_ts.get(key) or 0.0)
                     if now - last_ts >= interval:
                         self._last_run_ts[key] = now
-                        due.append((profile, city))
+                        due.append((profile, city, None))
+
+        due.extend(self._claim_due_refresh_requests(now))
 
         completed = 0
-        for profile, city in due:
+        for profile, city, request_id in due:
             started_wall = time.time()
             started_ts = now if now_ts is not None else started_wall
             ok = False
@@ -132,7 +137,70 @@ class ObservationCollector:
                     ok=ok,
                     error=error,
                 )
+                self._mark_refresh_request_done(request_id, ok=ok, error=error)
         return completed
+
+    def _claim_due_refresh_requests(self, now: float) -> List[tuple[ObservationSourceProfile, str, Optional[int]]]:
+        store = self.observation_store
+        claimer = getattr(store, "claim_observation_refresh_requests", None)
+        if not callable(claimer):
+            return []
+        try:
+            requests = claimer(limit=50, owner="observation_collector", now_ts=now)
+        except Exception as exc:
+            logger.debug("observation refresh request claim skipped: {}", exc)
+            return []
+        due: List[tuple[ObservationSourceProfile, str, Optional[int]]] = []
+        for request in requests or []:
+            if not isinstance(request, dict):
+                continue
+            city = str(request.get("city") or "").strip().lower()
+            requested_source = str(request.get("source") or "").strip().lower()
+            request_id = int(request.get("id") or 0) or None
+            matched = False
+            rate_limited = False
+            for profile in self.profiles:
+                profile_source = str(profile.source or "").strip().lower()
+                if requested_source and requested_source != profile_source:
+                    continue
+                if city not in set(profile.cities):
+                    continue
+                key = (profile.source, city)
+                interval = max(1, int(profile.interval_sec or 60))
+                with self._lock:
+                    last_ts = float(self._last_run_ts.get(key) or 0.0)
+                    if last_ts and now - last_ts < interval:
+                        rate_limited = True
+                        continue
+                    self._last_run_ts[key] = now
+                due.append((profile, city, request_id))
+                matched = True
+            if not matched:
+                reason = "rate_limited" if rate_limited else "no_matching_profile"
+                self._mark_refresh_request_done(request_id, ok=False, error=reason)
+        return due
+
+    def _mark_refresh_request_done(
+        self,
+        request_id: Optional[int],
+        *,
+        ok: bool,
+        error: Optional[str],
+    ) -> None:
+        if not request_id:
+            return
+        store = self.observation_store
+        marker = getattr(store, "mark_observation_refresh_request_done", None)
+        if not callable(marker):
+            return
+        try:
+            marker(
+                request_id,
+                status="done" if ok else "failed",
+                error="" if ok else str(error or "collection_failed"),
+            )
+        except Exception as exc:
+            logger.debug("observation refresh request completion skipped id={}: {}", request_id, exc)
 
     def _record_source_status(
         self,
@@ -187,7 +255,104 @@ class ObservationCollector:
         else:
             logger.debug("observation collector skipped unknown source={}", normalized_source)
             return False
-        return bool(results)
+        ok = bool(results)
+        if ok:
+            self._store_raw_observations(normalized_source, normalized_city, results)
+        return ok
+
+    @staticmethod
+    def _observation_value(row: dict[str, Any]) -> Optional[float]:
+        for key in ("temp_c", "temperature_c", "temp", "value"):
+            try:
+                value = row.get(key)
+                if value is not None and value != "":
+                    return float(value)
+            except (TypeError, ValueError):
+                continue
+        current = row.get("current")
+        if isinstance(current, dict):
+            try:
+                value = current.get("temp")
+                if value is not None and value != "":
+                    return float(value)
+            except (TypeError, ValueError):
+                return None
+        return None
+
+    @staticmethod
+    def _observation_time(row: dict[str, Any]) -> str:
+        for key in ("observation_time", "observed_at", "obs_time", "time_utc", "time"):
+            value = str(row.get(key) or "").strip()
+            if value:
+                return value
+        return ""
+
+    @staticmethod
+    def _station_code(row: dict[str, Any]) -> str:
+        for key in ("station_code", "icao", "istNo", "station_id", "code"):
+            value = str(row.get(key) or "").strip()
+            if value:
+                return value
+        return ""
+
+    @staticmethod
+    def _station_name(row: dict[str, Any]) -> str:
+        for key in ("station_name", "station_label", "name", "label"):
+            value = str(row.get(key) or "").strip()
+            if value:
+                return value
+        return ""
+
+    def _iter_raw_observation_rows(
+        self,
+        source: str,
+        results: dict[str, Any],
+    ) -> Iterable[dict[str, Any]]:
+        for value in (results or {}).values():
+            if isinstance(value, dict):
+                yield value
+                continue
+            if isinstance(value, list):
+                for item in value:
+                    if isinstance(item, dict):
+                        yield item
+
+    def _store_raw_observations(self, source: str, city: str, results: dict[str, Any]) -> None:
+        store = self.observation_store
+        writer = getattr(store, "append_raw_observation", None)
+        if not callable(writer):
+            return
+        fetched_at = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime())
+        wrote = 0
+        for row in self._iter_raw_observation_rows(source, results):
+            value = self._observation_value(row)
+            if value is None:
+                continue
+            payload_source = str(row.get("source") or row.get("source_code") or source).strip().lower()
+            try:
+                writer(
+                    source=payload_source or source,
+                    city=city,
+                    value=value,
+                    observed_at=self._observation_time(row),
+                    fetched_at=fetched_at,
+                    station_code=self._station_code(row),
+                    station_name=self._station_name(row),
+                    runway=str(row.get("runway") or "").strip(),
+                    value_unit=str(row.get("unit") or row.get("temp_unit") or "c").strip().lower(),
+                    status="ok",
+                    payload=dict(row),
+                )
+                wrote += 1
+            except Exception as exc:
+                logger.debug(
+                    "raw observation store write skipped source={} city={}: {}",
+                    source,
+                    city,
+                    exc,
+                )
+        if wrote:
+            logger.debug("raw observations stored source={} city={} count={}", source, city, wrote)
 
     def _refresh_city_cache(self, city: str) -> None:
         if not callable(self.cache_refresher):
@@ -276,6 +441,7 @@ def start_observation_collector_loop(
     cache_refresher: Optional[Callable[[str], Any]] = None,
     profiles: Optional[Sequence[ObservationSourceProfile]] = None,
     status_recorder: Optional[ObservationCollectorStatusRepository] = None,
+    observation_store: Optional[Any] = None,
 ) -> Optional[threading.Thread]:
     if not _env_bool("POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED", True):
         return None
@@ -290,6 +456,7 @@ def start_observation_collector_loop(
         profiles=selected_profiles,
         cache_refresher=cache_refresher,
         status_recorder=status_recorder or ObservationCollectorStatusRepository(),
+        observation_store=observation_store or DBManager(),
     )
 
     global _COLLECTOR_THREAD

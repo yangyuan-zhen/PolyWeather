@@ -10,7 +10,7 @@ from fastapi.concurrency import run_in_threadpool
 from loguru import logger
 
 import web.routes as legacy_routes
-from web.services.city_api import _build_cities_payload
+from web.services.city_api import _build_cities_payload, get_city_detail_payload
 
 
 def _resolve_default_city(request: Request) -> Optional[str]:
@@ -37,15 +37,12 @@ async def build_dashboard_init_payload(request: Request) -> Dict[str, Any]:
     detail_payload: Optional[Dict[str, Any]] = None
     if default_city:
         try:
-            cached_entry = await run_in_threadpool(
-                legacy_routes._CACHE_DB.get_city_cache, "panel", default_city,
+            detail_payload = await get_city_detail_payload(
+                request,
+                default_city,
+                force_refresh=False,
+                depth="panel",
             )
-            if cached_entry:
-                detail_payload = cached_entry.get("payload") or {}
-            else:
-                detail_payload = await run_in_threadpool(
-                    legacy_routes._refresh_city_panel_cache, default_city, False,
-                )
         except Exception as exc:
             logger.warning(
                 "dashboard_init default_city={} panel failed: {}", default_city, exc

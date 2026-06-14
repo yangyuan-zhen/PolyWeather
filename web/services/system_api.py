@@ -92,20 +92,27 @@ def run_system_priority_warm(
     primary = list(batches.get("primary") or [])
     secondary = list(batches.get("secondary") or [])
 
+    def _queue_city_refresh(city: str, *, priority: str) -> None:
+        enqueue = getattr(legacy_routes._CACHE_DB, "enqueue_observation_refresh_request", None)
+        if not callable(enqueue):
+            logger.warning("priority warm queue unavailable city={} timezone={}", city, timezone)
+            return
+        enqueue(
+            city=city,
+            kind="panel",
+            priority=priority,
+            reason="system_priority_warm",
+        )
+
     def _runner() -> None:
         for city in primary:
             try:
-                legacy_routes._refresh_city_summary_cache(city, force_refresh=False)
-                legacy_routes._refresh_city_panel_cache(city, force_refresh=False)
-                legacy_routes._refresh_city_nearby_cache(city, force_refresh=False)
-                legacy_routes._refresh_city_market_cache(city, force_refresh=False)
-                legacy_routes._refresh_city_full_cache(city, force_refresh=False)
+                _queue_city_refresh(city, priority="high")
             except Exception as exc:
                 logger.warning("priority warm primary failed city={} timezone={}: {}", city, timezone, exc)
         for city in secondary:
             try:
-                legacy_routes._refresh_city_summary_cache(city, force_refresh=False)
-                legacy_routes._refresh_city_panel_cache(city, force_refresh=False)
+                _queue_city_refresh(city, priority="normal")
             except Exception as exc:
                 logger.warning("priority warm secondary failed city={} timezone={}: {}", city, timezone, exc)
 

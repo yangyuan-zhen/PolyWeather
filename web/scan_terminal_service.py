@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
-from web.analysis_service import _analyze
+from src.database.db_manager import DBManager
 from web.core import CITIES
 from web.services.scan_terminal_config import (
     SCAN_TERMINAL_BUILD_TIMEOUT_SEC,
@@ -43,6 +43,7 @@ from web.scan_terminal_ranker import build_ranked_scan_terminal_result
 
 _SCAN_TERMINAL_INFLIGHT_BUILD_LOCK = threading.Lock()
 _SCAN_TERMINAL_INFLIGHT_BUILDS: Dict[str, Future] = {}
+_SCAN_PREWARM_DB = DBManager()
 SCAN_TERMINAL_STALE_SUCCESS_MAX_AGE_SEC = max(
     SCAN_TERMINAL_PAYLOAD_TTL_SEC * 2,
     600,
@@ -460,10 +461,20 @@ def _warm_scan_terminal_payloads() -> int:
     return ok
 
 
+def _queue_scan_terminal_city_prewarm(city: str) -> str:
+    _SCAN_PREWARM_DB.enqueue_observation_refresh_request(
+        city=city,
+        kind="panel",
+        priority="normal",
+        reason="scan_terminal_prewarm",
+    )
+    return city
+
+
 def start_scan_terminal_prewarm() -> None:
     """Warm analysis caches for all cities at startup so the first terminal
-    scan returns quickly instead of forcing every city through a cold
-    _analyze() path.
+    scan returns quickly without forcing every city through a cold external
+    source refresh path.
 
     Runs once per process.  Safe to call from any thread and at any point
     during the server lifecycle.
@@ -483,7 +494,7 @@ def start_scan_terminal_prewarm() -> None:
 
     def _warm_one(city: str) -> str:
         try:
-            _analyze(city, force_refresh=False, detail_mode="panel")
+            _queue_scan_terminal_city_prewarm(city)
         except Exception:
             pass
         return city

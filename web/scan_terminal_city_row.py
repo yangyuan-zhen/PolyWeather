@@ -7,17 +7,18 @@ from typing import Any, Dict, List, Optional
 
 from src.database.db_manager import DBManager
 from web.core import CITIES, _sf as _safe_float
-from web.analysis_service import _analyze
 from web.scan_terminal_filters import (
     market_region_from_tz_offset as _market_region_from_tz_offset,
     safe_int as _safe_int,
 )
+from web.services.canonical_temperature import build_city_weather_from_canonical
 from web.services.city_payloads import aggregate_runway_history
 
 
 SCAN_ROW_RUNWAY_HISTORY_RESOLUTION = "10m"
 SCAN_ROW_MAX_RUNWAY_POINTS = 144
 _PANEL_CACHE_DB = DBManager()
+_analyze = None  # compatibility hook for tests that assert scan terminal stays cache-only.
 
 
 def _compact_runway_plate_history_for_scan(raw_history: Any) -> Dict[str, List[Dict[str, Any]]]:
@@ -29,6 +30,47 @@ def _compact_runway_plate_history_for_scan(raw_history: Any) -> Dict[str, List[D
         for runway, points in compacted.items()
         if isinstance(points, list) and points
     }
+
+
+def _enqueue_scan_terminal_refresh(city: str, *, reason: str) -> None:
+    enqueue = getattr(_PANEL_CACHE_DB, "enqueue_observation_refresh_request", None)
+    if not callable(enqueue):
+        return
+    try:
+        enqueue(
+            city=city,
+            kind="panel",
+            priority="high",
+            reason=reason,
+        )
+    except Exception:
+        return
+
+
+def _load_scan_panel_payload(city: str, *, force_refresh: bool) -> Optional[Dict[str, Any]]:
+    if not force_refresh:
+        cached_entry = _PANEL_CACHE_DB.get_city_cache("panel", city)
+        cached_payload = cached_entry.get("payload") if isinstance(cached_entry, dict) else None
+        if isinstance(cached_payload, dict):
+            return cached_payload
+
+    canonical_getter = getattr(_PANEL_CACHE_DB, "get_canonical_temperature", None)
+    canonical_entry = canonical_getter(city) if callable(canonical_getter) else None
+    canonical = (
+        canonical_entry.get("payload")
+        if isinstance(canonical_entry, dict) and isinstance(canonical_entry.get("payload"), dict)
+        else canonical_entry
+    )
+    payload = build_city_weather_from_canonical(city, canonical) if isinstance(canonical, dict) else None
+    if payload:
+        city_meta = CITIES.get(city) or {}
+        payload.setdefault("display_name", city_meta.get("name") or city_meta.get("display_name") or city)
+        payload.setdefault("temp_symbol", canonical.get("temp_symbol") or "°C")
+        _enqueue_scan_terminal_refresh(city, reason="scan_terminal_canonical_fallback")
+        return payload
+
+    _enqueue_scan_terminal_refresh(city, reason="scan_terminal_cold_start")
+    return None
 
 
 def _resolve_time_range_dates(data: Dict[str, Any], time_range: str) -> List[str]:
@@ -173,18 +215,14 @@ def _scan_city_terminal_rows_quick(
 ) -> Dict[str, Any]:
     """Fast path that returns cached analysis rows only — returns a single row per city
     with cached analysis data (Obs, DEB, probabilities) but no market prices."""
-    data: Dict[str, Any] = {}
-    if not force_refresh:
-        cached_entry = _PANEL_CACHE_DB.get_city_cache("panel", city)
-        cached_payload = cached_entry.get("payload") if isinstance(cached_entry, dict) else None
-        if isinstance(cached_payload, dict):
-            data = cached_payload
+    data = _load_scan_panel_payload(city, force_refresh=force_refresh)
     if not data:
-        data = _analyze(
-            city,
-            force_refresh=force_refresh,
-            detail_mode="panel",
-        )
+        return {
+            "city": city,
+            "rows": [],
+            "candidate_total": 0,
+            "primary_scores": [],
+        }
     row = _build_quick_row(city=city, data=data)
     return {
         "city": city,

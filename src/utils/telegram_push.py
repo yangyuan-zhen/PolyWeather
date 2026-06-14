@@ -27,6 +27,7 @@ from src.utils.telegram_i18n import (
     normalize_push_language as _normalize_push_language,
     telegram_push_language as _resolve_telegram_push_language,
 )
+from web.services.canonical_temperature import build_city_weather_from_canonical
 
 # Forum topic routing: maps city_key -> message_thread_id for the push forum group.
 # Created by scripts/create_forum_topics.py, stored in the runtime data dir.
@@ -1504,9 +1505,11 @@ def _cached_payload_observation_epoch(payload: Dict[str, Any]) -> Optional[int]:
     airport_current = payload.get("airport_current") or {}
     current = payload.get("current") or {}
     candidates = [
+        (payload.get("canonical_temperature") or {}).get("observed_at"),
         amos.get("observation_time"),
         airport_primary.get("obs_time"),
         airport_current.get("obs_time"),
+        current.get("observed_at"),
         current.get("obs_time"),
     ]
     parsed = [
@@ -1574,19 +1577,37 @@ def _read_cached_airport_city_weather(city: str, max_age_sec: Optional[int] = No
     return None
 
 
+def _read_canonical_airport_city_weather(city: str) -> Optional[Dict[str, Any]]:
+    normalized_city = (city or "").strip().lower()
+    if not normalized_city:
+        return None
+    try:
+        db = DBManager()
+        getter = getattr(db, "get_canonical_temperature", None)
+        if not callable(getter):
+            return None
+        row = getter(normalized_city)
+    except Exception as exc:
+        logger.debug("airport push canonical latest read failed city={}: {}", normalized_city, exc)
+        return None
+    if not isinstance(row, dict):
+        return None
+    canonical = row.get("payload") or row
+    if not isinstance(canonical, dict):
+        return None
+    return build_city_weather_from_canonical(normalized_city, canonical)
+
+
 def _load_airport_city_weather_for_push(city: str) -> Dict[str, Any]:
     cached = _read_cached_airport_city_weather(city)
     if cached is not None:
         return cached
 
-    from web.app import _analyze  # lazy import - only the bot process needs it
+    canonical = _read_canonical_airport_city_weather(city)
+    if canonical is not None:
+        return canonical
 
-    return _analyze(
-        city,
-        force_refresh=False,
-        force_refresh_observations_only=False,
-        detail_mode="panel",
-    )
+    raise RuntimeError(f"no cached city weather for airport push city={city}")
 
 
 # Per-city temperature window threshold (°C below DEB predicted high)

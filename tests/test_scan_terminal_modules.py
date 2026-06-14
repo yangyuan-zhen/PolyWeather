@@ -1,5 +1,6 @@
 from web.scan_terminal_filters import normalize_scan_terminal_filters
 from web import scan_terminal_cache
+from web import scan_terminal_service
 from web.scan_terminal_metar_gate import _apply_metar_gate_to_row
 from web.scan_terminal_payloads import (
     build_failed_scan_terminal_payload,
@@ -82,6 +83,36 @@ def test_scan_terminal_prewarm_covers_default_api_limit():
     assert 180 in limits
 
 
+def test_scan_terminal_prewarm_queues_city_refresh_without_analyze(monkeypatch):
+    enqueued = []
+
+    class _DB:
+        @staticmethod
+        def enqueue_observation_refresh_request(**kwargs):
+            enqueued.append(kwargs)
+            return True
+
+    monkeypatch.setattr(scan_terminal_service, "_SCAN_PREWARM_DB", _DB(), raising=False)
+    monkeypatch.setattr(
+        scan_terminal_service,
+        "_analyze",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("scan terminal prewarm must not fetch external sources")
+        ),
+        raising=False,
+    )
+
+    assert scan_terminal_service._queue_scan_terminal_city_prewarm("shenzhen") == "shenzhen"
+    assert enqueued == [
+        {
+            "city": "shenzhen",
+            "kind": "panel",
+            "priority": "normal",
+            "reason": "scan_terminal_prewarm",
+        }
+    ]
+
+
 def test_scan_city_terminal_rows_reuses_persisted_panel_cache(monkeypatch):
     payload = {
         "display_name": "Paris",
@@ -117,6 +148,118 @@ def test_scan_city_terminal_rows_reuses_persisted_panel_cache(monkeypatch):
 
     assert result["city"] == "paris"
     assert result["rows"][0]["current_temp"] == 18.0
+
+
+def test_scan_city_terminal_rows_uses_canonical_without_analyze(monkeypatch):
+    enqueued = []
+
+    class _Cache:
+        @staticmethod
+        def get_city_cache(kind, city):
+            assert (kind, city) == ("panel", "qingdao")
+            return None
+
+        @staticmethod
+        def get_canonical_temperature(city):
+            assert city == "qingdao"
+            return {
+                "payload": {
+                    "city": "qingdao",
+                    "value": 22.5,
+                    "temp_symbol": "°C",
+                    "source": "amsc_awos",
+                    "source_label": "AMSC AWOS",
+                    "source_role": "settlement_proxy",
+                    "observed_at": "2026-06-01T08:00:00Z",
+                    "fetched_at": "2026-06-01T08:00:30Z",
+                    "freshness_sec": 30,
+                    "freshness_status": "fresh",
+                    "confidence": 0.92,
+                }
+            }
+
+        @staticmethod
+        def enqueue_observation_refresh_request(**kwargs):
+            enqueued.append(kwargs)
+            return True
+
+    monkeypatch.setattr(scan_terminal_city_row, "_PANEL_CACHE_DB", _Cache())
+    monkeypatch.setattr(
+        scan_terminal_city_row,
+        "_analyze",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("scan terminal must not fetch external sources")
+        ),
+    )
+
+    result = scan_terminal_city_row._scan_city_terminal_rows(
+        "qingdao",
+        {"market_type": "maxtemp"},
+        force_refresh=False,
+    )
+
+    assert result["city"] == "qingdao"
+    assert result["candidate_total"] == 1
+    assert result["rows"][0]["current_temp"] == 22.5
+    assert result["rows"][0]["temp_symbol"] == "°C"
+    assert enqueued == [
+        {
+            "city": "qingdao",
+            "kind": "panel",
+            "priority": "high",
+            "reason": "scan_terminal_canonical_fallback",
+        }
+    ]
+
+
+def test_scan_city_terminal_rows_cold_start_only_enqueues(monkeypatch):
+    enqueued = []
+
+    class _Cache:
+        @staticmethod
+        def get_city_cache(kind, city):
+            assert (kind, city) == ("panel", "seoul")
+            return None
+
+        @staticmethod
+        def get_canonical_temperature(city):
+            assert city == "seoul"
+            return None
+
+        @staticmethod
+        def enqueue_observation_refresh_request(**kwargs):
+            enqueued.append(kwargs)
+            return True
+
+    monkeypatch.setattr(scan_terminal_city_row, "_PANEL_CACHE_DB", _Cache())
+    monkeypatch.setattr(
+        scan_terminal_city_row,
+        "_analyze",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("scan terminal must not fetch external sources")
+        ),
+    )
+
+    result = scan_terminal_city_row._scan_city_terminal_rows(
+        "seoul",
+        {"market_type": "maxtemp"},
+        force_refresh=False,
+    )
+
+    assert result == {
+        "city": "seoul",
+        "rows": [],
+        "candidate_total": 0,
+        "primary_scores": [],
+    }
+    assert enqueued == [
+        {
+            "city": "seoul",
+            "kind": "panel",
+            "priority": "high",
+            "reason": "scan_terminal_cold_start",
+        }
+    ]
 
 
 def test_scan_router_does_not_expose_terminal_ai_endpoint():

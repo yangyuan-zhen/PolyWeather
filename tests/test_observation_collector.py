@@ -135,6 +135,169 @@ def test_observation_collector_run_due_once_refreshes_panel_cache():
     assert refreshed == ["qingdao", "qingdao"]
 
 
+def test_raw_observation_store_records_latest_observation(tmp_path):
+    from src.database.db_manager import DBManager
+
+    db = DBManager(str(tmp_path / "polyweather.db"))
+
+    db.append_raw_observation(
+        source="amsc_awos",
+        city="Qingdao",
+        value=24.0,
+        observed_at="2026-06-14T01:00:00+00:00",
+        fetched_at="2026-06-14T01:01:00+00:00",
+        station_code="ZSQD",
+        station_name="Qingdao Jiaodong",
+        status="ok",
+        payload={"temp_c": 24.0},
+    )
+
+    latest = db.get_latest_raw_observation("amsc_awos", "qingdao")
+
+    assert latest is not None
+    assert latest["source"] == "amsc_awos"
+    assert latest["city"] == "qingdao"
+    assert latest["value"] == 24.0
+    assert latest["observed_at"] == "2026-06-14T01:00:00+00:00"
+    assert latest["fetched_at"] == "2026-06-14T01:01:00+00:00"
+    assert latest["station_code"] == "ZSQD"
+    assert latest["status"] == "ok"
+    assert latest["payload"]["temp_c"] == 24.0
+
+
+def test_observation_refresh_request_queue_claims_pending_requests(tmp_path):
+    from src.database.db_manager import DBManager
+
+    db = DBManager(str(tmp_path / "polyweather.db"))
+
+    assert db.enqueue_observation_refresh_request(
+        city="Shanghai",
+        kind="panel",
+        priority="high",
+        reason="cold_canonical_fallback",
+    )
+
+    claimed = db.claim_observation_refresh_requests(limit=5, owner="collector-1", now_ts=1000.0)
+
+    assert len(claimed) == 1
+    request = claimed[0]
+    assert request["city"] == "shanghai"
+    assert request["kind"] == "panel"
+    assert request["priority"] == "high"
+    assert request["reason"] == "cold_canonical_fallback"
+
+    db.mark_observation_refresh_request_done(request["id"], status="done")
+
+    assert db.claim_observation_refresh_requests(limit=5, owner="collector-1", now_ts=1001.0) == []
+
+
+def test_observation_refresh_request_queue_coalesces_city_source_across_kinds(tmp_path):
+    from src.database.db_manager import DBManager
+
+    db = DBManager(str(tmp_path / "polyweather.db"))
+
+    assert db.enqueue_observation_refresh_request(
+        city="Shanghai",
+        kind="panel",
+        priority="high",
+        reason="panel_cold_start",
+    )
+    assert db.enqueue_observation_refresh_request(
+        city="shanghai",
+        kind="full",
+        priority="normal",
+        reason="chart_cold_start",
+    )
+
+    claimed = db.claim_observation_refresh_requests(limit=5, owner="collector-1", now_ts=1000.0)
+
+    assert len(claimed) == 1
+    request = claimed[0]
+    assert request["city"] == "shanghai"
+    assert request["kind"] == "full"
+    assert request["priority"] == "high"
+    assert request["reason"] == "chart_cold_start"
+
+
+def test_observation_collector_writes_raw_observation_store(tmp_path):
+    from src.database.db_manager import DBManager
+    from web.observation_collector_service import (
+        ObservationCollector,
+        ObservationSourceProfile,
+    )
+
+    db = DBManager(str(tmp_path / "polyweather.db"))
+
+    class FakeWeather:
+        def _uses_fahrenheit(self, city):
+            return False
+
+        def _attach_china_amsc_awos_data(self, results, city, use_fahrenheit):
+            results["amos"] = {
+                "source": "amsc_awos",
+                "temp_c": 24.0,
+                "observation_time": "2026-06-14T01:00:00+00:00",
+                "icao": "ZSQD",
+                "station_label": "Qingdao Jiaodong",
+            }
+
+    collector = ObservationCollector(
+        weather=FakeWeather(),
+        profiles=[ObservationSourceProfile("amsc_awos", ("qingdao",), 180)],
+        observation_store=db,
+        async_cache_refresh=False,
+    )
+
+    assert collector.run_due_once(now_ts=1000.0) == 1
+
+    latest = db.get_latest_raw_observation("amsc_awos", "qingdao")
+    assert latest is not None
+    assert latest["value"] == 24.0
+    assert latest["observed_at"] == "2026-06-14T01:00:00+00:00"
+    assert latest["station_code"] == "ZSQD"
+
+
+def test_observation_collector_consumes_refresh_request_queue(tmp_path):
+    from src.database.db_manager import DBManager
+    from web.observation_collector_service import (
+        ObservationCollector,
+        ObservationSourceProfile,
+    )
+
+    db = DBManager(str(tmp_path / "polyweather.db"))
+    db.enqueue_observation_refresh_request(
+        city="qingdao",
+        kind="panel",
+        priority="high",
+        reason="canonical_fallback",
+    )
+    calls = []
+
+    class FakeWeather:
+        def _uses_fahrenheit(self, city):
+            return False
+
+        def _attach_china_amsc_awos_data(self, results, city, use_fahrenheit):
+            calls.append(city)
+            results["amos"] = {
+                "source": "amsc_awos",
+                "temp_c": 24.0,
+                "observation_time": "2026-06-14T01:00:00+00:00",
+                "icao": "ZSQD",
+            }
+
+    collector = ObservationCollector(
+        weather=FakeWeather(),
+        profiles=[ObservationSourceProfile("amsc_awos", ("qingdao",), 180)],
+        observation_store=db,
+        async_cache_refresh=False,
+    )
+
+    assert collector.run_due_once(now_ts=100.0) == 1
+    assert calls == ["qingdao"]
+    assert db.claim_observation_refresh_requests(limit=5, owner="test", now_ts=101.0) == []
+
+
 def test_observation_collector_cache_refresh_does_not_block_source_polling():
     from web.observation_collector_service import (
         ObservationCollector,

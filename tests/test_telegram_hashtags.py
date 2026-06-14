@@ -1,3 +1,5 @@
+import pytest
+
 from src.utils.telegram_push import (
     HIGH_FREQ_AIRPORT_CITIES,
     HIGH_FREQ_AIRPORT_ICAO,
@@ -294,36 +296,64 @@ def test_airport_push_prefers_cache_with_newest_observation(monkeypatch):
     assert city_weather["airport_primary"]["temp"] == 31.4
 
 
-def test_airport_push_fallback_analysis_does_not_force_observation_refresh(monkeypatch):
+def test_airport_push_without_cache_uses_canonical_latest_not_analysis(monkeypatch):
     import src.utils.telegram_push as telegram_push
     import web.app as web_app
-
-    calls = []
 
     class FakeDB:
         def get_city_cache(self, kind, city):
             return None
 
-    def fake_analyze(city, force_refresh=False, force_refresh_observations_only=False, detail_mode="full", **_kwargs):
-        calls.append((city, force_refresh, force_refresh_observations_only, detail_mode))
-        return {
-            "local_time": "12:00",
-            "current": {"temp": 31.0},
-            "deb": {"prediction": 29.0},
-            "airport_current": {"max_so_far": 30.0, "max_temp_time": "11:50", "obs_time": "12:00"},
-            "mgm_nearby": [
-                {"icao": "ZSQD", "temp": 31.0, "obs_time": "2026-05-17T04:00:00Z"},
-            ],
-        }
+        def get_canonical_temperature(self, city):
+            assert city == "qingdao"
+            return {
+                "payload": {
+                    "city": "qingdao",
+                    "value": 31.0,
+                    "source": "amsc_awos",
+                    "source_label": "AMSC AWOS runway-point air temperature",
+                    "source_role": "settlement_proxy",
+                    "observed_at": "2026-06-14T04:00:00+00:00",
+                    "observed_at_local": "12:00",
+                    "freshness_sec": 45,
+                    "freshness_status": "fresh",
+                    "fetched_at": "2026-06-14T04:00:45+00:00",
+                    "confidence": 0.92,
+                },
+            }
+
+    def fail_analyze(*_args, **_kwargs):
+        raise AssertionError("Telegram push must not call _analyze when canonical latest exists")
 
     monkeypatch.setattr(telegram_push, "DBManager", lambda: FakeDB())
-    monkeypatch.setattr(web_app, "_analyze", fake_analyze)
+    monkeypatch.setattr(web_app, "_analyze", fail_analyze)
 
     city_weather = telegram_push._load_airport_city_weather_for_push("qingdao")
 
     assert city_weather["current"]["temp"] == 31.0
-    assert ("qingdao", False, False, "panel") in calls
-    assert not any(city == "qingdao" and force_obs for city, _force, force_obs, _mode in calls)
+    assert city_weather["airport_primary"]["obs_time"] == "2026-06-14T04:00:00+00:00"
+    assert city_weather["current"]["freshness"]["freshness_status"] == "fresh"
+
+
+def test_airport_push_without_cache_or_canonical_skips_analysis(monkeypatch):
+    import src.utils.telegram_push as telegram_push
+    import web.app as web_app
+
+    class FakeDB:
+        def get_city_cache(self, kind, city):
+            return None
+
+        def get_canonical_temperature(self, city):
+            return None
+
+    def fail_analyze(*_args, **_kwargs):
+        raise AssertionError("Telegram push must not call _analyze on cold cache")
+
+    monkeypatch.setattr(telegram_push, "DBManager", lambda: FakeDB())
+    monkeypatch.setattr(web_app, "_analyze", fail_analyze)
+
+    with pytest.raises(RuntimeError, match="no cached city weather"):
+        telegram_push._load_airport_city_weather_for_push("qingdao")
 
 
 def test_airport_push_uses_stale_cache_before_fallback_analysis(monkeypatch):
