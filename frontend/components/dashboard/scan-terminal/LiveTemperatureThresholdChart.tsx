@@ -37,6 +37,7 @@ import {
   readSessionCache,
   selectCompactSecondaryTemp,
   selectDisplayRunwayTemp,
+  selectInitialHourlyForRowChange,
   seedHourlyForecastFromRow,
   shouldPollLiveChart,
   validNumber,
@@ -528,6 +529,30 @@ function getInitialDetailLoadDelayMs({
   return DEFERRED_DETAIL_LOAD_DELAY_MS + deferredWave * DEFERRED_DETAIL_LOAD_WAVE_STEP_MS;
 }
 
+function readCachedHourlyForInitialRow(
+  city: string,
+  preferredResolution: string,
+): HourlyForecast {
+  const cityKey = String(city || "").toLowerCase().trim();
+  if (!cityKey) return null;
+  const resolutions = [
+    preferredResolution,
+    preferredResolution === "1m" ? "10m" : "1m",
+  ].filter((value, index, list) => value && list.indexOf(value) === index);
+
+  for (const resolution of resolutions) {
+    const cacheKey = `${cityKey}:${resolution}`;
+    const memoryEntry = _hourlyCache.get(cacheKey);
+    if (memoryEntry?.data) return memoryEntry.data;
+    const sessionEntry = readSessionCache(cacheKey, { allowStale: true });
+    if (sessionEntry?.data) {
+      _hourlyCache.set(cacheKey, sessionEntry);
+      return sessionEntry.data;
+    }
+  }
+  return null;
+}
+
 // ── Main component ─────────────────────────────────────────────────────
 
 export function LiveTemperatureThresholdChart({
@@ -575,6 +600,7 @@ export function LiveTemperatureThresholdChart({
     createChartFreshnessState(),
   );
   const hasLoadedHourlyDetailRef = useRef(false);
+  const hourlyCityRef = useRef<string>("");
   const chartVisibilityRef = useRef<HTMLDivElement | null>(null);
   const lastPatchAtRef = useRef<number>(Date.now());
   const lastAppliedPatchRevisionRef = useRef<number>(0);
@@ -624,12 +650,23 @@ export function LiveTemperatureThresholdChart({
 
   useEffect(() => {
     const now = Date.now();
+    const previousCity = hourlyCityRef.current;
+    hourlyCityRef.current = city;
+    const nextTargetResolution = prefersHighFrequencyRunwayResolution(row, null) ? "1m" : "10m";
+    const cachedHourly = readCachedHourlyForInitialRow(city, nextTargetResolution);
     setUserToggledKeys({});
     setZoomRange(null);
     setViewMode("full");
     setShowRunwayDetails(true);
-    setTargetResolution(prefersHighFrequencyRunwayResolution(row, null) ? "1m" : "10m");
-    setHourly(seedHourlyForecastFromRow(row));
+    setTargetResolution(nextTargetResolution);
+    setHourly((prev) =>
+      selectInitialHourlyForRowChange({
+        cachedHourly,
+        previousCity,
+        previousHourly: prev,
+        row,
+      }),
+    );
     setLiveTemp(null);
     setIsHourlyLoading(Boolean(city) && detailLoadDelayMs === 0);
     setDetailError(null);

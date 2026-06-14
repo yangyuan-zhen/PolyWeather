@@ -1406,6 +1406,32 @@ function mergeRowObservationIntoHourly(
   return mergeHourlyWithLiveObservations(prev, seeded, row);
 }
 
+function selectInitialHourlyForRowChange({
+  cachedHourly,
+  previousCity,
+  previousHourly,
+  row,
+}: {
+  cachedHourly?: HourlyForecast;
+  previousCity?: string | null;
+  previousHourly?: HourlyForecast;
+  row: ScanOpportunityRow | null;
+}): HourlyForecast {
+  const seeded = seedHourlyForecastFromRow(row);
+  const nextCity = normalizeCityKey(row?.city);
+  if (!nextCity) return seeded;
+
+  if (cachedHourly) {
+    return mergeHourlyWithLiveObservations(cachedHourly, seeded, row);
+  }
+
+  if (previousHourly && normalizeCityKey(previousCity) === nextCity) {
+    return mergeHourlyWithLiveObservations(previousHourly, seeded, row);
+  }
+
+  return seeded;
+}
+
 type HourlyForecastFetchOptions = {
   bypassLocalCache?: boolean;
   ignoreCache?: boolean;
@@ -2980,6 +3006,7 @@ export {
   readSessionCache,
   selectCompactSecondaryTemp,
   selectDisplayRunwayTemp,
+  selectInitialHourlyForRowChange,
   seedHourlyForecastFromRow,
   seriesStats,
   shouldPollLiveChart,

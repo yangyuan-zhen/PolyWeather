@@ -6,6 +6,7 @@ import {
   mergeHourlyWithLiveObservations,
   mergePatchIntoHourly,
   mergeRowObservationIntoHourly,
+  selectInitialHourlyForRowChange,
   seedHourlyForecastFromRow,
 } from "@/components/dashboard/scan-terminal/temperature-chart-logic";
 
@@ -473,5 +474,108 @@ export function runTests() {
   assert(
     chengduMerged?.airportCurrent?.temp === 28,
     "stale previous-day scan rows must not replace current-date detail airport conditions",
+  );
+
+  const shenzhenRow = {
+    city: "shenzhen",
+    local_date: "2026-06-10",
+    local_time: "12:03",
+    current_temp: 31.2,
+    current_max_so_far: 31.2,
+    temp_symbol: "°C",
+    tz_offset_seconds: 8 * 3600,
+  } as any;
+  const shenzhenFullDetail = {
+    ...seedHourlyForecastFromRow(shenzhenRow),
+    localDate: "2026-06-10",
+    localTime: "12:00",
+    times: ["10:00", "11:00", "12:00"],
+    temps: [28, 30, 31],
+    modelTimes: ["10:00", "11:00", "12:00"],
+    modelCurves: {
+      ECMWF: [28.2, 30.1, 31.1],
+      GFS: [27.9, 29.8, 30.9],
+    },
+    debPrediction: 33,
+    debHourlyPath: {
+      source: "deb_hourly_consensus",
+      times: ["10:00", "11:00", "12:00"],
+      temps: [29, 31, 33],
+    },
+    multiModelDaily: {
+      "2026-06-10": {
+        deb: { prediction: 33 },
+        models: { ECMWF: 33.2, GFS: 32.7 },
+      },
+    },
+  } as any;
+  const shenzhenUpdatedRow = {
+    ...shenzhenRow,
+    local_time: "12:07",
+    current_temp: 31.6,
+    current_max_so_far: 31.6,
+  } as any;
+  const shenzhenInitialAfterReturn = selectInitialHourlyForRowChange({
+    previousCity: "shenzhen",
+    previousHourly: shenzhenFullDetail,
+    row: shenzhenUpdatedRow,
+  });
+  assert(
+    shenzhenInitialAfterReturn?.modelCurves?.ECMWF?.length === 3,
+    "returning to terminal must keep existing multi-model curves while the detail refresh is pending",
+  );
+  assert(
+    shenzhenInitialAfterReturn?.debHourlyPath?.temps?.includes(33),
+    "returning to terminal must keep the existing DEB hourly path while the detail refresh is pending",
+  );
+  assert(
+    shenzhenInitialAfterReturn?.airportCurrent?.temp === 31.6,
+    "returning to terminal should still merge the newest scan-row observation into the preserved detail",
+  );
+
+  const hongKongCachedDetail = {
+    ...seedHourlyForecastFromRow({ ...shenzhenRow, city: "hongkong" } as any),
+    localDate: "2026-06-10",
+    times: ["10:00", "11:00"],
+    temps: [29.5, 30.2],
+    modelCurves: { ECMWF: [29.8, 30.5] },
+    debPrediction: 31,
+    debHourlyPath: {
+      source: "deb_hourly_consensus",
+      times: ["10:00", "11:00"],
+      temps: [30, 31],
+    },
+  } as any;
+  const hongKongRow = {
+    ...shenzhenRow,
+    city: "hongkong",
+    local_time: "12:10",
+    current_temp: 30.7,
+  } as any;
+  const hongKongInitialAfterSelect = selectInitialHourlyForRowChange({
+    cachedHourly: hongKongCachedDetail,
+    previousCity: "shenzhen",
+    previousHourly: shenzhenFullDetail,
+    row: hongKongRow,
+  });
+  assert(
+    hongKongInitialAfterSelect?.modelCurves?.ECMWF?.length === 2 &&
+      hongKongInitialAfterSelect?.debHourlyPath?.temps?.includes(31),
+    "selecting a city with cached detail must render cached multi-model and DEB immediately instead of falling back to an empty row seed",
+  );
+  assert(
+    !hongKongInitialAfterSelect?.modelCurves?.GFS,
+    "selecting a different city must not leak the previous city's model curves",
+  );
+
+  const uncachedNewCityInitial = selectInitialHourlyForRowChange({
+    previousCity: "shenzhen",
+    previousHourly: shenzhenFullDetail,
+    row: { ...shenzhenRow, city: "tokyo" } as any,
+  });
+  assert(
+    !uncachedNewCityInitial?.modelCurves?.ECMWF &&
+      !uncachedNewCityInitial?.debHourlyPath,
+    "selecting an uncached different city must not show another city's model and DEB curves",
   );
 }
