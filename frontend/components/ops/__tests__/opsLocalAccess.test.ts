@@ -44,6 +44,19 @@ export function runTests() {
   );
 
   assert(
+    opsAdminSource.includes("verifyOpsAdminWithBackend") &&
+      opsAdminSource.includes("POLYWEATHER_API_BASE_URL") &&
+      opsAdminSource.includes("/api/ops/online-users") &&
+      opsAdminSource.includes("Authorization") &&
+      opsAdminSource.includes("BACKEND_ENTITLEMENT_HEADER") &&
+      opsAdminSource.includes("await supabase.auth.getSession()") &&
+      opsAdminSource.includes("if (allowedEmails.includes(email))") &&
+      opsAdminSource.includes("if (await verifyOpsAdminWithBackend(accessToken))") &&
+      !opsAdminSource.includes("if (!allowedEmails.length || !hasSupabaseServerEnv())"),
+    "ops admin page gate must fall back to the backend ops admin check when the frontend admin email env is missing or stale",
+  );
+
+  assert(
     opsProxyAuthSource.includes("isLocalOpsAccessHost") &&
       opsProxyAuthSource.includes("x-forwarded-host") &&
       opsProxyAuthSource.includes("request.nextUrl.hostname") &&
