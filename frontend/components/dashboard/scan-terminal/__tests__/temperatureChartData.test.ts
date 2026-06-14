@@ -364,6 +364,48 @@ export function runTests() {
     preservedPatchRunway?.values.some((value) => value === 28.8),
     "stale full-detail responses must not overwrite a newer live SSE observation point",
   );
+  const olderAutoRefreshDetail = {
+    ...seededGuangzhou,
+    localDate: "2026-06-10",
+    localTime: "12:45",
+    times: ["12:00", "12:45"],
+    temps: [27.8, 28.4],
+    probabilities: { engine: "stale", distribution: [{ value: 28, probability: 0.2 }] },
+    runwayPlateHistory: {
+      "02L/20R": [{ timestamp: "12:45", temp_c: 28.4, value: 28.4 }],
+    },
+    airportCurrent: { temp: 28.4, obs_time: "12:45", max_so_far: 28.4 },
+    airportPrimary: { temp: 28.4, obs_time: "12:45", max_so_far: 28.4 },
+    airportPrimaryTodayObs: [["12:45", 28.4]],
+  } as any;
+  const newerVisibleDetail = {
+    ...seededGuangzhou,
+    localDate: "2026-06-10",
+    localTime: "12:55",
+    times: ["12:00", "12:55"],
+    temps: [27.8, 29.2],
+    probabilities: { engine: "fresh", distribution: [{ value: 29, probability: 0.7 }] },
+    runwayPlateHistory: {
+      "02L/20R": [{ timestamp: "12:55", temp_c: 29.2, value: 29.2 }],
+    },
+    airportCurrent: { temp: 29.2, obs_time: "12:55", max_so_far: 29.2 },
+    airportPrimary: { temp: 29.2, obs_time: "12:55", max_so_far: 29.2 },
+    airportPrimaryTodayObs: [["12:55", 29.2]],
+  } as any;
+  const mergedAfterOlderAutoRefresh = mergeHourlyWithLiveObservations(
+    olderAutoRefreshDetail,
+    newerVisibleDetail,
+    guangzhouRow,
+  );
+  assert(
+    mergedAfterOlderAutoRefresh?.times.includes("12:55") &&
+      !mergedAfterOlderAutoRefresh?.times.includes("12:45"),
+    "older automatic detail refreshes must not roll a newer visible chart curve back to stale timestamps",
+  );
+  assert(
+    mergedAfterOlderAutoRefresh?.probabilities?.engine === "fresh",
+    "older automatic detail refreshes must preserve the newer visible chart probability payload",
+  );
 
   const chengduDetail = {
     forecastTodayHigh: null,

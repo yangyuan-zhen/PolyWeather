@@ -1126,6 +1126,91 @@ function mergeRunwayPlateHistory(
   return Object.keys(result).length ? result : undefined;
 }
 
+function hasFullHourlyDetailPayload(hourly: HourlyForecast) {
+  if (!hourly) return false;
+  const probabilityBuckets =
+    hourly.probabilities?.distribution_all ||
+    hourly.probabilities?.distribution ||
+    [];
+  return Boolean(
+    (hourly.times || []).length > 0 ||
+      (hourly.temps || []).length > 0 ||
+      (hourly.debHourlyPath?.times || []).length > 0 ||
+      Object.keys(hourly.modelCurves || {}).length > 0 ||
+      (hourly.forecastDaily || []).length > 0 ||
+      Object.keys(hourly.multiModelDaily || {}).length > 0 ||
+      probabilityBuckets.length > 0,
+  );
+}
+
+function latestRawObservationRank(
+  points: RawObsPoint[] | null | undefined,
+  row: ScanOpportunityRow | null,
+  localDateStr: string | null | undefined,
+) {
+  let latest: number | null = null;
+  (points || []).forEach((point) => {
+    const normalized = normalizeRawObsPoint(point);
+    const rank = observationTimeRank(normalized?.time, row, localDateStr);
+    if (rank !== null) latest = latest === null ? rank : Math.max(latest, rank);
+  });
+  return latest;
+}
+
+function latestRunwayHistoryRank(
+  history: Record<string, Array<Record<string, unknown>>> | undefined,
+  row: ScanOpportunityRow | null,
+  localDateStr: string | null | undefined,
+) {
+  let latest: number | null = null;
+  Object.values(history || {}).forEach((points) => {
+    if (!Array.isArray(points)) return;
+    points.forEach((point) => {
+      const rawTime = point.timestamp ??
+        point.time ??
+        point.observed_at ??
+        null;
+      const rank = observationTimeRank(
+        typeof rawTime === "string" || typeof rawTime === "number" ? rawTime : null,
+        row,
+        localDateStr,
+      );
+      if (rank !== null) latest = latest === null ? rank : Math.max(latest, rank);
+    });
+  });
+  return latest;
+}
+
+function latestHourlyObservationRank(
+  hourly: HourlyForecast,
+  row: ScanOpportunityRow | null,
+) {
+  if (!hourly) return null;
+  const localDateStr = hourly.localDate || row?.local_date || null;
+  const ranks = [
+    observationTimeRank(hourly.localTime, row, localDateStr),
+    observationTimeRank(conditionObservationTime(hourly.airportCurrent), row, localDateStr),
+    observationTimeRank(conditionObservationTime(hourly.airportPrimary), row, localDateStr),
+    latestRawObservationRank(hourly.airportPrimaryTodayObs, row, localDateStr),
+    latestRawObservationRank(hourly.metarTodayObs, row, localDateStr),
+    latestRawObservationRank(hourly.settlementTodayObs, row, localDateStr),
+    latestRunwayHistoryRank(hourly.runwayPlateHistory, row, localDateStr),
+  ].filter((rank): rank is number => rank !== null);
+  return ranks.length ? Math.max(...ranks) : null;
+}
+
+function shouldKeepLiveHourlyDetailPayload(
+  base: HourlyForecast,
+  live: HourlyForecast,
+  row: ScanOpportunityRow | null,
+) {
+  if (!base || !live) return false;
+  if (!hasFullHourlyDetailPayload(base) || !hasFullHourlyDetailPayload(live)) return false;
+  const baseRank = latestHourlyObservationRank(base, row);
+  const liveRank = latestHourlyObservationRank(live, row);
+  return baseRank !== null && liveRank !== null && liveRank > baseRank;
+}
+
 function hourlyLocalDatesConflict(
   base: HourlyForecast,
   live: HourlyForecast,
@@ -1286,16 +1371,17 @@ function mergeHourlyWithLiveObservations(
   if (!base) return live;
   if (!live) return base;
   if (hourlyLocalDatesConflict(base, live, row)) return base;
-  const localDate = base.localDate || live.localDate || row?.local_date || null;
+  const detailSource = shouldKeepLiveHourlyDetailPayload(base, live, row) ? live : base;
+  const localDate = detailSource.localDate || base.localDate || live.localDate || row?.local_date || null;
   const runwayPlateHistory = mergeRunwayPlateHistory(base.runwayPlateHistory, live.runwayPlateHistory);
   const amos = runwayPlateHistory
     ? {
-        ...(base.amos || {}),
+        ...(detailSource.amos || {}),
         runway_plate_history: runwayPlateHistory,
       } as AmosData
-    : base.amos;
+    : detailSource.amos;
   return {
-    ...base,
+    ...detailSource,
     localDate,
     localTime: live.localTime || base.localTime,
     runwayPlateHistory,
