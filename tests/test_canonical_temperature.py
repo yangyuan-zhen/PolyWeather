@@ -4,30 +4,6 @@ import asyncio
 from types import SimpleNamespace
 
 
-def _sample_panel_payload() -> dict:
-    return {
-        "name": "shanghai",
-        "temp_symbol": "°C",
-        "updated_at": "2026-06-14T01:02:03+00:00",
-        "current": {
-            "temp": 31.2,
-            "source_code": "amsc_awos",
-            "settlement_source": "amsc_awos",
-            "settlement_source_label": "AMSC AWOS runway-point air temperature",
-            "station_code": "ZSPD",
-            "station_name": "Shanghai Pudong",
-            "observed_at": "2026-06-14T01:01:00+00:00",
-            "obs_time": "09:01",
-            "freshness": {
-                "freshness_status": "fresh",
-                "age_sec": 63,
-                "observed_at": "2026-06-14T01:01:00+00:00",
-                "observed_at_local": "09:01",
-            },
-        },
-    }
-
-
 def test_canonical_temperature_roles_understand_adapter_source_names():
     from web.services.canonical_temperature import build_canonical_temperature
 
@@ -80,33 +56,80 @@ def test_db_manager_stores_canonical_temperature_latest(tmp_path):
     assert row["payload"]["observed_at"] == "2026-06-14T01:01:00+00:00"
 
 
-def test_refresh_city_panel_cache_persists_canonical_temperature(monkeypatch):
+def test_refresh_city_panel_cache_reads_canonical_without_sync_fetch(monkeypatch):
     import web.services.city_runtime as city_runtime
 
-    writes = {}
+    enqueued = []
 
     class FakeDB:
-        def set_city_cache(self, kind, city, payload, **_kwargs):
-            writes["city_cache"] = (kind, city, payload)
+        def get_city_cache(self, kind, city):
+            assert kind == "panel"
+            assert city == "shanghai"
+            return None
 
-        def set_canonical_temperature(self, city, payload):
-            writes["canonical"] = (city, payload)
+        def get_canonical_temperature(self, city):
+            assert city == "shanghai"
+            return {
+                "payload": {
+                    "city": "shanghai",
+                    "value": 31.2,
+                    "temp_symbol": "°C",
+                    "source": "amsc_awos",
+                    "source_label": "AMSC AWOS runway-point air temperature",
+                    "source_role": "settlement_proxy",
+                    "observed_at": "2026-06-14T01:01:00+00:00",
+                    "observed_at_local": "09:01",
+                    "freshness_sec": 63,
+                    "freshness_status": "fresh",
+                    "fetched_at": "2026-06-14T01:02:03+00:00",
+                    "confidence": 0.92,
+                    "explanation": "AMSC AWOS runway-point air temperature updated 63s ago.",
+                }
+            }
+
+        def enqueue_observation_refresh_request(self, **kwargs):
+            enqueued.append(kwargs)
+            return True
+
+    def fail_analyze(*_args, **_kwargs):
+        raise AssertionError("business cache refresh must not call _analyze")
 
     monkeypatch.setattr(city_runtime, "_CACHE_DB", FakeDB())
-    monkeypatch.setattr(
-        city_runtime,
-        "_analyze",
-        lambda city, force_refresh=False, detail_mode="panel": _sample_panel_payload(),
-    )
+    if hasattr(city_runtime, "_analyze"):
+        monkeypatch.setattr(city_runtime, "_analyze", fail_analyze)
 
-    payload = city_runtime._refresh_city_panel_cache("shanghai", allow_external_fetch=True)
+    payload = city_runtime._refresh_city_panel_cache("shanghai")
 
     assert payload["canonical_temperature"]["value"] == 31.2
     assert payload["canonical_temperature"]["source"] == "amsc_awos"
     assert payload["canonical_temperature"]["freshness_sec"] == 63
     assert payload["canonical_temperature"]["source_role"] == "settlement_proxy"
-    assert writes["canonical"][0] == "shanghai"
-    assert writes["canonical"][1]["observed_at"] == "2026-06-14T01:01:00+00:00"
+    assert enqueued == [
+        {
+            "city": "shanghai",
+            "kind": "panel",
+            "priority": "high",
+            "reason": "canonical_fallback",
+        }
+    ]
+
+
+def test_city_runtime_refresh_helpers_have_no_sync_fetch_escape_hatch():
+    import inspect
+
+    import web.services.city_runtime as city_runtime
+
+    for name in (
+        "_refresh_city_summary_cache",
+        "_refresh_city_panel_cache",
+        "_refresh_city_nearby_cache",
+        "_refresh_city_market_cache",
+        "_refresh_city_full_cache",
+    ):
+        signature = inspect.signature(getattr(city_runtime, name))
+        assert "allow_external_fetch" not in signature.parameters
+    assert not hasattr(city_runtime, "_analyze")
+    assert not hasattr(city_runtime, "_analyze_summary")
 
 
 def test_refresh_city_panel_cache_defaults_to_queue_without_sync_analyze(monkeypatch):
@@ -128,11 +151,7 @@ def test_refresh_city_panel_cache_defaults_to_queue_without_sync_analyze(monkeyp
             enqueued.append(kwargs)
             return True
 
-    def fail_analyze(*_args, **_kwargs):
-        raise AssertionError("business cache refresh must not call _analyze by default")
-
     monkeypatch.setattr(city_runtime, "_CACHE_DB", FakeDB())
-    monkeypatch.setattr(city_runtime, "_analyze", fail_analyze)
 
     payload = city_runtime._refresh_city_panel_cache("shanghai")
 

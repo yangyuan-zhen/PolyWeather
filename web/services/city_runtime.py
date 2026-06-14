@@ -23,17 +23,12 @@ from src.data_collection.city_registry import ALIASES
 from src.data_collection.city_time import get_city_utc_offset_seconds  # noqa: F401 - compatibility export for transitional routers
 from src.utils.refresh_policy import OBSERVATION_REFRESH_SEC, SCAN_ROWS_REFRESH_SEC
 from web.analysis_service import (
-    _analyze,
-    _analyze_summary,
     _build_city_chart_detail_payload,  # noqa: F401 - compatibility export for chart detail batches
     _build_city_detail_payload,  # noqa: F401 - compatibility export for tests and transitional routers
     _build_city_market_scan_payload,
-    _build_city_summary_payload,
 )
 from web.services.canonical_temperature import (
-    attach_canonical_temperature,
     build_city_weather_from_canonical,
-    store_canonical_temperature_from_payload,
 )
 from web.scan_terminal_service import build_scan_terminal_payload  # noqa: F401 - compatibility export for tests and transitional routers
 from web.core import (
@@ -277,17 +272,6 @@ def _refresh_market_scan_payload_from_cached_analysis(
     return payload.get("market_scan_payload") or {}
 
 
-def _attach_and_store_canonical_temperature(city: str, payload: dict) -> dict:
-    if not isinstance(payload, dict):
-        return payload
-    attach_canonical_temperature(payload, city=city)
-    try:
-        store_canonical_temperature_from_payload(_CACHE_DB, city, payload)
-    except Exception as exc:
-        logger.debug("canonical temperature store skipped city={}: {}", city, exc)
-    return payload
-
-
 def _enqueue_city_observation_refresh(city: str, kind: str, *, reason: str) -> bool:
     try:
         enqueue = getattr(_CACHE_DB, "enqueue_observation_refresh_request", None)
@@ -428,116 +412,24 @@ def _queued_city_cache_payload(city: str, kind: str, *, force_refresh: bool = Fa
     return _initializing_city_payload(normalized, detail_depth=kind)
 
 
-def _refresh_city_summary_cache(
-    city: str,
-    force_refresh: bool = False,
-    *,
-    allow_external_fetch: bool = False,
-) -> dict:
-    if not allow_external_fetch:
-        return _queued_city_cache_payload(city, "summary", force_refresh=force_refresh)
-
-    data = _analyze_summary(city, force_refresh=force_refresh)
-    _attach_and_store_canonical_temperature(city, data)
-    payload = _build_city_summary_payload(data)
-    if data.get("canonical_temperature"):
-        payload["canonical_temperature"] = data["canonical_temperature"]
-    _CACHE_DB.set_city_cache(
-        "summary",
-        city,
-        payload,
-        version="v1",
-        source_fingerprint=f"{city}:summary",
-    )
-    return payload
+def _refresh_city_summary_cache(city: str, force_refresh: bool = False) -> dict:
+    return _queued_city_cache_payload(city, "summary", force_refresh=force_refresh)
 
 
-def _refresh_city_panel_cache(
-    city: str,
-    force_refresh: bool = False,
-    *,
-    allow_external_fetch: bool = False,
-) -> dict:
-    if not allow_external_fetch:
-        return _queued_city_cache_payload(city, "panel", force_refresh=force_refresh)
-
-    payload = _analyze(city, force_refresh=force_refresh, detail_mode="panel")
-    _attach_and_store_canonical_temperature(city, payload)
-    _CACHE_DB.set_city_cache(
-        "panel",
-        city,
-        payload,
-        version="v1",
-        source_fingerprint=f"{city}:panel",
-    )
-    return payload
+def _refresh_city_panel_cache(city: str, force_refresh: bool = False) -> dict:
+    return _queued_city_cache_payload(city, "panel", force_refresh=force_refresh)
 
 
-def _refresh_city_nearby_cache(
-    city: str,
-    force_refresh: bool = False,
-    *,
-    allow_external_fetch: bool = False,
-) -> dict:
-    if not allow_external_fetch:
-        return _queued_city_cache_payload(city, "nearby", force_refresh=force_refresh)
-
-    payload = _analyze(city, force_refresh=force_refresh, detail_mode="nearby")
-    _attach_and_store_canonical_temperature(city, payload)
-    _CACHE_DB.set_city_cache(
-        "nearby",
-        city,
-        payload,
-        version="v1",
-        source_fingerprint=f"{city}:nearby",
-    )
-    return payload
+def _refresh_city_nearby_cache(city: str, force_refresh: bool = False) -> dict:
+    return _queued_city_cache_payload(city, "nearby", force_refresh=force_refresh)
 
 
-def _refresh_city_market_cache(
-    city: str,
-    force_refresh: bool = False,
-    *,
-    allow_external_fetch: bool = False,
-) -> dict:
-    if not allow_external_fetch:
-        return _queued_city_cache_payload(city, "market", force_refresh=force_refresh)
-
-    payload = _analyze(city, force_refresh=force_refresh, detail_mode="market")
-    _attach_and_store_canonical_temperature(city, payload)
-    now_ts = time.time()
-    payload["market_analysis_cached_at"] = datetime.now().isoformat()
-    payload["market_analysis_cached_at_ts"] = now_ts
-    _attach_market_scan_payload(payload)
-    _CACHE_DB.set_city_cache(
-        "market",
-        city,
-        payload,
-        version="v1",
-        source_fingerprint=f"{city}:market",
-    )
-    return payload
+def _refresh_city_market_cache(city: str, force_refresh: bool = False) -> dict:
+    return _queued_city_cache_payload(city, "market", force_refresh=force_refresh)
 
 
-def _refresh_city_full_cache(
-    city: str,
-    force_refresh: bool = False,
-    *,
-    allow_external_fetch: bool = False,
-) -> dict:
-    if not allow_external_fetch:
-        return _queued_city_cache_payload(city, "full", force_refresh=force_refresh)
-
-    payload = _analyze(city, force_refresh=force_refresh, detail_mode="full")
-    _attach_and_store_canonical_temperature(city, payload)
-    _CACHE_DB.set_city_cache(
-        "full",
-        city,
-        payload,
-        version="v1",
-        source_fingerprint=f"{city}:full",
-    )
-    return payload
+def _refresh_city_full_cache(city: str, force_refresh: bool = False) -> dict:
+    return _queued_city_cache_payload(city, "full", force_refresh=force_refresh)
 
 
 def _overlay_wunderground_current(payload: dict, wunderground: dict) -> dict:
