@@ -20,6 +20,10 @@ from src.database.runtime_state import ObservationCollectorStatusRepository
 from web.services.analysis_utils import parse_utc_datetime
 from web.services.canonical_temperature import build_canonical_temperature
 from web.services.observation_freshness import build_observation_freshness
+from web.services.observation_source_adapters import (
+    ObservationRecord,
+    collect_observation_source,
+)
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -249,34 +253,28 @@ class ObservationCollector:
         if not normalized_source or not normalized_city:
             return False
         use_fahrenheit = bool(self.weather._uses_fahrenheit(normalized_city))
-        results: dict[str, Any] = {}
-
-        if normalized_source == "amsc_awos":
-            self.weather._attach_china_amsc_awos_data(results, normalized_city, use_fahrenheit)
-        elif normalized_source == "amos":
-            self.weather._attach_korean_amos_data(results, normalized_city, use_fahrenheit)
-        elif normalized_source == "madis_hfmetar":
-            self.weather._attach_madis_hfmetar_data(results, normalized_city, use_fahrenheit)
-        elif normalized_source == "hko_obs":
-            self.weather._attach_hko_obs_official_nearby(results, normalized_city, use_fahrenheit)
-        elif normalized_source == "cowin_obs":
-            self.weather._attach_cowin_official_nearby(results, normalized_city, use_fahrenheit)
-        else:
+        result = collect_observation_source(
+            self.weather,
+            normalized_source,
+            normalized_city,
+            use_fahrenheit=use_fahrenheit,
+        )
+        if result.status == "unsupported":
             logger.debug("observation collector skipped unknown source={}", normalized_source)
             return False
-        if not results:
+        if result.status != "ok":
             self._store_raw_observation_status(
-                source=normalized_source,
-                city=normalized_city,
-                status="no_results",
-                error="source returned no observation rows",
+                source=result.source or normalized_source,
+                city=result.city or normalized_city,
+                status=result.status,
+                error=result.error,
             )
             return False
-        wrote = self._store_raw_observations(normalized_source, normalized_city, results)
+        wrote = self._store_raw_observations(result.records)
         if wrote <= 0:
             self._store_raw_observation_status(
-                source=normalized_source,
-                city=normalized_city,
+                source=result.source or normalized_source,
+                city=result.city or normalized_city,
                 status="parse_error",
                 error="source response had no usable temperature",
             )
@@ -292,120 +290,54 @@ class ObservationCollector:
             return "auth_error"
         return "error"
 
-    @staticmethod
-    def _observation_value(row: dict[str, Any]) -> Optional[float]:
-        for key in ("temp_c", "temperature_c", "temp", "value"):
-            try:
-                value = row.get(key)
-                if value is not None and value != "":
-                    return float(value)
-            except (TypeError, ValueError):
-                continue
-        current = row.get("current")
-        if isinstance(current, dict):
-            try:
-                value = current.get("temp")
-                if value is not None and value != "":
-                    return float(value)
-            except (TypeError, ValueError):
-                return None
-        return None
-
-    @staticmethod
-    def _observation_time(row: dict[str, Any]) -> str:
-        for key in ("observation_time", "observed_at", "obs_time", "time_utc", "time"):
-            value = str(row.get(key) or "").strip()
-            if value:
-                return value
-        return ""
-
-    @staticmethod
-    def _station_code(row: dict[str, Any]) -> str:
-        for key in ("station_code", "icao", "istNo", "station_id", "code"):
-            value = str(row.get(key) or "").strip()
-            if value:
-                return value
-        return ""
-
-    @staticmethod
-    def _station_name(row: dict[str, Any]) -> str:
-        for key in ("station_name", "station_label", "name", "label"):
-            value = str(row.get(key) or "").strip()
-            if value:
-                return value
-        return ""
-
-    @staticmethod
-    def _source_label(row: dict[str, Any], source: str) -> str:
-        for key in ("source_label", "label", "source_name"):
-            value = str(row.get(key) or "").strip()
-            if value:
-                return value
-        return str(source or "").replace("_", " ").upper()
-
     def _store_canonical_temperature_from_observation(
         self,
         *,
-        city: str,
-        source: str,
-        row: dict[str, Any],
-        value: float,
-        observed_at: str,
+        record: ObservationRecord,
         fetched_at: str,
     ) -> None:
         setter = getattr(self.observation_store, "set_canonical_temperature", None)
         if not callable(setter):
             return
-        value_unit = str(row.get("unit") or row.get("temp_unit") or "c").strip().lower()
-        source_label = self._source_label(row, source)
         freshness = build_observation_freshness(
-            source_code=source,
-            source_label=source_label,
-            observed_at=observed_at or None,
-            observed_at_local=row.get("observation_time_local"),
+            source_code=record.source,
+            source_label=record.source_label,
+            observed_at=record.observed_at or None,
+            observed_at_local=record.observed_at_local or None,
             ingested_at=fetched_at,
             now_utc=parse_utc_datetime(fetched_at),
         )
         payload = {
-            "name": city,
-            "temp_symbol": "°F" if value_unit.startswith("f") else "°C",
+            "name": record.city,
+            "temp_symbol": "°F" if record.value_unit.startswith("f") else "°C",
             "updated_at": fetched_at,
             "current": {
-                "temp": value,
-                "source_code": source,
-                "source_label": source_label,
-                "settlement_source": source,
-                "settlement_source_label": source_label,
-                "station_code": self._station_code(row),
-                "station_name": self._station_name(row),
-                "observed_at": observed_at or None,
-                "observed_at_local": row.get("observation_time_local"),
-                "obs_time": row.get("observation_time_local") or observed_at,
+                "temp": record.value,
+                "source_code": record.source,
+                "source_label": record.source_label,
+                "settlement_source": record.source,
+                "settlement_source_label": record.source_label,
+                "station_code": record.station_code,
+                "station_name": record.station_name,
+                "observed_at": record.observed_at or None,
+                "observed_at_local": record.observed_at_local or None,
+                "obs_time": record.observed_at_local or record.observed_at,
                 "freshness": freshness,
                 "observation_status": "live",
             },
         }
-        canonical = build_canonical_temperature(city, payload, fetched_at=fetched_at)
+        canonical = build_canonical_temperature(record.city, payload, fetched_at=fetched_at)
         if not canonical:
             return
         try:
-            setter(city, canonical)
+            setter(record.city, canonical)
         except Exception as exc:
-            logger.debug("canonical temperature write skipped source={} city={}: {}", source, city, exc)
-
-    def _iter_raw_observation_rows(
-        self,
-        source: str,
-        results: dict[str, Any],
-    ) -> Iterable[dict[str, Any]]:
-        for value in (results or {}).values():
-            if isinstance(value, dict):
-                yield value
-                continue
-            if isinstance(value, list):
-                for item in value:
-                    if isinstance(item, dict):
-                        yield item
+            logger.debug(
+                "canonical temperature write skipped source={} city={}: {}",
+                record.source,
+                record.city,
+                exc,
+            )
 
     def _store_raw_observation_status(
         self,
@@ -441,52 +373,42 @@ class ObservationCollector:
                 exc,
             )
 
-    def _store_raw_observations(self, source: str, city: str, results: dict[str, Any]) -> int:
-        rows = list(self._iter_raw_observation_rows(source, results))
+    def _store_raw_observations(self, records: Sequence[ObservationRecord]) -> int:
         store = self.observation_store
         writer = getattr(store, "append_raw_observation", None)
         if not callable(writer):
-            return sum(1 for row in rows if self._observation_value(row) is not None)
+            return len(records)
         fetched_at = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime())
         wrote = 0
-        for row in rows:
-            value = self._observation_value(row)
-            if value is None:
-                continue
-            payload_source = str(row.get("source") or row.get("source_code") or source).strip().lower()
+        for record in records:
             try:
-                observed_at = self._observation_time(row)
                 writer(
-                    source=payload_source or source,
-                    city=city,
-                    value=value,
-                    observed_at=observed_at,
+                    source=record.source,
+                    city=record.city,
+                    value=record.value,
+                    observed_at=record.observed_at,
                     fetched_at=fetched_at,
-                    station_code=self._station_code(row),
-                    station_name=self._station_name(row),
-                    runway=str(row.get("runway") or "").strip(),
-                    value_unit=str(row.get("unit") or row.get("temp_unit") or "c").strip().lower(),
+                    station_code=record.station_code,
+                    station_name=record.station_name,
+                    runway=record.runway,
+                    value_unit=record.value_unit,
                     status="ok",
-                    payload=dict(row),
+                    payload=dict(record.payload),
                 )
                 self._store_canonical_temperature_from_observation(
-                    city=city,
-                    source=payload_source or source,
-                    row=row,
-                    value=value,
-                    observed_at=observed_at,
+                    record=record,
                     fetched_at=fetched_at,
                 )
                 wrote += 1
             except Exception as exc:
                 logger.debug(
                     "raw observation store write skipped source={} city={}: {}",
-                    source,
-                    city,
+                    record.source,
+                    record.city,
                     exc,
                 )
         if wrote:
-            logger.debug("raw observations stored source={} city={} count={}", source, city, wrote)
+            logger.debug("raw observations stored count={}", wrote)
         return wrote
 
     def _refresh_city_cache(self, city: str) -> None:

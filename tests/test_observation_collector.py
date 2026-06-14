@@ -310,6 +310,73 @@ def test_observation_collector_writes_raw_observation_store(tmp_path):
     assert latest["station_code"] == "ZSQD"
 
 
+def test_observation_collector_consumes_source_adapter_records(monkeypatch, tmp_path):
+    from src.database.db_manager import DBManager
+    import web.observation_collector_service as collector_service
+    from web.observation_collector_service import (
+        ObservationCollector,
+        ObservationSourceProfile,
+    )
+    from web.services.observation_source_adapters import (
+        ObservationRecord,
+        ObservationSourceResult,
+    )
+
+    db = DBManager(str(tmp_path / "polyweather.db"))
+    calls = []
+
+    def fake_collect_observation_source(weather, source, city, *, use_fahrenheit):
+        calls.append((weather.marker, source, city, use_fahrenheit))
+        return ObservationSourceResult(
+            source="amsc_awos",
+            city="qingdao",
+            status="ok",
+            error="",
+            records=(
+                ObservationRecord(
+                    source="amsc_awos",
+                    city="qingdao",
+                    value=24.5,
+                    observed_at="2026-06-14T01:00:00+00:00",
+                    observed_at_local="2026-06-14 09:00",
+                    station_code="ZSQD",
+                    station_name="Qingdao Jiaodong",
+                    runway="17L",
+                    value_unit="c",
+                    source_label="AMSC AWOS",
+                    payload={"temp_c": 24.5},
+                ),
+            ),
+        )
+
+    monkeypatch.setattr(
+        collector_service,
+        "collect_observation_source",
+        fake_collect_observation_source,
+    )
+
+    class FakeWeather:
+        marker = "weather"
+
+        def _uses_fahrenheit(self, city):
+            return False
+
+    collector = ObservationCollector(
+        weather=FakeWeather(),
+        profiles=[ObservationSourceProfile("amsc_awos", ("qingdao",), 180)],
+        observation_store=db,
+        async_cache_refresh=False,
+    )
+
+    assert collector.run_due_once(now_ts=1000.0) == 1
+    assert calls == [("weather", "amsc_awos", "qingdao", False)]
+
+    latest = db.get_latest_raw_observation("amsc_awos", "qingdao", station_code="ZSQD", runway="17L")
+    assert latest is not None
+    assert latest["value"] == 24.5
+    assert latest["payload"]["temp_c"] == 24.5
+
+
 def test_observation_collector_records_no_results_source_health(tmp_path):
     from src.database.db_manager import DBManager
     from web.observation_collector_service import (
@@ -387,6 +454,7 @@ def test_observation_collector_writes_canonical_latest_from_source(tmp_path):
 def test_observation_collector_canonical_uses_source_freshness_profile(tmp_path):
     from src.database.db_manager import DBManager
     from web.observation_collector_service import ObservationCollector
+    from web.services.observation_source_adapters import ObservationRecord
 
     db = DBManager(str(tmp_path / "polyweather.db"))
     collector = ObservationCollector(
@@ -397,17 +465,19 @@ def test_observation_collector_canonical_uses_source_freshness_profile(tmp_path)
     )
 
     collector._store_canonical_temperature_from_observation(
-        city="qingdao",
-        source="amsc_awos",
-        row={
-            "source": "amsc_awos",
-            "source_label": "AMSC AWOS",
-            "temp_c": 24.0,
-            "observation_time": "2026-06-14T01:00:00+00:00",
-            "icao": "ZSQD",
-        },
-        value=24.0,
-        observed_at="2026-06-14T01:00:00+00:00",
+        record=ObservationRecord(
+            source="amsc_awos",
+            city="qingdao",
+            value=24.0,
+            observed_at="2026-06-14T01:00:00+00:00",
+            observed_at_local="",
+            station_code="ZSQD",
+            station_name="",
+            runway="",
+            value_unit="c",
+            source_label="AMSC AWOS",
+            payload={"temp_c": 24.0},
+        ),
         fetched_at="2026-06-14T01:05:00+00:00",
     )
 
