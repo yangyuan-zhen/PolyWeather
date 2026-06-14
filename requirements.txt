@@ -12,3 +12,4 @@ fastapi>=0.115,<1
 uvicorn>=0.34,<1
 websockets>=15,<16
 redis>=5.0,<7
+tzdata>=2026.1,<2027; sys_platform == "win32"
