@@ -2,7 +2,9 @@ from src.data_collection.nws_open_meteo_sources import (
     OPEN_METEO_MULTI_MODEL_ORDER,
     _parse_open_meteo_multi_model_daily,
 )
+from src.data_collection.forecast_source_bundle import ensure_multi_model_hourly_payload
 import src.data_collection.open_meteo_cache as open_meteo_cache_module
+import src.data_collection.weather_sources as weather_sources_module
 from src.data_collection.weather_sources import WeatherDataCollector
 from src.database.runtime_state import (
     OpenMeteoCacheRepository,
@@ -193,6 +195,138 @@ def test_fetch_all_sources_prioritizes_multi_model_before_forecast(monkeypatch, 
 
     assert calls[:2] == ["multi_model", "open_meteo"]
     assert result["multi_model"]["forecasts"]["ECMWF"] == 24.0
+
+
+def test_fetch_all_sources_delegates_non_hf_forecast_bundle(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPEN_METEO_DISK_CACHE_PATH", str(tmp_path / "om-cache.json"))
+    collector = WeatherDataCollector({})
+    calls = []
+
+    monkeypatch.setattr(collector, "_log_temperature_unit", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_evict_city_caches", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_settlement_sources", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_wunderground_historical", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_supports_aviationweather", lambda city: False)
+    monkeypatch.setattr(collector, "_attach_turkish_mgm_data", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_korean_amos_data", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_china_amsc_awos_data", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_madis_hfmetar_data", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_singapore_mss_data", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_israel_ims_data", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_saudi_ncm_data", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_paris_aeroweb_data", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_china_official_nearby", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_japan_official_nearby", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_fmi_official_nearby", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_knmi_official_nearby", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_cowin_official_nearby", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_hko_obs_official_nearby", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_cwa_settlement_nearby", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_global_nearby_cluster", lambda *args, **kwargs: None)
+
+    def fake_forecast_bundle(collector_arg, **kwargs):
+        calls.append({"collector": collector_arg, **kwargs})
+        return {
+            "open-meteo": {
+                "utc_offset": 10800,
+                "daily": {"temperature_2m_max": [24.0]},
+            },
+            "multi_model": {"forecasts": {"ECMWF": 24.5}},
+        }
+
+    monkeypatch.setattr(
+        weather_sources_module,
+        "fetch_open_meteo_forecast_bundle",
+        fake_forecast_bundle,
+    )
+
+    result = collector.fetch_all_sources(
+        "ankara",
+        lat=40.1281,
+        lon=32.9951,
+        force_refresh_observations_only=True,
+        include_ensemble=False,
+        include_nearby=False,
+        include_taf=False,
+        include_mgm=False,
+    )
+
+    assert calls == [
+        {
+            "collector": collector,
+            "city": "ankara",
+            "lat": 40.1281,
+            "lon": 32.9951,
+            "use_fahrenheit": False,
+            "include_multi_model": True,
+            "cache_only": True,
+        }
+    ]
+    assert result["open-meteo"]["utc_offset"] == 10800
+    assert result["multi_model"]["forecasts"]["ECMWF"] == 24.5
+
+
+def test_ensure_multi_model_hourly_payload_fetches_missing_hourly_outside_analysis_layer():
+    calls = []
+
+    class FakeCollector:
+        def fetch_multi_model(self, lat, lon, *, city, use_fahrenheit):
+            calls.append(
+                {
+                    "lat": lat,
+                    "lon": lon,
+                    "city": city,
+                    "use_fahrenheit": use_fahrenheit,
+                }
+            )
+            return {
+                "hourly_times": ["2026-06-14T10:00"],
+                "hourly_forecasts": {"ECMWF": [24.1]},
+                "forecasts": {"ECMWF": 26.0},
+            }
+
+    result = ensure_multi_model_hourly_payload(
+        FakeCollector(),
+        {"forecasts": {"GFS": 25.0}},
+        city="ankara",
+        lat=40.1281,
+        lon=32.9951,
+        use_fahrenheit=False,
+    )
+
+    assert calls == [
+        {
+            "lat": 40.1281,
+            "lon": 32.9951,
+            "city": "ankara",
+            "use_fahrenheit": False,
+        }
+    ]
+    assert result["forecasts"] == {"ECMWF": 26.0}
+    assert result["hourly_times"] == ["2026-06-14T10:00"]
+    assert result["hourly_forecasts"]["ECMWF"] == [24.1]
+
+
+def test_ensure_multi_model_hourly_payload_reuses_existing_hourly():
+    class FakeCollector:
+        def fetch_multi_model(self, *_args, **_kwargs):
+            raise AssertionError("existing hourly payload should not fetch again")
+
+    result = ensure_multi_model_hourly_payload(
+        FakeCollector(),
+        {
+            "forecasts": {"GFS": 25.0},
+            "hourly_times": ["2026-06-14T10:00"],
+            "hourly_forecasts": {"GFS": [24.0]},
+        },
+        city="ankara",
+        lat=40.1281,
+        lon=32.9951,
+        use_fahrenheit=False,
+    )
+
+    assert result["forecasts"]["GFS"] == 25.0
+    assert result["hourly_forecasts"]["GFS"] == [24.0]
 
 
 def test_force_refresh_preserves_open_meteo_model_caches_by_default(monkeypatch, tmp_path):

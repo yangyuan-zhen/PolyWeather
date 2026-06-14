@@ -31,6 +31,7 @@ from src.data_collection.ncm_sources import NcmSourceMixin
 from src.data_collection.aeroweb_sources import AerowebSourceMixin
 from src.data_collection.wunderground_sources import WundergroundHistoricalMixin
 from src.data_collection.city_time import get_city_utc_offset_seconds
+from src.data_collection.forecast_source_bundle import fetch_open_meteo_forecast_bundle
 from src.database.db_manager import DBManager
 
 
@@ -1794,48 +1795,17 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         self._attach_wunderground_historical(results, city_lower, use_fahrenheit)
 
         if lat and lon:
-            # When force_refresh_observations_only is set by an explicit
-            # observation refresh caller, skip the OM fetch entirely if cached
-            # data exists. Stale model data is fine; the caller only needs
-            # fresh METAR / AMOS observations.
-            om_from_cache_only = force_refresh_observations_only
-            if om_from_cache_only:
-                self._maybe_reload_open_meteo_disk_cache()
-                base = f"{round(float(lat), 4)}:{round(float(lon), 4)}"
-                unit = "f" if use_fahrenheit else "c"
-                cache_city = city_lower
-                om_key = f"{base}:14:{unit}"
-                with self._open_meteo_cache_lock:
-                    om_cached = self._open_meteo_cache.get(om_key)
-                if om_cached and isinstance(om_cached.get("data"), dict):
-                    open_meteo = dict(om_cached["data"])
-                    if include_multi_model:
-                        mm_key = f"{base}:{cache_city}:{unit}:{self.multi_model_cache_version}"
-                        with self._multi_model_cache_lock:
-                            mm_cached = self._multi_model_cache.get(mm_key)
-                        if mm_cached and isinstance(mm_cached.get("data"), dict):
-                            results["multi_model"] = dict(mm_cached["data"])
-                else:
-                    open_meteo = None
-            else:
-                # Prioritize the model cluster before the regular Open-Meteo
-                # forecast.  The regular forecast endpoint can set the shared
-                # Open-Meteo 429 cooldown; if that happens first, cities with no
-                # existing multi-model cache (notably Ankara after a deploy) fall
-                # back to a single Open-Meteo/DEB line and the decision card loses
-                # most of its model support.  Fetching the multi-model payload
-                # first gives the richer, longer-lived model cache the first chance
-                # to populate; the regular forecast can still use its stale cache
-                # if Open-Meteo rate-limits the cycle.
-                if include_multi_model:
-                    multi_model_data = self.fetch_multi_model(
-                        lat, lon, city=city, use_fahrenheit=use_fahrenheit
-                    )
-                    if multi_model_data:
-                        results["multi_model"] = multi_model_data
-                open_meteo = self.fetch_from_open_meteo(
-                    lat, lon, use_fahrenheit=use_fahrenheit
-                )
+            forecast_bundle = fetch_open_meteo_forecast_bundle(
+                self,
+                city=city_lower,
+                lat=lat,
+                lon=lon,
+                use_fahrenheit=use_fahrenheit,
+                include_multi_model=include_multi_model,
+                cache_only=force_refresh_observations_only,
+            )
+            results.update(forecast_bundle)
+            open_meteo = forecast_bundle.get("open-meteo")
             if open_meteo:
                 results["open-meteo"] = open_meteo
                 # 获取时区偏移以过滤 METAR

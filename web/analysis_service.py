@@ -35,6 +35,7 @@ from src.analysis.trend_engine import _resolve_peak_hours
 from src.data_collection.country_networks import build_country_network_snapshot
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
 from src.data_collection.city_time import get_city_utc_offset_seconds
+from src.data_collection.forecast_source_bundle import ensure_multi_model_hourly_payload
 from src.database.runtime_state import IntradayPathSnapshotRepository
 from web.services.city_payloads import (
     build_city_chart_detail_payload as _city_chart_payload_detail,
@@ -835,10 +836,14 @@ def _analyze(
         ens_raw = {}
     if not isinstance(mm, dict):
         mm = {}
-    if not mm.get("hourly_times"):
-        mm_hourly = _weather.fetch_multi_model(lat, lon, city=city, use_fahrenheit=is_f)
-        if mm_hourly and mm_hourly.get("hourly_times"):
-            mm = {**mm, **mm_hourly}
+    mm = ensure_multi_model_hourly_payload(
+        _weather,
+        mm,
+        city=city,
+        lat=lat,
+        lon=lon,
+        use_fahrenheit=is_f,
+    )
     raw["multi_model"] = mm
     risk = CITY_RISK_PROFILES.get(city, {})
     network_snapshot = (
