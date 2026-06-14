@@ -88,6 +88,11 @@ def _to_float(value: Any) -> Optional[float]:
         return None
 
 
+def _amsc_payload_has_observation(raw_payload: dict[str, Any]) -> bool:
+    temp = raw_payload.get("temp_c") if raw_payload.get("temp_c") is not None else raw_payload.get("temp")
+    return _to_float(temp) is not None
+
+
 def _latest_amsc_row(db: Any, city: str) -> tuple[Optional[dict[str, Any]], Optional[dict[str, Any]]]:
     getter = getattr(db, "get_latest_raw_observation", None)
     if not callable(getter):
@@ -100,9 +105,26 @@ def _latest_amsc_row(db: Any, city: str) -> tuple[Optional[dict[str, Any]], Opti
     if not isinstance(row, dict):
         return None, None
     raw_payload = row.get("payload")
-    if not isinstance(raw_payload, dict) or not raw_payload:
-        return row, None
-    return row, raw_payload
+    if isinstance(raw_payload, dict) and raw_payload and _amsc_payload_has_observation(raw_payload):
+        return row, raw_payload
+
+    lister = getattr(db, "list_latest_raw_observations_for_city", None)
+    if callable(lister):
+        try:
+            candidates = lister(city, limit=20)
+        except Exception as exc:
+            logger.debug("latest AMSC raw fallback list failed city={}: {}", city, exc)
+            candidates = []
+        for candidate in candidates if isinstance(candidates, list) else []:
+            if not isinstance(candidate, dict):
+                continue
+            if str(candidate.get("source") or "").strip().lower() != "amsc_awos":
+                continue
+            candidate_payload = candidate.get("payload")
+            if isinstance(candidate_payload, dict) and _amsc_payload_has_observation(candidate_payload):
+                return candidate, candidate_payload
+
+    return row, None
 
 
 def _raw_observation_update(

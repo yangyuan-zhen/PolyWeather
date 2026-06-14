@@ -254,6 +254,13 @@ export async function runTests() {
     "visible terminal chart detail fetches should be coalesced into one batch request and prime the shared chart cache",
   );
   assert(
+    chartLogicSource.includes('from "@/lib/backend-api"') &&
+      chartLogicSource.includes("buildBrowserBackendHeaders") &&
+      chartLogicSource.includes('await buildBrowserBackendHeaders({ Accept: "application/json" })') &&
+      chartLogicSource.includes("headers,"),
+    "terminal chart detail batch fetches must attach the browser Supabase bearer so users without Supabase cookies do not get backend 401 and empty charts",
+  );
+  assert(
     chartLogicSource.includes('scope: "chart"') &&
       chartLogicSource.includes("params.toString()"),
     "terminal chart detail batches should request the slim chart scope instead of the full city detail payload",
@@ -267,7 +274,7 @@ export async function runTests() {
       chartLogicSource.includes("missing?: string[]"),
     "frontend city detail batch payload should understand partial responses and missing city markers",
   );
-  const flushCityDetailBatchBlock = chartLogicSource.match(/async function flushCityDetailBatch[\s\S]*?\r?\n}\r?\n\r?\nfunction fetchCityDetailBatchWithTimeout/)?.[0] || "";
+  const flushCityDetailBatchBlock = chartLogicSource.match(/async function flushCityDetailBatch[\s\S]*?\r?\n}\r?\n\r?\n(?:async\s+)?function fetchCityDetailBatchWithTimeout/)?.[0] || "";
   assert(
     flushCityDetailBatchBlock.includes("partialMissingCities") &&
       flushCityDetailBatchBlock.includes("resolveBatchWaiters(waiters, null)") &&

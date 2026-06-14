@@ -419,6 +419,13 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
                 fn=_overlay_cached_runway_history_from_db,
                 args=(city, payload),
             )
+            payload = await _run_optional_city_chart_overlay(
+                city=city,
+                overlay_name="amsc_latest_raw",
+                payload=payload,
+                fn=overlay_latest_amsc_observation,
+                args=(legacy_routes._CACHE_DB, city, payload),
+            )
             return await _run_optional_city_chart_overlay(
                 city=city,
                 overlay_name="wunderground_current",

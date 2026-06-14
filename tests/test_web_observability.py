@@ -1199,6 +1199,62 @@ def test_chart_data_cache_hit_starts_full_stale_refresh(monkeypatch):
     assert refresh_calls == ["paris"]
 
 
+def test_chart_data_cache_hit_overlays_latest_amsc_raw(monkeypatch):
+    import asyncio
+
+    class FakeCache:
+        def get_city_cache(self, kind, city):
+            assert kind == "full"
+            return {
+                "payload": {
+                    "name": city,
+                    "display_name": city.title(),
+                    "temp_symbol": "°C",
+                    "risk": {"icao": "ZUUU"},
+                    "current": {},
+                    "airport_current": {},
+                    "amos": {},
+                    "hourly": {"times": ["13:00"], "temps": [25.0]},
+                },
+            }
+
+        def get_runway_obs_recent(self, icao, minutes=60):
+            return []
+
+        def get_latest_raw_observation(self, source, city):
+            assert (source, city) == ("amsc_awos", "chengdu")
+            return {
+                "source": "amsc_awos",
+                "city": "chengdu",
+                "station_code": "ZUUU",
+                "station_name": "Chengdu Shuangliu",
+                "status": "ok",
+                "observed_at": "2026-06-14T17:00:00+00:00",
+                "fetched_at": "2026-06-14T17:00:30+00:00",
+                "payload": {
+                    "source": "amsc_awos",
+                    "source_label": "AMSC AWOS Chengdu Shuangliu (ZUUU)",
+                    "icao": "ZUUU",
+                    "temp_c": 25.8,
+                    "observation_time": "2026-06-14T17:00:00+00:00",
+                    "observation_time_local": "2026-06-15 01:00:00",
+                },
+            }
+
+    monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "_overlay_latest_wunderground_current",
+        lambda city, payload: payload,
+    )
+
+    payload = asyncio.run(city_api._get_city_chart_data("chengdu", force_refresh=False))
+
+    assert payload["amos"]["temp_c"] == 25.8
+    assert payload["current"]["temp"] == 25.8
+    assert payload["airport_current"]["source_code"] == "amsc_awos"
+
+
 def test_chart_data_returns_cached_payload_when_optional_overlay_times_out(monkeypatch):
     import asyncio
 

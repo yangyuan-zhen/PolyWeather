@@ -12,6 +12,7 @@ import type {
 } from "@/lib/dashboard-types";
 import { buildDebBaselinePath } from "@/lib/temperature-chart-paths";
 import { DASHBOARD_REFRESH_POLICY_MS } from "@/lib/refresh-policy";
+import { buildBrowserBackendHeaders } from "@/lib/backend-api";
 import type { CityPatch } from "@/hooks/use-sse-patches";
 const ROLLING_WINDOW_BEFORE_MS = 12 * 60 * 60 * 1000;
 const ROLLING_WINDOW_AFTER_LIVE_MS = 2 * 60 * 60 * 1000;
@@ -1715,7 +1716,7 @@ function resolveAllBatchWaitersAsNull(
   });
 }
 
-function fetchCityDetailBatchWithTimeout(
+async function fetchCityDetailBatchWithTimeout(
   cities: string[],
   resolution: string,
   forceRefresh: boolean,
@@ -1730,8 +1731,9 @@ function fetchCityDetailBatchWithTimeout(
     resolution,
     scope: "chart",
   });
+  const headers = await buildBrowserBackendHeaders({ Accept: "application/json" });
   return fetch(`/api/cities/detail-batch?${params.toString()}`, {
-    headers: { Accept: "application/json" },
+    headers,
     signal: controller.signal,
   })
     .then(async (res) => {
