@@ -45,6 +45,25 @@ def test_amsc_headers_prefer_runtime_secret_over_env(monkeypatch, tmp_path):
     assert headers["app"] == "AMS"
 
 
+def test_amsc_headers_prefer_rotated_session_id_over_stale_cookie(monkeypatch, tmp_path):
+    monkeypatch.setenv("POLYWEATHER_DB_PATH", str(tmp_path / "polyweather.db"))
+    monkeypatch.setenv("POLYWEATHER_AMSC_COOKIE", "stale-cookie")
+    DBManager().set_runtime_secret(
+        "POLYWEATHER_AMSC_SESSION_ID",
+        "fresh-session-1234",
+        updated_by="ops@example.com",
+    )
+
+    class FakeSource(AmscAwosSourceMixin):
+        timeout = 1.0
+
+    headers = FakeSource()._amsc_headers()
+
+    assert headers["sessionId"] == "fresh-session-1234"
+    assert headers["app"] == "AMS"
+    assert "Cookie" not in headers
+
+
 def test_ops_sensitive_config_update_rotates_session_without_echoing_secret(
     monkeypatch,
     tmp_path,
@@ -143,6 +162,46 @@ def test_ops_amsc_health_uses_configured_session_header(monkeypatch):
     assert captured["url"].endswith("?cccc=ZSPD")
     assert captured["headers"]["sessionId"] == session_id
     assert captured["headers"]["app"] == "AMS"
+
+
+def test_ops_amsc_health_prefers_session_id_over_cookie(monkeypatch):
+    captured = {}
+
+    payload = {
+        "code": 200,
+        "data": {
+            "35R/17L": {
+                "RNO": "35R/17L",
+                "OTIME": "2026-05-30 20:03:00",
+                "TDZ_TEMP": "23.6",
+                "END_TEMP": "23.4",
+            }
+        },
+    }
+
+    class FakeResponse:
+        ok = True
+        status_code = 200
+        content = b"{}"
+
+        def json(self):
+            return payload
+
+    def fake_get(_url, **kwargs):
+        captured["headers"] = kwargs.get("headers") or {}
+        return FakeResponse()
+
+    monkeypatch.setenv("AMSC_AWOS_BASE_URL", "https://example.test/getWindPlate")
+    monkeypatch.setenv("POLYWEATHER_AMSC_SESSION_ID", "fresh-session")
+    monkeypatch.setenv("POLYWEATHER_AMSC_COOKIE", "stale-cookie")
+    monkeypatch.setattr(ops_api._requests, "get", fake_get)
+
+    result = ops_api._check_amsc_awos_health(timeout=1)
+
+    assert result["ok"] is True
+    assert captured["headers"]["sessionId"] == "fresh-session"
+    assert captured["headers"]["app"] == "AMS"
+    assert "Cookie" not in captured["headers"]
 
 
 def test_ops_amsc_health_rejects_empty_success_response(monkeypatch):

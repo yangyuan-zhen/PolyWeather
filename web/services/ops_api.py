@@ -1400,11 +1400,11 @@ def _build_amsc_awos_headers() -> dict[str, str]:
     }
     cookie = get_runtime_secret("POLYWEATHER_AMSC_COOKIE")
     session_id = get_runtime_secret("POLYWEATHER_AMSC_SESSION_ID")
-    if cookie:
-        headers["Cookie"] = cookie
-    elif session_id:
+    if session_id:
         headers["sessionId"] = session_id
         headers["app"] = "AMS"
+    elif cookie:
+        headers["Cookie"] = cookie
     return headers
 
 
