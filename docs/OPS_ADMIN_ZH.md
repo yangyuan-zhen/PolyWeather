@@ -6,7 +6,7 @@
 
 前端入口：
 
-- `https://polyweather-pro.vercel.app/ops`
+- `https://polyweather.top/ops`
 
 ## 2. 权限
 

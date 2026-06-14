@@ -7,7 +7,7 @@ PolyWeather（仓库：`yangyuan-zhen/PolyWeather`）定位为**面向温度类�
 > **2026-05-29 更新**：支付 intent 已支持多链 `chain_id`，Polygon 继续承载 checkout 合约，Ethereum 主网 USDC 作为直转确认通道；终端图表继续使用 HTTP snapshot + SSE Patch + Redis Stream/SQLite replay 架构。
 ## 项目概览
 
-PolyWeather 的目标与范围在 README/README_ZH 中定义得较清楚：为温度结算市场提供气象情报（多源采集→融合→概率→对照市场报价），并提供“官方看板（Vercel 前端）+ VPS 后端 + Telegram Bot”。
+PolyWeather 的目标与范围在 README/README_ZH 中定义得较清楚：为温度结算市场提供气象情报（多源采集→融合→概率→对照市场报价），并提供“官方看板（Docker/VPS 前端）+ VPS 后端 + Telegram Bot”。
 项目主功能可归纳为五层：
 **天气层（数据源/采集）**：聚合 51 个城市的实测与预报；支持 AviationWeather METAR/TAF、韩国 AMOS 跑道级观测（首尔/釜山）、中国 AMSC AWOS 跑道端点气温、香港 CoWIN 6087 / HKO、土耳其 MGM、Open-Meteo 多模型与集合预报、美国 MADIS HFMETAR 等。机场类市场仍以 METAR / 机场主站或明确官方结算源为锚点，Wunderground 不描述为物理观测站。
 **分析层（DEB/趋势/概率/结算口径）**：
@@ -28,7 +28,7 @@ DEB（Dynamic Error Balancing）基于过去 N 天模型误差（MAE）倒数加
 从 README、Docker/Compose、入口脚本与核心模块引用关系，可以抽象出如下模块地图（按“运行时组件”与“Python 域模块”两层描述）：
 | 层级 | 目录/文件 | 角色定位 | 关键说明 |
 | ------------- | ------------------------------------------------------------------------ | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 运行时组件 | `frontend/` | Next.js 前端（Vercel） | 前端重构报告提到 App Router、Route Handlers（BFF）、缓存策略、支付与账户中心等；Scan Terminal 已新增城市决策卡、结构化实况层、页面内存/localStorage 双层缓存、structured detail 小并发队列与完整市场桶映射。 |
+| 运行时组件 | `frontend/` | Next.js 前端（Docker / VPS） | 前端重构报告提到 App Router、Route Handlers（BFF）、缓存策略、支付与账户中心等；Scan Terminal 已新增城市决策卡、结构化实况层、页面内存/localStorage 双层缓存、structured detail 小并发队列与完整市场桶映射。 |
 | 运行时组件 | `web/app.py` + `web/core.py` + `web/routes.py` + `web/analysis_service.py` + `web/scan_terminal_service.py` | FastAPI 后端 API | 已从单文件入口拆为启动入口、核心上下文、路由层、分析服务层；Scan Terminal 侧提供 `/api/city/{name}/detail`，城市结构化分析 默认 30s 超时并支持 stream parse failure 的非流式重试。 |
 | 运行时组件 | `bot_listener.py` + `src/bot/*` | Telegram Bot | 入口 `bot_listener.py` 调 `start_bot()`，并由 `StartupCoordinator` 启动多个后台 loop。 |
 | Python 域模块 | `src/data_collection/*` | 天气采集 + 城市注册 | 采集层已拆为 `weather_sources.py` 编排层 + `open_meteo_cache.py`、`settlement_sources.py`、`metar_sources.py`、`mgm_sources.py`、`amos_station_sources.py`、`jma_amedas_sources.py`、`nws_open_meteo_sources.py`、`country_networks.py` 等。v1.7.0 已移除 NMC、pogodaiklimat、Meteoblue 数据源。 |
@@ -44,7 +44,7 @@ DEB（Dynamic Error Balancing）基于过去 N 天模型误差（MAE）倒数加
 ```mermaid
 flowchart TB
  subgraph Clients
- WEB[Next.js Frontend<br/>Vercel]
+ WEB[Next.js Frontend<br/>Docker / VPS]
  CITYCARD[Scan Terminal City Cards<br/>structured observations + probability mapping]
  TG[Telegram Bot<br/>TeleBot + Handlers]
  end

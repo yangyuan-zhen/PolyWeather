@@ -15,7 +15,7 @@
    - `https://<project-ref>.supabase.co/auth/v1/callback`
 3. `Auth -> URL Configuration` 添加：
    - 站点 URL（生产域名）
-   - 回调 URL（例如 `https://polyweather-pro.vercel.app/auth/callback`）
+   - 回调 URL（例如 `https://polyweather.top/auth/callback`）
 
 ## 3. 数据库脚本
 
@@ -45,7 +45,7 @@
 
 ## 4. 环境变量
 
-### 4.1 前端（Vercel / frontend/.env.local）
+### 4.1 前端（Docker 容器 / frontend/.env.local）
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=

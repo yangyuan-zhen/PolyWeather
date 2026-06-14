@@ -71,6 +71,6 @@ frontend/.next-start.log
 tmp_apikey.js
 tmp_obs.js
 tmp_rctp.html
-playwright-home-check.png
 .codex-backend-*.log
 frontend-next-*.log
+*.stackdump

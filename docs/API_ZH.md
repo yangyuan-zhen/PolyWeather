@@ -7,7 +7,7 @@
 ## 1. 基础信息
 
 - 后端直连：`http://127.0.0.1:8000`
-- 前端 BFF：`https://polyweather-pro.vercel.app/api/*`
+- 前端 BFF：`https://polyweather.top/api/*`
 - 返回格式：`application/json`
 
 ## 2. 请求链路

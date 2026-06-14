@@ -46,7 +46,7 @@ npm ci
 npm run dev
 ```
 
-## Vercel 最小部署配置
+## 最小部署配置
 
 只跑看板和基础鉴权时，先填这 4 项：
 
@@ -97,7 +97,7 @@ NEXT_PUBLIC_POLYWEATHER_WEB_VITALS=false
 NEXT_PUBLIC_POLYWEATHER_EAGER_CITY_SUMMARIES=false
 ```
 
-更完整的 Vercel 配置说明见：
+更完整的部署配置说明见：
 - [docs/FRONTEND_DEPLOYMENT_ZH.md](/E:/web/PolyWeather/docs/FRONTEND_DEPLOYMENT_ZH.md)
 
 ## 路由处理器
@@ -155,7 +155,7 @@ Ops：
 注意：
 
 - `/ops` 现在是前后端双层管理员限制
-- Vercel 前端和后端都应配置相同的 `POLYWEATHER_OPS_ADMIN_EMAILS`
+- 前端容器和后端都应配置相同的 `POLYWEATHER_OPS_ADMIN_EMAILS`
 - 前端登录邮箱本身不会自动获得管理员权限
 
 ## 支付安全补充
@@ -172,7 +172,7 @@ Ops：
 这意味着：
 
 - 旧标签页风险已明显降低
-- 但支付地址变更后，仍建议在 Vercel 上 redeploy 当前 production，并清理明显过期 deployment
+- 支付地址变更后，由于地址在前端镜像构建期注入，需要触发一次 `main` push（或重跑 deploy workflow）发布新镜像；浏览器侧靠 `/api/payments/config` 的运行时校验兜底
 
 ## 缓存行为
 
@@ -184,11 +184,11 @@ Ops：
 - 终端图表订阅 `/api/events?cities=...&since_revision=...&replay_limit=按可见城市数动态限制`，接收 `city_observation_patch.v1`；无 patch 超过 2 分钟时，可见图表才触发 60 秒兜底刷新
 - 前端只消费 HTTP snapshot + SSE patch，不直接感知 Redis；Redis Stream / SQLite event log 都由后端统一封装
 
-## Vercel 节流建议
+## 成本与节流建议
 
-- 生产环境建议关闭 `Web Analytics` 和 `Speed Insights`
+- 前端与后端以 Docker Compose 部署在同一 VPS，静态资源通过 Cloudflare 缓存（见 `next.config.mjs` 的 `headers()` 和 CI 的 `cloudflare-cache-rules` job）
 - 建议把自建 `app analytics / web vitals / eager city summaries` 默认保持关闭
-- 如果你部署在 Vercel，可在 Firewall 中加一条 `WordPress / php scanner` 拦截规则，避免无效扫描白白触发 middleware
+- 如果扫描流量明显，可在 Cloudflare WAF 中加一条 `WordPress / php scanner` 拦截规则，避免无效扫描白白触发 Nginx / middleware
 
 ## AGPL 与商用边界说明
 

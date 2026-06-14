@@ -17,7 +17,7 @@ PolyWeather 的环境变量很多，但不是所有变量都属于同一层级�
 3. 平台侧真实密钥  
    放在：
    - VPS / Docker `.env`
-   - Vercel Environment Variables
+   - GitHub Secrets（构建期 `NEXT_PUBLIC_*` 通过 build-arg 注入前端镜像）
    - GitHub Secrets（如需要）
 
 ## 2. 为什么要拆
@@ -66,7 +66,7 @@ PolyWeather 的环境变量很多，但不是所有变量都属于同一层级�
 
 用途：
 
-- 前端本地开发与 Vercel 环境变量模板
+- 前端本地开发与容器运行时环境变量模板
 
 ## 4. 配置分级
 
@@ -165,20 +165,27 @@ PolyWeather 的环境变量很多，但不是所有变量都属于同一层级�
 - 所有 secrets
 - Bot / 支付 / watcher 配置
 
-### 5.2 Vercel（前端）
+### 5.2 前端容器（Docker Compose）
 
-建议只放前端真正需要的变量：
+前端与后端一起以 Docker Compose 部署，环境变量分两类来源：
 
-- `POLYWEATHER_API_BASE_URL`
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+**运行时变量**（`.env` 或 compose `environment` 块）：
+
+- `POLYWEATHER_API_BASE_URL`（容器内使用 `http://polyweather_web:8000`）
 - `POLYWEATHER_AUTH_ENABLED`
 - `POLYWEATHER_AUTH_REQUIRED`
 - `POLYWEATHER_OPS_ADMIN_EMAILS`
 - `POLYWEATHER_DASHBOARD_ACCESS_TOKEN`
 - `POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN`
+
+**构建期变量**（GitHub Secrets → CI `build-and-push` → `frontend/Dockerfile` 的 `ARG`，改了必须重新构建镜像）：
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `NEXT_PUBLIC_SITE_URL`
 - `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
 - `NEXT_PUBLIC_WALLETCONNECT_POLYGON_RPC_URL`
+- `NEXT_PUBLIC_PAYMENT_ALLOWED_HOSTS`
 - `NEXT_PUBLIC_POLYWEATHER_APP_ANALYTICS`
 - `NEXT_PUBLIC_POLYWEATHER_WEB_VITALS`
 - `NEXT_PUBLIC_POLYWEATHER_EAGER_CITY_SUMMARIES`
@@ -188,19 +195,17 @@ PolyWeather 的环境变量很多，但不是所有变量都属于同一层级�
 - `/ops` 现在是前后端双层限制：
   - 前端页面入口读取 `POLYWEATHER_OPS_ADMIN_EMAILS`
   - 后端写接口同样读取 `POLYWEATHER_OPS_ADMIN_EMAILS`
-- 因此，Vercel 和 VPS / Docker 两侧都应配置相同的管理员邮箱白名单。
+- 因此，前端容器和后端容器两侧都应配置相同的管理员邮箱白名单。
 
-不要把后端专用密钥全搬进 Vercel。
+不要把后端专用密钥全搬进前端容器。
 
 ### 5.3 GitHub Actions
 
-当前 CI 不需要大规模 secrets。
+当前 CI 已配置自动部署，需要的 secrets 见 `.github/workflows/ci.yml`：
 
-如果未来要做自动部署，再考虑：
-
-- `VERCEL_TOKEN`
-- `VERCEL_ORG_ID`
-- `VERCEL_PROJECT_ID`
+- `VPS_SSH_KEY` / `VPS_HOST` / `VPS_USER` / `GHCR_PAT`（SSH 部署到 VPS）
+- `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ZONE_ID`（同步 Cloudflare Cache Rules）
+- 前端构建期 `NEXT_PUBLIC_*`（注入前端镜像）
 
 ## 6. 最小部署示例
 
