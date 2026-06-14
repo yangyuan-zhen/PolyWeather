@@ -15,10 +15,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     gcc libhdf5-dev libnetcdf-dev && \
     rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY requirements.lock .
 
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --prefer-binary -r requirements.txt
+    pip install --prefer-binary -r requirements.lock
 
 COPY . .
 

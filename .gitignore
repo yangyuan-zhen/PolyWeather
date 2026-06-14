@@ -44,6 +44,11 @@ Thumbs.db
 frontend/node_modules/
 frontend/.next/
 frontend/.vercel/
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+frontend/.env.*
+!frontend/.env.example
 frontend/*.tsbuildinfo
 frontend/.codex-next-dev*.log
 frontend/.codex-next-start*.log

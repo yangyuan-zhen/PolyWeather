@@ -51,6 +51,7 @@ REPLACE_WITH_EXAMPLE: dict[str, str] = {
     ".env": ".env.example",
     ".env.local": ".env.example",
     "frontend/.env.local": "frontend/.env.example",
+    "frontend/.env.production": "frontend/.env.example",
 }
 
 
