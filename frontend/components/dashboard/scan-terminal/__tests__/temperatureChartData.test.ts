@@ -408,6 +408,136 @@ export function runTests() {
     "older automatic detail refreshes must preserve the newer visible chart probability payload",
   );
 
+  const richGuangzhouDetail = {
+    ...seededGuangzhou,
+    localDate: "2026-06-10",
+    localTime: "12:50",
+    times: ["00:00", "12:00", "18:00"],
+    temps: [25, 31, 28],
+    debPrediction: 32.2,
+    debHourlyPath: {
+      times: ["00:00", "12:00", "18:00"],
+      temps: [25.2, 32.2, 28.4],
+    },
+    modelTimes: ["00:00", "12:00", "18:00"],
+    modelCurves: {
+      GFS: [25, 31.5, 28],
+      ECMWF: [24.8, 32, 28.2],
+    },
+    multiModelDaily: {
+      GFS: { high: 31.5 },
+      ECMWF: { high: 32 },
+    },
+    airportPrimary: { temp: 28.4, obs_time: "12:50", max_so_far: 31 },
+    airportPrimaryTodayObs: [["12:50", 28.4]],
+  } as any;
+  const freshObservationOnlyDetail = {
+    ...seededGuangzhou,
+    localDate: "2026-06-10",
+    localTime: "12:55",
+    times: ["00:00", "12:00", "18:00"],
+    temps: [25, 31, 28],
+    debPrediction: null,
+    debHourlyPath: null,
+    modelTimes: undefined,
+    modelCurves: undefined,
+    multiModelDaily: {},
+    airportPrimary: { temp: 28.9, obs_time: "12:55", max_so_far: 31 },
+    airportPrimaryTodayObs: [["12:55", 28.9]],
+  } as any;
+  const mergedFreshObservationWithRichDetail = mergeHourlyWithLiveObservations(
+    freshObservationOnlyDetail,
+    richGuangzhouDetail,
+    guangzhouRow,
+  );
+  assert(
+    mergedFreshObservationWithRichDetail?.debPrediction === 32.2,
+    "fresh observation-only detail refreshes must preserve the existing DEB prediction",
+  );
+  assert(
+    Object.keys(mergedFreshObservationWithRichDetail?.modelCurves || {}).length === 2,
+    "fresh observation-only detail refreshes must preserve existing multi-model hourly curves",
+  );
+  assert(
+    Object.keys(mergedFreshObservationWithRichDetail?.multiModelDaily || {}).length === 2,
+    "fresh observation-only detail refreshes must preserve existing multi-model daily payloads",
+  );
+  assert(
+    mergedFreshObservationWithRichDetail?.airportPrimary?.obs_time === "12:55",
+    "fresh observation-only detail refreshes must still update the live observation timestamp",
+  );
+
+  const guangzhouNonUsMadisChart = buildFullDayChartData(
+    {
+      city: "guangzhou",
+      local_date: "2026-06-10",
+      local_time: "12:55",
+      tz_offset_seconds: 8 * 60 * 60,
+      airport: "ZGGG",
+      temp_symbol: "°C",
+    } as any,
+    {
+      localDate: "2026-06-10",
+      localTime: "12:55",
+      times: ["00:00", "12:00", "18:00"],
+      temps: [25, 31, 28],
+      airportPrimary: {
+        source_code: "madis_hfmetar",
+        source_label: "NOAA MADIS",
+        station_code: "ZGGG",
+        temp: 28.9,
+        obs_time: "2026-06-10T04:55:00Z",
+      },
+      airportPrimaryTodayObs: [["2026-06-10T04:55:00Z", 28.9]],
+    } as any,
+    false,
+  );
+  const guangzhouNonUsMadisSeries = guangzhouNonUsMadisChart.series.find((item) => item.key === "madis");
+  assert(
+    guangzhouNonUsMadisSeries?.label === "ZGGG METAR",
+    "NOAA MADIS label should be reserved for US airports; non-US airport-primary fallback should use METAR wording",
+  );
+
+  const guangzhouRunwayWithBadMadisChart = buildFullDayChartData(
+    {
+      city: "guangzhou",
+      local_date: "2026-06-10",
+      local_time: "12:55",
+      tz_offset_seconds: 8 * 60 * 60,
+      airport: "ZGGG",
+      temp_symbol: "°C",
+    } as any,
+    {
+      localDate: "2026-06-10",
+      localTime: "12:55",
+      times: ["00:00", "12:00", "18:00"],
+      temps: [25, 31, 28],
+      airportPrimary: {
+        source_code: "madis_hfmetar",
+        source_label: "NOAA MADIS",
+        station_code: "ZGGG",
+        temp: 28.9,
+        obs_time: "2026-06-10T04:55:00Z",
+      },
+      airportPrimaryTodayObs: [["2026-06-10T04:55:00Z", 28.9]],
+      runwayPlateHistory: {
+        "02L/20R": [
+          { timestamp: "12:51", temp_c: 28, value: 28 },
+          { timestamp: "12:55", temp_c: 28.4, value: 28.4 },
+        ],
+      },
+    } as any,
+    false,
+  );
+  assert(
+    guangzhouRunwayWithBadMadisChart.series.some((item) => item.key === "runway_02L_20R"),
+    "Guangzhou runway history should render the settlement runway line",
+  );
+  assert(
+    !guangzhouRunwayWithBadMadisChart.series.some((item) => item.key === "madis"),
+    "AMSC runway cities should not show a redundant NOAA MADIS aggregate series when runway observations are present",
+  );
+
   const chengduDetail = {
     forecastTodayHigh: null,
     debPrediction: 31,
