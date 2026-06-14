@@ -5,6 +5,7 @@ import {
   refreshMiddlewareSession,
 } from "@/lib/supabase/server";
 import { isLocalFullAccessHost } from "@/lib/local-dev-access";
+import { isLocalOpsAccessHost } from "@/lib/ops-local-access";
 
 function readEnvBool(name: string, fallback: boolean) {
   const raw = process.env[name];
@@ -48,6 +49,14 @@ function shouldRefreshOptionalSupabaseSession(pathname: string) {
   return (
     pathname.startsWith("/account") ||
     pathname.startsWith("/ops")
+  );
+}
+
+function isOpsSurface(pathname: string) {
+  return (
+    pathname.startsWith("/ops") ||
+    pathname.startsWith("/api/ops") ||
+    pathname === "/api/system/status"
   );
 }
 
@@ -169,6 +178,14 @@ export async function middleware(request: NextRequest) {
   }
 
   const { pathname } = request.nextUrl;
+
+  if (
+    isOpsSurface(pathname) &&
+    (isLocalOpsAccessHost(requestHost) ||
+      isLocalOpsAccessHost(request.nextUrl.hostname))
+  ) {
+    return NextResponse.next();
+  }
 
   // ── Terminal gate runs first, independently of global auth mode ──────────
   // This is the Koyfin-style Layer 1: send unauthenticated users to /auth/login

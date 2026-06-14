@@ -1,10 +1,13 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { isLocalOpsAccessHost } from "@/lib/ops-local-access";
 import {
   createSupabaseServerClient,
   hasSupabaseServerEnv,
   hasSupabaseSessionCookieValues,
 } from "@/lib/supabase/server";
+
+const LOCAL_DEV_OPS_EMAIL = "local-dev@polyweather.local";
 
 function parseAdminEmails() {
   return String(process.env.POLYWEATHER_OPS_ADMIN_EMAILS || "")
@@ -14,6 +17,13 @@ function parseAdminEmails() {
 }
 
 export async function requireOpsAdmin(nextPath = "/ops") {
+  const headerStore = await headers();
+  const requestHost =
+    headerStore.get("x-forwarded-host") || headerStore.get("host") || "";
+  if (isLocalOpsAccessHost(requestHost)) {
+    return { email: LOCAL_DEV_OPS_EMAIL };
+  }
+
   const allowedEmails = parseAdminEmails();
   if (!allowedEmails.length || !hasSupabaseServerEnv()) {
     redirect("/");

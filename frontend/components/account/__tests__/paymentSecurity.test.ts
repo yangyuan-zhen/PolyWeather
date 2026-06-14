@@ -216,9 +216,13 @@ export function runTests() {
   const optionalRefreshIndex = middlewareSource.indexOf(
     "function shouldRefreshOptionalSupabaseSession",
   );
+  const publicApiFunction = middlewareSource.slice(
+    middlewareSource.indexOf("function isPublicApi"),
+    middlewareSource.indexOf("function shouldRefreshOptionalSupabaseSession"),
+  );
   assert(
     optionalRefreshIndex >= 0 &&
-      !middlewareSource.includes('pathname === "/api/system/status"'),
+      !publicApiFunction.includes('pathname === "/api/system/status"'),
     "middleware must not treat system status as public after it becomes an ops-only API",
   );
 
