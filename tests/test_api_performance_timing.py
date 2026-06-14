@@ -129,7 +129,7 @@ def test_scan_terminal_response_includes_backend_server_timing(monkeypatch):
     monkeypatch.setattr(
         scan_api.legacy_routes,
         "build_scan_terminal_payload",
-        lambda filters, force_refresh=False, timing_recorder=None: {
+        lambda filters, force_refresh=False, timing_recorder=None, **_kwargs: {
             "rows": [],
             "filters": filters,
             "status": "ready",
@@ -155,7 +155,7 @@ def test_scan_terminal_stale_response_is_not_cached(monkeypatch):
     monkeypatch.setattr(
         scan_api.legacy_routes,
         "build_scan_terminal_payload",
-        lambda filters, force_refresh=False, timing_recorder=None: {
+        lambda filters, force_refresh=False, timing_recorder=None, **_kwargs: {
             "rows": [],
             "filters": filters,
             "status": "ready",

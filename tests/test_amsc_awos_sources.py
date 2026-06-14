@@ -135,6 +135,36 @@ def test_parse_wind_plate_payload_uses_end_temperature_when_target_is_second_run
     assert parsed["runway_obs"]["point_temperatures"][0]["target_runway_max"] == 33.7
 
 
+def test_parse_wind_plate_payload_uses_latest_runway_observation_time():
+    payload = {
+        "code": 200,
+        "data": {
+            "16L/34R": {
+                "RNO": "16L/34R",
+                "OTIME": "2026-06-14 10:44:00",
+                "TDZ_TEMP": "22.0",
+                "MID_TEMP": "22.1",
+                "END_TEMP": "22.2",
+            },
+            "17L/35R": {
+                "RNO": "17L/35R",
+                "OTIME": "2026-06-14 15:43:00",
+                "TDZ_TEMP": "24.9",
+                "MID_TEMP": "25.1",
+                "END_TEMP": "25.4",
+            },
+        },
+    }
+
+    parsed = _amsc_parse_wind_plate_payload(payload, city_key="shanghai", icao="ZSPD")
+
+    assert parsed is not None
+    assert parsed["settlement_runway"] == "35R"
+    assert parsed["temp_c"] == 25.4
+    assert parsed["observation_time"] == "2026-06-14T15:43:00+00:00"
+    assert parsed["observation_time_local"] == "2026-06-14 23:43:00"
+
+
 def test_parse_wind_plate_payload_rejects_unauthorized_or_empty_payloads():
     assert _amsc_parse_wind_plate_payload(
         {"errCode": -12010, "errMsg": "无权访问此接口"},

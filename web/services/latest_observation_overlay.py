@@ -58,13 +58,18 @@ def _block_epoch(block: Any) -> Optional[int]:
 
 
 def _raw_amsc_epoch(row: dict[str, Any], raw_payload: dict[str, Any]) -> Optional[int]:
-    values = (
+    payload_values = (
         raw_payload.get("observation_time"),
         raw_payload.get("observed_at"),
-        row.get("observed_at"),
     )
-    parsed = [epoch for epoch in (parse_observation_epoch(value) for value in values) if epoch is not None]
-    return max(parsed) if parsed else None
+    parsed = [
+        epoch
+        for epoch in (parse_observation_epoch(value) for value in payload_values)
+        if epoch is not None
+    ]
+    if parsed:
+        return max(parsed)
+    return parse_observation_epoch(row.get("observed_at"))
 
 
 def _to_float(value: Any) -> Optional[float]:
