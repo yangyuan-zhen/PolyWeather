@@ -218,6 +218,40 @@ def test_raw_observation_store_computes_source_latency_when_times_are_known(tmp_
     assert latest["source_latency_sec"] == 90.0
 
 
+def test_raw_observation_store_lists_latest_observations_for_city(tmp_path):
+    from src.database.db_manager import DBManager
+
+    db = DBManager(str(tmp_path / "polyweather.db"))
+
+    db.append_raw_observation(
+        source="hko_obs",
+        city="Shenzhen",
+        value=28.1,
+        observed_at="2026-06-14T01:00:00+00:00",
+        fetched_at="2026-06-14T01:05:00+00:00",
+        station_code="LFS",
+        station_name="Lau Fau Shan",
+        status="ok",
+        payload={"source_label": "HKO"},
+    )
+    db.append_raw_observation(
+        source="hko_obs",
+        city="shenzhen",
+        value=27.6,
+        observed_at="2026-06-14T01:00:00+00:00",
+        fetched_at="2026-06-14T01:05:30+00:00",
+        station_code="HKO",
+        station_name="Hong Kong Observatory",
+        status="ok",
+        payload={"source_label": "HKO"},
+    )
+
+    rows = db.list_latest_raw_observations_for_city("shenzhen")
+
+    assert [row["station_code"] for row in rows] == ["HKO", "LFS"]
+    assert [row["value"] for row in rows] == [27.6, 28.1]
+
+
 def test_observation_refresh_request_queue_claims_pending_requests(tmp_path):
     from src.database.db_manager import DBManager
 
@@ -375,6 +409,55 @@ def test_observation_collector_consumes_source_adapter_records(monkeypatch, tmp_
     assert latest is not None
     assert latest["value"] == 24.5
     assert latest["payload"]["temp_c"] == 24.5
+
+
+def test_observation_collector_recomputes_canonical_from_raw_latest_settlement_station(tmp_path):
+    from src.database.db_manager import DBManager
+    from web.observation_collector_service import (
+        ObservationCollector,
+        ObservationSourceProfile,
+    )
+
+    db = DBManager(str(tmp_path / "polyweather.db"))
+
+    class FakeWeather:
+        def _uses_fahrenheit(self, city):
+            return False
+
+        def _attach_hko_obs_official_nearby(self, results, city, use_fahrenheit):
+            results["hko_obs_nearby"] = [
+                {
+                    "source": "hko_obs",
+                    "source_label": "HKO",
+                    "temperature_c": 28.1,
+                    "observation_time": "2026-06-14T01:00:00+00:00",
+                    "station_code": "LFS",
+                    "station_name": "Lau Fau Shan",
+                },
+                {
+                    "source": "hko_obs",
+                    "source_label": "HKO",
+                    "temperature_c": 27.6,
+                    "observation_time": "2026-06-14T01:00:00+00:00",
+                    "station_code": "HKO",
+                    "station_name": "Hong Kong Observatory",
+                },
+            ]
+
+    collector = ObservationCollector(
+        weather=FakeWeather(),
+        profiles=[ObservationSourceProfile("hko_obs", ("shenzhen",), 600)],
+        observation_store=db,
+        async_cache_refresh=False,
+    )
+
+    assert collector.run_due_once(now_ts=1000.0) == 1
+
+    canonical = db.get_canonical_temperature("shenzhen")
+    assert canonical is not None
+    assert canonical["payload"]["station_code"] == "LFS"
+    assert canonical["payload"]["station_name"] == "Lau Fau Shan"
+    assert canonical["payload"]["value"] == 28.1
 
 
 def test_observation_collector_records_no_results_source_health(tmp_path):

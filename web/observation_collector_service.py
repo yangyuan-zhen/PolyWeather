@@ -18,6 +18,7 @@ from src.data_collection.hko_obs_sources import HKO_STATIONS
 from src.database.db_manager import DBManager
 from src.database.runtime_state import ObservationCollectorStatusRepository
 from web.services.analysis_utils import parse_utc_datetime
+from web.services.canonical_engine import refresh_canonical_temperature_from_latest
 from web.services.canonical_temperature import build_canonical_temperature
 from web.services.observation_freshness import build_observation_freshness
 from web.services.observation_source_adapters import (
@@ -380,6 +381,7 @@ class ObservationCollector:
             return len(records)
         fetched_at = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime())
         wrote = 0
+        written_records: list[ObservationRecord] = []
         for record in records:
             try:
                 writer(
@@ -395,10 +397,7 @@ class ObservationCollector:
                     status="ok",
                     payload=dict(record.payload),
                 )
-                self._store_canonical_temperature_from_observation(
-                    record=record,
-                    fetched_at=fetched_at,
-                )
+                written_records.append(record)
                 wrote += 1
             except Exception as exc:
                 logger.debug(
@@ -408,6 +407,16 @@ class ObservationCollector:
                     exc,
                 )
         if wrote:
+            refreshed_cities: set[str] = set()
+            for city in {record.city for record in written_records}:
+                if refresh_canonical_temperature_from_latest(self.observation_store, city):
+                    refreshed_cities.add(city)
+            for record in written_records:
+                if record.city not in refreshed_cities:
+                    self._store_canonical_temperature_from_observation(
+                        record=record,
+                        fetched_at=fetched_at,
+                    )
             logger.debug("raw observations stored count={}", wrote)
         return wrote
 
