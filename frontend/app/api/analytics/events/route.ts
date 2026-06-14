@@ -55,10 +55,7 @@ export async function POST(req: NextRequest) {
       ...(body ?? {}),
       payload: {
         ...payload,
-        cf_country:
-          req.headers.get("cf-ipcountry") ||
-          req.headers.get("x-vercel-ip-country") ||
-          "",
+        cf_country: req.headers.get("cf-ipcountry") || "",
         user_agent: req.headers.get("user-agent") || "",
         referer_header: req.headers.get("referer") || "",
       },

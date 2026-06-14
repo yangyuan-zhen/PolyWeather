@@ -1,6 +1,6 @@
 const DEFAULT_CONFIG = {
-  apiBase: "https://polyweather-pro.vercel.app",
-  siteBase: "https://polyweather-pro.vercel.app",
+  apiBase: "https://polyweather.top",
+  siteBase: "https://polyweather.top",
   authToken: "",
   selectedCity: ""
 };

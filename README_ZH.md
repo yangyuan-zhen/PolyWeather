@@ -83,7 +83,7 @@
 
 ```mermaid
 flowchart LR
-    U["用户（Web / Telegram）"] --> FE["Next.js 前端（Vercel）"]
+    U["用户（Web / Telegram）"] --> FE["Next.js 前端（Docker / VPS）"]
     U --> BOT["Telegram Bot（VPS）"]
     FE --> API["FastAPI /web/app.py"]
     BOT --> API
@@ -218,7 +218,7 @@ POLYWEATHER_OPS_ADMIN_EMAILS=yhrsc30@gmail.com
 - AGPL-3.0 边界：[docs/OPEN_CORE_POLICY.md](docs/OPEN_CORE_POLICY.md)
 - Supabase 接入：[docs/SUPABASE_SETUP_ZH.md](docs/SUPABASE_SETUP_ZH.md)
 - 配置与密钥管理：[docs/CONFIGURATION_ZH.md](docs/CONFIGURATION_ZH.md)
-- 前端部署（Vercel）：[docs/FRONTEND_DEPLOYMENT_ZH.md](docs/FRONTEND_DEPLOYMENT_ZH.md)
+- 前端部署（Docker / VPS）：[docs/FRONTEND_DEPLOYMENT_ZH.md](docs/FRONTEND_DEPLOYMENT_ZH.md)
 - 技术债：[docs/TECH_DEBT_ZH.md](docs/TECH_DEBT_ZH.md)
 - 机场实时数据源：[docs/AIRPORT_REALTIME_SOURCES.md](docs/AIRPORT_REALTIME_SOURCES.md)
 - 机场市场监控（中文）：[docs/AIRPORT_MARKET_MONITOR_ZH.md](docs/AIRPORT_MARKET_MONITOR_ZH.md)

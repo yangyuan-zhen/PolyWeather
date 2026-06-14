@@ -84,7 +84,7 @@ See: [AGPL-3.0 & Commercial Boundary](docs/OPEN_CORE_POLICY.md)
 
 ```mermaid
 flowchart LR
-    U["Users (Web / Telegram)"] --> FE["Next.js Frontend (Vercel)"]
+    U["Users (Web / Telegram)"] --> FE["Next.js Frontend (Docker / VPS)"]
     U --> BOT["Telegram Bot (VPS)"]
     FE --> API["FastAPI /web/app.py"]
     BOT --> API

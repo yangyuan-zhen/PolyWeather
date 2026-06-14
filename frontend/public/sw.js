@@ -34,8 +34,8 @@ self.addEventListener("fetch", (event) => {
 
   // Do not cache-first Next.js build chunks. A user can keep an old app shell
   // open across deployments; if checkout UI is loaded later, stale/missing
-  // chunks surface as a generic page fault. Let the browser/Vercel handle
-  // immutable _next/static asset caching instead.
+  // chunks surface as a generic page fault. Let the browser handle immutable
+  // _next/static asset caching instead.
   if (CACHEABLE_PUBLIC_ASSETS.includes(url.pathname)) {
     event.respondWith(
       caches.open(CACHE_NAME).then((cache) =>

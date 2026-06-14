@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PolyWeather Pro — a paid institutional weather-intelligence terminal. 50 monitored cities with real-time METAR/AMOS/MADIS observations, DEB multi-model temperature blending, Mu probability calibration, and intraday bias correction. Pure meteorological decision workspace; no market/price layer. Next.js 15 + React 19 (Vercel) frontend, FastAPI backend (VPS), Telegram bot.
+PolyWeather Pro — a paid institutional weather-intelligence terminal. 50 monitored cities with real-time METAR/AMOS/MADIS observations, DEB multi-model temperature blending, Mu probability calibration, and intraday bias correction. Pure meteorological decision workspace; no market/price layer. Next.js 15 + React 19 frontend (Docker / VPS, behind Cloudflare + Nginx), FastAPI backend (VPS), Telegram bot.
 
 **Business model**: Paid-only, $10/month, no free tier, no trial. Landing page is public; `/terminal` requires login + active subscription.
 
@@ -47,10 +47,12 @@ docker compose down && docker compose up -d --build
 ## Architecture
 
 ```
-Users → Next.js (Vercel) → FastAPI :8000 (VPS)
-         /terminal (paid gate)    Weather Collector
-         / (landing page)         Analysis (DEB + Mu)
-                                  Payment Layer (USDC on Polygon)
+Users → Cloudflare → Nginx → Docker Compose (VPS)
+                                 ├── Next.js frontend → FastAPI :8000
+                                 │     /terminal (paid gate)    Weather Collector
+                                 │     / (landing page)         Analysis (DEB + Mu)
+                                 │                               Payment Layer (USDC on Polygon)
+                                 └── Redis (SSE event store)
          Telegram Bot → bot_listener.py
 ```
 

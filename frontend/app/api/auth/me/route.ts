@@ -165,10 +165,7 @@ async function trackAuthDiagnosticEvent(
           response_mode: responseMode,
           user_id: normalizedUserId || undefined,
           email_domain: email?.includes("@") ? email.split("@").pop() : undefined,
-          cf_country:
-            req.headers.get("cf-ipcountry") ||
-            req.headers.get("x-vercel-ip-country") ||
-            "",
+          cf_country: req.headers.get("cf-ipcountry") || "",
           user_agent: req.headers.get("user-agent") || "",
           referer_header: req.headers.get("referer") || "",
           captured_at: new Date().toISOString(),

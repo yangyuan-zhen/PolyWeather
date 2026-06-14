@@ -43,7 +43,7 @@
 
 首次建议打开扩展"选项页"并确认：
 
-- `网站基础地址`：你的前端域名（例如 `https://polyweather-pro.vercel.app`）
+- `网站基础地址`：你的前端域名（例如 `https://polyweather.top`）
 - `API 基础地址`：你的后端 API 域名（若同域也可填前端域名）
 - `Bearer Token`：后端开启鉴权时填写
 

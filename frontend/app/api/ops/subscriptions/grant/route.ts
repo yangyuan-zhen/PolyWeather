@@ -41,7 +41,7 @@ async function findSupabaseUserIdByEmail(email: string) {
     .replace(/\/$/, "");
   const serviceRoleKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
   if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error("Supabase service role is not configured on Vercel");
+    throw new Error("Supabase service role is not configured on the server");
   }
   const profileRes = await fetch(
     `${supabaseUrl}/rest/v1/profiles?select=id&email=eq.${encodeURIComponent(email)}&limit=1`,

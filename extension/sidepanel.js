@@ -1,8 +1,8 @@
 const DEFAULT_CONFIG = {
-  apiBase: "https://polyweather-pro.vercel.app",
+  apiBase: "https://polyweather.top",
   authToken: "",
   selectedCity: "",
-  siteBase: "https://polyweather-pro.vercel.app"
+  siteBase: "https://polyweather.top"
 };
 const CACHE_VERSION = "v3";
 const locale = String(navigator.language || "en").toLowerCase().startsWith("zh")
