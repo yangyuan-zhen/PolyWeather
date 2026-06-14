@@ -1792,7 +1792,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             )
         self._log_temperature_unit(city, use_fahrenheit)
         self._attach_settlement_sources(results, city_lower)
-        self._attach_wunderground_historical(results, city_lower, use_fahrenheit)
 
         if lat and lon:
             forecast_bundle = fetch_open_meteo_forecast_bundle(

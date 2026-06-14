@@ -229,32 +229,69 @@ def test_fetch_wunderground_historical_negative_caches_client_errors(monkeypatch
     assert len(calls) == 4
 
 
-def test_fetch_all_sources_attaches_wunderground_historical(monkeypatch, tmp_path):
+def test_fetch_all_sources_skips_wunderground_historical_by_default(monkeypatch, tmp_path):
     collector = _collector(monkeypatch, tmp_path)
-    called = {}
 
     monkeypatch.setattr(collector, "fetch_settlement_current", lambda _city: None)
     monkeypatch.setattr(collector, "_supports_aviationweather", lambda _city: False)
+    calls = []
 
-    def fake_fetch(city: str, *, use_fahrenheit: bool, utc_offset: int, local_date=None):
-        called["city"] = city
-        called["use_fahrenheit"] = use_fahrenheit
-        called["utc_offset"] = utc_offset
-        called["local_date"] = local_date
-        return {
-            "source": "wunderground_historical",
-            "location_id": "ZSPD:9:CN",
-            "max_so_far": 26,
-        }
+    def fail_fetch(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise AssertionError("fetch_all_sources must not fetch Wunderground by default")
 
-    monkeypatch.setattr(collector, "fetch_wunderground_historical", fake_fetch)
+    monkeypatch.setattr(collector, "fetch_wunderground_historical", fail_fetch)
 
     payload = collector.fetch_all_sources("shanghai")
 
-    assert payload["wunderground_current"]["max_so_far"] == 26
-    assert called == {
-        "city": "shanghai",
-        "use_fahrenheit": False,
-        "utc_offset": 28800,
-        "local_date": None,
-    }
+    assert "wunderground_current" not in payload
+    assert calls == []
+
+
+def test_analyze_summary_skips_wunderground_historical_by_default(monkeypatch):
+    import web.analysis_service as analysis_service
+
+    class FakeWeather:
+        TURKISH_PROVINCES = {}
+        wunderground_calls = 0
+
+        def fetch_settlement_current(self, _city):
+            return {}
+
+        def fetch_wunderground_historical(self, *_args, **_kwargs):
+            self.wunderground_calls += 1
+            raise AssertionError("_analyze_summary must not fetch Wunderground by default")
+
+        def fetch_from_open_meteo(self, *_args, **_kwargs):
+            return {
+                "utc_offset": 28800,
+                "daily": {
+                    "time": ["2026-06-14"],
+                    "temperature_2m_max": [30.0],
+                },
+                "hourly": {
+                    "time": [],
+                    "temperature_2m": [],
+                },
+            }
+
+        def fetch_multi_model(self, *_args, **_kwargs):
+            return {"forecasts": {"Open-Meteo": 30.0}, "daily_forecasts": {}}
+
+        def _supports_aviationweather(self, _city):
+            return False
+
+        def fetch_nws(self, *_args, **_kwargs):
+            return {}
+
+    fake_weather = FakeWeather()
+    monkeypatch.setattr(analysis_service, "_weather", fake_weather)
+    monkeypatch.setattr(analysis_service, "_get_cached_analysis", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(analysis_service, "_get_cached_summary", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(analysis_service, "calculate_deb_prediction", lambda *_args, **_kwargs: {"prediction": 30.0})
+    monkeypatch.setattr(analysis_service, "_archive_intraday_path_snapshot", lambda *_args, **_kwargs: None)
+
+    payload = analysis_service._analyze_summary("shanghai", force_refresh=False)
+
+    assert payload["wunderground_current"] == {}
+    assert fake_weather.wunderground_calls == 0

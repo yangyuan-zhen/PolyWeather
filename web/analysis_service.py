@@ -2017,11 +2017,6 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
 
     jobs: Dict[str, Any] = {
         "settlement_current": lambda: _weather.fetch_settlement_current(city) or {},
-        "wunderground_current": lambda: _weather.fetch_wunderground_historical(
-            city,
-            use_fahrenheit=is_f,
-            utc_offset=default_utc_offset,
-        ) or {},
         "open_meteo": lambda: _weather.fetch_from_open_meteo(lat, lon, use_fahrenheit=is_f) or {},
         "multi_model": lambda: _weather.fetch_multi_model(lat, lon, city=city, use_fahrenheit=is_f) or {},
     }
