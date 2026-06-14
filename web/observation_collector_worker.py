@@ -16,7 +16,6 @@ from loguru import logger
 
 from web.core import _weather
 from web.observation_collector_service import start_observation_collector_loop
-from web.services.city_runtime import _refresh_city_panel_cache
 
 _STOP_EVENT = threading.Event()
 
@@ -32,7 +31,6 @@ def main() -> None:
 
     thread = start_observation_collector_loop(
         weather=_weather,
-        cache_refresher=lambda city: _refresh_city_panel_cache(city, force_refresh=False),
     )
     if thread is None:
         logger.warning("observation collector worker started with collector disabled")

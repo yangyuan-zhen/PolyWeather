@@ -36,9 +36,14 @@ def _source_role(source: str) -> str:
     normalized = str(source or "").strip().lower()
     if normalized in _SETTLEMENT_PROXY_SOURCES or "amsc" in normalized or "runway" in normalized:
         return "settlement_proxy"
-    if normalized in _SETTLEMENT_OFFICIAL_SOURCES:
+    if (
+        normalized in _SETTLEMENT_OFFICIAL_SOURCES
+        or "hko" in normalized
+        or "cowin" in normalized
+        or "cwa" in normalized
+    ):
         return "settlement_official"
-    if normalized in _AIRPORT_OFFICIAL_SOURCES:
+    if normalized in _AIRPORT_OFFICIAL_SOURCES or "metar" in normalized or "madis" in normalized:
         return "airport_official"
     if "model" in normalized or normalized in {"deb", "open_meteo"}:
         return "model_blend"

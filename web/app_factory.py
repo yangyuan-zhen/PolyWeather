@@ -69,12 +69,10 @@ def create_app() -> FastAPI:
         and not bool(getattr(core_app.state, _OBSERVATION_COLLECTOR_STARTED_FLAG, False))
     ):
         from web.core import _weather
-        from web.services.city_runtime import _refresh_city_panel_cache
         from web.observation_collector_service import start_observation_collector_loop
 
         thread = start_observation_collector_loop(
             weather=_weather,
-            cache_refresher=lambda city: _refresh_city_panel_cache(city, force_refresh=False),
         )
         setattr(core_app.state, _OBSERVATION_COLLECTOR_STARTED_FLAG, bool(thread))
     return core_app

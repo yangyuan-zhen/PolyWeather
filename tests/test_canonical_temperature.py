@@ -28,6 +28,29 @@ def _sample_panel_payload() -> dict:
     }
 
 
+def test_canonical_temperature_roles_understand_adapter_source_names():
+    from web.services.canonical_temperature import build_canonical_temperature
+
+    def role_for(source):
+        canonical = build_canonical_temperature(
+            "hong kong",
+            {
+                "current": {
+                    "temp": 28.0,
+                    "source_code": source,
+                    "source_label": source,
+                    "freshness": {"freshness_status": "fresh"},
+                },
+            },
+        )
+        assert canonical is not None
+        return canonical["source_role"]
+
+    assert role_for("hko_obs") == "settlement_official"
+    assert role_for("cowin_obs") == "settlement_official"
+    assert role_for("madis_hfmetar") == "airport_official"
+
+
 def test_db_manager_stores_canonical_temperature_latest(tmp_path):
     from src.database.db_manager import DBManager
 
@@ -306,7 +329,6 @@ def test_force_refresh_panel_returns_canonical_latest_without_waiting_for_sync_r
     def fail_refresh(*_args, **_kwargs):
         raise AssertionError("force refresh must not block on sync refresh when canonical latest exists")
 
-    city_api._CITY_FORCE_REFRESH_INFLIGHT.clear()
     monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeDB())
     monkeypatch.setattr(city_api.legacy_routes, "_refresh_city_panel_cache", fail_refresh)

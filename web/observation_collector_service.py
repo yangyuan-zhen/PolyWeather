@@ -17,6 +17,7 @@ from src.data_collection.city_registry import CITY_REGISTRY
 from src.data_collection.hko_obs_sources import HKO_STATIONS
 from src.database.db_manager import DBManager
 from src.database.runtime_state import ObservationCollectorStatusRepository
+from web.services.canonical_temperature import build_canonical_temperature
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -303,6 +304,59 @@ class ObservationCollector:
                 return value
         return ""
 
+    @staticmethod
+    def _source_label(row: dict[str, Any], source: str) -> str:
+        for key in ("source_label", "label", "source_name"):
+            value = str(row.get(key) or "").strip()
+            if value:
+                return value
+        return str(source or "").replace("_", " ").upper()
+
+    def _store_canonical_temperature_from_observation(
+        self,
+        *,
+        city: str,
+        source: str,
+        row: dict[str, Any],
+        value: float,
+        observed_at: str,
+        fetched_at: str,
+    ) -> None:
+        setter = getattr(self.observation_store, "set_canonical_temperature", None)
+        if not callable(setter):
+            return
+        value_unit = str(row.get("unit") or row.get("temp_unit") or "c").strip().lower()
+        payload = {
+            "name": city,
+            "temp_symbol": "°F" if value_unit.startswith("f") else "°C",
+            "updated_at": fetched_at,
+            "current": {
+                "temp": value,
+                "source_code": source,
+                "source_label": self._source_label(row, source),
+                "settlement_source": source,
+                "settlement_source_label": self._source_label(row, source),
+                "station_code": self._station_code(row),
+                "station_name": self._station_name(row),
+                "observed_at": observed_at or None,
+                "observed_at_local": row.get("observation_time_local"),
+                "obs_time": row.get("observation_time_local") or observed_at,
+                "freshness": {
+                    "freshness_status": "fresh",
+                    "observed_at": observed_at or None,
+                    "observed_at_local": row.get("observation_time_local"),
+                },
+                "observation_status": "live",
+            },
+        }
+        canonical = build_canonical_temperature(city, payload, fetched_at=fetched_at)
+        if not canonical:
+            return
+        try:
+            setter(city, canonical)
+        except Exception as exc:
+            logger.debug("canonical temperature write skipped source={} city={}: {}", source, city, exc)
+
     def _iter_raw_observation_rows(
         self,
         source: str,
@@ -330,11 +384,12 @@ class ObservationCollector:
                 continue
             payload_source = str(row.get("source") or row.get("source_code") or source).strip().lower()
             try:
+                observed_at = self._observation_time(row)
                 writer(
                     source=payload_source or source,
                     city=city,
                     value=value,
-                    observed_at=self._observation_time(row),
+                    observed_at=observed_at,
                     fetched_at=fetched_at,
                     station_code=self._station_code(row),
                     station_name=self._station_name(row),
@@ -342,6 +397,14 @@ class ObservationCollector:
                     value_unit=str(row.get("unit") or row.get("temp_unit") or "c").strip().lower(),
                     status="ok",
                     payload=dict(row),
+                )
+                self._store_canonical_temperature_from_observation(
+                    city=city,
+                    source=payload_source or source,
+                    row=row,
+                    value=value,
+                    observed_at=observed_at,
+                    fetched_at=fetched_at,
                 )
                 wrote += 1
             except Exception as exc:

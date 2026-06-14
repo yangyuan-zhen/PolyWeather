@@ -1693,7 +1693,6 @@ def test_stale_city_detail_uses_cached_full_payload_while_refreshing(monkeypatch
             "resolution": resolution,
         }
 
-    city_api._CITY_FULL_REFRESH_INFLIGHT.clear()
     city_api._CITY_DETAIL_PAYLOAD_CACHE.clear()
     city_api._CITY_DETAIL_PAYLOAD_CACHE_TS.clear()
     city_api._CITY_DETAIL_PAYLOAD_INFLIGHT.clear()
@@ -1815,8 +1814,6 @@ def test_force_refresh_panel_returns_cached_payload_when_refresh_already_running
         refresh_calls += 1
         return {"name": city, "deb": {"prediction": 21.0}, "from_cache": False}
 
-    city_api._CITY_FORCE_REFRESH_INFLIGHT.clear()
-
     monkeypatch.setenv("POLYWEATHER_CITY_FORCE_REFRESH_TIMEOUT_SEC", "0.5")
     monkeypatch.setattr(city_api, "run_in_threadpool", fake_run_in_threadpool)
     monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
@@ -1897,8 +1894,6 @@ def test_stale_panel_returns_cached_payload_while_refreshing(monkeypatch):
         refresh_calls += 1
         return {"name": city, "deb": {"prediction": 21.0}, "from_cache": False}
 
-    city_api._CITY_STALE_REFRESH_TASKS.clear()
-
     monkeypatch.setattr(city_api, "run_in_threadpool", fake_run_in_threadpool)
     monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
@@ -1970,7 +1965,6 @@ def test_force_refresh_full_detail_returns_cached_payload_when_refresh_is_slow(m
         build_inputs.append(data["hourly"]["temps"][0])
         return {"city": data["city"], "live_temp": data["hourly"]["temps"][0]}
 
-    city_api._CITY_FULL_REFRESH_INFLIGHT.clear()
     city_api._CITY_DETAIL_PAYLOAD_CACHE.clear()
     city_api._CITY_DETAIL_PAYLOAD_CACHE_TS.clear()
     city_api._CITY_DETAIL_PAYLOAD_INFLIGHT.clear()

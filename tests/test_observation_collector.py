@@ -2,6 +2,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError
 import sqlite3
 import threading
 import time
+from types import SimpleNamespace
 
 
 def test_observation_source_gate_shares_inflight_and_cooldown(monkeypatch):
@@ -93,14 +94,13 @@ def test_observation_collector_profiles_match_source_cadence():
     assert SOURCE_CADENCE_SECONDS["amsc_awos"] == 180
 
 
-def test_observation_collector_run_due_once_refreshes_panel_cache():
+def test_observation_collector_run_due_once_collects_without_panel_cache_refresh():
     from web.observation_collector_service import (
         ObservationCollector,
         ObservationSourceProfile,
     )
 
     calls = []
-    refreshed = []
 
     class FakeWeather:
         def _uses_fahrenheit(self, city):
@@ -119,20 +119,17 @@ def test_observation_collector_run_due_once_refreshes_panel_cache():
                 interval_sec=180,
             )
         ],
-        cache_refresher=lambda city: refreshed.append(city),
         async_cache_refresh=False,
     )
 
     assert collector.run_due_once(now_ts=1000.0) == 1
     assert calls == [("qingdao", False)]
-    assert refreshed == ["qingdao"]
 
     assert collector.run_due_once(now_ts=1100.0) == 0
     assert calls == [("qingdao", False)]
 
     assert collector.run_due_once(now_ts=1180.0) == 1
     assert calls == [("qingdao", False), ("qingdao", False)]
-    assert refreshed == ["qingdao", "qingdao"]
 
 
 def test_raw_observation_store_records_latest_observation(tmp_path):
@@ -255,6 +252,46 @@ def test_observation_collector_writes_raw_observation_store(tmp_path):
     assert latest["value"] == 24.0
     assert latest["observed_at"] == "2026-06-14T01:00:00+00:00"
     assert latest["station_code"] == "ZSQD"
+
+
+def test_observation_collector_writes_canonical_latest_from_source(tmp_path):
+    from src.database.db_manager import DBManager
+    from web.observation_collector_service import (
+        ObservationCollector,
+        ObservationSourceProfile,
+    )
+
+    db = DBManager(str(tmp_path / "polyweather.db"))
+
+    class FakeWeather:
+        def _uses_fahrenheit(self, city):
+            return False
+
+        def _attach_china_amsc_awos_data(self, results, city, use_fahrenheit):
+            results["amos"] = {
+                "source": "amsc_awos",
+                "source_label": "AMSC AWOS",
+                "temp_c": 24.0,
+                "observation_time": "2026-06-14T01:00:00+00:00",
+                "icao": "ZSQD",
+                "station_label": "Qingdao Jiaodong",
+            }
+
+    collector = ObservationCollector(
+        weather=FakeWeather(),
+        profiles=[ObservationSourceProfile("amsc_awos", ("qingdao",), 180)],
+        observation_store=db,
+        async_cache_refresh=False,
+    )
+
+    assert collector.run_due_once(now_ts=1000.0) == 1
+
+    canonical = db.get_canonical_temperature("qingdao")
+    assert canonical is not None
+    assert canonical["payload"]["value"] == 24.0
+    assert canonical["payload"]["source"] == "amsc_awos"
+    assert canonical["payload"]["source_role"] == "settlement_proxy"
+    assert canonical["payload"]["observed_at"] == "2026-06-14T01:00:00+00:00"
 
 
 def test_observation_collector_consumes_refresh_request_queue(tmp_path):
@@ -484,6 +521,38 @@ def test_observation_collector_worker_entrypoint_exists():
     from web import observation_collector_worker
 
     assert callable(observation_collector_worker.main)
+
+
+def test_observation_collector_worker_does_not_bind_panel_cache_refresher(monkeypatch):
+    from web import observation_collector_worker
+
+    captured = {}
+
+    def fake_start_observation_collector_loop(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(name="observation-collector")
+
+    class StopEvent:
+        @staticmethod
+        def wait(_timeout):
+            return True
+
+        @staticmethod
+        def set():
+            return None
+
+    monkeypatch.setattr(observation_collector_worker.signal, "signal", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        observation_collector_worker,
+        "start_observation_collector_loop",
+        fake_start_observation_collector_loop,
+    )
+    monkeypatch.setattr(observation_collector_worker, "_STOP_EVENT", StopEvent())
+
+    observation_collector_worker.main()
+
+    assert captured["weather"] is observation_collector_worker._weather
+    assert captured.get("cache_refresher") is None
 
 
 def test_ephemeral_observation_log_writes_skip_sqlite_lock(monkeypatch, tmp_path):
