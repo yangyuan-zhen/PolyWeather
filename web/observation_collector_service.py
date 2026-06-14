@@ -17,7 +17,9 @@ from src.data_collection.city_registry import CITY_REGISTRY
 from src.data_collection.hko_obs_sources import HKO_STATIONS
 from src.database.db_manager import DBManager
 from src.database.runtime_state import ObservationCollectorStatusRepository
+from web.services.analysis_utils import parse_utc_datetime
 from web.services.canonical_temperature import build_canonical_temperature
+from web.services.observation_freshness import build_observation_freshness
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -121,6 +123,12 @@ class ObservationCollector:
                     error = "no_results"
             except Exception as exc:
                 error = str(exc) or exc.__class__.__name__
+                self._store_raw_observation_status(
+                    source=profile.source,
+                    city=city,
+                    status=self._failure_status_from_exception(exc),
+                    error=error,
+                )
                 logger.warning(
                     "observation collector source failed source={} city={}: {}",
                     profile.source,
@@ -256,10 +264,33 @@ class ObservationCollector:
         else:
             logger.debug("observation collector skipped unknown source={}", normalized_source)
             return False
-        ok = bool(results)
-        if ok:
-            self._store_raw_observations(normalized_source, normalized_city, results)
-        return ok
+        if not results:
+            self._store_raw_observation_status(
+                source=normalized_source,
+                city=normalized_city,
+                status="no_results",
+                error="source returned no observation rows",
+            )
+            return False
+        wrote = self._store_raw_observations(normalized_source, normalized_city, results)
+        if wrote <= 0:
+            self._store_raw_observation_status(
+                source=normalized_source,
+                city=normalized_city,
+                status="parse_error",
+                error="source response had no usable temperature",
+            )
+            return False
+        return True
+
+    @staticmethod
+    def _failure_status_from_exception(exc: Exception) -> str:
+        text = f"{exc.__class__.__name__} {exc}".lower()
+        if "timeout" in text or "timed out" in text:
+            return "timeout"
+        if "401" in text or "403" in text or "auth" in text or "unauthor" in text:
+            return "auth_error"
+        return "error"
 
     @staticmethod
     def _observation_value(row: dict[str, Any]) -> Optional[float]:
@@ -326,6 +357,15 @@ class ObservationCollector:
         if not callable(setter):
             return
         value_unit = str(row.get("unit") or row.get("temp_unit") or "c").strip().lower()
+        source_label = self._source_label(row, source)
+        freshness = build_observation_freshness(
+            source_code=source,
+            source_label=source_label,
+            observed_at=observed_at or None,
+            observed_at_local=row.get("observation_time_local"),
+            ingested_at=fetched_at,
+            now_utc=parse_utc_datetime(fetched_at),
+        )
         payload = {
             "name": city,
             "temp_symbol": "°F" if value_unit.startswith("f") else "°C",
@@ -333,19 +373,15 @@ class ObservationCollector:
             "current": {
                 "temp": value,
                 "source_code": source,
-                "source_label": self._source_label(row, source),
+                "source_label": source_label,
                 "settlement_source": source,
-                "settlement_source_label": self._source_label(row, source),
+                "settlement_source_label": source_label,
                 "station_code": self._station_code(row),
                 "station_name": self._station_name(row),
                 "observed_at": observed_at or None,
                 "observed_at_local": row.get("observation_time_local"),
                 "obs_time": row.get("observation_time_local") or observed_at,
-                "freshness": {
-                    "freshness_status": "fresh",
-                    "observed_at": observed_at or None,
-                    "observed_at_local": row.get("observation_time_local"),
-                },
+                "freshness": freshness,
                 "observation_status": "live",
             },
         }
@@ -371,14 +407,49 @@ class ObservationCollector:
                     if isinstance(item, dict):
                         yield item
 
-    def _store_raw_observations(self, source: str, city: str, results: dict[str, Any]) -> None:
+    def _store_raw_observation_status(
+        self,
+        *,
+        source: str,
+        city: str,
+        status: str,
+        error: str = "",
+    ) -> None:
         store = self.observation_store
         writer = getattr(store, "append_raw_observation", None)
         if not callable(writer):
             return
         fetched_at = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime())
+        try:
+            writer(
+                source=source,
+                city=city,
+                fetched_at=fetched_at,
+                status=status,
+                payload={
+                    "source": source,
+                    "city": city,
+                    "status": status,
+                    "error": str(error or "").strip(),
+                },
+            )
+        except Exception as exc:
+            logger.debug(
+                "raw observation status write skipped source={} city={}: {}",
+                source,
+                city,
+                exc,
+            )
+
+    def _store_raw_observations(self, source: str, city: str, results: dict[str, Any]) -> int:
+        rows = list(self._iter_raw_observation_rows(source, results))
+        store = self.observation_store
+        writer = getattr(store, "append_raw_observation", None)
+        if not callable(writer):
+            return sum(1 for row in rows if self._observation_value(row) is not None)
+        fetched_at = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime())
         wrote = 0
-        for row in self._iter_raw_observation_rows(source, results):
+        for row in rows:
             value = self._observation_value(row)
             if value is None:
                 continue
@@ -416,6 +487,7 @@ class ObservationCollector:
                 )
         if wrote:
             logger.debug("raw observations stored source={} city={} count={}", source, city, wrote)
+        return wrote
 
     def _refresh_city_cache(self, city: str) -> None:
         if not callable(self.cache_refresher):

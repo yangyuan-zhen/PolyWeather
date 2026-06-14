@@ -6,7 +6,7 @@ import secrets
 import threading
 import time
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List, Set, Tuple
 from urllib.parse import urlparse
 
@@ -850,6 +850,27 @@ class DBManager:
         except (TypeError, ValueError):
             return None
 
+    @staticmethod
+    def _parse_datetime_or_none(value: Any) -> Optional[datetime]:
+        raw = str(value or "").strip()
+        if not raw:
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+
+    @classmethod
+    def _source_latency_or_none(cls, observed_at: Any, fetched_at: Any) -> Optional[float]:
+        observed = cls._parse_datetime_or_none(observed_at)
+        fetched = cls._parse_datetime_or_none(fetched_at)
+        if observed is None or fetched is None:
+            return None
+        return max(0.0, round((fetched - observed).total_seconds(), 3))
+
     def _cache_table_name(self, kind: str) -> Optional[str]:
         normalized = str(kind or "").strip().lower()
         if normalized == "summary":
@@ -1071,10 +1092,35 @@ class DBManager:
         safe_status = str(status or "ok").strip().lower() or "ok"
         value_float = self._float_or_none(value)
         latency_float = self._float_or_none(source_latency_sec)
+        if latency_float is None:
+            latency_float = self._source_latency_or_none(safe_observed_at, safe_fetched_at)
         payload_json = json.dumps(payload or {}, ensure_ascii=False)
         created_at_ts = now_dt.timestamp()
-        success_at = str(last_success_at or (safe_fetched_at if safe_status == "ok" else "")).strip()
         with self._get_connection() as conn:
+            previous_latest = conn.execute(
+                """
+                SELECT status, error_count, last_success_at, fetched_at
+                FROM raw_observation_latest
+                WHERE source = ? AND city = ?
+                ORDER BY updated_at_ts DESC
+                LIMIT 1
+                """,
+                (normalized_source, normalized_city),
+            ).fetchone()
+            previous_error_count = int(previous_latest[1] or 0) if previous_latest else 0
+            previous_last_success = str(previous_latest[2] or "").strip() if previous_latest else ""
+            previous_status = str(previous_latest[0] or "").strip().lower() if previous_latest else ""
+            previous_fetched_at = str(previous_latest[3] or "").strip() if previous_latest else ""
+            if safe_status == "ok":
+                safe_error_count = 0
+                success_at = str(last_success_at or safe_fetched_at).strip()
+            else:
+                safe_error_count = max(1, int(error_count or 0), previous_error_count + 1)
+                success_at = str(
+                    last_success_at
+                    or previous_last_success
+                    or (previous_fetched_at if previous_status == "ok" else "")
+                ).strip()
             conn.execute(
                 """
                 INSERT INTO raw_observation_store (
@@ -1096,7 +1142,7 @@ class DBManager:
                     safe_fetched_at,
                     latency_float,
                     safe_status,
-                    max(0, int(error_count or 0)),
+                    safe_error_count,
                     success_at,
                     payload_json,
                     created_at_ts,
@@ -1135,7 +1181,7 @@ class DBManager:
                     safe_fetched_at,
                     latency_float,
                     safe_status,
-                    max(0, int(error_count or 0)),
+                    safe_error_count,
                     success_at,
                     payload_json,
                     created_at_ts,
