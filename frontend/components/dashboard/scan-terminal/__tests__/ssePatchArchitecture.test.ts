@@ -249,11 +249,12 @@ export function runTests() {
   );
   const foregroundRefreshBlock = chart.match(/const refreshForegroundFullDetail = \(\) => \{[\s\S]*?\n    \};/)?.[0] || "";
   assert(
-    foregroundRefreshBlock.includes("ignoreCache: true") &&
-      foregroundRefreshBlock.includes("fetchHourlyForecastForCity") &&
-      foregroundRefreshBlock.includes("FOREGROUND_FULL_DETAIL_REFRESH_DEDUP_MS") &&
-      !foregroundRefreshBlock.includes("setIsHourlyLoading(true)"),
-    "foreground resume refresh should update full detail in the background without showing the loading overlay or refetching fresh detail",
+    foregroundRefreshBlock.includes("bypassLocalCache: true") &&
+    foregroundRefreshBlock.includes("fetchHourlyForecastForCity") &&
+    foregroundRefreshBlock.includes("FOREGROUND_FULL_DETAIL_REFRESH_DEDUP_MS") &&
+    !foregroundRefreshBlock.includes("ignoreCache: true") &&
+    !foregroundRefreshBlock.includes("setIsHourlyLoading(true)"),
+    "foreground resume refresh should revalidate cached detail in the background without showing the loading overlay or forcing external sources",
   );
   assert(
     !chart.includes("/api/city/${encodeURIComponent(city)}/summary"),

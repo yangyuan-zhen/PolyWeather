@@ -542,6 +542,7 @@ export function LiveTemperatureThresholdChart({
   isMaximized = false,
   disableClose = false,
   isActive = !compact,
+  activationRefreshKey = 0,
   slotIndex = 0,
 }: {
   isEn: boolean;
@@ -555,6 +556,7 @@ export function LiveTemperatureThresholdChart({
   isMaximized?: boolean;
   disableClose?: boolean;
   isActive?: boolean;
+  activationRefreshKey?: number;
   slotIndex?: number;
 }) {
   const [hourly, setHourly] = useState<HourlyForecast>(null);
@@ -987,6 +989,56 @@ export function LiveTemperatureThresholdChart({
   }, [city, compact, isActive, isMaximized, targetResolution, markDetailDegraded, markDetailRequest, applySuccessfulHourlyDetail]);
 
   useEffect(() => {
+    if (!activationRefreshKey) return;
+    if (!shouldPollLiveChart({ city, compact, isActive, isMaximized })) return;
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+
+    let cancelled = false;
+
+    const refreshActivatedCachedDetail = () => {
+      const now = Date.now();
+      if (now - lastForegroundRefreshAtRef.current < 10_000) return;
+
+      lastForegroundRefreshAtRef.current = now;
+      lastPatchAtRef.current = now;
+      markDetailRequest("network");
+
+      fetchHourlyForecastForCity(city, { bypassLocalCache: true, resolution: targetResolution })
+        .then((data) => {
+          if (cancelled) return;
+          if (!data) {
+            markDetailDegraded();
+            return;
+          }
+          applySuccessfulHourlyDetail(data, { updateLiveTemp: true });
+        })
+        .catch(() => {
+          if (!cancelled) {
+            markDetailDegraded();
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setIsHourlyLoading(false);
+        });
+    };
+
+    refreshActivatedCachedDetail();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activationRefreshKey,
+    city,
+    compact,
+    isActive,
+    isMaximized,
+    targetResolution,
+    markDetailDegraded,
+    markDetailRequest,
+    applySuccessfulHourlyDetail,
+  ]);
+
+  useEffect(() => {
     if (!shouldPollLiveChart({ city, compact, isActive, isMaximized })) return;
     let cancelled = false;
 
@@ -1004,9 +1056,9 @@ export function LiveTemperatureThresholdChart({
 
       lastForegroundRefreshAtRef.current = now;
       lastPatchAtRef.current = now;
-      markDetailRequest("force_refresh");
+      markDetailRequest("network");
 
-      fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })
+      fetchHourlyForecastForCity(city, { bypassLocalCache: true, resolution: targetResolution })
         .then((data) => {
           if (cancelled) return;
           if (!data) {

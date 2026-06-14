@@ -617,6 +617,7 @@ function PolyWeatherTerminal({
   generatedText,
   isEn,
   locale,
+  onTerminalActivated,
   onRefresh,
   refreshing,
   rows,
@@ -636,10 +637,12 @@ function PolyWeatherTerminal({
   setSelectedRegionKey,
   visibleRegions,
   toggleRegion,
+  terminalActivationRefreshKey,
 }: {
   generatedText: string;
   isEn: boolean;
   locale: "zh-CN" | "en-US";
+  onTerminalActivated: () => void;
   onRefresh: () => void;
   refreshing: boolean;
   rows: ScanOpportunityRow[];
@@ -659,6 +662,7 @@ function PolyWeatherTerminal({
   setSelectedRegionKey: (key: string) => void;
   visibleRegions: Set<string>;
   toggleRegion: (key: string) => void;
+  terminalActivationRefreshKey: number;
 }) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -682,6 +686,7 @@ function PolyWeatherTerminal({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [searchInputRef, setSearchQuery]);
   const [activeNavKey, setActiveNavKey] = useState<string>("thresholds");
+  const previousActiveNavKeyRef = useRef(activeNavKey);
   const [onlineCount, setOnlineCount] = useState<number | null>(null);
   const [feedbackDraft, setFeedbackDraft] = useState<FeedbackDraft | null>(null);
   const [feedbackRefreshKey, setFeedbackRefreshKey] = useState(0);
@@ -704,6 +709,13 @@ function PolyWeatherTerminal({
     if (activeNavKey !== "thresholds") return;
     void preloadTemperatureChartCanvas();
   }, [activeNavKey]);
+
+  useEffect(() => {
+    const previousActiveNavKey = previousActiveNavKeyRef.current;
+    previousActiveNavKeyRef.current = activeNavKey;
+    if (activeNavKey !== "thresholds" || previousActiveNavKey === "thresholds") return;
+    onTerminalActivated();
+  }, [activeNavKey, onTerminalActivated]);
 
   useEffect(() => {
     const fetchOnline = () => {
@@ -1078,6 +1090,7 @@ function PolyWeatherTerminal({
                       row={mobileChartRow}
                       allRows={filteredRegionRows}
                       compact={false}
+                      activationRefreshKey={terminalActivationRefreshKey}
                       disableClose={true}
                       onReportIssue={openChartFeedback}
                     />
@@ -1133,6 +1146,7 @@ function PolyWeatherTerminal({
                         row={filteredRegionRows.find((r) => String(r.city || "").toLowerCase() === visibleSlots[maximizedSlotIndex]) || null}
                         allRows={filteredRegionRows}
                         compact={false}
+                        activationRefreshKey={terminalActivationRefreshKey}
                         onSearchClick={() => setActiveSearchSlotIndex(maximizedSlotIndex)}
                         onMaximize={() => setMaximizedSlotIndex(null)}
                         onClose={() => {
@@ -1217,6 +1231,7 @@ function PolyWeatherTerminal({
                               row={rowForSlot}
                               allRows={filteredRegionRows}
                               compact={true}
+                              activationRefreshKey={terminalActivationRefreshKey}
                               isActive={isSlotActive}
                               slotIndex={slotIndex}
                               onSearchClick={() => setActiveSearchSlotIndex(slotIndex)}
@@ -1639,11 +1654,16 @@ function ScanTerminalScreen() {
     setUseLocalTimezoneDefault(false);
     setSelectedRegionKey(key);
   }, []);
+  const [terminalActivationRefreshKey, setTerminalActivationRefreshKey] = useState(0);
+  const handleTerminalActivated = useCallback(() => {
+    setTerminalActivationRefreshKey((value) => value + 1);
+  }, []);
 
   const { refreshScanTerminalManually, scanLoading, terminalData } =
     useScanTerminalQuery({
       isPro,
       proAccessLoading: !hydrated || (proAccess.loading && !canUseLocalFullAccess),
+      terminalActivationRefreshKey,
       timezoneOffsetSeconds: useLocalTimezoneDefault ? localTimezoneOffsetSeconds : null,
       tradingRegion: selectedRegionKey,
     });
@@ -1800,6 +1820,7 @@ function ScanTerminalScreen() {
       generatedText={generatedText || ""}
       isEn={isEn}
       locale={locale}
+      onTerminalActivated={handleTerminalActivated}
       onRefresh={handleRefresh}
       refreshing={scanLoading}
       rows={filteredRows}
@@ -1821,6 +1842,7 @@ function ScanTerminalScreen() {
       setSelectedRegionKey={selectRegionManually}
       visibleRegions={visibleRegions}
       toggleRegion={toggleRegion}
+      terminalActivationRefreshKey={terminalActivationRefreshKey}
     />
   );
 }

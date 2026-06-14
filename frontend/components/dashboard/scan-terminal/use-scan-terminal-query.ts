@@ -85,11 +85,13 @@ function applyTerminalPatches(
 export function useScanTerminalQuery({
   isPro,
   proAccessLoading,
+  terminalActivationRefreshKey = 0,
   timezoneOffsetSeconds,
   tradingRegion,
 }: {
   isPro: boolean;
   proAccessLoading: boolean;
+  terminalActivationRefreshKey?: number;
   timezoneOffsetSeconds?: number | null;
   tradingRegion?: string;
 }) {
@@ -205,6 +207,27 @@ export function useScanTerminalQuery({
       window.removeEventListener("focus", handleForegroundScanRefresh);
     };
   }, [fetchScanTerminal, isPro, proAccessLoading, scanRemote.status]);
+
+  useEffect(() => {
+    if (!terminalActivationRefreshKey) return;
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+    if (proAccessLoading || !isPro || scanRemote.status === "loading") return;
+
+    const handleTerminalActivationRefresh = () => {
+      const now = Date.now();
+      if (now - lastForegroundScanRefreshAtRef.current < 10_000) return;
+      lastForegroundScanRefreshAtRef.current = now;
+      void fetchScanTerminal({ forceRefresh: false, showLoading: false });
+    };
+
+    handleTerminalActivationRefresh();
+  }, [
+    fetchScanTerminal,
+    isPro,
+    proAccessLoading,
+    scanRemote.status,
+    terminalActivationRefreshKey,
+  ]);
 
   // Preload adjacent regions in idle time for instant tab switches
   useEffect(() => {

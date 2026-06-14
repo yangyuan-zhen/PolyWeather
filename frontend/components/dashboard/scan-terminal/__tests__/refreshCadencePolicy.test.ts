@@ -109,6 +109,20 @@ export async function runTests() {
     "terminal screen should preload the chart chunk once access is confirmed on the chart tab",
   );
   assert(
+    dashboardSource.includes("terminalActivationRefreshKey") &&
+      dashboardSource.includes("setTerminalActivationRefreshKey") &&
+      querySource.includes("terminalActivationRefreshKey") &&
+      querySource.includes("handleTerminalActivationRefresh") &&
+      querySource.includes("fetchScanTerminal({ forceRefresh: false, showLoading: false })"),
+    "switching back to the terminal tab should trigger a lightweight scan refresh without waiting for browser focus events",
+  );
+  assert(
+    chartSource.includes("activationRefreshKey") &&
+      chartSource.includes("refreshActivatedCachedDetail") &&
+      chartSource.includes("fetchHourlyForecastForCity(city, { bypassLocalCache: true, resolution: targetResolution })"),
+    "switching back to the terminal tab should refresh visible chart detail through cached backend data without forcing external sources",
+  );
+  assert(
     chartSource.includes("fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })") &&
       chartSource.includes("setHourly((prev) => mergeHourlyWithLiveObservations(dataWithCurrentRow, prev, row))"),
     "visible chart fallback must refresh full city detail at the current chart resolution while preserving newer live observations",
