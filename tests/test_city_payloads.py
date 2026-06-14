@@ -53,7 +53,7 @@ def test_city_payloads_expose_wunderground_current():
     assert detail["timeseries"]["wunderground_today_obs"] == [{"time": "13:30", "temp": 26}]
 
 
-def test_api_payload_overlay_uses_cached_wunderground_state_without_fetch(monkeypatch):
+def test_api_payload_overlay_strips_cached_wunderground_state_without_fetch(monkeypatch):
     stale_payload = {
         "name": "guangzhou",
         "temp_symbol": "°C",
@@ -87,12 +87,11 @@ def test_api_payload_overlay_uses_cached_wunderground_state_without_fetch(monkey
     monkeypatch.setattr(city_runtime._weather, "fetch_wunderground_historical", fail_fetch)
 
     overlay = getattr(city_runtime, "_overlay_latest_wunderground_current", None)
-    assert callable(overlay), "city API must preserve cached WU state without direct fetch"
+    assert callable(overlay), "city API must strip cached WU state without direct fetch"
     payload = overlay("guangzhou", stale_payload)
 
-    assert payload["wunderground_current"]["temp"] == 36
-    assert payload["wunderground_current"]["max_so_far"] == 36
-    assert payload["official"]["wunderground_current"]["max_so_far"] == 36
-    assert payload["timeseries"]["wunderground_today_obs"] == [{"time": "14:00", "temp": 36}]
+    assert "wunderground_current" not in payload
+    assert "wunderground_current" not in payload["official"]
+    assert "wunderground_today_obs" not in payload["timeseries"]
     assert stale_payload["wunderground_current"]["max_so_far"] == 36
     assert fetch_calls == []

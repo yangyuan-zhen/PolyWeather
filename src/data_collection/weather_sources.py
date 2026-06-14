@@ -1059,29 +1059,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             if cwa_forecast is not None:
                 results["cwa_forecast"] = cwa_forecast
 
-    def _attach_wunderground_historical(
-        self,
-        results: Dict,
-        city_lower: str,
-        use_fahrenheit: bool,
-    ) -> None:
-        try:
-            utc_offset = get_city_utc_offset_seconds(city_lower)
-            payload = self.fetch_wunderground_historical(
-                city_lower,
-                use_fahrenheit=use_fahrenheit,
-                utc_offset=utc_offset,
-            )
-        except Exception as exc:
-            logger.warning(
-                "Wunderground historical attach failed city={} error={}",
-                city_lower,
-                exc,
-            )
-            return
-        if payload:
-            results["wunderground_current"] = payload
-
     def _attach_turkish_mgm_data(
         self,
         results: Dict,

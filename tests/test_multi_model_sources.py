@@ -205,7 +205,6 @@ def test_fetch_all_sources_delegates_non_hf_forecast_bundle(monkeypatch, tmp_pat
     monkeypatch.setattr(collector, "_log_temperature_unit", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_evict_city_caches", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_attach_settlement_sources", lambda *args, **kwargs: None)
-    monkeypatch.setattr(collector, "_attach_wunderground_historical", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_supports_aviationweather", lambda city: False)
     monkeypatch.setattr(collector, "_attach_turkish_mgm_data", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_attach_korean_amos_data", lambda *args, **kwargs: None)

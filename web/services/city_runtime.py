@@ -299,7 +299,7 @@ def _cached_city_payload(kind: str, city: str) -> dict:
     if not isinstance(entry, dict):
         return {}
     payload = entry.get("payload")
-    return deepcopy(payload) if isinstance(payload, dict) else {}
+    return _strip_wunderground_current(payload) if isinstance(payload, dict) else {}
 
 
 def _canonical_city_payload(city: str, *, detail_depth: str) -> dict:
@@ -432,34 +432,24 @@ def _refresh_city_full_cache(city: str, force_refresh: bool = False) -> dict:
     return _queued_city_cache_payload(city, "full", force_refresh=force_refresh)
 
 
-def _overlay_wunderground_current(payload: dict, wunderground: dict) -> dict:
-    if not isinstance(payload, dict) or not isinstance(wunderground, dict) or not wunderground:
+def _strip_wunderground_current(payload: dict) -> dict:
+    if not isinstance(payload, dict):
         return payload
     next_payload = deepcopy(payload)
-    next_payload["wunderground_current"] = dict(wunderground)
-
+    next_payload.pop("wunderground_current", None)
     official = next_payload.get("official")
     if isinstance(official, dict):
-        official["wunderground_current"] = dict(wunderground)
-
+        official.pop("wunderground_current", None)
     timeseries = next_payload.get("timeseries")
     if isinstance(timeseries, dict):
-        timeseries["wunderground_today_obs"] = list(wunderground.get("today_obs") or [])
-
+        timeseries.pop("wunderground_today_obs", None)
     return next_payload
 
 
 def _overlay_latest_wunderground_current(city: str, payload: dict) -> dict:
     if not isinstance(payload, dict):
         return payload
-    latest_wu = payload.get("wunderground_current")
-    if not isinstance(latest_wu, dict) or not latest_wu:
-        official = payload.get("official")
-        if isinstance(official, dict):
-            latest_wu = official.get("wunderground_current")
-    if not isinstance(latest_wu, dict) or not latest_wu:
-        return deepcopy(payload)
-    return _overlay_wunderground_current(payload, latest_wu)
+    return _strip_wunderground_current(payload)
 
 def _normalize_city_or_404(name: str) -> str:
     city = name.lower().strip().replace("-", " ")
