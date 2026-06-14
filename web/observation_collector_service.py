@@ -403,6 +403,17 @@ class ObservationCollector:
                 exc,
             )
 
+    @staticmethod
+    def _raw_payload_for_record(record: ObservationRecord) -> dict[str, Any]:
+        payload = dict(record.payload)
+        source = str(record.source or payload.get("source") or "").strip().lower()
+        if source == "amsc_awos":
+            if record.observed_at:
+                payload["observation_time"] = record.observed_at
+            if record.observed_at_local:
+                payload["observation_time_local"] = record.observed_at_local
+        return payload
+
     def _store_raw_observations(self, records: Sequence[ObservationRecord]) -> int:
         store = self.observation_store
         writer = getattr(store, "append_raw_observation", None)
@@ -424,7 +435,7 @@ class ObservationCollector:
                     runway=record.runway,
                     value_unit=record.value_unit,
                     status="ok",
-                    payload=dict(record.payload),
+                    payload=self._raw_payload_for_record(record),
                 )
                 written_records.append(record)
                 wrote += 1
