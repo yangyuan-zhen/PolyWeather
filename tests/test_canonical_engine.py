@@ -98,6 +98,12 @@ def test_canonical_engine_builds_realtime_event_from_canonical():
             "freshness_sec": 300,
             "freshness_status": "fresh",
             "confidence": 0.9,
+            "max_so_far": 28.6,
+            "signed_gap": 1.2,
+            "gap_to_target": -1.2,
+            "touch_distance": 0.0,
+            "edge": 0.07,
+            "edge_percent": 7.0,
         }
     )
 
@@ -112,3 +118,9 @@ def test_canonical_engine_builds_realtime_event_from_canonical():
     assert event["payload"]["unit"] == "celsius"
     assert event["payload"]["freshness_status"] == "fresh"
     assert event["payload"]["confidence"] == 0.9
+    assert event["payload"]["max_so_far"] == 28.6
+    assert event["payload"]["signed_gap"] == 1.2
+    assert event["payload"]["gap_to_target"] == -1.2
+    assert event["payload"]["touch_distance"] == 0.0
+    assert event["payload"]["edge"] == 0.07
+    assert event["payload"]["edge_percent"] == 7.0

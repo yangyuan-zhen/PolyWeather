@@ -185,7 +185,18 @@ def build_realtime_event_from_canonical(canonical: dict[str, Any]) -> Optional[d
         text = str(canonical.get(key) or "").strip()
         if text:
             payload[key] = text
-    for key in ("freshness_sec", "confidence"):
+    for key in (
+        "freshness_sec",
+        "confidence",
+        "max_so_far",
+        "signed_gap",
+        "gap_to_target",
+        "touch_distance",
+        "current_reference",
+        "edge",
+        "edge_percent",
+        "deb_prediction",
+    ):
         value_meta = canonical.get(key)
         if value_meta is not None and value_meta != "":
             payload[key] = value_meta

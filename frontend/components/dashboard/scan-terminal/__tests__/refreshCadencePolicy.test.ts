@@ -36,7 +36,7 @@ async function flushMicrotasks() {
 
 export async function runTests() {
   assert(DASHBOARD_REFRESH_POLICY_MS.observation === 60_000, "observation layer should refresh every 60 seconds");
-  assert(DASHBOARD_REFRESH_POLICY_MS.scanRows === 5 * 60_000, "region/city rows should refresh every 5 minutes");
+  assert(DASHBOARD_REFRESH_POLICY_MS.scanRows === 2 * 60_000, "region/city rows should refresh every 2 minutes");
   assert(DASHBOARD_REFRESH_POLICY_MS.marketOverview === 10 * 60_000, "market overview should refresh every 10 minutes");
   assert(DASHBOARD_REFRESH_POLICY_MS.model === 30 * 60_000, "DEB and multi-model data should refresh every 30 minutes");
   assert(DASHBOARD_REFRESH_POLICY_SEC.metar === 5 * 60, "METAR polling should be 5 minutes");
@@ -69,8 +69,9 @@ export async function runTests() {
     querySource.includes("handleForegroundScanRefresh") &&
       querySource.includes('document.visibilityState !== "visible"') &&
       querySource.includes("SCAN_CACHE_TTL_MS") &&
+      querySource.includes("FOREGROUND_SCAN_REFRESH_AFTER_SUCCESS_MS = 60_000") &&
       querySource.includes("fetchScanTerminal({ forceRefresh: false, showLoading: false })"),
-    "scan list should silently revalidate stale rows when a long-hidden browser tab returns to the foreground",
+    "scan list should silently revalidate rows when a browser tab returns to the foreground after 60 seconds",
   );
   assert(
     chartLogicSource.includes("DASHBOARD_REFRESH_POLICY_MS.metar") &&

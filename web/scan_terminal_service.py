@@ -35,6 +35,7 @@ from web.scan_terminal_filters import (
 )
 from web.scan_terminal_payloads import (
     build_failed_scan_terminal_payload,
+    build_scan_terminal_incremental_payload,
     build_scan_terminal_snapshot_id,
     build_stale_scan_terminal_payload,
     compact_ranked_scan_rows_for_payload,
@@ -73,6 +74,36 @@ def _success_payload_within_stale_window(cached_entry: Dict[str, Any]) -> bool:
     except Exception:
         return True
     return (time.time() - success_ts) <= float(SCAN_TERMINAL_STALE_SUCCESS_MAX_AGE_SEC)
+
+
+def _build_scan_terminal_incremental_from_cache_entry(
+    *,
+    filters: Dict[str, Any],
+    current_payload: Dict[str, Any],
+    cached_entry: Optional[Dict[str, Any]],
+    since_snapshot_id: Optional[str],
+) -> Dict[str, Any]:
+    base_payload: Optional[Dict[str, Any]] = None
+    since_snapshot_id = str(since_snapshot_id or "").strip()
+    candidates: List[Any] = [current_payload]
+    if isinstance(cached_entry, dict):
+        candidates.extend(
+            [
+                cached_entry.get("success_payload"),
+                cached_entry.get("previous_success_payload"),
+                cached_entry.get("payload"),
+            ]
+        )
+    for candidate in candidates:
+        if isinstance(candidate, dict) and candidate.get("snapshot_id") == since_snapshot_id:
+            base_payload = candidate
+            break
+    return build_scan_terminal_incremental_payload(
+        filters=filters,
+        current_payload=current_payload,
+        since_snapshot_id=since_snapshot_id,
+        base_payload=base_payload,
+    )
 
 
 def _build_stale_payload_for_timeout_if_better_cached(
@@ -339,6 +370,8 @@ def build_scan_terminal_payload(
     raw_filters: Optional[Dict[str, Any]] = None,
     *,
     force_refresh: bool = False,
+    diff: bool = False,
+    since_snapshot_id: Optional[str] = None,
     timing_recorder: Any = None,
 ) -> Dict[str, Any]:
     filters = (
@@ -364,6 +397,14 @@ def build_scan_terminal_payload(
             )
         )
         if cached is not None:
+            if diff and since_snapshot_id:
+                cached_entry = get_scan_terminal_cache_entry(filters) or {}
+                return _build_scan_terminal_incremental_from_cache_entry(
+                    filters=filters,
+                    current_payload=cached,
+                    cached_entry=cached_entry,
+                    since_snapshot_id=since_snapshot_id,
+                )
             return cached
 
         cached_entry = (
@@ -381,7 +422,7 @@ def build_scan_terminal_payload(
             and _success_payload_within_stale_window(cached_entry)
         ):
             started = _start_scan_terminal_background_refresh(filters)
-            return build_stale_scan_terminal_payload(
+            payload = build_stale_scan_terminal_payload(
                 filters=filters,
                 success_payload=success_payload,
                 error_message=(
@@ -389,8 +430,16 @@ def build_scan_terminal_payload(
                 ),
                 failed_at=cached_entry.get("last_failed_at"),
             )
+            if diff and since_snapshot_id:
+                return _build_scan_terminal_incremental_from_cache_entry(
+                    filters=filters,
+                    current_payload=payload,
+                    cached_entry=cached_entry,
+                    since_snapshot_id=since_snapshot_id,
+                )
+            return payload
         started = _start_scan_terminal_background_refresh(filters)
-        return build_failed_scan_terminal_payload(
+        payload = build_failed_scan_terminal_payload(
             filters=filters,
             error_message=(
                 "市场扫描快照正在初始化"
@@ -399,8 +448,16 @@ def build_scan_terminal_payload(
             ),
             failed_at=cached_entry.get("last_failed_at"),
         )
+        if diff and since_snapshot_id:
+            return _build_scan_terminal_incremental_from_cache_entry(
+                filters=filters,
+                current_payload=payload,
+                cached_entry=cached_entry,
+                since_snapshot_id=since_snapshot_id,
+            )
+        return payload
 
-    return (
+    payload = (
         timing_recorder.measure(
             "uncached_build",
             lambda: _build_scan_terminal_payload_singleflight(
@@ -411,6 +468,15 @@ def build_scan_terminal_payload(
         if timing_recorder is not None
         else _build_scan_terminal_payload_singleflight(filters, force_refresh=force_refresh)
     )
+    if diff and since_snapshot_id:
+        cached_entry = get_scan_terminal_cache_entry(filters) or {}
+        return _build_scan_terminal_incremental_from_cache_entry(
+            filters=filters,
+            current_payload=payload,
+            cached_entry=cached_entry,
+            since_snapshot_id=since_snapshot_id,
+        )
+    return payload
 
 
 _SCAN_PREWARM_STARTED = False

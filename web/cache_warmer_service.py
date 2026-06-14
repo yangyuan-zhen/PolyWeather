@@ -190,17 +190,17 @@ class CacheWarmer:
         city_provider: Callable[[], Mapping[str, Mapping[str, Any]]],
         scan_warmer: Callable[..., Any],
         city_panel_warmer: Callable[..., Any],
-        scan_interval_sec: int = 300,
-        city_interval_sec: int = 60,
-        city_batch_size: int = 8,
+        scan_interval_sec: int = 120,
+        city_interval_sec: int = 30,
+        city_batch_size: int = 16,
         hot_cities: Optional[Iterable[str]] = None,
     ) -> None:
         self.city_provider = city_provider
         self.scan_warmer = scan_warmer
         self.city_panel_warmer = city_panel_warmer
-        self.scan_interval_sec = max(60, int(scan_interval_sec or 300))
-        self.city_interval_sec = max(30, int(city_interval_sec or 60))
-        self.city_batch_size = max(1, min(32, int(city_batch_size or 8)))
+        self.scan_interval_sec = max(60, int(scan_interval_sec or 120))
+        self.city_interval_sec = max(30, int(city_interval_sec or 30))
+        self.city_batch_size = max(1, min(32, int(city_batch_size or 16)))
         self.hot_cities = tuple(hot_cities or DEFAULT_HOT_CITIES)
         self._last_scan_ts = 0.0
         self._last_city_ts = 0.0
@@ -279,9 +279,9 @@ def build_default_cache_warmer() -> CacheWarmer:
         city_provider=lambda: CITIES,
         scan_warmer=build_scan_terminal_payload,
         city_panel_warmer=_queue_city_panel_refresh,
-        scan_interval_sec=_env_int("POLYWEATHER_WARMER_SCAN_INTERVAL_SEC", 300),
-        city_interval_sec=_env_int("POLYWEATHER_WARMER_CITY_INTERVAL_SEC", 60),
-        city_batch_size=_env_int("POLYWEATHER_WARMER_CITY_BATCH_SIZE", 8),
+        scan_interval_sec=_env_int("POLYWEATHER_WARMER_SCAN_INTERVAL_SEC", 120),
+        city_interval_sec=_env_int("POLYWEATHER_WARMER_CITY_INTERVAL_SEC", 30),
+        city_batch_size=_env_int("POLYWEATHER_WARMER_CITY_BATCH_SIZE", 16),
         hot_cities=hot_cities or DEFAULT_HOT_CITIES,
     )
 
@@ -291,4 +291,4 @@ def warmer_enabled() -> bool:
 
 
 def warmer_tick_sec() -> int:
-    return max(10, _env_int("POLYWEATHER_WARMER_TICK_SEC", 60))
+    return max(10, _env_int("POLYWEATHER_WARMER_TICK_SEC", 30))

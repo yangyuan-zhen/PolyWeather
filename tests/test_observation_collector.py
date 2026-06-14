@@ -132,6 +132,25 @@ def test_observation_collector_run_due_once_collects_without_panel_cache_refresh
     assert calls == [("qingdao", False), ("qingdao", False)]
 
 
+def test_observation_collector_default_cache_refresh_workers_is_two(monkeypatch):
+    from web.observation_collector_service import ObservationCollector
+
+    monkeypatch.delenv(
+        "POLYWEATHER_OBSERVATION_COLLECTOR_CACHE_REFRESH_WORKERS",
+        raising=False,
+    )
+    collector = ObservationCollector(
+        weather=object(),
+        profiles=[],
+        cache_refresher=lambda _city: None,
+    )
+    try:
+        assert collector._cache_refresh_executor is not None
+        assert collector._cache_refresh_executor._max_workers == 2
+    finally:
+        collector._cache_refresh_executor.shutdown(wait=False)
+
+
 def test_raw_observation_store_records_latest_observation(tmp_path):
     from src.database.db_manager import DBManager
 

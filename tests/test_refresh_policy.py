@@ -10,7 +10,7 @@ from src.utils.refresh_policy import (
 def test_refresh_policy_cadences_are_layered():
     assert OBSERVATION_REFRESH_SEC == 60
     assert METAR_POLL_TTL_SEC == 300
-    assert SCAN_ROWS_REFRESH_SEC == 300
+    assert SCAN_ROWS_REFRESH_SEC == 120
     assert MARKET_OVERVIEW_TTL_SEC == 600
     assert MODEL_CACHE_TTL_SEC == 1800
 

@@ -81,6 +81,135 @@ def build_scan_terminal_snapshot_id(
     return f"scan-{digest[:10]}"
 
 
+def _scan_row_id(row: Any) -> Optional[str]:
+    if not isinstance(row, dict):
+        return None
+    row_id = row.get("id")
+    if row_id is None:
+        return None
+    text = str(row_id)
+    return text if text else None
+
+
+def _scan_row_digest(row: Dict[str, Any]) -> str:
+    return hashlib.sha256(
+        json.dumps(row, ensure_ascii=True, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
+
+
+def _rows_by_id(payload: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    rows = payload.get("rows")
+    if not isinstance(rows, list):
+        return {}
+    indexed: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        row_id = _scan_row_id(row)
+        if row_id is not None:
+            indexed[row_id] = row
+    return indexed
+
+
+def _full_scan_terminal_incremental_payload(
+    *,
+    current_payload: Dict[str, Any],
+    since_snapshot_id: str,
+) -> Dict[str, Any]:
+    payload = dict(current_payload)
+    payload["diff"] = {
+        "mode": "full",
+        "base_snapshot_id": since_snapshot_id,
+        "snapshot_id": current_payload.get("snapshot_id"),
+        "rows_changed": [],
+        "removed_row_ids": [],
+    }
+    return payload
+
+
+def build_scan_terminal_incremental_payload(
+    *,
+    filters: Dict[str, Any],
+    current_payload: Dict[str, Any],
+    since_snapshot_id: Optional[str],
+    base_payload: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    since_snapshot_id = str(since_snapshot_id or "").strip()
+    current_snapshot_id = current_payload.get("snapshot_id")
+    if not since_snapshot_id or not current_snapshot_id:
+        return dict(current_payload)
+    if current_payload.get("stale") is True or current_payload.get("status") not in (
+        "ready",
+        "partial",
+    ):
+        return _full_scan_terminal_incremental_payload(
+            current_payload=current_payload,
+            since_snapshot_id=since_snapshot_id,
+        )
+    if since_snapshot_id == current_snapshot_id:
+        return {
+            "generated_at": current_payload.get("generated_at"),
+            "snapshot_id": current_snapshot_id,
+            "status": "not_modified",
+            "stale": False,
+            "stale_reason": None,
+            "last_success_at": current_payload.get("last_success_at"),
+            "last_failed_at": current_payload.get("last_failed_at"),
+            "filters": filters,
+            "summary": current_payload.get("summary") or {},
+            "top_signal": current_payload.get("top_signal"),
+            "rows": [],
+            "diff": {
+                "mode": "not_modified",
+                "base_snapshot_id": since_snapshot_id,
+                "snapshot_id": current_snapshot_id,
+                "rows_changed": [],
+                "removed_row_ids": [],
+            },
+        }
+
+    if (
+        not isinstance(base_payload, dict)
+        or base_payload.get("snapshot_id") != since_snapshot_id
+    ):
+        return _full_scan_terminal_incremental_payload(
+            current_payload=current_payload,
+            since_snapshot_id=since_snapshot_id,
+        )
+
+    current_rows = _rows_by_id(current_payload)
+    base_rows = _rows_by_id(base_payload)
+    rows_changed: List[Dict[str, Any]] = []
+    for row_id, row in current_rows.items():
+        base_row = base_rows.get(row_id)
+        if base_row is None or _scan_row_digest(base_row) != _scan_row_digest(row):
+            rows_changed.append(row)
+
+    removed_row_ids = [
+        row_id for row_id in base_rows.keys() if row_id not in current_rows
+    ]
+    return {
+        "generated_at": current_payload.get("generated_at"),
+        "snapshot_id": current_snapshot_id,
+        "status": current_payload.get("status") or "ready",
+        "stale": False,
+        "stale_reason": current_payload.get("stale_reason"),
+        "last_success_at": current_payload.get("last_success_at"),
+        "last_failed_at": current_payload.get("last_failed_at"),
+        "filters": filters,
+        "summary": current_payload.get("summary") or {},
+        "top_signal": current_payload.get("top_signal"),
+        "rows": [],
+        "diff": {
+            "mode": "row_delta",
+            "base_snapshot_id": since_snapshot_id,
+            "snapshot_id": current_snapshot_id,
+            "rows_changed": rows_changed,
+            "removed_row_ids": removed_row_ids,
+        },
+    }
+
+
 def build_stale_scan_terminal_payload(
     *,
     filters: Dict[str, Any],

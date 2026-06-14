@@ -30,6 +30,8 @@ async def scan_terminal(
     time_range: str = "today",
     limit: int = 25,
     force_refresh: bool = False,
+    diff: bool = False,
+    since_snapshot_id: str | None = None,
     region: str = "",
     trading_region: str = "",
     timezone_offset_seconds: int | None = None,
@@ -46,6 +48,8 @@ async def scan_terminal(
         time_range=time_range,
         limit=limit,
         force_refresh=force_refresh,
+        diff=diff,
+        since_snapshot_id=since_snapshot_id,
         region=region or trading_region or None,
         timezone_offset_seconds=timezone_offset_seconds,
     )

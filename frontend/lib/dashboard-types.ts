@@ -507,6 +507,14 @@ export interface ScanTerminalFilters {
   limit: number;
 }
 
+export interface ScanTerminalDiff {
+  mode: "full" | "not_modified" | "row_delta" | string;
+  base_snapshot_id?: string | null;
+  snapshot_id?: string | null;
+  rows_changed?: ScanOpportunityRow[];
+  removed_row_ids?: string[];
+}
+
 export interface ScanOpportunityRow {
   id: string;
   rank?: number | null;
@@ -673,7 +681,7 @@ export interface PrimarySignal extends ScanOpportunityRow {}
 export interface ScanTerminalResponse {
   generated_at: string;
   snapshot_id?: string | null;
-  status?: "ready" | "stale" | "failed" | string;
+  status?: "ready" | "stale" | "failed" | "not_modified" | string;
   stale?: boolean;
   stale_reason?: string | null;
   last_success_at?: string | null;
@@ -694,6 +702,7 @@ export interface ScanTerminalResponse {
   };
   top_signal?: PrimarySignal | null;
   rows: ScanOpportunityRow[];
+  diff?: ScanTerminalDiff;
 }
 
 export interface IntradayMeteorologySignal {

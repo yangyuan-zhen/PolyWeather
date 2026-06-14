@@ -82,6 +82,11 @@ export function runTests() {
     /fetchCache:\s*"no-store"/,
     "scan terminal proxy must not put failed or initializing payloads into the Next data cache",
   );
+  assert.match(
+    scanTerminalProxySource,
+    /"since_snapshot_id"/,
+    "scan terminal proxy should forward incremental scan diff snapshot ids to the backend",
+  );
 
   const scanTerminalClientSource = fs.readFileSync(
     path.join(
@@ -107,6 +112,11 @@ export function runTests() {
     scanTerminalClientSource,
     /params\.set\("_v",\s*SCAN_TERMINAL_PAYLOAD_VERSION\)/,
     "scan terminal client should vary the CDN cache key without changing backend scan filters",
+  );
+  assert.match(
+    scanTerminalClientSource,
+    /params\.set\("diff",\s*"true"\)/,
+    "scan terminal client should request incremental scan diffs when it has a previous snapshot",
   );
 
   const overviewProxySource = fs.readFileSync(

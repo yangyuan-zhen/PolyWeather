@@ -66,6 +66,12 @@ def test_v1_patch_payload_is_accepted_and_normalized():
             "obs_time": "2026-05-26T07:01:00Z",
             "payload": {
                 "temp": 29.4,
+                "max_so_far": 30.1,
+                "signed_gap": 0.6,
+                "gap_to_target": -0.6,
+                "touch_distance": 0,
+                "edge": 0.04,
+                "edge_percent": 4.0,
                 "station_code": "46692",
                 "runway_points": [{"runway": "05/23", "temp": 30.2}],
             },
@@ -75,6 +81,12 @@ def test_v1_patch_payload_is_accepted_and_normalized():
     assert event["city"] == "taipei"
     assert event["source"] == "cwa"
     assert event["payload"]["temp"] == 29.4
+    assert event["payload"]["max_so_far"] == 30.1
+    assert event["payload"]["signed_gap"] == 0.6
+    assert event["payload"]["gap_to_target"] == -0.6
+    assert event["payload"]["touch_distance"] == 0
+    assert event["payload"]["edge"] == 0.04
+    assert event["payload"]["edge_percent"] == 4.0
     assert event["payload"]["runway_points"][0]["temp"] == 30.2
 
 

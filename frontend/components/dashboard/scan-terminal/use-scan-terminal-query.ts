@@ -13,11 +13,24 @@ import {
   useSsePatchVersion,
   type CityPatch,
 } from "@/hooks/use-sse-patches";
-import type { ScanTerminalResponse } from "@/lib/dashboard-types";
+import type {
+  ScanOpportunityRow,
+  ScanTerminalResponse,
+} from "@/lib/dashboard-types";
 
 const SCAN_CACHE_PREFIX = "polyweather_scan_v2";
 const SCAN_CACHE_TTL_MS = DASHBOARD_REFRESH_POLICY_MS.scanRows;
+const FOREGROUND_SCAN_REFRESH_AFTER_SUCCESS_MS = 60_000;
 const MAX_STALE_SCAN_CACHE_MS = 6 * 60 * 60 * 1000;
+const DERIVED_SCAN_PATCH_NUMBER_FIELDS = [
+  "signed_gap",
+  "gap_to_target",
+  "touch_distance",
+  "current_reference",
+  "edge",
+  "edge_percent",
+  "deb_prediction",
+] as const;
 
 function scanCacheKey(tradingRegion: string): string {
   return `${SCAN_CACHE_PREFIX}:${tradingRegion || "all"}`;
@@ -48,22 +61,81 @@ function normalizeCityKey(city: string | null | undefined) {
   return String(city || "").trim().toLowerCase();
 }
 
-function applyPatchToScanRow(row: any, patch: CityPatch) {
-  const temp = typeof patch.changes.temp === "number" && Number.isFinite(patch.changes.temp)
-    ? patch.changes.temp
-    : null;
-  if (temp === null) return row;
+function finiteNumber(value: unknown): number | null {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function firstFiniteNumber(...values: unknown[]) {
+  for (const value of values) {
+    const number = finiteNumber(value);
+    if (number !== null) return number;
+  }
+  return null;
+}
+
+function isBelowTargetRow(row: any) {
+  const text = String(
+    row?.market_direction ||
+      row?.temperature_direction ||
+      row?.market_question ||
+      row?.target_label ||
+      row?.action ||
+      "",
+  ).toLowerCase();
+  return /\b(below|under|lte|less)\b|<=|≤|以下/.test(text);
+}
+
+function deriveTargetGapFields(row: any, maxSoFar: number | null) {
+  const target = firstFiniteNumber(
+    row?.target_threshold,
+    row?.target_value,
+    row?.target_lower,
+    row?.target_upper,
+  );
+  if (target === null || maxSoFar === null) return null;
+
+  const belowTargetRow = isBelowTargetRow(row);
+  const signedGap = belowTargetRow ? target - maxSoFar : maxSoFar - target;
+  const touchDistance = belowTargetRow
+    ? Math.max(0, maxSoFar - target)
+    : Math.max(0, target - maxSoFar);
   return {
+    signed_gap: Number(signedGap.toFixed(2)),
+    gap_to_target: Number((-signedGap).toFixed(2)),
+    touch_distance: Number(touchDistance.toFixed(2)),
+  };
+}
+
+function applyPatchToScanRow(row: any, patch: CityPatch) {
+  const temp = finiteNumber(patch.changes.temp);
+  const patchMaxSoFar = finiteNumber(patch.changes.max_so_far);
+  if (temp === null) return row;
+  const currentMaxSoFar = firstFiniteNumber(row.current_max_so_far, temp) ?? temp;
+  const maxSoFar = patchMaxSoFar ?? Math.max(temp, currentMaxSoFar);
+  const derivedGapFields = deriveTargetGapFields(row, maxSoFar);
+  const nextRow: any = {
     ...row,
     current_temp: temp,
-    current_max_so_far: Math.max(
-      temp,
-      typeof row.current_max_so_far === "number" && Number.isFinite(row.current_max_so_far)
-        ? row.current_max_so_far
-        : temp,
-    ),
+    current_max_so_far: maxSoFar,
     local_time: typeof patch.changes.obs_time === "string" ? patch.changes.obs_time : row.local_time,
     sse_revision: patch.revision,
+  };
+  for (const key of DERIVED_SCAN_PATCH_NUMBER_FIELDS) {
+    const value = finiteNumber(patch.changes[key]);
+    if (value !== null) {
+      nextRow[key] = value;
+    }
+  }
+  if (derivedGapFields) {
+    for (const key of ["signed_gap", "gap_to_target", "touch_distance"] as const) {
+      if (finiteNumber(patch.changes[key]) === null) {
+        nextRow[key] = derivedGapFields[key];
+      }
+    }
+  }
+  return {
+    ...nextRow,
   };
 }
 
@@ -80,6 +152,76 @@ function applyTerminalPatches(
     return applyPatchToScanRow(row, patch);
   });
   return changed ? { ...data, rows } : data;
+}
+
+function scanRowId(row: ScanOpportunityRow | null | undefined) {
+  const id = row?.id;
+  return typeof id === "string" && id ? id : null;
+}
+
+function sortScanRowsByRank(rows: ScanOpportunityRow[]) {
+  return [...rows].sort((a, b) => {
+    const rankA = finiteNumber(a.rank);
+    const rankB = finiteNumber(b.rank);
+    if (rankA !== null && rankB !== null && rankA !== rankB) {
+      return rankA - rankB;
+    }
+    if (rankA !== null && rankB === null) return -1;
+    if (rankA === null && rankB !== null) return 1;
+    return 0;
+  });
+}
+
+function mergeScanTerminalIncrementalResponse(
+  previous: ScanTerminalResponse | null | undefined,
+  next: ScanTerminalResponse,
+): ScanTerminalResponse {
+  const diff = next.diff;
+  if (!diff || diff.mode === "full") return next;
+  if (!previous?.snapshot_id) return next;
+
+  const baseSnapshotId = diff.base_snapshot_id || next.snapshot_id;
+  if (previous.snapshot_id !== baseSnapshotId) return next;
+
+  if (diff.mode === "not_modified") {
+    return {
+      ...previous,
+      ...next,
+      status: "ready",
+      stale: false,
+      rows: previous.rows,
+    };
+  }
+
+  if (diff.mode !== "row_delta") return next;
+
+  const removedIds = new Set((diff.removed_row_ids || []).map((id) => String(id)));
+  const changedRows = new Map<string, ScanOpportunityRow>();
+  for (const row of diff.rows_changed || []) {
+    const id = scanRowId(row);
+    if (id) changedRows.set(id, row);
+  }
+
+  const seenIds = new Set<string>();
+  const mergedRows: ScanOpportunityRow[] = [];
+  for (const row of previous.rows || []) {
+    const id = scanRowId(row);
+    if (!id || removedIds.has(id)) continue;
+    const replacement = changedRows.get(id);
+    mergedRows.push(replacement || row);
+    seenIds.add(id);
+  }
+  for (const [id, row] of changedRows.entries()) {
+    if (!seenIds.has(id) && !removedIds.has(id)) {
+      mergedRows.push(row);
+    }
+  }
+
+  return {
+    ...previous,
+    ...next,
+    rows: sortScanRowsByRank(mergedRows),
+  };
 }
 
 export function useScanTerminalQuery({
@@ -114,6 +256,11 @@ export function useScanTerminalQuery({
     }
     return null;
   });
+  const latestScanDataRef = useRef<ScanTerminalResponse | null>(null);
+
+  useEffect(() => {
+    latestScanDataRef.current = terminalData || cachedRows;
+  }, [terminalData, cachedRows]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -136,13 +283,17 @@ export function useScanTerminalQuery({
         lastForcedScanRefreshAtRef.current = Date.now();
       }
       await run({
-        request: (signal) =>
-          scanTerminalClient.getTerminal({
+        request: async (signal) => {
+          const previous = latestScanDataRef.current;
+          const next = await scanTerminalClient.getTerminal({
             forceRefresh,
             signal,
+            sinceSnapshotId: !forceRefresh ? previous?.snapshot_id : null,
             timezoneOffsetSeconds,
             tradingRegion,
-          }),
+          });
+          return mergeScanTerminalIncrementalResponse(previous, next);
+        },
         showLoading,
         onSuccess: (data) => {
           lastScanSuccessAtRef.current = Date.now();
@@ -191,7 +342,7 @@ export function useScanTerminalQuery({
       if (now - lastForegroundScanRefreshAtRef.current < 30_000) return;
       if (
         lastScanSuccessAtRef.current > 0 &&
-        now - lastScanSuccessAtRef.current < SCAN_CACHE_TTL_MS
+        now - lastScanSuccessAtRef.current < FOREGROUND_SCAN_REFRESH_AFTER_SUCCESS_MS
       ) {
         return;
       }
@@ -268,3 +419,7 @@ export function useScanTerminalQuery({
     terminalData: effectiveData,
   };
 }
+
+export const __applyPatchToScanRowForTest = applyPatchToScanRow;
+export const __mergeScanTerminalIncrementalResponseForTest =
+  mergeScanTerminalIncrementalResponse;

@@ -3851,9 +3851,17 @@ def test_scan_terminal_endpoint_forwards_filters(monkeypatch):
 
     captured = {}
 
-    def _fake_build_scan_terminal_payload(filters, *, force_refresh=False):
+    def _fake_build_scan_terminal_payload(
+        filters,
+        *,
+        force_refresh=False,
+        diff=False,
+        since_snapshot_id=None,
+    ):
         captured["filters"] = dict(filters)
         captured["force_refresh"] = force_refresh
+        captured["diff"] = diff
+        captured["since_snapshot_id"] = since_snapshot_id
         return {
             "generated_at": "2026-04-23T00:00:00Z",
             "filters": filters,
@@ -3876,12 +3884,15 @@ def test_scan_terminal_endpoint_forwards_filters(monkeypatch):
     response = client.get(
         "/api/scan/terminal?scan_mode=trend&min_price=0.1&max_price=0.8&min_edge_pct=3"
         "&min_liquidity=700&high_liquidity_only=true&market_type=all&time_range=week&limit=12&force_refresh=true"
+        "&diff=true&since_snapshot_id=scan-old"
     )
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["summary"]["recommended_count"] == 1
     assert captured["force_refresh"] is True
+    assert captured["diff"] is True
+    assert captured["since_snapshot_id"] == "scan-old"
     assert captured["filters"]["scan_mode"] == "trend"
     assert captured["filters"]["market_type"] == "all"
     assert captured["filters"]["time_range"] == "week"

@@ -1,7 +1,7 @@
 export const DASHBOARD_REFRESH_POLICY_SEC = {
   observation: 60,
   metar: 5 * 60,
-  scanRows: 5 * 60,
+  scanRows: 2 * 60,
   marketOverview: 10 * 60,
   model: 30 * 60,
 } as const;

@@ -27,6 +27,7 @@ const SCAN_TERMINAL_PAYLOAD_VERSION = "runway-slim-v1";
 type TerminalQueryOptions = {
   forceRefresh?: boolean;
   signal?: AbortSignal;
+  sinceSnapshotId?: string | null;
   timezoneOffsetSeconds?: number | null;
   tradingRegion?: string;
 };
@@ -123,6 +124,7 @@ async function readJsonOrThrow<T>(path: string, init?: RequestInit): Promise<T> 
 async function getTerminal({
   forceRefresh = false,
   signal,
+  sinceSnapshotId,
   timezoneOffsetSeconds,
   tradingRegion,
 }: TerminalQueryOptions = {}) {
@@ -142,6 +144,11 @@ async function getTerminal({
   }
   if (Number.isFinite(timezoneOffsetSeconds)) {
     params.set("timezone_offset_seconds", String(Math.trunc(Number(timezoneOffsetSeconds))));
+  }
+  const trimmedSnapshotId = String(sinceSnapshotId || "").trim();
+  if (!forceRefresh && trimmedSnapshotId) {
+    params.set("diff", "true");
+    params.set("since_snapshot_id", trimmedSnapshotId);
   }
   params.set("_v", SCAN_TERMINAL_PAYLOAD_VERSION);
   if (forceRefresh) {

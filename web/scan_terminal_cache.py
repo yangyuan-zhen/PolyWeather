@@ -154,11 +154,19 @@ def set_cached_scan_terminal_payload(
     cache_key = scan_terminal_cache_key(filters)
     existing = get_scan_terminal_cache_entry(filters) or {}
     now = time.time()
+    existing_success_payload = existing.get("success_payload")
+    previous_success_payload = existing.get("previous_success_payload")
+    if isinstance(existing_success_payload, dict):
+        existing_snapshot_id = existing_success_payload.get("snapshot_id")
+        next_snapshot_id = payload.get("snapshot_id")
+        if existing_snapshot_id and existing_snapshot_id != next_snapshot_id:
+            previous_success_payload = dict(existing_success_payload)
     entry = {
         "t": now,
         "payload": dict(payload),
         "success_t": now,
         "success_payload": dict(payload),
+        "previous_success_payload": previous_success_payload,
         "last_error": existing.get("last_error"),
         "last_failed_at": existing.get("last_failed_at"),
     }

@@ -1,6 +1,11 @@
 from datetime import datetime, timezone
 
-from web.cache_warmer_service import CacheWarmer, build_default_cache_warmer, build_priority_city_batch
+from web.cache_warmer_service import (
+    CacheWarmer,
+    build_default_cache_warmer,
+    build_priority_city_batch,
+    warmer_tick_sec,
+)
 
 
 def test_priority_city_batch_prefers_local_active_hours_over_night():
@@ -80,6 +85,20 @@ def test_default_cache_warmer_enqueues_city_refresh_without_direct_panel_refresh
             "reason": "cache_warmer",
         }
     ]
+
+
+def test_default_cache_warmer_uses_faster_city_refresh_defaults(monkeypatch):
+    monkeypatch.delenv("POLYWEATHER_WARMER_CITY_BATCH_SIZE", raising=False)
+    monkeypatch.delenv("POLYWEATHER_WARMER_CITY_INTERVAL_SEC", raising=False)
+    monkeypatch.delenv("POLYWEATHER_WARMER_SCAN_INTERVAL_SEC", raising=False)
+    monkeypatch.delenv("POLYWEATHER_WARMER_TICK_SEC", raising=False)
+
+    warmer = build_default_cache_warmer()
+
+    assert warmer.scan_interval_sec == 120
+    assert warmer.city_batch_size == 16
+    assert warmer.city_interval_sec == 30
+    assert warmer_tick_sec() == 30
 
 
 def test_cache_warmer_skips_work_when_intervals_are_not_due():

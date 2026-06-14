@@ -16,6 +16,15 @@ from src.data_collection.city_time import (
 SCHEMA_TYPE = "city_observation_patch"
 SCHEMA_VERSION = 1
 EVENT_TYPE = "city_observation_patch.v1"
+DERIVED_SCAN_NUMBER_FIELDS = (
+    "signed_gap",
+    "gap_to_target",
+    "touch_distance",
+    "current_reference",
+    "edge",
+    "edge_percent",
+    "deb_prediction",
+)
 SOURCE_CADENCE_SECONDS = {
     "amos": 60,
     "amsc_awos": 180,
@@ -178,6 +187,10 @@ def _payload_from_legacy(changes: Dict[str, Any]) -> Dict[str, Any]:
     max_so_far = _first_number(changes.get("max_so_far"), changes.get("current_max_so_far"))
     if max_so_far is not None:
         payload["max_so_far"] = max_so_far
+    for key in DERIVED_SCAN_NUMBER_FIELDS:
+        value = _finite_number(changes.get(key))
+        if value is not None:
+            payload[key] = value
 
     station_code = str(
         changes.get("station_code")
@@ -227,6 +240,10 @@ def _payload_from_v1(raw_payload: Any) -> Dict[str, Any]:
     max_so_far = _finite_number(raw_payload.get("max_so_far"))
     if max_so_far is not None:
         payload["max_so_far"] = max_so_far
+    for key in DERIVED_SCAN_NUMBER_FIELDS:
+        value = _finite_number(raw_payload.get(key))
+        if value is not None:
+            payload[key] = value
 
     for key in ("station_code", "station_label", "series_key", "unit"):
         value = raw_payload.get(key)

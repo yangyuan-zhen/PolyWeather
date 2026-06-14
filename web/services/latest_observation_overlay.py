@@ -45,12 +45,19 @@ def _payload_latest_epoch(payload: dict[str, Any], keys: tuple[str, ...]) -> Opt
 def _block_epoch(block: Any) -> Optional[int]:
     if not isinstance(block, dict):
         return None
-    return _payload_latest_epoch(
+    canonical_epoch = _payload_latest_epoch(
         block,
         (
             "observed_at",
             "observation_time",
             "obs_time",
+        ),
+    )
+    if canonical_epoch is not None:
+        return canonical_epoch
+    return _payload_latest_epoch(
+        block,
+        (
             "observed_at_local",
             "observation_time_local",
         ),

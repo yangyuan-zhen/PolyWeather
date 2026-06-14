@@ -3,6 +3,7 @@ from web import scan_terminal_cache
 from web import scan_terminal_service
 from web.scan_terminal_metar_gate import _apply_metar_gate_to_row
 from web.scan_terminal_payloads import (
+    build_scan_terminal_incremental_payload,
     build_failed_scan_terminal_payload,
     build_scan_terminal_snapshot_id,
     build_stale_scan_terminal_payload,
@@ -74,6 +75,146 @@ def test_scan_terminal_failure_state_preserves_redis_success_payload(monkeypatch
 
     assert entry["success_payload"]["rows"] == [{"id": "row-1"}]
     assert entry["last_error"] == "timeout"
+
+
+def test_scan_terminal_cache_keeps_previous_success_snapshot_for_diffs(monkeypatch):
+    fake_redis = _FakeRedis()
+    monkeypatch.setenv("POLYWEATHER_SCAN_TERMINAL_REDIS_CACHE_ENABLED", "true")
+    monkeypatch.setattr(scan_terminal_cache, "_get_redis_client", lambda: fake_redis)
+    scan_terminal_cache._SCAN_TERMINAL_CACHE.clear()
+
+    filters = {"scan_mode": "tradable", "limit": 9}
+    scan_terminal_cache.set_cached_scan_terminal_payload(
+        filters,
+        {
+            "snapshot_id": "scan-old",
+            "generated_at": "2026-06-01T00:00:00Z",
+            "rows": [{"id": "row-1", "edge_percent": 3}],
+        },
+    )
+    scan_terminal_cache.set_cached_scan_terminal_payload(
+        filters,
+        {
+            "snapshot_id": "scan-new",
+            "generated_at": "2026-06-01T00:01:00Z",
+            "rows": [{"id": "row-1", "edge_percent": 4}],
+        },
+    )
+
+    scan_terminal_cache._SCAN_TERMINAL_CACHE.clear()
+    entry = scan_terminal_cache.get_scan_terminal_cache_entry(filters)
+
+    assert entry["success_payload"]["snapshot_id"] == "scan-new"
+    assert entry["previous_success_payload"]["snapshot_id"] == "scan-old"
+
+
+def test_build_scan_terminal_incremental_payload_returns_not_modified():
+    filters = {"scan_mode": "tradable", "limit": 2}
+    current = {
+        "generated_at": "2026-06-01T00:01:00Z",
+        "snapshot_id": "scan-current",
+        "status": "ready",
+        "stale": False,
+        "filters": filters,
+        "summary": {"candidate_total": 2},
+        "top_signal": {"id": "row-1"},
+        "rows": [{"id": "row-1"}, {"id": "row-2"}],
+    }
+
+    payload = build_scan_terminal_incremental_payload(
+        filters=filters,
+        current_payload=current,
+        since_snapshot_id="scan-current",
+        base_payload=current,
+    )
+
+    assert payload["status"] == "not_modified"
+    assert payload["rows"] == []
+    assert payload["summary"] == current["summary"]
+    assert payload["top_signal"] == current["top_signal"]
+    assert payload["diff"] == {
+        "mode": "not_modified",
+        "base_snapshot_id": "scan-current",
+        "snapshot_id": "scan-current",
+        "rows_changed": [],
+        "removed_row_ids": [],
+    }
+
+
+def test_build_scan_terminal_incremental_payload_returns_changed_row_delta():
+    filters = {"scan_mode": "tradable", "limit": 3}
+    base = {
+        "generated_at": "2026-06-01T00:00:00Z",
+        "snapshot_id": "scan-old",
+        "status": "ready",
+        "stale": False,
+        "filters": filters,
+        "summary": {"candidate_total": 2},
+        "top_signal": {"id": "row-1"},
+        "rows": [
+            {"id": "row-1", "rank": 1, "edge_percent": 3},
+            {"id": "row-removed", "rank": 2, "edge_percent": 2},
+        ],
+    }
+    current = {
+        "generated_at": "2026-06-01T00:01:00Z",
+        "snapshot_id": "scan-new",
+        "status": "ready",
+        "stale": False,
+        "filters": filters,
+        "summary": {"candidate_total": 2},
+        "top_signal": {"id": "row-added"},
+        "rows": [
+            {"id": "row-1", "rank": 1, "edge_percent": 4},
+            {"id": "row-added", "rank": 2, "edge_percent": 5},
+        ],
+    }
+
+    payload = build_scan_terminal_incremental_payload(
+        filters=filters,
+        current_payload=current,
+        since_snapshot_id="scan-old",
+        base_payload=base,
+    )
+
+    assert payload["status"] == "ready"
+    assert payload["rows"] == []
+    assert payload["snapshot_id"] == "scan-new"
+    assert payload["diff"]["mode"] == "row_delta"
+    assert payload["diff"]["base_snapshot_id"] == "scan-old"
+    assert payload["diff"]["snapshot_id"] == "scan-new"
+    assert {row["id"] for row in payload["diff"]["rows_changed"]} == {
+        "row-1",
+        "row-added",
+    }
+    assert payload["diff"]["removed_row_ids"] == ["row-removed"]
+
+
+def test_build_scan_terminal_incremental_payload_falls_back_to_full_without_base():
+    filters = {"scan_mode": "tradable", "limit": 2}
+    current = {
+        "generated_at": "2026-06-01T00:01:00Z",
+        "snapshot_id": "scan-new",
+        "status": "ready",
+        "stale": False,
+        "filters": filters,
+        "summary": {"candidate_total": 1},
+        "top_signal": None,
+        "rows": [{"id": "row-1", "edge_percent": 4}],
+    }
+
+    payload = build_scan_terminal_incremental_payload(
+        filters=filters,
+        current_payload=current,
+        since_snapshot_id="scan-old",
+        base_payload=None,
+    )
+
+    assert payload["status"] == "ready"
+    assert payload["rows"] == current["rows"]
+    assert payload["diff"]["mode"] == "full"
+    assert payload["diff"]["base_snapshot_id"] == "scan-old"
+    assert payload["diff"]["snapshot_id"] == "scan-new"
 
 
 def test_scan_terminal_prewarm_covers_default_api_limit():

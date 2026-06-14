@@ -28,6 +28,14 @@ def _to_int(value: Any) -> Optional[int]:
         return None
 
 
+def _first_float(*values: Any) -> Optional[float]:
+    for value in values:
+        number = _to_float(value)
+        if number is not None:
+            return number
+    return None
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -127,6 +135,7 @@ def build_canonical_temperature(
     canonical = {
         "city": str(city or payload.get("name") or payload.get("city") or "").strip().lower(),
         "value": round(value, 2),
+        "max_so_far": _first_float(current.get("max_so_far"), current.get("max_temp_so_far")),
         "temp_symbol": str(payload.get("temp_symbol") or "°C"),
         "source": source,
         "source_label": source_label,
@@ -142,6 +151,10 @@ def build_canonical_temperature(
     }
     age_text = f" updated {freshness_sec}s ago" if freshness_sec is not None else ""
     canonical["explanation"] = f"{source_label or source or 'Source'}{age_text}."
+    deb = payload.get("deb") if isinstance(payload.get("deb"), dict) else {}
+    deb_prediction = _to_float(deb.get("prediction"))
+    if deb_prediction is not None:
+        canonical["deb_prediction"] = deb_prediction
     return canonical
 
 
@@ -190,6 +203,7 @@ def build_city_weather_from_canonical(city: str, canonical: Dict[str, Any]) -> O
     }
     current = {
         "temp": value,
+        "max_so_far": _first_float(canonical.get("max_so_far"), value),
         "source_code": source,
         "settlement_source": source,
         "settlement_source_label": source_label,
@@ -201,6 +215,7 @@ def build_city_weather_from_canonical(city: str, canonical: Dict[str, Any]) -> O
     }
     airport_primary = {
         "temp": value,
+        "max_so_far": _first_float(canonical.get("max_so_far"), value),
         "source_code": source,
         "source_label": source_label,
         "obs_time": observed_at or observed_at_local,

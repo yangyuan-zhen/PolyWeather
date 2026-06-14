@@ -96,7 +96,7 @@ class ObservationCollector:
                 int(
                     cache_refresh_workers
                     if cache_refresh_workers is not None
-                    else _env_int("POLYWEATHER_OBSERVATION_COLLECTOR_CACHE_REFRESH_WORKERS", 1)
+                    else _env_int("POLYWEATHER_OBSERVATION_COLLECTOR_CACHE_REFRESH_WORKERS", 2)
                 ),
             ),
         )

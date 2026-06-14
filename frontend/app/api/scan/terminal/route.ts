@@ -43,6 +43,8 @@ export async function GET(req: NextRequest) {
     "time_range",
     "limit",
     "force_refresh",
+    "diff",
+    "since_snapshot_id",
     "timezone_offset_seconds",
   ]) {
     const value = req.nextUrl.searchParams.get(key);

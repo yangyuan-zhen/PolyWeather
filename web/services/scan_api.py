@@ -23,6 +23,17 @@ def _supports_timing_recorder(func: Any) -> bool:
     )
 
 
+def _supports_keyword(func: Any, name: str) -> bool:
+    try:
+        params = signature(func).parameters.values()
+    except (TypeError, ValueError):
+        return True
+    return any(
+        param.name == name or param.kind == Parameter.VAR_KEYWORD
+        for param in params
+    )
+
+
 async def get_scan_terminal_payload(
     request: Request,
     *,
@@ -36,6 +47,8 @@ async def get_scan_terminal_payload(
     time_range: str = "today",
     limit: int = 25,
     force_refresh: bool = False,
+    diff: bool = False,
+    since_snapshot_id: str | None = None,
     region: str = "",
     timezone_offset_seconds: int | None = None,
 ) -> Dict[str, Any]:
@@ -67,6 +80,10 @@ async def get_scan_terminal_payload(
         async def build_payload():
             builder = legacy_routes.build_scan_terminal_payload
             kwargs: Dict[str, Any] = {"force_refresh": force_refresh}
+            if _supports_keyword(builder, "diff"):
+                kwargs["diff"] = diff
+            if _supports_keyword(builder, "since_snapshot_id"):
+                kwargs["since_snapshot_id"] = since_snapshot_id
             if _supports_timing_recorder(builder):
                 kwargs["timing_recorder"] = timer
             return await run_in_threadpool(builder, filters, **kwargs)
