@@ -28,6 +28,7 @@ from src.utils.telegram_i18n import (
     telegram_push_language as _resolve_telegram_push_language,
 )
 from web.services.canonical_temperature import build_city_weather_from_canonical
+from web.services.latest_observation_overlay import overlay_latest_amsc_observation
 
 # Forum topic routing: maps city_key -> message_thread_id for the push forum group.
 # Created by scripts/create_forum_topics.py, stored in the runtime data dir.
@@ -1582,23 +1583,11 @@ def _attach_latest_raw_observation_payload(
     city: str,
     payload: Dict[str, Any],
 ) -> Dict[str, Any]:
-    canonical = payload.get("canonical_temperature") or {}
-    source = str(canonical.get("source") or "").strip().lower()
-    if source != "amsc_awos":
-        return payload
-    getter = getattr(db, "get_latest_raw_observation", None)
-    if not callable(getter):
-        return payload
     try:
-        row = getter("amsc_awos", city)
+        return overlay_latest_amsc_observation(db, city, payload)
     except Exception as exc:
-        logger.debug("airport push latest raw observation read failed city={}: {}", city, exc)
+        logger.debug("airport push latest observation overlay failed city={}: {}", city, exc)
         return payload
-    raw_payload = row.get("payload") if isinstance(row, dict) else None
-    if isinstance(raw_payload, dict) and raw_payload:
-        payload = dict(payload)
-        payload["amos"] = dict(raw_payload)
-    return payload
 
 
 def _read_canonical_airport_city_weather(city: str, db: Optional[Any] = None) -> Optional[Dict[str, Any]]:
@@ -1661,8 +1650,11 @@ def _merge_airport_push_context(
 
 
 def _load_airport_city_weather_for_push(city: str) -> Dict[str, Any]:
-    cached = _read_cached_airport_city_weather(city)
-    canonical = _read_canonical_airport_city_weather(city)
+    normalized_city = (city or "").strip().lower()
+    cached = _read_cached_airport_city_weather(normalized_city)
+    if cached is not None:
+        cached = _attach_latest_raw_observation_payload(DBManager(), normalized_city, cached)
+    canonical = _read_canonical_airport_city_weather(normalized_city)
     if canonical is not None:
         cached_ts = _cached_payload_observation_epoch(cached or {})
         canonical_ts = _cached_payload_observation_epoch(canonical)

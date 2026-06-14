@@ -406,6 +406,119 @@ def test_force_refresh_panel_returns_canonical_latest_without_waiting_for_sync_r
     assert payload["detail_depth"] == "panel"
 
 
+def test_force_refresh_panel_overlays_latest_amsc_raw_over_stale_cache(monkeypatch):
+    import web.services.city_api as city_api
+
+    enqueued = []
+
+    class FakeDB:
+        def get_city_cache(self, kind, city):
+            assert kind == "panel"
+            assert city == "shanghai"
+            return {
+                "updated_at_ts": 1000.0,
+                "payload": {
+                    "detail_depth": "panel",
+                    "current": {
+                        "temp": 21.8,
+                        "source_code": "metar",
+                        "observed_at": "2026-06-14T10:30:00+00:00",
+                    },
+                    "airport_primary": {
+                        "temp": 21.8,
+                        "source_code": "metar",
+                        "obs_time": "2026-06-14T10:30:00+00:00",
+                    },
+                    "amos": {
+                        "source": "amsc_awos",
+                        "temp_c": 22.2,
+                        "observation_time": "2026-06-14T10:44:00+00:00",
+                    },
+                    "deb": {"prediction": 24.5},
+                },
+            }
+
+        def get_canonical_temperature(self, city):
+            assert city == "shanghai"
+            return {
+                "payload": {
+                    "city": "shanghai",
+                    "value": 21.8,
+                    "source": "metar",
+                    "source_label": "METAR",
+                    "source_role": "airport_official",
+                    "observed_at": "2026-06-14T10:30:00+00:00",
+                    "observed_at_local": "18:30",
+                    "freshness_sec": 120,
+                    "freshness_status": "fresh",
+                    "fetched_at": "2026-06-14T10:30:05+00:00",
+                    "confidence": 0.78,
+                },
+            }
+
+        def get_latest_raw_observation(self, source, city):
+            assert (source, city) == ("amsc_awos", "shanghai")
+            return {
+                "observed_at": "2026-06-14T15:43:00+00:00",
+                "fetched_at": "2026-06-14T15:43:30+00:00",
+                "payload": {
+                    "source": "amsc_awos",
+                    "source_label": "AMSC AWOS Shanghai Pudong (ZSPD)",
+                    "icao": "ZSPD",
+                    "temp_c": 25.4,
+                    "observation_time": "2026-06-14T15:43:00+00:00",
+                    "observation_time_local": "2026-06-14 23:43:00",
+                    "runway_obs": {
+                        "runway_pairs": [("17L", "35R")],
+                        "temperatures": [(25.4, None)],
+                        "point_temperatures": [
+                            {
+                                "runway": "17L/35R",
+                                "tdz_temp": 25.0,
+                                "mid_temp": 25.2,
+                                "end_temp": 25.4,
+                                "target_runway_max": 25.4,
+                            }
+                        ],
+                    },
+                },
+            }
+
+        def enqueue_observation_refresh_request(self, **kwargs):
+            enqueued.append(kwargs)
+            return True
+
+    async def identity_overlay(_city, payload):
+        return payload
+
+    monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
+    monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeDB())
+    monkeypatch.setattr(city_api, "_overlay_cached_wunderground", identity_overlay)
+
+    payload = asyncio.run(
+        city_api.get_city_detail_payload(
+            object(),
+            "Shanghai",
+            force_refresh=True,
+            depth="panel",
+        )
+    )
+
+    assert payload["amos"]["observation_time"] == "2026-06-14T15:43:00+00:00"
+    assert payload["current"]["source_code"] == "amsc_awos"
+    assert payload["current"]["temp"] == 25.4
+    assert payload["canonical_temperature"]["source"] == "amsc_awos"
+    assert payload["deb"]["prediction"] == 24.5
+    assert enqueued == [
+        {
+            "city": "shanghai",
+            "kind": "panel",
+            "priority": "high",
+            "reason": "force_refresh",
+        }
+    ]
+
+
 def test_city_panel_canonical_fallback_enqueues_collector_refresh_when_queue_exists(monkeypatch):
     import web.services.city_api as city_api
 

@@ -3782,7 +3782,7 @@ def test_scan_terminal_nonforce_ignores_ancient_success_snapshot(monkeypatch):
     monkeypatch.setattr(
         scan_terminal_service.time,
         "time",
-        lambda: old_success_t + scan_terminal_service.SCAN_TERMINAL_PAYLOAD_TTL_SEC * 3,
+        lambda: old_success_t + scan_terminal_service.SCAN_TERMINAL_STALE_SUCCESS_MAX_AGE_SEC + 1,
     )
     monkeypatch.setattr(
         scan_terminal_service,
