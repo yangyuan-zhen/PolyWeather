@@ -191,6 +191,83 @@ def _merge_observation_block(
     return True
 
 
+def _runway_history_temp(point: dict[str, Any]) -> Optional[float]:
+    for key in ("target_runway_max", "temp", "tdz_temp", "end_temp", "mid_temp"):
+        temp = _to_float(point.get(key))
+        if temp is not None:
+            return temp
+    return None
+
+
+def _append_latest_amsc_runway_history(
+    payload: dict[str, Any],
+    row: dict[str, Any],
+    raw_payload: dict[str, Any],
+) -> bool:
+    runway_obs = raw_payload.get("runway_obs")
+    if not isinstance(runway_obs, dict):
+        return False
+    point_temperatures = runway_obs.get("point_temperatures")
+    if not isinstance(point_temperatures, list) or not point_temperatures:
+        return False
+    observed_at = str(
+        raw_payload.get("observation_time")
+        or raw_payload.get("observed_at")
+        or row.get("observed_at")
+        or ""
+    ).strip()
+    if not observed_at:
+        return False
+
+    history = payload.get("runway_plate_history")
+    if not isinstance(history, dict):
+        history = {}
+    else:
+        history = deepcopy(history)
+
+    use_fahrenheit = "F" in str(payload.get("temp_symbol") or "").upper()
+    changed = False
+    for point in point_temperatures:
+        if not isinstance(point, dict):
+            continue
+        runway = str(point.get("runway") or "").strip().upper()
+        temp = _runway_history_temp(point)
+        if not runway or temp is None:
+            continue
+        if use_fahrenheit:
+            temp = temp * 9.0 / 5.0 + 32.0
+        entry = {
+            "time": observed_at,
+            "temp": round(float(temp), 1),
+        }
+        existing = history.get(runway)
+        runway_history = list(existing) if isinstance(existing, list) else []
+        replaced = False
+        for index, current in enumerate(runway_history):
+            if not isinstance(current, dict):
+                continue
+            current_time = str(
+                current.get("time")
+                or current.get("timestamp")
+                or current.get("observed_at")
+                or ""
+            ).strip()
+            if current_time == observed_at:
+                if current != entry:
+                    runway_history[index] = entry
+                    changed = True
+                replaced = True
+                break
+        if not replaced:
+            runway_history.append(entry)
+            changed = True
+        history[runway] = runway_history
+
+    if changed:
+        payload["runway_plate_history"] = history
+    return changed
+
+
 def overlay_latest_amsc_observation(
     db: Any,
     city: str,
@@ -219,6 +296,8 @@ def overlay_latest_amsc_observation(
 
     for key in ("current", "airport_primary", "airport_current"):
         changed = _merge_observation_block(next_payload, key, update, raw_epoch) or changed
+
+    changed = _append_latest_amsc_runway_history(next_payload, row, raw_payload) or changed
 
     canonical = next_payload.get("canonical_temperature")
     canonical_epoch = _block_epoch(canonical)

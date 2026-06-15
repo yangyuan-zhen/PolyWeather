@@ -48,6 +48,65 @@ def test_overlay_replaces_amos_when_old_local_time_string_looks_later_than_new_u
     assert result["amos"]["runway_obs"]["point_temperatures"][0]["runway"] == "17L/35R"
 
 
+def test_overlay_appends_latest_amsc_points_to_runway_history():
+    class FakeDB:
+        def get_latest_raw_observation(self, source, city):
+            assert (source, city) == ("amsc_awos", "chengdu")
+            return {
+                "observed_at": "2026-06-15T10:51:00+00:00",
+                "fetched_at": "2026-06-15T10:51:30+00:00",
+                "station_code": "ZUUU",
+                "station_name": "Chengdu Shuangliu",
+                "payload": {
+                    "source": "amsc_awos",
+                    "source_label": "AMSC AWOS Chengdu Shuangliu (ZUUU)",
+                    "icao": "ZUUU",
+                    "temp_c": 28.4,
+                    "observation_time": "2026-06-15T10:51:00+00:00",
+                    "observation_time_local": "2026-06-15 18:51:00",
+                    "runway_obs": {
+                        "point_temperatures": [
+                            {
+                                "runway": "02L/20R",
+                                "tdz_temp": 28.4,
+                                "end_temp": 28.2,
+                                "target_runway_max": 28.4,
+                            },
+                            {
+                                "runway": "02R/20L",
+                                "tdz_temp": 28.1,
+                                "end_temp": 28.0,
+                                "target_runway_max": 28.1,
+                            },
+                        ],
+                    },
+                },
+            }
+
+    stale_payload = {
+        "name": "chengdu",
+        "temp_symbol": "°C",
+        "runway_plate_history": {
+            "02L/20R": [{"time": "2026-06-14T10:44:00+00:00", "temp": 31.6}],
+        },
+        "amos": {
+            "source": "amsc_awos",
+            "observation_time": "2026-06-14T10:44:00+00:00",
+        },
+    }
+
+    result = overlay_latest_amsc_observation(FakeDB(), "chengdu", stale_payload)
+
+    assert result["runway_plate_history"]["02L/20R"][-1] == {
+        "time": "2026-06-15T10:51:00+00:00",
+        "temp": 28.4,
+    }
+    assert result["runway_plate_history"]["02R/20L"][-1] == {
+        "time": "2026-06-15T10:51:00+00:00",
+        "temp": 28.1,
+    }
+
+
 def test_overlay_uses_latest_success_when_newer_status_row_has_no_observation():
     class FakeDB:
         def get_latest_raw_observation(self, source, city):

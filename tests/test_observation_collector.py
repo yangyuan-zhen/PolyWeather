@@ -222,6 +222,66 @@ def test_observation_collector_aligns_amsc_payload_time_with_record_observed_at(
     assert latest["payload"]["observation_time_local"] == "2026-06-14 23:43:00"
 
 
+def test_observation_collector_persists_amsc_runway_history(tmp_path):
+    from src.database.db_manager import DBManager
+    from web.observation_collector_service import ObservationCollector
+    from web.services.observation_source_adapters import ObservationRecord
+
+    db = DBManager(str(tmp_path / "polyweather.db"))
+    collector = ObservationCollector(
+        weather=object(),
+        profiles=[],
+        observation_store=db,
+    )
+
+    record = ObservationRecord(
+        source="amsc_awos",
+        city="chengdu",
+        value=28.4,
+        observed_at="2026-06-15T10:51:00+00:00",
+        observed_at_local="2026-06-15 18:51:00",
+        station_code="ZUUU",
+        station_name="Chengdu Shuangliu",
+        runway="",
+        value_unit="c",
+        source_label="AMSC AWOS Chengdu Shuangliu (ZUUU)",
+        payload={
+            "source": "amsc_awos",
+            "icao": "ZUUU",
+            "temp_c": 28.4,
+            "runway_obs": {
+                "point_temperatures": [
+                    {
+                        "runway": "02L/20R",
+                        "tdz_temp": 28.4,
+                        "mid_temp": None,
+                        "end_temp": 28.2,
+                        "target_runway_max": 28.4,
+                        "wind_dir": 130,
+                        "wind_speed": 4.0,
+                    },
+                    {
+                        "runway": "02R/20L",
+                        "tdz_temp": 28.1,
+                        "mid_temp": None,
+                        "end_temp": 28.0,
+                        "target_runway_max": 28.1,
+                    },
+                ],
+            },
+        },
+    )
+
+    assert collector._store_raw_observations([record]) == 1
+
+    rows = db.get_runway_obs_recent("ZUUU", minutes=60)
+
+    assert [row["runway"] for row in rows] == ["02L/20R", "02R/20L"]
+    assert rows[0]["otime_utc"] == "2026-06-15T10:51:00+00:00"
+    assert rows[0]["target_runway_max"] == 28.4
+    assert rows[0]["wind_dir"] == 130
+
+
 def test_raw_observation_failure_preserves_last_success_and_increments_errors(tmp_path):
     from src.database.db_manager import DBManager
 
