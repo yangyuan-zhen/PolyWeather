@@ -775,8 +775,12 @@ function airportPrimarySeriesLabel(
   row?: ScanOpportunityRow | null,
 ) {
   if (isHKO) return "HKO";
+  const cityKey = normalizeCityKey(row?.city);
   const canonicalLabel = canonicalAirportPrimarySourceLabel(hourly);
   if (canonicalLabel === "MGM") return canonicalLabel;
+  if ((cityKey === "ankara" || cityKey === "istanbul") && (!canonicalLabel || canonicalLabel === "NOAA MADIS")) {
+    return "MGM";
+  }
   const payloadLabel = String(hourly?.airportPrimary?.source_label || "").trim();
   if (payloadLabel && !isGenericAirportPrimaryLabel(payloadLabel)) return payloadLabel;
   if (canonicalLabel === "NOAA MADIS" && !isUsAirportCode(airportCodeForSeriesLabel(hourly, row))) {

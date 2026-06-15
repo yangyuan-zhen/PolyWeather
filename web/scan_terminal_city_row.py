@@ -239,6 +239,8 @@ def _build_quick_row(
 ) -> Optional[Dict[str, Any]]:
     curr = data.get("current") or {}
     risk = data.get("risk") or {}
+    airport_primary = data.get("airport_primary") if isinstance(data.get("airport_primary"), dict) else {}
+    official_status = data.get("official_network_status") if isinstance(data.get("official_network_status"), dict) else {}
     deb = data.get("deb") or {}
     probs = data.get("probabilities") or {}
     multi = data.get("multi_model") or {}
@@ -274,6 +276,13 @@ def _build_quick_row(
         "current_temp": curr.get("temp"),
         "current_max_so_far": curr.get("max_so_far"),
         "wunderground_current": data.get("wunderground_current") or {},
+        "icao": str(risk.get("icao") or airport_primary.get("station_code") or ""),
+        "station_source_code": airport_primary.get("source_code") or data.get("official_network_source"),
+        "station_source_label": airport_primary.get("source_label") or official_status.get("provider_label"),
+        "station_code": airport_primary.get("station_code") or risk.get("icao"),
+        "station_label": airport_primary.get("station_label") or risk.get("airport"),
+        "network_provider": data.get("official_network_source") or official_status.get("provider_code"),
+        "network_provider_label": official_status.get("provider_label"),
         "deb_prediction": deb.get("prediction"),
         "model_cluster_sources": (
             daily_entry.get("models")

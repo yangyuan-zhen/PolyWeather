@@ -541,6 +541,34 @@ export function runTests() {
     "NOAA MADIS label should be reserved for US airports; non-US airport-primary fallback should use METAR wording",
   );
 
+  const ankaraScanSeedChart = buildFullDayChartData(
+    {
+      city: "ankara",
+      local_date: "2026-06-14",
+      local_time: "15:10",
+      tz_offset_seconds: 3 * 60 * 60,
+      airport: "Esenboğa 机场",
+      temp_symbol: "°C",
+    } as any,
+    {
+      localDate: "2026-06-14",
+      localTime: "15:10",
+      times: ["00:00", "12:00", "18:00"],
+      temps: [15, 19, 18],
+      airportPrimary: {
+        temp: 19,
+        obs_time: "2026-06-14T12:10:00Z",
+      },
+      airportPrimaryTodayObs: [["2026-06-14T12:10:00Z", 19]],
+    } as any,
+    false,
+  );
+  const ankaraScanSeedSeries = ankaraScanSeedChart.series.find((item) => item.key === "madis");
+  assert(
+    ankaraScanSeedSeries?.label === "MGM",
+    "Ankara scan-row-seeded airport-primary curve should default to MGM instead of NOAA MADIS when source metadata is missing",
+  );
+
   const guangzhouRunwayWithBadMadisChart = buildFullDayChartData(
     {
       city: "guangzhou",

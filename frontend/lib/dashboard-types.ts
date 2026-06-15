@@ -533,6 +533,13 @@ export interface ScanOpportunityRow {
   current_temp?: number | null;
   current_max_so_far?: number | null;
   wunderground_current?: AirportCurrentConditions;
+  icao?: string | null;
+  station_source_code?: string | null;
+  station_source_label?: string | null;
+  station_code?: string | null;
+  station_label?: string | null;
+  network_provider?: string | null;
+  network_provider_label?: string | null;
   metar_context?: {
     source?: string | null;
     station?: string | null;

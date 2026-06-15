@@ -603,6 +603,40 @@ def test_scan_terminal_quick_row_compacts_runway_history_for_list_payload():
     assert len(str(row["runway_plate_history"])) < len(str(raw_history))
 
 
+def test_scan_terminal_quick_row_exposes_airport_primary_source_metadata():
+    row = _build_quick_row(
+        city="ankara",
+        data={
+            "display_name": "Ankara",
+            "local_date": "2026-06-14",
+            "local_time": "2026-06-14T15:10:00+03:00",
+            "temp_symbol": "°C",
+            "current": {"temp": 19.0, "max_so_far": 19.0},
+            "risk": {"airport": "Esenboğa", "icao": "LTAC", "level": "medium"},
+            "airport_primary": {
+                "station_code": "LTAC",
+                "station_label": "Esenboğa 机场",
+                "source_code": "mgm",
+                "source_label": "MGM",
+            },
+            "official_network_source": "turkey_mgm",
+            "official_network_status": {
+                "provider_code": "turkey_mgm",
+                "provider_label": "MGM",
+            },
+            "deb": {"prediction": 20.0},
+            "probabilities": {"distribution": []},
+            "multi_model": {},
+        },
+    )
+
+    assert row["icao"] == "LTAC"
+    assert row["station_source_code"] == "mgm"
+    assert row["station_source_label"] == "MGM"
+    assert row["station_code"] == "LTAC"
+    assert row["network_provider"] == "turkey_mgm"
+
+
 def test_metar_gate_vetoes_yes_when_observed_breaks_above_bucket():
     row = {
         "id": "yes-row",
