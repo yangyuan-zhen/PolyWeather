@@ -88,6 +88,15 @@ def _to_float(value: Any) -> Optional[float]:
         return None
 
 
+def _to_int(value: Any) -> Optional[int]:
+    try:
+        if value is None or value == "":
+            return None
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
 def _amsc_payload_has_observation(raw_payload: dict[str, Any]) -> bool:
     temp = raw_payload.get("temp_c") if raw_payload.get("temp_c") is not None else raw_payload.get("temp")
     return _to_float(temp) is not None
@@ -200,6 +209,8 @@ def _runway_history_temp(point: dict[str, Any]) -> Optional[float]:
 
 
 def _append_latest_amsc_runway_history(
+    db: Any,
+    city: str,
     payload: dict[str, Any],
     row: dict[str, Any],
     raw_payload: dict[str, Any],
@@ -226,6 +237,8 @@ def _append_latest_amsc_runway_history(
         history = deepcopy(history)
 
     use_fahrenheit = "F" in str(payload.get("temp_symbol") or "").upper()
+    appender = getattr(db, "append_runway_obs", None)
+    icao = str(raw_payload.get("icao") or row.get("station_code") or "").strip().upper()
     changed = False
     for point in point_temperatures:
         if not isinstance(point, dict):
@@ -262,6 +275,30 @@ def _append_latest_amsc_runway_history(
             runway_history.append(entry)
             changed = True
         history[runway] = runway_history
+        if callable(appender) and icao:
+            try:
+                appender(
+                    icao=icao,
+                    city=city,
+                    runway=runway,
+                    tdz_temp=_to_float(point.get("tdz_temp")),
+                    mid_temp=_to_float(point.get("mid_temp")),
+                    end_temp=_to_float(point.get("end_temp")),
+                    target_runway_max=_to_float(point.get("target_runway_max")),
+                    wind_dir=_to_int(point.get("wind_dir")),
+                    wind_speed=_to_float(point.get("wind_speed")),
+                    rvr=_to_int(point.get("rvr")),
+                    mor=_to_float(point.get("mor")),
+                    humidity=_to_float(point.get("humidity")),
+                    otime_utc=observed_at,
+                )
+            except Exception as exc:
+                logger.debug(
+                    "latest AMSC runway history persist skipped city={} runway={}: {}",
+                    city,
+                    runway,
+                    exc,
+                )
 
     if changed:
         payload["runway_plate_history"] = history
@@ -297,7 +334,7 @@ def overlay_latest_amsc_observation(
     for key in ("current", "airport_primary", "airport_current"):
         changed = _merge_observation_block(next_payload, key, update, raw_epoch) or changed
 
-    changed = _append_latest_amsc_runway_history(next_payload, row, raw_payload) or changed
+    changed = _append_latest_amsc_runway_history(db, normalized_city, next_payload, row, raw_payload) or changed
 
     canonical = next_payload.get("canonical_temperature")
     canonical_epoch = _block_epoch(canonical)

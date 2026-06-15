@@ -49,6 +49,8 @@ def test_overlay_replaces_amos_when_old_local_time_string_looks_later_than_new_u
 
 
 def test_overlay_appends_latest_amsc_points_to_runway_history():
+    runway_writes = []
+
     class FakeDB:
         def get_latest_raw_observation(self, source, city):
             assert (source, city) == ("amsc_awos", "chengdu")
@@ -83,6 +85,9 @@ def test_overlay_appends_latest_amsc_points_to_runway_history():
                 },
             }
 
+        def append_runway_obs(self, **kwargs):
+            runway_writes.append(kwargs)
+
     stale_payload = {
         "name": "chengdu",
         "temp_symbol": "°C",
@@ -105,6 +110,11 @@ def test_overlay_appends_latest_amsc_points_to_runway_history():
         "time": "2026-06-15T10:51:00+00:00",
         "temp": 28.1,
     }
+    assert [(row["icao"], row["runway"], row["otime_utc"]) for row in runway_writes] == [
+        ("ZUUU", "02L/20R", "2026-06-15T10:51:00+00:00"),
+        ("ZUUU", "02R/20L", "2026-06-15T10:51:00+00:00"),
+    ]
+    assert runway_writes[0]["target_runway_max"] == 28.4
 
 
 def test_overlay_uses_latest_success_when_newer_status_row_has_no_observation():
