@@ -101,9 +101,10 @@ export function runTests() {
     "terminal guide must describe the new 3x2 maximum layout instead of 3x3",
   );
   assert(
-    dashboardSource.includes("if (!cityInSlot || !rowForSlot)") &&
+    dashboardSource.includes("LoadingSlotCard") &&
+      dashboardSource.includes("cityInSlot && !rowForSlot && refreshing") &&
       dashboardSource.includes("handleSelectCityForSlot(slotIndex, null);"),
-    "stale saved chart slots must render the empty city picker instead of a row=null Temperature Chart",
+    "terminal must show a loading chart card for saved cities while the first scan rows are still loading, then fall back to the empty picker for stale slots",
   );
   assert(
     dashboardSource.includes("absolute left-1/2 top-12 z-50") &&
@@ -222,6 +223,12 @@ export function runTests() {
       ],
     }),
     "temperature chart should show the loading skeleton while the first detail fetch is in flight and no drawable data exists",
+  );
+  assert(
+    chartCanvasSource.includes("animate-pulse") &&
+      chartCanvasSource.includes("Loading chart") &&
+      chartCanvasSource.includes("bg-gradient-to-r"),
+    "temperature chart loading skeleton must include visible animation on cold first-open charts",
   );
   assert(
     !__shouldKeepTemperatureChartLoadingForTest({

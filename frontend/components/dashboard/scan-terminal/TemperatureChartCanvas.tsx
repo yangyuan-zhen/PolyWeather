@@ -89,7 +89,8 @@ function TemperatureChartSkeleton({ compact }: { compact: boolean }) {
             style={{ left: `${(index / Math.max(1, verticalLines - 1)) * 100}%` }}
           />
         ))}
-        <div className="absolute inset-x-10 top-1/3 h-10 rounded bg-slate-100/60" />
+        <div className="absolute inset-x-10 top-1/3 h-10 animate-pulse rounded bg-gradient-to-r from-slate-100 via-blue-100 to-slate-100" />
+        <div className="absolute inset-y-0 -left-1/3 w-1/3 animate-pulse bg-gradient-to-r from-transparent via-white/80 to-transparent" />
       </div>
     </div>
   );

@@ -499,6 +499,64 @@ function EmptySlotCard({
   );
 }
 
+function LoadingSlotCard({
+  city,
+  isActive,
+  isEn,
+  onSelectSlot,
+}: {
+  city: string;
+  isActive: boolean;
+  isEn: boolean;
+  onSelectSlot: () => void;
+}) {
+  const cityLabel = city
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ") || city;
+
+  return (
+    <div
+      onClick={onSelectSlot}
+      className={clsx(
+        "relative flex h-full min-h-0 flex-col overflow-hidden rounded-[4px] border bg-white cursor-default",
+        isActive ? "border-blue-500 ring-2 ring-blue-500/20 shadow-md z-10" : "border-[#d2d9e2]",
+      )}
+    >
+      <div className="flex h-9 shrink-0 items-center justify-between border-b border-slate-200 px-3">
+        <div className="flex min-w-0 items-center gap-2 text-[11px] font-bold text-slate-600">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
+          <span className="truncate">{cityLabel}</span>
+          <span className="text-slate-300">·</span>
+          <span className="text-slate-400">{isEn ? "Loading chart" : "加载图表"}</span>
+        </div>
+        <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-200 border-t-blue-500" />
+      </div>
+      <div className="relative min-h-0 flex-1 overflow-hidden bg-white">
+        <div className="absolute inset-x-3 bottom-7 top-5 rounded-sm border border-slate-100">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <span
+              key={`h-${index}`}
+              className="absolute left-0 right-0 border-t border-dashed border-sky-100"
+              style={{ top: `${(index / 5) * 100}%` }}
+            />
+          ))}
+          {Array.from({ length: 7 }).map((_, index) => (
+            <span
+              key={`v-${index}`}
+              className="absolute bottom-0 top-0 border-l border-dashed border-sky-100"
+              style={{ left: `${(index / 6) * 100}%` }}
+            />
+          ))}
+          <div className="absolute left-8 right-8 top-1/3 h-10 animate-pulse rounded bg-gradient-to-r from-slate-100 via-blue-100 to-slate-100" />
+          <div className="absolute inset-y-0 -left-1/3 w-1/3 animate-[pulse_1.2s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-white/80 to-transparent" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const TerminalSidebar = memo(function TerminalSidebar({
   activeNavKey,
   isEn,
@@ -1186,6 +1244,19 @@ function PolyWeatherTerminal({
                               (r) => String(r.city || "").toLowerCase() === cityInSlot
                             ) || null
                           : null;
+                        const isSavedSlotLoading = Boolean(cityInSlot && !rowForSlot && refreshing);
+
+                        if (isSavedSlotLoading && cityInSlot) {
+                          return (
+                            <LoadingSlotCard
+                              key={slotIndex}
+                              city={cityInSlot}
+                              isActive={isSlotActive}
+                              isEn={isEn}
+                              onSelectSlot={() => setActiveSlotIndex(slotIndex)}
+                            />
+                          );
+                        }
 
                         if (!cityInSlot || !rowForSlot) {
                           return (
