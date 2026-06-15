@@ -150,6 +150,13 @@ export async function runTests() {
     "forced chart detail refreshes should reuse a very recent full-detail payload instead of refetching repeatedly",
   );
   assert(
+    chartLogicSource.includes("const SESSION_CACHE_TTL_MS = HOURLY_CACHE_TTL_MS") &&
+      chartLogicSource.includes("MAX_HOURLY_CACHE_ENTRIES") &&
+      chartLogicSource.includes("pruneHourlyCache") &&
+      chartLogicSource.includes("writeHourlyCacheEntry"),
+    "hourly detail cache should use one TTL policy and bounded memory writes instead of separate ad-hoc memory/session lifetimes",
+  );
+  assert(
     chartLogicSource.includes("forceRefresh: boolean") &&
       chartLogicSource.includes('force_refresh: forceRefresh ? "true" : "false"'),
     "ignoreCache chart detail refreshes must send force_refresh=true so fresh METAR observations bypass proxy and backend chart caches",
@@ -254,8 +261,9 @@ export async function runTests() {
   assert(
     chartLogicSource.includes("_hourlyRequestCache") &&
       chartLogicSource.includes("seedHourlyForecastFromRow") &&
-      chartSource.includes("setHourly(seedHourlyForecastFromRow(getLatestRowSnapshot()))"),
-    "terminal charts should render from row data immediately and dedupe concurrent city detail requests",
+      !chartSource.includes("setHourly(seedHourlyForecastFromRow(getLatestRowSnapshot()))") &&
+      chartSource.includes("mergeRowObservationIntoHourly"),
+    "terminal charts should render from row data through the same merge path instead of racing a row-only skeleton against detail fetches",
   );
   assert(
     chartLogicSource.includes("/api/cities/detail-batch") &&
@@ -343,21 +351,41 @@ export async function runTests() {
       chartSource.includes("latestRowRef.current = row"),
     "temperature chart should keep the latest row in a ref so live row changes do not restart detail fetches",
   );
+  assert(
+    !chartSource.includes("_hourlyCache") &&
+      !chartSource.includes("readSessionCache") &&
+      chartSource.includes("readCachedHourlyForInitialRow") &&
+      chartSource.includes("readHourlyDetailSnapshot") &&
+      chartSource.includes("detailSource: cached.source"),
+    "temperature chart component should not directly read global memory/session caches; cache policy belongs in temperature-chart-logic.ts",
+  );
+  const rememberSnapshotCalls = chartSource.match(/rememberHourlyDetailSnapshot\(/g) || [];
+  assert(
+    rememberSnapshotCalls.length === 1,
+    "temperature chart should persist hourly snapshots through one local commit helper instead of writing cache snapshots from multiple effects",
+  );
+  const markDetailDegradedBlock =
+    /const markDetailDegraded = useCallback\([\s\S]*?\n  \}, \[[^\]]*\]\);/.exec(chartSource)?.[0] || "";
+  assert(
+    markDetailDegradedBlock.includes("const detailErrorMessage") &&
+      markDetailDegradedBlock.includes("setDetailError(detailErrorMessage)"),
+    "detail degraded state and visible detail error text should be updated from the same branch so they cannot drift",
+  );
   const successfulHourlyDetailBlock =
     /const applySuccessfulHourlyDetail = useCallback\([\s\S]*?\n  \}, \[[^\]]*\]\);/.exec(chartSource)?.[0] || "";
   assert(
     successfulHourlyDetailBlock.includes("setDetailError(null)") &&
       successfulHourlyDetailBlock.includes("setShowingStaleDetail(false)") &&
       successfulHourlyDetailBlock.includes("getLatestRowSnapshot") &&
-      successfulHourlyDetailBlock.includes("rememberHourlyDetailSnapshot(city, targetResolution, mergedHourly)") &&
+      successfulHourlyDetailBlock.includes("commitHourlySnapshot") &&
       !/\[row\]/.test(successfulHourlyDetailBlock),
     "successful city detail refreshes must read the latest row, persist the merged snapshot, and avoid depending on the row object",
   );
   assert(
-    chartSource.includes("rememberHourlyDetailSnapshot") &&
-      chartSource.includes("const mergedHourly = mergeRowObservationIntoHourly(prev ?? rowSeed, row);") &&
-      chartSource.includes("const mergedHourly = mergePatchIntoHourly(prev ?? seedHourlyForecastFromRow(getLatestRowSnapshot()), latestPatch);"),
-    "live row and SSE patch merges must persist their hourly snapshots so returning to terminal restores runway history immediately",
+    chartSource.includes("commitHourlySnapshot") &&
+      chartSource.includes("mergeRowObservationIntoHourly") &&
+      chartSource.includes("mergePatchIntoHourly"),
+    "live row and SSE patch merges must persist their hourly snapshots through the shared commit helper so returning to terminal restores runway history immediately",
   );
   const coldDetailFetchBlock =
     /useEffect\(\(\) => \{\s*if \(!city\) \{[\s\S]*?scheduleTransientDetailRetry[\s\S]*?runHourlyDetailFetch\(\{[\s\S]*?\n  \}, \[([\s\S]*?)\]\);/.exec(chartSource)?.[1] || "";

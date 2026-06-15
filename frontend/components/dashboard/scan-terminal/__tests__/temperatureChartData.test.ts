@@ -834,4 +834,32 @@ export function runTests() {
     (restoredChengdu?.runwayPlateHistory?.["02L/20R"] || []).length === 2,
     "instant-restore cache must include live-merged runway history so returning to terminal shows it immediately",
   );
+
+  _hourlyCache.clear();
+  for (let i = 0; i < 180; i += 1) {
+    const row = {
+      city: `cache-city-${i}`,
+      local_date: "2026-06-15",
+      local_time: "2026-06-15T09:00:00Z",
+      current_temp: 20 + i / 100,
+      current_max_so_far: 20 + i / 100,
+      temp_symbol: "°C",
+      tz_offset_seconds: 0,
+    } as any;
+    rememberHourlyDetailSnapshot(`cache-city-${i}`, "10m", {
+      ...seedHourlyForecastFromRow(row),
+      times: ["09:00"],
+      temps: [20 + i / 100],
+      modelTimes: ["09:00"],
+      modelCurves: { ECMWF: [20 + i / 100] },
+    } as any);
+  }
+  assert(
+    _hourlyCache.size <= 160,
+    "hourly detail memory cache must be bounded so many mounted chart instances cannot leak entries indefinitely",
+  );
+  assert(
+    !_hourlyCache.has("cachecity0:10m") && _hourlyCache.has("cachecity179:10m"),
+    "hourly detail memory cache should evict oldest entries first while retaining the newest chart detail",
+  );
 }

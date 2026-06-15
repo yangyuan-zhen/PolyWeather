@@ -15,7 +15,6 @@ import { DASHBOARD_REFRESH_POLICY_MS } from "@/lib/refresh-policy";
 
 import {
   HOURLY_CACHE_TTL_MS,
-  _hourlyCache,
   buildChartDomain,
   buildFullDayChartData,
   buildIntDegreeTicks,
@@ -33,8 +32,10 @@ import {
   mergeRowObservationIntoHourly,
   normObs,
   prefersHighFrequencyRunwayResolution,
+  readCachedHourlyForInitialRow,
   readCityDetailBatchDiagnostics,
-  readSessionCache,
+  readHourlyDetailSnapshot,
+  readHourlyDetailSnapshotAgeMs,
   rememberHourlyDetailSnapshot,
   selectCompactSecondaryTemp,
   selectDisplayRunwayTemp,
@@ -530,30 +531,6 @@ function getInitialDetailLoadDelayMs({
   return DEFERRED_DETAIL_LOAD_DELAY_MS + deferredWave * DEFERRED_DETAIL_LOAD_WAVE_STEP_MS;
 }
 
-function readCachedHourlyForInitialRow(
-  city: string,
-  preferredResolution: string,
-): HourlyForecast {
-  const cityKey = String(city || "").toLowerCase().trim();
-  if (!cityKey) return null;
-  const resolutions = [
-    preferredResolution,
-    preferredResolution === "1m" ? "10m" : "1m",
-  ].filter((value, index, list) => value && list.indexOf(value) === index);
-
-  for (const resolution of resolutions) {
-    const cacheKey = `${cityKey}:${resolution}`;
-    const memoryEntry = _hourlyCache.get(cacheKey);
-    if (memoryEntry?.data) return memoryEntry.data;
-    const sessionEntry = readSessionCache(cacheKey, { allowStale: true });
-    if (sessionEntry?.data) {
-      _hourlyCache.set(cacheKey, sessionEntry);
-      return sessionEntry.data;
-    }
-  }
-  return null;
-}
-
 type HourlyDetailFetchOptions = {
   ignoreCache?: boolean;
   bypassLocalCache?: boolean;
@@ -719,9 +696,10 @@ export function LiveTemperatureThresholdChart({
     }));
   }, []);
   const markDetailDegraded = useCallback((options?: { showUserError?: boolean }) => {
-    if (options?.showUserError) {
-      setDetailError(isEn ? "Detail temporarily unavailable." : "详情暂不可用");
-    }
+    const detailErrorMessage = options?.showUserError
+      ? (isEn ? "Detail temporarily unavailable." : "详情暂不可用")
+      : null;
+    setDetailError(detailErrorMessage);
     setChartFreshness((prev) => ({
       ...prev,
       detailErrorAtMs: Date.now(),
@@ -811,6 +789,14 @@ export function LiveTemperatureThresholdChart({
     return () => clearInterval(id);
   }, [row?.tz_offset_seconds]);
 
+  const commitHourlySnapshot = useCallback((buildNext: (previous: HourlyForecast) => HourlyForecast) => {
+    setHourly((prev) => {
+      const next = buildNext(prev);
+      rememberHourlyDetailSnapshot(city, targetResolution, next);
+      return next;
+    });
+  }, [city, targetResolution]);
+
   const applySuccessfulHourlyDetail = useCallback((data: HourlyForecast, options?: { updateLiveTemp?: boolean }) => {
     if (!data) return;
     const loadedAtMs = Date.now();
@@ -822,9 +808,8 @@ export function LiveTemperatureThresholdChart({
       const temp = getLiveTempFromHourly(dataWithCurrentRow);
       if (temp !== null) setLiveTemp(temp);
     }
-    setHourly((prev) => {
+    commitHourlySnapshot((prev) => {
       const mergedHourly = mergeHourlyWithLiveObservations(dataWithCurrentRow, prev, latestRow);
-      rememberHourlyDetailSnapshot(city, targetResolution, mergedHourly);
       return mergedHourly;
     });
     setDetailError(null);
@@ -839,7 +824,7 @@ export function LiveTemperatureThresholdChart({
           ? "network"
           : prev.detailSource,
     }));
-  }, [city, targetResolution, getLatestRowSnapshot]);
+  }, [commitHourlySnapshot, getLatestRowSnapshot]);
 
   const runHourlyDetailFetch = useHourlyDetailFetcher({
     city,
@@ -857,17 +842,13 @@ export function LiveTemperatureThresholdChart({
     const rowSeed = seedHourlyForecastFromRow(row);
     const temp = getLiveTempFromHourly(rowSeed);
     if (temp !== null) setLiveTemp(temp);
-    setHourly((prev) => {
-      const mergedHourly = mergeRowObservationIntoHourly(prev ?? rowSeed, row);
-      rememberHourlyDetailSnapshot(city, targetResolution, mergedHourly);
-      return mergedHourly;
-    });
+    commitHourlySnapshot((prev) => mergeRowObservationIntoHourly(prev, row));
     setChartFreshness((prev) => ({
       ...prev,
       rowAppliedAtMs: now,
       rowObservationTime: rowObservationTimeForFreshness(row),
     }));
-  }, [city, currentRowObservationSignature, row, targetResolution]);
+  }, [city, currentRowObservationSignature, row, commitHourlySnapshot]);
 
   useEffect(() => {
     if (!city) {
@@ -875,17 +856,7 @@ export function LiveTemperatureThresholdChart({
       return;
     }
 
-    const cacheKey = `${city}:${targetResolution}`;
-    let cached = _hourlyCache.get(cacheKey);
-    let cachedSource: ChartDetailSource = cached ? "memory_cache" : "none";
-    if (!cached || Date.now() - Number(cached.ts || 0) >= HOURLY_CACHE_TTL_MS) {
-      const sessionEntry = readSessionCache(cacheKey, { allowStale: true });
-      if (sessionEntry) {
-        cached = sessionEntry;
-        cachedSource = "session_cache";
-        _hourlyCache.set(cacheKey, sessionEntry);
-      }
-    }
+    const cached = readHourlyDetailSnapshot(city, targetResolution, { allowStale: true });
     const cacheAge = cached ? Date.now() - Number(cached.ts || 0) : Number.POSITIVE_INFINITY;
     const hasFreshCache = cached && cacheAge >= 0 && cacheAge < HOURLY_CACHE_TTL_MS;
 
@@ -897,7 +868,7 @@ export function LiveTemperatureThresholdChart({
         ...prev,
         detailResolvedAtMs: Number(cached.ts || Date.now()),
         detailStatus: hasFreshCache ? "fresh" : "stale_cache",
-        detailSource: cachedSource,
+        detailSource: cached.source,
       }));
     }
 
@@ -925,7 +896,7 @@ export function LiveTemperatureThresholdChart({
     }
 
     if (!cached && !hasLoadedHourlyDetailRef.current) {
-      setHourly(seedHourlyForecastFromRow(getLatestRowSnapshot()));
+      commitHourlySnapshot((prev) => mergeRowObservationIntoHourly(prev, getLatestRowSnapshot()));
       setShowingStaleDetail(false);
     }
     setIsHourlyLoading(true);
@@ -976,6 +947,7 @@ export function LiveTemperatureThresholdChart({
     detailLoadReady,
     detailRetryNonce,
     getLatestRowSnapshot,
+    commitHourlySnapshot,
     markDetailDegraded,
     runHourlyDetailFetch,
   ]);
@@ -987,9 +959,8 @@ export function LiveTemperatureThresholdChart({
     lastPatchAtRef.current = patchAppliedAtMs;
     const tempValue = validNumber(latestPatch.changes.temp);
     if (tempValue !== null) setLiveTemp(tempValue);
-    setHourly((prev) => {
+    commitHourlySnapshot((prev) => {
       const mergedHourly = mergePatchIntoHourly(prev ?? seedHourlyForecastFromRow(getLatestRowSnapshot()), latestPatch);
-      rememberHourlyDetailSnapshot(city, targetResolution, mergedHourly);
       return mergedHourly;
     });
     setChartFreshness((prev) => ({
@@ -1026,7 +997,7 @@ export function LiveTemperatureThresholdChart({
     return () => {
       cancelled = true;
     };
-  }, [latestPatch, city, targetResolution, compact, isActive, isMaximized, getLatestRowSnapshot, runHourlyDetailFetch]);
+  }, [latestPatch, city, targetResolution, compact, isActive, isMaximized, getLatestRowSnapshot, commitHourlySnapshot, runHourlyDetailFetch]);
 
   useEffect(() => {
     if (!resyncVersion || !city) return;
@@ -1119,9 +1090,7 @@ export function LiveTemperatureThresholdChart({
 
     const refreshForegroundFullDetail = () => {
       const now = Date.now();
-      const cacheKey = `${city}:${targetResolution}`;
-      const cached = _hourlyCache.get(cacheKey);
-      const cacheAge = cached ? now - Number(cached.ts || 0) : Number.POSITIVE_INFINITY;
+      const cacheAge = readHourlyDetailSnapshotAgeMs(city, targetResolution);
       if (
         now - lastForegroundRefreshAtRef.current < FOREGROUND_FULL_DETAIL_REFRESH_DEDUP_MS ||
         (cacheAge >= 0 && cacheAge < FOREGROUND_FULL_DETAIL_REFRESH_DEDUP_MS)

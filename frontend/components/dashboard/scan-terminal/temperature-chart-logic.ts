@@ -360,6 +360,9 @@ type LocalDayBounds = { start: number; end: number };
 
 const MAX_OBS_POINTS = 1440;
 const HOURLY_CACHE_TTL_MS = DASHBOARD_REFRESH_POLICY_MS.metar;
+const SESSION_CACHE_TTL_MS = HOURLY_CACHE_TTL_MS;
+const HOURLY_CACHE_STALE_TTL_MS = 6 * HOURLY_CACHE_TTL_MS;
+const MAX_HOURLY_CACHE_ENTRIES = 160;
 const HOURLY_FORCE_REFRESH_DEDUP_MS = 60_000;
 const _hourlyCache = new Map<string, { ts: number; data: HourlyForecast }>();
 const _hourlyRequestCache = new Map<string, Promise<HourlyForecast>>();
@@ -370,9 +373,10 @@ const _hourlyDetailRequestQueue: Array<() => void> = [];
 const RUNWAY_LINE_COLORS = ["#00897b", "#d97706", "#7c3aed", "#0891b2", "#ea580c", "#64748b"];
 
 const SESSION_CACHE_PREFIX = "polyweather_city_detail_v1:";
-const SESSION_CACHE_TTL_MS = DASHBOARD_REFRESH_POLICY_MS.metar;
 
 type HourlyCacheEntry = { ts: number; data: HourlyForecast };
+type HourlyDetailSnapshotSource = "memory_cache" | "session_cache";
+type HourlyDetailSnapshotEntry = HourlyCacheEntry & { source: HourlyDetailSnapshotSource };
 type CityDetailBatchDiagnostics = Record<string, any>;
 type CityDetailBatchDiagnosticsEntry = { ts: number; data: CityDetailBatchDiagnostics };
 
@@ -411,11 +415,53 @@ function readCityDetailBatchDiagnostics(
   return entry.data;
 }
 
+function hourlyCacheKey(city: string, resolution: string) {
+  const cityKey = normalizeCityKey(city);
+  return cityKey ? `${cityKey}:${resolution || "10m"}` : "";
+}
+
+function hourlyCacheEntryAgeMs(entry: HourlyCacheEntry | null | undefined, now = Date.now()) {
+  if (!entry) return Number.POSITIVE_INFINITY;
+  return now - Number(entry.ts || 0);
+}
+
 function isFreshHourlyCacheEntry(
   entry: HourlyCacheEntry | null | undefined,
-  maxAgeMs = SESSION_CACHE_TTL_MS,
+  maxAgeMs = HOURLY_CACHE_TTL_MS,
 ) {
-  return Boolean(entry && Date.now() - Number(entry.ts || 0) < maxAgeMs);
+  const age = hourlyCacheEntryAgeMs(entry);
+  return Number.isFinite(age) && age >= 0 && age < maxAgeMs;
+}
+
+function isRetainedHourlyCacheEntry(
+  entry: HourlyCacheEntry | null | undefined,
+  maxAgeMs = HOURLY_CACHE_STALE_TTL_MS,
+) {
+  const age = hourlyCacheEntryAgeMs(entry);
+  return Number.isFinite(age) && age >= 0 && age < maxAgeMs;
+}
+
+function pruneHourlyCache() {
+  for (const [key, entry] of _hourlyCache.entries()) {
+    if (!isRetainedHourlyCacheEntry(entry, HOURLY_CACHE_STALE_TTL_MS)) {
+      _hourlyCache.delete(key);
+    }
+  }
+
+  if (_hourlyCache.size <= MAX_HOURLY_CACHE_ENTRIES) return;
+
+  const oldestFirst = Array.from(_hourlyCache.entries())
+    .sort((left, right) => Number(left[1].ts || 0) - Number(right[1].ts || 0));
+  for (const [key] of oldestFirst) {
+    if (_hourlyCache.size <= MAX_HOURLY_CACHE_ENTRIES) break;
+    _hourlyCache.delete(key);
+  }
+}
+
+function rememberMemoryHourlyCacheEntry(cacheKey: string, entry: HourlyCacheEntry) {
+  if (!cacheKey || !entry?.data) return;
+  _hourlyCache.set(cacheKey, entry);
+  pruneHourlyCache();
 }
 
 function readSessionCache(
@@ -427,11 +473,10 @@ function readSessionCache(
     const raw = sessionStorage.getItem(`${SESSION_CACHE_PREFIX}${city}`);
     if (!raw) return null;
     const item = JSON.parse(raw);
-    if (
-      item &&
-      item.ts &&
-      (options.allowStale || Date.now() - item.ts < (options.maxAgeMs ?? SESSION_CACHE_TTL_MS))
-    ) {
+    const maxAgeMs = options.allowStale
+      ? HOURLY_CACHE_STALE_TTL_MS
+      : options.maxAgeMs ?? SESSION_CACHE_TTL_MS;
+    if (item && item.ts && isRetainedHourlyCacheEntry(item, maxAgeMs)) {
       return item;
     }
   } catch {}
@@ -443,27 +488,92 @@ function readHourlyCacheEntry(
   options: { allowStale?: boolean; maxAgeMs?: number } = {},
 ): HourlyCacheEntry | null {
   const cached = _hourlyCache.get(cacheKey);
-  if (cached && (options.allowStale || isFreshHourlyCacheEntry(cached, options.maxAgeMs))) {
+  if (cached && (options.allowStale ? isRetainedHourlyCacheEntry(cached) : isFreshHourlyCacheEntry(cached, options.maxAgeMs))) {
     return cached;
+  }
+  if (cached && !isRetainedHourlyCacheEntry(cached)) {
+    _hourlyCache.delete(cacheKey);
   }
 
   const sessionEntry = readSessionCache(cacheKey, options);
   if (sessionEntry) {
-    _hourlyCache.set(cacheKey, sessionEntry);
+    rememberMemoryHourlyCacheEntry(cacheKey, sessionEntry);
     return sessionEntry;
   }
 
   return null;
 }
 
-function writeSessionCache(city: string, data: HourlyForecast) {
+function readHourlyCacheSnapshot(
+  cacheKey: string,
+  options: { allowStale?: boolean; maxAgeMs?: number } = {},
+): HourlyDetailSnapshotEntry | null {
+  const cached = _hourlyCache.get(cacheKey);
+  if (cached && (options.allowStale ? isRetainedHourlyCacheEntry(cached) : isFreshHourlyCacheEntry(cached, options.maxAgeMs))) {
+    return { ...cached, source: "memory_cache" };
+  }
+  if (cached && !isRetainedHourlyCacheEntry(cached)) {
+    _hourlyCache.delete(cacheKey);
+  }
+
+  const sessionEntry = readSessionCache(cacheKey, options);
+  if (sessionEntry) {
+    rememberMemoryHourlyCacheEntry(cacheKey, sessionEntry);
+    return { ...sessionEntry, source: "session_cache" };
+  }
+
+  return null;
+}
+
+function writeSessionCache(city: string, data: HourlyForecast, ts = Date.now()) {
   if (typeof window === "undefined" || !data) return;
   try {
     sessionStorage.setItem(
       `${SESSION_CACHE_PREFIX}${city}`,
-      JSON.stringify({ ts: Date.now(), data })
+      JSON.stringify({ ts, data })
     );
   } catch {}
+}
+
+function writeHourlyCacheEntry(cacheKey: string, data: HourlyForecast, ts = Date.now()) {
+  if (!cacheKey || !data) return;
+  rememberMemoryHourlyCacheEntry(cacheKey, { ts, data });
+  writeSessionCache(cacheKey, data, ts);
+}
+
+function readHourlyDetailSnapshot(
+  city: string,
+  resolution: string,
+  options: { allowStale?: boolean; maxAgeMs?: number } = {},
+): HourlyDetailSnapshotEntry | null {
+  const cacheKey = hourlyCacheKey(city, resolution);
+  return cacheKey ? readHourlyCacheSnapshot(cacheKey, options) : null;
+}
+
+function readHourlyDetailSnapshotAgeMs(
+  city: string,
+  resolution: string,
+) {
+  const entry = readHourlyDetailSnapshot(city, resolution, { allowStale: true });
+  return entry ? hourlyCacheEntryAgeMs(entry) : Number.POSITIVE_INFINITY;
+}
+
+function readCachedHourlyForInitialRow(
+  city: string,
+  preferredResolution: string,
+): HourlyForecast {
+  const cityKey = normalizeCityKey(city);
+  if (!cityKey) return null;
+  const resolutions = [
+    preferredResolution,
+    preferredResolution === "1m" ? "10m" : "1m",
+  ].filter((value, index, list) => value && list.indexOf(value) === index);
+
+  for (const resolution of resolutions) {
+    const entry = readHourlyDetailSnapshot(cityKey, resolution, { allowStale: true });
+    if (entry?.data) return entry.data;
+  }
+  return null;
 }
 
 function rememberHourlyDetailSnapshot(
@@ -473,9 +583,8 @@ function rememberHourlyDetailSnapshot(
 ) {
   const cityKey = normalizeCityKey(city);
   if (!cityKey || !data || !hasFullHourlyDetailPayload(data)) return;
-  const cacheKey = `${cityKey}:${resolution || "10m"}`;
-  _hourlyCache.set(cacheKey, { ts: Date.now(), data });
-  writeSessionCache(cacheKey, data);
+  const cacheKey = hourlyCacheKey(cityKey, resolution);
+  writeHourlyCacheEntry(cacheKey, data);
 }
 
 function drainHourlyDetailRequestQueue() {
@@ -1627,10 +1736,9 @@ function primeCityDetailCache(
 ): HourlyForecast {
   let data = parseHourlyForecastFromCityDetail(detail || null);
   if (!data) return null;
-  const cacheKey = `${city}:${resolution}`;
+  const cacheKey = hourlyCacheKey(city, resolution);
   data = preserveCachedRunwayHistory(cacheKey, data);
-  _hourlyCache.set(cacheKey, { ts: Date.now(), data });
-  writeSessionCache(cacheKey, data);
+  writeHourlyCacheEntry(cacheKey, data);
   return data;
 }
 
@@ -1792,7 +1900,7 @@ async function fetchHourlyForecastForCity(
   options: HourlyForecastFetchOptions = {},
 ): Promise<HourlyForecast> {
   const resParam = options.resolution || "10m";
-  const cacheKey = `${city}:${resParam}`;
+  const cacheKey = hourlyCacheKey(city, resParam);
   const forceRefresh = Boolean(options.ignoreCache);
   const bypassLocalCache = forceRefresh || Boolean(options.bypassLocalCache);
 
@@ -3127,7 +3235,10 @@ export {
   normObs,
   normalizeCityKey,
   prefersHighFrequencyRunwayResolution,
+  readCachedHourlyForInitialRow,
   readCityDetailBatchDiagnostics,
+  readHourlyDetailSnapshot,
+  readHourlyDetailSnapshotAgeMs,
   readSessionCache,
   rememberHourlyDetailSnapshot,
   selectCompactSecondaryTemp,
