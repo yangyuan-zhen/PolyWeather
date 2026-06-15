@@ -6,6 +6,14 @@
 
 缓存规则只允许作用于前端域名 `polyweather.top`。`api.polyweather.top` 是带服务令牌和会员校验的后端源站，必须绕过 Cloudflare 缓存，避免缓存命中绕过后端权限检查。
 
+## 已接入的免费能力
+
+- Cache Rules：仓库脚本 `scripts/configure_cloudflare_free.py` 同步公开缓存规则，`scripts/validate_frontend_cache.sh` 可检查 `CF-Cache-Status`。
+- Turnstile：登录/注册经 Supabase Auth captcha token；反馈提交和支付创建订单在 Next API Route 校验后再转发给后端。
+- R2：`scripts/archive_realtime_events_to_r2.py` 可把 Redis/SQLite 中的 SSE 事件按天归档为 JSONL，上传到 Cloudflare R2。
+
+暂不建议把 Tunnel 作为本轮替代 Nginx：当前 Nginx 还承担 TLS、回源隔离和本地 compose 端口映射，Tunnel 需要单独灰度和回滚方案。
+
 ## 基础设置
 
 - `Caching > Configuration > Browser Cache TTL`：Respect Existing Headers
@@ -161,3 +169,37 @@ curl.exe -sS -D - -o NUL "https://polyweather.top/api/scan/terminal?limit=1"
 ```
 
 正常命中应看到 `CF-Cache-Status: HIT` 和递增的 `Age`。首次请求通常是 `MISS`；动态或明确 `no-store` 的请求应保持 `DYNAMIC` 或 `BYPASS`。
+
+也可以用脚本：
+
+```bash
+scripts/validate_frontend_cache.sh https://polyweather.top
+REQUIRE_CF_CACHE=true scripts/validate_frontend_cache.sh https://polyweather.top
+```
+
+第二条会把缺失 `CF-Cache-Status` 或持续 `MISS` 作为失败处理，适合 Cache Rules 同步后的线上检查。
+
+## Turnstile
+
+Cloudflare 控制台创建 Turnstile site 后，配置：
+
+- GitHub Secrets：`NEXT_PUBLIC_TURNSTILE_SITE_KEY`
+- VPS / Docker `.env`：`NEXT_PUBLIC_TURNSTILE_SITE_KEY`
+- VPS / Docker `.env`：`POLYWEATHER_TURNSTILE_SECRET_KEY`
+
+`NEXT_PUBLIC_TURNSTILE_SITE_KEY` 属于前端构建期变量，改动后必须重新构建前端镜像。`POLYWEATHER_TURNSTILE_SECRET_KEY` 只在服务端使用，不要提交仓库。
+
+## R2 事件归档
+
+R2 用于冷归档，不替代 Redis Stream / SQLite 的热路径。推荐先用 dry-run 看事件量：
+
+```bash
+python scripts/archive_realtime_events_to_r2.py --source redis --date 2026-06-16 --dry-run
+python scripts/archive_realtime_events_to_r2.py --source redis --date 2026-06-16
+```
+
+对象 key 形如：
+
+```text
+sse-events/2026/06/16/city_observation_patch.redis.jsonl
+```

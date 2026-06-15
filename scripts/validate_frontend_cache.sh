@@ -4,6 +4,7 @@ set -u
 
 BASE_URL="${1:-https://polyweather.top}"
 CURL_BIN="${CURL_BIN:-curl}"
+REQUIRE_CF_CACHE="${REQUIRE_CF_CACHE:-false}"
 
 PASS_COUNT=0
 FAIL_COUNT=0
@@ -38,6 +39,11 @@ header_value() {
   printf '%s\n' "$headers" \
     | tr -d '\r' \
     | awk -F': ' -v k="$key" 'tolower($1)==tolower(k) { print $2; exit }'
+}
+
+cf_cache_status() {
+  local headers="$1"
+  header_value "$headers" "CF-Cache-Status"
 }
 
 contains_ci() {
@@ -95,6 +101,78 @@ check_cached_endpoint() {
   else
     fail "$label missing ETag"
   fi
+}
+
+check_cloudflare_cache_hit() {
+  local endpoint="$1"
+  local label="$2"
+  local url="${BASE_URL%/}${endpoint}"
+  local headers1 headers2
+  if ! headers1="$(header_dump "$url")"; then
+    fail "$label first Cloudflare cache request failed: $url"
+    return
+  fi
+  if ! headers2="$(header_dump "$url")"; then
+    fail "$label second Cloudflare cache request failed: $url"
+    return
+  fi
+
+  local code2 status1 status2
+  code2="$(status_code "$headers2")"
+  status1="$(cf_cache_status "$headers1")"
+  status2="$(cf_cache_status "$headers2")"
+
+  if [ "$code2" != "200" ]; then
+    fail "$label Cloudflare cache status check expected HTTP 200, got $code2"
+    return
+  fi
+
+  case "$status1" in
+    HIT|MISS|REVALIDATED|STALE|UPDATING|EXPIRED)
+      pass "$label Cloudflare first status observable: $status1"
+      ;;
+    "")
+      if [ "$REQUIRE_CF_CACHE" = "true" ]; then
+        fail "$label missing CF-Cache-Status on first request"
+      else
+        pass "$label CF-Cache-Status unavailable; set REQUIRE_CF_CACHE=true to enforce"
+      fi
+      ;;
+    *)
+      if [ "$REQUIRE_CF_CACHE" = "true" ]; then
+        fail "$label unexpected first CF-Cache-Status: $status1"
+      else
+        pass "$label Cloudflare first status non-cacheable but observed: $status1"
+      fi
+      ;;
+  esac
+
+  case "$status2" in
+    HIT|REVALIDATED)
+      pass "$label Cloudflare edge cache hit: $status2"
+      ;;
+    MISS)
+      if [ "$REQUIRE_CF_CACHE" = "true" ]; then
+        fail "$label Cloudflare edge cache expected HIT or REVALIDATED, got MISS"
+      else
+        pass "$label Cloudflare returned MISS; cache rule may still be warming"
+      fi
+      ;;
+    "")
+      if [ "$REQUIRE_CF_CACHE" = "true" ]; then
+        fail "$label missing CF-Cache-Status on second request"
+      else
+        pass "$label CF-Cache-Status missing on second request; enforcement disabled"
+      fi
+      ;;
+    *)
+      if [ "$REQUIRE_CF_CACHE" = "true" ]; then
+        fail "$label Cloudflare edge cache expected HIT or REVALIDATED, got $status2"
+      else
+        pass "$label Cloudflare edge cache not enforced, got $status2"
+      fi
+      ;;
+  esac
 }
 
 check_force_refresh_nostore() {
@@ -168,12 +246,14 @@ main() {
 
   check_cached_endpoint "/api/cities" "cities"
   check_if_none_match_304 "/api/cities" "cities"
+  check_cloudflare_cache_hit "/api/cities" "cities edge cache"
 
   check_cached_endpoint "/api/city/ankara/summary" "city summary"
   check_force_refresh_nostore "/api/city/ankara/summary?force_refresh=true" "city summary force_refresh"
 
   check_cached_endpoint "/api/history/ankara" "history"
   check_if_none_match_304 "/api/history/ankara" "history"
+  check_cloudflare_cache_hit "/api/scan/terminal?limit=1" "scan terminal edge cache"
 
   print_line ""
   if [ "$FAIL_COUNT" -gt 0 ]; then

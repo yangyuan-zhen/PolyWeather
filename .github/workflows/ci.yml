@@ -93,6 +93,7 @@ jobs:
           NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '' }}
           NEXT_PUBLIC_WALLETCONNECT_POLYGON_RPC_URL: ${{ secrets.NEXT_PUBLIC_WALLETCONNECT_POLYGON_RPC_URL || 'https://polygon-bor-rpc.publicnode.com' }}
           NEXT_PUBLIC_PAYMENT_ALLOWED_HOSTS: ${{ secrets.NEXT_PUBLIC_PAYMENT_ALLOWED_HOSTS || 'polyweather.top,www.polyweather.top' }}
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ secrets.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '' }}
         run: |
           set -euo pipefail
 
@@ -109,6 +110,7 @@ jobs:
               --build-arg "NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID}"
               --build-arg "NEXT_PUBLIC_WALLETCONNECT_POLYGON_RPC_URL=${NEXT_PUBLIC_WALLETCONNECT_POLYGON_RPC_URL}"
               --build-arg "NEXT_PUBLIC_PAYMENT_ALLOWED_HOSTS=${NEXT_PUBLIC_PAYMENT_ALLOWED_HOSTS}"
+              --build-arg "NEXT_PUBLIC_TURNSTILE_SITE_KEY=${NEXT_PUBLIC_TURNSTILE_SITE_KEY}"
             )
           fi
 

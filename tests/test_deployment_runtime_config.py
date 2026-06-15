@@ -18,6 +18,13 @@ def test_frontend_dockerfile_uses_standalone_multistage_runtime():
     assert "CMD [\"node\", \"server.js\"]" in dockerfile
 
 
+def test_frontend_dockerfile_accepts_turnstile_site_key_build_arg():
+    dockerfile = (ROOT / "frontend" / "Dockerfile").read_text(encoding="utf-8")
+
+    assert "ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY" in dockerfile
+    assert "ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY" in dockerfile
+
+
 def test_nginx_proxy_buffers_cover_supabase_auth_cookies():
     nginx_conf = (ROOT / "deploy" / "nginx" / "polyweather.conf").read_text(
         encoding="utf-8"
@@ -136,6 +143,26 @@ def test_docker_compose_isolates_collector_from_web_and_bot_services():
     assert "POLYWEATHER_OBSERVATION_COLLECTOR_MADIS_SEC: ${POLYWEATHER_OBSERVATION_COLLECTOR_MADIS_SEC:-300}" in collector_block
 
 
+def test_docker_compose_exposes_cloudflare_free_runtime_env():
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    frontend_block = compose.split("  polyweather_frontend:", 1)[1].split(
+        "\n  polyweather_web:",
+        1,
+    )[0]
+    web_block = compose.split("  polyweather_web:", 1)[1].split(
+        "\n  polyweather_collector:",
+        1,
+    )[0]
+
+    assert "NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}" in frontend_block
+    assert "POLYWEATHER_TURNSTILE_SECRET_KEY: ${POLYWEATHER_TURNSTILE_SECRET_KEY:-}" in frontend_block
+    assert "POLYWEATHER_TURNSTILE_BYPASS: ${POLYWEATHER_TURNSTILE_BYPASS:-false}" in frontend_block
+    assert "POLYWEATHER_R2_ACCOUNT_ID: ${POLYWEATHER_R2_ACCOUNT_ID:-}" in web_block
+    assert "POLYWEATHER_R2_BUCKET: ${POLYWEATHER_R2_BUCKET:-}" in web_block
+    assert "POLYWEATHER_R2_ACCESS_KEY_ID: ${POLYWEATHER_R2_ACCESS_KEY_ID:-}" in web_block
+    assert "POLYWEATHER_R2_SECRET_ACCESS_KEY: ${POLYWEATHER_R2_SECRET_ACCESS_KEY:-}" in web_block
+
+
 def test_scan_terminal_backend_timeout_returns_before_next_proxy_abort():
     import web.services.scan_terminal_config as scan_terminal_config
 
@@ -170,6 +197,13 @@ def test_deploy_workflow_applies_cloudflare_rules_when_token_is_available():
     assert "CLOUDFLARE_ZONE_ID is not configured" in workflow
     assert "python scripts/configure_cloudflare_free.py --apply" in workflow
     assert workflow.index("cloudflare-cache-rules:") < workflow.index("deploy:")
+
+
+def test_deploy_workflow_passes_turnstile_site_key_to_frontend_build():
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    assert "NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ secrets.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '' }}" in workflow
+    assert '--build-arg "NEXT_PUBLIC_TURNSTILE_SITE_KEY=${NEXT_PUBLIC_TURNSTILE_SITE_KEY}"' in workflow
 
 
 def test_probability_engine_uses_enriched_multi_model_snapshot():
