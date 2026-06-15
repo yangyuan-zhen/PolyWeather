@@ -28,6 +28,8 @@ class _DummyMetarSource(MetarSourceMixin):
     def __init__(self):
         self._metar_cache = {}
         self._metar_cache_lock = threading.Lock()
+        from src.data_collection.weather_cache import WeatherCacheManager
+        self.cache = WeatherCacheManager()
         self.metar_timeout_sec = 0.0
         self.metar_latest_timeout_sec = 0.0
         self.timeout = 0.0

@@ -212,8 +212,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             os.getenv("METAR_FAST_CACHE_TTL_SEC", str(OBSERVATION_REFRESH_SEC))
         )
         self.metar_fast_cache_ttl_sec = min(self.metar_fast_cache_ttl_sec, OBSERVATION_REFRESH_SEC)
-        self._metar_cache: Dict[str, Dict] = {}
-        self._metar_cache_lock = threading.Lock()
+        # METAR cache migrated to self.cache (WeatherCacheManager)
         self.taf_cache_ttl_sec = int(
             os.getenv("TAF_CACHE_TTL_SEC", "900")
         )
@@ -300,6 +299,11 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         self._CACHE_TRIM_EVERY_N_WRITES = int(
             os.getenv("POLYWEATHER_CACHE_TRIM_INTERVAL", "200")
         )
+        # Unified cache manager — new sources should use this instead of per-source dicts.
+        from src.data_collection.weather_cache import WeatherCacheManager
+        self.cache = WeatherCacheManager(
+            trim_interval_writes=self._CACHE_TRIM_EVERY_N_WRITES,
+        )
 
         # 设置代理
         proxy = config.get("proxy")
@@ -344,7 +348,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             (self._open_meteo_cache, self._open_meteo_cache_lock, 3600.0),
             (self._ensemble_cache, self._ensemble_cache_lock, 7200.0),
             (self._multi_model_cache, self._multi_model_cache_lock, 7200.0),
-            (self._metar_cache, self._metar_cache_lock, float(self.metar_cache_ttl_sec * 2)),
+            # metar cache migrated to self.cache
             (self._taf_cache, self._taf_cache_lock, float(self.taf_cache_ttl_sec * 2)),
             (self._jma_cache, self._jma_cache_lock, float(self.jma_cache_ttl_sec * 2)),
             (self._settlement_cache, self._settlement_cache_lock, float(self.settlement_cache_ttl_sec * 2)),
@@ -367,6 +371,8 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 with lock:
                     for key in stale:
                         cache.pop(key, None)
+        # Unified cache stores
+        self.cache.trim_stale({"metar": float(self.metar_cache_ttl_sec * 2)})
 
     def _post_temperature_patch_payload(
         self,
@@ -960,10 +966,12 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         icao = self.get_icao_code(city)
         if icao:
             prefix = f"{icao}:"
-            with self._metar_cache_lock:
-                for key in list(self._metar_cache.keys()):
-                    if key.startswith(prefix):
-                        self._metar_cache.pop(key, None)
+            # Clear matching entries from unified cache
+            with self.cache._lock:
+                entries = self.cache._stores.get("metar", {})
+                stale = [k for k in entries if k.startswith(prefix)]
+                for key in stale:
+                    del entries[key]
         normalized = str(city or "").strip().lower()
         with self._jma_cache_lock:
             self._jma_cache.pop(f"{normalized}:{use_fahrenheit}", None)

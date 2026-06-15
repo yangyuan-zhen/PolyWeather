@@ -109,6 +109,10 @@ multidict==6.7.1
 netcdf4==1.7.4
     # via -r requirements.txt
 numpy==2.4.6
+
+torch @ https://download.pytorch.org/whl/cpu/torch-2.5.1%2Bcpu-cp311-cp311-manylinux_2_28_x86_64.whl ; python_version >= "3.11"
+typing_extensions==4.15.0
+    # via torch
     # via
     #   -r requirements.txt
     #   cftime

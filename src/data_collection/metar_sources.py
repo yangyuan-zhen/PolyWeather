@@ -97,12 +97,11 @@ class MetarSourceMixin:
         cache_key = f"{icao}:{utc_offset}:{use_fahrenheit}"
         now_ts = time.time()
         cache_ttl_sec = self._metar_cache_ttl_for_city(city, icao)
-        with self._metar_cache_lock:
-            cached = self._metar_cache.get(cache_key)
-            if cached and now_ts - cached["t"] < cache_ttl_sec:
-                logger.debug(f"METAR cache hit {icao} age={int(now_ts - cached['t'])}s")
-                record_source_call("metar", "current", "cache_hit", (time.perf_counter() - started) * 1000.0)
-                return cached["d"]
+        cached = self.cache.get_ttl("metar", cache_key, cache_ttl_sec)
+        if cached is not None:
+            logger.debug(f"METAR cache hit {icao} age=...")
+            record_source_call("metar", "current", "cache_hit", (time.perf_counter() - started) * 1000.0)
+            return cached
 
         try:
             url = "https://aviationweather.gov/api/data/metar"
@@ -331,19 +330,17 @@ class MetarSourceMixin:
                 )
             else:
                 logger.info(f"✈️ METAR {icao}: temperature unavailable (obs: {obs_time})")
-            with self._metar_cache_lock:
-                self._metar_cache[cache_key] = {"d": result, "t": now_ts}
+            self.cache.set_ttl("metar", cache_key, result)
             record_source_call("metar", "current", "success", (time.perf_counter() - started) * 1000.0)
             return result
 
         except httpx.HTTPError as exc:
             logger.error(f"METAR 请求失败 ({icao}): {exc}")
-            with self._metar_cache_lock:
-                stale = self._metar_cache.get(cache_key)
-                if stale:
-                    logger.warning(f"METAR {icao} 请求失败，使用缓存回退")
-                    record_source_call("metar", "current", "stale_cache", (time.perf_counter() - started) * 1000.0)
-                    return stale["d"]
+            stale = self.cache.get("metar", cache_key)
+            if stale:
+                logger.warning(f"METAR {icao} 请求失败，使用缓存回退")
+                record_source_call("metar", "current", "stale_cache", (time.perf_counter() - started) * 1000.0)
+                return stale.get("d") if isinstance(stale, dict) else None
             record_source_call("metar", "current", "error", (time.perf_counter() - started) * 1000.0)
             return None
         except (KeyError, IndexError, TypeError) as exc:

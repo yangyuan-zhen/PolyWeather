@@ -14,6 +14,7 @@ import requests
 from loguru import logger
 
 from src.database.sqlite_connection import connect_sqlite
+from src.auth.supabase_admin_client import get_supabase_admin_client
 
 
 class DBManager:
@@ -54,28 +55,16 @@ class DBManager:
             self._initialized_paths.add(cache_key)
 
     def _supabase_profiles_endpoint(self) -> str:
-        supabase_url = str(os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
-        if not supabase_url:
-            return ""
-        return f"{supabase_url}/rest/v1/profiles"
+        return get_supabase_admin_client().profiles_endpoint()
 
     def _supabase_service_headers(self) -> Dict[str, str]:
-        service_role_key = str(os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
-        if not service_role_key:
+        client = get_supabase_admin_client()
+        if not client.configured:
             return {}
-        return {
-            "apikey": service_role_key,
-            "Authorization": f"Bearer {service_role_key}",
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "Prefer": "return=minimal",
-        }
+        return client._service_headers()
 
     def _supabase_admin_users_endpoint(self) -> str:
-        supabase_url = str(os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
-        if not supabase_url:
-            return ""
-        return f"{supabase_url}/auth/v1/admin/users"
+        return get_supabase_admin_client().admin_users_endpoint()
 
     def _profile_sync_min_interval_sec(self) -> float:
         raw = str(
@@ -249,35 +238,16 @@ class DBManager:
         ):
             return False
 
-        try:
-            resp = requests.patch(
-                f"{endpoint}/{supabase_user_id}",
-                json={"user_metadata": {"points": points}},
-                headers={**headers, "Prefer": "return=minimal"},
-                timeout=8,
-            )
-            if resp.status_code not in (200, 204):
-                logger.warning(
-                    "supabase points sync failed tg={} suid={} status={} body={}",
-                    telegram_id,
-                    supabase_user_id,
-                    resp.status_code,
-                    (resp.text or "")[:200],
-                )
-                return False
+        admin = get_supabase_admin_client()
+        if not admin.configured:
+            return False
+        ok = admin.patch_user_metadata(supabase_user_id, {"points": points})
+        if ok:
             self._remember_points_metadata_sync(
                 telegram_id=int(telegram_id),
                 points=points,
             )
-            return True
-        except Exception as exc:
-            logger.warning(
-                "supabase points sync error tg={} suid={}: {}",
-                telegram_id,
-                supabase_user_id,
-                exc,
-            )
-            return False
+        return ok
 
     def _sync_supabase_profile_telegram_fields(
         self,
@@ -305,35 +275,15 @@ class DBManager:
             "telegram_username": str(telegram_username or "").strip() or None,
             "updated_at": datetime.now().isoformat(),
         }
-        try:
-            response = requests.patch(
-                endpoint,
-                params={"id": f"eq.{normalized_uid}"},
-                json=payload,
-                headers=headers,
-                timeout=8,
-            )
-            if response.status_code not in {200, 204}:
-                logger.warning(
-                    "supabase profiles telegram sync failed user_id={} status={} body={}",
-                    normalized_uid,
-                    response.status_code,
-                    (response.text or "")[:240],
-                )
-                return False
+        admin = get_supabase_admin_client()
+        ok = admin.patch_profile(normalized_uid, payload)
+        if ok:
             self._remember_profile_sync(
                 supabase_user_id=normalized_uid,
                 telegram_id=telegram_id,
                 telegram_username=telegram_username,
             )
-            return True
-        except Exception as exc:
-            logger.warning(
-                "supabase profiles telegram sync error user_id={}: {}",
-                normalized_uid,
-                exc,
-            )
-            return False
+        return ok
 
     def _sync_bound_supabase_profiles_for_telegram(
         self,

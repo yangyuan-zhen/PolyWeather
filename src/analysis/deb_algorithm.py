@@ -1159,11 +1159,24 @@ def calculate_dynamic_weight_components(
 
     city_data = data[city_name]
     sorted_dates = sorted(city_data.keys(), reverse=True)
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    available_days = sum(
+        1 for d in sorted_dates
+        if d != today_str and city_data[d].get("actual_high") is not None
+    )
+
+    # ── 改进3: 自适应 lookback — 数据多的城市用更多历史 ──
+    adaptive_lookback = min(14, max(7, available_days // 4))
+    effective_lookback = max(lookback_days, adaptive_lookback) if lookback_days <= 7 else lookback_days
+
+    # ── 改进1: 偏差惩罚 — per-model signed bias ──
+    model_biases: dict = {model: 0.0 for model in forecasts.keys()}
+    bias_samples: dict = {model: 0 for model in forecasts.keys()}
 
     errors: dict = {model: [] for model in forecasts.keys()}
     days_used = 0
     for date_str in sorted_dates:
-        if date_str == datetime.now().strftime("%Y-%m-%d"):
+        if date_str == today_str:
             continue
 
         record = city_data[date_str]
@@ -1174,8 +1187,6 @@ def calculate_dynamic_weight_components(
         if actual is None:
             continue
 
-        decay_weight = decay_factor ** days_used
-
         for model in forecasts.keys():
             if model in past_forecasts and past_forecasts[model] is not None:
                 try:
@@ -1183,6 +1194,10 @@ def calculate_dynamic_weight_components(
                     av = float(actual)
                 except (TypeError, ValueError):
                     continue
+                # Track signed error for bias
+                model_biases[model] += (pv - av)  # positive = model overpredicts
+                bias_samples[model] += 1
+                # Track absolute error for MAE
                 daily_error = abs(pv - av)
                 h_err = (
                     past_hourly_error.get(model)
@@ -1190,15 +1205,17 @@ def calculate_dynamic_weight_components(
                     else None
                 )
                 blended_error = _blend_mae(daily_error, h_err)
+                decay_weight = decay_factor ** days_used
                 errors[model].append((blended_error, decay_weight))
 
         days_used += 1
-        if days_used >= lookback_days:
+        if days_used >= effective_lookback:
             break
 
     if days_used < 2:
         return _equal_weight_result(f"等权平均(由于仅{days_used}天历史)", days_used)
 
+    # Compute weighted MAEs
     maes = {}
     for model, err_weighted in errors.items():
         if err_weighted:
@@ -1210,8 +1227,14 @@ def calculate_dynamic_weight_components(
         else:
             maes[model] = 2.0
 
+    # Finalize per-model biases — only trust when enough samples
+    for model in forecasts.keys():
+        n = bias_samples.get(model, 0)
+        model_biases[model] = model_biases[model] / n if n >= 5 else 0.0
+
+    # ── 改进1: 偏差惩罚进逆误差 ──
     inverse_errors = {
-        m: 1.0 / (mae + 0.1)
+        m: 1.0 / (mae + abs(model_biases[m]) * 0.5 + 0.1)
         for m, mae in maes.items()
         if forecasts.get(m) is not None
     }
@@ -1229,12 +1252,30 @@ def calculate_dynamic_weight_components(
         }
 
     weights = {m: inv / total_inv for m, inv in inverse_errors.items()}
+
+    # ── 改进2: 分歧感知的权重回退 ──
+    forecast_values = [v for v in forecasts.values() if v is not None]
+    if len(forecast_values) >= 2:
+        spread = max(forecast_values) - min(forecast_values)
+        if spread > 3.0:
+            trust_factor = 3.0 / spread  # 分歧>3°F时才回退
+            n = len(weights)
+            weights = {
+                m: w * trust_factor + (1.0 - trust_factor) / n
+                for m, w in weights.items()
+            }
+
     blended_high = sum(forecasts[m] * weights[m] for m in weights)
 
     sorted_models = sorted(weights.items(), key=lambda x: x[1], reverse=True)
     weight_str_parts = []
     for m, w in sorted_models[:3]:
-        weight_str_parts.append(f"{m}({w * 100:.0f}%,MAE:{maes[m]:.1f}°)")
+        parts = [f"{m}({w * 100:.0f}%"]
+        if maes.get(m):
+            parts.append(f"MAE:{maes[m]:.1f}°")
+        if abs(model_biases.get(m, 0.0)) >= 0.3:
+            parts.append(f"bias:{model_biases[m]:+.1f}")
+        weight_str_parts.append(",".join(parts) + ")")
     if dedup_note:
         weight_str_parts.append(dedup_note)
 

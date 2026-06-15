@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Set
 
 from src.database.db_manager import DBManager
+from src.database.sqlite_connection import connect_sqlite
 from web.realtime_patch_schema import EVENT_TYPE
 
 
@@ -72,10 +73,7 @@ class RealtimeEventStore:
         self._ensure_table()
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path, timeout=10)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA busy_timeout=5000")
-        return conn
+        return connect_sqlite(self.db_path, timeout=10)
 
     def _ensure_table(self) -> None:
         db_dir = os.path.dirname(self.db_path)

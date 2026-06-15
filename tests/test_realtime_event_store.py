@@ -2,6 +2,7 @@ import sqlite3
 from datetime import datetime, timezone
 
 from src.database.db_manager import DBManager
+from src.database.sqlite_connection import connect_sqlite
 from web.realtime_event_store import RealtimeEventStore
 from web.realtime_patch_schema import normalize_observation_patch
 
@@ -75,7 +76,7 @@ def test_event_store_cleanup_uses_short_replay_retention(tmp_path):
     old_event = store.append_event(_event("taipei", 30.0))
     fresh_event = store.append_event(_event("taipei", 31.0))
 
-    with sqlite3.connect(db_path) as conn:
+    with connect_sqlite(db_path) as conn:
         conn.execute(
             "UPDATE observation_patch_events SET created_at = ? WHERE revision = ?",
             ("2026-05-26T00:00:00+00:00", old_event["revision"]),
