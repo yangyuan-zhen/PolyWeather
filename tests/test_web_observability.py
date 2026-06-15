@@ -3050,6 +3050,31 @@ def test_backend_entitlement_token_without_forwarded_identity_validates_bearer(m
     assert request.state.auth_email == "user@example.com"
 
 
+def test_backend_entitlement_token_accepts_service_bearer(monkeypatch):
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "enabled", True)
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "anon_key", "anon-key")
+    monkeypatch.setattr(web_core, "_SUPABASE_AUTH_REQUIRED", True)
+    monkeypatch.setattr(web_core, "_ENTITLEMENT_TOKEN", "backend-token")
+
+    def _get_identity(_token):
+        raise AssertionError("service bearer token must not be treated as a Supabase access token")
+
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "get_identity", _get_identity)
+
+    request = Request(
+        {
+            "type": "http",
+            "headers": [
+                (b"x-polyweather-entitlement", b"backend-token"),
+                (b"authorization", b"Bearer backend-token"),
+            ],
+        }
+    )
+
+    web_core._assert_entitlement(request)
+
+
 def test_ops_memberships_prefers_supabase_auth_email(monkeypatch):
     monkeypatch.setattr(routes, "_assert_entitlement", lambda request: None)
     monkeypatch.setattr(routes, "_require_ops_admin", lambda request: None)

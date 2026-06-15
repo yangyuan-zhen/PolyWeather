@@ -305,7 +305,8 @@ def _assert_entitlement(request: Request) -> None:
         if _legacy_service_token_valid(request):
             if _bind_forwarded_supabase_identity(request):
                 return
-            if not extract_bearer_token(request.headers.get("authorization")):
+            bearer_token = extract_bearer_token(request.headers.get("authorization"))
+            if not bearer_token or bearer_token == _ENTITLEMENT_TOKEN:
                 return
         if not _SUPABASE_AUTH_REQUIRED:
             _bind_optional_supabase_identity(request)
