@@ -182,15 +182,19 @@ def test_raw_observation_store_records_latest_observation(tmp_path):
 
 
 def test_raw_observation_store_lists_source_city_history(tmp_path):
+    from datetime import datetime, timedelta, timezone
+
     from src.database.db_manager import DBManager
 
     db = DBManager(str(tmp_path / "polyweather.db"))
+    first_observed_at = (datetime.now(timezone.utc) - timedelta(minutes=2)).replace(microsecond=0).isoformat()
+    second_observed_at = (datetime.now(timezone.utc) - timedelta(minutes=1)).replace(microsecond=0).isoformat()
     db.append_raw_observation(
         source="amsc_awos",
         city="Chengdu",
         value=25.6,
-        observed_at="2026-06-15T11:04:00+00:00",
-        fetched_at="2026-06-15T11:04:30+00:00",
+        observed_at=first_observed_at,
+        fetched_at=first_observed_at,
         station_code="ZUUU",
         payload={"temp_c": 25.6},
     )
@@ -198,8 +202,8 @@ def test_raw_observation_store_lists_source_city_history(tmp_path):
         source="amsc_awos",
         city="chengdu",
         value=25.4,
-        observed_at="2026-06-15T11:08:00+00:00",
-        fetched_at="2026-06-15T11:08:30+00:00",
+        observed_at=second_observed_at,
+        fetched_at=second_observed_at,
         station_code="ZUUU",
         payload={"temp_c": 25.4},
     )
@@ -207,8 +211,8 @@ def test_raw_observation_store_lists_source_city_history(tmp_path):
     rows = db.list_raw_observation_history("amsc_awos", "chengdu", minutes=60, limit=10)
 
     assert [row["observed_at"] for row in rows] == [
-        "2026-06-15T11:04:00+00:00",
-        "2026-06-15T11:08:00+00:00",
+        first_observed_at,
+        second_observed_at,
     ]
     assert rows[-1]["payload"]["temp_c"] == 25.4
 

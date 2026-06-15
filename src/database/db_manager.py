@@ -1307,20 +1307,25 @@ class DBManager:
             return []
         safe_limit = max(1, min(int(limit or 1000), 5000))
         safe_minutes = max(1, min(int(minutes or 60), 7 * 24 * 60))
-        cutoff_ts = datetime.now().timestamp() - safe_minutes * 60
+        cutoff_dt = datetime.now(timezone.utc) - timedelta(minutes=safe_minutes)
+        cutoff_observed_at = cutoff_dt.replace(microsecond=0).isoformat()
         with self._get_connection() as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
                 """
                 SELECT *
-                FROM raw_observation_store
-                WHERE source = ?
-                  AND city = ?
-                  AND created_at_ts >= ?
+                FROM (
+                    SELECT *
+                    FROM raw_observation_store
+                    WHERE source = ?
+                      AND city = ?
+                      AND observed_at >= ?
+                    ORDER BY observed_at DESC, fetched_at DESC, created_at_ts DESC
+                    LIMIT ?
+                )
                 ORDER BY observed_at ASC, fetched_at ASC, created_at_ts ASC
-                LIMIT ?
                 """,
-                (normalized_source, normalized_city, cutoff_ts, safe_limit),
+                (normalized_source, normalized_city, cutoff_observed_at, safe_limit),
             ).fetchall()
         out: List[Dict[str, Any]] = []
         for row in rows:
