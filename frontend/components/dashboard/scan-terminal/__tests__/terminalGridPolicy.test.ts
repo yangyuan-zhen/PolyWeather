@@ -265,7 +265,7 @@ export function runTests() {
     "temperature chart should render once a visible series has drawable values",
   );
   assert(
-    !__shouldKeepTemperatureChartLoadingForTest({
+    __shouldKeepTemperatureChartLoadingForTest({
       row: { city: "Moscow" } as any,
       isHourlyLoading: true,
       activeSeries: [
@@ -283,6 +283,6 @@ export function runTests() {
         { label: "05:00", ts: 2, current: 13 },
       ],
     }),
-    "temperature chart must render seeded or cached data immediately while full detail continues loading in the background",
+    "temperature chart should keep the loading overlay when the only drawable series is the fallback Current reference line",
   );
 }

@@ -50,6 +50,26 @@ function hasDrawableTemperatureChartContent({
   );
 }
 
+function isFallbackReferenceSeries(series: EvidenceSeries) {
+  return series.key === "current" && series.label === "Current reference";
+}
+
+function hasDrawablePrimaryTemperatureChartContent({
+  activeSeries,
+  probabilityOverlay,
+  zoomedData,
+}: {
+  activeSeries: EvidenceSeries[];
+  probabilityOverlay: ProbabilityOverlay | null;
+  zoomedData: Array<Record<string, any>>;
+}) {
+  return hasDrawableTemperatureChartContent({
+    activeSeries: activeSeries.filter((series) => !isFallbackReferenceSeries(series)),
+    probabilityOverlay,
+    zoomedData,
+  });
+}
+
 function shouldKeepTemperatureChartLoading({
   row,
   isHourlyLoading,
@@ -65,7 +85,7 @@ function shouldKeepTemperatureChartLoading({
 }) {
   if (!row?.city) return false;
   if (!isHourlyLoading) return false;
-  return !hasDrawableTemperatureChartContent({ activeSeries, probabilityOverlay, zoomedData });
+  return !hasDrawablePrimaryTemperatureChartContent({ activeSeries, probabilityOverlay, zoomedData });
 }
 
 function TemperatureChartSkeleton({ compact }: { compact: boolean }) {
@@ -225,7 +245,7 @@ function TemperatureChartCanvasComponent({
   });
   const shouldRenderChart = canRenderChart && hasDrawableChartContent;
   const shouldShowEmptyState = Boolean(row?.city) && !isHourlyLoading && !hasDrawableChartContent;
-  const shouldShowBackgroundRefresh = isHourlyLoading && hasDrawableChartContent;
+  const shouldShowBackgroundRefresh = isHourlyLoading && hasDrawableChartContent && !shouldShowChartLoading;
   const shouldShowUnavailableState = Boolean(row?.city) && Boolean(detailError) && !isHourlyLoading && !hasDrawableChartContent;
   const shouldShowBackgroundError =
     showDetailErrorBadge && Boolean(row?.city) && !isHourlyLoading && hasDrawableChartContent &&
