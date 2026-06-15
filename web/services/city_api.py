@@ -341,6 +341,31 @@ def _payload_observation_epoch(payload: Dict[str, Any]) -> Optional[int]:
     return max(epochs) if epochs else None
 
 
+_SOURCE_BOUND_OBSERVATION_FIELDS = {
+    "altim",
+    "cloud_desc",
+    "clouds",
+    "clouds_raw",
+    "current_local_date",
+    "humidity",
+    "last_observation_local_date",
+    "max_temp_time",
+    "obs_time_epoch",
+    "pressure_hpa",
+    "raw_max_so_far",
+    "raw_metar",
+    "receipt_time",
+    "report_time",
+    "stale_for_today",
+    "visibility_km",
+    "visibility_mi",
+    "wind_dir",
+    "wind_speed_kt",
+    "wu_settlement",
+    "wx_desc",
+}
+
+
 def _float_or_none(value: Any) -> Optional[float]:
     try:
         if value is None or value == "":
@@ -385,6 +410,29 @@ def _latest_airport_primary_point(
     return [{"time": local_time, "temp": round(float(temp), 1)}]
 
 
+def _observation_source_code(block: Any) -> str:
+    if not isinstance(block, dict):
+        return ""
+    for key in ("source_code", "settlement_source", "source"):
+        value = str(block.get(key) or "").strip().lower()
+        if value:
+            return value
+    return ""
+
+
+def _merge_latest_observation_block(base_block: Any, latest_block: Dict[str, Any]) -> Dict[str, Any]:
+    base = dict(base_block) if isinstance(base_block, dict) else {}
+    latest_source = _observation_source_code(latest_block)
+    base_source = _observation_source_code(base)
+    if base_source and latest_source and base_source != latest_source:
+        base = {
+            key: value
+            for key, value in base.items()
+            if key not in _SOURCE_BOUND_OBSERVATION_FIELDS
+        }
+    return {**base, **latest_block}
+
+
 def _replace_airport_primary_today_obs(
     payload: Dict[str, Any],
     points: List[Dict[str, Any]],
@@ -393,6 +441,60 @@ def _replace_airport_primary_today_obs(
     official = payload.get("official")
     if isinstance(official, dict):
         official["airport_primary_today_obs"] = points
+
+
+def _clear_previous_day_observation_series(payload: Dict[str, Any], *, local_date: str) -> None:
+    for key in ("metar_today_obs", "metar_recent_obs", "settlement_today_obs"):
+        if key in payload:
+            payload[key] = []
+    timeseries = payload.get("timeseries")
+    if isinstance(timeseries, dict):
+        for key in ("metar_today_obs", "metar_recent_obs", "settlement_today_obs"):
+            if key in timeseries:
+                timeseries[key] = []
+    metar_status = payload.get("metar_status")
+    if isinstance(metar_status, dict):
+        metar_status["available_for_today"] = False
+        metar_status["stale_for_today"] = True
+        metar_status["current_local_date"] = local_date
+
+
+def _sync_latest_mgm_summary(
+    payload: Dict[str, Any],
+    latest_payload: Dict[str, Any],
+    *,
+    local_time: str,
+) -> None:
+    latest_current = latest_payload.get("current") if isinstance(latest_payload.get("current"), dict) else {}
+    latest_airport = (
+        latest_payload.get("airport_primary")
+        if isinstance(latest_payload.get("airport_primary"), dict)
+        else {}
+    )
+    latest_source = _observation_source_code(latest_current) or _observation_source_code(latest_airport)
+    if latest_source != "mgm":
+        return
+    temp = _float_or_none(latest_airport.get("temp") if latest_airport else None)
+    if temp is None:
+        temp = _float_or_none(latest_current.get("temp") if latest_current else None)
+    if temp is None:
+        return
+    payload["mgm"] = {
+        "temp": round(float(temp), 1),
+        "time": local_time,
+        "feels_like": round(float(temp), 1),
+        "humidity": None,
+        "wind_dir": None,
+        "wind_speed_ms": None,
+        "pressure": None,
+        "cloud_cover": None,
+        "rain_24h": None,
+        "today_high": None,
+        "today_low": None,
+        "station_code": latest_airport.get("station_code") or latest_current.get("station_code"),
+        "station_name": latest_airport.get("station_name") or latest_current.get("station_name"),
+        "hourly": [],
+    }
 
 
 def _merge_latest_observation_payload(
@@ -414,8 +516,7 @@ def _merge_latest_observation_payload(
         latest_block = latest_payload.get(key)
         if not isinstance(latest_block, dict) or not latest_block:
             continue
-        base_block = next_payload.get(key) if isinstance(next_payload.get(key), dict) else {}
-        next_payload[key] = {**base_block, **latest_block}
+        next_payload[key] = _merge_latest_observation_block(next_payload.get(key), latest_block)
     if isinstance(latest_payload.get("canonical_temperature"), dict):
         next_payload["canonical_temperature"] = latest_payload["canonical_temperature"]
     if latest_payload.get("updated_at"):
@@ -435,6 +536,12 @@ def _merge_latest_observation_payload(
                     local_time=local_context["local_time"],
                 ),
             )
+            _clear_previous_day_observation_series(next_payload, local_date=local_context["local_date"])
+        _sync_latest_mgm_summary(
+            next_payload,
+            latest_payload,
+            local_time=local_context["local_time"],
+        )
     return next_payload
 
 

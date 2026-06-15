@@ -1843,18 +1843,34 @@ def test_stale_ankara_chart_data_overlays_latest_mgm_canonical(monkeypatch):
                     "local_time": "13:12",
                     "current": {
                         "temp": 16.0,
+                        "max_temp_time": "12:50",
+                        "raw_max_so_far": 16.0,
+                        "wu_settlement": 16,
                         "source_code": "metar",
                         "settlement_source": "metar",
                         "settlement_source_label": "METAR",
                         "observed_at": "2026-06-14T09:50:00+00:00",
+                        "report_time": "2026-06-14T09:50:00+00:00",
+                        "raw_metar": "METAR LTAC 140950Z 06013KT 9999 16/11 Q1015",
                     },
                     "airport_primary": {
                         "temp": 16.0,
                         "source_code": "metar",
                         "source_label": "METAR",
                         "obs_time": "2026-06-14T09:50:00+00:00",
+                        "report_time": "2026-06-14T09:50:00+00:00",
+                        "raw_metar": "METAR LTAC 140950Z 06013KT 9999 16/11 Q1015",
                     },
                     "airport_primary_today_obs": [{"time": "12:50", "temp": 16.0}],
+                    "metar_today_obs": [{"time": "12:50", "temp": 16.0}],
+                    "metar_recent_obs": [{"time": "12:50", "temp": 16.0}],
+                    "metar_status": {
+                        "available_for_today": True,
+                        "stale_for_today": False,
+                        "last_observation_local_date": "2026-06-14",
+                        "current_local_date": "2026-06-14",
+                    },
+                    "mgm": {"temp": 16.7, "time": "12:50", "hourly": [{"time": "12:00", "temp": 16.5}]},
                     "hourly": {"times": ["2026-06-14T09:00:00Z"], "temps": [16.0]},
                     "deb": {"prediction": 23.0},
                 },
@@ -1901,6 +1917,16 @@ def test_stale_ankara_chart_data_overlays_latest_mgm_canonical(monkeypatch):
     assert payload["local_date"] == "2026-06-15"
     assert payload["local_time"] == "17:20"
     assert payload["airport_primary_today_obs"] == [{"time": "17:20", "temp": 19.0}]
+    assert "raw_metar" not in payload["current"]
+    assert "report_time" not in payload["airport_primary"]
+    assert payload["metar_today_obs"] == []
+    assert payload["metar_recent_obs"] == []
+    assert payload["metar_status"]["available_for_today"] is False
+    assert payload["metar_status"]["stale_for_today"] is True
+    assert payload["metar_status"]["current_local_date"] == "2026-06-15"
+    assert payload["mgm"]["temp"] == 19.0
+    assert payload["mgm"]["time"] == "17:20"
+    assert payload["mgm"].get("hourly") == []
     assert payload["deb"]["prediction"] == 23.0
 
 
