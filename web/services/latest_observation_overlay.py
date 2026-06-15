@@ -327,7 +327,7 @@ def _append_amsc_runway_history_from_raw_store(
     if not callable(lister):
         return False
     try:
-        rows = lister("amsc_awos", city, minutes=36 * 60, limit=3000)
+        rows = lister("amsc_awos", city, minutes=24 * 60, limit=1500)
     except Exception as exc:
         logger.debug("latest AMSC raw history overlay skipped city={}: {}", city, exc)
         return False

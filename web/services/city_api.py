@@ -330,7 +330,7 @@ def _overlay_cached_runway_history_from_db(city: str, payload: Dict[str, Any]) -
         return payload
 
     try:
-        rows = legacy_routes._CACHE_DB.get_runway_obs_recent(icao, minutes=36 * 60)
+        rows = legacy_routes._CACHE_DB.get_runway_obs_recent(icao, minutes=24 * 60)
     except Exception as exc:
         logger.debug("chart runway DB overlay skipped city={} icao={}: {}", normalized_city, icao, exc)
         return payload

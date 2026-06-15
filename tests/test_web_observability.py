@@ -1128,7 +1128,7 @@ def test_chart_scope_overlays_collector_runway_history_from_db(monkeypatch):
 
         def get_runway_obs_recent(self, icao, minutes=60):
             assert icao == "ZSPD"
-            assert minutes == 36 * 60
+            assert minutes == 24 * 60
             return [
                 {
                     "runway": "35R/17L",
@@ -1163,7 +1163,7 @@ def test_chart_data_force_refresh_overlays_collector_runway_history(monkeypatch)
     class FakeCache:
         def get_runway_obs_recent(self, icao, minutes=60):
             assert icao == "ZUUU"
-            assert minutes == 36 * 60
+            assert minutes == 24 * 60
             return [
                 {
                     "runway": "02L/20R",

@@ -4257,8 +4257,11 @@ class DBManager:
                        wind_dir, wind_speed, rvr, mor, humidity,
                        otime_utc, created_at
                 FROM runway_obs_log
-                WHERE icao = ? AND created_at >= datetime('now', ? || ' minutes')
-                ORDER BY created_at ASC
+                WHERE icao = ?
+                  AND datetime(COALESCE(NULLIF(otime_utc, ''), created_at))
+                      >= datetime('now', ? || ' minutes')
+                ORDER BY datetime(COALESCE(NULLIF(otime_utc, ''), created_at)) ASC,
+                         created_at ASC
                 """,
                 (str(icao).strip().upper(), str(-int(minutes))),
             ).fetchall()

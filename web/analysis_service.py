@@ -1761,7 +1761,7 @@ def _analyze(
     if isinstance(icao, str) and icao:
         try:
             from src.database.db_manager import DBManager
-            raw_runway_obs = DBManager().get_runway_obs_recent(icao, minutes=36 * 60)
+            raw_runway_obs = DBManager().get_runway_obs_recent(icao, minutes=24 * 60)
             for r in raw_runway_obs:
                 rw = r.get("runway")
                 if not rw:
