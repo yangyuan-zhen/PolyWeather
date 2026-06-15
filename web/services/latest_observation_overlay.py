@@ -43,6 +43,33 @@ def parse_observation_epoch(value: Any) -> Optional[int]:
     return int(dt.timestamp())
 
 
+def _parse_observation_datetime(value: Any) -> Optional[datetime]:
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        text = str(value).strip()
+        if not text:
+            return None
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        try:
+            dt = datetime.fromisoformat(text)
+        except ValueError:
+            for fmt in ("%Y-%m-%d %H:%M:%S%z", "%Y-%m-%d %H:%M:%S"):
+                try:
+                    dt = datetime.strptime(text, fmt)
+                    break
+                except ValueError:
+                    continue
+            else:
+                return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def _payload_latest_epoch(payload: dict[str, Any], keys: tuple[str, ...]) -> Optional[int]:
     values = [payload.get(key) for key in keys]
     parsed = [epoch for epoch in (parse_observation_epoch(value) for value in values) if epoch is not None]
@@ -102,6 +129,239 @@ def _to_int(value: Any) -> Optional[int]:
         return int(float(value))
     except (TypeError, ValueError):
         return None
+
+
+def _latest_jma_row(weather: Any, city: str, use_fahrenheit: bool) -> Optional[dict[str, Any]]:
+    fetcher = getattr(weather, "fetch_jma_amedas_official_nearby", None)
+    if callable(fetcher):
+        try:
+            rows = fetcher(city, use_fahrenheit=use_fahrenheit)
+        except Exception as exc:
+            logger.debug("latest JMA overlay read failed city={}: {}", city, exc)
+            rows = []
+        for row in rows if isinstance(rows, list) else []:
+            if not isinstance(row, dict):
+                continue
+            if _to_float(row.get("temp")) is not None and row.get("obs_time"):
+                return row
+
+    current_fetcher = getattr(weather, "fetch_jma_amedas_current", None)
+    if callable(current_fetcher):
+        try:
+            current = current_fetcher(city, use_fahrenheit=use_fahrenheit)
+        except Exception as exc:
+            logger.debug("latest JMA current overlay read failed city={}: {}", city, exc)
+            return None
+        if isinstance(current, dict):
+            temp = _to_float((current.get("current") or {}).get("temp"))
+            obs_time = current.get("obs_time")
+            if temp is not None and obs_time:
+                return {
+                    "station_label": current.get("station_name"),
+                    "temp": temp,
+                    "icao": current.get("station_code"),
+                    "source": "jma",
+                    "source_label": "JMA",
+                    "obs_time": obs_time,
+                }
+    return None
+
+
+def _jma_observation_update(
+    city: str,
+    row: dict[str, Any],
+    obs_time: str,
+    temp: float,
+) -> dict[str, Any]:
+    source_label = str(row.get("source_label") or "JMA").strip() or "JMA"
+    station_code = str(row.get("icao") or row.get("istNo") or "").strip() or None
+    station_name = str(row.get("station_label") or row.get("name") or source_label).strip()
+    freshness = {
+        "freshness_status": "fresh",
+        "observed_at": obs_time,
+        "source_code": "jma_amedas",
+        "source_label": source_label,
+    }
+    return {
+        "temp": round(float(temp), 1),
+        "source_code": "jma_amedas",
+        "source_label": source_label,
+        "station_code": station_code,
+        "station_name": station_name,
+        "station_label": station_name,
+        "observed_at": obs_time,
+        "observation_time": obs_time,
+        "obs_time": obs_time,
+        "freshness": freshness,
+        "observation_status": "live",
+        "city": city,
+    }
+
+
+def _jma_today_point(local_time: str, obs_time: str, temp: float) -> dict[str, Any]:
+    return {
+        "time": local_time,
+        "temp": round(float(temp), 1),
+        "obs_time": obs_time,
+        "source_code": "jma_amedas",
+        "source_label": "JMA",
+    }
+
+
+def _replace_or_append_today_point(
+    rows: Any,
+    point: dict[str, Any],
+    *,
+    replace_all: bool,
+) -> list[dict[str, Any]]:
+    if replace_all:
+        return [point]
+    next_rows: list[dict[str, Any]] = []
+    replaced = False
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict):
+            continue
+        current_time = str(row.get("time") or "").strip()
+        current_obs_time = str(row.get("obs_time") or row.get("observed_at") or "").strip()
+        if current_time == point["time"] or current_obs_time == point["obs_time"]:
+            next_rows.append(point)
+            replaced = True
+        else:
+            next_rows.append(dict(row))
+    if not replaced:
+        next_rows.append(point)
+    return next_rows
+
+
+def _sync_jma_today_series(
+    payload: dict[str, Any],
+    point: dict[str, Any],
+    *,
+    replace_all: bool,
+) -> None:
+    rows = _replace_or_append_today_point(
+        payload.get("metar_today_obs"),
+        point,
+        replace_all=replace_all,
+    )
+    payload["metar_today_obs"] = rows
+    payload["airport_primary_today_obs"] = rows
+    official = payload.get("official")
+    if not isinstance(official, dict):
+        official = {}
+    official["airport_primary_today_obs"] = rows
+    payload["official"] = official
+
+    timeseries = payload.get("timeseries")
+    if not isinstance(timeseries, dict):
+        timeseries = {}
+    timeseries["metar_today_obs"] = rows
+    for key in ("metar_recent_obs", "settlement_today_obs"):
+        if replace_all and key in timeseries:
+            timeseries[key] = []
+    payload["timeseries"] = timeseries
+    if replace_all:
+        for key in ("metar_recent_obs", "settlement_today_obs"):
+            if key in payload:
+                payload[key] = []
+
+
+def overlay_latest_jma_amedas_observation(
+    weather: Any,
+    city: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    normalized_city = str(city or payload.get("name") or payload.get("city") or "").strip().lower()
+    if not normalized_city or not isinstance(payload, dict) or not payload:
+        return payload
+    if normalized_city != "tokyo":
+        return payload
+
+    use_fahrenheit = "F" in str(payload.get("temp_symbol") or "").upper()
+    row = _latest_jma_row(weather, normalized_city, use_fahrenheit)
+    if not isinstance(row, dict):
+        return payload
+
+    temp = _to_float(row.get("temp"))
+    obs_time = str(row.get("obs_time") or "").strip()
+    if temp is None or not obs_time:
+        return payload
+
+    raw_epoch = parse_observation_epoch(obs_time)
+    local_dt = _parse_observation_datetime(obs_time)
+    if raw_epoch is None or local_dt is None:
+        return payload
+    existing_epochs = [
+        epoch
+        for epoch in (
+            _block_epoch(payload.get("current")),
+            _block_epoch(payload.get("airport_primary")),
+            _block_epoch(payload.get("airport_current")),
+            _block_epoch(payload.get("canonical_temperature")),
+        )
+        if epoch is not None
+    ]
+    if existing_epochs and max(existing_epochs) >= raw_epoch:
+        return payload
+
+    update = _jma_observation_update(normalized_city, row, obs_time, temp)
+    next_payload = deepcopy(payload)
+    changed = False
+    for key in ("current", "airport_primary", "airport_current"):
+        changed = _merge_observation_block(next_payload, key, update, raw_epoch) or changed
+
+    canonical = next_payload.get("canonical_temperature")
+    canonical_epoch = _block_epoch(canonical)
+    if canonical_epoch is None or raw_epoch > canonical_epoch:
+        canonical_payload = build_canonical_temperature(
+            normalized_city,
+            {
+                "name": normalized_city,
+                "temp_symbol": next_payload.get("temp_symbol") or "\u00b0C",
+                "updated_at": obs_time,
+                "current": update,
+            },
+            fetched_at=obs_time,
+        )
+        if canonical_payload:
+            next_payload["canonical_temperature"] = canonical_payload
+            changed = True
+
+    local_date = local_dt.date().isoformat()
+    local_time = local_dt.strftime("%H:%M")
+    previous_local_date = str(next_payload.get("local_date") or "")
+    if next_payload.get("local_date") != local_date:
+        next_payload["local_date"] = local_date
+        changed = True
+    if next_payload.get("local_time") != local_time:
+        next_payload["local_time"] = local_time
+        changed = True
+
+    overview = next_payload.get("overview")
+    if not isinstance(overview, dict):
+        overview = {}
+    next_overview = dict(overview)
+    overview_updates = {
+        "local_date": local_date,
+        "local_time": local_time,
+        "current_temp": round(float(temp), 1),
+        "airport_primary": update,
+    }
+    for key, value in overview_updates.items():
+        if next_overview.get(key) != value:
+            next_overview[key] = value
+            changed = True
+    next_payload["overview"] = next_overview
+
+    replace_today_series = bool(previous_local_date and previous_local_date != local_date)
+    _sync_jma_today_series(
+        next_payload,
+        _jma_today_point(local_time, obs_time, temp),
+        replace_all=replace_today_series,
+    )
+    changed = True
+
+    return next_payload if changed else payload
 
 
 def _amsc_payload_has_observation(raw_payload: dict[str, Any]) -> bool:

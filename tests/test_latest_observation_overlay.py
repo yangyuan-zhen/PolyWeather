@@ -1,3 +1,4 @@
+import web.services.latest_observation_overlay as observation_overlay
 from web.services.latest_observation_overlay import overlay_latest_amsc_observation
 
 
@@ -267,3 +268,120 @@ def test_overlay_uses_latest_success_when_newer_status_row_has_no_observation():
     assert result["amos"]["temp_c"] == 25.8
     assert result["current"]["temp"] == 25.8
     assert result["airport_current"]["source_code"] == "amsc_awos"
+
+
+def test_overlay_latest_jma_resets_stale_tokyo_detail_to_latest_local_day():
+    class FakeWeather:
+        def fetch_jma_amedas_official_nearby(self, city, use_fahrenheit=False):
+            assert (city, use_fahrenheit) == ("tokyo", False)
+            return [
+                {
+                    "station_label": "羽田 10分实况 (JMA)",
+                    "temp": 24.0,
+                    "icao": "44166",
+                    "source": "jma",
+                    "source_label": "JMA",
+                    "obs_time": "2026-06-16T06:00:00+09:00",
+                }
+            ]
+
+    stale_payload = {
+        "name": "tokyo",
+        "display_name": "Tokyo",
+        "temp_symbol": "°C",
+        "local_date": "2026-06-14",
+        "local_time": "19:00",
+        "current": {
+            "temp": 23.0,
+            "source_code": "metar",
+            "obs_time": "2026-06-14T10:00:00+00:00",
+        },
+        "airport_current": {
+            "temp": 23.0,
+            "source_code": "metar",
+            "obs_time": "2026-06-14T10:00:00+00:00",
+        },
+        "airport_primary": {
+            "temp": 23.0,
+            "source_code": "metar",
+            "obs_time": "2026-06-14T10:00:00+00:00",
+        },
+        "overview": {
+            "local_date": "2026-06-14",
+            "local_time": "19:00",
+            "current_temp": 23.0,
+        },
+        "metar_today_obs": [
+            {"time": "00:00", "temp": 23.0},
+            {"time": "17:00", "temp": 25.0},
+        ],
+        "timeseries": {
+            "metar_today_obs": [
+                {"time": "00:00", "temp": 23.0},
+                {"time": "17:00", "temp": 25.0},
+            ],
+        },
+    }
+
+    assert hasattr(observation_overlay, "overlay_latest_jma_amedas_observation")
+
+    result = observation_overlay.overlay_latest_jma_amedas_observation(
+        FakeWeather(),
+        "tokyo",
+        stale_payload,
+    )
+
+    assert result["local_date"] == "2026-06-16"
+    assert result["local_time"] == "06:00"
+    assert result["current"]["temp"] == 24.0
+    assert result["current"]["source_code"] == "jma_amedas"
+    assert result["airport_current"]["obs_time"] == "2026-06-16T06:00:00+09:00"
+    assert result["airport_primary"]["station_code"] == "44166"
+    assert result["overview"]["local_date"] == "2026-06-16"
+    assert result["overview"]["current_temp"] == 24.0
+    assert result["metar_today_obs"] == [
+        {
+            "time": "06:00",
+            "temp": 24.0,
+            "obs_time": "2026-06-16T06:00:00+09:00",
+            "source_code": "jma_amedas",
+            "source_label": "JMA",
+        }
+    ]
+    assert result["timeseries"]["metar_today_obs"] == result["metar_today_obs"]
+
+
+def test_overlay_latest_jma_does_not_downgrade_newer_payload_current():
+    class FakeWeather:
+        def fetch_jma_amedas_official_nearby(self, city, use_fahrenheit=False):
+            return [
+                {
+                    "station_label": "羽田 10分实况 (JMA)",
+                    "temp": 24.0,
+                    "icao": "44166",
+                    "source": "jma",
+                    "source_label": "JMA",
+                    "obs_time": "2026-06-16T06:00:00+09:00",
+                }
+            ]
+
+    payload = {
+        "name": "tokyo",
+        "local_date": "2026-06-16",
+        "local_time": "07:00",
+        "current": {
+            "temp": 25.0,
+            "source_code": "jma_amedas",
+            "obs_time": "2026-06-16T07:00:00+09:00",
+        },
+    }
+
+    result = observation_overlay.overlay_latest_jma_amedas_observation(
+        FakeWeather(),
+        "tokyo",
+        payload,
+    )
+
+    assert result is payload
+    assert result["current"]["temp"] == 25.0
+    assert result["local_time"] == "07:00"

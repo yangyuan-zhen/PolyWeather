@@ -1310,6 +1310,79 @@ def test_chart_data_cache_hit_overlays_latest_amsc_raw(monkeypatch):
     assert payload["airport_current"]["source_code"] == "amsc_awos"
 
 
+def test_chart_data_cache_hit_overlays_latest_jma_amedas(monkeypatch):
+    import asyncio
+
+    class FakeCache:
+        def get_city_cache(self, kind, city):
+            assert kind == "full"
+            return {
+                "payload": {
+                    "name": city,
+                    "display_name": "Tokyo",
+                    "temp_symbol": "°C",
+                    "local_date": "2026-06-14",
+                    "local_time": "19:00",
+                    "current": {
+                        "temp": 23.0,
+                        "source_code": "metar",
+                        "obs_time": "2026-06-14T10:00:00+00:00",
+                    },
+                    "airport_current": {
+                        "temp": 23.0,
+                        "source_code": "metar",
+                        "obs_time": "2026-06-14T10:00:00+00:00",
+                    },
+                    "metar_today_obs": [{"time": "19:00", "temp": 23.0}],
+                    "timeseries": {"metar_today_obs": [{"time": "19:00", "temp": 23.0}]},
+                },
+            }
+
+        def get_runway_obs_recent(self, icao, minutes=60):
+            return []
+
+        def get_latest_raw_observation(self, source, city):
+            return None
+
+    class FakeWeather:
+        def fetch_jma_amedas_official_nearby(self, city, use_fahrenheit=False):
+            assert (city, use_fahrenheit) == ("tokyo", False)
+            return [
+                {
+                    "station_label": "羽田 10分实况 (JMA)",
+                    "temp": 24.0,
+                    "icao": "44166",
+                    "source": "jma",
+                    "source_label": "JMA",
+                    "obs_time": "2026-06-16T06:00:00+09:00",
+                }
+            ]
+
+    monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
+    monkeypatch.setattr(city_api.legacy_routes, "_weather", FakeWeather())
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "_overlay_latest_wunderground_current",
+        lambda city, payload: payload,
+    )
+
+    payload = asyncio.run(city_api._get_city_chart_data("tokyo", force_refresh=False))
+
+    assert payload["local_date"] == "2026-06-16"
+    assert payload["local_time"] == "06:00"
+    assert payload["current"]["temp"] == 24.0
+    assert payload["airport_current"]["source_code"] == "jma_amedas"
+    assert payload["metar_today_obs"] == [
+        {
+            "time": "06:00",
+            "temp": 24.0,
+            "obs_time": "2026-06-16T06:00:00+09:00",
+            "source_code": "jma_amedas",
+            "source_label": "JMA",
+        }
+    ]
+
+
 def test_chart_data_returns_cached_payload_when_optional_overlay_times_out(monkeypatch):
     import asyncio
 
