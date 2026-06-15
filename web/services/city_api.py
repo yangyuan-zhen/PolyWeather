@@ -404,7 +404,28 @@ async def _get_city_full_data(city: str, *, force_refresh: bool) -> Dict[str, An
 
 async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, Any]:
     if force_refresh:
-        return await _get_city_full_data(city, force_refresh=True)
+        payload = await _get_city_full_data(city, force_refresh=True)
+        payload = await _run_optional_city_chart_overlay(
+            city=city,
+            overlay_name="runway_history",
+            payload=payload,
+            fn=_overlay_cached_runway_history_from_db,
+            args=(city, payload),
+        )
+        payload = await _run_optional_city_chart_overlay(
+            city=city,
+            overlay_name="amsc_latest_raw",
+            payload=payload,
+            fn=overlay_latest_amsc_observation,
+            args=(legacy_routes._CACHE_DB, city, payload),
+        )
+        return await _run_optional_city_chart_overlay(
+            city=city,
+            overlay_name="wunderground_current",
+            payload=payload,
+            fn=legacy_routes._overlay_latest_wunderground_current,
+            args=(city, payload),
+        )
 
     cached_entry = await run_in_threadpool(legacy_routes._CACHE_DB.get_city_cache, "full", city)
     if cached_entry:

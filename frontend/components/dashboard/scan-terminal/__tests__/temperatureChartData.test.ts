@@ -6,8 +6,10 @@ import {
   mergeHourlyWithLiveObservations,
   mergePatchIntoHourly,
   mergeRowObservationIntoHourly,
+  rememberHourlyDetailSnapshot,
   selectInitialHourlyForRowChange,
   seedHourlyForecastFromRow,
+  _hourlyCache,
 } from "@/components/dashboard/scan-terminal/temperature-chart-logic";
 
 function assert(condition: unknown, message: string) {
@@ -748,5 +750,60 @@ export function runTests() {
     !uncachedNewCityInitial?.modelCurves?.ECMWF &&
       !uncachedNewCityInitial?.debHourlyPath,
     "selecting an uncached different city must not show another city's model and DEB curves",
+  );
+
+  const chengduCacheKey = "chengdu:1m";
+  _hourlyCache.delete(chengduCacheKey);
+  const cachedChengduRow = {
+    city: "chengdu",
+    local_date: "2026-06-15",
+    local_time: "2026-06-15T09:00:00Z",
+    current_temp: 26.4,
+    current_max_so_far: 26.4,
+    temp_symbol: "°C",
+    tz_offset_seconds: 8 * 3600,
+    metar_context: { source: "amsc_awos" },
+  } as any;
+  rememberHourlyDetailSnapshot("chengdu", "1m", seedHourlyForecastFromRow(cachedChengduRow));
+  assert(
+    !_hourlyCache.has(chengduCacheKey),
+    "instant-restore cache must not persist a row-only seed that would block the full detail fetch",
+  );
+
+  const cachedChengduDetail = {
+    ...seedHourlyForecastFromRow(cachedChengduRow),
+    localDate: "2026-06-15",
+    times: ["08:00", "09:00"],
+    temps: [25.8, 26.4],
+    modelTimes: ["08:00", "09:00"],
+    modelCurves: { ECMWF: [26.1, 26.5] },
+    debHourlyPath: {
+      source: "deb_hourly_consensus",
+      times: ["08:00", "09:00"],
+      temps: [30.1, 30.9],
+    },
+    runwayPlateHistory: {
+      "02L/20R": [{ timestamp: "2026-06-15T08:55:00Z", temp_c: 26.2 }],
+    },
+  } as any;
+  const cachedChengduLivePatch = mergePatchIntoHourly(cachedChengduDetail, {
+    city: "chengdu",
+    revision: 7,
+    changes: {
+      temp: 26.8,
+      observed_at_utc: "2026-06-15T09:03:00Z",
+      runway_points: [{ runway: "02L/20R", temp: 26.8 }],
+    },
+  } as any);
+  rememberHourlyDetailSnapshot("chengdu", "1m", cachedChengduLivePatch);
+  const restoredChengdu = _hourlyCache.get(chengduCacheKey)?.data;
+  assert(
+    restoredChengdu?.modelCurves?.ECMWF?.length === 2 &&
+      restoredChengdu?.debHourlyPath?.temps?.includes(30.9),
+    "instant-restore cache must keep the full DEB and multi-model detail after live merges",
+  );
+  assert(
+    (restoredChengdu?.runwayPlateHistory?.["02L/20R"] || []).length === 2,
+    "instant-restore cache must include live-merged runway history so returning to terminal shows it immediately",
   );
 }

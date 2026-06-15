@@ -35,6 +35,7 @@ import {
   prefersHighFrequencyRunwayResolution,
   readCityDetailBatchDiagnostics,
   readSessionCache,
+  rememberHourlyDetailSnapshot,
   selectCompactSecondaryTemp,
   selectDisplayRunwayTemp,
   selectInitialHourlyForRowChange,
@@ -743,7 +744,11 @@ export function LiveTemperatureThresholdChart({
       const temp = getLiveTempFromHourly(dataWithCurrentRow);
       if (temp !== null) setLiveTemp(temp);
     }
-    setHourly((prev) => mergeHourlyWithLiveObservations(dataWithCurrentRow, prev, latestRow));
+    setHourly((prev) => {
+      const mergedHourly = mergeHourlyWithLiveObservations(dataWithCurrentRow, prev, latestRow);
+      rememberHourlyDetailSnapshot(city, targetResolution, mergedHourly);
+      return mergedHourly;
+    });
     setDetailError(null);
     setShowingStaleDetail(false);
     setChartFreshness((prev) => ({
@@ -756,7 +761,7 @@ export function LiveTemperatureThresholdChart({
           ? "network"
           : prev.detailSource,
     }));
-  }, [getLatestRowSnapshot]);
+  }, [city, targetResolution, getLatestRowSnapshot]);
 
   useEffect(() => {
     if (!city || !currentRowObservationSignature) return;
@@ -766,13 +771,17 @@ export function LiveTemperatureThresholdChart({
     const rowSeed = seedHourlyForecastFromRow(row);
     const temp = getLiveTempFromHourly(rowSeed);
     if (temp !== null) setLiveTemp(temp);
-    setHourly((prev) => mergeRowObservationIntoHourly(prev ?? rowSeed, row));
+    setHourly((prev) => {
+      const mergedHourly = mergeRowObservationIntoHourly(prev ?? rowSeed, row);
+      rememberHourlyDetailSnapshot(city, targetResolution, mergedHourly);
+      return mergedHourly;
+    });
     setChartFreshness((prev) => ({
       ...prev,
       rowAppliedAtMs: now,
       rowObservationTime: rowObservationTimeForFreshness(row),
     }));
-  }, [city, currentRowObservationSignature, row]);
+  }, [city, currentRowObservationSignature, row, targetResolution]);
 
   useEffect(() => {
     if (!city) {
@@ -913,7 +922,11 @@ export function LiveTemperatureThresholdChart({
     lastPatchAtRef.current = patchAppliedAtMs;
     const tempValue = validNumber(latestPatch.changes.temp);
     if (tempValue !== null) setLiveTemp(tempValue);
-    setHourly((prev) => mergePatchIntoHourly(prev ?? seedHourlyForecastFromRow(getLatestRowSnapshot()), latestPatch));
+    setHourly((prev) => {
+      const mergedHourly = mergePatchIntoHourly(prev ?? seedHourlyForecastFromRow(getLatestRowSnapshot()), latestPatch);
+      rememberHourlyDetailSnapshot(city, targetResolution, mergedHourly);
+      return mergedHourly;
+    });
     setChartFreshness((prev) => ({
       ...prev,
       ssePatchAppliedAtMs: patchAppliedAtMs,

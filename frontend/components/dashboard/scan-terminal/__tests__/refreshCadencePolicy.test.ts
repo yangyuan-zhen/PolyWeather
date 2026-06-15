@@ -125,7 +125,8 @@ export async function runTests() {
   );
   assert(
     chartSource.includes("fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })") &&
-      chartSource.includes("setHourly((prev) => mergeHourlyWithLiveObservations(dataWithCurrentRow, prev, latestRow))"),
+      chartSource.includes("const mergedHourly = mergeHourlyWithLiveObservations(dataWithCurrentRow, prev, latestRow)") &&
+      chartSource.includes("return mergedHourly;"),
     "visible chart fallback must refresh full city detail at the current chart resolution while preserving newer live observations",
   );
   assert(
@@ -339,8 +340,15 @@ export async function runTests() {
     successfulHourlyDetailBlock.includes("setDetailError(null)") &&
       successfulHourlyDetailBlock.includes("setShowingStaleDetail(false)") &&
       successfulHourlyDetailBlock.includes("getLatestRowSnapshot") &&
+      successfulHourlyDetailBlock.includes("rememberHourlyDetailSnapshot(city, targetResolution, mergedHourly)") &&
       !/\[row\]/.test(successfulHourlyDetailBlock),
-    "successful city detail refreshes must read the latest row without depending on the row object",
+    "successful city detail refreshes must read the latest row, persist the merged snapshot, and avoid depending on the row object",
+  );
+  assert(
+    chartSource.includes("rememberHourlyDetailSnapshot") &&
+      chartSource.includes("const mergedHourly = mergeRowObservationIntoHourly(prev ?? rowSeed, row);") &&
+      chartSource.includes("const mergedHourly = mergePatchIntoHourly(prev ?? seedHourlyForecastFromRow(getLatestRowSnapshot()), latestPatch);"),
+    "live row and SSE patch merges must persist their hourly snapshots so returning to terminal restores runway history immediately",
   );
   const coldDetailFetchBlock =
     /useEffect\(\(\) => \{\s*if \(!city\) \{[\s\S]*?fetchHourlyForecastForCity\(city, \{ resolution: targetResolution \}\)[\s\S]*?\n  \}, \[([\s\S]*?)\]\);/.exec(chartSource)?.[1] || "";
@@ -582,6 +590,74 @@ export async function runTests() {
     assert(
       __readHourlyCacheEntryForTest(cacheKey, { allowStale: true })?.data?.temps[0] === 21,
       "stale city detail cache should still be available for immediate chart rendering",
+    );
+
+    clearCityDetailCache();
+    const runwayCacheKey = "chengdu:1m";
+    store.set(
+      `polyweather_city_detail_v1:${runwayCacheKey}`,
+      JSON.stringify({
+        ts: Date.now() - HOURLY_CACHE_TTL_MS - 1000,
+        data: {
+          forecastDaily: [],
+          localDate: "2026-06-15",
+          localTime: "2026-06-15T09:00:00Z",
+          multiModelDaily: {},
+          probabilities: null,
+          temps: [27.1],
+          times: ["09:00"],
+          runwayPlateHistory: {
+            "02L/20R": [{ time: "2026-06-15T09:00:00Z", temp: 27.1 }],
+          },
+          amos: {
+            runway_plate_history: {
+              "02L/20R": [{ time: "2026-06-15T09:00:00Z", temp: 27.1 }],
+            },
+          },
+        },
+      }),
+    );
+    (globalThis as any).fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        cities: ["chengdu"],
+        details: {
+          chengdu: {
+            city: "chengdu",
+            local_date: "2026-06-15",
+            local_time: "2026-06-15T09:04:00Z",
+            hourly: {
+              times: ["09:00", "09:04"],
+              temps: [27.1, 27.8],
+            },
+            models_hourly: {
+              times: ["09:00", "09:04"],
+              curves: { ECMWF: [27.0, 27.6] },
+            },
+            deb: {
+              hourly_path: {
+                source: "deb_hourly_consensus",
+                times: ["09:00", "09:04"],
+                temps: [30.1, 30.4],
+              },
+            },
+            runway_plate_history: {},
+            amos: {},
+          },
+        },
+        errors: {},
+        missing: [],
+        partial: false,
+      }),
+    });
+    const forceRefreshedRunwayDetail = await fetchHourlyForecastForCity("chengdu", {
+      ignoreCache: true,
+      resolution: "1m",
+    });
+    assert(
+      forceRefreshedRunwayDetail?.runwayPlateHistory?.["02L/20R"]?.length === 1 &&
+        __readHourlyCacheEntryForTest(runwayCacheKey, { allowStale: true })?.data?.runwayPlateHistory?.["02L/20R"]?.length === 1,
+      "force-refresh chart detail must not overwrite cached runway history when the response omits it",
     );
   } finally {
     clearCityDetailCache();

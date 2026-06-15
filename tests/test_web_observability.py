@@ -1157,6 +1157,61 @@ def test_chart_scope_overlays_collector_runway_history_from_db(monkeypatch):
     assert history[-1] == {"time": "2026-06-06T05:28:00+00:00", "temp": 24.8}
 
 
+def test_chart_data_force_refresh_overlays_collector_runway_history(monkeypatch):
+    import asyncio
+
+    class FakeCache:
+        def get_runway_obs_recent(self, icao, minutes=60):
+            assert icao == "ZUUU"
+            assert minutes == 36 * 60
+            return [
+                {
+                    "runway": "02L/20R",
+                    "tdz_temp": 27.2,
+                    "mid_temp": None,
+                    "end_temp": 27.0,
+                    "target_runway_max": 27.2,
+                    "otime_utc": "2026-06-15T09:01:00+00:00",
+                },
+                {
+                    "runway": "02L/20R",
+                    "tdz_temp": 27.8,
+                    "mid_temp": None,
+                    "end_temp": 27.5,
+                    "target_runway_max": 27.8,
+                    "otime_utc": "2026-06-15T09:04:00+00:00",
+                },
+            ]
+
+    async def refreshed_full_payload(city, *, force_refresh):
+        assert force_refresh is True
+        return {
+            "name": city,
+            "display_name": "Chengdu",
+            "local_date": "2026-06-15",
+            "local_time": "17:04",
+            "temp_symbol": "°C",
+            "risk": {"icao": "ZUUU"},
+            "current": {"temp": 27.8},
+            "hourly": {"times": ["16:00"], "temps": [27.0]},
+        }
+
+    monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
+    monkeypatch.setattr(city_api, "_get_city_full_data", refreshed_full_payload)
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "_overlay_latest_wunderground_current",
+        lambda city, payload: payload,
+    )
+
+    payload = asyncio.run(city_api._get_city_chart_data("chengdu", force_refresh=True))
+
+    assert payload["runway_plate_history"]["02L/20R"][-1] == {
+        "time": "2026-06-15T09:04:00+00:00",
+        "temp": 27.8,
+    }
+
+
 def test_chart_data_cache_hit_starts_full_stale_refresh(monkeypatch):
     import asyncio
 
