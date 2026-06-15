@@ -1861,6 +1861,14 @@ def test_stale_ankara_chart_data_overlays_latest_mgm_canonical(monkeypatch):
                         "report_time": "2026-06-14T09:50:00+00:00",
                         "raw_metar": "METAR LTAC 140950Z 06013KT 9999 16/11 Q1015",
                     },
+                    "airport_current": {
+                        "temp": 16.0,
+                        "source_code": "mgm",
+                        "source_label": "MGM",
+                        "obs_time": "2026-06-14T09:50:00+00:00",
+                        "report_time": "2026-06-14T09:50:00+00:00",
+                        "raw_metar": "METAR LTAC 140950Z 06013KT 9999 16/11 Q1015",
+                    },
                     "airport_primary_today_obs": [{"time": "12:50", "temp": 16.0}],
                     "metar_today_obs": [{"time": "12:50", "temp": 16.0}],
                     "metar_recent_obs": [{"time": "12:50", "temp": 16.0}],
@@ -1918,7 +1926,10 @@ def test_stale_ankara_chart_data_overlays_latest_mgm_canonical(monkeypatch):
     assert payload["local_time"] == "17:20"
     assert payload["airport_primary_today_obs"] == [{"time": "17:20", "temp": 19.0}]
     assert "raw_metar" not in payload["current"]
+    assert "raw_metar" not in payload["airport_primary"]
     assert "report_time" not in payload["airport_primary"]
+    assert "raw_metar" not in payload["airport_current"]
+    assert "report_time" not in payload["airport_current"]
     assert payload["metar_today_obs"] == []
     assert payload["metar_recent_obs"] == []
     assert payload["metar_status"]["available_for_today"] is False

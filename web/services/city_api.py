@@ -423,12 +423,11 @@ def _observation_source_code(block: Any) -> str:
 def _merge_latest_observation_block(base_block: Any, latest_block: Dict[str, Any]) -> Dict[str, Any]:
     base = dict(base_block) if isinstance(base_block, dict) else {}
     latest_source = _observation_source_code(latest_block)
-    base_source = _observation_source_code(base)
-    if base_source and latest_source and base_source != latest_source:
+    if latest_source:
         base = {
             key: value
             for key, value in base.items()
-            if key not in _SOURCE_BOUND_OBSERVATION_FIELDS
+            if key not in _SOURCE_BOUND_OBSERVATION_FIELDS or key in latest_block
         }
     return {**base, **latest_block}
 
