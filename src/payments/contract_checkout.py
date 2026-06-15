@@ -3272,14 +3272,18 @@ class PaymentContractCheckoutService:
             amount_usdc=intent.amount_usdc,
             tx_hash=tx_hash_text,
         )
-        refreshed = PaymentIntentRecord(
-            **{
-                **intent.__dict__,
+        refreshed_payload = {
+            field_name: getattr(intent, field_name)
+            for field_name in PaymentIntentRecord.__dataclass_fields__
+        }
+        refreshed_payload.update(
+            {
                 "status": "confirmed",
                 "tx_hash": tx_hash_text,
                 "metadata": confirmed_metadata,
             }
         )
+        refreshed = PaymentIntentRecord(**refreshed_payload)
         return {
             "intent": refreshed.__dict__,
             "transaction": tx_payload,

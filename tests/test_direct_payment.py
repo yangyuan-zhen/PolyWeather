@@ -235,6 +235,9 @@ def test_confirm_direct_transfer_uses_intent_chain_rpc(monkeypatch, tmp_path):
         metadata={},
     )
     confirmed_intent = PaymentIntentRecord(**{**intent.__dict__, "status": "confirmed"})
+    # get_intent attaches user_id at runtime; the confirmation response must ignore
+    # non-dataclass attributes when rebuilding the returned intent payload.
+    setattr(intent, "user_id", "user-1")
     intents = [intent, confirmed_intent]
     get_intent_calls = []
     requested_chains = []
@@ -653,6 +656,9 @@ def test_confirm_direct_transfer_uses_erc20_transfer_without_wallet_binding(monk
         metadata={},
     )
     confirmed_intent = PaymentIntentRecord(**{**intent.__dict__, "status": "confirmed"})
+    # Production get_intent attaches user_id at runtime; the confirmation
+    # response must ignore non-dataclass attributes when rebuilding the intent.
+    setattr(intent, "user_id", "user-1")
     intents = [intent, confirmed_intent]
     rest_calls = []
 
