@@ -1480,9 +1480,13 @@ def _get_airport_daily_high(city_weather: Dict[str, Any]):
     amos = city_weather.get("amos") or {}
     has_runway = bool((amos.get("runway_obs") or {}).get("point_temperatures"))
     if has_runway:
-        runway_max = _runway_history_daily_max(city_weather, city_weather.get("city") or "")
+        city = city_weather.get("city") or ""
+        runway_max = _runway_history_daily_max(city_weather, city)
         if runway_max is not None:
             return runway_max, None
+        current_runway_max = _focused_runway_max(str(city), city_weather)
+        if current_runway_max is not None:
+            return round(float(current_runway_max), 1), None
 
     airport = city_weather.get("airport_current") or {}
     max_so_far = airport.get("max_so_far")

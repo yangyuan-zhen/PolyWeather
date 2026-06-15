@@ -212,6 +212,50 @@ def test_runway_high_infers_local_today_when_payload_lacks_local_date():
     assert "Today's runway high / 今日跑道高点: 35.0°C" not in text
 
 
+def test_runway_high_does_not_fall_back_to_future_airport_high_when_history_missing():
+    text = _build_airport_status_message(
+        "wuhan",
+        {
+            "city": "wuhan",
+            "local_date": "2026-06-16",
+            "utc_offset_seconds": 8 * 60 * 60,
+            "current": {"temp": 23.0},
+            "airport_current": {"max_so_far": 29.0, "max_temp_time": "15:00"},
+            "amos": {
+                "source": "amsc_awos",
+                "icao": "ZHHH",
+                "observation_time": "2026-06-15T20:11:00Z",
+                "runway_obs": {
+                    "runway_pairs": [("04", "22"), ("05L", "23R")],
+                    "temperatures": [(23.0, None), (23.4, None)],
+                    "point_temperatures": [
+                        {
+                            "runway": "04/22",
+                            "tdz_temp": 23.0,
+                            "mid_temp": None,
+                            "end_temp": 22.8,
+                            "target_runway_max": 23.0,
+                        },
+                        {
+                            "runway": "05L/23R",
+                            "tdz_temp": 23.4,
+                            "mid_temp": None,
+                            "end_temp": 22.8,
+                            "target_runway_max": 23.4,
+                        },
+                    ],
+                },
+            },
+        },
+        29.6,
+        "04:11",
+        language="both",
+    )
+
+    assert "Today's runway high / 今日跑道高点: 23.0°C" in text
+    assert "Today's runway high / 今日跑道高点: 29.0°C (15:00)" not in text
+
+
 def test_telegram_slope_uses_settlement_endpoint_not_runway_max(monkeypatch):
     import src.utils.telegram_push as telegram_push
 
