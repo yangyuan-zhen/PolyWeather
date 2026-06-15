@@ -216,6 +216,7 @@ def _append_latest_amsc_runway_history(
     raw_payload: dict[str, Any],
     *,
     persist: bool = True,
+    copy_history: bool = True,
 ) -> bool:
     runway_obs = raw_payload.get("runway_obs")
     if not isinstance(runway_obs, dict):
@@ -235,7 +236,7 @@ def _append_latest_amsc_runway_history(
     history = payload.get("runway_plate_history")
     if not isinstance(history, dict):
         history = {}
-    else:
+    elif copy_history:
         history = deepcopy(history)
 
     use_fahrenheit = "F" in str(payload.get("temp_symbol") or "").upper()
@@ -320,6 +321,8 @@ def _append_amsc_runway_history_from_raw_store(
     except Exception as exc:
         logger.debug("latest AMSC raw history overlay skipped city={}: {}", city, exc)
         return False
+    existing_history = payload.get("runway_plate_history")
+    payload["runway_plate_history"] = deepcopy(existing_history) if isinstance(existing_history, dict) else {}
     changed = False
     for row in rows if isinstance(rows, list) else []:
         if not isinstance(row, dict):
@@ -334,6 +337,7 @@ def _append_amsc_runway_history_from_raw_store(
             row,
             raw_payload,
             persist=False,
+            copy_history=False,
         ) or changed
     return changed
 
