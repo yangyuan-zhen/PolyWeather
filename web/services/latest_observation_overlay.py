@@ -313,6 +313,16 @@ def _append_amsc_runway_history_from_raw_store(
     city: str,
     payload: dict[str, Any],
 ) -> bool:
+    existing_history = payload.get("runway_plate_history")
+    if isinstance(existing_history, dict):
+        existing_points = [
+            len(points)
+            for points in existing_history.values()
+            if isinstance(points, list)
+        ]
+        if max(existing_points or [0]) > 1:
+            return False
+
     lister = getattr(db, "list_raw_observation_history", None)
     if not callable(lister):
         return False
@@ -321,7 +331,6 @@ def _append_amsc_runway_history_from_raw_store(
     except Exception as exc:
         logger.debug("latest AMSC raw history overlay skipped city={}: {}", city, exc)
         return False
-    existing_history = payload.get("runway_plate_history")
     payload["runway_plate_history"] = deepcopy(existing_history) if isinstance(existing_history, dict) else {}
     changed = False
     for row in rows if isinstance(rows, list) else []:
