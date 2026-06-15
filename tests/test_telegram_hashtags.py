@@ -136,6 +136,47 @@ def test_airport_status_removes_max_when_runway_endpoints_are_shown():
     assert "max:" not in text
 
 
+def test_wuhan_runway_high_uses_local_today_not_rolling_24h_history():
+    text = _build_airport_status_message(
+        "wuhan",
+        {
+            "city": "wuhan",
+            "local_date": "2026-06-16",
+            "utc_offset_seconds": 8 * 60 * 60,
+            "current": {"temp": 23.0},
+            "airport_current": {"max_so_far": 34.4, "max_temp_time": "15:00"},
+            "runway_plate_history": {
+                "04/22": [
+                    {"time": "2026-06-15T07:00:00Z", "temp": 34.4},
+                    {"time": "2026-06-15T19:38:00Z", "temp": 23.0},
+                ],
+                "05L/23R": [
+                    {"time": "2026-06-15T19:38:00Z", "temp": 23.6},
+                ],
+            },
+            "amos": {
+                "source": "amsc_awos",
+                "icao": "ZHHH",
+                "observation_time": "2026-06-15T19:38:00Z",
+                "runway_obs": {
+                    "runway_pairs": [("04", "22"), ("05L", "23R")],
+                    "temperatures": [(23.0, None), (23.6, None)],
+                    "point_temperatures": [
+                        {"runway": "04/22", "tdz_temp": 23.0, "mid_temp": None, "end_temp": 23.4, "target_runway_max": 23.4},
+                        {"runway": "05L/23R", "tdz_temp": 23.6, "mid_temp": None, "end_temp": 23.4, "target_runway_max": 23.6},
+                    ],
+                },
+            },
+        },
+        29.6,
+        "03:38",
+        language="both",
+    )
+
+    assert "Today's runway high / 今日跑道高点: 23.0°C" in text
+    assert "Today's runway high / 今日跑道高点: 34.4°C" not in text
+
+
 def test_telegram_slope_uses_settlement_endpoint_not_runway_max(monkeypatch):
     import src.utils.telegram_push as telegram_push
 
