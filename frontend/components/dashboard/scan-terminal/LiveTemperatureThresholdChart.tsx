@@ -599,6 +599,9 @@ export function LiveTemperatureThresholdChart({
   const [chartFreshness, setChartFreshness] = useState<ChartFreshnessState>(() =>
     createChartFreshnessState(),
   );
+  const latestRowRef = useRef<ScanOpportunityRow | null>(row);
+  latestRowRef.current = row;
+  const getLatestRowSnapshot = useCallback(() => latestRowRef.current, []);
   const hasLoadedHourlyDetailRef = useRef(false);
   const hourlyCityRef = useRef<string>("");
   const chartVisibilityRef = useRef<HTMLDivElement | null>(null);
@@ -732,14 +735,15 @@ export function LiveTemperatureThresholdChart({
   const applySuccessfulHourlyDetail = useCallback((data: HourlyForecast, options?: { updateLiveTemp?: boolean }) => {
     if (!data) return;
     const loadedAtMs = Date.now();
-    const rowSeed = seedHourlyForecastFromRow(row);
-    const dataWithCurrentRow = mergeHourlyWithLiveObservations(data, rowSeed, row);
+    const latestRow = getLatestRowSnapshot();
+    const rowSeed = seedHourlyForecastFromRow(latestRow);
+    const dataWithCurrentRow = mergeHourlyWithLiveObservations(data, rowSeed, latestRow);
     hasLoadedHourlyDetailRef.current = true;
     if (options?.updateLiveTemp) {
       const temp = getLiveTempFromHourly(dataWithCurrentRow);
       if (temp !== null) setLiveTemp(temp);
     }
-    setHourly((prev) => mergeHourlyWithLiveObservations(dataWithCurrentRow, prev, row));
+    setHourly((prev) => mergeHourlyWithLiveObservations(dataWithCurrentRow, prev, latestRow));
     setDetailError(null);
     setShowingStaleDetail(false);
     setChartFreshness((prev) => ({
@@ -752,7 +756,7 @@ export function LiveTemperatureThresholdChart({
           ? "network"
           : prev.detailSource,
     }));
-  }, [row]);
+  }, [getLatestRowSnapshot]);
 
   useEffect(() => {
     if (!city || !currentRowObservationSignature) return;
@@ -826,7 +830,7 @@ export function LiveTemperatureThresholdChart({
     }
 
     if (!cached && !hasLoadedHourlyDetailRef.current) {
-      setHourly(seedHourlyForecastFromRow(row));
+      setHourly(seedHourlyForecastFromRow(getLatestRowSnapshot()));
       setShowingStaleDetail(false);
     }
     setIsHourlyLoading(true);
@@ -888,7 +892,6 @@ export function LiveTemperatureThresholdChart({
     };
   }, [
     city,
-    row,
     targetResolution,
     isChartVisible,
     compact,
@@ -897,6 +900,7 @@ export function LiveTemperatureThresholdChart({
     slotIndex,
     detailLoadReady,
     detailRetryNonce,
+    getLatestRowSnapshot,
     markDetailDegraded,
     markDetailRequest,
     applySuccessfulHourlyDetail,
@@ -909,7 +913,7 @@ export function LiveTemperatureThresholdChart({
     lastPatchAtRef.current = patchAppliedAtMs;
     const tempValue = validNumber(latestPatch.changes.temp);
     if (tempValue !== null) setLiveTemp(tempValue);
-    setHourly((prev) => mergePatchIntoHourly(prev ?? seedHourlyForecastFromRow(row), latestPatch));
+    setHourly((prev) => mergePatchIntoHourly(prev ?? seedHourlyForecastFromRow(getLatestRowSnapshot()), latestPatch));
     setChartFreshness((prev) => ({
       ...prev,
       ssePatchAppliedAtMs: patchAppliedAtMs,
@@ -954,7 +958,7 @@ export function LiveTemperatureThresholdChart({
     return () => {
       cancelled = true;
     };
-  }, [latestPatch, row, city, targetResolution, compact, isActive, isMaximized, markDetailDegraded, markDetailRequest, applySuccessfulHourlyDetail]);
+  }, [latestPatch, city, targetResolution, compact, isActive, isMaximized, getLatestRowSnapshot, markDetailDegraded, markDetailRequest, applySuccessfulHourlyDetail]);
 
   useEffect(() => {
     if (!resyncVersion || !city) return;

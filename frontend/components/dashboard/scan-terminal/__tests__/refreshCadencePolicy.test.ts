@@ -125,7 +125,7 @@ export async function runTests() {
   );
   assert(
     chartSource.includes("fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })") &&
-      chartSource.includes("setHourly((prev) => mergeHourlyWithLiveObservations(dataWithCurrentRow, prev, row))"),
+      chartSource.includes("setHourly((prev) => mergeHourlyWithLiveObservations(dataWithCurrentRow, prev, latestRow))"),
     "visible chart fallback must refresh full city detail at the current chart resolution while preserving newer live observations",
   );
   assert(
@@ -244,7 +244,7 @@ export async function runTests() {
   assert(
     chartLogicSource.includes("_hourlyRequestCache") &&
       chartLogicSource.includes("seedHourlyForecastFromRow") &&
-      chartSource.includes("setHourly(seedHourlyForecastFromRow(row))"),
+      chartSource.includes("setHourly(seedHourlyForecastFromRow(getLatestRowSnapshot()))"),
     "terminal charts should render from row data immediately and dedupe concurrent city detail requests",
   );
   assert(
@@ -328,13 +328,26 @@ export async function runTests() {
       chartSource.includes("!retryScheduled"),
     "cold partial detail-batch misses should stay in loading state and retry cached detail once before showing unavailable",
   );
+  assert(
+    chartSource.includes("latestRowRef") &&
+      chartSource.includes("latestRowRef.current = row"),
+    "temperature chart should keep the latest row in a ref so live row changes do not restart detail fetches",
+  );
   const successfulHourlyDetailBlock =
-    /const applySuccessfulHourlyDetail = useCallback\([\s\S]*?\n  \}, \[row\]\);/.exec(chartSource)?.[0] || "";
+    /const applySuccessfulHourlyDetail = useCallback\([\s\S]*?\n  \}, \[[^\]]*\]\);/.exec(chartSource)?.[0] || "";
   assert(
     successfulHourlyDetailBlock.includes("setDetailError(null)") &&
       successfulHourlyDetailBlock.includes("setShowingStaleDetail(false)") &&
-      successfulHourlyDetailBlock.includes("mergeHourlyWithLiveObservations(dataWithCurrentRow, prev, row)"),
-    "successful city detail refreshes must clear stale-cache retry state when fresh detail arrives",
+      successfulHourlyDetailBlock.includes("getLatestRowSnapshot") &&
+      !/\[row\]/.test(successfulHourlyDetailBlock),
+    "successful city detail refreshes must read the latest row without depending on the row object",
+  );
+  const coldDetailFetchBlock =
+    /useEffect\(\(\) => \{\s*if \(!city\) \{[\s\S]*?fetchHourlyForecastForCity\(city, \{ resolution: targetResolution \}\)[\s\S]*?\n  \}, \[([\s\S]*?)\]\);/.exec(chartSource)?.[1] || "";
+  assert(
+    coldDetailFetchBlock.length > 0 &&
+      !/^\s*row\s*,?\s*$/m.test(coldDetailFetchBlock),
+    "cold detail fetch effect must not restart just because the live scan row object changed",
   );
   const rawSuccessfulSetHourlyCalls = chartSource
     .replace(successfulHourlyDetailBlock, "")
