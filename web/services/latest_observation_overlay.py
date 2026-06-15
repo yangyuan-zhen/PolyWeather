@@ -368,7 +368,7 @@ def _append_amsc_runway_history_from_raw_store(
     except Exception as exc:
         logger.debug("latest AMSC raw history overlay skipped city={}: {}", city, exc)
         return False
-    payload["runway_plate_history"] = deepcopy(existing_history) if isinstance(existing_history, dict) else {}
+    payload["runway_plate_history"] = {}
     changed = False
     for row in rows if isinstance(rows, list) else []:
         if not isinstance(row, dict):

@@ -152,10 +152,16 @@ def test_overlay_builds_amsc_runway_history_from_raw_store():
     result = overlay_latest_amsc_observation(
         FakeDB(),
         "chengdu",
-        {"name": "chengdu", "temp_symbol": "°C", "runway_plate_history": {}},
+        {
+            "name": "chengdu",
+            "temp_symbol": "°C",
+            "runway_plate_history": {
+                "02L/20R": [{"time": "2026-06-12T10:44:00+00:00", "temp": 31.6}],
+            },
+        },
     )
 
-    assert result["runway_plate_history"]["02L/20R"][-2:] == [
+    assert result["runway_plate_history"]["02L/20R"] == [
         {"time": "2026-06-15T11:04:00+00:00", "temp": 25.6},
         {"time": "2026-06-15T11:08:00+00:00", "temp": 25.4},
     ]
