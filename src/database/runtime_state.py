@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 from loguru import logger
 
 from src.database.db_manager import DBManager
+from src.database.sqlite_connection import connect_sqlite
 
 STATE_STORAGE_FILE = "file"
 STATE_STORAGE_DUAL = "dual"
@@ -60,9 +61,7 @@ class RuntimeStateDB:
             return cls._instance
 
     def connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
+        return connect_sqlite(self.db_path, row_factory=sqlite3.Row)
 
     def _init_tables(self) -> None:
         with self.connect() as conn:

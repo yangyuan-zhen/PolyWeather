@@ -13,6 +13,8 @@ from urllib.parse import urlparse
 import requests
 from loguru import logger
 
+from src.database.sqlite_connection import connect_sqlite
+
 
 class DBManager:
     _init_lock = threading.Lock()
@@ -34,10 +36,7 @@ class DBManager:
         return raw
 
     def _get_connection(self):
-        conn = sqlite3.connect(self.db_path, timeout=10)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA busy_timeout=5000")
-        return conn
+        return connect_sqlite(self.db_path)
 
     @staticmethod
     def _is_sqlite_locked_error(exc: sqlite3.OperationalError) -> bool:
