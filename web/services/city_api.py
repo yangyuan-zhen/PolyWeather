@@ -7,6 +7,7 @@ import asyncio
 import threading
 import time
 from copy import deepcopy
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException, Request
@@ -340,7 +341,62 @@ def _payload_observation_epoch(payload: Dict[str, Any]) -> Optional[int]:
     return max(epochs) if epochs else None
 
 
+def _float_or_none(value: Any) -> Optional[float]:
+    try:
+        if value is None or value == "":
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _latest_observation_local_context(
+    city: str,
+    latest_payload: Dict[str, Any],
+) -> Dict[str, str]:
+    epoch = _payload_observation_epoch(latest_payload)
+    if epoch is None:
+        return {}
+    try:
+        offset_sec = int((legacy_routes.CITIES.get(city) or {}).get("tz") or 0)
+    except Exception:
+        offset_sec = 0
+    local_dt = datetime.fromtimestamp(epoch, timezone.utc) + timedelta(seconds=offset_sec)
+    return {
+        "local_date": local_dt.strftime("%Y-%m-%d"),
+        "local_time": local_dt.strftime("%H:%M"),
+    }
+
+
+def _latest_airport_primary_point(
+    latest_payload: Dict[str, Any],
+    *,
+    local_time: str,
+) -> List[Dict[str, Any]]:
+    if not local_time:
+        return []
+    airport = latest_payload.get("airport_primary") if isinstance(latest_payload.get("airport_primary"), dict) else {}
+    current = latest_payload.get("current") if isinstance(latest_payload.get("current"), dict) else {}
+    temp = _float_or_none(airport.get("temp") if airport else None)
+    if temp is None:
+        temp = _float_or_none(current.get("temp") if current else None)
+    if temp is None:
+        return []
+    return [{"time": local_time, "temp": round(float(temp), 1)}]
+
+
+def _replace_airport_primary_today_obs(
+    payload: Dict[str, Any],
+    points: List[Dict[str, Any]],
+) -> None:
+    payload["airport_primary_today_obs"] = points
+    official = payload.get("official")
+    if isinstance(official, dict):
+        official["airport_primary_today_obs"] = points
+
+
 def _merge_latest_observation_payload(
+    city: str,
     payload: Dict[str, Any],
     latest_payload: Dict[str, Any],
 ) -> Dict[str, Any]:
@@ -366,6 +422,19 @@ def _merge_latest_observation_payload(
         next_payload["updated_at"] = latest_payload.get("updated_at")
     if latest_payload.get("temp_symbol"):
         next_payload["temp_symbol"] = latest_payload.get("temp_symbol")
+
+    local_context = _latest_observation_local_context(city, latest_payload)
+    if local_context:
+        previous_local_date = str(next_payload.get("local_date") or "")
+        next_payload.update(local_context)
+        if previous_local_date and previous_local_date != local_context["local_date"]:
+            _replace_airport_primary_today_obs(
+                next_payload,
+                _latest_airport_primary_point(
+                    latest_payload,
+                    local_time=local_context["local_time"],
+                ),
+            )
     return next_payload
 
 
@@ -375,7 +444,7 @@ async def _overlay_cached_canonical_observation(city: str, payload: Dict[str, An
     canonical_payload = await _get_canonical_city_payload(city, detail_depth=str(payload.get("detail_depth") or "full"))
     if not canonical_payload:
         return payload
-    return _merge_latest_observation_payload(payload, canonical_payload)
+    return _merge_latest_observation_payload(city, payload, canonical_payload)
 
 
 def _overlay_cached_runway_history_from_db(city: str, payload: Dict[str, Any]) -> Dict[str, Any]:

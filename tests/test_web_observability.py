@@ -1854,6 +1854,7 @@ def test_stale_ankara_chart_data_overlays_latest_mgm_canonical(monkeypatch):
                         "source_label": "METAR",
                         "obs_time": "2026-06-14T09:50:00+00:00",
                     },
+                    "airport_primary_today_obs": [{"time": "12:50", "temp": 16.0}],
                     "hourly": {"times": ["2026-06-14T09:00:00Z"], "temps": [16.0]},
                     "deb": {"prediction": 23.0},
                 },
@@ -1897,6 +1898,9 @@ def test_stale_ankara_chart_data_overlays_latest_mgm_canonical(monkeypatch):
     assert payload["airport_primary"]["temp"] == 19.0
     assert payload["airport_primary"]["source_code"] == "mgm"
     assert payload["airport_primary"]["station_code"] == "17128"
+    assert payload["local_date"] == "2026-06-15"
+    assert payload["local_time"] == "17:20"
+    assert payload["airport_primary_today_obs"] == [{"time": "17:20", "temp": 19.0}]
     assert payload["deb"]["prediction"] == 23.0
 
 
