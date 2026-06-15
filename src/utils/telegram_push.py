@@ -1471,7 +1471,18 @@ def _build_airport_status_message(
 
 
 def _get_airport_daily_high(city_weather: Dict[str, Any]):
-    """Get today's observed high from METAR/AMOS airport history."""
+    """Get today's observed high from METAR/AMOS airport history.
+
+    For runway cities, prefers the settlement runway's max from runway_plate_history.
+    Otherwise falls back to airport_current.max_so_far.
+    """
+    amos = city_weather.get("amos") or {}
+    has_runway = bool((amos.get("runway_obs") or {}).get("point_temperatures"))
+    if has_runway:
+        runway_max = _runway_history_daily_max(city_weather, city_weather.get("city") or "")
+        if runway_max is not None:
+            return runway_max, None
+
     airport = city_weather.get("airport_current") or {}
     max_so_far = airport.get("max_so_far")
     max_time = airport.get("max_temp_time")
@@ -1481,6 +1492,27 @@ def _get_airport_daily_high(city_weather: Dict[str, Any]):
         except Exception:
             max_so_far = None
     return max_so_far, max_time
+
+
+def _runway_history_daily_max(city_weather: Dict[str, Any], city: str) -> Optional[float]:
+    """Compute today's runway high from runway_plate_history."""
+    history = city_weather.get("runway_plate_history")
+    if not isinstance(history, dict) or not history:
+        return None
+    settlement_pair = _settlement_runway_for_city(city)
+    if settlement_pair:
+        settlement_key = f"{settlement_pair[0]}/{settlement_pair[1]}"
+        settlement_pts = history.get(settlement_key)
+        if settlement_pts:
+            temps = [p.get("temp") for p in settlement_pts if isinstance(p, dict) and p.get("temp") is not None]
+            if temps:
+                return round(max(temps), 1)
+    # Fallback: max across all runways
+    all_temps = []
+    for pts in history.values():
+        if isinstance(pts, list):
+            all_temps.extend(p.get("temp") for p in pts if isinstance(p, dict) and p.get("temp") is not None)
+    return round(max(all_temps), 1) if all_temps else None
 
 
 # Per-city push interval. The loop wakes every minute, but Telegram should
