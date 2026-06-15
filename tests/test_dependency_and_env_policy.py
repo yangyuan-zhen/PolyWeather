@@ -24,11 +24,11 @@ def test_python_dependency_builds_use_lock_files() -> None:
 
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert "COPY requirements.lock ." in dockerfile
-    assert "pip install --prefer-binary -r requirements.lock" in dockerfile
+    assert "pip install --prefer-binary --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.lock" in dockerfile
     assert "pip install --prefer-binary -r requirements.txt" not in dockerfile
 
     ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-    assert "pip install -r requirements.lock -r requirements-dev.lock" in ci
+    assert "pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.lock -r requirements-dev.lock" in ci
     assert "pip install -r requirements.txt -r requirements-dev.txt" not in ci
 
 

@@ -110,8 +110,8 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # ---------------------------------------------------------------------------
 # Middleware — imported from web.middleware.http
 # ---------------------------------------------------------------------------
-from web.middleware.http import metrics_middleware as _metrics_middleware
-from web.middleware.http import etag_middleware as _etag_middleware
+from web.middleware.http import metrics_middleware as _metrics_middleware  # noqa: E402
+from web.middleware.http import etag_middleware as _etag_middleware  # noqa: E402
 
 app.middleware("http")(_metrics_middleware)
 app.middleware("http")(_etag_middleware)
