@@ -228,7 +228,8 @@ function TemperatureChartCanvasComponent({
   const shouldShowBackgroundRefresh = isHourlyLoading && hasDrawableChartContent;
   const shouldShowUnavailableState = Boolean(row?.city) && Boolean(detailError) && !isHourlyLoading && !hasDrawableChartContent;
   const shouldShowBackgroundError =
-    showDetailErrorBadge && Boolean(row?.city) && Boolean(detailError) && !isHourlyLoading && hasDrawableChartContent;
+    showDetailErrorBadge && Boolean(row?.city) && !isHourlyLoading && hasDrawableChartContent &&
+    (Boolean(detailError) || showingStaleDetail || detailStatus === "stale_cache");
   const backgroundErrorLabel =
     showingStaleDetail || detailStatus === "stale_cache"
       ? (isEn ? "Detail cache" : "详情缓存")

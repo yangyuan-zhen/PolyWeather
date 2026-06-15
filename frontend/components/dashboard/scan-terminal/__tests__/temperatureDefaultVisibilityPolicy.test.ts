@@ -7,6 +7,8 @@ import {
   __getPeakGlowStateForTest,
   __getWundergroundDailyHighForTest,
   __getVisibleTemperatureSeriesForTest,
+  __formatCityLocalDateForTest,
+  __formatCityLocalDateTimeForTest,
   __isTemperatureSeriesVisibleByDefaultForTest,
   __mergePatchIntoHourlyForTest,
   __selectCompactSecondaryTempForTest,
@@ -27,6 +29,39 @@ function runwayKey(rwy: string) {
 }
 
 export function runTests() {
+  {
+    const originalDateNow = Date.now;
+    const originalGetTimezoneOffsetForCityDate = Date.prototype.getTimezoneOffset;
+    try {
+      Date.now = () => Date.UTC(2026, 5, 15, 14, 0, 0);
+      Date.prototype.getTimezoneOffset = function () {
+        return 0;
+      };
+      assert(
+        __formatCityLocalDateForTest(9 * 60 * 60) === "2026-06-15",
+        "Tokyo local date should be formatted from UTC plus city offset, independent of browser timezone",
+      );
+      assert(
+        __formatCityLocalDateTimeForTest(9 * 60 * 60) === "2026-06-15 23:00:00",
+        "Tokyo update time should be formatted from UTC plus city offset, independent of browser timezone",
+      );
+      Date.prototype.getTimezoneOffset = function () {
+        return -8 * 60;
+      };
+      assert(
+        __formatCityLocalDateForTest(9 * 60 * 60) === "2026-06-15",
+        "Tokyo local date should not change when the browser timezone changes",
+      );
+      assert(
+        __formatCityLocalDateTimeForTest(9 * 60 * 60) === "2026-06-15 23:00:00",
+        "Tokyo update time should not change when the browser timezone changes",
+      );
+    } finally {
+      Date.now = originalDateNow;
+      Date.prototype.getTimezoneOffset = originalGetTimezoneOffsetForCityDate;
+    }
+  }
+
   const peakGlowSeries = [
     {
       key: "madis",

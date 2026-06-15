@@ -103,11 +103,25 @@ function peakGlowTitle(
 
 function formatCityLocalDate(tzOffsetSeconds: number | null | undefined) {
   const cityOffsetMs = (tzOffsetSeconds ?? 0) * 1000;
-  const cityNow = new Date(Date.now() + cityOffsetMs + new Date().getTimezoneOffset() * 60_000);
-  const y = cityNow.getFullYear();
-  const m = String(cityNow.getMonth() + 1).padStart(2, "0");
-  const d = String(cityNow.getDate()).padStart(2, "0");
+  const cityNow = new Date(Date.now() + cityOffsetMs);
+  const y = cityNow.getUTCFullYear();
+  const m = String(cityNow.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(cityNow.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+function formatCityLocalDateTime(tzOffsetSeconds: number | null | undefined) {
+  const nowUtc = Date.now();
+  const cityOffsetMs = (tzOffsetSeconds ?? 0) * 1000;
+  const cityNow = new Date(nowUtc + cityOffsetMs);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const y = cityNow.getUTCFullYear();
+  const mo = pad(cityNow.getUTCMonth() + 1);
+  const d = pad(cityNow.getUTCDate());
+  const hh = pad(cityNow.getUTCHours());
+  const mm = pad(cityNow.getUTCMinutes());
+  const ss = pad(cityNow.getUTCSeconds());
+  return `${y}-${mo}-${d} ${hh}:${mm}:${ss}`;
 }
 
 function getLiveTempFromHourly(data: HourlyForecast) {
@@ -878,6 +892,9 @@ export function LiveTemperatureThresholdChart({
       return;
     }
 
+    // ── Stale-while-revalidate: show cached data, refresh in background ──
+    const hasStaleCache = cached && !hasFreshCache;
+
     if (
       !shouldFetchCityDetailForChart({
         city,
@@ -899,7 +916,11 @@ export function LiveTemperatureThresholdChart({
       commitHourlySnapshot((prev) => mergeRowObservationIntoHourly(prev, getLatestRowSnapshot()));
       setShowingStaleDetail(false);
     }
-    setIsHourlyLoading(true);
+
+    // Stale cache: don't show loading spinner, refresh silently
+    if (!hasStaleCache) {
+      setIsHourlyLoading(true);
+    }
     let cancelled = false;
     let retryScheduled = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1292,17 +1313,7 @@ export function LiveTemperatureThresholdChart({
   );
 
   const formattedUpdateTime = useMemo(() => {
-    const nowUtc = Date.now();
-    const cityOffsetMs = (row?.tz_offset_seconds ?? 0) * 1000;
-    const cityNow = new Date(nowUtc + cityOffsetMs + new Date().getTimezoneOffset() * 60_000);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const y = cityNow.getFullYear();
-    const mo = pad(cityNow.getMonth() + 1);
-    const d = pad(cityNow.getDate());
-    const hh = pad(cityNow.getHours());
-    const mm = pad(cityNow.getMinutes());
-    const ss = pad(cityNow.getSeconds());
-    return `${y}-${mo}-${d} ${hh}:${mm}:${ss}`;
+    return formatCityLocalDateTime(row?.tz_offset_seconds);
   }, [row]);
 
   const cityThresholds = useMemo(() => {
@@ -1692,6 +1703,8 @@ export const __getLiveObservationLabelsForTest = getLiveObservationLabels;
 export const __getObservationDisplayMetricsForTest = getObservationDisplayMetrics;
 export const __getPeakGlowStateForTest = getPeakGlowState;
 export const __getWundergroundDailyHighForTest = getWundergroundDailyHigh;
+export const __formatCityLocalDateForTest = formatCityLocalDate;
+export const __formatCityLocalDateTimeForTest = formatCityLocalDateTime;
 export const __getInitialDetailLoadDelayMsForTest = getInitialDetailLoadDelayMs;
 export const __shouldFetchCityDetailForChartForTest = shouldFetchCityDetailForChart;
 export const __shouldPollLiveChartForTest = shouldPollLiveChart;
