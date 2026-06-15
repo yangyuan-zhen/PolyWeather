@@ -7,7 +7,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException, Request
-import requests as _requests
 
 from src.database.db_manager import DBManager  # type hints
 import web.routes as legacy_routes

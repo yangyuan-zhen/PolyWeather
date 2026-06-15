@@ -11,7 +11,6 @@ from typing import Any, Dict, List, Optional
 import requests as _requests
 from fastapi import HTTPException, Request
 
-from src.database.db_manager import DBManager  # type hints
 from src.utils.runtime_secrets import get_runtime_secret_status
 
 
@@ -276,7 +275,7 @@ def grant_ops_subscription(
     deduct_points: int = 0,
 ) -> dict[str, Any]:
     _require_ops(request)
-    from datetime import datetime, timedelta
+    from datetime import datetime
 
     import web.routes as legacy_routes  # lazy – avoid circular import
 
@@ -359,7 +358,7 @@ def extend_ops_subscription(
     additional_days: int = 30,
 ) -> dict[str, Any]:
     _require_ops(request)
-    from datetime import datetime, timedelta
+    from datetime import datetime
 
     import web.routes as legacy_routes  # lazy – avoid circular import
 

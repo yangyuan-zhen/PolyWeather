@@ -86,7 +86,6 @@ def _bind_optional_supabase_identity(request: Request) -> None:
 
 
 def _resolve_auth_points(request: Request, account_db=None) -> int:
-    from src.database.db_manager import DBManager
 
     if account_db is None:
         # imported lazily to avoid circular dependency at module level
@@ -127,7 +126,6 @@ def _resolve_auth_points(request: Request, account_db=None) -> int:
 
 
 def _resolve_weekly_profile(request: Request, account_db=None) -> Dict[str, Any]:
-    from src.database.db_manager import DBManager
 
     if account_db is None:
         from web.core import _account_db as _db

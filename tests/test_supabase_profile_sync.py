@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import src.database.db_manager as db_manager_module
 from src.database.db_manager import DBManager
+import src.auth.supabase_admin_client as admin_client_module
 
 
 def _bound_db(tmp_path, monkeypatch):
@@ -43,7 +44,7 @@ def test_repeated_user_upsert_coalesces_supabase_profile_sync(tmp_path, monkeypa
         raising=False,
     )
     monkeypatch.setattr(
-        db_manager_module.requests,
+        admin_client_module.requests,
         "patch",
         lambda *args, **kwargs: calls.append((args, kwargs))
         or SimpleNamespace(status_code=204, text="", content=b""),
@@ -69,7 +70,7 @@ def test_changed_username_bypasses_supabase_profile_sync_coalescing(tmp_path, mo
         raising=False,
     )
     monkeypatch.setattr(
-        db_manager_module.requests,
+        admin_client_module.requests,
         "patch",
         lambda *args, **kwargs: calls.append((args, kwargs))
         or SimpleNamespace(status_code=204, text="", content=b""),

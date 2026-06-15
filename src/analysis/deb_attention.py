@@ -10,12 +10,9 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import math
 import os
 import random
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -237,8 +234,9 @@ def predict(model, forecasts, city, mv, cv):
 
 
 if __name__ == "__main__":
-    import sys, statistics
-    from src.analysis.deb_algorithm import load_history as lh, get_deb_accuracy, calculate_dynamic_weights
+    import sys
+    import statistics
+    from src.analysis.deb_algorithm import load_history as lh, calculate_dynamic_weights
     from src.data_collection.city_registry import CITY_REGISTRY
 
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -255,20 +253,28 @@ if __name__ == "__main__":
             print("No checkpoint. Run --train first.")
             sys.exit(1)
         m, mv, cv = load_model(ckpt)
-        base, attn_errs = [], []
+        base: list = []
+        attn_errs: list = []
         for city in [c for c in CITY_REGISTRY if c in history]:
             cd = history.get(city, {})
             for d in sorted(cd.keys(), reverse=True)[:5]:
-                rec = cd[d]; fc = rec.get("forecasts", {}); actual = rec.get("actual_high")
-                if not fc or actual is None: continue
+                rec = cd[d]
+                fc = rec.get("forecasts", {})
+                actual = rec.get("actual_high")
+                if not fc or actual is None:
+                    continue
                 try:
                     bp, _ = calculate_dynamic_weights(city, fc)
-                    if bp: base.append(abs(bp - float(actual)))
-                except: pass
+                    if bp:
+                        base.append(abs(bp - float(actual)))
+                except Exception:
+                    pass
                 try:
                     ap, _ = predict(m, fc, city, mv, cv)
-                    if ap: attn_errs.append(abs(ap - float(actual)))
-                except: pass
+                    if ap:
+                        attn_errs.append(abs(ap - float(actual)))
+                except Exception:
+                    pass
         if base and attn_errs:
             print(f"Baseline MAE: {statistics.mean(base):.3f}")
             print(f"Attention MAE: {statistics.mean(attn_errs):.3f}")

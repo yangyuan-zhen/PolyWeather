@@ -10,7 +10,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List, Set, Tuple
 from urllib.parse import urlparse
 
-import requests
 from loguru import logger
 
 from src.database.sqlite_connection import connect_sqlite

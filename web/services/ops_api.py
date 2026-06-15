@@ -30,7 +30,7 @@ def _require_ops(request):
 # ---------------------------------------------------------------------------
 # Users / Points / Feedback / Analytics
 # ---------------------------------------------------------------------------
-from web.services.ops.users import (  # noqa: F401
+from web.services.ops.users import (  # noqa: E402, F401
     get_ops_analytics_funnel,
     get_ops_weekly_leaderboard,
     grant_ops_feedback_reward,
@@ -44,7 +44,7 @@ from web.services.ops.users import (  # noqa: F401
 # ---------------------------------------------------------------------------
 # Payments / Billing / Memberships
 # ---------------------------------------------------------------------------
-from web.services.ops.payments import (  # noqa: F401
+from web.services.ops.payments import (  # noqa: E402, F401
     get_ops_billing_risk,
     get_ops_memberships_growth,
     get_ops_memberships_overview,
@@ -57,7 +57,7 @@ from web.services.ops.payments import (  # noqa: F401
 # ---------------------------------------------------------------------------
 # Health / Source Health / Training / Truth
 # ---------------------------------------------------------------------------
-from web.services.ops.health import (  # noqa: F401
+from web.services.ops.health import (  # noqa: E402, F401
     _build_training_accuracy_payload,
     get_ops_health_check,
     get_ops_observation_collector_status,
@@ -69,8 +69,7 @@ from web.services.ops.health import (  # noqa: F401
 # ---------------------------------------------------------------------------
 # Config / Subscriptions / Logs / Telegram
 # ---------------------------------------------------------------------------
-from web.services.ops.config import (  # noqa: F401
-    _lookup_supabase_user_id_by_email,
+from web.services.ops.config import (  # noqa: E402, F401
     _supabase_rest_rows,
     extend_ops_subscription,
     get_ops_config,

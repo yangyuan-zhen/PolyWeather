@@ -1,3 +1,4 @@
+import src.auth.supabase_admin_client as admin_client_module
 from types import SimpleNamespace
 
 import src.database.db_manager as db_manager_module
@@ -41,7 +42,7 @@ def test_message_points_sync_to_supabase_metadata_is_throttled(tmp_path, monkeyp
         raising=False,
     )
     monkeypatch.setattr(
-        db_manager_module.requests,
+        admin_client_module.requests,
         "patch",
         lambda *args, **kwargs: calls.append((args, kwargs))
         or SimpleNamespace(status_code=204, text="", content=b""),
@@ -78,7 +79,7 @@ def test_manual_point_grant_forces_supabase_metadata_sync(tmp_path, monkeypatch)
         raising=False,
     )
     monkeypatch.setattr(
-        db_manager_module.requests,
+        admin_client_module.requests,
         "patch",
         lambda *args, **kwargs: calls.append((args, kwargs))
         or SimpleNamespace(status_code=204, text="", content=b""),

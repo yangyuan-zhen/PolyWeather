@@ -95,7 +95,6 @@ class MetarSourceMixin:
             return None
 
         cache_key = f"{icao}:{utc_offset}:{use_fahrenheit}"
-        now_ts = time.time()
         cache_ttl_sec = self._metar_cache_ttl_for_city(city, icao)
         cached = self.cache.get_ttl("metar", cache_key, cache_ttl_sec)
         if cached is not None:
