@@ -18,7 +18,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 COPY requirements.lock .
 
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --prefer-binary -r requirements.lock
+    pip install --prefer-binary --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.lock
 
 COPY . .
 
