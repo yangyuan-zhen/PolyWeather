@@ -51,6 +51,7 @@ import {
 } from "./constants";
 import { InfoRow, PlusIcon } from "./AccountInfoRow";
 import { AccountFeedbackPanel } from "./AccountFeedbackPanel";
+import { TurnstileWidget } from "@/components/security/TurnstileWidget";
 import {
   chainIdToDisplayName,
   clearStoredPaymentRecovery,
@@ -65,6 +66,7 @@ import {
   buildTrialValueReplaySummary,
   readTrialValueReplay,
 } from "@/lib/trial-value-replay";
+import { getTurnstileTokenForAction } from "@/lib/turnstile-client";
 
 // --- Main Component ---
 
@@ -90,9 +92,25 @@ export function AccountCenter() {
   const [backend, setBackend] = useState<AuthMeResponse | null>(null);
   const [referralCodeInput, setReferralCodeInput] = useState("");
   const [referralApplying, setReferralApplying] = useState(false);
+  const [paymentTurnstileToken, setPaymentTurnstileToken] = useState("");
+  const [paymentTurnstileResetKey, setPaymentTurnstileResetKey] = useState(0);
 
   const supabaseReady = hasSupabasePublicEnv();
   const walletConnectEnabled = Boolean(WALLETCONNECT_PROJECT_ID);
+  const resetPaymentTurnstile = useCallback(() => {
+    setPaymentTurnstileToken("");
+    setPaymentTurnstileResetKey((value) => value + 1);
+  }, []);
+  const getPaymentTurnstileToken = useCallback(
+    (
+      action: "payment_intent_create" | "payment_tx_submit",
+      options?: { optional?: boolean },
+    ) => {
+      if (options?.optional && !paymentTurnstileToken) return undefined;
+      return getTurnstileTokenForAction(paymentTurnstileToken, action);
+    },
+    [paymentTurnstileToken],
+  );
 
   // ── Hook ────────────────────────────────────────────────
   const {
@@ -189,6 +207,8 @@ export function AccountCenter() {
     setUpdatedAt,
     usePoints,
     setUsePoints,
+    getPaymentTurnstileToken,
+    resetPaymentTurnstile,
   });
 
   // ── Auth analytics effect ──────────────────────────────
@@ -1369,6 +1389,12 @@ export function AccountCenter() {
                         </div>
                       </div>
                     )}
+
+                    <TurnstileWidget
+                      action="payment_intent_create"
+                      onToken={setPaymentTurnstileToken}
+                      resetKey={paymentTurnstileResetKey}
+                    />
 
                     {/* Payment Method Tabs */}
                     <div className="border-t border-slate-200 pt-5">

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -18,6 +18,8 @@ import {
 } from "@/lib/supabase/client";
 import { getConfiguredSiteUrl, PRODUCTION_SITE_URL } from "@/lib/site-url";
 import { useI18n } from "@/hooks/useI18n";
+import { TurnstileWidget } from "@/components/security/TurnstileWidget";
+import { getTurnstileTokenForAction } from "@/lib/turnstile-client";
 
 type Mode = "login" | "signup";
 
@@ -72,6 +74,8 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
   const [infoText, setInfoText] = useState("");
   const [resetSent, setResetSent] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
 
   const supabaseReady = hasSupabasePublicEnv();
   const isLogin = mode === "login";
@@ -173,6 +177,11 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
     setErrorText(initialError || "");
   }, [initialError]);
 
+  const resetTurnstile = useCallback(() => {
+    setTurnstileToken("");
+    setTurnstileResetKey((value) => value + 1);
+  }, []);
+
   const onResetPassword = async () => {
     setErrorText("");
     setInfoText("");
@@ -247,13 +256,19 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
     setLoading(true);
     try {
       const supabase = getSupabaseBrowserClient();
+      const captchaToken = getTurnstileTokenForAction(
+        turnstileToken,
+        isLogin ? "login" : "signup",
+      );
       if (mode === "login") {
         const { data, error } = await supabase.auth.signInWithPassword({
           email: email.trim(),
           password,
+          options: captchaToken ? { captchaToken } : undefined,
         });
         if (error) {
           setErrorText(error.message);
+          resetTurnstile();
           return;
         }
         const redirectPath = await resolvePostLoginRedirect({
@@ -272,10 +287,12 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
         password,
         options: {
           emailRedirectTo,
+          ...(captchaToken ? { captchaToken } : {}),
         },
       });
       if (error) {
         setErrorText(error.message);
+        resetTurnstile();
         return;
       }
       if (data.session?.user) {
@@ -287,6 +304,10 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
         return;
       }
       setInfoText(copy.signupCheckEmail);
+      resetTurnstile();
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : String(error));
+      resetTurnstile();
     } finally {
       setLoading(false);
     }
@@ -407,6 +428,7 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
                 setErrorText("");
                 setInfoText("");
                 setMode(isLogin ? "signup" : "login");
+                resetTurnstile();
               }}
               className="whitespace-nowrap rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-blue-700 active:scale-[0.98]"
             >
@@ -494,6 +516,12 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
                   </button>
                 </div>
               </div>
+
+              <TurnstileWidget
+                action={isLogin ? "login" : "signup"}
+                onToken={setTurnstileToken}
+                resetKey={turnstileResetKey}
+              />
 
               {!isLogin ? (
                 <p className="text-[11px] leading-relaxed text-slate-500">

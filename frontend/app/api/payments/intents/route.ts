@@ -9,6 +9,10 @@ import {
   buildUpstreamErrorResponse,
 } from "@/lib/api-proxy";
 import { isPaymentHostAllowed } from "@/lib/payment-host";
+import {
+  requireTurnstileForRequest,
+  stripTurnstileToken,
+} from "@/lib/turnstile";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -35,6 +39,8 @@ export async function POST(req: NextRequest) {
   }
   try {
     const body = await req.json();
+    const turnstileError = await requireTurnstileForRequest(req, "payment_intent_create", body);
+    if (turnstileError) return turnstileError;
     const auth = await buildBackendRequestHeaders(req);
     const authError = requireBackendPaymentAuth(auth);
     if (authError) return authError;
@@ -43,7 +49,7 @@ export async function POST(req: NextRequest) {
     const res = await fetch(`${API_BASE}/api/payments/intents`, {
       method: "POST",
       headers: proxiedHeaders,
-      body: JSON.stringify(body ?? {}),
+      body: JSON.stringify(stripTurnstileToken(body ?? {})),
       cache: "no-store",
     });
     if (!res.ok) {

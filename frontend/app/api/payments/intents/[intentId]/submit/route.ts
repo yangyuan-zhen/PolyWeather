@@ -8,6 +8,10 @@ import {
   buildProxyExceptionResponse,
   buildUpstreamErrorResponse,
 } from "@/lib/api-proxy";
+import {
+  requireTurnstileForRequest,
+  stripTurnstileToken,
+} from "@/lib/turnstile";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -53,6 +57,10 @@ export async function POST(
   const { intentId } = await context.params;
   try {
     const body = await req.json();
+    if (process.env.POLYWEATHER_TURNSTILE_REQUIRE_PAYMENT_SUBMIT === "true") {
+      const turnstileError = await requireTurnstileForRequest(req, "payment_tx_submit", body);
+      if (turnstileError) return turnstileError;
+    }
     const auth = await buildBackendRequestHeaders(req);
     const authError = requireBackendPaymentAuth(auth);
     if (authError) return authError;
@@ -63,7 +71,7 @@ export async function POST(
       {
         method: "POST",
         headers: proxiedHeaders,
-        body: JSON.stringify(body ?? {}),
+        body: JSON.stringify(stripTurnstileToken(body ?? {})),
         cache: "no-store",
       },
     );

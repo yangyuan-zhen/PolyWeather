@@ -56,6 +56,11 @@ export interface UseAccountPaymentParams {
   setUpdatedAt: (text: string) => void;
   usePoints: boolean;
   setUsePoints: (v: boolean) => void;
+  getPaymentTurnstileToken?: (
+    action: "payment_intent_create" | "payment_tx_submit",
+    options?: { optional?: boolean },
+  ) => string | undefined;
+  resetPaymentTurnstile?: () => void;
 }
 
 // ============================================================
@@ -73,6 +78,8 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
     setUpdatedAt,
     usePoints,
     setUsePoints,
+    getPaymentTurnstileToken,
+    resetPaymentTurnstile,
   } = params;
 
   // ── Base payment state (from usePaymentState) ──────────────
@@ -532,6 +539,8 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
     allowedPaymentHosts: billing.allowedPaymentHosts,
     authIsAuthenticated,
     hasPayingWallet: walletBind.hasPayingWallet,
+    getPaymentTurnstileToken,
+    resetPaymentTurnstile,
     getValidAccessToken,
     buildAuthedHeaders,
     loadSnapshot,

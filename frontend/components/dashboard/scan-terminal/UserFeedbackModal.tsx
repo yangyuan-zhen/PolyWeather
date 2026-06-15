@@ -11,6 +11,8 @@ import {
   getSupabaseBrowserClient,
   hasSupabasePublicEnv,
 } from "@/lib/supabase/client";
+import { TurnstileWidget } from "@/components/security/TurnstileWidget";
+import { getTurnstileTokenForAction, isTurnstileEnabled } from "@/lib/turnstile-client";
 import type { UserFeedbackEntry } from "@/types/ops";
 
 export type FeedbackCategory = "bug" | "data" | "idea" | "payment" | "account" | "other";
@@ -111,6 +113,8 @@ export function UserFeedbackModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
 
   useEffect(() => {
     if (!open) return;
@@ -120,6 +124,8 @@ export function UserFeedbackModal({
     setLoginEmailContact("");
     setError("");
     setSubmitted(false);
+    setTurnstileToken("");
+    setTurnstileResetKey((value) => value + 1);
   }, [open, draft?.category]);
 
   useEffect(() => {
@@ -158,13 +164,20 @@ export function UserFeedbackModal({
 
   if (!open) return null;
 
-  const canSubmit = message.trim().length >= 3 && !submitting;
+  const canSubmit =
+    message.trim().length >= 3 &&
+    !submitting &&
+    (!isTurnstileEnabled() || Boolean(turnstileToken));
 
   const submit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
     setError("");
     try {
+      const turnstile_token = getTurnstileTokenForAction(
+        turnstileToken,
+        "feedback_submit",
+      );
       const res = await fetch("/api/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -174,6 +187,7 @@ export function UserFeedbackModal({
           contact: contact.trim() || undefined,
           source: draft?.source || "terminal",
           context: buildRuntimeContext(draft?.context || {}),
+          turnstile_token,
         }),
       });
       if (!res.ok) {
@@ -188,6 +202,8 @@ export function UserFeedbackModal({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message.slice(0, 220));
+      setTurnstileToken("");
+      setTurnstileResetKey((value) => value + 1);
     } finally {
       setSubmitting(false);
     }
@@ -295,6 +311,12 @@ export function UserFeedbackModal({
                 ? "Terminal context is attached automatically: city, slot, source state, browser and session diagnostics."
                 : "会自动附带终端上下文：城市、槽位、数据源状态、浏览器和会话诊断信息。"}
             </div>
+
+            <TurnstileWidget
+              action="feedback_submit"
+              onToken={setTurnstileToken}
+              resetKey={turnstileResetKey}
+            />
 
             {error && (
               <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">

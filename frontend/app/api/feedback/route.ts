@@ -7,6 +7,10 @@ import {
   buildProxyExceptionResponse,
   buildUpstreamErrorResponse,
 } from "@/lib/api-proxy";
+import {
+  requireTurnstileForRequest,
+  stripTurnstileToken,
+} from "@/lib/turnstile";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -89,6 +93,8 @@ export async function POST(req: NextRequest) {
   let auth: Awaited<ReturnType<typeof buildBackendRequestHeaders>> | null = null;
   try {
     const body = await req.json();
+    const turnstileError = await requireTurnstileForRequest(req, "feedback_submit", body);
+    if (turnstileError) return turnstileError;
     auth = await buildBackendRequestHeaders(req);
     const headers = new Headers(auth.headers);
     headers.set("Content-Type", "application/json");
@@ -96,7 +102,7 @@ export async function POST(req: NextRequest) {
     const res = await fetch(`${API_BASE}/api/feedback`, {
       method: "POST",
       headers,
-      body: JSON.stringify(body),
+      body: JSON.stringify(stripTurnstileToken(body)),
       cache: "no-store",
     });
     const raw = await res.text();

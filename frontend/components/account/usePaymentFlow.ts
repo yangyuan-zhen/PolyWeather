@@ -32,9 +32,12 @@ import {
   assertExpectedPaymentReceiver,
   EXPECTED_PAYMENT_RECEIVER_ADDRESS,
 } from "@/lib/payment-receiver";
+import { getTurnstileTokenForAction } from "@/lib/turnstile-client";
 import type { PaymentTxValidationState } from "./usePaymentState";
 
 // ============================================================
+type PaymentTurnstileAction = "payment_intent_create" | "payment_tx_submit";
+
 export interface UsePaymentFlowParams {
   isEn: boolean;
   copy: Record<string, string>;
@@ -97,6 +100,11 @@ export interface UsePaymentFlowParams {
   allowedPaymentHosts: string[];
   authIsAuthenticated: boolean;
   hasPayingWallet: boolean;
+  getPaymentTurnstileToken?: (
+    action: PaymentTurnstileAction,
+    options?: { optional?: boolean },
+  ) => string | undefined;
+  resetPaymentTurnstile?: () => void;
 
   // Callbacks from master
   getValidAccessToken: () => Promise<string>;
@@ -159,6 +167,8 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
     allowedPaymentHosts,
     authIsAuthenticated,
     hasPayingWallet,
+    getPaymentTurnstileToken,
+    resetPaymentTurnstile,
     getValidAccessToken,
     buildAuthedHeaders,
     loadSnapshot,
@@ -183,6 +193,16 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
     trackAppEvent("checkout_succeeded", payload);
     trackAppEvent("payment_success", payload);
   }, []);
+
+  const buildPaymentTurnstilePayload = useCallback(
+    (action: PaymentTurnstileAction, optional = false) => {
+      const turnstile_token =
+        getPaymentTurnstileToken?.(action, { optional }) ||
+        (optional ? undefined : getTurnstileTokenForAction("", action));
+      return turnstile_token ? { turnstile_token } : {};
+    },
+    [getPaymentTurnstileToken],
+  );
 
   const verifyPaymentAuthReady = useCallback(async () => {
     const accessToken = await getValidAccessToken();
@@ -499,6 +519,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
         method: "POST",
         headers: authHeaders,
         body: JSON.stringify({
+          ...buildPaymentTurnstilePayload("payment_intent_create"),
           plan_code: selectedPlan?.plan_code || "pro_monthly",
           payment_mode: "strict",
           allowed_wallet: payingWallet,
@@ -514,6 +535,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
           },
         }),
       });
+      resetPaymentTurnstile?.();
       if (!createRes.ok) {
         const raw = await readPaymentApiErrorMessage(
           createRes,
@@ -596,7 +618,13 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
       await waitForReceipt(txHashNorm, eth);
 
       const submitRes = await fetch(`/api/payments/intents/${intentId}/submit`, {
-        method: "POST", headers: authHeaders, body: JSON.stringify({ tx_hash: txHashNorm, from_address: payingWallet }),
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          ...buildPaymentTurnstilePayload("payment_tx_submit", true),
+          tx_hash: txHashNorm,
+          from_address: payingWallet,
+        }),
       });
       if (!submitRes.ok) {
         const raw = await readPaymentApiErrorMessage(
@@ -692,6 +720,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
         method: "POST",
         headers: authHeaders,
         body: JSON.stringify({
+          ...buildPaymentTurnstilePayload("payment_intent_create"),
           plan_code: selectedPlan?.plan_code || "pro_monthly",
           payment_mode: "direct",
           chain_id: effectivePaymentChainId,
@@ -705,6 +734,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
           },
         }),
       });
+      resetPaymentTurnstile?.();
       if (!createRes.ok) {
         const raw = await readPaymentApiErrorMessage(
           createRes,
@@ -765,7 +795,12 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
     try {
       const authHeaders = await buildAuthedHeaders(true, true);
       const submitRes = await fetch(`/api/payments/intents/${intentIdVal}/submit`, {
-        method: "POST", headers: authHeaders, body: JSON.stringify({ tx_hash: txHashNorm }),
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          ...buildPaymentTurnstilePayload("payment_tx_submit", true),
+          tx_hash: txHashNorm,
+        }),
       });
       if (!submitRes.ok) {
         const raw = await readPaymentApiErrorMessage(
