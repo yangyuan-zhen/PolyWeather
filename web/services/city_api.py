@@ -16,7 +16,10 @@ from loguru import logger
 import web.routes as legacy_routes
 from web.analysis_service import _runway_history_temp_for_city
 from web.services.canonical_temperature import build_city_weather_from_canonical
-from web.services.latest_observation_overlay import overlay_latest_amsc_observation
+from web.services.latest_observation_overlay import (
+    overlay_latest_amsc_observation,
+    parse_observation_epoch,
+)
 from web.services.request_timing import ServerTimingRecorder
 
 _RECENT_DEB_CACHE: Optional[Dict[str, Dict[str, object]]] = None
@@ -297,17 +300,82 @@ def _start_city_cache_stale_refresh(
 
 
 async def _overlay_cached_wunderground(city: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    latest_payload = await _overlay_cached_canonical_observation(city, payload)
     latest_payload = await run_in_threadpool(
         overlay_latest_amsc_observation,
         legacy_routes._CACHE_DB,
         city,
-        payload,
+        latest_payload,
     )
     return await run_in_threadpool(
         legacy_routes._overlay_latest_wunderground_current,
         city,
         latest_payload,
     )
+
+
+def _observation_block_epoch(block: Any) -> Optional[int]:
+    if not isinstance(block, dict):
+        return None
+    freshness = block.get("freshness") if isinstance(block.get("freshness"), dict) else {}
+    values = (
+        block.get("observed_at"),
+        block.get("observation_time"),
+        block.get("obs_time"),
+        freshness.get("observed_at"),
+    )
+    epochs = [epoch for epoch in (parse_observation_epoch(value) for value in values) if epoch is not None]
+    return max(epochs) if epochs else None
+
+
+def _payload_observation_epoch(payload: Dict[str, Any]) -> Optional[int]:
+    if not isinstance(payload, dict):
+        return None
+    blocks = (
+        payload.get("current"),
+        payload.get("airport_primary"),
+        payload.get("airport_current"),
+    )
+    epochs = [epoch for epoch in (_observation_block_epoch(block) for block in blocks) if epoch is not None]
+    return max(epochs) if epochs else None
+
+
+def _merge_latest_observation_payload(
+    payload: Dict[str, Any],
+    latest_payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    if not isinstance(payload, dict) or not isinstance(latest_payload, dict):
+        return payload
+    latest_epoch = _payload_observation_epoch(latest_payload)
+    if latest_epoch is None:
+        return payload
+    current_epoch = _payload_observation_epoch(payload)
+    if current_epoch is not None and current_epoch >= latest_epoch:
+        return payload
+
+    next_payload = deepcopy(payload)
+    for key in ("current", "airport_primary", "airport_current"):
+        latest_block = latest_payload.get(key)
+        if not isinstance(latest_block, dict) or not latest_block:
+            continue
+        base_block = next_payload.get(key) if isinstance(next_payload.get(key), dict) else {}
+        next_payload[key] = {**base_block, **latest_block}
+    if isinstance(latest_payload.get("canonical_temperature"), dict):
+        next_payload["canonical_temperature"] = latest_payload["canonical_temperature"]
+    if latest_payload.get("updated_at"):
+        next_payload["updated_at"] = latest_payload.get("updated_at")
+    if latest_payload.get("temp_symbol"):
+        next_payload["temp_symbol"] = latest_payload.get("temp_symbol")
+    return next_payload
+
+
+async def _overlay_cached_canonical_observation(city: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(payload, dict) or not payload:
+        return payload
+    canonical_payload = await _get_canonical_city_payload(city, detail_depth=str(payload.get("detail_depth") or "full"))
+    if not canonical_payload:
+        return payload
+    return _merge_latest_observation_payload(payload, canonical_payload)
 
 
 def _overlay_cached_runway_history_from_db(city: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -405,6 +473,7 @@ async def _get_city_full_data(city: str, *, force_refresh: bool) -> Dict[str, An
 async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, Any]:
     if force_refresh:
         payload = await _get_city_full_data(city, force_refresh=True)
+        payload = await _overlay_cached_canonical_observation(city, payload)
         payload = await _run_optional_city_chart_overlay(
             city=city,
             overlay_name="runway_history",
@@ -433,6 +502,7 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
         if payload:
             if not legacy_routes._city_cache_is_fresh(cached_entry, legacy_routes.CITY_FULL_CACHE_TTL_SEC):
                 _start_city_full_stale_refresh(city)
+            payload = await _overlay_cached_canonical_observation(city, payload)
             payload = await _run_optional_city_chart_overlay(
                 city=city,
                 overlay_name="runway_history",

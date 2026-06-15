@@ -36,6 +36,12 @@ _ATTACH_METHODS: dict[str, str] = {
     "madis_hfmetar": "_attach_madis_hfmetar_data",
     "hko_obs": "_attach_hko_obs_official_nearby",
     "cowin_obs": "_attach_cowin_official_nearby",
+    "mgm": "_attach_turkish_mgm_data",
+}
+
+_TURKISH_MGM_STATION_CODES = {
+    "ankara": "17128",
+    "istanbul": "17058",
 }
 
 
@@ -115,6 +121,31 @@ def _record_from_row(
     )
 
 
+def _enrich_mgm_results(results: dict[str, Any], city: str) -> None:
+    mgm = results.get("mgm")
+    if not isinstance(mgm, dict):
+        return
+    current = mgm.get("current") if isinstance(mgm.get("current"), dict) else {}
+    station_code = str(
+        mgm.get("station_code")
+        or mgm.get("istNo")
+        or _TURKISH_MGM_STATION_CODES.get(city)
+        or ""
+    ).strip()
+    station_name = str(
+        mgm.get("station_name")
+        or current.get("station_name")
+        or current.get("station_label")
+        or ""
+    ).strip()
+    mgm.setdefault("source", "mgm")
+    mgm.setdefault("source_label", "MGM")
+    if station_code:
+        mgm.setdefault("station_code", station_code)
+    if station_name:
+        mgm.setdefault("station_name", station_name)
+
+
 def collect_observation_source(
     weather: Any,
     source: Any,
@@ -144,7 +175,16 @@ def collect_observation_source(
         )
 
     results: dict[str, Any] = {}
-    attach(results, normalized_city, bool(use_fahrenheit))
+    if normalized_source == "mgm":
+        attach(
+            results,
+            normalized_city,
+            include_mgm=True,
+            include_nearby=True,
+        )
+        _enrich_mgm_results(results, normalized_city)
+    else:
+        attach(results, normalized_city, bool(use_fahrenheit))
     if not results:
         return ObservationSourceResult(
             source=normalized_source,

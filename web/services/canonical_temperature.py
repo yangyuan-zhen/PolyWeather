@@ -218,6 +218,8 @@ def build_city_weather_from_canonical(city: str, canonical: Dict[str, Any]) -> O
         "max_so_far": _first_float(canonical.get("max_so_far"), value),
         "source_code": source,
         "source_label": source_label,
+        "station_code": canonical.get("station_code"),
+        "station_name": canonical.get("station_name"),
         "obs_time": observed_at or observed_at_local,
         "freshness": freshness,
     }

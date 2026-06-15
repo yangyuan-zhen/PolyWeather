@@ -1829,6 +1829,77 @@ def test_stale_city_detail_uses_cached_full_payload_while_refreshing(monkeypatch
     assert refresh_calls == 0
 
 
+def test_stale_ankara_chart_data_overlays_latest_mgm_canonical(monkeypatch):
+    import asyncio
+
+    class FakeCache:
+        def get_city_cache(self, kind, city):
+            assert kind == "full"
+            assert city == "ankara"
+            return {
+                "payload": {
+                    "name": "ankara",
+                    "local_date": "2026-06-14",
+                    "local_time": "13:12",
+                    "current": {
+                        "temp": 16.0,
+                        "source_code": "metar",
+                        "settlement_source": "metar",
+                        "settlement_source_label": "METAR",
+                        "observed_at": "2026-06-14T09:50:00+00:00",
+                    },
+                    "airport_primary": {
+                        "temp": 16.0,
+                        "source_code": "metar",
+                        "source_label": "METAR",
+                        "obs_time": "2026-06-14T09:50:00+00:00",
+                    },
+                    "hourly": {"times": ["2026-06-14T09:00:00Z"], "temps": [16.0]},
+                    "deb": {"prediction": 23.0},
+                },
+            }
+
+        def get_canonical_temperature(self, city):
+            assert city == "ankara"
+            return {
+                "payload": {
+                    "city": "ankara",
+                    "value": 19.0,
+                    "temp_symbol": "°C",
+                    "source": "mgm",
+                    "source_label": "MGM",
+                    "source_role": "settlement_official",
+                    "station_code": "17128",
+                    "station_name": "Esenboga Airport",
+                    "observed_at": "2026-06-15T14:20:00+00:00",
+                    "observed_at_local": "17:20",
+                    "freshness_sec": 60,
+                    "freshness_status": "fresh",
+                    "fetched_at": "2026-06-15T14:21:00+00:00",
+                    "confidence": 0.9,
+                    "deb_prediction": 23.0,
+                }
+            }
+
+        def enqueue_observation_refresh_request(self, **_kwargs):
+            return True
+
+    monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
+    monkeypatch.setattr(city_api.legacy_routes, "_city_cache_is_fresh", lambda entry, ttl: False)
+    monkeypatch.setattr(city_api, "_start_city_full_stale_refresh", lambda city: None)
+    monkeypatch.setattr(city_api.legacy_routes, "_overlay_latest_wunderground_current", lambda city, payload: payload)
+
+    payload = asyncio.run(city_api._get_city_chart_data("ankara", force_refresh=False))
+
+    assert payload["current"]["temp"] == 19.0
+    assert payload["current"]["source_code"] == "mgm"
+    assert payload["current"]["settlement_source_label"] == "MGM"
+    assert payload["airport_primary"]["temp"] == 19.0
+    assert payload["airport_primary"]["source_code"] == "mgm"
+    assert payload["airport_primary"]["station_code"] == "17128"
+    assert payload["deb"]["prediction"] == 23.0
+
+
 def test_force_refresh_panel_returns_cached_payload_when_refresh_is_slow(monkeypatch):
     import asyncio
 

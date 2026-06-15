@@ -14,6 +14,7 @@ from web.realtime_patch_schema import normalize_observation_patch
 _SETTLEMENT_SOURCE_ADAPTERS = {
     "hko": {"hko_obs", "cowin_obs"},
     "cwa": {"cwa"},
+    "mgm": {"mgm"},
     "noaa": {"madis_hfmetar", "metar", "noaa"},
     "wunderground": {"amsc_awos", "amos", "madis_hfmetar", "metar", "wunderground"},
 }
@@ -23,6 +24,7 @@ _SOURCE_WEIGHTS = {
     "amos": 700,
     "hko_obs": 680,
     "cowin_obs": 660,
+    "mgm": 640,
     "madis_hfmetar": 500,
     "metar": 460,
 }
@@ -33,6 +35,11 @@ _FRESHNESS_WEIGHTS = {
     "delayed": 35,
     "unknown": 20,
     "stale": 5,
+}
+
+_TURKISH_MGM_STATION_CODES = {
+    "ankara": "17128",
+    "istanbul": "17058",
 }
 
 
@@ -116,8 +123,13 @@ def _candidate_canonical(city: str, row: dict[str, Any]) -> Optional[dict[str, A
 def _score(city: str, row: dict[str, Any], canonical: dict[str, Any]) -> tuple[int, float]:
     meta = CITY_REGISTRY.get(city) or {}
     station_code = _station_code(row.get("station_code"))
-    settlement_station_code = _station_code(meta.get("settlement_station_code") or meta.get("icao"))
-    settlement_source = _normalized_source(meta.get("settlement_source"))
+    is_turkish_mgm_city = city in _TURKISH_MGM_STATION_CODES
+    settlement_station_code = _station_code(
+        _TURKISH_MGM_STATION_CODES.get(city)
+        if is_turkish_mgm_city
+        else (meta.get("settlement_station_code") or meta.get("icao"))
+    )
+    settlement_source = "mgm" if is_turkish_mgm_city else _normalized_source(meta.get("settlement_source"))
     expected_sources = _SETTLEMENT_SOURCE_ADAPTERS.get(settlement_source, {settlement_source})
     station_name = str(row.get("station_name") or "").strip().lower()
     candidates = {

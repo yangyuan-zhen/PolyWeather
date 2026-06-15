@@ -81,6 +81,52 @@ def test_source_adapter_flattens_nearby_source_lists():
     assert [record.value for record in result.records] == [28.1, 27.6]
 
 
+def test_source_adapter_collects_mgm_with_keyword_flags_and_station_metadata():
+    from web.services.observation_source_adapters import collect_observation_source
+
+    calls = []
+
+    class FakeWeather:
+        def _attach_turkish_mgm_data(
+            self,
+            results,
+            city,
+            *,
+            include_mgm=True,
+            include_nearby=True,
+        ):
+            calls.append((city, include_mgm, include_nearby))
+            if not include_mgm:
+                return
+            results["mgm"] = {
+                "source": "mgm",
+                "source_label": "MGM",
+                "station_code": "17128",
+                "station_name": "Esenboga Airport",
+                "obs_time": "2026-06-15T14:20:00Z",
+                "current": {"temp": 19.0},
+            }
+
+    result = collect_observation_source(
+        FakeWeather(),
+        "mgm",
+        "ankara",
+        use_fahrenheit=False,
+    )
+
+    assert calls == [("ankara", True, True)]
+    assert result.status == "ok"
+    assert len(result.records) == 1
+
+    record = result.records[0]
+    assert record.source == "mgm"
+    assert record.source_label == "MGM"
+    assert record.value == 19.0
+    assert record.observed_at == "2026-06-15T14:20:00Z"
+    assert record.station_code == "17128"
+    assert record.station_name == "Esenboga Airport"
+
+
 def test_source_adapter_reports_parse_error_for_unusable_source_rows():
     from web.services.observation_source_adapters import collect_observation_source
 

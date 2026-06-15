@@ -586,6 +586,11 @@ def build_observation_source_profiles() -> List[ObservationSourceProfile]:
         for city, meta in CITY_REGISTRY.items()
         if str((meta or {}).get("icao") or "").strip().upper().startswith("K")
     ]
+    turkish_mgm_cities = [
+        city
+        for city in ("ankara", "istanbul")
+        if city in CITY_REGISTRY
+    ]
     return [
         ObservationSourceProfile(
             source="amos",
@@ -611,6 +616,11 @@ def build_observation_source_profiles() -> List[ObservationSourceProfile]:
             source="hko_obs",
             cities=_normalized_cities(HKO_STATIONS.keys()),
             interval_sec=max(60, _env_int("POLYWEATHER_OBSERVATION_COLLECTOR_HKO_SEC", 600)),
+        ),
+        ObservationSourceProfile(
+            source="mgm",
+            cities=_normalized_cities(turkish_mgm_cities),
+            interval_sec=max(300, _env_int("POLYWEATHER_OBSERVATION_COLLECTOR_MGM_SEC", 300)),
         ),
     ]
 

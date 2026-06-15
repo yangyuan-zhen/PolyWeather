@@ -83,6 +83,47 @@ def test_canonical_engine_ignores_failed_latest_rows():
     assert canonical["value"] == 24.0
 
 
+def test_canonical_engine_prefers_mgm_over_metar_for_turkish_city():
+    from web.services.canonical_engine import build_canonical_temperature_from_observations
+
+    canonical = build_canonical_temperature_from_observations(
+        "ankara",
+        [
+            {
+                "source": "metar",
+                "city": "ankara",
+                "station_code": "LTAC",
+                "station_name": "Ankara Esenboga",
+                "value": 14.0,
+                "value_unit": "c",
+                "observed_at": "2026-06-15T14:20:00+00:00",
+                "fetched_at": "2026-06-15T14:21:00+00:00",
+                "status": "ok",
+                "payload": {"source_label": "METAR"},
+                "updated_at_ts": 10.0,
+            },
+            {
+                "source": "mgm",
+                "city": "ankara",
+                "station_code": "17128",
+                "station_name": "Esenboga Airport",
+                "value": 19.0,
+                "value_unit": "c",
+                "observed_at": "2026-06-15T14:20:00+00:00",
+                "fetched_at": "2026-06-15T14:21:00+00:00",
+                "status": "ok",
+                "payload": {"source_label": "MGM"},
+                "updated_at_ts": 9.0,
+            },
+        ],
+    )
+
+    assert canonical is not None
+    assert canonical["source"] == "mgm"
+    assert canonical["source_label"] == "MGM"
+    assert canonical["value"] == 19.0
+
+
 def test_canonical_engine_builds_realtime_event_from_canonical():
     from web.services.canonical_engine import build_realtime_event_from_canonical
 
