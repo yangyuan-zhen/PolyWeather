@@ -1035,8 +1035,61 @@ export function runTests() {
       isShenzhen: false,
       displayMetarTemp: 72.0,
       observedHighMetar: 73.9,
-    }) === 73.9,
-    "non-HKO compact secondary stat should keep the existing daily-high behavior",
+    }) === 72.0,
+    "non-HKO compact secondary stat should render the latest METAR/current point, not the daily high",
+  );
+
+  const wuhanEarlyMorningMetrics = __getObservationDisplayMetricsForTest(
+    {
+      city: "wuhan",
+      local_date: "2026-06-16",
+      local_time: "04:23",
+      tz_offset_seconds: 8 * 60 * 60,
+      current_temp: 22.8,
+      current_max_so_far: 33.0,
+      temp_symbol: "°C",
+      metar_context: {
+        airport_current_temp: 23.0,
+        airport_max_so_far: 33.0,
+        airport_obs_time: "04:00",
+      },
+    } as any,
+    {
+      localTime: "04:23",
+      times: ["00:00", "04:00", "12:00", "18:00"],
+      temps: [24.0, 23.0, 33.0, 29.0],
+      settlementTodayObs: [
+        { time: "04:00", temp: 23.0 },
+      ],
+      airportCurrent: {
+        temp: 23.0,
+        max_so_far: 33.0,
+        obs_time: "2026-06-16T04:00:00+08:00",
+      },
+      runwayPlateHistory: {
+        "04/22": [
+          { time: "04:20", temp: 22.8 },
+        ],
+      },
+    } as any,
+    null,
+  );
+  assert(
+    wuhanEarlyMorningMetrics.currentMetarTemp === 23.0,
+    "Wuhan early-morning METAR current metric should use the latest settlement point",
+  );
+  assert(
+    wuhanEarlyMorningMetrics.observedHighMetar === 33.0,
+    "Wuhan METAR daily high can remain available separately from the compact current stat",
+  );
+  assert(
+    __selectCompactSecondaryTempForTest({
+      isHKO: false,
+      isShenzhen: false,
+      displayMetarTemp: (wuhanEarlyMorningMetrics as any).currentMetarTemp,
+      observedHighMetar: wuhanEarlyMorningMetrics.observedHighMetar,
+    }) === 23.0,
+    "Wuhan compact METAR settlement stat should not show a stale daily high at 04:23",
   );
 
   const wuhanRunwayChart = __buildTemperatureChartDataForTest(

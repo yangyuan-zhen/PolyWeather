@@ -964,10 +964,14 @@ function selectCompactSecondaryTemp({
   displayMetarTemp: number | null;
   observedHighMetar: number | null;
 }) {
-  if (isHKO && !isShenzhen && displayMetarTemp !== null) {
+  if (isShenzhen) {
+    return observedHighMetar;
+  }
+  // The compact secondary label is an observation cadence, so it must not display a daily high.
+  if (isHKO) {
     return displayMetarTemp;
   }
-  return observedHighMetar;
+  return displayMetarTemp;
 }
 
 function isSettlementRunway(row: ScanOpportunityRow | null, rwy: string) {
