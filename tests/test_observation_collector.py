@@ -181,6 +181,38 @@ def test_raw_observation_store_records_latest_observation(tmp_path):
     assert latest["payload"]["temp_c"] == 24.0
 
 
+def test_raw_observation_store_lists_source_city_history(tmp_path):
+    from src.database.db_manager import DBManager
+
+    db = DBManager(str(tmp_path / "polyweather.db"))
+    db.append_raw_observation(
+        source="amsc_awos",
+        city="Chengdu",
+        value=25.6,
+        observed_at="2026-06-15T11:04:00+00:00",
+        fetched_at="2026-06-15T11:04:30+00:00",
+        station_code="ZUUU",
+        payload={"temp_c": 25.6},
+    )
+    db.append_raw_observation(
+        source="amsc_awos",
+        city="chengdu",
+        value=25.4,
+        observed_at="2026-06-15T11:08:00+00:00",
+        fetched_at="2026-06-15T11:08:30+00:00",
+        station_code="ZUUU",
+        payload={"temp_c": 25.4},
+    )
+
+    rows = db.list_raw_observation_history("amsc_awos", "chengdu", minutes=60, limit=10)
+
+    assert [row["observed_at"] for row in rows] == [
+        "2026-06-15T11:04:00+00:00",
+        "2026-06-15T11:08:00+00:00",
+    ]
+    assert rows[-1]["payload"]["temp_c"] == 25.4
+
+
 def test_observation_collector_aligns_amsc_payload_time_with_record_observed_at(tmp_path):
     from src.database.db_manager import DBManager
     from web.observation_collector_service import ObservationCollector

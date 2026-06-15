@@ -214,6 +214,8 @@ def _append_latest_amsc_runway_history(
     payload: dict[str, Any],
     row: dict[str, Any],
     raw_payload: dict[str, Any],
+    *,
+    persist: bool = True,
 ) -> bool:
     runway_obs = raw_payload.get("runway_obs")
     if not isinstance(runway_obs, dict):
@@ -237,7 +239,7 @@ def _append_latest_amsc_runway_history(
         history = deepcopy(history)
 
     use_fahrenheit = "F" in str(payload.get("temp_symbol") or "").upper()
-    appender = getattr(db, "append_runway_obs", None)
+    appender = getattr(db, "append_runway_obs", None) if persist else None
     icao = str(raw_payload.get("icao") or row.get("station_code") or "").strip().upper()
     changed = False
     for point in point_temperatures:
@@ -305,6 +307,37 @@ def _append_latest_amsc_runway_history(
     return changed
 
 
+def _append_amsc_runway_history_from_raw_store(
+    db: Any,
+    city: str,
+    payload: dict[str, Any],
+) -> bool:
+    lister = getattr(db, "list_raw_observation_history", None)
+    if not callable(lister):
+        return False
+    try:
+        rows = lister("amsc_awos", city, minutes=36 * 60, limit=3000)
+    except Exception as exc:
+        logger.debug("latest AMSC raw history overlay skipped city={}: {}", city, exc)
+        return False
+    changed = False
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict):
+            continue
+        raw_payload = row.get("payload")
+        if not isinstance(raw_payload, dict) or not _amsc_payload_has_observation(raw_payload):
+            continue
+        changed = _append_latest_amsc_runway_history(
+            db,
+            city,
+            payload,
+            row,
+            raw_payload,
+            persist=False,
+        ) or changed
+    return changed
+
+
 def overlay_latest_amsc_observation(
     db: Any,
     city: str,
@@ -334,6 +367,7 @@ def overlay_latest_amsc_observation(
     for key in ("current", "airport_primary", "airport_current"):
         changed = _merge_observation_block(next_payload, key, update, raw_epoch) or changed
 
+    changed = _append_amsc_runway_history_from_raw_store(db, normalized_city, next_payload) or changed
     changed = _append_latest_amsc_runway_history(db, normalized_city, next_payload, row, raw_payload) or changed
 
     canonical = next_payload.get("canonical_temperature")
