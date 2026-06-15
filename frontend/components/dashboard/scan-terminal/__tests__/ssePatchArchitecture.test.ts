@@ -231,14 +231,17 @@ export function runTests() {
   );
   const fallbackRefreshBlock = chart.match(/const refreshCachedDetail = \(\) => \{[\s\S]*?\n    \};/)?.[0] || "";
   assert(
-    fallbackRefreshBlock.includes("fetchHourlyForecastForCity(city, { bypassLocalCache: true, resolution: targetResolution })") &&
+    fallbackRefreshBlock.includes("runHourlyDetailFetch") &&
+      fallbackRefreshBlock.includes("fetchOptions: { bypassLocalCache: true }") &&
       !fallbackRefreshBlock.includes("ignoreCache: true") &&
       !fallbackRefreshBlock.includes("setIsHourlyLoading(true)"),
     "no-patch fallback refresh should revalidate through cached backend detail without force-refreshing sources or showing the loading overlay",
   );
-  const resyncBlock = chart.match(/useEffect\(\(\) => \{\s*if \(!resyncVersion \|\| !city\) return;[\s\S]*?\}, \[resyncVersion, city, targetResolution, applySuccessfulHourlyDetail\]\);/)?.[0] || "";
+  const resyncBlock = chart.match(/useEffect\(\(\) => \{\s*if \(!resyncVersion \|\| !city\) return;[\s\S]*?\}, \[resyncVersion, city, runHourlyDetailFetch\]\);/)?.[0] || "";
   assert(
-    !resyncBlock.includes("setIsHourlyLoading(true)"),
+    resyncBlock.includes("runHourlyDetailFetch") &&
+      resyncBlock.includes("fetchOptions: { ignoreCache: true }") &&
+      !resyncBlock.includes("setIsHourlyLoading(true)"),
     "SSE replay resync should refresh full detail in the background without showing the loading overlay",
   );
   assert(
@@ -250,7 +253,7 @@ export function runTests() {
   const foregroundRefreshBlock = chart.match(/const refreshForegroundFullDetail = \(\) => \{[\s\S]*?\n    \};/)?.[0] || "";
   assert(
     foregroundRefreshBlock.includes("bypassLocalCache: true") &&
-    foregroundRefreshBlock.includes("fetchHourlyForecastForCity") &&
+    foregroundRefreshBlock.includes("runHourlyDetailFetch") &&
     foregroundRefreshBlock.includes("FOREGROUND_FULL_DETAIL_REFRESH_DEDUP_MS") &&
     !foregroundRefreshBlock.includes("ignoreCache: true") &&
     !foregroundRefreshBlock.includes("setIsHourlyLoading(true)"),
@@ -291,11 +294,11 @@ export function runTests() {
     "temperature chart must trigger a throttled background probability refresh after live observation patches",
   );
   const patchEffectBlock = chart.match(
-    /useEffect\(\(\) => \{\s*if \(!latestPatch[\s\S]*?refreshProbabilityOverlayAfterPatch\(\);[\s\S]*?\}, \[[^\]]*latestPatch[^\]]*applySuccessfulHourlyDetail[^\]]*\]\);/,
+    /useEffect\(\(\) => \{\s*if \(!latestPatch[\s\S]*?refreshProbabilityOverlayAfterPatch\(\);[\s\S]*?\}, \[[^\]]*latestPatch[^\]]*runHourlyDetailFetch[^\]]*\]\);/,
   )?.[0] || "";
   assert(
     patchEffectBlock.includes("refreshProbabilityOverlayAfterPatch") &&
-      patchEffectBlock.includes("ignoreCache: true") &&
+      patchEffectBlock.includes("fetchOptions: { ignoreCache: true }") &&
       !patchEffectBlock.includes("setIsHourlyLoading(true)"),
     "live patch probability refresh must recompute legacy Gaussian in the background without showing a loading overlay",
   );

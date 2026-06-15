@@ -88,10 +88,18 @@ export async function runTests() {
   assert(
     chartSource.includes("NO_PATCH_CACHED_DETAIL_REFRESH_MS = DASHBOARD_REFRESH_POLICY_MS.observation") &&
       chartSource.includes("refreshCachedDetail") &&
-      chartSource.includes("fetchHourlyForecastForCity(city, { bypassLocalCache: true, resolution: targetResolution })") &&
+      chartSource.includes("runHourlyDetailFetch") &&
+      chartSource.includes("fetchOptions: { bypassLocalCache: true }") &&
       chartLogicSource.includes("options.bypassLocalCache") &&
       chartLogicSource.includes("const forceRefresh = Boolean(options.ignoreCache)"),
     "visible charts should bypass the five-minute browser detail cache every observation cadence without force-refreshing backend sources",
+  );
+  const componentHourlyFetchCalls = chartSource.match(/fetchHourlyForecastForCity\(city,/g) || [];
+  assert(
+    chartSource.includes("function useHourlyDetailFetcher") &&
+      componentHourlyFetchCalls.length === 1 &&
+      !/fetchHourlyForecastForCity\(city,[\s\S]*?\)\s*\.then\(/.test(chartSource),
+    "temperature chart should centralize full-detail fetch lifecycle in useHourlyDetailFetcher instead of duplicating then/catch branches across effects",
   );
   assert(
     chartSource.includes("preloadTemperatureChartCanvas"),
@@ -120,11 +128,12 @@ export async function runTests() {
   assert(
     chartSource.includes("activationRefreshKey") &&
       chartSource.includes("refreshActivatedCachedDetail") &&
-      chartSource.includes("fetchHourlyForecastForCity(city, { bypassLocalCache: true, resolution: targetResolution })"),
+      chartSource.includes("fetchOptions: { bypassLocalCache: true }") &&
+      chartSource.includes("applyOptions: { updateLiveTemp: true }"),
     "switching back to the terminal tab should refresh visible chart detail through cached backend data without forcing external sources",
   );
   assert(
-    chartSource.includes("fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })") &&
+    chartSource.includes("fetchOptions: { ignoreCache: true }") &&
       chartSource.includes("const mergedHourly = mergeHourlyWithLiveObservations(dataWithCurrentRow, prev, latestRow)") &&
       chartSource.includes("return mergedHourly;"),
     "visible chart fallback must refresh full city detail at the current chart resolution while preserving newer live observations",
@@ -325,7 +334,7 @@ export async function runTests() {
   assert(
     chartSource.includes("TRANSIENT_DETAIL_RETRY_DELAY_MS") &&
       chartSource.includes("scheduleTransientDetailRetry") &&
-      chartSource.includes("fetchHourlyForecastForCity(city, { bypassLocalCache: true, resolution: targetResolution })") &&
+      chartSource.includes("fetchOptions: { bypassLocalCache: true }") &&
       chartSource.includes("!retryScheduled"),
     "cold partial detail-batch misses should stay in loading state and retry cached detail once before showing unavailable",
   );
@@ -351,7 +360,7 @@ export async function runTests() {
     "live row and SSE patch merges must persist their hourly snapshots so returning to terminal restores runway history immediately",
   );
   const coldDetailFetchBlock =
-    /useEffect\(\(\) => \{\s*if \(!city\) \{[\s\S]*?fetchHourlyForecastForCity\(city, \{ resolution: targetResolution \}\)[\s\S]*?\n  \}, \[([\s\S]*?)\]\);/.exec(chartSource)?.[1] || "";
+    /useEffect\(\(\) => \{\s*if \(!city\) \{[\s\S]*?scheduleTransientDetailRetry[\s\S]*?runHourlyDetailFetch\(\{[\s\S]*?\n  \}, \[([\s\S]*?)\]\);/.exec(chartSource)?.[1] || "";
   assert(
     coldDetailFetchBlock.length > 0 &&
       !/^\s*row\s*,?\s*$/m.test(coldDetailFetchBlock),
@@ -362,8 +371,8 @@ export async function runTests() {
     .match(/setHourly\(data\);/g) || [];
   assert(
     rawSuccessfulSetHourlyCalls.length === 0 &&
-      (chartSource.match(/applySuccessfulHourlyDetail\(data/g) || []).length >= 5,
-    "all successful city detail fetch branches should use the shared success handler",
+      (chartSource.match(/applySuccessfulHourlyDetail\(data/g) || []).length === 1,
+    "all successful city detail fetch branches should flow through the shared fetcher and success handler once",
   );
   assert(
     chartSource.includes("const showDetailErrorBadge = !compact || isActive || isMaximized") &&

@@ -554,6 +554,84 @@ function readCachedHourlyForInitialRow(
   return null;
 }
 
+type HourlyDetailFetchOptions = {
+  ignoreCache?: boolean;
+  bypassLocalCache?: boolean;
+};
+
+type HourlyDetailFetchRequest = {
+  source: ChartDetailSource;
+  fetchOptions?: HourlyDetailFetchOptions;
+  applyOptions?: { updateLiveTemp?: boolean };
+  showUserError?: boolean;
+  isCancelled?: () => boolean;
+  onEmpty?: () => void;
+  onError?: () => void;
+  onSettled?: () => void;
+};
+
+function useHourlyDetailFetcher({
+  city,
+  targetResolution,
+  markDetailRequest,
+  markDetailDegraded,
+  applySuccessfulHourlyDetail,
+}: {
+  city: string;
+  targetResolution: string;
+  markDetailRequest: (source: ChartDetailSource) => void;
+  markDetailDegraded: (options?: { showUserError?: boolean }) => void;
+  applySuccessfulHourlyDetail: (data: HourlyForecast, options?: { updateLiveTemp?: boolean }) => void;
+}) {
+  return useCallback(
+    async ({
+      source,
+      fetchOptions = {},
+      applyOptions,
+      showUserError = false,
+      isCancelled,
+      onEmpty,
+      onError,
+      onSettled,
+    }: HourlyDetailFetchRequest) => {
+      const cancelled = () => Boolean(isCancelled?.());
+      if (!city || cancelled()) return null;
+
+      markDetailRequest(source);
+      try {
+        const data = await fetchHourlyForecastForCity(city, {
+          ...fetchOptions,
+          resolution: targetResolution,
+        });
+        if (cancelled()) return null;
+        if (!data) {
+          if (onEmpty) {
+            onEmpty();
+          } else {
+            markDetailDegraded({ showUserError });
+          }
+          return null;
+        }
+
+        applySuccessfulHourlyDetail(data, applyOptions);
+        return data;
+      } catch {
+        if (!cancelled()) {
+          if (onError) {
+            onError();
+          } else {
+            markDetailDegraded({ showUserError });
+          }
+        }
+        return null;
+      } finally {
+        if (!cancelled()) onSettled?.();
+      }
+    },
+    [city, targetResolution, markDetailRequest, markDetailDegraded, applySuccessfulHourlyDetail],
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────
 
 export function LiveTemperatureThresholdChart({
@@ -763,6 +841,14 @@ export function LiveTemperatureThresholdChart({
     }));
   }, [city, targetResolution, getLatestRowSnapshot]);
 
+  const runHourlyDetailFetch = useHourlyDetailFetcher({
+    city,
+    targetResolution,
+    markDetailRequest,
+    markDetailDegraded,
+    applySuccessfulHourlyDetail,
+  });
+
   useEffect(() => {
     if (!city || !currentRowObservationSignature) return;
     if (lastRowObservationSignatureRef.current === currentRowObservationSignature) return;
@@ -843,7 +929,6 @@ export function LiveTemperatureThresholdChart({
       setShowingStaleDetail(false);
     }
     setIsHourlyLoading(true);
-    markDetailRequest("network");
     let cancelled = false;
     let retryScheduled = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -853,45 +938,26 @@ export function LiveTemperatureThresholdChart({
       markDetailDegraded();
       retryTimer = setTimeout(() => {
         if (cancelled) return;
-        markDetailRequest("network");
-        fetchHourlyForecastForCity(city, { bypassLocalCache: true, resolution: targetResolution })
-          .then((data) => {
-            if (cancelled) return;
-            if (!data) {
-              markDetailDegraded({ showUserError: true });
-              return;
-            }
-            applySuccessfulHourlyDetail(data);
-          })
-          .catch(() => {
-            if (!cancelled) {
-              markDetailDegraded({ showUserError: true });
-            }
-          })
-          .finally(() => {
-            if (!cancelled) setIsHourlyLoading(false);
-          });
+        void runHourlyDetailFetch({
+          source: "network",
+          fetchOptions: { bypassLocalCache: true },
+          showUserError: true,
+          isCancelled: () => cancelled,
+          onSettled: () => setIsHourlyLoading(false),
+        });
       }, TRANSIENT_DETAIL_RETRY_DELAY_MS);
     };
 
     const timer = setTimeout(() => {
-      fetchHourlyForecastForCity(city, { resolution: targetResolution })
-        .then((data) => {
-          if (cancelled) return;
-          if (!data) {
-            scheduleTransientDetailRetry();
-            return;
-          }
-          applySuccessfulHourlyDetail(data);
-        })
-        .catch(() => {
-          if (!cancelled) {
-            markDetailDegraded({ showUserError: true });
-          }
-        })
-        .finally(() => {
-          if (!cancelled && !retryScheduled) setIsHourlyLoading(false);
-        });
+      void runHourlyDetailFetch({
+        source: "network",
+        showUserError: true,
+        isCancelled: () => cancelled,
+        onEmpty: scheduleTransientDetailRetry,
+        onSettled: () => {
+          if (!retryScheduled) setIsHourlyLoading(false);
+        },
+      });
     }, DETAIL_LOAD_BATCH_DELAY_MS);
 
     return () => {
@@ -911,8 +977,7 @@ export function LiveTemperatureThresholdChart({
     detailRetryNonce,
     getLatestRowSnapshot,
     markDetailDegraded,
-    markDetailRequest,
-    applySuccessfulHourlyDetail,
+    runHourlyDetailFetch,
   ]);
 
   useEffect(() => {
@@ -950,54 +1015,34 @@ export function LiveTemperatureThresholdChart({
 
     let cancelled = false;
     const refreshProbabilityOverlayAfterPatch = () => {
-      markDetailRequest("force_refresh");
-      fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })
-        .then((data) => {
-          if (cancelled) return;
-          if (!data) {
-            markDetailDegraded();
-            return;
-          }
-          applySuccessfulHourlyDetail(data);
-        })
-        .catch(() => {
-          if (!cancelled) {
-            markDetailDegraded();
-          }
-        });
+      void runHourlyDetailFetch({
+        source: "force_refresh",
+        fetchOptions: { ignoreCache: true },
+        isCancelled: () => cancelled,
+      });
     };
 
     refreshProbabilityOverlayAfterPatch();
     return () => {
       cancelled = true;
     };
-  }, [latestPatch, city, targetResolution, compact, isActive, isMaximized, getLatestRowSnapshot, markDetailDegraded, markDetailRequest, applySuccessfulHourlyDetail]);
+  }, [latestPatch, city, targetResolution, compact, isActive, isMaximized, getLatestRowSnapshot, runHourlyDetailFetch]);
 
   useEffect(() => {
     if (!resyncVersion || !city) return;
     let cancelled = false;
-    markDetailRequest("force_refresh");
-    fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })
-      .then((data) => {
-        if (cancelled) return;
-        if (!data) {
-          markDetailDegraded();
-          return;
-        }
-        applySuccessfulHourlyDetail(data);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          markDetailDegraded();
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setIsHourlyLoading(false);
-      });
+    void runHourlyDetailFetch({
+      source: "force_refresh",
+      fetchOptions: { ignoreCache: true },
+      isCancelled: () => cancelled,
+      onSettled: () => {
+        setIsHourlyLoading(false);
+      },
+    });
     return () => {
       cancelled = true;
     };
-  }, [resyncVersion, city, targetResolution, markDetailDegraded, markDetailRequest, applySuccessfulHourlyDetail]);
+  }, [resyncVersion, city, runHourlyDetailFetch]);
 
   // ── SSE fallback: visible charts refresh cached detail at observation cadence if patches stop. ──
   useEffect(() => {
@@ -1007,25 +1052,14 @@ export function LiveTemperatureThresholdChart({
     const refreshCachedDetail = () => {
       const now = Date.now();
       lastPatchAtRef.current = now;
-      markDetailRequest("network");
 
-      fetchHourlyForecastForCity(city, { bypassLocalCache: true, resolution: targetResolution })
-        .then((data) => {
-          if (cancelled) return;
-          if (!data) {
-            markDetailDegraded();
-            return;
-          }
-          applySuccessfulHourlyDetail(data, { updateLiveTemp: true });
-        })
-        .catch(() => {
-          if (!cancelled) {
-            markDetailDegraded();
-          }
-        })
-        .finally(() => {
-          if (!cancelled) setIsHourlyLoading(false);
-        });
+      void runHourlyDetailFetch({
+        source: "network",
+        fetchOptions: { bypassLocalCache: true },
+        applyOptions: { updateLiveTemp: true },
+        isCancelled: () => cancelled,
+        onSettled: () => setIsHourlyLoading(false),
+      });
     };
 
     const checkFallback = () => {
@@ -1040,7 +1074,7 @@ export function LiveTemperatureThresholdChart({
       cancelled = true;
       clearInterval(id);
     };
-  }, [city, compact, isActive, isMaximized, targetResolution, markDetailDegraded, markDetailRequest, applySuccessfulHourlyDetail]);
+  }, [city, compact, isActive, isMaximized, targetResolution, runHourlyDetailFetch]);
 
   useEffect(() => {
     if (!activationRefreshKey) return;
@@ -1055,25 +1089,14 @@ export function LiveTemperatureThresholdChart({
 
       lastForegroundRefreshAtRef.current = now;
       lastPatchAtRef.current = now;
-      markDetailRequest("network");
 
-      fetchHourlyForecastForCity(city, { bypassLocalCache: true, resolution: targetResolution })
-        .then((data) => {
-          if (cancelled) return;
-          if (!data) {
-            markDetailDegraded();
-            return;
-          }
-          applySuccessfulHourlyDetail(data, { updateLiveTemp: true });
-        })
-        .catch(() => {
-          if (!cancelled) {
-            markDetailDegraded();
-          }
-        })
-        .finally(() => {
-          if (!cancelled) setIsHourlyLoading(false);
-        });
+      void runHourlyDetailFetch({
+        source: "network",
+        fetchOptions: { bypassLocalCache: true },
+        applyOptions: { updateLiveTemp: true },
+        isCancelled: () => cancelled,
+        onSettled: () => setIsHourlyLoading(false),
+      });
     };
 
     refreshActivatedCachedDetail();
@@ -1087,9 +1110,7 @@ export function LiveTemperatureThresholdChart({
     isActive,
     isMaximized,
     targetResolution,
-    markDetailDegraded,
-    markDetailRequest,
-    applySuccessfulHourlyDetail,
+    runHourlyDetailFetch,
   ]);
 
   useEffect(() => {
@@ -1110,22 +1131,13 @@ export function LiveTemperatureThresholdChart({
 
       lastForegroundRefreshAtRef.current = now;
       lastPatchAtRef.current = now;
-      markDetailRequest("network");
 
-      fetchHourlyForecastForCity(city, { bypassLocalCache: true, resolution: targetResolution })
-        .then((data) => {
-          if (cancelled) return;
-          if (!data) {
-            markDetailDegraded();
-            return;
-          }
-          applySuccessfulHourlyDetail(data, { updateLiveTemp: true });
-        })
-        .catch(() => {
-          if (!cancelled) {
-            markDetailDegraded();
-          }
-        });
+      void runHourlyDetailFetch({
+        source: "network",
+        fetchOptions: { bypassLocalCache: true },
+        applyOptions: { updateLiveTemp: true },
+        isCancelled: () => cancelled,
+      });
     };
 
     const handleVisibilityChange = () => {
@@ -1140,7 +1152,7 @@ export function LiveTemperatureThresholdChart({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", refreshForegroundFullDetail);
     };
-  }, [city, compact, isActive, isMaximized, targetResolution, markDetailDegraded, markDetailRequest, applySuccessfulHourlyDetail]);
+  }, [city, compact, isActive, isMaximized, targetResolution, runHourlyDetailFetch]);
 
   useEffect(() => {
     if (!city || !currentCityLocalDate) return;
@@ -1150,27 +1162,20 @@ export function LiveTemperatureThresholdChart({
 
     localDayRolloverFetchDateRef.current = currentCityLocalDate;
     let cancelled = false;
-    markDetailRequest("force_refresh");
-    fetchHourlyForecastForCity(city, { ignoreCache: true, resolution: targetResolution })
-      .then((data) => {
-        if (cancelled) return;
-        if (!data) {
-          markDetailDegraded();
-          return;
-        }
-        applySuccessfulHourlyDetail(data);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          localDayRolloverFetchDateRef.current = "";
-          markDetailDegraded();
-        }
-      });
+    void runHourlyDetailFetch({
+      source: "force_refresh",
+      fetchOptions: { ignoreCache: true },
+      isCancelled: () => cancelled,
+      onError: () => {
+        localDayRolloverFetchDateRef.current = "";
+        markDetailDegraded();
+      },
+    });
 
     return () => {
       cancelled = true;
     };
-  }, [city, currentCityLocalDate, hourly?.localDate, row?.local_date, targetResolution, markDetailDegraded, markDetailRequest, applySuccessfulHourlyDetail]);
+  }, [city, currentCityLocalDate, hourly?.localDate, row?.local_date, targetResolution, markDetailDegraded, runHourlyDetailFetch]);
 
   const chartHourly = useMemo<HourlyForecast>(() => {
     if (!hourly) return hourly;
