@@ -19,7 +19,7 @@ import {
   buildFullDayChartData,
   buildIntDegreeTicks,
   buildRunwayPlates,
-  fetchHourlyForecastForCity,
+  fetchFullChartDetailForCity,
   fetchLiveObservationForCity,
   getActiveTemperatureSeries,
   getDebPeakWindowRange,
@@ -41,10 +41,10 @@ import {
   selectCompactSecondaryTemp,
   selectDisplayRunwayTemp,
   selectInitialHourlyForRowChange,
-  seedHourlyForecastFromRow,
+  seedChartRenderStateFromRow,
   shouldPollLiveChart,
   validNumber,
-  type HourlyForecast,
+  type ChartRenderState,
   type ObservationSnapshot,
 } from "@/components/dashboard/scan-terminal/temperature-chart-logic";
 export { clearCityDetailCache } from "@/components/dashboard/scan-terminal/temperature-chart-logic";
@@ -125,7 +125,7 @@ function formatCityLocalDateTime(tzOffsetSeconds: number | null | undefined) {
   return `${y}-${mo}-${d} ${hh}:${mm}:${ss}`;
 }
 
-function getLiveTempFromHourly(data: HourlyForecast) {
+function getLiveTempFromHourly(data: ChartRenderState) {
   return validNumber(data?.airportCurrent?.temp) ?? validNumber(data?.airportPrimary?.temp) ?? null;
 }
 
@@ -268,7 +268,7 @@ function patchObservationTimeForFreshness(patch: { changes?: Record<string, unkn
   ).trim() || null;
 }
 
-function getWundergroundDailyHigh(hourly: HourlyForecast) {
+function getWundergroundDailyHigh(hourly: ChartRenderState) {
   return validNumber(hourly?.wundergroundCurrent?.max_so_far) ?? null;
 }
 
@@ -319,7 +319,7 @@ function sourceStatusLabel(status: string | null | undefined, isEn: boolean) {
 
 function buildSourceCadenceSummary(
   row: ScanOpportunityRow | null,
-  hourly: HourlyForecast,
+  hourly: ChartRenderState,
   isEn: boolean,
 ): SourceCadenceSummary | null {
   const primary = hourly?.airportPrimary || hourly?.airportCurrent || null;
@@ -355,7 +355,7 @@ function buildSourceCadenceSummary(
 
 function buildAdvancedWeatherVariableItems(
   row: ScanOpportunityRow | null,
-  hourly: HourlyForecast,
+  hourly: ChartRenderState,
   isEn: boolean,
 ): AdvancedWeatherVariableItem[] {
   const primary = hourly?.airportPrimary || hourly?.airportCurrent || null;
@@ -578,7 +578,7 @@ function useHourlyDetailFetcher({
   targetResolution: string;
   markDetailRequest: (source: ChartDetailSource) => void;
   markDetailDegraded: (options?: { showUserError?: boolean }) => void;
-  applySuccessfulHourlyDetail: (data: HourlyForecast, options?: { updateLiveTemp?: boolean }) => void;
+  applySuccessfulHourlyDetail: (data: ChartRenderState, options?: { updateLiveTemp?: boolean }) => void;
 }) {
   return useCallback(
     async ({
@@ -596,7 +596,7 @@ function useHourlyDetailFetcher({
 
       markDetailRequest(source);
       try {
-        const data = await fetchHourlyForecastForCity(city, {
+        const data = await fetchFullChartDetailForCity(city, {
           ...fetchOptions,
           resolution: targetResolution,
         });
@@ -660,7 +660,7 @@ export function LiveTemperatureThresholdChart({
   activationRefreshKey?: number;
   slotIndex?: number;
 }) {
-  const [hourly, setHourly] = useState<HourlyForecast>(null);
+  const [hourly, setHourly] = useState<ChartRenderState>(null);
   const city = String(row?.city || "").toLowerCase().trim();
   const latestPatch = useLatestPatch(city);
   const resyncVersion = useSseResyncVersion();
@@ -807,15 +807,15 @@ export function LiveTemperatureThresholdChart({
     return () => clearInterval(id);
   }, [row?.tz_offset_seconds]);
 
-  const commitHourlySnapshot = useCallback((buildNext: (previous: HourlyForecast) => HourlyForecast) => {
+  const commitHourlySnapshot = useCallback((buildNext: (previous: ChartRenderState) => ChartRenderState) => {
     setHourly((prev) => buildNext(prev));
   }, []);
 
-  const applySuccessfulHourlyDetail = useCallback((data: HourlyForecast, options?: { updateLiveTemp?: boolean }) => {
+  const applySuccessfulHourlyDetail = useCallback((data: ChartRenderState, options?: { updateLiveTemp?: boolean }) => {
     if (!data) return;
     const loadedAtMs = Date.now();
     const latestRow = getLatestRowSnapshot();
-    const rowSeed = seedHourlyForecastFromRow(latestRow);
+    const rowSeed = seedChartRenderStateFromRow(latestRow);
     const dataWithCurrentRow = mergeHourlyWithLiveObservations(data, rowSeed, latestRow);
     hasLoadedHourlyDetailRef.current = true;
     if (options?.updateLiveTemp) {
@@ -859,7 +859,7 @@ export function LiveTemperatureThresholdChart({
     }
     commitHourlySnapshot((prev) =>
       mergeObservationSnapshotIntoHourly(
-        prev ?? seedHourlyForecastFromRow(getLatestRowSnapshot()),
+        prev ?? seedChartRenderStateFromRow(getLatestRowSnapshot()),
         snapshot,
       ),
     );
@@ -875,7 +875,7 @@ export function LiveTemperatureThresholdChart({
     if (lastRowObservationSignatureRef.current === currentRowObservationSignature) return;
     const now = Date.now();
     lastRowObservationSignatureRef.current = currentRowObservationSignature;
-    const rowSeed = seedHourlyForecastFromRow(row);
+    const rowSeed = seedChartRenderStateFromRow(row);
     const temp = getLiveTempFromHourly(rowSeed);
     if (temp !== null) setLiveTemp(temp);
     commitHourlySnapshot((prev) => mergeRowObservationIntoHourly(prev, row));
@@ -1003,7 +1003,7 @@ export function LiveTemperatureThresholdChart({
     const tempValue = validNumber(latestPatch.changes.temp);
     if (tempValue !== null) setLiveTemp(tempValue);
     commitHourlySnapshot((prev) => {
-      const mergedHourly = mergePatchIntoHourly(prev ?? seedHourlyForecastFromRow(getLatestRowSnapshot()), latestPatch);
+      const mergedHourly = mergePatchIntoHourly(prev ?? seedChartRenderStateFromRow(getLatestRowSnapshot()), latestPatch);
       return mergedHourly;
     });
     setChartFreshness((prev) => ({
@@ -1160,7 +1160,7 @@ export function LiveTemperatureThresholdChart({
     };
   }, [city, currentCityLocalDate, hourly?.localDate, row?.local_date, targetResolution, markDetailDegraded, runHourlyDetailFetch]);
 
-  const chartHourly = useMemo<HourlyForecast>(() => {
+  const chartHourly = useMemo<ChartRenderState>(() => {
     if (!hourly) return hourly;
     const loadedLocalDate = hourly.localDate || row?.local_date || "";
     if (currentCityLocalDate && currentCityLocalDate !== loadedLocalDate) {
@@ -1681,7 +1681,7 @@ export function LiveTemperatureThresholdChart({
 
 export function __buildTemperatureChartDataForTest(
   row: ScanOpportunityRow | null,
-  hourly: HourlyForecast,
+  hourly: ChartRenderState,
   _timeframe = "1D",
   isEn = false,
 ) {

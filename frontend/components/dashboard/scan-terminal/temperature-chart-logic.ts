@@ -109,7 +109,7 @@ function isTemperatureSeriesVisibleByDefault(city: string, seriesKey: string) {
 
 function prefersHighFrequencyRunwayResolution(
   row: ScanOpportunityRow | null,
-  hourly: HourlyForecast,
+  hourly: ChartRenderState,
 ) {
   const cityKey = normalizeCityKey(row?.city);
   if ((SETTLEMENT_RUNWAY_PAIRS[cityKey] || []).length > 0) return true;
@@ -590,7 +590,7 @@ function readHourlyDetailSnapshotAgeMs(
 function readCachedHourlyForInitialRow(
   city: string,
   preferredResolution: string,
-): HourlyForecast {
+): ChartRenderState {
   const cityKey = normalizeCityKey(city);
   if (!cityKey) return null;
   const resolutions = [
@@ -777,7 +777,7 @@ function laterLocalDate(left?: string | null, right?: string | null) {
   return isDate(a) ? a : isDate(b) ? b : null;
 }
 
-function resolveChartLocalDate(row: ScanOpportunityRow | null, hourly: HourlyForecast) {
+function resolveChartLocalDate(row: ScanOpportunityRow | null, hourly: ChartRenderState) {
   const hourlyDate = hourly?.localDate || dateFromLocalTime(hourly?.localTime);
   const rowDate = row?.local_date || dateFromLocalTime(row?.local_time);
   return (
@@ -871,7 +871,7 @@ function appendLatestAirportObservation(
   return merged;
 }
 
-function isMgmAirportPrimary(hourly: HourlyForecast) {
+function isMgmAirportPrimary(hourly: ChartRenderState) {
   const primary = hourly?.airportPrimary;
   const sourceTokens = [
     primary?.source_code,
@@ -881,7 +881,7 @@ function isMgmAirportPrimary(hourly: HourlyForecast) {
   return sourceTokens.some((value) => value === "mgm" || value.includes("turkey_mgm"));
 }
 
-function canonicalAirportPrimarySourceLabel(hourly: HourlyForecast) {
+function canonicalAirportPrimarySourceLabel(hourly: ChartRenderState) {
   const primary = hourly?.airportPrimary;
   const tokens = [
     primary?.source_code,
@@ -900,7 +900,7 @@ function canonicalAirportPrimarySourceLabel(hourly: HourlyForecast) {
 }
 
 function airportCodeForSeriesLabel(
-  hourly: HourlyForecast,
+  hourly: ChartRenderState,
   row?: ScanOpportunityRow | null,
 ) {
   const candidates = [
@@ -933,7 +933,7 @@ function isGenericAirportPrimaryLabel(label: string) {
 }
 
 function airportPrimarySeriesLabel(
-  hourly: HourlyForecast,
+  hourly: ChartRenderState,
   isHKO: boolean,
   row?: ScanOpportunityRow | null,
 ) {
@@ -956,7 +956,7 @@ function airportPrimarySeriesLabel(
 }
 
 function airportPrimaryUsesMetarFallback(
-  hourly: HourlyForecast,
+  hourly: ChartRenderState,
   isHKO: boolean,
   row?: ScanOpportunityRow | null,
 ) {
@@ -969,7 +969,7 @@ function airportPrimaryUsesMetarFallback(
   return !payloadLabel || isGenericAirportPrimaryLabel(payloadLabel);
 }
 
-function metarStationCodeForSeries(row?: ScanOpportunityRow | null, hourly?: HourlyForecast) {
+function metarStationCodeForSeries(row?: ScanOpportunityRow | null, hourly?: ChartRenderState) {
   const candidates = [
     row?.metar_context?.station,
     hourly?.settlementStationCode,
@@ -981,13 +981,13 @@ function metarStationCodeForSeries(row?: ScanOpportunityRow | null, hourly?: Hou
     .find((value) => /^[A-Z0-9]{4}$/.test(value)) || "";
 }
 
-function airportPrimaryMatchesMetarStation(hourly: HourlyForecast, row?: ScanOpportunityRow | null) {
+function airportPrimaryMatchesMetarStation(hourly: ChartRenderState, row?: ScanOpportunityRow | null) {
   const primaryCode = airportCodeForSeriesLabel(hourly, row);
   const metarCode = metarStationCodeForSeries(row, hourly);
   return Boolean(primaryCode && metarCode && primaryCode === metarCode);
 }
 
-function airportPrimaryObservationPoints(hourly: HourlyForecast) {
+function airportPrimaryObservationPoints(hourly: ChartRenderState) {
   return appendLatestAirportObservation(
     hourly?.airportPrimaryTodayObs,
     hourly?.airportPrimary,
@@ -1016,7 +1016,7 @@ function maxObservationValue(obs: Array<{ ts: number; value: number }>) {
 
 function getRunwayHistoryObservationMetrics(
   row: ScanOpportunityRow | null,
-  hourly: HourlyForecast,
+  hourly: ChartRenderState,
 ) {
   const tzOffset = row?.tz_offset_seconds ?? 0;
   const localDateStr = resolveChartLocalDate(row, hourly);
@@ -1061,7 +1061,7 @@ function observationSetContains(
 
 function getObservationDisplayMetrics(
   row: ScanOpportunityRow | null,
-  hourly: HourlyForecast,
+  hourly: ChartRenderState,
   settlementPlate?: { maxTemp: number | null } | null,
 ) {
   const tzOffset = row?.tz_offset_seconds ?? 0;
@@ -1372,7 +1372,7 @@ function mergeRunwayPlateHistory(
   return Object.keys(result).length ? result : undefined;
 }
 
-function hasFullHourlyDetailPayload(hourly: HourlyForecast) {
+function hasFullHourlyDetailPayload(hourly: ChartRenderState) {
   if (!hourly) return false;
   const probabilityBuckets =
     hourly.probabilities?.distribution_all ||
@@ -1389,7 +1389,7 @@ function hasFullHourlyDetailPayload(hourly: HourlyForecast) {
   );
 }
 
-function toFullChartDetail(hourly: HourlyForecast): FullChartDetail | null {
+function toFullChartDetail(hourly: ChartRenderState): FullChartDetail | null {
   if (!hourly || !hasFullHourlyDetailPayload(hourly)) return null;
   if ((hourly as any).__detailKind === "full_chart_detail") return hourly as FullChartDetail;
   return {
@@ -1470,7 +1470,7 @@ function latestRunwayHistoryRank(
 }
 
 function latestHourlyObservationRank(
-  hourly: HourlyForecast,
+  hourly: ChartRenderState,
   row: ScanOpportunityRow | null,
 ) {
   if (!hourly) return null;
@@ -1488,8 +1488,8 @@ function latestHourlyObservationRank(
 }
 
 function shouldKeepLiveHourlyDetailPayload(
-  base: HourlyForecast,
-  live: HourlyForecast,
+  base: ChartRenderState,
+  live: ChartRenderState,
   row: ScanOpportunityRow | null,
 ) {
   if (!base || !live) return false;
@@ -1500,8 +1500,8 @@ function shouldKeepLiveHourlyDetailPayload(
 }
 
 function hourlyLocalDatesConflict(
-  base: HourlyForecast,
-  live: HourlyForecast,
+  base: ChartRenderState,
+  live: ChartRenderState,
   row: ScanOpportunityRow | null,
 ) {
   const baseDate = String(base?.localDate || "").trim();
@@ -1563,7 +1563,7 @@ function seedRunwayPlateHistoryFromRow(
   return Object.keys(history).length ? history : existing;
 }
 
-type HourlyForecast = {
+type ChartRenderState = {
   forecastTodayHigh?: number | null;
   debPrediction?: number | null;
   debQuality?: Pick<DebForecast, "quality_tier" | "recommendation" | "recent_hit_rate" | "recent_samples" | "recent_hits" | "recent_mae"> | null;
@@ -1591,11 +1591,11 @@ type HourlyForecast = {
   airportPrimaryTodayObs?: RawObsPoint[];
 } | null;
 
-type FullChartDetail = NonNullable<HourlyForecast> & {
+type FullChartDetail = NonNullable<ChartRenderState> & {
   readonly __detailKind: "full_chart_detail";
 };
 
-function seedHourlyForecastFromRow(row: ScanOpportunityRow | null): HourlyForecast {
+function seedChartRenderStateFromRow(row: ScanOpportunityRow | null): ChartRenderState {
   if (!row) return null;
   const current = rowCurrentObservation(row);
   const sourceCode = current?.sourceCode || undefined;
@@ -1658,10 +1658,10 @@ function seedHourlyForecastFromRow(row: ScanOpportunityRow | null): HourlyForeca
 }
 
 function mergeHourlyWithLiveObservations(
-  base: HourlyForecast,
-  live: HourlyForecast,
+  base: ChartRenderState,
+  live: ChartRenderState,
   row: ScanOpportunityRow | null,
-): HourlyForecast {
+): ChartRenderState {
   if (!base) return live;
   if (!live) return base;
   if (hourlyLocalDatesConflict(base, live, row)) return base;
@@ -1708,9 +1708,9 @@ function mergeHourlyWithLiveObservations(
 }
 
 function mergeObservationSnapshotIntoHourly(
-  prev: HourlyForecast,
+  prev: ChartRenderState,
   snapshot: ObservationSnapshot | null | undefined,
-): HourlyForecast {
+): ChartRenderState {
   const live = observationSnapshotToHourly(snapshot);
   if (!prev) return live;
   if (!live) return prev;
@@ -1718,10 +1718,10 @@ function mergeObservationSnapshotIntoHourly(
 }
 
 function mergeRowObservationIntoHourly(
-  prev: HourlyForecast,
+  prev: ChartRenderState,
   row: ScanOpportunityRow | null,
-): HourlyForecast {
-  const seeded = seedHourlyForecastFromRow(row);
+): ChartRenderState {
+  const seeded = seedChartRenderStateFromRow(row);
   if (!prev) return seeded;
   return mergeHourlyWithLiveObservations(prev, seeded, row);
 }
@@ -1732,12 +1732,12 @@ function selectInitialHourlyForRowChange({
   previousHourly,
   row,
 }: {
-  cachedHourly?: HourlyForecast;
+  cachedHourly?: ChartRenderState;
   previousCity?: string | null;
-  previousHourly?: HourlyForecast;
+  previousHourly?: ChartRenderState;
   row: ScanOpportunityRow | null;
-}): HourlyForecast {
-  const seeded = seedHourlyForecastFromRow(row);
+}): ChartRenderState {
+  const seeded = seedChartRenderStateFromRow(row);
   const nextCity = normalizeCityKey(row?.city);
   if (!nextCity) return seeded;
 
@@ -1752,7 +1752,7 @@ function selectInitialHourlyForRowChange({
   return seeded;
 }
 
-type HourlyForecastFetchOptions = {
+type ChartDetailFetchOptions = {
   bypassLocalCache?: boolean;
   ignoreCache?: boolean;
   resolution?: string;
@@ -1890,7 +1890,7 @@ function observationPayloadToSnapshot(payload: CityObservationPayload | null | u
   };
 }
 
-function observationSnapshotToHourly(snapshot: ObservationSnapshot | null | undefined): HourlyForecast {
+function observationSnapshotToHourly(snapshot: ObservationSnapshot | null | undefined): ChartRenderState {
   if (!snapshot || typeof snapshot !== "object") return null;
   const airportCurrent = normalizeObservationCondition(snapshot.airport_current || snapshot.current);
   const airportPrimary = normalizeObservationCondition(snapshot.airport_primary || snapshot.airport_current || snapshot.current);
@@ -1933,10 +1933,10 @@ function observationSnapshotToHourly(snapshot: ObservationSnapshot | null | unde
   };
 }
 
-function parseHourlyForecastFromCityDetail(json: CityDetail | null): FullChartDetail | null {
+function parseFullChartDetailFromCityDetail(json: CityDetail | null): FullChartDetail | null {
   const hourlySource = (json as any)?.hourly ?? (json as any)?.timeseries?.hourly;
   if (!json || !hourlySource) return null;
-  const parsed: HourlyForecast = {
+  const parsed: ChartRenderState = {
     forecastTodayHigh: json.forecast?.today_high ?? null,
     debPrediction: json.deb?.prediction ?? (json as any)?.overview?.deb_prediction ?? null,
     debQuality: json.deb ? {
@@ -2001,7 +2001,7 @@ function primeCityDetailCache(
   resolution: string,
   detail: CityDetail | null | undefined,
 ): FullChartDetail | null {
-  let data = parseHourlyForecastFromCityDetail(detail || null);
+  let data = parseFullChartDetailFromCityDetail(detail || null);
   if (!data) return null;
   const cacheKey = hourlyCacheKey(city, resolution);
   data = preserveCachedRunwayHistory(cacheKey, data);
@@ -2176,9 +2176,9 @@ async function fetchLiveObservationForCity(city: string): Promise<ObservationSna
     .catch(() => null);
 }
 
-async function fetchHourlyForecastForCity(
+async function fetchFullChartDetailForCity(
   city: string,
-  options: HourlyForecastFetchOptions = {},
+  options: ChartDetailFetchOptions = {},
 ): Promise<FullChartDetail | null> {
   const resParam = options.resolution || "10m";
   const cacheKey = hourlyCacheKey(city, resParam);
@@ -2232,7 +2232,7 @@ function shouldPollLiveChart({
 
 function getLiveObservationLabels(
   row: ScanOpportunityRow | null,
-  hourly: HourlyForecast,
+  hourly: ChartRenderState,
 ) {
   const normalizedKey = normalizeCityKey(row?.city);
   const runwaySensorCities = new Set([
@@ -2316,19 +2316,19 @@ function getLiveObservationLabels(
 }
 
 function mergePatchIntoHourly(
-  prev: HourlyForecast,
+  prev: ChartRenderState,
   patch: CityPatch,
-): HourlyForecast {
+): ChartRenderState {
   const changes = patch.changes || {};
   const tempValue = validNumber(changes.temp);
   const observedAtUtc = typeof changes.observed_at_utc === "string" ? changes.observed_at_utc : null;
   const obsTime = observedAtUtc || (typeof changes.obs_time === "string" ? changes.obs_time : null);
   const source = typeof changes.source === "string" ? changes.source : "";
   const explicitHourlyPatch = changes.hourly && typeof changes.hourly === "object"
-    ? changes.hourly as Partial<NonNullable<HourlyForecast>>
+    ? changes.hourly as Partial<NonNullable<ChartRenderState>>
     : {};
 
-  const next: NonNullable<HourlyForecast> = {
+  const next: NonNullable<ChartRenderState> = {
     ...(prev || {
       forecastTodayHigh: null,
       debPrediction: null,
@@ -2470,7 +2470,7 @@ function parseRunwayHistoryTime(
 
 function buildRunwayHistorySeries(
   row: ScanOpportunityRow | null,
-  hourly: HourlyForecast,
+  hourly: ChartRenderState,
   tzOffset: number,
   localDateStr: string,
   minPoints = 2,
@@ -2607,7 +2607,7 @@ function formatDailyDateLabel(dateStr: string): string {
 
 function buildDailyChartData(
   row: ScanOpportunityRow | null,
-  hourly: HourlyForecast,
+  hourly: ChartRenderState,
   daysCount: number,
 ): { data: Array<Record<string, string | number | null>>; series: EvidenceSeries[] } {
   const localDateStr = resolveChartLocalDate(row, hourly);
@@ -2700,7 +2700,7 @@ function addLocalDayAxisSlots(timeline: Set<number>, bounds: LocalDayBounds | nu
 
 function resolveFullDayFallbackAnchor(
   row: ScanOpportunityRow | null,
-  hourly: HourlyForecast,
+  hourly: ChartRenderState,
   tzOffsetSeconds: number,
   localDateStr: string,
 ) {
@@ -2792,7 +2792,7 @@ function addHourlyTimesToTimeline(
 }
 
 function resolveModelCurveTimes(
-  hourly: HourlyForecast,
+  hourly: ChartRenderState,
   modelTemps: Array<number | null>,
 ) {
   if (hourly?.modelTimes?.length) return hourly.modelTimes;
@@ -2827,7 +2827,7 @@ function probabilityBucketRange(bucket: ProbabilityBucket, value: number) {
 
 function buildLegacyGaussianProbabilityOverlay(
   row: ScanOpportunityRow | null,
-  hourly: HourlyForecast,
+  hourly: ChartRenderState,
 ): ProbabilityOverlay | null {
   const source = hourly?.probabilities || null;
   const rowBuckets = ((row as any)?.distribution_full || (row as any)?.distribution_preview || []) as ProbabilityBucket[];
@@ -2880,7 +2880,7 @@ function buildLegacyGaussianProbabilityOverlay(
 
 function buildFullDayChartData(
   row: ScanOpportunityRow | null,
-  hourly: HourlyForecast,
+  hourly: ChartRenderState,
   isEn: boolean,
 ): { data: Array<Record<string, any>>; series: EvidenceSeries[]; probabilityOverlay: ProbabilityOverlay | null } {
   const tzOffset = row?.tz_offset_seconds ?? 0;
@@ -3510,7 +3510,7 @@ export {
   buildIntDegreeTicks,
   buildModelSummaryCards,
   buildRunwayPlates,
-  fetchHourlyForecastForCity,
+  fetchFullChartDetailForCity,
   fetchLiveObservationForCity,
   getActiveTemperatureSeries,
   getTemperatureSeriesForRunwayDetailsMode,
@@ -3534,7 +3534,7 @@ export {
   selectCompactSecondaryTemp,
   selectDisplayRunwayTemp,
   selectInitialHourlyForRowChange,
-  seedHourlyForecastFromRow,
+  seedChartRenderStateFromRow,
   seriesStats,
   shouldPollLiveChart,
   observationPayloadToSnapshot,
@@ -3543,4 +3543,4 @@ export {
   rememberCityDetailBatchDiagnostics as __rememberCityDetailBatchDiagnosticsForTest,
 };
 
-export type { EvidenceSeries, FullChartDetail, HourlyForecast, ObservationSnapshot, PeakGlowMeta, PeakGlowState, ProbabilityOverlay };
+export type { EvidenceSeries, FullChartDetail, ChartRenderState, ObservationSnapshot, PeakGlowMeta, PeakGlowState, ProbabilityOverlay };

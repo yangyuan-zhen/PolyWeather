@@ -11,7 +11,7 @@ import {
   readCachedHourlyForInitialRow,
   rememberHourlyDetailSnapshot,
   selectInitialHourlyForRowChange,
-  seedHourlyForecastFromRow,
+  seedChartRenderStateFromRow,
   toFullChartDetail,
   _hourlyCache,
 } from "@/components/dashboard/scan-terminal/temperature-chart-logic";
@@ -434,7 +434,7 @@ export function runTests() {
       airport_max_so_far: 29,
     },
   } as any;
-  const seededGuangzhou = seedHourlyForecastFromRow(guangzhouRow);
+  const seededGuangzhou = seedChartRenderStateFromRow(guangzhouRow);
   const guangzhouLiveChart = buildFullDayChartData(guangzhouRow, seededGuangzhou, false);
   const guangzhouSettlementRunway = guangzhouLiveChart.series.find((item) => item.key === "runway_02L_20R");
   assert(
@@ -851,7 +851,7 @@ export function runTests() {
     tz_offset_seconds: 8 * 3600,
   } as any;
   const shenzhenFullDetail = {
-    ...seedHourlyForecastFromRow(shenzhenRow),
+    ...seedChartRenderStateFromRow(shenzhenRow),
     localDate: "2026-06-10",
     localTime: "12:00",
     times: ["10:00", "11:00", "12:00"],
@@ -899,7 +899,7 @@ export function runTests() {
   );
 
   const hongKongCachedDetail = {
-    ...seedHourlyForecastFromRow({ ...shenzhenRow, city: "hongkong" } as any),
+    ...seedChartRenderStateFromRow({ ...shenzhenRow, city: "hongkong" } as any),
     localDate: "2026-06-10",
     times: ["10:00", "11:00"],
     temps: [29.5, 30.2],
@@ -956,14 +956,14 @@ export function runTests() {
     tz_offset_seconds: 8 * 3600,
     metar_context: { source: "amsc_awos" },
   } as any;
-  rememberHourlyDetailSnapshot("chengdu", "1m", seedHourlyForecastFromRow(cachedChengduRow) as any);
+  rememberHourlyDetailSnapshot("chengdu", "1m", seedChartRenderStateFromRow(cachedChengduRow) as any);
   assert(
     !_hourlyCache.has(chengduCacheKey),
     "instant-restore cache must not persist a row-only seed that would block the full detail fetch",
   );
 
   const cachedChengduDetail = toFullChartDetail({
-    ...seedHourlyForecastFromRow(cachedChengduRow),
+    ...seedChartRenderStateFromRow(cachedChengduRow),
     localDate: "2026-06-15",
     times: ["08:00", "09:00"],
     temps: [25.8, 26.4],
@@ -1063,7 +1063,7 @@ export function runTests() {
       tz_offset_seconds: 0,
     } as any;
     const cacheDetail = toFullChartDetail({
-      ...seedHourlyForecastFromRow(row),
+      ...seedChartRenderStateFromRow(row),
       times: ["09:00"],
       temps: [20 + i / 100],
       modelTimes: ["09:00"],
