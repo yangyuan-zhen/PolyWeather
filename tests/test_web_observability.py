@@ -1518,6 +1518,127 @@ def test_chart_data_cache_hit_overlays_latest_cwa_from_airport_obs_log(monkeypat
     assert payload["airport_current"]["source_code"] == "cwa"
 
 
+def test_full_detail_batch_overlays_latest_official_observations_from_airport_obs_log(monkeypatch):
+    import asyncio
+
+    class FakeCache:
+        def get_city_cache(self, kind, city):
+            assert kind == "full"
+            if city == "tokyo":
+                return {
+                    "payload": {
+                        "name": city,
+                        "display_name": "Tokyo",
+                        "temp_symbol": "°C",
+                        "local_date": "2026-06-14",
+                        "local_time": "19:00",
+                        "current": {
+                            "temp": 23.0,
+                            "source_code": "metar",
+                            "obs_time": "2026-06-14T10:00:00+00:00",
+                        },
+                        "airport_current": {
+                            "temp": 23.0,
+                            "source_code": "metar",
+                            "obs_time": "2026-06-14T10:00:00+00:00",
+                        },
+                    },
+                }
+            return {
+                "payload": {
+                    "name": city,
+                    "display_name": "Taipei",
+                    "temp_symbol": "°C",
+                    "local_date": "2026-06-14",
+                    "local_time": "18:00",
+                    "current": {
+                        "temp": 26.0,
+                        "source_code": "cwa",
+                        "obs_time": "2026-06-14T10:00:00+00:00",
+                    },
+                    "airport_current": {
+                        "temp": 26.0,
+                        "source_code": "cwa",
+                        "obs_time": "2026-06-14T10:00:00+00:00",
+                    },
+                },
+            }
+
+        def get_latest_raw_observation(self, source, city):
+            return None
+
+        def get_airport_obs_recent(self, icao, minutes=30):
+            if icao == "44166":
+                return [
+                    {
+                        "icao": "44166",
+                        "city": "tokyo",
+                        "temp_c": 24.0,
+                        "obs_time": "2026-06-16T06:00:00+09:00",
+                        "created_at": "2026-06-15T21:00:15+00:00",
+                    }
+                ]
+            if icao == "466920":
+                return [
+                    {
+                        "icao": "466920",
+                        "city": "taipei",
+                        "temp_c": 29.4,
+                        "obs_time": "2026-06-16T15:30:00+08:00",
+                        "created_at": "2026-06-16T07:30:15+00:00",
+                    }
+                ]
+            return []
+
+    class FakeWeather:
+        def fetch_jma_amedas_official_nearby(self, city, use_fahrenheit=False):
+            return []
+
+        def fetch_jma_amedas_current(self, city, use_fahrenheit=False):
+            return None
+
+        def fetch_cwa_taipei_settlement_current(self):
+            return None
+
+    city_api._CITY_DETAIL_PAYLOAD_CACHE.clear()
+    city_api._CITY_DETAIL_PAYLOAD_CACHE_TS.clear()
+    monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
+    monkeypatch.setattr(city_api.legacy_routes, "_weather", FakeWeather())
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "_overlay_latest_wunderground_current",
+        lambda city, payload: payload,
+    )
+
+    _, tokyo = asyncio.run(
+        city_api._build_city_detail_batch_item_async(
+            "tokyo",
+            force_refresh=False,
+            market_slug=None,
+            target_date=None,
+            resolution="10m",
+            detail_scope="full",
+        )
+    )
+    _, taipei = asyncio.run(
+        city_api._build_city_detail_batch_item_async(
+            "taipei",
+            force_refresh=False,
+            market_slug=None,
+            target_date=None,
+            resolution="10m",
+            detail_scope="full",
+        )
+    )
+
+    assert tokyo["overview"]["local_date"] == "2026-06-16"
+    assert tokyo["airport_current"]["source_code"] == "jma_amedas"
+    assert tokyo["airport_current"]["temp"] == 24.0
+    assert taipei["overview"]["local_date"] == "2026-06-16"
+    assert taipei["airport_current"]["source_code"] == "cwa"
+    assert taipei["airport_current"]["temp"] == 29.4
+
+
 def test_chart_data_returns_cached_payload_when_optional_overlay_times_out(monkeypatch):
     import asyncio
 

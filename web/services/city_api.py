@@ -138,6 +138,52 @@ async def _run_latest_observation_city_chart_overlay(
         return payload
 
 
+async def _overlay_latest_observation_sources(city: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    latest_payload = payload
+    latest_payload = await _run_latest_observation_city_chart_overlay(
+        city=city,
+        overlay_name="amsc_latest_raw",
+        payload=latest_payload,
+        fn=overlay_latest_amsc_observation,
+        args=(legacy_routes._CACHE_DB, city, latest_payload),
+    )
+    latest_payload = await _run_latest_observation_city_chart_overlay(
+        city=city,
+        overlay_name="jma_amedas_latest",
+        payload=latest_payload,
+        fn=overlay_latest_jma_amedas_observation,
+        args=(legacy_routes._weather, city, latest_payload, legacy_routes._CACHE_DB),
+    )
+    latest_payload = await _run_latest_observation_city_chart_overlay(
+        city=city,
+        overlay_name="amos_latest_raw",
+        payload=latest_payload,
+        fn=overlay_latest_amos_observation,
+        args=(legacy_routes._CACHE_DB, city, latest_payload),
+    )
+    latest_payload = await _run_latest_observation_city_chart_overlay(
+        city=city,
+        overlay_name="mgm_latest_raw",
+        payload=latest_payload,
+        fn=overlay_latest_mgm_observation,
+        args=(legacy_routes._CACHE_DB, city, latest_payload),
+    )
+    latest_payload = await _run_latest_observation_city_chart_overlay(
+        city=city,
+        overlay_name="hko_latest_raw",
+        payload=latest_payload,
+        fn=overlay_latest_hko_observation,
+        args=(legacy_routes._CACHE_DB, city, latest_payload),
+    )
+    return await _run_latest_observation_city_chart_overlay(
+        city=city,
+        overlay_name="cwa_taipei",
+        payload=latest_payload,
+        fn=overlay_latest_cwa_observation,
+        args=(legacy_routes._weather, city, latest_payload, legacy_routes._CACHE_DB),
+    )
+
+
 async def _get_cached_city_payload(city: str, kind: str) -> Dict[str, Any]:
     cached_entry = await run_in_threadpool(legacy_routes._CACHE_DB.get_city_cache, kind, city)
     if not isinstance(cached_entry, dict):
@@ -327,12 +373,7 @@ def _start_city_cache_stale_refresh(
 
 async def _overlay_cached_wunderground(city: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     latest_payload = await _overlay_cached_canonical_observation(city, payload)
-    latest_payload = await run_in_threadpool(
-        overlay_latest_amsc_observation,
-        legacy_routes._CACHE_DB,
-        city,
-        latest_payload,
-    )
+    latest_payload = await _overlay_latest_observation_sources(city, latest_payload)
     return await run_in_threadpool(
         legacy_routes._overlay_latest_wunderground_current,
         city,
@@ -681,48 +722,7 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
             fn=_overlay_cached_runway_history_from_db,
             args=(city, payload),
         )
-        payload = await _run_latest_observation_city_chart_overlay(
-            city=city,
-            overlay_name="amsc_latest_raw",
-            payload=payload,
-            fn=overlay_latest_amsc_observation,
-            args=(legacy_routes._CACHE_DB, city, payload),
-        )
-        payload = await _run_latest_observation_city_chart_overlay(
-            city=city,
-            overlay_name="jma_amedas_latest",
-            payload=payload,
-            fn=overlay_latest_jma_amedas_observation,
-            args=(legacy_routes._weather, city, payload, legacy_routes._CACHE_DB),
-        )
-        payload = await _run_latest_observation_city_chart_overlay(
-            city=city,
-            overlay_name="amos_latest_raw",
-            payload=payload,
-            fn=overlay_latest_amos_observation,
-            args=(legacy_routes._CACHE_DB, city, payload),
-        )
-        payload = await _run_latest_observation_city_chart_overlay(
-            city=city,
-            overlay_name="mgm_latest_raw",
-            payload=payload,
-            fn=overlay_latest_mgm_observation,
-            args=(legacy_routes._CACHE_DB, city, payload),
-        )
-        payload = await _run_latest_observation_city_chart_overlay(
-            city=city,
-            overlay_name="hko_latest_raw",
-            payload=payload,
-            fn=overlay_latest_hko_observation,
-            args=(legacy_routes._CACHE_DB, city, payload),
-        )
-        payload = await _run_latest_observation_city_chart_overlay(
-            city=city,
-            overlay_name="cwa_taipei",
-            payload=payload,
-            fn=overlay_latest_cwa_observation,
-            args=(legacy_routes._weather, city, payload, legacy_routes._CACHE_DB),
-        )
+        payload = await _overlay_latest_observation_sources(city, payload)
         return await _run_optional_city_chart_overlay(
             city=city,
             overlay_name="wunderground_current",
@@ -745,48 +745,7 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
                 fn=_overlay_cached_runway_history_from_db,
                 args=(city, payload),
             )
-            payload = await _run_latest_observation_city_chart_overlay(
-                city=city,
-                overlay_name="amsc_latest_raw",
-                payload=payload,
-                fn=overlay_latest_amsc_observation,
-                args=(legacy_routes._CACHE_DB, city, payload),
-            )
-            payload = await _run_latest_observation_city_chart_overlay(
-                city=city,
-                overlay_name="jma_amedas_latest",
-                payload=payload,
-                fn=overlay_latest_jma_amedas_observation,
-                args=(legacy_routes._weather, city, payload, legacy_routes._CACHE_DB),
-            )
-            payload = await _run_latest_observation_city_chart_overlay(
-                city=city,
-                overlay_name="amos_latest_raw",
-                payload=payload,
-                fn=overlay_latest_amos_observation,
-                args=(legacy_routes._CACHE_DB, city, payload),
-            )
-            payload = await _run_latest_observation_city_chart_overlay(
-                city=city,
-                overlay_name="mgm_latest_raw",
-                payload=payload,
-                fn=overlay_latest_mgm_observation,
-                args=(legacy_routes._CACHE_DB, city, payload),
-            )
-            payload = await _run_latest_observation_city_chart_overlay(
-                city=city,
-                overlay_name="hko_latest_raw",
-                payload=payload,
-                fn=overlay_latest_hko_observation,
-                args=(legacy_routes._CACHE_DB, city, payload),
-            )
-            payload = await _run_latest_observation_city_chart_overlay(
-                city=city,
-                overlay_name="cwa_taipei",
-                payload=payload,
-                fn=overlay_latest_cwa_observation,
-                args=(legacy_routes._weather, city, payload, legacy_routes._CACHE_DB),
-            )
+            payload = await _overlay_latest_observation_sources(city, payload)
             return await _run_optional_city_chart_overlay(
                 city=city,
                 overlay_name="wunderground_current",
