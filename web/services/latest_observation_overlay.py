@@ -14,6 +14,7 @@ _RAW_AMSC_RUNWAY_HISTORY_CACHE: dict[tuple[str, bool], tuple[float, dict[str, li
 _RAW_AMSC_RUNWAY_HISTORY_CACHE_TTL_SEC = 60.0
 _RAW_AMSC_RUNWAY_HISTORY_RECENT_WINDOW_SEC = 24 * 60 * 60
 _RAW_AMSC_RUNWAY_HISTORY_MIN_POINTS = 30
+_TAIPEI_TZ = timezone(timedelta(hours=8))
 _RAW_AMSC_RUNWAY_HISTORY_MIN_SPAN_SEC = 12 * 60 * 60
 
 
@@ -328,11 +329,28 @@ def _sync_jma_today_series(
     *,
     replace_all: bool,
 ) -> None:
-    rows = _replace_or_append_today_point(
-        payload.get("metar_today_obs"),
-        point,
-        replace_all=replace_all,
-    )
+    _sync_today_series_points(payload, [point], replace_all=replace_all)
+
+
+def _sync_today_series_points(
+    payload: dict[str, Any],
+    points: list[dict[str, Any]],
+    *,
+    replace_all: bool,
+) -> None:
+    clean_points = [dict(point) for point in points if isinstance(point, dict)]
+    if not clean_points:
+        return
+    if replace_all:
+        rows = clean_points
+    else:
+        rows = payload.get("metar_today_obs")
+        for point in clean_points:
+            rows = _replace_or_append_today_point(
+                rows,
+                point,
+                replace_all=False,
+            )
     payload["metar_today_obs"] = rows
     payload["airport_primary_today_obs"] = rows
     official = payload.get("official")
@@ -960,12 +978,193 @@ def _newer_cwa_payload(left: Optional[dict[str, Any]], right: Optional[dict[str,
     return left
 
 
+def _taipei_local_today() -> str:
+    return datetime.now(timezone.utc).astimezone(_TAIPEI_TZ).strftime("%Y-%m-%d")
+
+
+def _taipei_local_datetime(value: Any) -> Optional[datetime]:
+    dt = _parse_observation_datetime(value)
+    if dt is None:
+        return None
+    return dt.astimezone(_TAIPEI_TZ)
+
+
+def _is_taipei_today_observation(value: Any, target_date: str) -> bool:
+    local_dt = _taipei_local_datetime(value)
+    return bool(local_dt and local_dt.date().isoformat() == target_date)
+
+
+def _latest_taipei_metar_from_airport_obs_log(
+    db: Any,
+    use_fahrenheit: bool,
+    *,
+    target_date: str,
+) -> Optional[dict[str, Any]]:
+    latest: Optional[dict[str, Any]] = None
+    for station_code, station_name in (
+        ("RCSS", "Taipei Songshan METAR"),
+        ("RCTP", "Taipei Taoyuan METAR"),
+    ):
+        row = _latest_airport_obs_log_row(
+            db,
+            station_code=station_code,
+            city="taipei",
+            source_code="metar",
+            source_label="METAR",
+            station_label=station_name,
+            use_fahrenheit=use_fahrenheit,
+        )
+        if not row or not _is_taipei_today_observation(row.get("obs_time"), target_date):
+            continue
+        candidate = {
+            "source": "metar",
+            "source_label": "METAR",
+            "station_code": row.get("icao") or station_code,
+            "station_name": row.get("station_label") or station_name,
+            "observation_time": row.get("obs_time"),
+            "current": {
+                "temp": row.get("temp"),
+            },
+            "unit": "fahrenheit" if use_fahrenheit else "celsius",
+        }
+        latest = _newer_cwa_payload(latest, candidate)
+    return latest
+
+
+def _call_taipei_metar_fetcher(weather: Any, use_fahrenheit: bool) -> Optional[dict[str, Any]]:
+    fetcher = getattr(weather, "fetch_metar", None)
+    if not callable(fetcher):
+        return None
+    try:
+        return fetcher("taipei", use_fahrenheit=use_fahrenheit, utc_offset=28800)
+    except TypeError:
+        try:
+            return fetcher("taipei", use_fahrenheit=use_fahrenheit)
+        except TypeError:
+            return fetcher("taipei")
+    except Exception as exc:
+        logger.debug("latest Taipei METAR fallback fetch failed: {}", exc)
+        return None
+
+
+def _latest_taipei_metar_from_fetcher(
+    weather: Any,
+    use_fahrenheit: bool,
+    *,
+    target_date: str,
+) -> Optional[dict[str, Any]]:
+    metar = _call_taipei_metar_fetcher(weather, use_fahrenheit)
+    if not isinstance(metar, dict) or metar.get("stale_for_today") is True:
+        return None
+    obs_time = str(metar.get("observation_time") or "").strip()
+    if not obs_time or not _is_taipei_today_observation(obs_time, target_date):
+        return None
+    current = metar.get("current") if isinstance(metar.get("current"), dict) else {}
+    temp = _to_float(current.get("temp"))
+    if temp is None:
+        return None
+    return {
+        "source": "metar",
+        "source_label": "METAR",
+        "station_code": str(metar.get("icao") or metar.get("station_code") or "RCSS").strip(),
+        "station_name": str(metar.get("station_name") or "Taipei Songshan METAR").strip(),
+        "observation_time": obs_time,
+        "current": {
+            "temp": round(float(temp), 1),
+            "max_temp_so_far": _to_float(current.get("max_temp_so_far")),
+            "max_temp_time": current.get("max_temp_time"),
+            "humidity": current.get("humidity"),
+            "wind_speed_kt": current.get("wind_speed_kt"),
+            "wind_dir": current.get("wind_dir"),
+            "raw_metar": current.get("raw_metar"),
+            "visibility_mi": current.get("visibility_mi"),
+            "wx_desc": current.get("wx_desc"),
+        },
+        "today_obs": metar.get("today_obs") or [],
+        "unit": "fahrenheit" if use_fahrenheit else "celsius",
+    }
+
+
+def _latest_taipei_metar_fallback(
+    weather: Any,
+    db: Any,
+    use_fahrenheit: bool,
+    *,
+    target_date: str,
+) -> Optional[dict[str, Any]]:
+    latest = _latest_taipei_metar_from_airport_obs_log(
+        db,
+        use_fahrenheit,
+        target_date=target_date,
+    )
+    latest = _newer_cwa_payload(
+        latest,
+        _latest_taipei_metar_from_fetcher(weather, use_fahrenheit, target_date=target_date),
+    )
+    return latest
+
+
+def _normalized_today_points(
+    rows: Any,
+    latest_point: dict[str, Any],
+    *,
+    source_code: str,
+    source_label: str,
+) -> list[dict[str, Any]]:
+    points: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+
+    def add(point: dict[str, Any]) -> None:
+        time_key = str(point.get("time") or "")
+        obs_key = str(point.get("obs_time") or "")
+        if not time_key and not obs_key:
+            return
+        for index, existing in enumerate(points):
+            existing_time = str(existing.get("time") or "")
+            existing_obs = str(existing.get("obs_time") or "")
+            if existing_time == time_key and (not existing_obs or not obs_key or existing_obs == obs_key):
+                if obs_key and not existing_obs:
+                    points[index] = point
+                return
+        key = (time_key, obs_key)
+        if key in seen:
+            return
+        seen.add(key)
+        points.append(point)
+
+    for row in rows if isinstance(rows, list) else []:
+        if isinstance(row, dict):
+            time_text = str(row.get("time") or "").strip()
+            temp = _to_float(row.get("temp"))
+            obs_time = str(row.get("obs_time") or row.get("observed_at") or "").strip()
+        elif isinstance(row, (list, tuple)) and len(row) >= 2:
+            time_text = str(row[0] or "").strip()
+            temp = _to_float(row[1])
+            obs_time = ""
+        else:
+            continue
+        if not time_text or temp is None:
+            continue
+        point = {
+            "time": time_text,
+            "temp": round(float(temp), 1),
+            "source_code": source_code,
+            "source_label": source_label,
+        }
+        if obs_time:
+            point["obs_time"] = obs_time
+        add(point)
+    add(dict(latest_point))
+    return points
+
+
 def overlay_latest_cwa_observation(weather, city, payload, db=None):
     normalized_city = str(city or payload.get("name") or payload.get("city") or "").strip().lower()
     if normalized_city != "taipei" or not isinstance(payload, dict) or not payload:
         return payload
 
     use_fahrenheit = "F" in str(payload.get("temp_symbol") or "").upper()
+    target_date = _taipei_local_today()
     cwa_data = _latest_cwa_data_from_airport_obs_log(db, normalized_city, use_fahrenheit)
     cwa_data = _newer_cwa_payload(cwa_data, _latest_cwa_data_from_official_intraday_history(use_fahrenheit))
 
@@ -977,6 +1176,18 @@ def overlay_latest_cwa_observation(weather, city, payload, db=None):
             cwa_data = _newer_cwa_payload(cwa_data, fetcher())
         except Exception as exc:
             logger.debug("latest CWA overlay fetch failed: {}", exc)
+    if isinstance(cwa_data, dict) and not _is_taipei_today_observation(
+        cwa_data.get("observation_time"),
+        target_date,
+    ):
+        cwa_data = None
+    if not isinstance(cwa_data, dict):
+        cwa_data = _latest_taipei_metar_fallback(
+            weather,
+            db,
+            use_fahrenheit,
+            target_date=target_date,
+        )
     if not isinstance(cwa_data, dict):
         return payload
 
@@ -986,7 +1197,7 @@ def overlay_latest_cwa_observation(weather, city, payload, db=None):
         return payload
 
     raw_epoch = parse_observation_epoch(obs_time)
-    local_dt = _parse_observation_datetime(obs_time)
+    local_dt = _taipei_local_datetime(obs_time)
     if raw_epoch is None or local_dt is None:
         return payload
     existing_epochs = [
@@ -1001,18 +1212,21 @@ def overlay_latest_cwa_observation(weather, city, payload, db=None):
     if existing_epochs and max(existing_epochs) > raw_epoch:
         return payload
 
-    source_label = str(cwa_data.get("source_label") or "CWA").strip() or "CWA"
+    source_code = str(cwa_data.get("source") or "cwa").strip().lower() or "cwa"
+    source_label = str(cwa_data.get("source_label") or ("METAR" if source_code == "metar" else "CWA")).strip()
+    source_label = source_label or ("METAR" if source_code == "metar" else "CWA")
     current = cwa_data.get("current") if isinstance(cwa_data.get("current"), dict) else {}
     max_so_far = _to_float(current.get("max_temp_so_far") if current else None)
     update = {
         "temp": round(float(temp), 1),
-        "source_code": "cwa",
+        "source_code": source_code,
         "source_label": source_label,
-        "settlement_source": "cwa",
+        "settlement_source": source_code,
         "settlement_source_label": source_label,
-        "station_code": str(cwa_data.get("station_code") or "466920").strip(),
-        "station_name": str(cwa_data.get("station_name") or "\u81fa\u5317").strip(),
+        "station_code": str(cwa_data.get("station_code") or ("RCSS" if source_code == "metar" else "466920")).strip(),
+        "station_name": str(cwa_data.get("station_name") or ("Taipei Songshan METAR" if source_code == "metar" else "\u81fa\u5317")).strip(),
         "observed_at": obs_time,
+        "observation_time": obs_time,
         "obs_time": obs_time,
         "observation_status": "live",
         "city": normalized_city,
@@ -1063,6 +1277,8 @@ def overlay_latest_cwa_observation(weather, city, payload, db=None):
         "local_time": local_time,
         "current_temp": round(float(temp), 1),
         "airport_primary": update,
+        "settlement_source": source_code,
+        "settlement_source_label": source_label,
     }
     for key, value in overview_updates.items():
         if next_overview.get(key) != value:
@@ -1071,15 +1287,22 @@ def overlay_latest_cwa_observation(weather, city, payload, db=None):
     next_payload["overview"] = next_overview
 
     replace_today_series = bool(previous_local_date and previous_local_date != local_date)
-    _sync_jma_today_series(
+    latest_point = _observation_today_point(
+        local_time,
+        obs_time,
+        temp,
+        source_code=source_code,
+        source_label=source_label,
+    )
+    today_points = _normalized_today_points(
+        cwa_data.get("today_obs"),
+        latest_point,
+        source_code=source_code,
+        source_label=source_label,
+    )
+    _sync_today_series_points(
         next_payload,
-        _observation_today_point(
-            local_time,
-            obs_time,
-            temp,
-            source_code="cwa",
-            source_label=source_label,
-        ),
+        today_points,
         replace_all=replace_today_series,
     )
     changed = True

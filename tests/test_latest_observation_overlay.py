@@ -608,3 +608,98 @@ def test_overlay_latest_cwa_uses_official_intraday_history_when_fetcher_is_empty
     assert result["airport_current"]["temp"] == 29.4
     assert result["airport_current"]["source_code"] == "cwa"
     assert result["airport_current"]["obs_time"] == f"{expected_date}T15:30:00+08:00"
+
+
+def test_overlay_latest_cwa_uses_current_metar_when_cwa_source_is_stale(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    local_now = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=8)))
+    today = local_now.strftime("%Y-%m-%d")
+    stale_date = (local_now - timedelta(days=2)).strftime("%Y-%m-%d")
+
+    class EmptyRepo:
+        def load_points(self, *, source_code, station_code, target_date):
+            return []
+
+    class FakeWeather:
+        def fetch_cwa_taipei_settlement_current(self):
+            return {
+                "source": "cwa",
+                "source_label": "CWA",
+                "station_code": "466920",
+                "station_name": "臺北",
+                "observation_time": f"{stale_date}T10:00:00Z",
+                "current": {"temp": 26.0, "max_temp_so_far": 26.0},
+            }
+
+        def fetch_metar(self, city, *, use_fahrenheit=False, utc_offset=0):
+            assert city == "taipei"
+            assert utc_offset == 28800
+            assert use_fahrenheit is False
+            return {
+                "icao": "RCSS",
+                "station_name": "Taipei Songshan",
+                "observation_time": f"{today}T09:30:00Z",
+                "current_local_date": today,
+                "stale_for_today": False,
+                "current": {
+                    "temp": 30.0,
+                    "max_temp_so_far": 31.0,
+                    "max_temp_time": "15:00",
+                    "wind_speed_kt": 8,
+                    "wind_dir": 70,
+                    "humidity": 66,
+                    "raw_metar": "RCSS 160930Z 07008KT 9999 FEW020 30/23 Q1008",
+                },
+                "today_obs": [("15:00", 31.0), ("17:30", 30.0)],
+            }
+
+    monkeypatch.setattr(
+        observation_overlay,
+        "OfficialIntradayObservationRepository",
+        lambda: EmptyRepo(),
+    )
+
+    result = observation_overlay.overlay_latest_cwa_observation(
+        FakeWeather(),
+        "taipei",
+        {
+            "name": "taipei",
+            "display_name": "Taipei",
+            "temp_symbol": "°C",
+            "local_date": stale_date,
+            "local_time": "18:00",
+            "current": {
+                "temp": 26.0,
+                "source_code": "cwa",
+                "obs_time": f"{stale_date}T10:00:00Z",
+            },
+            "airport_current": {
+                "temp": 26.0,
+                "source_code": "cwa",
+                "obs_time": f"{stale_date}T10:00:00Z",
+            },
+            "metar_today_obs": [{"time": "18:00", "temp": 26.0}],
+            "timeseries": {"metar_today_obs": [{"time": "18:00", "temp": 26.0}]},
+            "overview": {"local_date": stale_date, "local_time": "18:00", "current_temp": 26.0},
+        },
+    )
+
+    assert result["local_date"] == today
+    assert result["local_time"] == "17:30"
+    assert result["airport_current"]["temp"] == 30.0
+    assert result["airport_current"]["source_code"] == "metar"
+    assert result["airport_current"]["obs_time"] == f"{today}T09:30:00Z"
+    assert result["overview"]["current_temp"] == 30.0
+    assert result["overview"]["settlement_source"] == "metar"
+    assert result["metar_today_obs"] == [
+        {"time": "15:00", "temp": 31.0, "source_code": "metar", "source_label": "METAR"},
+        {
+            "time": "17:30",
+            "temp": 30.0,
+            "obs_time": f"{today}T09:30:00Z",
+            "source_code": "metar",
+            "source_label": "METAR",
+        },
+    ]
+    assert result["timeseries"]["metar_today_obs"] == result["metar_today_obs"]
