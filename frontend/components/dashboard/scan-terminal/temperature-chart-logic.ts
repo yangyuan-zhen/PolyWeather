@@ -441,9 +441,13 @@ function isRetainedHourlyCacheEntry(
   return Number.isFinite(age) && age >= 0 && age < maxAgeMs;
 }
 
+function isUsableHourlyDetailCacheEntry(entry: HourlyCacheEntry | null | undefined) {
+  return Boolean(entry?.data && hasFullHourlyDetailPayload(entry.data));
+}
+
 function pruneHourlyCache() {
   for (const [key, entry] of _hourlyCache.entries()) {
-    if (!isRetainedHourlyCacheEntry(entry, HOURLY_CACHE_STALE_TTL_MS)) {
+    if (!isUsableHourlyDetailCacheEntry(entry) || !isRetainedHourlyCacheEntry(entry, HOURLY_CACHE_STALE_TTL_MS)) {
       _hourlyCache.delete(key);
     }
   }
@@ -459,7 +463,7 @@ function pruneHourlyCache() {
 }
 
 function rememberMemoryHourlyCacheEntry(cacheKey: string, entry: HourlyCacheEntry) {
-  if (!cacheKey || !entry?.data) return;
+  if (!cacheKey || !isUsableHourlyDetailCacheEntry(entry)) return;
   _hourlyCache.set(cacheKey, entry);
   pruneHourlyCache();
 }
@@ -476,7 +480,11 @@ function readSessionCache(
     const maxAgeMs = options.allowStale
       ? HOURLY_CACHE_STALE_TTL_MS
       : options.maxAgeMs ?? SESSION_CACHE_TTL_MS;
-    if (item && item.ts && isRetainedHourlyCacheEntry(item, maxAgeMs)) {
+    if (!item || !item.ts || !isUsableHourlyDetailCacheEntry(item) || !isRetainedHourlyCacheEntry(item, HOURLY_CACHE_STALE_TTL_MS)) {
+      sessionStorage.removeItem(`${SESSION_CACHE_PREFIX}${city}`);
+      return null;
+    }
+    if (isRetainedHourlyCacheEntry(item, maxAgeMs)) {
       return item;
     }
   } catch {}
@@ -488,10 +496,14 @@ function readHourlyCacheEntry(
   options: { allowStale?: boolean; maxAgeMs?: number } = {},
 ): HourlyCacheEntry | null {
   const cached = _hourlyCache.get(cacheKey);
-  if (cached && (options.allowStale ? isRetainedHourlyCacheEntry(cached) : isFreshHourlyCacheEntry(cached, options.maxAgeMs))) {
+  if (
+    cached &&
+    isUsableHourlyDetailCacheEntry(cached) &&
+    (options.allowStale ? isRetainedHourlyCacheEntry(cached) : isFreshHourlyCacheEntry(cached, options.maxAgeMs))
+  ) {
     return cached;
   }
-  if (cached && !isRetainedHourlyCacheEntry(cached)) {
+  if (cached && (!isUsableHourlyDetailCacheEntry(cached) || !isRetainedHourlyCacheEntry(cached))) {
     _hourlyCache.delete(cacheKey);
   }
 
@@ -509,10 +521,14 @@ function readHourlyCacheSnapshot(
   options: { allowStale?: boolean; maxAgeMs?: number } = {},
 ): HourlyDetailSnapshotEntry | null {
   const cached = _hourlyCache.get(cacheKey);
-  if (cached && (options.allowStale ? isRetainedHourlyCacheEntry(cached) : isFreshHourlyCacheEntry(cached, options.maxAgeMs))) {
+  if (
+    cached &&
+    isUsableHourlyDetailCacheEntry(cached) &&
+    (options.allowStale ? isRetainedHourlyCacheEntry(cached) : isFreshHourlyCacheEntry(cached, options.maxAgeMs))
+  ) {
     return { ...cached, source: "memory_cache" };
   }
-  if (cached && !isRetainedHourlyCacheEntry(cached)) {
+  if (cached && (!isUsableHourlyDetailCacheEntry(cached) || !isRetainedHourlyCacheEntry(cached))) {
     _hourlyCache.delete(cacheKey);
   }
 

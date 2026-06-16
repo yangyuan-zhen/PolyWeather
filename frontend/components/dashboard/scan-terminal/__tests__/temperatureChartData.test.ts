@@ -7,6 +7,7 @@ import {
   mergeHourlyWithLiveObservations,
   mergePatchIntoHourly,
   mergeRowObservationIntoHourly,
+  readCachedHourlyForInitialRow,
   rememberHourlyDetailSnapshot,
   selectInitialHourlyForRowChange,
   seedHourlyForecastFromRow,
@@ -222,6 +223,28 @@ export function runTests() {
     currentDayModelLatePoint,
     "chart should use the current scan row local date when cached detail localDate is older so today's model curve is drawn through 23:00",
   );
+
+  _hourlyCache.clear();
+  _hourlyCache.set("madrid:10m", {
+    ts: Date.now(),
+    data: {
+      localDate: "2026-06-16",
+      localTime: "15:46",
+      times: [],
+      temps: [],
+      airportPrimary: {
+        temp: 28.8,
+        obs_time: "2026-06-16T13:46:00Z",
+      },
+      airportPrimaryTodayObs: [["2026-06-16T13:46:00Z", 28.8]],
+    } as any,
+  });
+  const observationOnlyInitialCache = readCachedHourlyForInitialRow("madrid", "10m");
+  assert(
+    observationOnlyInitialCache === null,
+    "observation-only hourly cache entries must not block loading the full city detail payload",
+  );
+  _hourlyCache.clear();
 
   const correctedDetailChart = getTemperatureChartData(
     {
