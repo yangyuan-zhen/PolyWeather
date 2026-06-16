@@ -90,7 +90,7 @@ export async function runTests() {
     chartSource.includes("LIVE_OBSERVATION_FALLBACK_MS = DASHBOARD_REFRESH_POLICY_MS.liveObservationFallback") &&
       chartSource.includes("refreshLiveObservation") &&
       chartSource.includes("fetchLiveObservationForCity") &&
-      chartSource.includes("mergeObservationPayloadIntoHourly") &&
+      chartSource.includes("mergeObservationSnapshotIntoHourly") &&
       chartLogicSource.includes("options.bypassLocalCache") &&
       chartLogicSource.includes("const forceRefresh = Boolean(options.ignoreCache)"),
     "visible charts should use the no-store observation endpoint for 180-second SSE fallback without forcing detail-batch refreshes",
@@ -137,7 +137,7 @@ export async function runTests() {
   );
   assert(
     chartSource.includes("fetchLiveObservationForCity") &&
-      chartSource.includes("mergeObservationPayloadIntoHourly") &&
+      chartSource.includes("mergeObservationSnapshotIntoHourly") &&
       !chartSource.includes("rememberHourlyDetailSnapshot"),
     "visible chart fallback must use the no-store observation endpoint without writing live overlays into full-detail cache",
   );
@@ -167,8 +167,29 @@ export async function runTests() {
   assert(
     chartLogicSource.includes("/api/city/${encodeURIComponent(city)}/observation") &&
       chartLogicSource.includes('cache: "no-store"') &&
-      chartLogicSource.includes("mergeObservationPayloadIntoHourly"),
+      chartLogicSource.includes("mergeObservationSnapshotIntoHourly"),
     "live observation fetches must call the no-store per-city observation endpoint and merge without touching cached model detail",
+  );
+  assert(
+    /type FullChartDetail\s*=\s*NonNullable<HourlyForecast>\s*&\s*\{[\s\S]*__detailKind:\s*"full_chart_detail"/.test(chartLogicSource) &&
+      /type ObservationSnapshot\s*=\s*CityObservationPayload\s*&\s*\{[\s\S]*__observationKind:\s*"observation_snapshot"/.test(chartLogicSource),
+    "full detail and no-store observation payloads should be separate branded types instead of sharing raw HourlyForecast",
+  );
+  assert(
+    chartLogicSource.includes("type HourlyCacheEntry = { ts: number; data: FullChartDetail }") &&
+      /function rememberHourlyDetailSnapshot\([\s\S]*data:\s*FullChartDetail/.test(chartLogicSource),
+    "hourly detail cache writes should require FullChartDetail so observation-only snapshots cannot be cached as model detail",
+  );
+  assert(
+    /async function fetchLiveObservationForCity\([\s\S]*Promise<ObservationSnapshot \| null>/.test(chartLogicSource) &&
+      chartLogicSource.includes("function observationPayloadToSnapshot") &&
+      chartLogicSource.includes("function mergeObservationSnapshotIntoHourly"),
+    "live observation fetches should return ObservationSnapshot and enter chart state through the observation snapshot merge path",
+  );
+  assert(
+    /async function fetchHourlyForecastForCity\([\s\S]*Promise<FullChartDetail \| null>/.test(chartLogicSource) &&
+      /type CityDetailBatchWaiter = \{[\s\S]*resolve: \(value: FullChartDetail \| null\)/.test(chartLogicSource),
+    "model/detail fetches and batch waiters should return FullChartDetail or null, not observation-shaped hourly state",
   );
   assert(
     chartLogicSource.includes("cityDetailBatchQueueKey") &&

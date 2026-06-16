@@ -364,8 +364,8 @@ const SESSION_CACHE_TTL_MS = HOURLY_CACHE_TTL_MS;
 const HOURLY_CACHE_STALE_TTL_MS = 6 * HOURLY_CACHE_TTL_MS;
 const MAX_HOURLY_CACHE_ENTRIES = 160;
 const HOURLY_FORCE_REFRESH_DEDUP_MS = 60_000;
-const _hourlyCache = new Map<string, { ts: number; data: HourlyForecast }>();
-const _hourlyRequestCache = new Map<string, Promise<HourlyForecast>>();
+const _hourlyCache = new Map<string, { ts: number; data: FullChartDetail }>();
+const _hourlyRequestCache = new Map<string, Promise<FullChartDetail | null>>();
 const MAX_HOURLY_DETAIL_CONCURRENT_REQUESTS = 3;
 const HOURLY_DETAIL_REQUEST_TIMEOUT_MS = 16_000;
 let _hourlyActiveDetailRequests = 0;
@@ -374,7 +374,7 @@ const RUNWAY_LINE_COLORS = ["#00897b", "#d97706", "#7c3aed", "#0891b2", "#ea580c
 
 const SESSION_CACHE_PREFIX = "polyweather_city_detail_v1:";
 
-type HourlyCacheEntry = { ts: number; data: HourlyForecast };
+type HourlyCacheEntry = { ts: number; data: FullChartDetail };
 type HourlyDetailSnapshotSource = "memory_cache" | "session_cache";
 type HourlyDetailSnapshotEntry = HourlyCacheEntry & { source: HourlyDetailSnapshotSource };
 type CityDetailBatchDiagnostics = Record<string, any>;
@@ -442,14 +442,25 @@ function isRetainedHourlyCacheEntry(
 }
 
 function isUsableHourlyDetailCacheEntry(entry: HourlyCacheEntry | null | undefined) {
-  return Boolean(entry?.data && hasFullHourlyDetailPayload(entry.data));
+  return Boolean(toFullChartDetail((entry as any)?.data || null));
+}
+
+function normalizeHourlyCacheEntry(entry: unknown): HourlyCacheEntry | null {
+  if (!entry || typeof entry !== "object") return null;
+  const ts = Number((entry as any).ts || 0);
+  const data = toFullChartDetail((entry as any).data || null);
+  if (!Number.isFinite(ts) || ts <= 0 || !data) return null;
+  return { ts, data };
 }
 
 function pruneHourlyCache() {
   for (const [key, entry] of _hourlyCache.entries()) {
-    if (!isUsableHourlyDetailCacheEntry(entry) || !isRetainedHourlyCacheEntry(entry, HOURLY_CACHE_STALE_TTL_MS)) {
+    const normalized = normalizeHourlyCacheEntry(entry);
+    if (!normalized || !isRetainedHourlyCacheEntry(normalized, HOURLY_CACHE_STALE_TTL_MS)) {
       _hourlyCache.delete(key);
+      continue;
     }
+    if (normalized !== entry) _hourlyCache.set(key, normalized);
   }
 
   if (_hourlyCache.size <= MAX_HOURLY_CACHE_ENTRIES) return;
@@ -476,11 +487,11 @@ function readSessionCache(
   try {
     const raw = sessionStorage.getItem(`${SESSION_CACHE_PREFIX}${city}`);
     if (!raw) return null;
-    const item = JSON.parse(raw);
+    const item = normalizeHourlyCacheEntry(JSON.parse(raw));
     const maxAgeMs = options.allowStale
       ? HOURLY_CACHE_STALE_TTL_MS
       : options.maxAgeMs ?? SESSION_CACHE_TTL_MS;
-    if (!item || !item.ts || !isUsableHourlyDetailCacheEntry(item) || !isRetainedHourlyCacheEntry(item, HOURLY_CACHE_STALE_TTL_MS)) {
+    if (!item || !isRetainedHourlyCacheEntry(item, HOURLY_CACHE_STALE_TTL_MS)) {
       sessionStorage.removeItem(`${SESSION_CACHE_PREFIX}${city}`);
       return null;
     }
@@ -495,15 +506,16 @@ function readHourlyCacheEntry(
   cacheKey: string,
   options: { allowStale?: boolean; maxAgeMs?: number } = {},
 ): HourlyCacheEntry | null {
-  const cached = _hourlyCache.get(cacheKey);
+  const cachedRaw = _hourlyCache.get(cacheKey);
+  const cached = normalizeHourlyCacheEntry(cachedRaw);
   if (
     cached &&
-    isUsableHourlyDetailCacheEntry(cached) &&
     (options.allowStale ? isRetainedHourlyCacheEntry(cached) : isFreshHourlyCacheEntry(cached, options.maxAgeMs))
   ) {
+    if (cached !== cachedRaw) _hourlyCache.set(cacheKey, cached);
     return cached;
   }
-  if (cached && (!isUsableHourlyDetailCacheEntry(cached) || !isRetainedHourlyCacheEntry(cached))) {
+  if (cachedRaw && (!cached || !isRetainedHourlyCacheEntry(cached))) {
     _hourlyCache.delete(cacheKey);
   }
 
@@ -520,15 +532,16 @@ function readHourlyCacheSnapshot(
   cacheKey: string,
   options: { allowStale?: boolean; maxAgeMs?: number } = {},
 ): HourlyDetailSnapshotEntry | null {
-  const cached = _hourlyCache.get(cacheKey);
+  const cachedRaw = _hourlyCache.get(cacheKey);
+  const cached = normalizeHourlyCacheEntry(cachedRaw);
   if (
     cached &&
-    isUsableHourlyDetailCacheEntry(cached) &&
     (options.allowStale ? isRetainedHourlyCacheEntry(cached) : isFreshHourlyCacheEntry(cached, options.maxAgeMs))
   ) {
+    if (cached !== cachedRaw) _hourlyCache.set(cacheKey, cached);
     return { ...cached, source: "memory_cache" };
   }
-  if (cached && (!isUsableHourlyDetailCacheEntry(cached) || !isRetainedHourlyCacheEntry(cached))) {
+  if (cachedRaw && (!cached || !isRetainedHourlyCacheEntry(cached))) {
     _hourlyCache.delete(cacheKey);
   }
 
@@ -541,7 +554,7 @@ function readHourlyCacheSnapshot(
   return null;
 }
 
-function writeSessionCache(city: string, data: HourlyForecast, ts = Date.now()) {
+function writeSessionCache(city: string, data: FullChartDetail, ts = Date.now()) {
   if (typeof window === "undefined" || !data) return;
   try {
     sessionStorage.setItem(
@@ -551,7 +564,7 @@ function writeSessionCache(city: string, data: HourlyForecast, ts = Date.now()) 
   } catch {}
 }
 
-function writeHourlyCacheEntry(cacheKey: string, data: HourlyForecast, ts = Date.now()) {
+function writeHourlyCacheEntry(cacheKey: string, data: FullChartDetail, ts = Date.now()) {
   if (!cacheKey || !data) return;
   rememberMemoryHourlyCacheEntry(cacheKey, { ts, data });
   writeSessionCache(cacheKey, data, ts);
@@ -595,12 +608,13 @@ function readCachedHourlyForInitialRow(
 function rememberHourlyDetailSnapshot(
   city: string,
   resolution: string,
-  data: HourlyForecast,
+  data: FullChartDetail,
 ) {
   const cityKey = normalizeCityKey(city);
-  if (!cityKey || !data || !hasFullHourlyDetailPayload(data)) return;
+  const detail = toFullChartDetail(data);
+  if (!cityKey || !detail) return;
   const cacheKey = hourlyCacheKey(cityKey, resolution);
-  writeHourlyCacheEntry(cacheKey, data);
+  writeHourlyCacheEntry(cacheKey, detail);
 }
 
 function drainHourlyDetailRequestQueue() {
@@ -1375,6 +1389,15 @@ function hasFullHourlyDetailPayload(hourly: HourlyForecast) {
   );
 }
 
+function toFullChartDetail(hourly: HourlyForecast): FullChartDetail | null {
+  if (!hourly || !hasFullHourlyDetailPayload(hourly)) return null;
+  if ((hourly as any).__detailKind === "full_chart_detail") return hourly as FullChartDetail;
+  return {
+    ...hourly,
+    __detailKind: "full_chart_detail",
+  };
+}
+
 function hasArrayItems<T>(value: T[] | null | undefined): value is T[] {
   return Array.isArray(value) && value.length > 0;
 }
@@ -1568,6 +1591,10 @@ type HourlyForecast = {
   airportPrimaryTodayObs?: RawObsPoint[];
 } | null;
 
+type FullChartDetail = NonNullable<HourlyForecast> & {
+  readonly __detailKind: "full_chart_detail";
+};
+
 function seedHourlyForecastFromRow(row: ScanOpportunityRow | null): HourlyForecast {
   if (!row) return null;
   const current = rowCurrentObservation(row);
@@ -1680,11 +1707,11 @@ function mergeHourlyWithLiveObservations(
   };
 }
 
-function mergeObservationPayloadIntoHourly(
+function mergeObservationSnapshotIntoHourly(
   prev: HourlyForecast,
-  payload: CityObservationPayload | null | undefined,
+  snapshot: ObservationSnapshot | null | undefined,
 ): HourlyForecast {
-  const live = observationPayloadToHourly(payload);
+  const live = observationSnapshotToHourly(snapshot);
   if (!prev) return live;
   if (!live) return prev;
   return mergeHourlyWithLiveObservations(prev, live, null);
@@ -1747,6 +1774,10 @@ type CityObservationPayload = {
   } | null;
 };
 
+type ObservationSnapshot = CityObservationPayload & {
+  readonly __observationKind: "observation_snapshot";
+};
+
 type CityDetailBatchPayload = {
   cities?: string[];
   details?: Record<string, CityDetail | null | undefined>;
@@ -1757,7 +1788,7 @@ type CityDetailBatchPayload = {
 };
 
 type CityDetailBatchWaiter = {
-  resolve: (value: HourlyForecast) => void;
+  resolve: (value: FullChartDetail | null) => void;
   reject: (reason?: unknown) => void;
 };
 
@@ -1850,19 +1881,28 @@ function normalizeObservationRunwayHistory(
   return Object.keys(normalized).length ? normalized : undefined;
 }
 
-function observationPayloadToHourly(payload: CityObservationPayload | null | undefined): HourlyForecast {
+function observationPayloadToSnapshot(payload: CityObservationPayload | null | undefined): ObservationSnapshot | null {
   if (!payload || typeof payload !== "object") return null;
-  const airportCurrent = normalizeObservationCondition(payload.airport_current || payload.current);
-  const airportPrimary = normalizeObservationCondition(payload.airport_primary || payload.airport_current || payload.current);
-  const current = payload.current && typeof payload.current === "object"
+  if ((payload as any).__observationKind === "observation_snapshot") return payload as ObservationSnapshot;
+  return {
+    ...payload,
+    __observationKind: "observation_snapshot",
+  };
+}
+
+function observationSnapshotToHourly(snapshot: ObservationSnapshot | null | undefined): HourlyForecast {
+  if (!snapshot || typeof snapshot !== "object") return null;
+  const airportCurrent = normalizeObservationCondition(snapshot.airport_current || snapshot.current);
+  const airportPrimary = normalizeObservationCondition(snapshot.airport_primary || snapshot.airport_current || snapshot.current);
+  const current = snapshot.current && typeof snapshot.current === "object"
     ? {
-        ...(payload.current as CurrentConditions),
-        temp: validNumber(payload.current.temp),
+        ...(snapshot.current as CurrentConditions),
+        temp: validNumber(snapshot.current.temp),
       }
     : null;
   const metarTodayObs = [
-    ...((payload.timeseries?.metar_today_obs || []) as Array<Record<string, any>>),
-    ...((payload.metar_today_obs || []) as Array<Record<string, any>>),
+    ...((snapshot.timeseries?.metar_today_obs || []) as Array<Record<string, any>>),
+    ...((snapshot.metar_today_obs || []) as Array<Record<string, any>>),
   ]
     .map(normalizeObservationPoint)
     .filter((point): point is ObsPoint => point !== null);
@@ -1874,8 +1914,8 @@ function observationPayloadToHourly(payload: CityObservationPayload | null | und
     debPrediction: null,
     debQuality: null,
     debHourlyPath: null,
-    localDate: payload.local_date || null,
-    localTime: payload.local_time || airportPrimary?.obs_time || airportCurrent?.obs_time || null,
+    localDate: snapshot.local_date || null,
+    localTime: snapshot.local_time || airportPrimary?.obs_time || airportCurrent?.obs_time || null,
     times: [],
     temps: [],
     modelTimes: undefined,
@@ -1883,8 +1923,8 @@ function observationPayloadToHourly(payload: CityObservationPayload | null | und
     forecastDaily: [],
     multiModelDaily: {},
     probabilities: null,
-    runwayPlateHistory: normalizeObservationRunwayHistory(payload.runway_plate_history, payload.runway_points),
-    amos: payload.amos || null,
+    runwayPlateHistory: normalizeObservationRunwayHistory(snapshot.runway_plate_history, snapshot.runway_points),
+    amos: snapshot.amos || null,
     current,
     airportCurrent,
     airportPrimary,
@@ -1893,10 +1933,10 @@ function observationPayloadToHourly(payload: CityObservationPayload | null | und
   };
 }
 
-function parseHourlyForecastFromCityDetail(json: CityDetail | null): HourlyForecast {
+function parseHourlyForecastFromCityDetail(json: CityDetail | null): FullChartDetail | null {
   const hourlySource = (json as any)?.hourly ?? (json as any)?.timeseries?.hourly;
   if (!json || !hourlySource) return null;
-  return {
+  const parsed: HourlyForecast = {
     forecastTodayHigh: json.forecast?.today_high ?? null,
     debPrediction: json.deb?.prediction ?? (json as any)?.overview?.deb_prediction ?? null,
     debQuality: json.deb ? {
@@ -1930,9 +1970,10 @@ function parseHourlyForecastFromCityDetail(json: CityDetail | null): HourlyForec
     metarTodayObs: (json as any).timeseries?.metar_today_obs || (json as any)?.metar_today_obs || undefined,
     airportPrimaryTodayObs: (json as any)?.official?.airport_primary_today_obs || (json as any)?.airport_primary_today_obs || undefined,
   };
+  return toFullChartDetail(parsed);
 }
 
-function preserveCachedRunwayHistory(cacheKey: string, data: HourlyForecast) {
+function preserveCachedRunwayHistory(cacheKey: string, data: FullChartDetail): FullChartDetail {
   if (!data) return data;
   const cached = readHourlyCacheEntry(cacheKey, { allowStale: true })?.data;
   if (!cached || hourlyLocalDatesConflict(cached, data, null)) return data;
@@ -1951,6 +1992,7 @@ function preserveCachedRunwayHistory(cacheKey: string, data: HourlyForecast) {
       ...(data.amos || {}),
       runway_plate_history: runwayPlateHistory,
     } as AmosData,
+    __detailKind: "full_chart_detail",
   };
 }
 
@@ -1958,7 +2000,7 @@ function primeCityDetailCache(
   city: string,
   resolution: string,
   detail: CityDetail | null | undefined,
-): HourlyForecast {
+): FullChartDetail | null {
   let data = parseHourlyForecastFromCityDetail(detail || null);
   if (!data) return null;
   const cacheKey = hourlyCacheKey(city, resolution);
@@ -1975,8 +2017,8 @@ function queueCityDetailBatch(
   city: string,
   resolution: string,
   forceRefresh: boolean,
-): Promise<HourlyForecast> {
-  return new Promise<HourlyForecast>((resolve, reject) => {
+): Promise<FullChartDetail | null> {
+  return new Promise<FullChartDetail | null>((resolve, reject) => {
     const queueKey = cityDetailBatchQueueKey(resolution, forceRefresh);
     const queue = _cityDetailBatchQueues.get(queueKey) || {
       cities: new Set<string>(),
@@ -2003,7 +2045,7 @@ function queueCityDetailBatch(
 
 function resolveBatchWaiters(
   waiters: CityDetailBatchWaiter[] | undefined,
-  value: HourlyForecast,
+  value: FullChartDetail | null,
 ) {
   (waiters || []).forEach((waiter) => waiter.resolve(value));
 }
@@ -2120,7 +2162,7 @@ async function fetchCityDetailBatchWithTimeout(
     .finally(() => globalThis.clearTimeout(timeoutId));
 }
 
-async function fetchLiveObservationForCity(city: string): Promise<CityObservationPayload | null> {
+async function fetchLiveObservationForCity(city: string): Promise<ObservationSnapshot | null> {
   const headers = await buildBrowserBackendHeaders({ Accept: "application/json" });
   return fetch(`/api/city/${encodeURIComponent(city)}/observation`, {
     cache: "no-store",
@@ -2128,7 +2170,8 @@ async function fetchLiveObservationForCity(city: string): Promise<CityObservatio
   })
     .then(async (res) => {
       if (!res.ok) return null;
-      return res.json() as Promise<CityObservationPayload>;
+      const payload = await res.json() as CityObservationPayload;
+      return observationPayloadToSnapshot(payload);
     })
     .catch(() => null);
 }
@@ -2136,7 +2179,7 @@ async function fetchLiveObservationForCity(city: string): Promise<CityObservatio
 async function fetchHourlyForecastForCity(
   city: string,
   options: HourlyForecastFetchOptions = {},
-): Promise<HourlyForecast> {
+): Promise<FullChartDetail | null> {
   const resParam = options.resolution || "10m";
   const cacheKey = hourlyCacheKey(city, resParam);
   const forceRefresh = Boolean(options.ignoreCache);
@@ -3476,7 +3519,7 @@ export {
   getVisibleTemperatureSeries,
   isTemperatureSeriesVisibleByDefault,
   mergeHourlyWithLiveObservations,
-  mergeObservationPayloadIntoHourly,
+  mergeObservationSnapshotIntoHourly,
   mergePatchIntoHourly,
   mergeRowObservationIntoHourly,
   normObs,
@@ -3494,8 +3537,10 @@ export {
   seedHourlyForecastFromRow,
   seriesStats,
   shouldPollLiveChart,
+  observationPayloadToSnapshot,
+  toFullChartDetail,
   validNumber,
   rememberCityDetailBatchDiagnostics as __rememberCityDetailBatchDiagnosticsForTest,
 };
 
-export type { EvidenceSeries, HourlyForecast, PeakGlowMeta, PeakGlowState, ProbabilityOverlay };
+export type { EvidenceSeries, FullChartDetail, HourlyForecast, ObservationSnapshot, PeakGlowMeta, PeakGlowState, ProbabilityOverlay };

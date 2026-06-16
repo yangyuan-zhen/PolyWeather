@@ -232,8 +232,8 @@ export function runTests() {
   const fallbackRefreshBlock = chart.match(/const refreshLiveObservation = \(\) => \{[\s\S]*?\n    \};/)?.[0] || "";
   assert(
     fallbackRefreshBlock.includes("fetchLiveObservationForCity") &&
-      fallbackRefreshBlock.includes("applyLiveObservationPayload") &&
-      chart.includes("mergeObservationPayloadIntoHourly") &&
+      fallbackRefreshBlock.includes("applyLiveObservationSnapshot") &&
+      chart.includes("mergeObservationSnapshotIntoHourly") &&
       !fallbackRefreshBlock.includes("runHourlyDetailFetch") &&
       !fallbackRefreshBlock.includes("ignoreCache: true") &&
       !fallbackRefreshBlock.includes("setIsHourlyLoading(true)"),
@@ -243,10 +243,10 @@ export function runTests() {
     !chart.includes("rememberHourlyDetailSnapshot"),
     "temperature chart must not write row/SSE/observation overlays back into the full-detail cache",
   );
-  const resyncBlock = chart.match(/useEffect\(\(\) => \{\s*if \(!resyncVersion \|\| !city\) return;[\s\S]*?\}, \[resyncVersion, city, applyLiveObservationPayload\]\);/)?.[0] || "";
+  const resyncBlock = chart.match(/useEffect\(\(\) => \{\s*if \(!resyncVersion \|\| !city\) return;[\s\S]*?\}, \[resyncVersion, city, applyLiveObservationSnapshot\]\);/)?.[0] || "";
   assert(
     resyncBlock.includes("fetchLiveObservationForCity") &&
-      resyncBlock.includes("applyLiveObservationPayload") &&
+      resyncBlock.includes("applyLiveObservationSnapshot") &&
       !resyncBlock.includes("runHourlyDetailFetch") &&
       !resyncBlock.includes("ignoreCache: true") &&
       !resyncBlock.includes("setIsHourlyLoading(true)"),

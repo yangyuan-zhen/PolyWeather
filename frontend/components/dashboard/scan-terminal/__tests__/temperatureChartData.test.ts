@@ -3,14 +3,16 @@ import type { CityDetail } from "@/lib/dashboard-types";
 import { buildChartTimeAxis, buildDebBaselinePath } from "@/lib/temperature-chart-paths";
 import {
   buildFullDayChartData,
-  mergeObservationPayloadIntoHourly,
+  mergeObservationSnapshotIntoHourly,
   mergeHourlyWithLiveObservations,
   mergePatchIntoHourly,
   mergeRowObservationIntoHourly,
+  observationPayloadToSnapshot,
   readCachedHourlyForInitialRow,
   rememberHourlyDetailSnapshot,
   selectInitialHourlyForRowChange,
   seedHourlyForecastFromRow,
+  toFullChartDetail,
   _hourlyCache,
 } from "@/components/dashboard/scan-terminal/temperature-chart-logic";
 
@@ -954,13 +956,13 @@ export function runTests() {
     tz_offset_seconds: 8 * 3600,
     metar_context: { source: "amsc_awos" },
   } as any;
-  rememberHourlyDetailSnapshot("chengdu", "1m", seedHourlyForecastFromRow(cachedChengduRow));
+  rememberHourlyDetailSnapshot("chengdu", "1m", seedHourlyForecastFromRow(cachedChengduRow) as any);
   assert(
     !_hourlyCache.has(chengduCacheKey),
     "instant-restore cache must not persist a row-only seed that would block the full detail fetch",
   );
 
-  const cachedChengduDetail = {
+  const cachedChengduDetail = toFullChartDetail({
     ...seedHourlyForecastFromRow(cachedChengduRow),
     localDate: "2026-06-15",
     times: ["08:00", "09:00"],
@@ -975,7 +977,8 @@ export function runTests() {
     runwayPlateHistory: {
       "02L/20R": [{ timestamp: "2026-06-15T08:55:00Z", temp_c: 26.2 }],
     },
-  } as any;
+  } as any);
+  if (!cachedChengduDetail) throw new Error("test fixture should produce a full chart detail");
   const cachedChengduLivePatch = mergePatchIntoHourly(cachedChengduDetail, {
     city: "chengdu",
     revision: 7,
@@ -985,7 +988,9 @@ export function runTests() {
       runway_points: [{ runway: "02L/20R", temp: 26.8 }],
     },
   } as any);
-  rememberHourlyDetailSnapshot("chengdu", "1m", cachedChengduLivePatch);
+  const cachedChengduPatchedDetail = toFullChartDetail(cachedChengduLivePatch);
+  if (!cachedChengduPatchedDetail) throw new Error("live-merged detail should preserve full chart detail fields");
+  rememberHourlyDetailSnapshot("chengdu", "1m", cachedChengduPatchedDetail);
   const restoredChengdu = _hourlyCache.get(chengduCacheKey)?.data;
   assert(
     restoredChengdu?.modelCurves?.ECMWF?.length === 2 &&
@@ -1025,23 +1030,25 @@ export function runTests() {
       "02L/20R": [{ time: "2026-06-15T17:45:00+08:00", tdz_temp: 27.1, end_temp: 26.8 }],
     },
   };
-  const observationMergedChengdu = mergeObservationPayloadIntoHourly(
+  const observationSnapshot = observationPayloadToSnapshot(observationOnlyPayload as any);
+  if (!observationSnapshot) throw new Error("test observation payload should produce an observation snapshot");
+  const observationMergedChengdu = mergeObservationSnapshotIntoHourly(
     cachedChengduDetail,
-    observationOnlyPayload as any,
+    observationSnapshot,
   );
   assert(
     observationMergedChengdu?.airportCurrent?.temp === 27.1 &&
       observationMergedChengdu?.airportPrimary?.source_code === "amsc_awos",
-    "observation endpoint payload should update the current observation block",
+    "observation endpoint snapshot should update the current observation block",
   );
   assert(
     observationMergedChengdu?.modelCurves?.ECMWF?.length === 2 &&
       observationMergedChengdu?.debHourlyPath?.temps?.includes(30.9),
-    "observation endpoint payload must not clear DEB or multi-model chart detail",
+    "observation endpoint snapshot must not clear DEB or multi-model chart detail",
   );
   assert(
     (observationMergedChengdu?.runwayPlateHistory?.["02L/20R"] || []).length === 2,
-    "observation endpoint payload should append fresh runway history onto cached detail history",
+    "observation endpoint snapshot should append fresh runway history onto cached detail history",
   );
 
   _hourlyCache.clear();
@@ -1055,13 +1062,14 @@ export function runTests() {
       temp_symbol: "°C",
       tz_offset_seconds: 0,
     } as any;
-    rememberHourlyDetailSnapshot(`cache-city-${i}`, "10m", {
+    const cacheDetail = toFullChartDetail({
       ...seedHourlyForecastFromRow(row),
       times: ["09:00"],
       temps: [20 + i / 100],
       modelTimes: ["09:00"],
       modelCurves: { ECMWF: [20 + i / 100] },
     } as any);
+    if (cacheDetail) rememberHourlyDetailSnapshot(`cache-city-${i}`, "10m", cacheDetail);
   }
   assert(
     _hourlyCache.size <= 160,

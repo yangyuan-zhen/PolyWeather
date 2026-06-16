@@ -29,7 +29,7 @@ import {
   getVisibleTemperatureSeries,
   isTemperatureSeriesVisibleByDefault,
   mergeHourlyWithLiveObservations,
-  mergeObservationPayloadIntoHourly,
+  mergeObservationSnapshotIntoHourly,
   mergePatchIntoHourly,
   mergeRowObservationIntoHourly,
   normObs,
@@ -45,6 +45,7 @@ import {
   shouldPollLiveChart,
   validNumber,
   type HourlyForecast,
+  type ObservationSnapshot,
 } from "@/components/dashboard/scan-terminal/temperature-chart-logic";
 export { clearCityDetailCache } from "@/components/dashboard/scan-terminal/temperature-chart-logic";
 
@@ -252,9 +253,9 @@ function rowObservationTimeForFreshness(row: ScanOpportunityRow | null) {
   ).trim() || null;
 }
 
-function observationPayloadTimeForFreshness(payload: any) {
-  const block = payload?.airport_current || payload?.airport_primary || payload?.current || {};
-  return String(block.obs_time || block.observed_at || block.observation_time || payload?.local_time || "").trim() || null;
+function observationSnapshotTimeForFreshness(snapshot: ObservationSnapshot) {
+  const block = snapshot.airport_current || snapshot.airport_primary || snapshot.current || {};
+  return String(block.obs_time || block.observed_at || block.observation_time || snapshot.local_time || "").trim() || null;
 }
 
 function patchObservationTimeForFreshness(patch: { changes?: Record<string, unknown> } | null | undefined) {
@@ -847,25 +848,25 @@ export function LiveTemperatureThresholdChart({
     applySuccessfulHourlyDetail,
   });
 
-  const applyLiveObservationPayload = useCallback((payload: any) => {
-    if (!payload || typeof payload !== "object") return;
+  const applyLiveObservationSnapshot = useCallback((snapshot: ObservationSnapshot) => {
+    if (!snapshot || typeof snapshot !== "object") return;
     const appliedAtMs = Date.now();
-    const condition = payload.airport_current || payload.airport_primary || payload.current || {};
+    const condition = snapshot.airport_current || snapshot.airport_primary || snapshot.current || {};
     const temp = validNumber(condition.temp);
     if (temp !== null) setLiveTemp(temp);
-    if (typeof payload.local_date === "string" && payload.local_date) {
-      setCurrentCityLocalDate(payload.local_date);
+    if (typeof snapshot.local_date === "string" && snapshot.local_date) {
+      setCurrentCityLocalDate(snapshot.local_date);
     }
     commitHourlySnapshot((prev) =>
-      mergeObservationPayloadIntoHourly(
+      mergeObservationSnapshotIntoHourly(
         prev ?? seedHourlyForecastFromRow(getLatestRowSnapshot()),
-        payload,
+        snapshot,
       ),
     );
     setChartFreshness((prev) => ({
       ...prev,
       rowAppliedAtMs: appliedAtMs,
-      rowObservationTime: observationPayloadTimeForFreshness(payload),
+      rowObservationTime: observationSnapshotTimeForFreshness(snapshot),
     }));
   }, [commitHourlySnapshot, getLatestRowSnapshot]);
 
@@ -1021,14 +1022,14 @@ export function LiveTemperatureThresholdChart({
   useEffect(() => {
     if (!resyncVersion || !city) return;
     let cancelled = false;
-    void fetchLiveObservationForCity(city).then((payload) => {
-      if (cancelled || !payload) return;
-      applyLiveObservationPayload(payload);
+    void fetchLiveObservationForCity(city).then((snapshot) => {
+      if (cancelled || !snapshot) return;
+      applyLiveObservationSnapshot(snapshot);
     });
     return () => {
       cancelled = true;
     };
-  }, [resyncVersion, city, applyLiveObservationPayload]);
+  }, [resyncVersion, city, applyLiveObservationSnapshot]);
 
   // ── SSE fallback: visible charts merge no-store observations if patches stop. ──
   useEffect(() => {
@@ -1039,9 +1040,9 @@ export function LiveTemperatureThresholdChart({
       const now = Date.now();
       lastPatchAtRef.current = now;
 
-      void fetchLiveObservationForCity(city).then((payload) => {
-        if (cancelled || !payload) return;
-        applyLiveObservationPayload(payload);
+      void fetchLiveObservationForCity(city).then((snapshot) => {
+        if (cancelled || !snapshot) return;
+        applyLiveObservationSnapshot(snapshot);
       });
     };
 
@@ -1058,7 +1059,7 @@ export function LiveTemperatureThresholdChart({
       cancelled = true;
       clearInterval(id);
     };
-  }, [city, compact, isActive, isMaximized, applyLiveObservationPayload]);
+  }, [city, compact, isActive, isMaximized, applyLiveObservationSnapshot]);
 
   useEffect(() => {
     if (!activationRefreshKey) return;
