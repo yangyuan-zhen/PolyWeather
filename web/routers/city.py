@@ -16,6 +16,7 @@ from web.services.city_api import (
     get_city_summary_payload,
     list_cities_payload,
 )
+from web.services import city_observation as city_observation_service
 from web.services.city_realtime_stream import get_realtime_stream_payload
 from web.services.request_timing import attach_server_timing_header
 
@@ -150,6 +151,13 @@ async def city_detail_batch(
     else:
         apply_cache_control(response.headers, CITY_DETAIL_CACHE_CONTROL)
     attach_server_timing_header(response, request, "city_detail_batch_server_timing")
+    return payload
+
+
+@router.get("/api/city/{name}/observation")
+async def city_observation(response: Response, name: str):
+    payload = city_observation_service.get_city_observation_payload(name)
+    apply_no_store(response.headers)
     return payload
 
 

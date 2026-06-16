@@ -20,6 +20,7 @@ import {
   buildIntDegreeTicks,
   buildRunwayPlates,
   fetchHourlyForecastForCity,
+  fetchLiveObservationForCity,
   getActiveTemperatureSeries,
   getDebPeakWindowRange,
   getPeakGlowState,
@@ -28,6 +29,7 @@ import {
   getVisibleTemperatureSeries,
   isTemperatureSeriesVisibleByDefault,
   mergeHourlyWithLiveObservations,
+  mergeObservationPayloadIntoHourly,
   mergePatchIntoHourly,
   mergeRowObservationIntoHourly,
   normObs,
@@ -65,7 +67,7 @@ const PEAK_GLOW_BADGE_CLASS = {
 
 const PROBABILITY_REFRESH_AFTER_PATCH_MS = DASHBOARD_REFRESH_POLICY_MS.metar;
 const FOREGROUND_FULL_DETAIL_REFRESH_DEDUP_MS = 90_000;
-const NO_PATCH_CACHED_DETAIL_REFRESH_MS = DASHBOARD_REFRESH_POLICY_MS.observation;
+const LIVE_OBSERVATION_FALLBACK_MS = DASHBOARD_REFRESH_POLICY_MS.liveObservationFallback;
 const DETAIL_LOAD_BATCH_DELAY_MS = 0;
 const TRANSIENT_DETAIL_RETRY_DELAY_MS = 3_000;
 const INITIAL_DETAIL_LOAD_SLOTS = 3;
@@ -250,6 +252,11 @@ function rowObservationTimeForFreshness(row: ScanOpportunityRow | null) {
       row.local_time ||
       "",
   ).trim() || null;
+}
+
+function observationPayloadTimeForFreshness(payload: any) {
+  const block = payload?.airport_current || payload?.airport_primary || payload?.current || {};
+  return String(block.obs_time || block.observed_at || block.observation_time || payload?.local_time || "").trim() || null;
 }
 
 function patchObservationTimeForFreshness(patch: { changes?: Record<string, unknown> } | null | undefined) {
@@ -848,6 +855,28 @@ export function LiveTemperatureThresholdChart({
     applySuccessfulHourlyDetail,
   });
 
+  const applyLiveObservationPayload = useCallback((payload: any) => {
+    if (!payload || typeof payload !== "object") return;
+    const appliedAtMs = Date.now();
+    const condition = payload.airport_current || payload.airport_primary || payload.current || {};
+    const temp = validNumber(condition.temp);
+    if (temp !== null) setLiveTemp(temp);
+    if (typeof payload.local_date === "string" && payload.local_date) {
+      setCurrentCityLocalDate(payload.local_date);
+    }
+    commitHourlySnapshot((prev) =>
+      mergeObservationPayloadIntoHourly(
+        prev ?? seedHourlyForecastFromRow(getLatestRowSnapshot()),
+        payload,
+      ),
+    );
+    setChartFreshness((prev) => ({
+      ...prev,
+      rowAppliedAtMs: appliedAtMs,
+      rowObservationTime: observationPayloadTimeForFreshness(payload),
+    }));
+  }, [commitHourlySnapshot, getLatestRowSnapshot]);
+
   useEffect(() => {
     if (!city || !currentRowObservationSignature) return;
     if (lastRowObservationSignatureRef.current === currentRowObservationSignature) return;
@@ -1036,37 +1065,35 @@ export function LiveTemperatureThresholdChart({
     };
   }, [resyncVersion, city, runHourlyDetailFetch]);
 
-  // ── SSE fallback: visible charts refresh cached detail at observation cadence if patches stop. ──
+  // ── SSE fallback: visible charts merge no-store observations if patches stop. ──
   useEffect(() => {
     if (!shouldPollLiveChart({ city, compact, isActive, isMaximized })) return;
     let cancelled = false;
 
-    const refreshCachedDetail = () => {
+    const refreshLiveObservation = () => {
       const now = Date.now();
       lastPatchAtRef.current = now;
 
-      void runHourlyDetailFetch({
-        source: "network",
-        fetchOptions: { bypassLocalCache: true },
-        applyOptions: { updateLiveTemp: true },
-        isCancelled: () => cancelled,
-        onSettled: () => setIsHourlyLoading(false),
+      void fetchLiveObservationForCity(city).then((payload) => {
+        if (cancelled || !payload) return;
+        applyLiveObservationPayload(payload);
       });
     };
 
     const checkFallback = () => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-      if (Date.now() - lastPatchAtRef.current < NO_PATCH_CACHED_DETAIL_REFRESH_MS) return;
+      if (Date.now() - lastPatchAtRef.current < LIVE_OBSERVATION_FALLBACK_MS) return;
 
-      refreshCachedDetail();
+      refreshLiveObservation();
     };
 
+    refreshLiveObservation();
     const id = setInterval(checkFallback, 60_000);
     return () => {
       cancelled = true;
       clearInterval(id);
     };
-  }, [city, compact, isActive, isMaximized, targetResolution, runHourlyDetailFetch]);
+  }, [city, compact, isActive, isMaximized, applyLiveObservationPayload]);
 
   useEffect(() => {
     if (!activationRefreshKey) return;

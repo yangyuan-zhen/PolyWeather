@@ -3,6 +3,7 @@ import type { CityDetail } from "@/lib/dashboard-types";
 import { buildChartTimeAxis, buildDebBaselinePath } from "@/lib/temperature-chart-paths";
 import {
   buildFullDayChartData,
+  mergeObservationPayloadIntoHourly,
   mergeHourlyWithLiveObservations,
   mergePatchIntoHourly,
   mergeRowObservationIntoHourly,
@@ -833,6 +834,53 @@ export function runTests() {
   assert(
     (restoredChengdu?.runwayPlateHistory?.["02L/20R"] || []).length === 2,
     "instant-restore cache must include live-merged runway history so returning to terminal shows it immediately",
+  );
+
+  const observationOnlyPayload = {
+    city: "chengdu",
+    local_date: "2026-06-15",
+    local_time: "17:45",
+    airport_current: {
+      temp: 27.1,
+      obs_time: "2026-06-15T17:45:00+08:00",
+      source_code: "amsc_awos",
+      source_label: "AMSC AWOS",
+    },
+    airport_primary: {
+      temp: 27.1,
+      obs_time: "2026-06-15T17:45:00+08:00",
+      source_code: "amsc_awos",
+      source_label: "AMSC AWOS",
+    },
+    metar_today_obs: [
+      {
+        time: "17:45",
+        temp: 27.1,
+        obs_time: "2026-06-15T17:45:00+08:00",
+        source_code: "amsc_awos",
+      },
+    ],
+    runway_plate_history: {
+      "02L/20R": [{ time: "2026-06-15T17:45:00+08:00", tdz_temp: 27.1, end_temp: 26.8 }],
+    },
+  };
+  const observationMergedChengdu = mergeObservationPayloadIntoHourly(
+    cachedChengduDetail,
+    observationOnlyPayload as any,
+  );
+  assert(
+    observationMergedChengdu?.airportCurrent?.temp === 27.1 &&
+      observationMergedChengdu?.airportPrimary?.source_code === "amsc_awos",
+    "observation endpoint payload should update the current observation block",
+  );
+  assert(
+    observationMergedChengdu?.modelCurves?.ECMWF?.length === 2 &&
+      observationMergedChengdu?.debHourlyPath?.temps?.includes(30.9),
+    "observation endpoint payload must not clear DEB or multi-model chart detail",
+  );
+  assert(
+    (observationMergedChengdu?.runwayPlateHistory?.["02L/20R"] || []).length === 2,
+    "observation endpoint payload should append fresh runway history onto cached detail history",
   );
 
   _hourlyCache.clear();

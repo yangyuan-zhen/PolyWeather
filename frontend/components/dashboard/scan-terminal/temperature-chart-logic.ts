@@ -1602,6 +1602,16 @@ function mergeHourlyWithLiveObservations(
   };
 }
 
+function mergeObservationPayloadIntoHourly(
+  prev: HourlyForecast,
+  payload: CityObservationPayload | null | undefined,
+): HourlyForecast {
+  const live = observationPayloadToHourly(payload);
+  if (!prev) return live;
+  if (!live) return prev;
+  return mergeHourlyWithLiveObservations(prev, live, null);
+}
+
 function mergeRowObservationIntoHourly(
   prev: HourlyForecast,
   row: ScanOpportunityRow | null,
@@ -1643,6 +1653,22 @@ type HourlyForecastFetchOptions = {
   resolution?: string;
 };
 
+type CityObservationPayload = {
+  city?: string | null;
+  local_date?: string | null;
+  local_time?: string | null;
+  current?: Record<string, any> | null;
+  airport_current?: Record<string, any> | null;
+  airport_primary?: Record<string, any> | null;
+  amos?: AmosData | null;
+  runway_plate_history?: Record<string, Array<Record<string, unknown>>> | null;
+  runway_points?: Array<Record<string, unknown>>;
+  metar_today_obs?: Array<Record<string, any>>;
+  timeseries?: {
+    metar_today_obs?: Array<Record<string, any>>;
+  } | null;
+};
+
 type CityDetailBatchPayload = {
   cities?: string[];
   details?: Record<string, CityDetail | null | undefined>;
@@ -1668,6 +1694,126 @@ type CityDetailBatchQueue = {
 const CITY_DETAIL_BATCH_WINDOW_MS = 100;
 const CITY_DETAIL_BATCH_MAX_CITIES = 12;
 const _cityDetailBatchQueues = new Map<string, CityDetailBatchQueue>();
+
+function normalizeObservationCondition(block: Record<string, any> | null | undefined): AirportCurrentConditions | null {
+  if (!block || typeof block !== "object") return null;
+  const temp = validNumber(block.temp);
+  const obsTime = String(block.obs_time || block.observed_at || block.observation_time || block.time || "").trim();
+  if (temp === null || !obsTime) return null;
+  return {
+    ...(block as AirportCurrentConditions),
+    temp,
+    obs_time: obsTime,
+    max_so_far: validNumber(block.max_so_far) ?? validNumber(block.max_temp_so_far) ?? temp,
+    source_code: String(block.source_code || block.source || "").trim() || null,
+    source_label: String(block.source_label || block.settlement_source_label || block.source || "").trim() || null,
+    station_code: String(block.station_code || block.icao || "").trim() || null,
+    station_label: String(block.station_label || block.station_name || "").trim() || null,
+  };
+}
+
+function normalizeObservationPoint(point: Record<string, any>): ObsPoint | null {
+  const temp = validNumber(point.temp);
+  const time = String(point.time || point.obs_time || point.observed_at || point.observation_time || "").trim();
+  if (temp === null || !time) return null;
+  return { time, temp };
+}
+
+function normalizeObservationRunwayHistory(
+  history: CityObservationPayload["runway_plate_history"],
+  runwayPoints: CityObservationPayload["runway_points"],
+) {
+  const normalized: Record<string, Array<Record<string, unknown>>> = {};
+  Object.entries(history || {}).forEach(([runway, points]) => {
+    if (!Array.isArray(points)) return;
+    const normalizedPoints = points
+      .map((point): Record<string, unknown> | null => {
+        if (!point || typeof point !== "object") return null;
+        const value =
+          parseRunwayHistoryValue(point) ??
+          validNumber((point as any).target_runway_max) ??
+          validNumber((point as any).tdz_temp) ??
+          validNumber((point as any).end_temp);
+        const time = String((point as any).timestamp || (point as any).time || (point as any).observed_at || "").trim();
+        if (value === null || !time) return null;
+        return {
+          ...point,
+          timestamp: time,
+          value,
+          temp_c: value,
+        };
+      })
+      .filter((point): point is Record<string, unknown> => point !== null);
+    if (normalizedPoints.length) normalized[runway] = normalizedPoints;
+  });
+
+  for (const point of runwayPoints || []) {
+    if (!point || typeof point !== "object") continue;
+    const runway = String((point as any).runway || "").trim().toUpperCase();
+    if (!runway) continue;
+    const value =
+      parseRunwayHistoryValue(point) ??
+      validNumber((point as any).target_runway_max) ??
+      validNumber((point as any).tdz_temp) ??
+      validNumber((point as any).end_temp);
+    const time = String((point as any).timestamp || (point as any).time || (point as any).observed_at || "").trim();
+    if (value === null || !time) continue;
+    normalized[runway] = [
+      ...(normalized[runway] || []),
+      {
+        ...point,
+        timestamp: time,
+        value,
+        temp_c: value,
+      },
+    ].slice(-MAX_OBS_POINTS);
+  }
+
+  return Object.keys(normalized).length ? normalized : undefined;
+}
+
+function observationPayloadToHourly(payload: CityObservationPayload | null | undefined): HourlyForecast {
+  if (!payload || typeof payload !== "object") return null;
+  const airportCurrent = normalizeObservationCondition(payload.airport_current || payload.current);
+  const airportPrimary = normalizeObservationCondition(payload.airport_primary || payload.airport_current || payload.current);
+  const current = payload.current && typeof payload.current === "object"
+    ? {
+        ...(payload.current as CurrentConditions),
+        temp: validNumber(payload.current.temp),
+      }
+    : null;
+  const metarTodayObs = [
+    ...((payload.timeseries?.metar_today_obs || []) as Array<Record<string, any>>),
+    ...((payload.metar_today_obs || []) as Array<Record<string, any>>),
+  ]
+    .map(normalizeObservationPoint)
+    .filter((point): point is ObsPoint => point !== null);
+  const airportPrimaryTodayObs = (airportPrimary?.obs_time && validNumber(airportPrimary.temp) !== null)
+    ? appendRawObservationPoint(undefined, airportPrimary.obs_time, Number(airportPrimary.temp))
+    : undefined;
+  return {
+    forecastTodayHigh: null,
+    debPrediction: null,
+    debQuality: null,
+    debHourlyPath: null,
+    localDate: payload.local_date || null,
+    localTime: payload.local_time || airportPrimary?.obs_time || airportCurrent?.obs_time || null,
+    times: [],
+    temps: [],
+    modelTimes: undefined,
+    modelCurves: undefined,
+    forecastDaily: [],
+    multiModelDaily: {},
+    probabilities: null,
+    runwayPlateHistory: normalizeObservationRunwayHistory(payload.runway_plate_history, payload.runway_points),
+    amos: payload.amos || null,
+    current,
+    airportCurrent,
+    airportPrimary,
+    metarTodayObs: metarTodayObs.length ? metarTodayObs : undefined,
+    airportPrimaryTodayObs,
+  };
+}
 
 function parseHourlyForecastFromCityDetail(json: CityDetail | null): HourlyForecast {
   const hourlySource = (json as any)?.hourly ?? (json as any)?.timeseries?.hourly;
@@ -1893,6 +2039,19 @@ async function fetchCityDetailBatchWithTimeout(
     })
     .catch(() => null)
     .finally(() => globalThis.clearTimeout(timeoutId));
+}
+
+async function fetchLiveObservationForCity(city: string): Promise<CityObservationPayload | null> {
+  const headers = await buildBrowserBackendHeaders({ Accept: "application/json" });
+  return fetch(`/api/city/${encodeURIComponent(city)}/observation`, {
+    cache: "no-store",
+    headers,
+  })
+    .then(async (res) => {
+      if (!res.ok) return null;
+      return res.json() as Promise<CityObservationPayload>;
+    })
+    .catch(() => null);
 }
 
 async function fetchHourlyForecastForCity(
@@ -3223,6 +3382,7 @@ export {
   buildModelSummaryCards,
   buildRunwayPlates,
   fetchHourlyForecastForCity,
+  fetchLiveObservationForCity,
   getActiveTemperatureSeries,
   getTemperatureSeriesForRunwayDetailsMode,
   getLiveObservationLabels,
@@ -3230,6 +3390,7 @@ export {
   getVisibleTemperatureSeries,
   isTemperatureSeriesVisibleByDefault,
   mergeHourlyWithLiveObservations,
+  mergeObservationPayloadIntoHourly,
   mergePatchIntoHourly,
   mergeRowObservationIntoHourly,
   normObs,

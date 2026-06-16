@@ -36,6 +36,7 @@ async function flushMicrotasks() {
 
 export async function runTests() {
   assert(DASHBOARD_REFRESH_POLICY_MS.observation === 60_000, "observation layer should refresh every 60 seconds");
+  assert(DASHBOARD_REFRESH_POLICY_MS.liveObservationFallback === 3 * 60_000, "chart observation fallback should poll every 180 seconds when SSE is unavailable");
   assert(DASHBOARD_REFRESH_POLICY_MS.scanRows === 2 * 60_000, "region/city rows should refresh every 2 minutes");
   assert(DASHBOARD_REFRESH_POLICY_MS.marketOverview === 10 * 60_000, "market overview should refresh every 10 minutes");
   assert(DASHBOARD_REFRESH_POLICY_MS.model === 30 * 60_000, "DEB and multi-model data should refresh every 30 minutes");
@@ -86,19 +87,21 @@ export async function runTests() {
     "selected city chart should consume SSE patches and keep METAR cadence for heavy probability refreshes instead of a 2-minute forced refresh",
   );
   assert(
-    chartSource.includes("NO_PATCH_CACHED_DETAIL_REFRESH_MS = DASHBOARD_REFRESH_POLICY_MS.observation") &&
-      chartSource.includes("refreshCachedDetail") &&
-      chartSource.includes("runHourlyDetailFetch") &&
-      chartSource.includes("fetchOptions: { bypassLocalCache: true }") &&
+    chartSource.includes("LIVE_OBSERVATION_FALLBACK_MS = DASHBOARD_REFRESH_POLICY_MS.liveObservationFallback") &&
+      chartSource.includes("refreshLiveObservation") &&
+      chartSource.includes("fetchLiveObservationForCity") &&
+      chartSource.includes("mergeObservationPayloadIntoHourly") &&
       chartLogicSource.includes("options.bypassLocalCache") &&
       chartLogicSource.includes("const forceRefresh = Boolean(options.ignoreCache)"),
-    "visible charts should bypass the five-minute browser detail cache every observation cadence without force-refreshing backend sources",
+    "visible charts should use the no-store observation endpoint for 180-second SSE fallback without forcing detail-batch refreshes",
   );
   const componentHourlyFetchCalls = chartSource.match(/fetchHourlyForecastForCity\(city,/g) || [];
+  const hourlyFetcherBlock =
+    /function useHourlyDetailFetcher\([\s\S]*?\n}\r?\n\r?\n\/\/ 岸岸 Main component/.exec(chartSource)?.[0] || "";
   assert(
     chartSource.includes("function useHourlyDetailFetcher") &&
       componentHourlyFetchCalls.length === 1 &&
-      !/fetchHourlyForecastForCity\(city,[\s\S]*?\)\s*\.then\(/.test(chartSource),
+      !/fetchHourlyForecastForCity\(city,[\s\S]*?\)\s*\.then\(/.test(hourlyFetcherBlock),
     "temperature chart should centralize full-detail fetch lifecycle in useHourlyDetailFetcher instead of duplicating then/catch branches across effects",
   );
   assert(
@@ -159,7 +162,13 @@ export async function runTests() {
   assert(
     chartLogicSource.includes("forceRefresh: boolean") &&
       chartLogicSource.includes('force_refresh: forceRefresh ? "true" : "false"'),
-    "ignoreCache chart detail refreshes must send force_refresh=true so fresh METAR observations bypass proxy and backend chart caches",
+    "ignoreCache chart detail refreshes must send force_refresh=true only for heavy model/detail resyncs, not the 180-second observation fallback",
+  );
+  assert(
+    chartLogicSource.includes("/api/city/${encodeURIComponent(city)}/observation") &&
+      chartLogicSource.includes('cache: "no-store"') &&
+      chartLogicSource.includes("mergeObservationPayloadIntoHourly"),
+    "live observation fetches must call the no-store per-city observation endpoint and merge without touching cached model detail",
   );
   assert(
     chartLogicSource.includes("cityDetailBatchQueueKey") &&

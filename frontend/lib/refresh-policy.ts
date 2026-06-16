@@ -1,5 +1,6 @@
 export const DASHBOARD_REFRESH_POLICY_SEC = {
   observation: 60,
+  liveObservationFallback: 3 * 60,
   metar: 5 * 60,
   scanRows: 2 * 60,
   marketOverview: 10 * 60,
@@ -8,6 +9,7 @@ export const DASHBOARD_REFRESH_POLICY_SEC = {
 
 export const DASHBOARD_REFRESH_POLICY_MS = {
   observation: DASHBOARD_REFRESH_POLICY_SEC.observation * 1000,
+  liveObservationFallback: DASHBOARD_REFRESH_POLICY_SEC.liveObservationFallback * 1000,
   metar: DASHBOARD_REFRESH_POLICY_SEC.metar * 1000,
   scanRows: DASHBOARD_REFRESH_POLICY_SEC.scanRows * 1000,
   marketOverview: DASHBOARD_REFRESH_POLICY_SEC.marketOverview * 1000,

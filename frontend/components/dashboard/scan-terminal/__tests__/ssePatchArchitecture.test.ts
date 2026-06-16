@@ -197,8 +197,8 @@ export function runTests() {
     "temperature chart must keep METAR cadence for heavy patch-triggered probability refreshes",
   );
   assert(
-    chart.includes("NO_PATCH_CACHED_DETAIL_REFRESH_MS = DASHBOARD_REFRESH_POLICY_MS.observation"),
-    "temperature chart must use observation cadence for lightweight cached no-patch refreshes",
+    chart.includes("LIVE_OBSERVATION_FALLBACK_MS = DASHBOARD_REFRESH_POLICY_MS.liveObservationFallback"),
+    "temperature chart must use the 180-second observation fallback cadence when SSE patches stop",
   );
   assert(chart.includes("TemperatureChartCanvas"), "temperature chart shell must compose the extracted chart canvas");
   assert(chart.includes("TemperatureStatsBars"), "temperature chart shell must compose the extracted stat bars");
@@ -229,13 +229,15 @@ export function runTests() {
     chart.includes("ignoreCache: true") && chart.includes("currentCityLocalDate !== loadedLocalDate"),
     "temperature chart must background-refresh full city detail when the city-local day rolls over",
   );
-  const fallbackRefreshBlock = chart.match(/const refreshCachedDetail = \(\) => \{[\s\S]*?\n    \};/)?.[0] || "";
+  const fallbackRefreshBlock = chart.match(/const refreshLiveObservation = \(\) => \{[\s\S]*?\n    \};/)?.[0] || "";
   assert(
-    fallbackRefreshBlock.includes("runHourlyDetailFetch") &&
-      fallbackRefreshBlock.includes("fetchOptions: { bypassLocalCache: true }") &&
+    fallbackRefreshBlock.includes("fetchLiveObservationForCity") &&
+      fallbackRefreshBlock.includes("applyLiveObservationPayload") &&
+      chart.includes("mergeObservationPayloadIntoHourly") &&
+      !fallbackRefreshBlock.includes("runHourlyDetailFetch") &&
       !fallbackRefreshBlock.includes("ignoreCache: true") &&
       !fallbackRefreshBlock.includes("setIsHourlyLoading(true)"),
-    "no-patch fallback refresh should revalidate through cached backend detail without force-refreshing sources or showing the loading overlay",
+    "no-patch fallback refresh should merge no-store observation data without refreshing cached detail-batch or showing the loading overlay",
   );
   const resyncBlock = chart.match(/useEffect\(\(\) => \{\s*if \(!resyncVersion \|\| !city\) return;[\s\S]*?\}, \[resyncVersion, city, runHourlyDetailFetch\]\);/)?.[0] || "";
   assert(
