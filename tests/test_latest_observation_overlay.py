@@ -553,3 +553,58 @@ def test_overlay_latest_cwa_resets_stale_taipei_detail_to_latest_local_day():
         }
     ]
     assert result["timeseries"]["metar_today_obs"] == result["metar_today_obs"]
+
+
+def test_overlay_latest_cwa_uses_official_intraday_history_when_fetcher_is_empty(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    expected_date = (datetime.now(timezone.utc) + timedelta(hours=8)).strftime("%Y-%m-%d")
+
+    class FakeRepo:
+        def load_points(self, *, source_code, station_code, target_date):
+            assert source_code == "cwa"
+            assert station_code == "466920"
+            return [
+                {"time": "14:30", "temp": 28.8},
+                {"time": "15:30", "temp": 29.4},
+            ]
+
+    class FakeWeather:
+        def fetch_cwa_taipei_settlement_current(self):
+            return None
+
+    monkeypatch.setattr(
+        observation_overlay,
+        "OfficialIntradayObservationRepository",
+        lambda: FakeRepo(),
+    )
+
+    result = observation_overlay.overlay_latest_cwa_observation(
+        FakeWeather(),
+        "taipei",
+        {
+            "name": "taipei",
+            "display_name": "Taipei",
+            "temp_symbol": "°C",
+            "local_date": "2026-06-14",
+            "local_time": "18:00",
+            "current": {
+                "temp": 26.0,
+                "source_code": "cwa",
+                "obs_time": "2026-06-14T10:00:00+00:00",
+            },
+            "airport_current": {
+                "temp": 26.0,
+                "source_code": "cwa",
+                "obs_time": "2026-06-14T10:00:00+00:00",
+            },
+            "metar_today_obs": [{"time": "18:00", "temp": 26.0}],
+            "timeseries": {"metar_today_obs": [{"time": "18:00", "temp": 26.0}]},
+        },
+    )
+
+    assert result["local_date"] == expected_date
+    assert result["local_time"] == "15:30"
+    assert result["airport_current"]["temp"] == 29.4
+    assert result["airport_current"]["source_code"] == "cwa"
+    assert result["airport_current"]["obs_time"] == f"{expected_date}T15:30:00+08:00"

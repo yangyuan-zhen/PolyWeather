@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import time
 from typing import Any, Optional
 
 from loguru import logger
 
+from src.database.runtime_state import OfficialIntradayObservationRepository
 from web.services.canonical_temperature import build_canonical_temperature
 
 _RAW_AMSC_RUNWAY_HISTORY_CACHE: dict[tuple[str, bool], tuple[float, dict[str, list[dict[str, Any]]]]] = {}
@@ -905,6 +906,48 @@ def _latest_cwa_data_from_airport_obs_log(db: Any, city: str, use_fahrenheit: bo
     }
 
 
+def _latest_cwa_data_from_official_intraday_history(use_fahrenheit: bool) -> Optional[dict[str, Any]]:
+    try:
+        local_now = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=8)))
+        target_date = local_now.strftime("%Y-%m-%d")
+        points = OfficialIntradayObservationRepository().load_points(
+            source_code="cwa",
+            station_code="466920",
+            target_date=target_date,
+        )
+    except Exception as exc:
+        logger.debug("latest CWA official intraday history read failed: {}", exc)
+        return None
+
+    latest: Optional[dict[str, Any]] = None
+    latest_epoch: Optional[int] = None
+    for point in points if isinstance(points, list) else []:
+        if not isinstance(point, dict):
+            continue
+        time_text = str(point.get("time") or "").strip()
+        temp = _to_float(point.get("temp"))
+        if len(time_text) != 5 or ":" not in time_text or temp is None:
+            continue
+        obs_time = f"{target_date}T{time_text}:00+08:00"
+        epoch = parse_observation_epoch(obs_time)
+        if epoch is None:
+            continue
+        if latest_epoch is None or epoch > latest_epoch:
+            latest_epoch = epoch
+            latest = {
+                "source": "cwa",
+                "source_label": "CWA",
+                "station_code": "466920",
+                "station_name": "\u81fa\u5317",
+                "observation_time": obs_time,
+                "current": {
+                    "temp": round(float(temp) * 9 / 5 + 32, 1) if use_fahrenheit else round(float(temp), 1),
+                },
+                "unit": "fahrenheit" if use_fahrenheit else "celsius",
+            }
+    return latest
+
+
 def _newer_cwa_payload(left: Optional[dict[str, Any]], right: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
     if not isinstance(left, dict):
         return right if isinstance(right, dict) else None
@@ -924,6 +967,7 @@ def overlay_latest_cwa_observation(weather, city, payload, db=None):
 
     use_fahrenheit = "F" in str(payload.get("temp_symbol") or "").upper()
     cwa_data = _latest_cwa_data_from_airport_obs_log(db, normalized_city, use_fahrenheit)
+    cwa_data = _newer_cwa_payload(cwa_data, _latest_cwa_data_from_official_intraday_history(use_fahrenheit))
 
     fetcher = getattr(weather, "fetch_cwa_taipei_settlement_current", None)
     if not callable(fetcher) and not cwa_data:
