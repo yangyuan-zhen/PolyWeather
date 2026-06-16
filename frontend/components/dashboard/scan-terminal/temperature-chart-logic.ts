@@ -371,6 +371,8 @@ const HOURLY_DETAIL_REQUEST_TIMEOUT_MS = 16_000;
 let _hourlyActiveDetailRequests = 0;
 const _hourlyDetailRequestQueue: Array<() => void> = [];
 const RUNWAY_LINE_COLORS = ["#00897b", "#d97706", "#7c3aed", "#0891b2", "#ea580c", "#64748b"];
+const SHORT_RANGE_MODEL_CURVES = new Set(["AROME HD", "HRRR", "NAM", "ICON-D2", "HRDPS"]);
+const SHORT_RANGE_MODEL_STALE_GRACE_MS = 2 * 60 * 60 * 1000;
 
 const SESSION_CACHE_PREFIX = "polyweather_city_detail_v1:";
 
@@ -2799,6 +2801,38 @@ function resolveModelCurveTimes(
   return hourly?.times?.length === modelTemps.length ? hourly.times : [];
 }
 
+function isShortRangeModelCurve(model: string) {
+  return SHORT_RANGE_MODEL_CURVES.has(String(model || "").trim().toUpperCase());
+}
+
+function shouldRenderModelCurve(
+  model: string,
+  values: Array<number | null>,
+  timeline: number[],
+  row: ScanOpportunityRow | null,
+  hourly: ChartRenderState,
+  tzOffsetSeconds: number,
+  localDateStr: string,
+) {
+  if (!isShortRangeModelCurve(model)) return true;
+  const currentTs = getCityLocalUtcTimestamp(
+    hourly?.localTime || row?.local_time,
+    tzOffsetSeconds,
+    localDateStr,
+  );
+  if (currentTs === null) return true;
+
+  let latestValidTs: number | null = null;
+  values.forEach((value, index) => {
+    if (validNumber(value) === null) return;
+    const ts = timeline[index];
+    if (!Number.isFinite(ts)) return;
+    latestValidTs = latestValidTs === null ? ts : Math.max(latestValidTs, ts);
+  });
+
+  return latestValidTs !== null && latestValidTs >= currentTs - SHORT_RANGE_MODEL_STALE_GRACE_MS;
+}
+
 function probabilityBucketValue(bucket: ProbabilityBucket) {
   return validNumber(bucket.value ?? (bucket as any).temp ?? (bucket as any).temperature);
 }
@@ -3132,6 +3166,7 @@ function buildFullDayChartData(
           localDayBounds,
         );
         if (vals.some((v) => v !== null)) {
+          if (!shouldRenderModelCurve(model, vals, timeline, row, hourly, tzOffset, localDateStr)) return;
           series.push({
             key: `model_curve_${model}`,
             label: model,

@@ -157,6 +157,11 @@ OPEN_METEO_MULTI_MODEL_SPECS: Dict[str, Dict[str, Any]] = {
 }
 
 OPEN_METEO_MULTI_MODEL_ORDER = tuple(OPEN_METEO_MULTI_MODEL_SPECS.keys())
+SHORT_RANGE_HOURLY_MODEL_LABELS = frozenset(
+    str(spec["label"])
+    for spec in OPEN_METEO_MULTI_MODEL_SPECS.values()
+    if str(spec.get("tier") or "").startswith("short_range")
+)
 
 
 def _parse_open_meteo_multi_model_daily(
@@ -320,14 +325,22 @@ def _merge_multi_model_result_with_cache(
         cutoff = fresh_hourly_times[0]
         all_hourly_times = [t for t in all_hourly_times if t >= cutoff]
 
+    fresh_hourly_labels = {
+        str(label)
+        for label, values in fresh_hourly_forecasts.items()
+        if isinstance(values, list)
+    }
+
     for t_str in all_hourly_times:
         c_hour = cached_hourly_by_time.get(t_str) or {}
         f_hour = fresh_hourly_by_time.get(t_str) or {}
-        merged_hourly_by_time[t_str] = (
-            dict(f_hour)
-            if _count_models(f_hour) >= _count_models(c_hour)
-            else {**dict(c_hour), **dict(f_hour)}
-        )
+        reusable_cached_hour = {
+            label: value
+            for label, value in c_hour.items()
+            if label not in fresh_hourly_labels
+            and label not in SHORT_RANGE_HOURLY_MODEL_LABELS
+        }
+        merged_hourly_by_time[t_str] = {**reusable_cached_hour, **dict(f_hour)}
 
     merged_hourly_forecasts = _reconstruct_hourly_forecasts(all_hourly_times, merged_hourly_by_time)
 

@@ -92,7 +92,7 @@ def test_multi_model_default_cache_version_refreshes_noaa_model_set(monkeypatch)
 
     collector = WeatherDataCollector({})
 
-    assert collector.multi_model_cache_version == "v4"
+    assert collector.multi_model_cache_version == "v5"
 
 
 def test_madis_patch_uses_city_display_unit_for_us(monkeypatch):
@@ -467,3 +467,47 @@ def test_merge_multi_model_result_with_cache_hourly():
     assert merged["hourly_forecasts"]["ECMWF"] == [15.1, 15.3]
     assert merged["hourly_forecasts"]["GFS"] == [14.5, None]
     assert merged["hourly_forecasts"]["ICON-EU"] == [14.8, None]
+
+
+def test_merge_multi_model_result_drops_missing_short_range_hourly_from_cache():
+    from src.data_collection.nws_open_meteo_sources import _merge_multi_model_result_with_cache
+
+    cached = {
+        "forecasts": {"ECMWF": 28.0, "AROME HD": 27.0},
+        "daily_forecasts": {
+            "2026-06-16": {"ECMWF": 28.0, "AROME HD": 27.0}
+        },
+        "hourly_times": [
+            "2026-06-16T00:00",
+            "2026-06-16T01:00",
+            "2026-06-16T02:00",
+            "2026-06-16T03:00",
+            "2026-06-16T04:00",
+            "2026-06-16T05:00",
+        ],
+        "hourly_forecasts": {
+            "ECMWF": [21.0, 21.5, 22.0, 22.5, 23.0, 23.5],
+            "AROME HD": [25.0, 24.5, 24.0, 23.5, 23.0, 22.5],
+        },
+    }
+    fresh = {
+        "forecasts": {"ECMWF": 28.2},
+        "daily_forecasts": {"2026-06-16": {"ECMWF": 28.2}},
+        "hourly_times": [
+            "2026-06-16T00:00",
+            "2026-06-16T01:00",
+            "2026-06-16T02:00",
+            "2026-06-16T03:00",
+            "2026-06-16T04:00",
+            "2026-06-16T05:00",
+            "2026-06-16T06:00",
+        ],
+        "hourly_forecasts": {
+            "ECMWF": [21.2, 21.7, 22.2, 22.7, 23.2, 23.7, 24.0],
+        },
+    }
+
+    merged = _merge_multi_model_result_with_cache(cached, fresh)
+
+    assert merged["hourly_forecasts"]["ECMWF"] == [21.2, 21.7, 22.2, 22.7, 23.2, 23.7, 24.0]
+    assert "AROME HD" not in merged["hourly_forecasts"]

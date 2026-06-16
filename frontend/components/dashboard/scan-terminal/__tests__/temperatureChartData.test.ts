@@ -226,6 +226,76 @@ export function runTests() {
     "chart should use the current scan row local date when cached detail localDate is older so today's model curve is drawn through 23:00",
   );
 
+  const staleShortRangeModelChart = buildFullDayChartData(
+    {
+      city: "paris",
+      local_date: "2026-06-16",
+      local_time: "19:33",
+      temp_symbol: "°C",
+      tz_offset_seconds: 2 * 3600,
+    } as any,
+    {
+      forecastTodayHigh: 27,
+      debPrediction: 27,
+      localDate: "2026-06-16",
+      localTime: "19:33",
+      times: fullDayHourlyTimes,
+      temps: fullDayHourlyTemps,
+      debHourlyPath: {
+        times: fullDayHourlyTimes,
+        temps: fullDayHourlyTimes.map((_, hour) => 16 + Math.sin((hour / 23) * Math.PI) * 8),
+      },
+      modelTimes: fullDayHourlyTimes,
+      modelCurves: {
+        "AROME HD": [
+          25.1,
+          25.0,
+          24.1,
+          24.0,
+          23.9,
+          22.8,
+          ...Array.from({ length: 18 }, () => null),
+        ],
+      },
+    } as any,
+    true,
+  );
+  assert(
+    !staleShortRangeModelChart.series.some((item) => item.key === "model_curve_AROME HD"),
+    "Paris AROME HD should not render a stale early-morning fragment as a live prediction curve at 19:33",
+  );
+
+  const freshShortRangeModelChart = buildFullDayChartData(
+    {
+      city: "paris",
+      local_date: "2026-06-16",
+      local_time: "19:33",
+      temp_symbol: "°C",
+      tz_offset_seconds: 2 * 3600,
+    } as any,
+    {
+      forecastTodayHigh: 27,
+      debPrediction: 27,
+      localDate: "2026-06-16",
+      localTime: "19:33",
+      times: fullDayHourlyTimes,
+      temps: fullDayHourlyTemps,
+      debHourlyPath: {
+        times: fullDayHourlyTimes,
+        temps: fullDayHourlyTimes.map((_, hour) => 16 + Math.sin((hour / 23) * Math.PI) * 8),
+      },
+      modelTimes: fullDayHourlyTimes,
+      modelCurves: {
+        "AROME HD": fullDayHourlyTimes.map((_, hour) => 21 + Math.sin((hour / 23) * Math.PI) * 7),
+      },
+    } as any,
+    true,
+  );
+  assert(
+    freshShortRangeModelChart.series.some((item) => item.key === "model_curve_AROME HD"),
+    "Paris AROME HD should still render when the curve has current or future points",
+  );
+
   _hourlyCache.clear();
   _hourlyCache.set("madrid:10m", {
     ts: Date.now(),
