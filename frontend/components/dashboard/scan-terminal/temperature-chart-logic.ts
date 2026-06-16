@@ -892,8 +892,10 @@ function airportPrimarySeriesLabel(
   }
   const payloadLabel = String(hourly?.airportPrimary?.source_label || "").trim();
   if (payloadLabel && !isGenericAirportPrimaryLabel(payloadLabel)) return payloadLabel;
-  if (canonicalLabel === "NOAA MADIS" && !isUsAirportCode(airportCodeForSeriesLabel(hourly, row))) {
-    const stationCode = airportCodeForSeriesLabel(hourly, row);
+  const stationCode = airportCodeForSeriesLabel(hourly, row);
+  const isUsAirport = isUsAirportCode(stationCode);
+  if (!isUsAirport) {
+    if (canonicalLabel && canonicalLabel !== "NOAA MADIS") return canonicalLabel;
     return stationCode ? `${stationCode} METAR` : "METAR";
   }
   return canonicalLabel || payloadLabel || "NOAA MADIS";

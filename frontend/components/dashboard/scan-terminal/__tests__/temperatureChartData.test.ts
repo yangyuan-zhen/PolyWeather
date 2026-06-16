@@ -542,6 +542,35 @@ export function runTests() {
     "NOAA MADIS label should be reserved for US airports; non-US airport-primary fallback should use METAR wording",
   );
 
+  const parisImplicitAirportPrimaryChart = buildFullDayChartData(
+    {
+      city: "paris",
+      local_date: "2026-06-16",
+      local_time: "14:24",
+      tz_offset_seconds: 2 * 60 * 60,
+      airport: "LFPB",
+      temp_symbol: "°C",
+    } as any,
+    {
+      localDate: "2026-06-16",
+      localTime: "14:24",
+      times: ["00:00", "12:00", "18:00"],
+      temps: [14, 20, 18],
+      airportPrimary: {
+        temp: 20.0,
+        obs_time: "2026-06-16T12:24:00Z",
+      },
+      airportPrimaryTodayObs: [["2026-06-16T12:00:00Z", 20.0]],
+      metarTodayObs: [["2026-06-16T12:00:00Z", 20.0]],
+    } as any,
+    false,
+  );
+  const parisImplicitAirportPrimarySeries = parisImplicitAirportPrimaryChart.series.find((item) => item.key === "madis");
+  assert(
+    parisImplicitAirportPrimarySeries?.label === "LFPB METAR",
+    "non-US airport-primary fallback without explicit source metadata must not default to NOAA MADIS",
+  );
+
   const ankaraScanSeedChart = buildFullDayChartData(
     {
       city: "ankara",
