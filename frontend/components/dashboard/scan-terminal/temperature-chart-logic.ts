@@ -665,6 +665,20 @@ function getCityLocalUtcTimestamp(
   const raw = String(value).trim();
   if (!raw) return null;
 
+  const floatingIsoDateTime = raw.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{1,2}):(\d{2})(?::(\d{2}))?$/,
+  );
+  if (floatingIsoDateTime) {
+    return Date.UTC(
+      Number(floatingIsoDateTime[1]),
+      Number(floatingIsoDateTime[2]) - 1,
+      Number(floatingIsoDateTime[3]),
+      Number(floatingIsoDateTime[4]),
+      Number(floatingIsoDateTime[5]),
+      floatingIsoDateTime[6] ? Number(floatingIsoDateTime[6]) : 0,
+    );
+  }
+
   if (raw.includes("T") || raw.includes("Z") || raw.includes("-")) {
     const d = new Date(raw);
     if (!Number.isNaN(d.getTime())) {
@@ -725,12 +739,19 @@ function dateFromLocalTime(value?: string | null) {
   return match ? `${match[1]}-${match[2]}-${match[3]}` : null;
 }
 
+function laterLocalDate(left?: string | null, right?: string | null) {
+  const a = String(left || "").trim();
+  const b = String(right || "").trim();
+  const isDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+  if (isDate(a) && isDate(b)) return a >= b ? a : b;
+  return isDate(a) ? a : isDate(b) ? b : null;
+}
+
 function resolveChartLocalDate(row: ScanOpportunityRow | null, hourly: HourlyForecast) {
+  const hourlyDate = hourly?.localDate || dateFromLocalTime(hourly?.localTime);
+  const rowDate = row?.local_date || dateFromLocalTime(row?.local_time);
   return (
-    hourly?.localDate ||
-    dateFromLocalTime(hourly?.localTime) ||
-    row?.local_date ||
-    dateFromLocalTime(row?.local_time) ||
+    laterLocalDate(hourlyDate, rowDate) ||
     new Date().toISOString().slice(0, 10)
   );
 }
@@ -855,12 +876,15 @@ function airportCodeForSeriesLabel(
   const candidates = [
     hourly?.airportPrimary?.station_code,
     (hourly?.airportPrimary as any)?.icao,
-    row?.airport,
+    hourly?.settlementStationCode,
     row?.metar_context?.station,
+    row?.icao,
+    row?.station_code,
+    row?.airport,
   ];
   const code = candidates
     .map((value) => String(value || "").trim().toUpperCase())
-    .find(Boolean);
+    .find((value) => /^[A-Z0-9]{4}$/.test(value));
   return code || "";
 }
 
@@ -899,6 +923,38 @@ function airportPrimarySeriesLabel(
     return stationCode ? `${stationCode} METAR` : "METAR";
   }
   return canonicalLabel || payloadLabel || "NOAA MADIS";
+}
+
+function airportPrimaryUsesMetarFallback(
+  hourly: HourlyForecast,
+  isHKO: boolean,
+  row?: ScanOpportunityRow | null,
+) {
+  if (isHKO) return false;
+  const cityKey = normalizeCityKey(row?.city);
+  if (cityKey === "ankara" || cityKey === "istanbul") return false;
+  const canonicalLabel = canonicalAirportPrimarySourceLabel(hourly);
+  if (canonicalLabel && canonicalLabel !== "NOAA MADIS") return false;
+  const payloadLabel = String(hourly?.airportPrimary?.source_label || "").trim();
+  return !payloadLabel || isGenericAirportPrimaryLabel(payloadLabel);
+}
+
+function metarStationCodeForSeries(row?: ScanOpportunityRow | null, hourly?: HourlyForecast) {
+  const candidates = [
+    row?.metar_context?.station,
+    hourly?.settlementStationCode,
+    row?.station_code,
+    row?.icao,
+  ];
+  return candidates
+    .map((value) => String(value || "").trim().toUpperCase())
+    .find((value) => /^[A-Z0-9]{4}$/.test(value)) || "";
+}
+
+function airportPrimaryMatchesMetarStation(hourly: HourlyForecast, row?: ScanOpportunityRow | null) {
+  const primaryCode = airportCodeForSeriesLabel(hourly, row);
+  const metarCode = metarStationCodeForSeries(row, hourly);
+  return Boolean(primaryCode && metarCode && primaryCode === metarCode);
 }
 
 function airportPrimaryObservationPoints(hourly: HourlyForecast) {
@@ -1490,6 +1546,7 @@ type HourlyForecast = {
   multiModelDaily?: Record<string, DailyModelForecast>;
   probabilities?: LegacyGaussianProbabilitySource | null;
   settlementTodayObs?: ObsPoint[];
+  settlementStationCode?: string | null;
   settlementStationLabel?: string | null;
   metarTodayObs?: ObsPoint[];
   airportPrimaryTodayObs?: RawObsPoint[];
@@ -1549,6 +1606,7 @@ function seedHourlyForecastFromRow(row: ScanOpportunityRow | null): HourlyForeca
       distribution_all: row.distribution_full || row.distribution_preview || [],
     },
     settlementTodayObs: row.settlement_today_obs || row.metar_context?.settlement_today_obs || undefined,
+    settlementStationCode: row.metar_context?.station || row.station_code || row.icao || null,
     metarTodayObs: row.metar_today_obs || row.metar_context?.today_obs || row.metar_recent_obs || row.metar_context?.recent_obs || undefined,
     airportPrimaryTodayObs: current
       ? appendRawObservationPoint(undefined, current.time, current.temp)
@@ -1596,6 +1654,8 @@ function mergeHourlyWithLiveObservations(
     airportCurrent: mergeAirportCondition(base.airportCurrent, live.airportCurrent, row, localDate),
     airportPrimary: mergeAirportCondition(base.airportPrimary, live.airportPrimary, row, localDate),
     settlementTodayObs: mergeRawObservationPoints(base.settlementTodayObs, live.settlementTodayObs) as ObsPoint[] | undefined,
+    settlementStationCode: detailSource.settlementStationCode || forecastFallback.settlementStationCode || row?.metar_context?.station || null,
+    settlementStationLabel: detailSource.settlementStationLabel || forecastFallback.settlementStationLabel || null,
     metarTodayObs: mergeRawObservationPoints(base.metarTodayObs, live.metarTodayObs) as ObsPoint[] | undefined,
     airportPrimaryTodayObs: mergeRawObservationPoints(
       base.airportPrimaryTodayObs,
@@ -1849,6 +1909,7 @@ function parseHourlyForecastFromCityDetail(json: CityDetail | null): HourlyForec
     multiModelDaily: json.multi_model_daily || {},
     probabilities: json.probabilities || null,
     settlementTodayObs: (json as any).timeseries?.settlement_today_obs || (json as any)?.settlement_today_obs || undefined,
+    settlementStationCode: (json as any)?.settlement_station?.settlement_station_code || (json as any)?.settlement_station?.airport_code || null,
     settlementStationLabel: (json as any)?.settlement_station?.settlement_station_label || null,
     metarTodayObs: (json as any).timeseries?.metar_today_obs || (json as any)?.metar_today_obs || undefined,
     airportPrimaryTodayObs: (json as any)?.official?.airport_primary_today_obs || (json as any)?.airport_primary_today_obs || undefined,
@@ -2845,7 +2906,14 @@ function buildFullDayChartData(
       Boolean(hourly?.amos?.runway_obs)
     );
   const isRunwaySensorAggregateSource = isAmscSource || isKoreanAmosSource;
-  const shouldRenderMetar = metarObs.length > 0 && !observationSetContains(finalMadisObs, metarObs);
+  const isRedundantMetarFallback =
+    finalMadisObs.length > 0 &&
+    airportPrimaryUsesMetarFallback(hourly, isHKO, row) &&
+    airportPrimaryMatchesMetarStation(hourly, row);
+  const shouldRenderMetar =
+    metarObs.length > 0 &&
+    !isRedundantMetarFallback &&
+    !observationSetContains(finalMadisObs, metarObs);
 
   const timelineSet = new Set<number>();
   runwayHistorySeries.forEach((rhs) => rhs.points.forEach((point) => timelineSet.add(point.ts)));
@@ -2950,7 +3018,7 @@ function buildFullDayChartData(
       series.push({
         key: "madis",
         label: airportPrimarySeriesLabel(hourly, isHKO, row),
-        source: isHKO ? "HKO" : (hourly?.airportPrimary?.station_code || row?.airport || "MADIS"),
+        source: isHKO ? "HKO" : (airportCodeForSeriesLabel(hourly, row) || row?.airport || "MADIS"),
         color: "#0284c7",
         dashed: isHKO ? true : false,
         values: madisVals,

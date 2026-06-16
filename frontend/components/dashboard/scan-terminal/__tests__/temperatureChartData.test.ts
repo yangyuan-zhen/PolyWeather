@@ -159,6 +159,70 @@ export function runTests() {
     `multi-model curves must use models_hourly.times instead of hourly.times; got ${independentModelPeak?.label}`,
   );
 
+  const floatingIsoModelTimelineChart = buildFullDayChartData(
+    {
+      city: "paris",
+      local_date: "2026-06-14",
+      local_time: "12:00",
+      temp_symbol: "°C",
+      tz_offset_seconds: 2 * 3600,
+    } as any,
+    {
+      forecastTodayHigh: 24,
+      debPrediction: 24,
+      localDate: "2026-06-14",
+      localTime: "12:00",
+      times: ["00:00", "12:00", "23:00"],
+      temps: [18, 21, 16],
+      modelTimes: Array.from({ length: 24 }, (_, hour) => `2026-06-14T${String(hour).padStart(2, "0")}:00`),
+      modelCurves: {
+        ECMWF: Array.from({ length: 24 }, (_, hour) => hour),
+      },
+    } as any,
+    true,
+  );
+  const floatingIsoModelLatePoint = floatingIsoModelTimelineChart.data.find(
+    (point) => point.label === "23:00:00" && point.model_curve_ECMWF === 23,
+  );
+  assert(
+    floatingIsoModelLatePoint,
+    "floating ISO model times without an explicit timezone must stay on the city-local clock so late-day forecast points do not disappear",
+  );
+
+  const staleDetailWithCurrentRowChart = buildFullDayChartData(
+    {
+      city: "paris",
+      local_date: "2026-06-16",
+      local_time: "14:59",
+      temp_symbol: "°C",
+      tz_offset_seconds: 2 * 3600,
+    } as any,
+    {
+      forecastTodayHigh: 24,
+      debPrediction: 24,
+      localDate: "2026-06-14",
+      localTime: "11:00",
+      times: ["00:00", "12:00", "23:00"],
+      temps: [18, 21, 16],
+      modelTimes: Array.from({ length: 72 }, (_, index) => {
+        const date = index < 24 ? "2026-06-14" : index < 48 ? "2026-06-15" : "2026-06-16";
+        const hour = index % 24;
+        return `${date}T${String(hour).padStart(2, "0")}:00`;
+      }),
+      modelCurves: {
+        ECMWF: Array.from({ length: 72 }, (_, index) => index),
+      },
+    } as any,
+    true,
+  );
+  const currentDayModelLatePoint = staleDetailWithCurrentRowChart.data.find(
+    (point) => point.label === "23:00:00" && point.model_curve_ECMWF === 71,
+  );
+  assert(
+    currentDayModelLatePoint,
+    "chart should use the current scan row local date when cached detail localDate is older so today's model curve is drawn through 23:00",
+  );
+
   const correctedDetailChart = getTemperatureChartData(
     {
       name: "shanghai",
@@ -569,6 +633,51 @@ export function runTests() {
   assert(
     parisImplicitAirportPrimarySeries?.label === "LFPB METAR",
     "non-US airport-primary fallback without explicit source metadata must not default to NOAA MADIS",
+  );
+
+  const parisAirportDisplayNameChart = buildFullDayChartData(
+    {
+      city: "paris",
+      local_date: "2026-06-16",
+      local_time: "14:59",
+      tz_offset_seconds: 2 * 60 * 60,
+      airport: "Paris-Le Bourget 机场",
+      metar_context: {
+        station: "LFPB",
+        station_label: "Paris-Le Bourget Airport",
+      },
+      temp_symbol: "°C",
+    } as any,
+    {
+      localDate: "2026-06-16",
+      localTime: "14:59",
+      times: ["00:00", "12:00", "18:00"],
+      temps: [14, 20, 18],
+      settlementStationCode: "LFPB",
+      settlementStationLabel: "Paris-Le Bourget Airport",
+      airportPrimary: {
+        temp: 20.0,
+        obs_time: "2026-06-16T12:59:00Z",
+      },
+      airportPrimaryTodayObs: [
+        ["2026-06-16T10:00:00Z", 18],
+        ["2026-06-16T12:00:00Z", 20],
+      ],
+      metarTodayObs: [
+        ["2026-06-16T10:30:00Z", 18],
+        ["2026-06-16T12:30:00Z", 20],
+      ],
+    } as any,
+    false,
+  );
+  const parisAirportDisplayNameSeries = parisAirportDisplayNameChart.series.find((item) => item.key === "madis");
+  assert(
+    parisAirportDisplayNameSeries?.label === "LFPB METAR",
+    `airport-primary fallback must prefer station code over display name; got ${parisAirportDisplayNameSeries?.label}`,
+  );
+  assert(
+    !parisAirportDisplayNameChart.series.some((item) => item.key === "metar"),
+    "same-station airport-primary observations should suppress the redundant METAR line even when cadences differ",
   );
 
   const ankaraScanSeedChart = buildFullDayChartData(
