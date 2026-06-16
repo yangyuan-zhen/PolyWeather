@@ -20,6 +20,8 @@ type UpdateAnnouncementButtonProps = {
   isEn: boolean;
 };
 
+const UPDATE_ANNOUNCEMENT_SEEN_KEY = "polyweather_update_announcement_seen_v1";
+
 const STATIC_UPDATE_ANNOUNCEMENTS: StaticUpdateAnnouncement[] = [
   {
     id: "live-observation-chart-2026-06",
@@ -71,9 +73,39 @@ function formatUpdatedAt(value: string | undefined, isEn: boolean) {
   });
 }
 
+function loadSeenAnnouncementIds() {
+  if (typeof window === "undefined") return new Set<string>();
+  try {
+    const raw = window.localStorage.getItem(UPDATE_ANNOUNCEMENT_SEEN_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed.map(String) : []);
+  } catch {
+    return new Set<string>();
+  }
+}
+
+function saveSeenAnnouncementIds(ids: Set<string>) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      UPDATE_ANNOUNCEMENT_SEEN_KEY,
+      JSON.stringify(Array.from(ids).slice(-50)),
+    );
+  } catch {
+    // Ignore storage failures; the unread dot may reappear but the announcement remains usable.
+  }
+}
+
 export function UpdateAnnouncementButton({ isEn }: UpdateAnnouncementButtonProps) {
   const [open, setOpen] = useState(false);
+  const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
+  const [seenLoaded, setSeenLoaded] = useState(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setSeenIds(loadSeenAnnouncementIds());
+    setSeenLoaded(true);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -98,6 +130,17 @@ export function UpdateAnnouncementButton({ isEn }: UpdateAnnouncementButtonProps
     () => formatUpdatedAt(announcement?.publishedAt, isEn),
     [announcement?.publishedAt, isEn],
   );
+  const hasUnread = Boolean(seenLoaded && announcement?.id && !seenIds.has(announcement.id));
+
+  const markAnnouncementAsSeen = (announcementId: string) => {
+    setSeenIds((current) => {
+      if (current.has(announcementId)) return current;
+      const next = new Set(current);
+      next.add(announcementId);
+      saveSeenAnnouncementIds(next);
+      return next;
+    });
+  };
 
   if (!announcement || (!text.title && !text.body)) return null;
 
@@ -105,13 +148,34 @@ export function UpdateAnnouncementButton({ isEn }: UpdateAnnouncementButtonProps
     <div ref={shellRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="inline-flex h-7 items-center gap-1.5 rounded border border-blue-200 bg-blue-50 px-2 text-[10px] font-bold uppercase tracking-wide text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-100"
+        onClick={() => {
+          setOpen((value) => {
+            const next = !value;
+            if (next) markAnnouncementAsSeen(announcement.id);
+            return next;
+          });
+        }}
+        className="relative inline-flex h-7 items-center gap-1.5 rounded border border-blue-200 bg-blue-50 px-2 text-[10px] font-bold uppercase tracking-wide text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-100"
         title={isEn ? "Update announcement" : "更新公告"}
+        aria-label={
+          hasUnread
+            ? isEn
+              ? "Update announcement, unread"
+              : "更新公告，有未读内容"
+            : isEn
+              ? "Update announcement"
+              : "更新公告"
+        }
         aria-expanded={open}
       >
         <Megaphone size={12} />
         {isEn ? "Updates" : "更新公告"}
+        {hasUnread && (
+          <span
+            className="scan-update-announcement-unread absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-white"
+            aria-hidden="true"
+          />
+        )}
       </button>
       {open && (
         <div className="absolute left-0 top-8 z-50 w-[min(360px,calc(100vw-32px))] rounded-md border border-slate-200 bg-white p-3 text-left shadow-lg">

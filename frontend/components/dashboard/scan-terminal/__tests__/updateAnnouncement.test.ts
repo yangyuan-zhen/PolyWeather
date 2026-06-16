@@ -61,6 +61,15 @@ export function runTests() {
     "announcement component must use hardcoded zh/en release notes with an expiry time and no backend polling",
   );
   assert(
+    componentSource.includes("polyweather_update_announcement_seen_v1") &&
+      componentSource.includes("loadSeenAnnouncementIds") &&
+      componentSource.includes("saveSeenAnnouncementIds") &&
+      componentSource.includes("markAnnouncementAsSeen") &&
+      componentSource.includes("announcement.id") &&
+      componentSource.includes("scan-update-announcement-unread"),
+    "announcement component must persist seen announcement ids and render an unread indicator for unseen updates",
+  );
+  assert(
     componentSource.includes("实时观测链路已和模型缓存拆分") &&
       componentSource.includes("SSE") &&
       componentSource.includes("3 分钟") &&
