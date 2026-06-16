@@ -22,22 +22,22 @@ type UpdateAnnouncementButtonProps = {
 
 const STATIC_UPDATE_ANNOUNCEMENTS: StaticUpdateAnnouncement[] = [
   {
-    id: "feedback-status-2026-06",
-    publishedAt: "2026-06-07T00:00:00+08:00",
-    expiresAt: "2026-07-15T00:00:00+08:00",
+    id: "live-observation-chart-2026-06",
+    publishedAt: "2026-06-17T00:00:00+08:00",
+    expiresAt: "2026-07-31T00:00:00+08:00",
     zh: {
-      title: "更新公告：终端新增公告与反馈状态",
+      title: "更新公告：实时观测和图表稳定性升级",
       body:
-        "PolyWeather 天气决策台新增“更新公告”入口，后续产品更新、数据源调整和重要说明会在这里同步。\n\n" +
-        "用户反馈系统也已升级：提交反馈时会自动附带相关图表上下文，用户可以在终端右上角通知入口和账户页查看自己反馈的处理状态，包括已收到、已确认、处理中、已解决和已关闭。\n\n" +
-        "我们也在考虑对真实、可复现、有建设性价值的反馈加入积分或 Pro 天数激励。",
+        "实时观测链路已和模型缓存拆分：SSE 到达会立即更新图表；如果 SSE 断线，终端会每 3 分钟拉取一次轻量观测兜底。DEB、模型曲线、概率和历史数据继续走独立缓存，不再跟着实时温度强刷。\n\n" +
+        "这次也补齐了更多官方观测覆盖，包括东京 JMA、韩国 AMOS、土耳其 MGM、台北 CWA 等，并修正 NOAA MADIS 只应用于美国城市，避免非美国城市串台。\n\n" +
+        "图表侧同步修复了预测曲线缺段、首屏 loading 不明显、旧缓存覆盖最新观测等问题。刷新终端后即可使用新逻辑。",
     },
     en: {
-      title: "Update: announcements and feedback status are now live",
+      title: "Update: live observations and chart stability",
       body:
-        "PolyWeather Terminal now has an update announcement entry. Future product updates, data-source changes, and important notes will be shared here.\n\n" +
-        "The feedback system has also been upgraded. When users submit feedback, PolyWeather automatically attaches the relevant chart context. Users can now track their own feedback status from the terminal notification entry and the account page: received, confirmed, in progress, resolved, or closed.\n\n" +
-        "We are also considering small rewards such as points or Pro days for real, reproducible, and constructive feedback.",
+        "Live observations are now separated from cached model detail. SSE patches update charts immediately; if SSE is unavailable, the terminal falls back to a lightweight observation fetch every 3-minute interval. DEB, model curves, probabilities, and historical data stay on their own cache path instead of refreshing with every live temperature update.\n\n" +
+        "Official observation coverage has also expanded, including Tokyo JMA, Korea AMOS, Turkey MGM, and Taipei CWA. NOAA MADIS is now restricted to US cities to avoid cross-region source leakage.\n\n" +
+        "Charts also include fixes for truncated forecast curves, first-load chart loading visibility, and stale cache overriding newer observations. Refresh the terminal to use the new flow.",
     },
   },
 ];

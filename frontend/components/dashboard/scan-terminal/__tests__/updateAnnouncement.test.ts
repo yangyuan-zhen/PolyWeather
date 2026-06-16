@@ -61,6 +61,34 @@ export function runTests() {
     "announcement component must use hardcoded zh/en release notes with an expiry time and no backend polling",
   );
   assert(
+    componentSource.includes("实时观测链路已和模型缓存拆分") &&
+      componentSource.includes("SSE") &&
+      componentSource.includes("3 分钟") &&
+      componentSource.includes("DEB") &&
+      componentSource.includes("JMA") &&
+      componentSource.includes("AMOS") &&
+      componentSource.includes("MGM") &&
+      componentSource.includes("CWA") &&
+      componentSource.includes("NOAA MADIS") &&
+      componentSource.includes("预测曲线缺段") &&
+      componentSource.includes("首屏 loading"),
+    "terminal announcement should summarize the live-observation architecture update and recent chart fixes in Chinese",
+  );
+  assert(
+    componentSource.includes("Live observations are now separated from cached model detail") &&
+      componentSource.includes("SSE") &&
+      componentSource.includes("3-minute") &&
+      componentSource.includes("DEB") &&
+      componentSource.includes("JMA") &&
+      componentSource.includes("AMOS") &&
+      componentSource.includes("MGM") &&
+      componentSource.includes("CWA") &&
+      componentSource.includes("NOAA MADIS") &&
+      componentSource.includes("truncated forecast curves") &&
+      componentSource.includes("first-load chart loading"),
+    "terminal announcement should summarize the live-observation architecture update and recent chart fixes in English",
+  );
+  assert(
     !middlewareSource.includes("/api/system/update-announcement"),
     "middleware should not keep a public announcement API entry after announcements move into frontend code",
   );
