@@ -1180,7 +1180,19 @@ def overlay_latest_cwa_observation(weather, city, payload, db=None):
         cwa_data.get("observation_time"),
         target_date,
     ):
-        cwa_data = None
+        cwa_epoch = parse_observation_epoch(cwa_data.get("observation_time"))
+        existing_epochs = [
+            epoch
+            for epoch in (
+                _block_epoch(payload.get("current")),
+                _block_epoch(payload.get("airport_primary")),
+                _block_epoch(payload.get("airport_current")),
+            )
+            if epoch is not None
+        ]
+        latest_existing_epoch = max(existing_epochs) if existing_epochs else None
+        if cwa_epoch is None or (latest_existing_epoch is not None and cwa_epoch <= latest_existing_epoch):
+            cwa_data = None
     if not isinstance(cwa_data, dict):
         cwa_data = _latest_taipei_metar_fallback(
             weather,
