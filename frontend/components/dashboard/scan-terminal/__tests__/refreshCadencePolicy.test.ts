@@ -82,9 +82,9 @@ export async function runTests() {
   assert(
     chartSource.includes("useLatestPatch") &&
       chartSource.includes("latestPatch") &&
-      chartSource.includes("DASHBOARD_REFRESH_POLICY_MS.metar") &&
+      !chartSource.includes("DASHBOARD_REFRESH_POLICY_MS.metar") &&
       !chartSource.includes("2 * 60_000"),
-    "selected city chart should consume SSE patches and keep METAR cadence for heavy probability refreshes instead of a 2-minute forced refresh",
+    "selected city chart should consume SSE patches without coupling live observations to the model/detail refresh cadence",
   );
   assert(
     chartSource.includes("LIVE_OBSERVATION_FALLBACK_MS = DASHBOARD_REFRESH_POLICY_MS.liveObservationFallback") &&
@@ -136,15 +136,15 @@ export async function runTests() {
     "switching back to the terminal tab should refresh visible chart detail through cached backend data without forcing external sources",
   );
   assert(
-    chartSource.includes("fetchOptions: { ignoreCache: true }") &&
-      chartSource.includes("const mergedHourly = mergeHourlyWithLiveObservations(dataWithCurrentRow, prev, latestRow)") &&
-      chartSource.includes("return mergedHourly;"),
-    "visible chart fallback must refresh full city detail at the current chart resolution while preserving newer live observations",
+    chartSource.includes("fetchLiveObservationForCity") &&
+      chartSource.includes("mergeObservationPayloadIntoHourly") &&
+      !chartSource.includes("rememberHourlyDetailSnapshot"),
+    "visible chart fallback must use the no-store observation endpoint without writing live overlays into full-detail cache",
   );
   assert(
-    chartSource.includes("PROBABILITY_REFRESH_AFTER_PATCH_MS = DASHBOARD_REFRESH_POLICY_MS.metar") &&
-      !chartSource.includes("PROBABILITY_REFRESH_AFTER_PATCH_MS = 60_000"),
-    "live observation patches should update the plotted line immediately and throttle heavy probability/detail refreshes to METAR cadence",
+    !chartSource.includes("PROBABILITY_REFRESH_AFTER_PATCH_MS") &&
+      !chartSource.includes("refreshProbabilityOverlayAfterPatch"),
+    "live observation patches must not force-refresh model, DEB, probability, or detail-batch data",
   );
   assert(
     chartLogicSource.includes("HOURLY_FORCE_REFRESH_DEDUP_MS") &&
@@ -370,8 +370,8 @@ export async function runTests() {
   );
   const rememberSnapshotCalls = chartSource.match(/rememberHourlyDetailSnapshot\(/g) || [];
   assert(
-    rememberSnapshotCalls.length === 1,
-    "temperature chart should persist hourly snapshots through one local commit helper instead of writing cache snapshots from multiple effects",
+    rememberSnapshotCalls.length === 0,
+    "temperature chart component must not persist live-merged snapshots into the full-detail cache",
   );
   const markDetailDegradedBlock =
     /const markDetailDegraded = useCallback\([\s\S]*?\n  \}, \[[^\]]*\]\);/.exec(chartSource)?.[0] || "";
@@ -388,13 +388,13 @@ export async function runTests() {
       successfulHourlyDetailBlock.includes("getLatestRowSnapshot") &&
       successfulHourlyDetailBlock.includes("commitHourlySnapshot") &&
       !/\[row\]/.test(successfulHourlyDetailBlock),
-    "successful city detail refreshes must read the latest row, persist the merged snapshot, and avoid depending on the row object",
+    "successful city detail refreshes must read the latest row, merge into chart state, and avoid depending on the row object",
   );
   assert(
     chartSource.includes("commitHourlySnapshot") &&
       chartSource.includes("mergeRowObservationIntoHourly") &&
       chartSource.includes("mergePatchIntoHourly"),
-    "live row and SSE patch merges must persist their hourly snapshots through the shared commit helper so returning to terminal restores runway history immediately",
+    "live row and SSE patch merges must flow through the shared state helper without touching the full-detail cache",
   );
   const coldDetailFetchBlock =
     /useEffect\(\(\) => \{\s*if \(!city\) \{[\s\S]*?scheduleTransientDetailRetry[\s\S]*?runHourlyDetailFetch\(\{[\s\S]*?\n  \}, \[([\s\S]*?)\]\);/.exec(chartSource)?.[1] || "";

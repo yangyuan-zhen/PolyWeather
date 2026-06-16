@@ -189,12 +189,12 @@ export function runTests() {
   assert(!chart.includes("function mergePatchIntoHourly"), "LiveTemperatureThresholdChart.tsx must not define SSE patch merge logic inline");
   assert(chart.includes("useLatestPatch"), "temperature chart must consume useLatestPatch(city)");
   assert(chart.includes("latestPatch"), "temperature chart must react to incoming SSE patches");
-  assert(chart.includes("useSseResyncVersion"), "temperature chart must resync full detail when SSE replay is incomplete");
+  assert(chart.includes("useSseResyncVersion"), "temperature chart must resync live observations when SSE replay is incomplete");
   assert(chartLogic.includes("runway_points"), "temperature chart must merge v1 runway_points into runway history");
   assert(
-    chart.includes("DASHBOARD_REFRESH_POLICY_MS.metar") &&
+    !chart.includes("DASHBOARD_REFRESH_POLICY_MS.metar") &&
       !chart.includes("2 * 60_000"),
-    "temperature chart must keep METAR cadence for heavy patch-triggered probability refreshes",
+    "temperature chart must not attach model/detail refresh cadence to live observation patches",
   );
   assert(
     chart.includes("LIVE_OBSERVATION_FALLBACK_MS = DASHBOARD_REFRESH_POLICY_MS.liveObservationFallback"),
@@ -239,12 +239,18 @@ export function runTests() {
       !fallbackRefreshBlock.includes("setIsHourlyLoading(true)"),
     "no-patch fallback refresh should merge no-store observation data without refreshing cached detail-batch or showing the loading overlay",
   );
-  const resyncBlock = chart.match(/useEffect\(\(\) => \{\s*if \(!resyncVersion \|\| !city\) return;[\s\S]*?\}, \[resyncVersion, city, runHourlyDetailFetch\]\);/)?.[0] || "";
   assert(
-    resyncBlock.includes("runHourlyDetailFetch") &&
-      resyncBlock.includes("fetchOptions: { ignoreCache: true }") &&
+    !chart.includes("rememberHourlyDetailSnapshot"),
+    "temperature chart must not write row/SSE/observation overlays back into the full-detail cache",
+  );
+  const resyncBlock = chart.match(/useEffect\(\(\) => \{\s*if \(!resyncVersion \|\| !city\) return;[\s\S]*?\}, \[resyncVersion, city, applyLiveObservationPayload\]\);/)?.[0] || "";
+  assert(
+    resyncBlock.includes("fetchLiveObservationForCity") &&
+      resyncBlock.includes("applyLiveObservationPayload") &&
+      !resyncBlock.includes("runHourlyDetailFetch") &&
+      !resyncBlock.includes("ignoreCache: true") &&
       !resyncBlock.includes("setIsHourlyLoading(true)"),
-    "SSE replay resync should refresh full detail in the background without showing the loading overlay",
+    "SSE replay resync should refresh no-store observations without touching cached detail-batch or showing the loading overlay",
   );
   assert(
     chart.includes("visibilitychange") &&
@@ -290,19 +296,10 @@ export function runTests() {
     "runway charts must request 1-minute detail resolution so historical runway lines match live SSE patch cadence",
   );
   assert(
-    chart.includes("PROBABILITY_REFRESH_AFTER_PATCH_MS") &&
-      chart.includes("lastProbabilityRefreshAtRef") &&
-      chart.includes("refreshProbabilityOverlayAfterPatch"),
-    "temperature chart must trigger a throttled background probability refresh after live observation patches",
-  );
-  const patchEffectBlock = chart.match(
-    /useEffect\(\(\) => \{\s*if \(!latestPatch[\s\S]*?refreshProbabilityOverlayAfterPatch\(\);[\s\S]*?\}, \[[^\]]*latestPatch[^\]]*runHourlyDetailFetch[^\]]*\]\);/,
-  )?.[0] || "";
-  assert(
-    patchEffectBlock.includes("refreshProbabilityOverlayAfterPatch") &&
-      patchEffectBlock.includes("fetchOptions: { ignoreCache: true }") &&
-      !patchEffectBlock.includes("setIsHourlyLoading(true)"),
-    "live patch probability refresh must recompute legacy Gaussian in the background without showing a loading overlay",
+    !chart.includes("PROBABILITY_REFRESH_AFTER_PATCH_MS") &&
+      !chart.includes("lastProbabilityRefreshAtRef") &&
+      !chart.includes("refreshProbabilityOverlayAfterPatch"),
+    "live observation patches must not trigger model/probability/detail refreshes; cached detail-batch stays on its own cadence",
   );
   assert(!chartCanvas.includes("ResponsiveContainer"), "temperature chart canvas must not mount Recharts through ResponsiveContainer at 0x0");
   assert(chartCanvas.includes("ResizeObserver"), "temperature chart canvas must measure its host with ResizeObserver");

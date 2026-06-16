@@ -38,7 +38,6 @@ import {
   readCityDetailBatchDiagnostics,
   readHourlyDetailSnapshot,
   readHourlyDetailSnapshotAgeMs,
-  rememberHourlyDetailSnapshot,
   selectCompactSecondaryTemp,
   selectDisplayRunwayTemp,
   selectInitialHourlyForRowChange,
@@ -65,7 +64,6 @@ const PEAK_GLOW_BADGE_CLASS = {
   cooling: "border-slate-200 bg-slate-100 text-slate-500",
 } as const;
 
-const PROBABILITY_REFRESH_AFTER_PATCH_MS = DASHBOARD_REFRESH_POLICY_MS.metar;
 const FOREGROUND_FULL_DETAIL_REFRESH_DEDUP_MS = 90_000;
 const LIVE_OBSERVATION_FALLBACK_MS = DASHBOARD_REFRESH_POLICY_MS.liveObservationFallback;
 const DETAIL_LOAD_BATCH_DELAY_MS = 0;
@@ -684,7 +682,6 @@ export function LiveTemperatureThresholdChart({
   const chartVisibilityRef = useRef<HTMLDivElement | null>(null);
   const lastPatchAtRef = useRef<number>(Date.now());
   const lastAppliedPatchRevisionRef = useRef<number>(0);
-  const lastProbabilityRefreshAtRef = useRef<number>(0);
   const lastForegroundRefreshAtRef = useRef<number>(0);
   const lastRowObservationSignatureRef = useRef<string>("");
   const localDayRolloverFetchDateRef = useRef<string>("");
@@ -763,7 +760,6 @@ export function LiveTemperatureThresholdChart({
     hasLoadedHourlyDetailRef.current = false;
     lastPatchAtRef.current = now;
     lastAppliedPatchRevisionRef.current = 0;
-    lastProbabilityRefreshAtRef.current = 0;
     lastForegroundRefreshAtRef.current = 0;
     lastRowObservationSignatureRef.current = "";
     localDayRolloverFetchDateRef.current = "";
@@ -811,12 +807,8 @@ export function LiveTemperatureThresholdChart({
   }, [row?.tz_offset_seconds]);
 
   const commitHourlySnapshot = useCallback((buildNext: (previous: HourlyForecast) => HourlyForecast) => {
-    setHourly((prev) => {
-      const next = buildNext(prev);
-      rememberHourlyDetailSnapshot(city, targetResolution, next);
-      return next;
-    });
-  }, [city, targetResolution]);
+    setHourly((prev) => buildNext(prev));
+  }, []);
 
   const applySuccessfulHourlyDetail = useCallback((data: HourlyForecast, options?: { updateLiveTemp?: boolean }) => {
     if (!data) return;
@@ -1024,46 +1016,19 @@ export function LiveTemperatureThresholdChart({
       sseSourceToCollectorLatencySec: latestPatch.delivery?.source_to_collector_latency_sec ?? null,
     }));
 
-    const hasObservationChange =
-      tempValue !== null ||
-      Array.isArray(latestPatch.changes.runway_points) ||
-      Boolean(latestPatch.changes.amos);
-    if (!hasObservationChange || !shouldPollLiveChart({ city, compact, isActive, isMaximized })) return;
-
-    const now = Date.now();
-    if (now - lastProbabilityRefreshAtRef.current < PROBABILITY_REFRESH_AFTER_PATCH_MS) return;
-    lastProbabilityRefreshAtRef.current = now;
-
-    let cancelled = false;
-    const refreshProbabilityOverlayAfterPatch = () => {
-      void runHourlyDetailFetch({
-        source: "force_refresh",
-        fetchOptions: { ignoreCache: true },
-        isCancelled: () => cancelled,
-      });
-    };
-
-    refreshProbabilityOverlayAfterPatch();
-    return () => {
-      cancelled = true;
-    };
-  }, [latestPatch, city, targetResolution, compact, isActive, isMaximized, getLatestRowSnapshot, commitHourlySnapshot, runHourlyDetailFetch]);
+  }, [latestPatch, getLatestRowSnapshot, commitHourlySnapshot]);
 
   useEffect(() => {
     if (!resyncVersion || !city) return;
     let cancelled = false;
-    void runHourlyDetailFetch({
-      source: "force_refresh",
-      fetchOptions: { ignoreCache: true },
-      isCancelled: () => cancelled,
-      onSettled: () => {
-        setIsHourlyLoading(false);
-      },
+    void fetchLiveObservationForCity(city).then((payload) => {
+      if (cancelled || !payload) return;
+      applyLiveObservationPayload(payload);
     });
     return () => {
       cancelled = true;
     };
-  }, [resyncVersion, city, runHourlyDetailFetch]);
+  }, [resyncVersion, city, applyLiveObservationPayload]);
 
   // ── SSE fallback: visible charts merge no-store observations if patches stop. ──
   useEffect(() => {
