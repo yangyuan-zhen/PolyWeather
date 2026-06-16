@@ -330,19 +330,20 @@ export function useBilling(params: UseBillingParams) {
     setPaymentError("");
     setTelegramBindUrl("");
     setTelegramBindCommand("");
-    const popup = window.open("about:blank", "_blank", "noopener,noreferrer");
     try {
-      const { botUrl } = await requestTelegramBotBindPayload();
+      const { botUrl, botCommand } = await requestTelegramBotBindPayload();
       if (!botUrl) throw new Error(copy.telegramBindLinkMissing);
-      if (popup && !popup.closed) {
-        popup.location.href = botUrl;
+      // Open directly — skip about:blank to avoid browser popup blockers
+      const win = window.open(botUrl, "_blank", "noopener,noreferrer");
+      if (win) {
         setPaymentInfo(copy.telegramBindClickHint);
       } else {
+        // Popup blocked — show fallback link
         setPaymentInfo(copy.telegramPopupBlocked);
         setTelegramBindUrl(botUrl);
+        setTelegramBindCommand(botCommand);
       }
     } catch (error) {
-      if (popup && !popup.closed) popup.close();
       setPaymentError(normalizePaymentError(error).message);
     } finally {
       setTelegramBindOpening(false);
