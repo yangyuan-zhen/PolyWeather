@@ -77,11 +77,11 @@ def _city_detail_batch_response_cache_ttl() -> float:
 def _city_chart_optional_overlay_timeout_sec() -> float:
     try:
         timeout_ms = int(
-            os.getenv("POLYWEATHER_CITY_CHART_OPTIONAL_OVERLAY_TIMEOUT_MS", "2000")
-            or "2000"
+            os.getenv("POLYWEATHER_CITY_CHART_OPTIONAL_OVERLAY_TIMEOUT_MS", "3000")
+            or "3000"
         )
     except ValueError:
-        timeout_ms = 2000
+        timeout_ms = 3000
     return max(0.001, min(3.0, timeout_ms / 1000.0))
 
 
