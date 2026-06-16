@@ -20,6 +20,7 @@ from web.services.canonical_temperature import build_city_weather_from_canonical
 from web.services.latest_observation_overlay import (
     overlay_latest_amos_observation,
     overlay_latest_amsc_observation,
+    overlay_latest_cwa_observation,
     overlay_latest_hko_observation,
     overlay_latest_jma_amedas_observation,
     overlay_latest_mgm_observation,
@@ -695,6 +696,13 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
             fn=overlay_latest_hko_observation,
             args=(legacy_routes._CACHE_DB, city, payload),
         )
+        payload = await _run_optional_city_chart_overlay(
+            city=city,
+            overlay_name="cwa_taipei",
+            payload=payload,
+            fn=overlay_latest_cwa_observation,
+            args=(legacy_routes._weather, city, payload),
+        )
         return await _run_optional_city_chart_overlay(
             city=city,
             overlay_name="wunderground_current",
@@ -751,6 +759,13 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
                 payload=payload,
                 fn=overlay_latest_hko_observation,
                 args=(legacy_routes._CACHE_DB, city, payload),
+            )
+            payload = await _run_optional_city_chart_overlay(
+                city=city,
+                overlay_name="cwa_taipei",
+                payload=payload,
+                fn=overlay_latest_cwa_observation,
+                args=(legacy_routes._weather, city, payload),
             )
             return await _run_optional_city_chart_overlay(
                 city=city,

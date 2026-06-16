@@ -711,7 +711,82 @@ def overlay_latest_amsc_observation(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# AMOS (Korean runway sensors — Seoul, Busan)
+# CWA (Central Weather Administration — Taipei)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def overlay_latest_cwa_observation(weather, city, payload):
+    normalized_city = str(city or payload.get("name") or payload.get("city") or "").strip().lower()
+    if normalized_city != "taipei" or not isinstance(payload, dict) or not payload:
+        return payload
+
+    fetcher = getattr(weather, "fetch_cwa_taipei_settlement_current", None)
+    if not callable(fetcher):
+        return payload
+    try:
+        cwa_data = fetcher()
+    except Exception as exc:
+        logger.debug("latest CWA overlay fetch failed: {}", exc)
+        return payload
+    if not isinstance(cwa_data, dict):
+        return payload
+
+    temp = _to_float((cwa_data.get("current") or {}).get("temp"))
+    obs_time = str(cwa_data.get("observation_time") or "").strip()
+    if temp is None or not obs_time:
+        return payload
+
+    raw_epoch = parse_observation_epoch(obs_time)
+    if raw_epoch is None:
+        return payload
+    existing_epochs = [
+        epoch
+        for epoch in (
+            _block_epoch(payload.get("current")),
+            _block_epoch(payload.get("airport_primary")),
+            _block_epoch(payload.get("airport_current")),
+        )
+        if epoch is not None
+    ]
+    if existing_epochs and max(existing_epochs) >= raw_epoch:
+        return payload
+
+    update = {
+        "temp": round(float(temp), 1),
+        "source_code": "cwa",
+        "source_label": str(cwa_data.get("source_label") or "CWA").strip(),
+        "station_code": str(cwa_data.get("station_code") or "466920").strip(),
+        "station_name": str(cwa_data.get("station_name") or "\u81fa\u5317").strip(),
+        "observed_at": obs_time,
+        "obs_time": obs_time,
+        "observation_status": "live",
+        "city": normalized_city,
+    }
+
+    next_payload = deepcopy(payload)
+    changed = False
+
+    for key in ("current", "airport_primary", "airport_current"):
+        changed = _merge_observation_block(next_payload, key, update, raw_epoch) or changed
+
+    canonical = next_payload.get("canonical_temperature")
+    canonical_epoch = _block_epoch(canonical)
+    if canonical_epoch is None or raw_epoch > canonical_epoch:
+        canonical_payload = build_canonical_temperature(
+            normalized_city,
+            {
+                "name": normalized_city,
+                "temp_symbol": next_payload.get("temp_symbol") or "\u00b0C",
+                "updated_at": obs_time,
+                "current": update,
+            },
+            fetched_at=obs_time,
+        )
+        if canonical_payload:
+            next_payload["canonical_temperature"] = canonical_payload
+            changed = True
+
+    return next_payload if changed else payload
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
