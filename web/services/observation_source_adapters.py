@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable
 
+from src.data_collection.city_registry import CITY_REGISTRY
+
 
 @dataclass(frozen=True)
 class ObservationRecord:
@@ -37,7 +39,16 @@ _ATTACH_METHODS: dict[str, str] = {
     "hko_obs": "_attach_hko_obs_official_nearby",
     "cowin_obs": "_attach_cowin_official_nearby",
     "mgm": "_attach_turkish_mgm_data",
+    "jma_amedas": "_attach_japan_official_nearby",
+    "fmi": "_attach_fmi_official_nearby",
+    "knmi": "_attach_knmi_official_nearby",
+    "singapore_mss": "_attach_singapore_mss_data",
+    "ims": "_attach_israel_ims_data",
+    "ncm": "_attach_saudi_ncm_data",
+    "aeroweb": "_attach_paris_aeroweb_data",
 }
+
+_NO_UNIT_ATTACH_SOURCES = {"singapore_mss", "ims", "ncm", "aeroweb"}
 
 _TURKISH_MGM_STATION_CODES = {
     "ankara": "17128",
@@ -68,6 +79,14 @@ def _text(row: dict[str, Any], keys: Iterable[str]) -> str:
         if value:
             return value
     return ""
+
+
+def _city_utc_offset_seconds(city: str) -> int:
+    meta = CITY_REGISTRY.get(city) or {}
+    try:
+        return int(meta.get("tz_offset") or meta.get("utc_offset_seconds") or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _observation_value(row: dict[str, Any]) -> float | None:
@@ -156,7 +175,7 @@ def collect_observation_source(
     normalized_source = _normalize_source(source)
     normalized_city = _normalize_city(city)
     method_name = _ATTACH_METHODS.get(normalized_source)
-    if not method_name:
+    if not method_name and normalized_source not in {"cwa", "metar"}:
         return ObservationSourceResult(
             source=normalized_source,
             city=normalized_city,
@@ -164,8 +183,8 @@ def collect_observation_source(
             error="unsupported observation source",
             records=(),
         )
-    attach: Callable[[dict[str, Any], str, bool], Any] | None = getattr(weather, method_name, None)
-    if not callable(attach):
+    attach: Callable[..., Any] | None = getattr(weather, method_name, None) if method_name else None
+    if method_name and not callable(attach):
         return ObservationSourceResult(
             source=normalized_source,
             city=normalized_city,
@@ -183,6 +202,38 @@ def collect_observation_source(
             include_nearby=True,
         )
         _enrich_mgm_results(results, normalized_city)
+    elif normalized_source == "cwa":
+        fetch_cwa = getattr(weather, "fetch_cwa_taipei_settlement_current", None)
+        if not callable(fetch_cwa) or normalized_city != "taipei":
+            return ObservationSourceResult(
+                source=normalized_source,
+                city=normalized_city,
+                status="unsupported",
+                error="weather collector missing fetch_cwa_taipei_settlement_current",
+                records=(),
+            )
+        cwa_payload = fetch_cwa()
+        if cwa_payload:
+            results["cwa"] = cwa_payload
+    elif normalized_source == "metar":
+        fetch_metar = getattr(weather, "fetch_metar", None)
+        if not callable(fetch_metar):
+            return ObservationSourceResult(
+                source=normalized_source,
+                city=normalized_city,
+                status="unsupported",
+                error="weather collector missing fetch_metar",
+                records=(),
+            )
+        metar_payload = fetch_metar(
+            normalized_city,
+            use_fahrenheit=bool(use_fahrenheit),
+            utc_offset=_city_utc_offset_seconds(normalized_city),
+        )
+        if metar_payload:
+            results["metar"] = metar_payload
+    elif normalized_source in _NO_UNIT_ATTACH_SOURCES:
+        attach(results, normalized_city)
     else:
         attach(results, normalized_city, bool(use_fahrenheit))
     if not results:

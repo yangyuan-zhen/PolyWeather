@@ -127,6 +127,102 @@ def test_source_adapter_collects_mgm_with_keyword_flags_and_station_metadata():
     assert record.station_name == "Esenboga Airport"
 
 
+def test_source_adapter_collects_jma_official_nearby_rows():
+    from web.services.observation_source_adapters import collect_observation_source
+
+    calls = []
+
+    class FakeWeather:
+        def _attach_japan_official_nearby(self, results, city, use_fahrenheit):
+            calls.append((city, use_fahrenheit))
+            results["jma_current"] = {
+                "source": "jma_amedas",
+                "source_label": "JMA",
+                "temp": 23.4,
+                "obs_time": "2026-06-16T06:00:00+09:00",
+                "station_code": "44166",
+                "station_name": "Haneda",
+            }
+
+    result = collect_observation_source(
+        FakeWeather(),
+        "jma_amedas",
+        "tokyo",
+        use_fahrenheit=False,
+    )
+
+    assert calls == [("tokyo", False)]
+    assert result.status == "ok"
+    assert len(result.records) == 1
+    assert result.records[0].source == "jma_amedas"
+    assert result.records[0].value == 23.4
+    assert result.records[0].observed_at == "2026-06-16T06:00:00+09:00"
+    assert result.records[0].station_code == "44166"
+
+
+def test_source_adapter_collects_cwa_direct_settlement_payload():
+    from web.services.observation_source_adapters import collect_observation_source
+
+    calls = []
+
+    class FakeWeather:
+        def fetch_cwa_taipei_settlement_current(self):
+            calls.append("fetch_cwa")
+            return {
+                "source": "cwa",
+                "source_label": "CWA",
+                "station_code": "466920",
+                "station_name": "Taipei",
+                "observation_time": "2026-06-16T06:00:00+08:00",
+                "current": {"temp": 29.2},
+            }
+
+    result = collect_observation_source(
+        FakeWeather(),
+        "cwa",
+        "taipei",
+        use_fahrenheit=False,
+    )
+
+    assert calls == ["fetch_cwa"]
+    assert result.status == "ok"
+    assert result.records[0].source == "cwa"
+    assert result.records[0].value == 29.2
+    assert result.records[0].observed_at == "2026-06-16T06:00:00+08:00"
+    assert result.records[0].station_code == "466920"
+
+
+def test_source_adapter_collects_metar_for_low_frequency_cities():
+    from web.services.observation_source_adapters import collect_observation_source
+
+    calls = []
+
+    class FakeWeather:
+        def fetch_metar(self, city, use_fahrenheit=False, utc_offset=0):
+            calls.append((city, use_fahrenheit, utc_offset))
+            return {
+                "source": "metar",
+                "icao": "LEMD",
+                "station_name": "Madrid Barajas",
+                "observation_time": "2026-06-16T12:00:00.000Z",
+                "current": {"temp": 28.0},
+            }
+
+    result = collect_observation_source(
+        FakeWeather(),
+        "metar",
+        "madrid",
+        use_fahrenheit=False,
+    )
+
+    assert calls == [("madrid", False, 3600)]
+    assert result.status == "ok"
+    assert result.records[0].source == "metar"
+    assert result.records[0].value == 28.0
+    assert result.records[0].observed_at == "2026-06-16T12:00:00.000Z"
+    assert result.records[0].station_code == "LEMD"
+
+
 def test_source_adapter_reports_parse_error_for_unusable_source_rows():
     from web.services.observation_source_adapters import collect_observation_source
 

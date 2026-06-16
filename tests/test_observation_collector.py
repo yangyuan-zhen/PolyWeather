@@ -88,14 +88,28 @@ def test_observation_collector_profiles_match_source_cadence():
     assert profiles["cowin_obs"].interval_sec == 60
     assert profiles["hko_obs"].interval_sec == 600
     assert profiles["mgm"].interval_sec == 300
+    assert profiles["jma_amedas"].interval_sec == 600
+    assert profiles["singapore_mss"].interval_sec == 60
+    assert profiles["fmi"].interval_sec == 600
+    assert profiles["knmi"].interval_sec == 600
+    assert profiles["ims"].interval_sec == 600
+    assert profiles["aeroweb"].interval_sec == 900
+    assert profiles["cwa"].interval_sec == 600
+    assert profiles["metar"].interval_sec == 1800
     assert "qingdao" in profiles["amsc_awos"].cities
     assert {"seoul", "busan"}.issubset(set(profiles["amos"].cities))
     assert "new york" in profiles["madis_hfmetar"].cities
     assert "hong kong" in profiles["cowin_obs"].cities
     assert {"hong kong", "shenzhen"}.issubset(set(profiles["hko_obs"].cities))
     assert {"ankara", "istanbul"}.issubset(set(profiles["mgm"].cities))
+    assert profiles["jma_amedas"].cities == ("tokyo",)
+    assert profiles["aeroweb"].cities == ("paris",)
+    assert profiles["cwa"].cities == ("taipei",)
+    assert {"madrid", "milan", "tokyo", "paris"}.issubset(set(profiles["metar"].cities))
     assert SOURCE_CADENCE_SECONDS["amsc_awos"] == 180
     assert SOURCE_CADENCE_SECONDS["mgm"] == 300
+    assert SOURCE_CADENCE_SECONDS["jma_amedas"] == 600
+    assert SOURCE_CADENCE_SECONDS["metar"] == 1800
 
 
 def test_observation_collector_run_due_once_collects_without_panel_cache_refresh():

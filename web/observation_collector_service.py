@@ -591,6 +591,11 @@ def build_observation_source_profiles() -> List[ObservationSourceProfile]:
         for city in ("ankara", "istanbul")
         if city in CITY_REGISTRY
     ]
+    metar_cities = [
+        city
+        for city, meta in CITY_REGISTRY.items()
+        if str((meta or {}).get("icao") or "").strip()
+    ]
     return [
         ObservationSourceProfile(
             source="amos",
@@ -621,6 +626,46 @@ def build_observation_source_profiles() -> List[ObservationSourceProfile]:
             source="mgm",
             cities=_normalized_cities(turkish_mgm_cities),
             interval_sec=max(300, _env_int("POLYWEATHER_OBSERVATION_COLLECTOR_MGM_SEC", 300)),
+        ),
+        ObservationSourceProfile(
+            source="jma_amedas",
+            cities=("tokyo",),
+            interval_sec=max(300, _env_int("POLYWEATHER_OBSERVATION_COLLECTOR_JMA_SEC", 600)),
+        ),
+        ObservationSourceProfile(
+            source="singapore_mss",
+            cities=("singapore",),
+            interval_sec=max(30, _env_int("POLYWEATHER_OBSERVATION_COLLECTOR_MSS_SEC", 60)),
+        ),
+        ObservationSourceProfile(
+            source="fmi",
+            cities=("helsinki",),
+            interval_sec=max(300, _env_int("POLYWEATHER_OBSERVATION_COLLECTOR_FMI_SEC", 600)),
+        ),
+        ObservationSourceProfile(
+            source="knmi",
+            cities=("amsterdam",),
+            interval_sec=max(300, _env_int("POLYWEATHER_OBSERVATION_COLLECTOR_KNMI_SEC", 600)),
+        ),
+        ObservationSourceProfile(
+            source="ims",
+            cities=("tel aviv",),
+            interval_sec=max(300, _env_int("POLYWEATHER_OBSERVATION_COLLECTOR_IMS_SEC", 600)),
+        ),
+        ObservationSourceProfile(
+            source="aeroweb",
+            cities=("paris",),
+            interval_sec=max(600, _env_int("POLYWEATHER_OBSERVATION_COLLECTOR_AEROWEB_SEC", 900)),
+        ),
+        ObservationSourceProfile(
+            source="cwa",
+            cities=("taipei",),
+            interval_sec=max(300, _env_int("POLYWEATHER_OBSERVATION_COLLECTOR_CWA_SEC", 600)),
+        ),
+        ObservationSourceProfile(
+            source="metar",
+            cities=_normalized_cities(metar_cities),
+            interval_sec=max(600, _env_int("POLYWEATHER_OBSERVATION_COLLECTOR_METAR_SEC", 1800)),
         ),
     ]
 
