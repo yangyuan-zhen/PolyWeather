@@ -131,7 +131,78 @@ def _to_int(value: Any) -> Optional[int]:
         return None
 
 
-def _latest_jma_row(weather: Any, city: str, use_fahrenheit: bool) -> Optional[dict[str, Any]]:
+def _latest_airport_obs_log_row(
+    db: Any,
+    *,
+    station_code: str,
+    city: str,
+    source_code: str,
+    source_label: str,
+    station_label: str,
+    use_fahrenheit: bool,
+) -> Optional[dict[str, Any]]:
+    reader = getattr(db, "get_airport_obs_recent", None)
+    if not callable(reader):
+        return None
+    try:
+        rows = reader(station_code, minutes=180)
+    except Exception as exc:
+        logger.debug("latest airport obs log read failed city={} station={}: {}", city, station_code, exc)
+        return None
+
+    latest: Optional[tuple[int, dict[str, Any]]] = None
+    normalized_city = str(city or "").strip().lower()
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict):
+            continue
+        row_city = str(row.get("city") or "").strip().lower()
+        if row_city and normalized_city and row_city != normalized_city:
+            continue
+        temp_c = _to_float(row.get("temp_c") if row.get("temp_c") is not None else row.get("temp"))
+        obs_time = str(row.get("obs_time") or row.get("observed_at") or "").strip()
+        epoch = parse_observation_epoch(obs_time)
+        if temp_c is None or not obs_time or epoch is None:
+            continue
+        if latest is None or epoch > latest[0]:
+            latest = (epoch, row)
+
+    if latest is None:
+        return None
+    row = latest[1]
+    temp = _to_float(row.get("temp_c") if row.get("temp_c") is not None else row.get("temp"))
+    obs_time = str(row.get("obs_time") or row.get("observed_at") or "").strip()
+    if temp is None or not obs_time:
+        return None
+    if use_fahrenheit:
+        temp = temp * 9 / 5 + 32
+    return {
+        "station_label": station_label,
+        "temp": round(float(temp), 1),
+        "icao": station_code,
+        "source": source_code,
+        "source_label": source_label,
+        "obs_time": obs_time,
+    }
+
+
+def _latest_jma_row(
+    weather: Any,
+    city: str,
+    use_fahrenheit: bool,
+    db: Any = None,
+) -> Optional[dict[str, Any]]:
+    airport_obs_row = _latest_airport_obs_log_row(
+        db,
+        station_code="44166",
+        city=city,
+        source_code="jma_amedas",
+        source_label="JMA",
+        station_label="\u7fbd\u7530 10\u5206\u5b9e\u51b5 (JMA)",
+        use_fahrenheit=use_fahrenheit,
+    )
+    if airport_obs_row:
+        return airport_obs_row
+
     fetcher = getattr(weather, "fetch_jma_amedas_official_nearby", None)
     if callable(fetcher):
         try:
@@ -287,6 +358,7 @@ def overlay_latest_jma_amedas_observation(
     weather: Any,
     city: str,
     payload: dict[str, Any],
+    db: Any = None,
 ) -> dict[str, Any]:
     normalized_city = str(city or payload.get("name") or payload.get("city") or "").strip().lower()
     if not normalized_city or not isinstance(payload, dict) or not payload:
@@ -295,7 +367,7 @@ def overlay_latest_jma_amedas_observation(
         return payload
 
     use_fahrenheit = "F" in str(payload.get("temp_symbol") or "").upper()
-    row = _latest_jma_row(weather, normalized_city, use_fahrenheit)
+    row = _latest_jma_row(weather, normalized_city, use_fahrenheit, db=db)
     if not isinstance(row, dict):
         return payload
 
@@ -808,19 +880,59 @@ def overlay_latest_amsc_observation(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def overlay_latest_cwa_observation(weather, city, payload):
+def _latest_cwa_data_from_airport_obs_log(db: Any, city: str, use_fahrenheit: bool) -> Optional[dict[str, Any]]:
+    row = _latest_airport_obs_log_row(
+        db,
+        station_code="466920",
+        city=city,
+        source_code="cwa",
+        source_label="CWA",
+        station_label="\u81fa\u5317",
+        use_fahrenheit=use_fahrenheit,
+    )
+    if not row:
+        return None
+    return {
+        "source": "cwa",
+        "source_label": "CWA",
+        "station_code": row.get("icao") or "466920",
+        "station_name": row.get("station_label") or "\u81fa\u5317",
+        "observation_time": row.get("obs_time"),
+        "current": {
+            "temp": row.get("temp"),
+        },
+        "unit": "fahrenheit" if use_fahrenheit else "celsius",
+    }
+
+
+def _newer_cwa_payload(left: Optional[dict[str, Any]], right: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    if not isinstance(left, dict):
+        return right if isinstance(right, dict) else None
+    if not isinstance(right, dict):
+        return left
+    left_epoch = parse_observation_epoch(left.get("observation_time"))
+    right_epoch = parse_observation_epoch(right.get("observation_time"))
+    if right_epoch is not None and (left_epoch is None or right_epoch > left_epoch):
+        return right
+    return left
+
+
+def overlay_latest_cwa_observation(weather, city, payload, db=None):
     normalized_city = str(city or payload.get("name") or payload.get("city") or "").strip().lower()
     if normalized_city != "taipei" or not isinstance(payload, dict) or not payload:
         return payload
 
+    use_fahrenheit = "F" in str(payload.get("temp_symbol") or "").upper()
+    cwa_data = _latest_cwa_data_from_airport_obs_log(db, normalized_city, use_fahrenheit)
+
     fetcher = getattr(weather, "fetch_cwa_taipei_settlement_current", None)
-    if not callable(fetcher):
+    if not callable(fetcher) and not cwa_data:
         return payload
-    try:
-        cwa_data = fetcher()
-    except Exception as exc:
-        logger.debug("latest CWA overlay fetch failed: {}", exc)
-        return payload
+    if callable(fetcher):
+        try:
+            cwa_data = _newer_cwa_payload(cwa_data, fetcher())
+        except Exception as exc:
+            logger.debug("latest CWA overlay fetch failed: {}", exc)
     if not isinstance(cwa_data, dict):
         return payload
 

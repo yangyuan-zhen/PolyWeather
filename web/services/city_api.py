@@ -693,7 +693,7 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
             overlay_name="jma_amedas_latest",
             payload=payload,
             fn=overlay_latest_jma_amedas_observation,
-            args=(legacy_routes._weather, city, payload),
+            args=(legacy_routes._weather, city, payload, legacy_routes._CACHE_DB),
         )
         payload = await _run_latest_observation_city_chart_overlay(
             city=city,
@@ -721,7 +721,7 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
             overlay_name="cwa_taipei",
             payload=payload,
             fn=overlay_latest_cwa_observation,
-            args=(legacy_routes._weather, city, payload),
+            args=(legacy_routes._weather, city, payload, legacy_routes._CACHE_DB),
         )
         return await _run_optional_city_chart_overlay(
             city=city,
@@ -757,7 +757,7 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
                 overlay_name="jma_amedas_latest",
                 payload=payload,
                 fn=overlay_latest_jma_amedas_observation,
-                args=(legacy_routes._weather, city, payload),
+                args=(legacy_routes._weather, city, payload, legacy_routes._CACHE_DB),
             )
             payload = await _run_latest_observation_city_chart_overlay(
                 city=city,
@@ -785,7 +785,7 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
                 overlay_name="cwa_taipei",
                 payload=payload,
                 fn=overlay_latest_cwa_observation,
-                args=(legacy_routes._weather, city, payload),
+                args=(legacy_routes._weather, city, payload, legacy_routes._CACHE_DB),
             )
             return await _run_optional_city_chart_overlay(
                 city=city,
