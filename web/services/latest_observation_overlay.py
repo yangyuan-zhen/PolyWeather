@@ -198,14 +198,31 @@ def _jma_observation_update(
     }
 
 
-def _jma_today_point(local_time: str, obs_time: str, temp: float) -> dict[str, Any]:
+def _observation_today_point(
+    local_time: str,
+    obs_time: str,
+    temp: float,
+    *,
+    source_code: str,
+    source_label: str,
+) -> dict[str, Any]:
     return {
         "time": local_time,
         "temp": round(float(temp), 1),
         "obs_time": obs_time,
-        "source_code": "jma_amedas",
-        "source_label": "JMA",
+        "source_code": source_code,
+        "source_label": source_label,
     }
+
+
+def _jma_today_point(local_time: str, obs_time: str, temp: float) -> dict[str, Any]:
+    return _observation_today_point(
+        local_time,
+        obs_time,
+        temp,
+        source_code="jma_amedas",
+        source_label="JMA",
+    )
 
 
 def _replace_or_append_today_point(
@@ -447,6 +464,82 @@ def _raw_observation_update(
         "observation_status": "live",
         "city": city,
     }
+
+
+def _first_text(*values: Any) -> str:
+    for value in values:
+        text = str(value or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def _raw_source_observation_update(
+    city: str,
+    row: dict[str, Any],
+    raw_payload: dict[str, Any],
+    *,
+    source_code: str,
+    default_label: str,
+    temp_keys: tuple[str, ...] = ("temp", "temp_c"),
+    observed_at_keys: tuple[str, ...] = ("observation_time", "obs_time", "observed_at"),
+) -> Optional[dict[str, Any]]:
+    temp = None
+    for key in temp_keys:
+        temp = _to_float(raw_payload.get(key))
+        if temp is not None:
+            break
+    if temp is None:
+        return None
+
+    observed_at = _first_text(
+        *(raw_payload.get(key) for key in observed_at_keys),
+        row.get("observed_at"),
+    )
+    observed_at_local = _first_text(
+        raw_payload.get("observation_time_local"),
+        raw_payload.get("observed_at_local"),
+        row.get("observed_at_local"),
+    )
+    normalized_source = str(source_code or raw_payload.get("source") or "").strip().lower()
+    source_label = _first_text(raw_payload.get("source_label"), default_label, normalized_source.upper())
+    station_code = _first_text(
+        raw_payload.get("icao"),
+        raw_payload.get("station_code"),
+        raw_payload.get("istNo"),
+        row.get("station_code"),
+    )
+    station_name = _first_text(
+        raw_payload.get("station_label"),
+        raw_payload.get("station_name"),
+        raw_payload.get("name"),
+        row.get("station_name"),
+        source_label,
+    )
+    freshness = {
+        "freshness_status": "fresh",
+        "observed_at": observed_at or None,
+        "observed_at_local": observed_at_local or None,
+        "source_code": normalized_source,
+        "source_label": source_label,
+    }
+    update = {
+        "temp": round(temp, 1),
+        "source_code": normalized_source,
+        "source_label": source_label,
+        "station_code": station_code or None,
+        "station_name": station_name,
+        "observed_at": observed_at or None,
+        "observed_at_local": observed_at_local or None,
+        "obs_time": observed_at or observed_at_local,
+        "freshness": freshness,
+        "observation_status": "live",
+        "city": city,
+    }
+    if normalized_source:
+        update["settlement_source"] = normalized_source
+        update["settlement_source_label"] = source_label
+    return update
 
 
 def _merge_observation_block(
@@ -737,7 +830,8 @@ def overlay_latest_cwa_observation(weather, city, payload):
         return payload
 
     raw_epoch = parse_observation_epoch(obs_time)
-    if raw_epoch is None:
+    local_dt = _parse_observation_datetime(obs_time)
+    if raw_epoch is None or local_dt is None:
         return payload
     existing_epochs = [
         epoch
@@ -748,13 +842,18 @@ def overlay_latest_cwa_observation(weather, city, payload):
         )
         if epoch is not None
     ]
-    if existing_epochs and max(existing_epochs) >= raw_epoch:
+    if existing_epochs and max(existing_epochs) > raw_epoch:
         return payload
 
+    source_label = str(cwa_data.get("source_label") or "CWA").strip() or "CWA"
+    current = cwa_data.get("current") if isinstance(cwa_data.get("current"), dict) else {}
+    max_so_far = _to_float(current.get("max_temp_so_far") if current else None)
     update = {
         "temp": round(float(temp), 1),
         "source_code": "cwa",
-        "source_label": str(cwa_data.get("source_label") or "CWA").strip(),
+        "source_label": source_label,
+        "settlement_source": "cwa",
+        "settlement_source_label": source_label,
         "station_code": str(cwa_data.get("station_code") or "466920").strip(),
         "station_name": str(cwa_data.get("station_name") or "\u81fa\u5317").strip(),
         "observed_at": obs_time,
@@ -762,6 +861,9 @@ def overlay_latest_cwa_observation(weather, city, payload):
         "observation_status": "live",
         "city": normalized_city,
     }
+    if max_so_far is not None:
+        update["max_so_far"] = round(float(max_so_far), 1)
+        update["max_temp_so_far"] = round(float(max_so_far), 1)
 
     next_payload = deepcopy(payload)
     changed = False
@@ -785,6 +887,46 @@ def overlay_latest_cwa_observation(weather, city, payload):
         if canonical_payload:
             next_payload["canonical_temperature"] = canonical_payload
             changed = True
+
+    local_date = local_dt.date().isoformat()
+    local_time = local_dt.strftime("%H:%M")
+    previous_local_date = str(next_payload.get("local_date") or "")
+    if next_payload.get("local_date") != local_date:
+        next_payload["local_date"] = local_date
+        changed = True
+    if next_payload.get("local_time") != local_time:
+        next_payload["local_time"] = local_time
+        changed = True
+
+    overview = next_payload.get("overview")
+    if not isinstance(overview, dict):
+        overview = {}
+    next_overview = dict(overview)
+    overview_updates = {
+        "local_date": local_date,
+        "local_time": local_time,
+        "current_temp": round(float(temp), 1),
+        "airport_primary": update,
+    }
+    for key, value in overview_updates.items():
+        if next_overview.get(key) != value:
+            next_overview[key] = value
+            changed = True
+    next_payload["overview"] = next_overview
+
+    replace_today_series = bool(previous_local_date and previous_local_date != local_date)
+    _sync_jma_today_series(
+        next_payload,
+        _observation_today_point(
+            local_time,
+            obs_time,
+            temp,
+            source_code="cwa",
+            source_label=source_label,
+        ),
+        replace_all=replace_today_series,
+    )
+    changed = True
 
     return next_payload if changed else payload
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -832,7 +974,13 @@ def overlay_latest_amos_observation(db, city, payload):
     raw_epoch = _raw_amos_epoch(row, raw_payload)
     if raw_epoch is None:
         return payload
-    update = _raw_observation_update(normalized_city, row, raw_payload)
+    update = _raw_source_observation_update(
+        normalized_city,
+        row,
+        raw_payload,
+        source_code="amos",
+        default_label="AMOS",
+    )
     if not update:
         return payload
 
@@ -913,7 +1061,14 @@ def overlay_latest_hko_observation(db, city, payload):
     raw_epoch = _raw_hko_epoch(row, raw_payload)
     if raw_epoch is None:
         return payload
-    update = _raw_observation_update(normalized_city, row, raw_payload)
+    update = _raw_source_observation_update(
+        normalized_city,
+        row,
+        raw_payload,
+        source_code="hko_obs",
+        default_label="HKO",
+        observed_at_keys=("obs_time", "observation_time", "observed_at"),
+    )
     if not update:
         return payload
 
@@ -987,7 +1142,14 @@ def overlay_latest_mgm_observation(db, city, payload):
     raw_epoch = _raw_mgm_epoch(row, raw_payload)
     if raw_epoch is None:
         return payload
-    update = _raw_observation_update(normalized_city, row, raw_payload)
+    update = _raw_source_observation_update(
+        normalized_city,
+        row,
+        raw_payload,
+        source_code="mgm",
+        default_label="MGM",
+        observed_at_keys=("obs_time", "observation_time", "observed_at"),
+    )
     if not update:
         return payload
 

@@ -1431,6 +1431,76 @@ def test_chart_data_returns_cached_payload_when_optional_overlay_times_out(monke
     ]
 
 
+def test_chart_data_waits_for_latest_observation_overlay_when_optional_timeout_is_short(monkeypatch):
+    import asyncio
+
+    class FakeCache:
+        def get_city_cache(self, kind, city):
+            assert kind == "full"
+            return {
+                "payload": {
+                    "name": city,
+                    "display_name": city.title(),
+                    "temp_symbol": "°C",
+                    "risk": {"icao": "ZUUU"},
+                    "current": {
+                        "temp": 21.0,
+                        "source_code": "metar",
+                        "obs_time": "2026-06-14T16:00:00+00:00",
+                    },
+                    "airport_current": {
+                        "temp": 21.0,
+                        "source_code": "metar",
+                        "obs_time": "2026-06-14T16:00:00+00:00",
+                    },
+                    "hourly": {"times": ["13:00"], "temps": [21.0]},
+                },
+            }
+
+        def get_runway_obs_recent(self, icao, minutes=60):
+            return []
+
+        def get_latest_raw_observation(self, source, city):
+            if (source, city) != ("amsc_awos", "chengdu"):
+                return None
+            return {
+                "source": "amsc_awos",
+                "city": "chengdu",
+                "station_code": "ZUUU",
+                "station_name": "Chengdu Shuangliu",
+                "status": "ok",
+                "observed_at": "2026-06-14T17:00:00+00:00",
+                "fetched_at": "2026-06-14T17:00:30+00:00",
+                "payload": {
+                    "source": "amsc_awos",
+                    "source_label": "AMSC AWOS Chengdu Shuangliu (ZUUU)",
+                    "icao": "ZUUU",
+                    "temp_c": 25.8,
+                    "observation_time": "2026-06-14T17:00:00+00:00",
+                    "observation_time_local": "2026-06-15 01:00:00",
+                },
+            }
+
+    async def fake_run_in_threadpool(fn, *args, **kwargs):
+        if fn is city_api.overlay_latest_amsc_observation:
+            await asyncio.sleep(0.05)
+        return fn(*args, **kwargs)
+
+    monkeypatch.setenv("POLYWEATHER_CITY_CHART_OPTIONAL_OVERLAY_TIMEOUT_MS", "1")
+    monkeypatch.setattr(city_api, "run_in_threadpool", fake_run_in_threadpool)
+    monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "_overlay_latest_wunderground_current",
+        lambda city, payload: payload,
+    )
+
+    payload = asyncio.run(city_api._get_city_chart_data("chengdu", force_refresh=False))
+
+    assert payload["current"]["temp"] == 25.8
+    assert payload["airport_current"]["source_code"] == "amsc_awos"
+
+
 def test_chart_detail_payload_uses_threadpool_and_reuses_short_cache(monkeypatch):
     import asyncio
 

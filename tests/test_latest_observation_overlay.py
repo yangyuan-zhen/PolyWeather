@@ -385,3 +385,171 @@ def test_overlay_latest_jma_does_not_downgrade_newer_payload_current():
     assert result is payload
     assert result["current"]["temp"] == 25.0
     assert result["local_time"] == "07:00"
+
+
+def test_non_amsc_raw_overlays_keep_their_source_codes():
+    cases = [
+        (
+            "amos",
+            observation_overlay.overlay_latest_amos_observation,
+            "seoul",
+            {
+                "observed_at": "2026-06-16T06:03:00+09:00",
+                "fetched_at": "2026-06-15T21:03:30+00:00",
+                "station_code": "RKSS",
+                "station_name": "Gimpo",
+                "payload": {
+                    "source": "amos",
+                    "source_label": "AMOS",
+                    "icao": "RKSS",
+                    "temp": 22.4,
+                    "observation_time": "2026-06-16T06:03:00+09:00",
+                },
+            },
+        ),
+        (
+            "hko_obs",
+            observation_overlay.overlay_latest_hko_observation,
+            "hong kong",
+            {
+                "observed_at": "2026-06-16T05:55:00+08:00",
+                "fetched_at": "2026-06-15T21:55:30+00:00",
+                "station_code": "HKO",
+                "station_name": "Hong Kong Observatory",
+                "payload": {
+                    "source": "hko_obs",
+                    "source_label": "HKO",
+                    "station_code": "HKO",
+                    "station_label": "Hong Kong Observatory",
+                    "temp": 28.6,
+                    "obs_time": "2026-06-16T05:55:00+08:00",
+                },
+            },
+        ),
+        (
+            "mgm",
+            observation_overlay.overlay_latest_mgm_observation,
+            "ankara",
+            {
+                "observed_at": "2026-06-16T00:10:00+03:00",
+                "fetched_at": "2026-06-15T21:10:30+00:00",
+                "station_code": "17130",
+                "station_name": "Ankara",
+                "payload": {
+                    "source": "mgm",
+                    "source_label": "MGM",
+                    "icao": "17130",
+                    "station_label": "Ankara (Bölge/Center)",
+                    "temp": 25.3,
+                    "obs_time": "2026-06-16T00:10:00+03:00",
+                },
+            },
+        ),
+    ]
+
+    for source_code, overlay_fn, city, row in cases:
+        class FakeDB:
+            def get_latest_raw_observation(self, source, requested_city):
+                assert (source, requested_city) == (source_code, city)
+                return row
+
+        result = overlay_fn(
+            FakeDB(),
+            city,
+            {
+                "name": city,
+                "temp_symbol": "°C",
+                "current": {
+                    "temp": 19.0,
+                    "source_code": "metar",
+                    "obs_time": "2026-06-15T00:00:00+00:00",
+                },
+                "airport_current": {
+                    "temp": 19.0,
+                    "source_code": "metar",
+                    "obs_time": "2026-06-15T00:00:00+00:00",
+                },
+            },
+        )
+
+        assert result["current"]["source_code"] == source_code
+        assert result["airport_current"]["source_code"] == source_code
+        assert result["current"]["source_label"] == row["payload"]["source_label"]
+        assert result["current"].get("settlement_source") != "amsc_awos"
+        assert result["canonical_temperature"]["source"] == source_code
+
+
+def test_overlay_latest_cwa_resets_stale_taipei_detail_to_latest_local_day():
+    class FakeWeather:
+        def fetch_cwa_taipei_settlement_current(self):
+            return {
+                "source": "cwa",
+                "source_label": "CWA",
+                "station_code": "466920",
+                "station_name": "臺北",
+                "observation_time": "2026-06-16T15:30:00+08:00",
+                "current": {
+                    "temp": 29.4,
+                    "max_temp_so_far": 31.0,
+                },
+            }
+
+    stale_payload = {
+        "name": "taipei",
+        "display_name": "Taipei",
+        "temp_symbol": "°C",
+        "local_date": "2026-06-14",
+        "local_time": "18:00",
+        "current": {
+            "temp": 24.0,
+            "source_code": "metar",
+            "obs_time": "2026-06-14T10:00:00+00:00",
+        },
+        "airport_current": {
+            "temp": 24.0,
+            "source_code": "metar",
+            "obs_time": "2026-06-14T10:00:00+00:00",
+        },
+        "airport_primary": {
+            "temp": 24.0,
+            "source_code": "metar",
+            "obs_time": "2026-06-14T10:00:00+00:00",
+        },
+        "overview": {
+            "local_date": "2026-06-14",
+            "local_time": "18:00",
+            "current_temp": 24.0,
+        },
+        "metar_today_obs": [
+            {"time": "18:00", "temp": 24.0},
+        ],
+        "timeseries": {
+            "metar_today_obs": [
+                {"time": "18:00", "temp": 24.0},
+            ],
+        },
+    }
+
+    result = observation_overlay.overlay_latest_cwa_observation(
+        FakeWeather(),
+        "taipei",
+        stale_payload,
+    )
+
+    assert result["local_date"] == "2026-06-16"
+    assert result["local_time"] == "15:30"
+    assert result["current"]["temp"] == 29.4
+    assert result["current"]["source_code"] == "cwa"
+    assert result["airport_current"]["obs_time"] == "2026-06-16T15:30:00+08:00"
+    assert result["overview"]["local_date"] == "2026-06-16"
+    assert result["overview"]["current_temp"] == 29.4
+    assert result["metar_today_obs"] == [
+        {
+            "time": "15:30",
+            "temp": 29.4,
+            "obs_time": "2026-06-16T15:30:00+08:00",
+            "source_code": "cwa",
+            "source_label": "CWA",
+        }
+    ]
+    assert result["timeseries"]["metar_today_obs"] == result["metar_today_obs"]
