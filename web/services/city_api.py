@@ -14,7 +14,10 @@ from fastapi import HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from loguru import logger
 
-from src.data_collection.forecast_source_bundle import fetch_open_meteo_forecast_bundle
+from src.data_collection.forecast_source_bundle import (
+    _multi_model_cache_key,
+    fetch_open_meteo_forecast_bundle,
+)
 import web.routes as legacy_routes
 from web.analysis_service import _runway_history_temp_for_city
 from web.services.canonical_temperature import build_city_weather_from_canonical
@@ -777,7 +780,8 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
 
 def _overlay_cached_multi_model_hourly(city: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     current_multi_model = payload.get("multi_model") if isinstance(payload.get("multi_model"), dict) else {}
-    if current_multi_model.get("hourly_times") and current_multi_model.get("hourly_forecasts"):
+    local_date = _payload_local_date(payload)
+    if _multi_model_hourly_covers_local_date(current_multi_model, local_date):
         return payload
 
     city_info = legacy_routes.CITIES.get(city) if isinstance(getattr(legacy_routes, "CITIES", None), dict) else None
@@ -798,18 +802,122 @@ def _overlay_cached_multi_model_hourly(city: str, payload: Dict[str, Any]) -> Di
         cache_only=True,
     )
     cached_multi_model = cached_bundle.get("multi_model") if isinstance(cached_bundle, dict) else None
-    if not isinstance(cached_multi_model, dict):
-        return payload
-    if not cached_multi_model.get("hourly_times") or not cached_multi_model.get("hourly_forecasts"):
+    if isinstance(cached_multi_model, dict) and _multi_model_hourly_covers_local_date(cached_multi_model, local_date):
+        return {
+            **payload,
+            "multi_model": {
+                **current_multi_model,
+                **cached_multi_model,
+            },
+        }
+
+    fresh_multi_model = _refresh_multi_model_hourly_if_stale(
+        city=city,
+        lat=float(lat),
+        lon=float(lon),
+        use_fahrenheit=bool(city_info.get("f")),
+        local_date=local_date,
+        cached_multi_model=cached_multi_model,
+    )
+    if not _multi_model_hourly_covers_local_date(fresh_multi_model, local_date):
         return payload
 
     return {
         **payload,
         "multi_model": {
             **current_multi_model,
-            **cached_multi_model,
+            **fresh_multi_model,
         },
     }
+
+
+def _payload_local_date(payload: Dict[str, Any]) -> str:
+    overview = payload.get("overview") if isinstance(payload.get("overview"), dict) else {}
+    return str(payload.get("local_date") or overview.get("local_date") or "").strip()
+
+
+def _multi_model_has_hourly_payload(multi_model: Any) -> bool:
+    if not isinstance(multi_model, dict):
+        return False
+    times = multi_model.get("hourly_times")
+    forecasts = multi_model.get("hourly_forecasts")
+    return bool(times) and isinstance(forecasts, dict) and bool(forecasts)
+
+
+def _multi_model_hourly_covers_local_date(multi_model: Any, local_date: str) -> bool:
+    if not _multi_model_has_hourly_payload(multi_model):
+        return False
+    wanted_date = str(local_date or "").strip()
+    if not wanted_date:
+        return True
+
+    times = multi_model.get("hourly_times") or []
+    forecasts = multi_model.get("hourly_forecasts") or {}
+    for idx, raw_time in enumerate(times):
+        if not str(raw_time or "").startswith(wanted_date):
+            continue
+        for values in forecasts.values():
+            if isinstance(values, list) and idx < len(values) and values[idx] is not None:
+                return True
+    return False
+
+
+def _evict_stale_multi_model_cache_entry(
+    *,
+    city: str,
+    lat: float,
+    lon: float,
+    use_fahrenheit: bool,
+    local_date: str,
+    cached_multi_model: Any,
+) -> None:
+    if _multi_model_hourly_covers_local_date(cached_multi_model, local_date):
+        return
+    try:
+        key = _multi_model_cache_key(
+            legacy_routes._weather,
+            city,
+            lat,
+            lon,
+            use_fahrenheit=use_fahrenheit,
+        )
+        with legacy_routes._weather._multi_model_cache_lock:
+            entry = legacy_routes._weather._multi_model_cache.get(key)
+            data = entry.get("data") if isinstance(entry, dict) else None
+            if isinstance(data, dict) and not _multi_model_hourly_covers_local_date(data, local_date):
+                legacy_routes._weather._multi_model_cache.pop(key, None)
+    except Exception as exc:
+        logger.debug("stale multi-model cache eviction skipped city={}: {}", city, exc)
+
+
+def _refresh_multi_model_hourly_if_stale(
+    *,
+    city: str,
+    lat: float,
+    lon: float,
+    use_fahrenheit: bool,
+    local_date: str,
+    cached_multi_model: Any,
+) -> Dict[str, Any]:
+    _evict_stale_multi_model_cache_entry(
+        city=city,
+        lat=lat,
+        lon=lon,
+        use_fahrenheit=use_fahrenheit,
+        local_date=local_date,
+        cached_multi_model=cached_multi_model,
+    )
+    try:
+        fresh = legacy_routes._weather.fetch_multi_model(
+            lat,
+            lon,
+            city=city,
+            use_fahrenheit=use_fahrenheit,
+        )
+    except Exception as exc:
+        logger.debug("multi-model chart refresh skipped city={}: {}", city, exc)
+        return {}
+    return fresh if isinstance(fresh, dict) else {}
 
 
 def _city_detail_payload_cache_key(
