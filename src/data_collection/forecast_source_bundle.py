@@ -46,10 +46,8 @@ def _read_open_meteo_bundle_from_cache(
     with collector._open_meteo_cache_lock:
         om_cached = collector._open_meteo_cache.get(om_key)
 
-    if not om_cached or not isinstance(om_cached.get("data"), dict):
-        return results
-
-    results["open-meteo"] = dict(om_cached["data"])
+    if om_cached and isinstance(om_cached.get("data"), dict):
+        results["open-meteo"] = dict(om_cached["data"])
     if include_multi_model:
         mm_key = _multi_model_cache_key(
             collector,

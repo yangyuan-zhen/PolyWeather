@@ -265,6 +265,47 @@ def test_fetch_all_sources_delegates_non_hf_forecast_bundle(monkeypatch, tmp_pat
     assert result["multi_model"]["forecasts"]["ECMWF"] == 24.5
 
 
+def test_open_meteo_cache_only_reads_multi_model_without_forecast_cache():
+    from src.data_collection.forecast_source_bundle import fetch_open_meteo_forecast_bundle
+
+    class DummyLock:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, *_args):
+            return False
+
+    class FakeCollector:
+        multi_model_cache_version = "v5"
+        _open_meteo_cache = {}
+        _open_meteo_cache_lock = DummyLock()
+        _multi_model_cache_lock = DummyLock()
+        _multi_model_cache = {
+            "48.9694:2.4414:paris:c:v5": {
+                "data": {
+                    "hourly_times": ["2026-06-16T15:00"],
+                    "hourly_forecasts": {"ECMWF": [24.5]},
+                    "forecasts": {"ECMWF": 27.0},
+                }
+            }
+        }
+
+        def _maybe_reload_open_meteo_disk_cache(self):
+            return None
+
+    result = fetch_open_meteo_forecast_bundle(
+        FakeCollector(),
+        city="paris",
+        lat=48.9694,
+        lon=2.4414,
+        use_fahrenheit=False,
+        include_multi_model=True,
+        cache_only=True,
+    )
+
+    assert result["multi_model"]["hourly_forecasts"]["ECMWF"] == [24.5]
+
+
 def test_ensure_multi_model_hourly_payload_fetches_missing_hourly_outside_analysis_layer():
     calls = []
 

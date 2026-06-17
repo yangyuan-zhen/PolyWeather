@@ -14,6 +14,7 @@ from fastapi import HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from loguru import logger
 
+from src.data_collection.forecast_source_bundle import fetch_open_meteo_forecast_bundle
 import web.routes as legacy_routes
 from web.analysis_service import _runway_history_temp_for_city
 from web.services.canonical_temperature import build_city_weather_from_canonical
@@ -722,6 +723,13 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
             fn=_overlay_cached_runway_history_from_db,
             args=(city, payload),
         )
+        payload = await _run_optional_city_chart_overlay(
+            city=city,
+            overlay_name="multi_model_hourly",
+            payload=payload,
+            fn=_overlay_cached_multi_model_hourly,
+            args=(city, payload),
+        )
         payload = await _overlay_latest_observation_sources(city, payload)
         return await _run_optional_city_chart_overlay(
             city=city,
@@ -745,6 +753,13 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
                 fn=_overlay_cached_runway_history_from_db,
                 args=(city, payload),
             )
+            payload = await _run_optional_city_chart_overlay(
+                city=city,
+                overlay_name="multi_model_hourly",
+                payload=payload,
+                fn=_overlay_cached_multi_model_hourly,
+                args=(city, payload),
+            )
             payload = await _overlay_latest_observation_sources(city, payload)
             return await _run_optional_city_chart_overlay(
                 city=city,
@@ -757,6 +772,43 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
     return {
         "name": city,
         "display_name": str((legacy_routes.CITY_REGISTRY.get(city, {}) or {}).get("display_name") or city.title()),
+    }
+
+
+def _overlay_cached_multi_model_hourly(city: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    current_multi_model = payload.get("multi_model") if isinstance(payload.get("multi_model"), dict) else {}
+    if current_multi_model.get("hourly_times") and current_multi_model.get("hourly_forecasts"):
+        return payload
+
+    city_info = legacy_routes.CITIES.get(city) if isinstance(getattr(legacy_routes, "CITIES", None), dict) else None
+    if not isinstance(city_info, dict):
+        return payload
+    lat = city_info.get("lat")
+    lon = city_info.get("lon")
+    if lat is None or lon is None:
+        return payload
+
+    cached_bundle = fetch_open_meteo_forecast_bundle(
+        legacy_routes._weather,
+        city=city,
+        lat=lat,
+        lon=lon,
+        use_fahrenheit=bool(city_info.get("f")),
+        include_multi_model=True,
+        cache_only=True,
+    )
+    cached_multi_model = cached_bundle.get("multi_model") if isinstance(cached_bundle, dict) else None
+    if not isinstance(cached_multi_model, dict):
+        return payload
+    if not cached_multi_model.get("hourly_times") or not cached_multi_model.get("hourly_forecasts"):
+        return payload
+
+    return {
+        **payload,
+        "multi_model": {
+            **current_multi_model,
+            **cached_multi_model,
+        },
     }
 
 

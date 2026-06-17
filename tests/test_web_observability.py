@@ -1254,6 +1254,63 @@ def test_chart_data_cache_hit_starts_full_stale_refresh(monkeypatch):
     assert refresh_calls == ["paris"]
 
 
+def test_chart_data_cache_hit_overlays_cached_multi_model_hourly(monkeypatch):
+    import asyncio
+
+    class FakeCache:
+        def get_city_cache(self, kind, city):
+            assert kind == "full"
+            return {
+                "payload": {
+                    "name": city,
+                    "display_name": city.title(),
+                    "local_date": "2026-06-16",
+                    "local_time": "15:20",
+                    "temp_symbol": "°C",
+                    "current": {"temp": 20.0},
+                    "hourly": {"times": ["15:00"], "temps": [20.0]},
+                    "multi_model": {},
+                },
+            }
+
+        def get_runway_obs_recent(self, icao, minutes=60):
+            return []
+
+    class DummyLock:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, *_args):
+            return False
+
+    collector = city_api.legacy_routes._weather
+    monkeypatch.setattr(collector, "multi_model_cache_version", "v5")
+    monkeypatch.setattr(collector, "_open_meteo_cache", {})
+    monkeypatch.setattr(collector, "_multi_model_cache", {
+        "48.9694:2.4414:paris:c:v5": {
+            "data": {
+                "hourly_times": ["2026-06-16T15:00"],
+                "hourly_forecasts": {"ECMWF": [24.5]},
+                "forecasts": {"ECMWF": 27.0},
+            }
+        }
+    })
+    monkeypatch.setattr(collector, "_open_meteo_cache_lock", DummyLock())
+    monkeypatch.setattr(collector, "_multi_model_cache_lock", DummyLock())
+    monkeypatch.setattr(collector, "_maybe_reload_open_meteo_disk_cache", lambda: None)
+    monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
+    monkeypatch.setattr(city_api.legacy_routes, "_city_cache_is_fresh", lambda entry, ttl: True)
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "_overlay_latest_wunderground_current",
+        lambda city, payload: payload,
+    )
+
+    payload = asyncio.run(city_api._get_city_chart_data("paris", force_refresh=False))
+
+    assert payload["multi_model"]["hourly_forecasts"]["ECMWF"] == [24.5]
+
+
 def test_chart_data_cache_hit_overlays_latest_amsc_raw(monkeypatch):
     import asyncio
 
