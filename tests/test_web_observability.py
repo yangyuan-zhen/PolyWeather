@@ -1446,6 +1446,103 @@ def test_chart_data_cache_hit_refreshes_when_multi_model_cache_is_stale(monkeypa
     assert payload["multi_model"]["hourly_forecasts"]["ECMWF"] == [24.5, 25.0]
 
 
+def test_chart_data_floors_stale_forecast_and_deb_with_observed_high(monkeypatch):
+    import asyncio
+
+    class FakeCache:
+        def get_city_cache(self, kind, city):
+            assert kind == "full"
+            return {
+                "payload": {
+                    "name": city,
+                    "display_name": "Lucknow",
+                    "local_date": "2026-06-21",
+                    "local_time": "13:30",
+                    "temp_symbol": "°C",
+                    "current": {"temp": 38.0, "max_so_far": 38.0},
+                    "airport_current": {"temp": 38.0, "max_so_far": 38.0},
+                    "airport_primary": {"temp": 38.0, "max_so_far": 38.0},
+                    "forecast": {
+                        "today_high": 36.2,
+                        "daily": [{"date": "2026-06-14", "max_temp": 36.2}],
+                    },
+                    "deb": {"prediction": 36.0, "raw_prediction": 36.0},
+                    "multi_model_daily": {
+                        "2026-06-14": {"models": {"Open-Meteo": 36.2}},
+                    },
+                    "multi_model": {},
+                    "hourly": {"times": ["13:00"], "temps": [36.0]},
+                },
+            }
+
+        def get_runway_obs_recent(self, icao, minutes=60):
+            return []
+
+        def get_latest_raw_observation(self, source, city):
+            return None
+
+    class DummyLock:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, *_args):
+            return False
+
+    collector = city_api.legacy_routes._weather
+    monkeypatch.setattr(collector, "multi_model_cache_version", "v5")
+    monkeypatch.setattr(collector, "_open_meteo_cache", {})
+    cache_key = city_api._multi_model_cache_key(
+        collector,
+        "lucknow",
+        26.7606,
+        80.8893,
+        use_fahrenheit=False,
+    )
+    monkeypatch.setattr(
+        collector,
+        "_multi_model_cache",
+        {
+            cache_key: {
+                "data": {
+                    "hourly_times": [
+                        "2026-06-21T13:00",
+                        "2026-06-21T14:00",
+                        "2026-06-21T15:00",
+                    ],
+                    "hourly_forecasts": {
+                        "ECMWF": [38.7, 39.0, 38.0],
+                        "GFS": [42.0, 44.1, 43.0],
+                    },
+                    "daily_forecasts": {
+                        "2026-06-21": {"ECMWF": 39.0, "GFS": 44.1},
+                    },
+                    "forecasts": {"ECMWF": 39.0, "GFS": 44.1},
+                }
+            }
+        },
+    )
+    monkeypatch.setattr(collector, "_open_meteo_cache_lock", DummyLock())
+    monkeypatch.setattr(collector, "_multi_model_cache_lock", DummyLock())
+    monkeypatch.setattr(collector, "_maybe_reload_open_meteo_disk_cache", lambda: None)
+    monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
+    monkeypatch.setattr(city_api.legacy_routes, "_city_cache_is_fresh", lambda entry, ttl: True)
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "_overlay_latest_wunderground_current",
+        lambda city, payload: payload,
+    )
+
+    payload = asyncio.run(city_api._get_city_chart_data("lucknow", force_refresh=False))
+    detail = asyncio.run(city_api._build_city_chart_detail_payload(payload, "10m"))
+
+    assert payload["forecast"]["today_high"] >= 38.0
+    assert payload["deb"]["prediction"] >= 38.0
+    assert payload["multi_model_daily"]["2026-06-21"]["models"]["GFS"] == 44.1
+    assert detail["forecast"]["today_high"] >= 38.0
+    assert detail["overview"]["deb_prediction"] >= 38.0
+    assert detail["multi_model_daily"]["2026-06-21"]["models"]["GFS"] == 44.1
+
+
 def test_chart_data_cache_hit_overlays_latest_amsc_raw(monkeypatch):
     import asyncio
 

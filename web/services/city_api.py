@@ -734,13 +734,14 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
             args=(city, payload),
         )
         payload = await _overlay_latest_observation_sources(city, payload)
-        return await _run_optional_city_chart_overlay(
+        payload = await _run_optional_city_chart_overlay(
             city=city,
             overlay_name="wunderground_current",
             payload=payload,
             fn=legacy_routes._overlay_latest_wunderground_current,
             args=(city, payload),
         )
+        return _floor_chart_forecast_with_observed_high(payload)
 
     cached_entry = await run_in_threadpool(legacy_routes._CACHE_DB.get_city_cache, "full", city)
     if cached_entry:
@@ -764,13 +765,14 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
                 args=(city, payload),
             )
             payload = await _overlay_latest_observation_sources(city, payload)
-            return await _run_optional_city_chart_overlay(
+            payload = await _run_optional_city_chart_overlay(
                 city=city,
                 overlay_name="wunderground_current",
                 payload=payload,
                 fn=legacy_routes._overlay_latest_wunderground_current,
                 args=(city, payload),
             )
+            return _floor_chart_forecast_with_observed_high(payload)
 
     return {
         "name": city,
@@ -829,6 +831,287 @@ def _overlay_cached_multi_model_hourly(city: str, payload: Dict[str, Any]) -> Di
             **fresh_multi_model,
         },
     }
+
+
+def _floor_chart_forecast_with_observed_high(payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(payload, dict) or not payload:
+        return payload
+
+    local_date = _payload_local_date(payload)
+    observed_floor = _observed_temperature_floor(payload)
+    daily_models = _multi_model_daily_models_for_date(payload.get("multi_model"), local_date)
+
+    next_payload = payload
+    if daily_models and local_date:
+        existing_daily = (
+            payload.get("multi_model_daily")
+            if isinstance(payload.get("multi_model_daily"), dict)
+            else {}
+        )
+        current_entry = existing_daily.get(local_date) if isinstance(existing_daily, dict) else {}
+        current_models = current_entry.get("models") if isinstance(current_entry, dict) else {}
+        merged_models = {
+            **(current_models if isinstance(current_models, dict) else {}),
+            **daily_models,
+        }
+        if current_models != merged_models:
+            next_payload = deepcopy(next_payload)
+            next_daily = dict(next_payload.get("multi_model_daily") or {})
+            next_entry = dict(next_daily.get(local_date) or {})
+            next_entry["models"] = merged_models
+            next_daily[local_date] = next_entry
+            next_payload["multi_model_daily"] = next_daily
+
+    if observed_floor is None:
+        return next_payload
+
+    rounded_floor = round(float(observed_floor), 1)
+    next_payload = _floor_forecast_today_high(next_payload, local_date, rounded_floor)
+    next_payload = _floor_deb_prediction(next_payload, rounded_floor)
+    next_payload = _floor_multi_model_daily_deb(next_payload, local_date, rounded_floor)
+    next_payload = _floor_probability_mu(next_payload, rounded_floor)
+    return next_payload
+
+
+def _observed_temperature_floor(payload: Dict[str, Any]) -> Optional[float]:
+    values: List[float] = []
+
+    def add(value: Any) -> None:
+        parsed = _float_or_none(value)
+        if parsed is not None:
+            values.append(parsed)
+
+    for key in ("current", "airport_current", "airport_primary", "canonical_temperature"):
+        block = payload.get(key) if isinstance(payload.get(key), dict) else {}
+        for value_key in ("max_so_far", "max_temp_so_far", "today_high", "temp", "temp_c"):
+            add(block.get(value_key))
+
+    amos = payload.get("amos") if isinstance(payload.get("amos"), dict) else {}
+    for value_key in ("max_so_far", "max_temp_so_far", "today_high", "temp", "temp_c"):
+        add(amos.get(value_key))
+    amos_current = amos.get("current") if isinstance(amos.get("current"), dict) else {}
+    for value_key in ("max_so_far", "max_temp_so_far", "today_high", "temp", "temp_c"):
+        add(amos_current.get(value_key))
+
+    for series_key in ("airport_primary_today_obs", "metar_today_obs", "settlement_today_obs"):
+        _collect_observed_series_temps(payload.get(series_key), values)
+
+    timeseries = payload.get("timeseries") if isinstance(payload.get("timeseries"), dict) else {}
+    for series_key in ("airport_primary_today_obs", "metar_today_obs", "settlement_today_obs"):
+        _collect_observed_series_temps(timeseries.get(series_key), values)
+
+    return max(values) if values else None
+
+
+def _collect_observed_series_temps(series: Any, values: List[float]) -> None:
+    if not isinstance(series, list):
+        return
+    for point in series:
+        if not isinstance(point, dict):
+            continue
+        parsed = _first_float(point, ("temp", "temperature", "value"))
+        if parsed is not None:
+            values.append(parsed)
+
+
+def _first_float(block: Dict[str, Any], keys: Tuple[str, ...]) -> Optional[float]:
+    for key in keys:
+        parsed = _float_or_none(block.get(key))
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _multi_model_daily_models_for_date(multi_model: Any, local_date: str) -> Dict[str, float]:
+    if not isinstance(multi_model, dict) or not local_date:
+        return {}
+
+    models: Dict[str, float] = {}
+    daily = multi_model.get("daily_forecasts") if isinstance(multi_model.get("daily_forecasts"), dict) else {}
+    day_models = daily.get(local_date) if isinstance(daily, dict) else {}
+    if isinstance(day_models, dict):
+        for model, value in day_models.items():
+            parsed = _float_or_none(value)
+            if parsed is not None:
+                models[str(model)] = round(parsed, 1)
+
+    hourly_models = _multi_model_daily_models_from_hourly(multi_model, local_date)
+    for model, value in hourly_models.items():
+        current = models.get(model)
+        models[model] = value if current is None else round(max(current, value), 1)
+
+    if not models:
+        forecasts = multi_model.get("forecasts") if isinstance(multi_model.get("forecasts"), dict) else {}
+        for model, value in forecasts.items():
+            parsed = _float_or_none(value)
+            if parsed is not None:
+                models[str(model)] = round(parsed, 1)
+
+    return models
+
+
+def _multi_model_daily_models_from_hourly(multi_model: Dict[str, Any], local_date: str) -> Dict[str, float]:
+    times = multi_model.get("hourly_times") if isinstance(multi_model.get("hourly_times"), list) else []
+    forecasts = (
+        multi_model.get("hourly_forecasts")
+        if isinstance(multi_model.get("hourly_forecasts"), dict)
+        else {}
+    )
+    if not times or not forecasts:
+        return {}
+
+    day_indexes = [
+        idx
+        for idx, raw_time in enumerate(times)
+        if str(raw_time or "").startswith(local_date)
+    ]
+    if not day_indexes:
+        return {}
+
+    models: Dict[str, float] = {}
+    for model, raw_values in forecasts.items():
+        if not isinstance(raw_values, list):
+            continue
+        model_values = [
+            parsed
+            for idx in day_indexes
+            if idx < len(raw_values)
+            for parsed in [_float_or_none(raw_values[idx])]
+            if parsed is not None
+        ]
+        if model_values:
+            models[str(model)] = round(max(model_values), 1)
+    return models
+
+
+def _floor_forecast_today_high(
+    payload: Dict[str, Any],
+    local_date: str,
+    observed_floor: float,
+) -> Dict[str, Any]:
+    forecast = payload.get("forecast") if isinstance(payload.get("forecast"), dict) else {}
+    today_high = _float_or_none(forecast.get("today_high"))
+    daily = forecast.get("daily") if isinstance(forecast.get("daily"), list) else []
+    needs_today_high = today_high is None or today_high < observed_floor
+    needs_daily = False
+    if local_date:
+        found_today = False
+        for entry in daily:
+            if not isinstance(entry, dict) or str(entry.get("date") or "") != local_date:
+                continue
+            found_today = True
+            max_temp = _first_float(entry, ("max_temp", "today_high"))
+            if max_temp is None or max_temp < observed_floor:
+                needs_daily = True
+            break
+        if daily and not found_today:
+            needs_daily = True
+
+    if not needs_today_high and not needs_daily:
+        return payload
+
+    next_payload = deepcopy(payload)
+    next_forecast = dict(next_payload.get("forecast") or {})
+    if needs_today_high:
+        next_forecast["today_high"] = observed_floor
+    if needs_daily and local_date:
+        next_daily = []
+        found_today = False
+        for entry in daily:
+            if not isinstance(entry, dict):
+                next_daily.append(entry)
+                continue
+            next_entry = dict(entry)
+            if str(next_entry.get("date") or "") == local_date:
+                found_today = True
+                max_temp = _first_float(next_entry, ("max_temp", "today_high"))
+                if max_temp is None or max_temp < observed_floor:
+                    next_entry["max_temp"] = observed_floor
+            next_daily.append(next_entry)
+        if not found_today:
+            next_daily.insert(0, {"date": local_date, "max_temp": observed_floor})
+        next_forecast["daily"] = next_daily
+    next_payload["forecast"] = next_forecast
+    return next_payload
+
+
+def _floor_deb_prediction(payload: Dict[str, Any], observed_floor: float) -> Dict[str, Any]:
+    deb = payload.get("deb") if isinstance(payload.get("deb"), dict) else {}
+    prediction = _float_or_none(deb.get("prediction"))
+    raw_prediction = _float_or_none(deb.get("raw_prediction"))
+    needs_prediction = prediction is None or prediction < observed_floor
+    needs_raw = raw_prediction is not None and raw_prediction < observed_floor
+    overview = payload.get("overview") if isinstance(payload.get("overview"), dict) else {}
+    overview_deb = _float_or_none(overview.get("deb_prediction"))
+    needs_overview = overview_deb is not None and overview_deb < observed_floor
+    if not needs_prediction and not needs_raw and not needs_overview:
+        return payload
+
+    next_payload = deepcopy(payload)
+    next_deb = dict(next_payload.get("deb") or {})
+    if needs_prediction:
+        next_deb["prediction"] = observed_floor
+        next_deb["observed_floor_applied"] = True
+    if needs_raw:
+        next_deb["raw_prediction"] = observed_floor
+    next_payload["deb"] = next_deb
+    if needs_overview:
+        next_overview = dict(next_payload.get("overview") or {})
+        next_overview["deb_prediction"] = observed_floor
+        next_payload["overview"] = next_overview
+    return next_payload
+
+
+def _floor_multi_model_daily_deb(
+    payload: Dict[str, Any],
+    local_date: str,
+    observed_floor: float,
+) -> Dict[str, Any]:
+    if not local_date:
+        return payload
+    daily = payload.get("multi_model_daily") if isinstance(payload.get("multi_model_daily"), dict) else {}
+    if not daily or local_date not in daily:
+        return payload
+    entry = daily.get(local_date) if isinstance(daily.get(local_date), dict) else {}
+    deb = entry.get("deb") if isinstance(entry.get("deb"), dict) else {}
+    prediction = _float_or_none(deb.get("prediction"))
+    raw_prediction = _float_or_none(deb.get("raw_prediction"))
+    if (
+        prediction is not None
+        and prediction >= observed_floor
+        and (raw_prediction is None or raw_prediction >= observed_floor)
+    ):
+        return payload
+
+    next_payload = deepcopy(payload)
+    next_daily = dict(next_payload.get("multi_model_daily") or {})
+    next_entry = dict(next_daily.get(local_date) or {})
+    next_deb = dict(next_entry.get("deb") or {})
+    if prediction is None or prediction < observed_floor:
+        next_deb["prediction"] = observed_floor
+        next_deb["observed_floor_applied"] = True
+    if raw_prediction is not None and raw_prediction < observed_floor:
+        next_deb["raw_prediction"] = observed_floor
+    next_entry["deb"] = next_deb
+    next_daily[local_date] = next_entry
+    next_payload["multi_model_daily"] = next_daily
+    return next_payload
+
+
+def _floor_probability_mu(payload: Dict[str, Any], observed_floor: float) -> Dict[str, Any]:
+    probabilities = (
+        payload.get("probabilities")
+        if isinstance(payload.get("probabilities"), dict)
+        else {}
+    )
+    mu = _float_or_none(probabilities.get("mu"))
+    if mu is None or mu >= observed_floor:
+        return payload
+    next_payload = deepcopy(payload)
+    next_probabilities = dict(next_payload.get("probabilities") or {})
+    next_probabilities["mu"] = observed_floor
+    next_payload["probabilities"] = next_probabilities
+    return next_payload
 
 
 def _payload_local_date(payload: Dict[str, Any]) -> str:
