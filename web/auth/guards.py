@@ -63,6 +63,8 @@ def _bind_forwarded_supabase_identity(request: Request) -> bool:
     request.state.auth_email = str(
         request.headers.get(_FORWARDED_SUPABASE_EMAIL_HEADER) or ""
     ).strip()
+    from src.utils.online_tracker import record_activity
+    record_activity(forwarded_user_id)
     return True
 
 

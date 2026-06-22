@@ -3866,6 +3866,33 @@ def test_backend_entitlement_token_binds_forwarded_supabase_identity(monkeypatch
     assert request.state.auth_email == "user@example.com"
 
 
+def test_backend_entitlement_token_records_forwarded_supabase_activity(monkeypatch):
+    import src.utils.online_tracker as online_tracker
+
+    recorded = []
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "enabled", True)
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "anon_key", "anon-key")
+    monkeypatch.setattr(web_core, "_SUPABASE_AUTH_REQUIRED", True)
+    monkeypatch.setattr(web_core, "_ENTITLEMENT_TOKEN", "backend-token")
+    monkeypatch.setattr(online_tracker, "record_activity", recorded.append)
+
+    request = Request(
+        {
+            "type": "http",
+            "headers": [
+                (b"x-polyweather-entitlement", b"backend-token"),
+                (b"x-polyweather-auth-user-id", b"user-1"),
+                (b"x-polyweather-auth-email", b"user@example.com"),
+            ],
+        }
+    )
+
+    web_core._assert_entitlement(request)
+
+    assert recorded == ["user-1"]
+
+
 def test_backend_entitlement_token_without_forwarded_identity_validates_bearer(monkeypatch):
     monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "enabled", True)
     monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "supabase_url", "https://example.supabase.co")
