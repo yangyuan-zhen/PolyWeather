@@ -35,6 +35,7 @@ from web.services.ops.users import (  # noqa: E402, F401
     get_ops_weekly_leaderboard,
     grant_ops_feedback_reward,
     grant_ops_points,
+    list_ops_audit_log,
     list_ops_feedback,
     search_ops_users,
     transfer_ops_points,
@@ -45,13 +46,16 @@ from web.services.ops.users import (  # noqa: E402, F401
 # Payments / Billing / Memberships
 # ---------------------------------------------------------------------------
 from web.services.ops.payments import (  # noqa: E402, F401
+    create_ops_refund_case,
     get_ops_billing_risk,
     get_ops_memberships_growth,
     get_ops_memberships_overview,
+    list_ops_refund_cases,
     list_ops_memberships,
     list_ops_payment_incidents,
     list_ops_payments,
     resolve_ops_payment_incident,
+    update_ops_refund_case,
 )
 
 # ---------------------------------------------------------------------------

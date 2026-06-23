@@ -2201,6 +2201,20 @@ class PaymentContractCheckoutService:
                 prefer="resolution=merge-duplicates,return=minimal",
                 allowed_status=[200, 201],
             )
+            if str(status or "").strip().lower() == "refund_required":
+                self._db.append_payment_audit_event(
+                    "payment_refund_required",
+                    {
+                        "reason": "refund_required",
+                        "detail": detail,
+                        "intent_id": intent.intent_id,
+                        "user_id": getattr(intent, "user_id", "") or "",
+                        "tx_hash": tx_hash_text,
+                        "chain_id": int(intent.chain_id),
+                        "from_address": _normalize_address(from_address) or "",
+                        "receiver_expected": intent.receiver_address,
+                    },
+                )
             return {}
         except Exception:
             return {}

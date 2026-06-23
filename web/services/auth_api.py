@@ -381,6 +381,27 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
                 "weekly_profile",
                 lambda: legacy_routes._resolve_weekly_profile(request),
             )
+        points_ledger = {
+            "balance": points,
+            "recent": [],
+            "by_source": {},
+        }
+        if user_id and not entitlement_scope:
+            try:
+                points_ledger = timer.measure(
+                    "points_ledger",
+                    lambda: DBManager().get_points_ledger_summary(
+                        supabase_user_id=str(user_id or ""),
+                        supabase_email=str(email or ""),
+                        limit=8,
+                    ),
+                )
+            except Exception:
+                points_ledger = {
+                    "balance": points,
+                    "recent": [],
+                    "by_source": {},
+                }
 
         def resolve_telegram_pricing() -> Any:
             if not user_id:
@@ -409,6 +430,7 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
             "user_id": user_id,
             "email": email,
             "points": points,
+            "points_ledger": points_ledger,
             "weekly_points": weekly_profile["weekly_points"],
             "weekly_rank": weekly_profile["weekly_rank"],
             "entitlement_mode": (

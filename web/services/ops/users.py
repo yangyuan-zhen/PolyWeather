@@ -63,6 +63,25 @@ def search_ops_users(request: Request, q: str = "", limit: int = 20) -> Dict[str
     return {"users": db.search_users(q, limit=limit)}
 
 
+def list_ops_audit_log(
+    request: Request,
+    *,
+    limit: int = 100,
+    action: str = "",
+    actor_email: str = "",
+    target_user_id: str = "",
+) -> Dict[str, Any]:
+    _require_ops(request)
+    db = _get_db()
+    rows = db.list_ops_audit_events(
+        limit=limit,
+        action=action,
+        actor_email=actor_email,
+        target_user_id=target_user_id,
+    )
+    return {"events": rows, "total": len(rows)}
+
+
 def get_ops_weekly_leaderboard(request: Request, limit: int = 20) -> Dict[str, Any]:
     _require_ops(request)
     db = _get_db()
@@ -76,12 +95,34 @@ def get_ops_weekly_leaderboard(request: Request, limit: int = 20) -> Dict[str, A
 def grant_ops_points(request: Request, body: GrantPointsRequest) -> Dict[str, Any]:
     admin = _require_ops(request) or {}
     db = _get_db()
-    result = db.grant_points_by_supabase_email(body.email, body.points)
-    result["operator_email"] = admin.get("email")
+    actor_email = str(admin.get("email") or "").strip().lower()
+    result = db.grant_points_by_supabase_email(
+        body.email,
+        body.points,
+        source="ops_manual_grant",
+        actor_email=actor_email,
+        reference_type="ops_action",
+        metadata={"action": "manual_points_grant"},
+    )
+    result["operator_email"] = actor_email
     if not result.get("ok"):
         reason = str(result.get("reason") or "grant_points_failed")
         status_code = 404 if reason == "user_not_found" else 400
         raise HTTPException(status_code=status_code, detail=result)
+    append_audit = getattr(db, "append_ops_audit_event", None)
+    if callable(append_audit):
+        audit = append_audit(
+            action="manual_points_grant",
+            actor_email=actor_email,
+            target_user_id=str(result.get("supabase_user_id") or ""),
+            target_email=str(result.get("supabase_email") or body.email),
+            target_type="user",
+            payload={
+                "points_added": int(result.get("points_added") or body.points),
+                "points_after": int(result.get("points_after") or 0),
+            },
+        )
+        result["audit_event_id"] = audit.get("id")
     return result
 
 
@@ -170,12 +211,23 @@ def grant_ops_feedback_reward(
     reason: str = "",
 ) -> Dict[str, Any]:
     admin = _require_ops(request) or {}
+    actor_email = str(admin.get("email") or "").strip().lower()
     db = _get_db()
-    result = db.grant_feedback_reward(
-        feedback_id,
-        points=points,
-        reason=reason,
-    )
+    try:
+        result = db.grant_feedback_reward(
+            feedback_id,
+            points=points,
+            reason=reason,
+            actor_email=actor_email,
+        )
+    except TypeError as exc:
+        if "actor_email" not in str(exc):
+            raise
+        result = db.grant_feedback_reward(
+            feedback_id,
+            points=points,
+            reason=reason,
+        )
     if not result.get("ok") and str(result.get("reason") or "") == "user_not_found":
         feedback = result.get("feedback") if isinstance(result.get("feedback"), dict) else {}
         reward_status = str(feedback.get("reward_status") or "").strip().lower()
@@ -203,11 +255,32 @@ def grant_ops_feedback_reward(
                     "supabase_user_id": supabase_user_id,
                     "feedback": updated_feedback,
                 }
-    result["operator_email"] = admin.get("email")
+    result["operator_email"] = actor_email
     if not result.get("ok"):
         reason_code = str(result.get("reason") or "feedback_reward_failed")
         status_code = 404 if reason_code in {"feedback_not_found", "user_not_found"} else 400
         if reason_code == "already_rewarded":
             status_code = 409
         raise HTTPException(status_code=status_code, detail=result)
+    feedback = result.get("feedback") if isinstance(result.get("feedback"), dict) else {}
+    append_audit = getattr(db, "append_ops_audit_event", None)
+    if callable(append_audit):
+        audit = append_audit(
+            action="feedback_reward_grant",
+            actor_email=actor_email,
+            target_user_id=str(
+                result.get("supabase_user_id")
+                or feedback.get("user_id")
+                or ""
+            ),
+            target_email=str(result.get("supabase_email") or feedback.get("user_email") or ""),
+            target_type="feedback",
+            target_id=str(feedback_id),
+            payload={
+                "points_added": int(points or 0),
+                "reason": str(reason or ""),
+                "points_after": int(result.get("points_after") or 0),
+            },
+        )
+        result["audit_event_id"] = audit.get("id")
     return result

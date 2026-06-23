@@ -70,6 +70,17 @@ import { getTurnstileTokenForAction } from "@/lib/turnstile-client";
 
 // --- Main Component ---
 
+function pointSourceLabel(source?: string, isEn = false) {
+  const key = String(source || "").trim().toLowerCase();
+  if (key === "feedback_reward") return isEn ? "Feedback reward" : "反馈奖励";
+  if (key === "ops_manual_grant") return isEn ? "Ops manual grant" : "后台补发";
+  if (key === "paid_referral") return isEn ? "Paid referral" : "有效付费邀请";
+  if (key === "growth_milestone_reward") return isEn ? "Growth reward" : "增长奖励";
+  if (key === "points_redemption") return isEn ? "Payment redemption" : "支付抵扣";
+  if (key === "ops_subscription_deduction") return isEn ? "Ops deduction" : "后台订阅扣分";
+  return key || (isEn ? "Unknown source" : "未知来源");
+}
+
 export function AccountCenter() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -535,6 +546,9 @@ export function AccountCenter() {
   const monthlyReferralPointsLimit = Number.isFinite(monthlyReferralPointsLimitRaw)
     ? Math.max(0, monthlyReferralPointsLimitRaw)
     : monthlyReferralLimit * referralRewardPoints;
+  const pointsLedger = backend?.points_ledger;
+  const pointSourceRows = Object.entries(pointsLedger?.by_source ?? {});
+  const recentPointEvents = pointsLedger?.recent ?? [];
 
   // ── Telegram bind command ──────────────────────────────
   const bindCommand = telegramBindCommand || copy.telegramBindCommandPlaceholder;
@@ -896,6 +910,64 @@ export function AccountCenter() {
             </div>
           </div>
         )}
+
+        <section className="lg:col-span-12 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <h3 className="flex items-center gap-2 text-lg font-bold text-slate-950">
+              <Coins size={20} className="text-yellow-500" />
+              {isEn ? "Point Sources" : "积分来源"}
+            </h3>
+            <span className="text-xs font-semibold text-slate-500">
+              {isEn ? "Current balance" : "当前余额"} {Number(pointsLedger?.balance ?? totalPoints).toLocaleString()}
+            </span>
+          </div>
+          {pointSourceRows.length === 0 && recentPointEvents.length === 0 ? (
+            <p className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+              {copy.pointsRule}
+            </p>
+          ) : (
+            <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {pointSourceRows.map(([source, item]) => (
+                  <div key={source} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="text-xs font-bold text-slate-600">
+                      {pointSourceLabel(source, isEn)}
+                    </div>
+                    <div className="mt-1 text-lg font-black text-slate-950">
+                      {Number(item?.points ?? 0).toLocaleString()}
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-slate-500">
+                      {Number(item?.count ?? 0).toLocaleString()} {isEn ? "events" : "笔记录"} · {source}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-xl border border-slate-200">
+                <div className="border-b border-slate-200 px-4 py-2 text-xs font-bold uppercase text-slate-500">
+                  {isEn ? "Recent point ledger" : "最近积分流水"}
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {recentPointEvents.slice(0, 5).map((event, index) => (
+                    <div key={`${event.id ?? index}-${event.source}`} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 px-4 py-2 text-sm">
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold text-slate-800">
+                          {pointSourceLabel(event.source, isEn)}
+                        </div>
+                        <div className="mt-0.5 truncate text-[11px] text-slate-500">
+                          {event.reference_type || "ledger"} · {event.created_at ? formatTime(event.created_at, locale) : "--"}
+                        </div>
+                      </div>
+                      <div className={`font-mono font-bold ${Number(event.delta_points ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                        {Number(event.delta_points ?? 0) >= 0 ? "+" : ""}
+                        {Number(event.delta_points ?? 0).toLocaleString()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
 
         {/* Subscription Info & Paywall */}
         <div className="lg:col-span-12 relative">

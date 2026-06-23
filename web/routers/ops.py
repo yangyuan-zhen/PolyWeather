@@ -4,6 +4,7 @@ from fastapi import APIRouter, Request, Response
 
 from web.core import FeedbackRewardRequest, GrantPointsRequest
 from web.services.ops_api import (
+    create_ops_refund_case,
     extend_ops_subscription,
     get_ops_analytics_funnel,
     get_ops_billing_risk,
@@ -17,7 +18,9 @@ from web.services.ops_api import (
     get_ops_source_health,
     get_ops_truth_history,
     get_ops_weekly_leaderboard,
+    list_ops_audit_log,
     list_ops_feedback,
+    list_ops_refund_cases,
     get_ops_user_subscriptions,
     grant_ops_points,
     transfer_ops_points,
@@ -25,6 +28,7 @@ from web.services.ops_api import (
     list_ops_memberships,
     list_ops_payment_incidents,
     resolve_ops_payment_incident,
+    update_ops_refund_case,
     list_ops_payments,
     search_ops_users,
     update_ops_config,
@@ -73,6 +77,23 @@ async def ops_search_users(request: Request, q: str = "", limit: int = 20):
 @router.get("/api/ops/leaderboard/weekly")
 async def ops_weekly_leaderboard(request: Request, limit: int = 20):
     return get_ops_weekly_leaderboard(request, limit=limit)
+
+
+@router.get("/api/ops/audit-log")
+async def ops_audit_log(
+    request: Request,
+    limit: int = 100,
+    action: str = "",
+    actor_email: str = "",
+    target_user_id: str = "",
+):
+    return list_ops_audit_log(
+        request,
+        limit=limit,
+        action=action,
+        actor_email=actor_email,
+        target_user_id=target_user_id,
+    )
 
 
 @router.get("/api/ops/feedback")
@@ -145,6 +166,40 @@ async def ops_resolve_payment_incident(request: Request, event_id: int):
 @router.get("/api/ops/payments")
 async def ops_payments(request: Request, limit: int = 50):
     return list_ops_payments(request, limit=limit)
+
+
+@router.get("/api/ops/refunds")
+async def ops_refunds(request: Request, limit: int = 50, status: str = ""):
+    return list_ops_refund_cases(request, limit=limit, status=status)
+
+
+@router.post("/api/ops/refunds")
+async def ops_refund_create(request: Request):
+    import json as _json
+    body_bytes = await request.body()
+    body = _json.loads(body_bytes.decode("utf-8") or "{}")
+    return create_ops_refund_case(
+        request,
+        reason=str(body.get("reason") or "").strip(),
+        intent_id=str(body.get("intent_id") or "").strip(),
+        tx_hash=str(body.get("tx_hash") or "").strip(),
+        user_id=str(body.get("user_id") or "").strip(),
+        amount_usdc=str(body.get("amount_usdc") or "").strip(),
+        note=str(body.get("note") or "").strip(),
+    )
+
+
+@router.patch("/api/ops/refunds/{case_id}")
+async def ops_refund_update(request: Request, case_id: int):
+    import json as _json
+    body_bytes = await request.body()
+    body = _json.loads(body_bytes.decode("utf-8") or "{}")
+    return update_ops_refund_case(
+        request,
+        case_id=case_id,
+        status=str(body.get("status") or "").strip(),
+        note=str(body.get("note") or "").strip(),
+    )
 
 
 @router.get("/api/ops/billing-risk")

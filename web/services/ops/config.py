@@ -274,7 +274,8 @@ def grant_ops_subscription(
     days: int = 30,
     deduct_points: int = 0,
 ) -> dict[str, Any]:
-    _require_ops(request)
+    admin = _require_ops(request) or {}
+    actor_email = str(admin.get("email") or "").strip().lower()
     from datetime import datetime
 
     import web.routes as legacy_routes  # lazy – avoid circular import
@@ -344,10 +345,33 @@ def grant_ops_subscription(
     if safe_deduct > 0:
         db = _get_db()
         deduct_result = db.deduct_points_by_supabase_email(
-            normalized_email, safe_deduct
+            normalized_email,
+            safe_deduct,
+            source="ops_subscription_deduction",
+            actor_email=actor_email,
+            reference_type="subscription",
+            reference_id=user_id,
+            metadata={"plan_code": plan_code, "days": safe_days},
         )
         result["points_deducted"] = safe_deduct
         result["points_result"] = deduct_result
+
+    try:
+        _get_db().append_ops_audit_event(
+            action="subscription_manual_grant",
+            actor_email=actor_email,
+            target_user_id=user_id,
+            target_email=normalized_email,
+            target_type="subscription",
+            payload={
+                "plan_code": plan_code,
+                "days": safe_days,
+                "expires_at": expires_at,
+                "deduct_points": safe_deduct,
+            },
+        )
+    except Exception:
+        pass
 
     return result
 
@@ -357,7 +381,8 @@ def extend_ops_subscription(
     email: str,
     additional_days: int = 30,
 ) -> dict[str, Any]:
-    _require_ops(request)
+    admin = _require_ops(request) or {}
+    actor_email = str(admin.get("email") or "").strip().lower()
     from datetime import datetime
 
     import web.routes as legacy_routes  # lazy – avoid circular import
@@ -419,6 +444,22 @@ def extend_ops_subscription(
     )
     if patch_resp.ok:
         legacy_routes.SUPABASE_ENTITLEMENT.invalidate_subscription_cache(user_id)
+        try:
+            _get_db().append_ops_audit_event(
+                action="subscription_manual_extend",
+                actor_email=actor_email,
+                target_user_id=user_id,
+                target_email=normalized_email,
+                target_type="subscription",
+                target_id=str(sub.get("id") or ""),
+                payload={
+                    "additional_days": safe_days,
+                    "previous_expires_at": current_expiry,
+                    "new_expires_at": new_expiry,
+                },
+            )
+        except Exception:
+            pass
         return {
             "ok": True,
             "email": normalized_email,

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import time
+import os
+from collections import Counter
 from typing import Any, Dict, Optional
 
 from fastapi import BackgroundTasks, Request
@@ -10,7 +12,8 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import PlainTextResponse
 from loguru import logger
 
-from src.utils.metrics import export_prometheus_metrics
+from src.database.db_manager import DBManager
+from src.utils.metrics import export_prometheus_metrics, gauge_set
 from web.core import build_health_payload, build_system_status_payload
 import web.routes as legacy_routes
 
@@ -128,7 +131,83 @@ def run_system_priority_warm(
 
 def get_prometheus_metrics_response(request: Request) -> PlainTextResponse:
     legacy_routes._require_ops_admin(request)
+    _refresh_operational_metrics()
     return PlainTextResponse(
         export_prometheus_metrics(),
         media_type="text/plain; version=0.0.4; charset=utf-8",
     )
+
+
+def _payment_event_reason(row: Dict[str, Any]) -> str:
+    payload = row.get("payload") if isinstance(row, dict) else {}
+    payload = payload if isinstance(payload, dict) else {}
+    confirm_failure = (
+        payload.get("confirm_failure")
+        if isinstance(payload.get("confirm_failure"), dict)
+        else {}
+    )
+    return str(
+        payload.get("reason")
+        or confirm_failure.get("reason")
+        or payload.get("error")
+        or "unknown"
+    ).strip().lower() or "unknown"
+
+
+def _payment_event_is_resolved(row: Dict[str, Any]) -> bool:
+    payload = row.get("payload") if isinstance(row, dict) else {}
+    payload = payload if isinstance(payload, dict) else {}
+    return bool(str(payload.get("resolved_at") or "").strip())
+
+
+def _refresh_operational_metrics() -> None:
+    try:
+        db = DBManager()
+    except Exception:
+        return
+
+    payment_events = []
+    for event_type in ("payment_intent_failed", "payment_refund_required"):
+        try:
+            payment_events.extend(
+                db.list_payment_audit_events(limit=500, event_type=event_type)
+            )
+        except Exception:
+            continue
+
+    open_events = [row for row in payment_events if not _payment_event_is_resolved(row)]
+    gauge_set("polyweather_payment_incidents_open", len(open_events))
+    for reason, count in Counter(_payment_event_reason(row) for row in open_events).items():
+        gauge_set("polyweather_payment_incidents_by_reason", count, reason=reason)
+
+    try:
+        refund_cases = db.list_refund_cases(limit=500)
+    except Exception:
+        refund_cases = []
+    terminal_statuses = {"refunded", "rejected", "closed"}
+    open_refunds = [
+        case
+        for case in refund_cases
+        if str(case.get("status") or "").strip().lower() not in terminal_statuses
+    ]
+    gauge_set("polyweather_refund_cases_open", len(open_refunds))
+
+    realtime = _realtime_status_payload()
+    gauge_set("polyweather_sse_connections", int(realtime.get("sse_connections") or 0))
+    gauge_set(
+        "polyweather_realtime_latest_revision",
+        int(realtime.get("latest_revision") or 0),
+    )
+    degraded_from = str(realtime.get("degraded_from") or "").strip().lower()
+    store = str(realtime.get("store") or "").strip().lower()
+    gauge_set(
+        "polyweather_realtime_redis_fallback",
+        1 if degraded_from == "redis" or store == "degraded_sqlite" else 0,
+    )
+
+    db_path = str(getattr(db, "db_path", "") or "").strip()
+    if db_path:
+        try:
+            gauge_set("polyweather_sqlite_db_size_bytes", os.path.getsize(db_path))
+        except OSError:
+            pass

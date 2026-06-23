@@ -109,6 +109,37 @@ export const opsApi = {
     if (reason) params.set("reason", reason);
     return opsFetch<Record<string, unknown>>(`/api/ops/payments/incidents?${params}`);
   },
+  auditLog(limit = 100, action?: string) {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (action) params.set("action", action);
+    return opsFetch<Record<string, unknown>>(`/api/ops/audit-log?${params}`);
+  },
+  refunds(limit = 50, status?: string) {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (status) params.set("status", status);
+    return opsFetch<Record<string, unknown>>(`/api/ops/refunds?${params}`);
+  },
+  createRefund(input: {
+    reason: string;
+    intent_id?: string;
+    tx_hash?: string;
+    user_id?: string;
+    amount_usdc?: string;
+    note?: string;
+  }) {
+    return opsFetch<Record<string, unknown>>("/api/ops/refunds", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  },
+  updateRefund(caseId: string | number, input: { status: string; note?: string }) {
+    return opsFetch<Record<string, unknown>>(`/api/ops/refunds/${caseId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  },
   feedback(limit = 100, status?: string) {
     const params = new URLSearchParams({ limit: String(limit) });
     if (status) params.set("status", status);

@@ -597,6 +597,75 @@ class DBManager:
                 "CREATE INDEX IF NOT EXISTS idx_payment_audit_events_created_at ON payment_audit_events(created_at DESC)"
             )
             conn.execute("""
+                CREATE TABLE IF NOT EXISTS ops_audit_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    action TEXT NOT NULL,
+                    actor_email TEXT NOT NULL DEFAULT '',
+                    target_user_id TEXT NOT NULL DEFAULT '',
+                    target_email TEXT NOT NULL DEFAULT '',
+                    target_type TEXT NOT NULL DEFAULT '',
+                    target_id TEXT NOT NULL DEFAULT '',
+                    payload_json TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_ops_audit_events_created_at
+                ON ops_audit_events(created_at DESC)
+                """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_ops_audit_events_action_created_at
+                ON ops_audit_events(action, created_at DESC)
+                """
+            )
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS points_ledger (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    telegram_id INTEGER,
+                    supabase_user_id TEXT NOT NULL DEFAULT '',
+                    supabase_email TEXT NOT NULL DEFAULT '',
+                    source TEXT NOT NULL,
+                    delta_points INTEGER NOT NULL,
+                    balance_after INTEGER NOT NULL,
+                    actor_email TEXT NOT NULL DEFAULT '',
+                    reference_type TEXT NOT NULL DEFAULT '',
+                    reference_id TEXT NOT NULL DEFAULT '',
+                    metadata_json TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_points_ledger_user_created_at
+                ON points_ledger(supabase_user_id, supabase_email, created_at DESC)
+                """
+            )
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS payment_refund_cases (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    status TEXT NOT NULL DEFAULT 'open',
+                    reason TEXT NOT NULL,
+                    intent_id TEXT NOT NULL DEFAULT '',
+                    tx_hash TEXT NOT NULL DEFAULT '',
+                    user_id TEXT NOT NULL DEFAULT '',
+                    amount_usdc TEXT NOT NULL DEFAULT '',
+                    created_by TEXT NOT NULL DEFAULT '',
+                    handled_by TEXT NOT NULL DEFAULT '',
+                    notes_json TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_payment_refund_cases_status_created_at
+                ON payment_refund_cases(status, created_at DESC)
+                """
+            )
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS observation_patch_events (
                     revision INTEGER PRIMARY KEY AUTOINCREMENT,
                     schema_type TEXT NOT NULL,
@@ -1673,6 +1742,479 @@ class DBManager:
             )
             conn.commit()
 
+    def append_ops_audit_event(
+        self,
+        *,
+        action: str,
+        actor_email: str = "",
+        target_user_id: str = "",
+        target_email: str = "",
+        target_type: str = "",
+        target_id: str = "",
+        payload: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        normalized_action = str(action or "").strip().lower()
+        if not normalized_action:
+            return {"ok": False, "reason": "invalid_action"}
+        body = payload if isinstance(payload, dict) else {}
+        now = datetime.now().isoformat()
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                INSERT INTO ops_audit_events (
+                    action,
+                    actor_email,
+                    target_user_id,
+                    target_email,
+                    target_type,
+                    target_id,
+                    payload_json,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    normalized_action,
+                    str(actor_email or "").strip().lower(),
+                    str(target_user_id or "").strip().lower(),
+                    str(target_email or "").strip().lower(),
+                    str(target_type or "").strip().lower(),
+                    str(target_id or "").strip(),
+                    json.dumps(body, ensure_ascii=False, default=str),
+                    now,
+                ),
+            )
+            event_id = int(cursor.lastrowid)
+            conn.commit()
+        return {
+            "id": event_id,
+            "action": normalized_action,
+            "actor_email": str(actor_email or "").strip().lower(),
+            "target_user_id": str(target_user_id or "").strip().lower(),
+            "target_email": str(target_email or "").strip().lower(),
+            "target_type": str(target_type or "").strip().lower(),
+            "target_id": str(target_id or "").strip(),
+            "payload": body,
+            "created_at": now,
+        }
+
+    def list_ops_audit_events(
+        self,
+        *,
+        limit: int = 100,
+        action: str = "",
+        actor_email: str = "",
+        target_user_id: str = "",
+    ) -> List[Dict[str, Any]]:
+        safe_limit = max(1, min(int(limit or 100), 500))
+        clauses: List[str] = []
+        params: List[Any] = []
+        normalized_action = str(action or "").strip().lower()
+        normalized_actor = str(actor_email or "").strip().lower()
+        normalized_target_user = str(target_user_id or "").strip().lower()
+        if normalized_action:
+            clauses.append("action = ?")
+            params.append(normalized_action)
+        if normalized_actor:
+            clauses.append("actor_email = ?")
+            params.append(normalized_actor)
+        if normalized_target_user:
+            clauses.append("target_user_id = ?")
+            params.append(normalized_target_user)
+        where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(safe_limit)
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                f"""
+                SELECT id, action, actor_email, target_user_id, target_email,
+                       target_type, target_id, payload_json, created_at
+                FROM ops_audit_events
+                {where_sql}
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                tuple(params),
+            ).fetchall()
+        events: List[Dict[str, Any]] = []
+        for row in rows:
+            try:
+                payload = json.loads(str(row["payload_json"] or "{}"))
+            except Exception:
+                payload = {}
+            events.append(
+                {
+                    "id": int(row["id"]),
+                    "action": str(row["action"] or ""),
+                    "actor_email": str(row["actor_email"] or ""),
+                    "target_user_id": str(row["target_user_id"] or ""),
+                    "target_email": str(row["target_email"] or ""),
+                    "target_type": str(row["target_type"] or ""),
+                    "target_id": str(row["target_id"] or ""),
+                    "payload": payload if isinstance(payload, dict) else {},
+                    "created_at": row["created_at"],
+                }
+            )
+        return events
+
+    def _append_points_ledger_entry_conn(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        telegram_id: Optional[int],
+        supabase_user_id: str = "",
+        supabase_email: str = "",
+        source: str,
+        delta_points: int,
+        balance_after: int,
+        actor_email: str = "",
+        reference_type: str = "",
+        reference_id: str = "",
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        normalized_source = str(source or "").strip().lower()
+        if not normalized_source or int(delta_points or 0) == 0:
+            return
+        conn.execute(
+            """
+            INSERT INTO points_ledger (
+                telegram_id,
+                supabase_user_id,
+                supabase_email,
+                source,
+                delta_points,
+                balance_after,
+                actor_email,
+                reference_type,
+                reference_id,
+                metadata_json,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                int(telegram_id) if telegram_id is not None else None,
+                str(supabase_user_id or "").strip().lower(),
+                str(supabase_email or "").strip().lower(),
+                normalized_source,
+                int(delta_points),
+                int(balance_after),
+                str(actor_email or "").strip().lower(),
+                str(reference_type or "").strip().lower(),
+                str(reference_id or "").strip(),
+                json.dumps(metadata if isinstance(metadata, dict) else {}, ensure_ascii=False, default=str),
+                datetime.now().isoformat(),
+            ),
+        )
+
+    def append_points_ledger_entry(
+        self,
+        *,
+        telegram_id: Optional[int] = None,
+        supabase_user_id: str = "",
+        supabase_email: str = "",
+        source: str,
+        delta_points: int,
+        balance_after: int,
+        actor_email: str = "",
+        reference_type: str = "",
+        reference_id: str = "",
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        with self._get_connection() as conn:
+            self._append_points_ledger_entry_conn(
+                conn,
+                telegram_id=telegram_id,
+                supabase_user_id=supabase_user_id,
+                supabase_email=supabase_email,
+                source=source,
+                delta_points=delta_points,
+                balance_after=balance_after,
+                actor_email=actor_email,
+                reference_type=reference_type,
+                reference_id=reference_id,
+                metadata=metadata,
+            )
+            conn.commit()
+
+    def list_points_ledger_entries(
+        self,
+        *,
+        limit: int = 20,
+        supabase_user_id: str = "",
+        supabase_email: str = "",
+    ) -> List[Dict[str, Any]]:
+        safe_limit = max(1, min(int(limit or 20), 200))
+        normalized_user_id = str(supabase_user_id or "").strip().lower()
+        normalized_email = str(supabase_email or "").strip().lower()
+        if not normalized_user_id and not normalized_email:
+            return []
+        clauses: List[str] = []
+        params: List[Any] = []
+        if normalized_user_id:
+            clauses.append("supabase_user_id = ?")
+            params.append(normalized_user_id)
+        if normalized_email:
+            clauses.append("supabase_email = ?")
+            params.append(normalized_email)
+        where_sql = f"WHERE {' OR '.join(clauses)}" if clauses else ""
+        params.append(safe_limit)
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                f"""
+                SELECT id, telegram_id, supabase_user_id, supabase_email, source,
+                       delta_points, balance_after, actor_email, reference_type,
+                       reference_id, metadata_json, created_at
+                FROM points_ledger
+                {where_sql}
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                tuple(params),
+            ).fetchall()
+        out: List[Dict[str, Any]] = []
+        for row in rows:
+            try:
+                metadata = json.loads(str(row["metadata_json"] or "{}"))
+            except Exception:
+                metadata = {}
+            out.append(
+                {
+                    "id": int(row["id"]),
+                    "telegram_id": row["telegram_id"],
+                    "supabase_user_id": str(row["supabase_user_id"] or ""),
+                    "supabase_email": str(row["supabase_email"] or ""),
+                    "source": str(row["source"] or ""),
+                    "delta_points": int(row["delta_points"] or 0),
+                    "balance_after": int(row["balance_after"] or 0),
+                    "actor_email": str(row["actor_email"] or ""),
+                    "reference_type": str(row["reference_type"] or ""),
+                    "reference_id": str(row["reference_id"] or ""),
+                    "metadata": metadata if isinstance(metadata, dict) else {},
+                    "created_at": row["created_at"],
+                }
+            )
+        return out
+
+    def get_points_ledger_summary(
+        self,
+        *,
+        supabase_user_id: str = "",
+        supabase_email: str = "",
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        recent = self.list_points_ledger_entries(
+            limit=limit,
+            supabase_user_id=supabase_user_id,
+            supabase_email=supabase_email,
+        )
+        by_source: Dict[str, Dict[str, int]] = {}
+        for row in recent:
+            source = str(row.get("source") or "unknown")
+            bucket = by_source.setdefault(source, {"points": 0, "count": 0})
+            bucket["points"] += int(row.get("delta_points") or 0)
+            bucket["count"] += 1
+        balance = int(recent[0]["balance_after"]) if recent else (
+            self.get_points_by_supabase_user_id(supabase_user_id)
+            if supabase_user_id
+            else self.get_points_by_supabase_email(supabase_email)
+        )
+        return {
+            "balance": max(0, balance),
+            "recent": recent,
+            "by_source": by_source,
+        }
+
+    @staticmethod
+    def _refund_case_row_to_dict(row: sqlite3.Row) -> Dict[str, Any]:
+        try:
+            notes = json.loads(str(row["notes_json"] or "[]"))
+        except Exception:
+            notes = []
+        return {
+            "id": int(row["id"]),
+            "status": str(row["status"] or ""),
+            "reason": str(row["reason"] or ""),
+            "intent_id": str(row["intent_id"] or ""),
+            "tx_hash": str(row["tx_hash"] or ""),
+            "user_id": str(row["user_id"] or ""),
+            "amount_usdc": str(row["amount_usdc"] or ""),
+            "created_by": str(row["created_by"] or ""),
+            "handled_by": str(row["handled_by"] or ""),
+            "notes": notes if isinstance(notes, list) else [],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+
+    def create_refund_case(
+        self,
+        *,
+        reason: str,
+        intent_id: str = "",
+        tx_hash: str = "",
+        user_id: str = "",
+        amount_usdc: str = "",
+        created_by: str = "",
+        note: str = "",
+    ) -> Dict[str, Any]:
+        normalized_reason = str(reason or "").strip().lower()
+        if not normalized_reason:
+            return {"ok": False, "reason": "invalid_refund_reason"}
+        now = datetime.now().isoformat()
+        notes = []
+        note_text = str(note or "").strip()
+        if note_text:
+            notes.append(
+                {
+                    "note": note_text,
+                    "by": str(created_by or "").strip().lower(),
+                    "at": now,
+                }
+            )
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                INSERT INTO payment_refund_cases (
+                    status,
+                    reason,
+                    intent_id,
+                    tx_hash,
+                    user_id,
+                    amount_usdc,
+                    created_by,
+                    handled_by,
+                    notes_json,
+                    created_at,
+                    updated_at
+                )
+                VALUES ('open', ?, ?, ?, ?, ?, ?, '', ?, ?, ?)
+                """,
+                (
+                    normalized_reason,
+                    str(intent_id or "").strip(),
+                    str(tx_hash or "").strip().lower(),
+                    str(user_id or "").strip().lower(),
+                    str(amount_usdc or "").strip(),
+                    str(created_by or "").strip().lower(),
+                    json.dumps(notes, ensure_ascii=False, default=str),
+                    now,
+                    now,
+                ),
+            )
+            case_id = int(cursor.lastrowid)
+            row = conn.execute(
+                """
+                SELECT id, status, reason, intent_id, tx_hash, user_id,
+                       amount_usdc, created_by, handled_by, notes_json,
+                       created_at, updated_at
+                FROM payment_refund_cases
+                WHERE id = ?
+                """,
+                (case_id,),
+            ).fetchone()
+            conn.commit()
+        return self._refund_case_row_to_dict(row)
+
+    def update_refund_case(
+        self,
+        case_id: int,
+        *,
+        status: str,
+        handled_by: str = "",
+        note: str = "",
+    ) -> Optional[Dict[str, Any]]:
+        safe_id = int(case_id or 0)
+        normalized_status = str(status or "").strip().lower()
+        allowed = {"open", "processing", "refunded", "rejected", "closed"}
+        if safe_id <= 0 or normalized_status not in allowed:
+            return None
+        now = datetime.now().isoformat()
+        actor = str(handled_by or "").strip().lower()
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """
+                SELECT notes_json
+                FROM payment_refund_cases
+                WHERE id = ?
+                LIMIT 1
+                """,
+                (safe_id,),
+            ).fetchone()
+            if not row:
+                return None
+            try:
+                notes = json.loads(str(row["notes_json"] or "[]"))
+            except Exception:
+                notes = []
+            if not isinstance(notes, list):
+                notes = []
+            note_text = str(note or "").strip()
+            if note_text:
+                notes.append({"note": note_text, "by": actor, "at": now})
+            conn.execute(
+                """
+                UPDATE payment_refund_cases
+                SET status = ?,
+                    handled_by = ?,
+                    notes_json = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    normalized_status,
+                    actor,
+                    json.dumps(notes, ensure_ascii=False, default=str),
+                    now,
+                    safe_id,
+                ),
+            )
+            updated = conn.execute(
+                """
+                SELECT id, status, reason, intent_id, tx_hash, user_id,
+                       amount_usdc, created_by, handled_by, notes_json,
+                       created_at, updated_at
+                FROM payment_refund_cases
+                WHERE id = ?
+                """,
+                (safe_id,),
+            ).fetchone()
+            conn.commit()
+        return self._refund_case_row_to_dict(updated)
+
+    def list_refund_cases(
+        self,
+        *,
+        limit: int = 50,
+        status: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        safe_limit = max(1, min(int(limit or 50), 200))
+        normalized_status = str(status or "").strip().lower()
+        params: List[Any] = []
+        where_sql = ""
+        if normalized_status:
+            where_sql = "WHERE status = ?"
+            params.append(normalized_status)
+        params.append(safe_limit)
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                f"""
+                SELECT id, status, reason, intent_id, tx_hash, user_id,
+                       amount_usdc, created_by, handled_by, notes_json,
+                       created_at, updated_at
+                FROM payment_refund_cases
+                {where_sql}
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                tuple(params),
+            ).fetchall()
+        return [self._refund_case_row_to_dict(row) for row in rows]
+
     def append_app_analytics_event(
         self,
         event_type: str,
@@ -1981,6 +2523,7 @@ class DBManager:
         *,
         points: int,
         reason: str = "",
+        actor_email: str = "",
     ) -> Dict[str, Any]:
         safe_points = int(points or 0)
         if safe_points <= 0:
@@ -2017,7 +2560,7 @@ class DBManager:
 
             user_row = conn.execute(
                 """
-                SELECT telegram_id, username, points, supabase_email
+                SELECT telegram_id, username, points, supabase_email, supabase_user_id
                 FROM users
                 WHERE lower(trim(COALESCE(supabase_email, ''))) = ?
                 LIMIT 1
@@ -2027,7 +2570,8 @@ class DBManager:
             if not user_row:
                 user_row = conn.execute(
                     """
-                    SELECT u.telegram_id, u.username, u.points, b.supabase_email
+                    SELECT u.telegram_id, u.username, u.points, b.supabase_email,
+                           b.supabase_user_id
                     FROM users u
                     JOIN supabase_bindings b ON b.telegram_id = u.telegram_id
                     WHERE lower(trim(COALESCE(b.supabase_email, ''))) = ?
@@ -2073,6 +2617,19 @@ class DBManager:
                 WHERE id = ?
                 """,
                 (safe_points, normalized_reason, now, now, int(feedback_id)),
+            )
+            self._append_points_ledger_entry_conn(
+                conn,
+                telegram_id=telegram_id,
+                supabase_user_id=str(user_row["supabase_user_id"] or "").strip().lower(),
+                supabase_email=str(user_row["supabase_email"] or email),
+                source="feedback_reward",
+                delta_points=safe_points,
+                balance_after=after,
+                actor_email=actor_email,
+                reference_type="feedback",
+                reference_id=str(feedback_id),
+                metadata={"reason": normalized_reason},
             )
             updated_feedback_row = conn.execute(
                 """
@@ -2764,6 +3321,12 @@ class DBManager:
         self,
         supabase_email: str,
         amount: int,
+        *,
+        source: str = "manual_adjustment",
+        actor_email: str = "",
+        reference_type: str = "",
+        reference_id: str = "",
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         email = str(supabase_email or "").strip().lower()
         points = int(amount or 0)
@@ -2776,7 +3339,7 @@ class DBManager:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 """
-                SELECT telegram_id, username, points, supabase_email
+                SELECT telegram_id, username, points, supabase_email, supabase_user_id
                 FROM users
                 WHERE lower(trim(COALESCE(supabase_email, ''))) = ?
                 LIMIT 1
@@ -2797,6 +3360,19 @@ class DBManager:
                 """,
                 (after, telegram_id),
             )
+            self._append_points_ledger_entry_conn(
+                conn,
+                telegram_id=telegram_id,
+                supabase_user_id=str(row["supabase_user_id"] or "").strip().lower(),
+                supabase_email=str(row["supabase_email"] or email),
+                source=source,
+                delta_points=points,
+                balance_after=after,
+                actor_email=actor_email,
+                reference_type=reference_type,
+                reference_id=reference_id,
+                metadata=metadata,
+            )
             conn.commit()
             self._sync_points_to_supabase_user_metadata(telegram_id, force=True)
             return {
@@ -2813,6 +3389,12 @@ class DBManager:
         self,
         supabase_user_id: str,
         amount: int,
+        *,
+        source: str = "manual_adjustment",
+        actor_email: str = "",
+        reference_type: str = "",
+        reference_id: str = "",
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         key = str(supabase_user_id or "").strip().lower()
         points = int(amount or 0)
@@ -2849,6 +3431,19 @@ class DBManager:
                 """,
                 (after, telegram_id),
             )
+            self._append_points_ledger_entry_conn(
+                conn,
+                telegram_id=telegram_id,
+                supabase_user_id=key,
+                supabase_email=str(row["supabase_email"] or ""),
+                source=source,
+                delta_points=points,
+                balance_after=after,
+                actor_email=actor_email,
+                reference_type=reference_type,
+                reference_id=reference_id,
+                metadata=metadata,
+            )
             conn.commit()
             self._sync_points_to_supabase_user_metadata(telegram_id, force=True)
             return {
@@ -2866,6 +3461,12 @@ class DBManager:
         self,
         supabase_email: str,
         amount: int,
+        *,
+        source: str = "points_redemption",
+        actor_email: str = "",
+        reference_type: str = "",
+        reference_id: str = "",
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         email = str(supabase_email or "").strip().lower()
         points = int(amount or 0)
@@ -2878,7 +3479,7 @@ class DBManager:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
                 """
-                SELECT telegram_id, username, points, supabase_email
+                SELECT telegram_id, username, points, supabase_email, supabase_user_id
                 FROM users
                 WHERE lower(trim(COALESCE(supabase_email, ''))) = ?
                 LIMIT 1
@@ -2901,6 +3502,19 @@ class DBManager:
             conn.execute(
                 "UPDATE users SET points = ? WHERE telegram_id = ?",
                 (after, telegram_id),
+            )
+            self._append_points_ledger_entry_conn(
+                conn,
+                telegram_id=telegram_id,
+                supabase_user_id=str(row["supabase_user_id"] or "").strip().lower(),
+                supabase_email=str(row["supabase_email"] or email),
+                source=source,
+                delta_points=-points,
+                balance_after=after,
+                actor_email=actor_email,
+                reference_type=reference_type,
+                reference_id=reference_id,
+                metadata=metadata,
             )
             conn.commit()
             self._sync_points_to_supabase_user_metadata(telegram_id, force=True)

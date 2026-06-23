@@ -146,6 +146,8 @@ def _normalize_payment_incident(item: Dict[str, Any]) -> Dict[str, Any]:
             or confirm_failure.get("tx_hash")
             or ""
         ).strip(),
+        "refund_case_id": payload.get("refund_case_id"),
+        "refund_status": str(payload.get("refund_status") or "").strip(),
         "resolved": bool(resolved_at),
         "resolved_at": resolved_at,
         "resolved_by": str(payload.get("resolved_by") or "").strip(),
@@ -235,10 +237,47 @@ def list_ops_payment_incidents(
     _require_ops(request)
     db = _get_db()
     safe_limit = max(1, min(int(limit or 50), 200))
-    incidents = db.list_payment_audit_events(
-        limit=max(safe_limit, 500),
-        event_type="payment_intent_failed",
-    )
+    incidents: List[Dict[str, Any]] = []
+    for event_type in ("payment_intent_failed", "payment_refund_required"):
+        try:
+            rows = db.list_payment_audit_events(
+                limit=max(safe_limit, 500),
+                event_type=event_type,
+            )
+            incidents.extend(
+                row for row in rows
+                if str(row.get("event_type") or "").strip().lower() == event_type
+            )
+        except Exception:
+            continue
+    terminal_refund_statuses = {"refunded", "rejected", "closed"}
+    list_refund_cases = getattr(db, "list_refund_cases", None)
+    if callable(list_refund_cases):
+        try:
+            refund_cases = list_refund_cases(limit=max(safe_limit, 500))
+        except Exception:
+            refund_cases = []
+        for case in refund_cases:
+            if not isinstance(case, dict):
+                continue
+            status = str(case.get("status") or "").strip().lower()
+            if not include_resolved and status in terminal_refund_statuses:
+                continue
+            incidents.append(
+                {
+                    "id": int(case.get("id") or 0),
+                    "event_type": "payment_refund_case",
+                    "payload": {
+                        "reason": str(case.get("reason") or "refund_required"),
+                        "intent_id": case.get("intent_id"),
+                        "user_id": case.get("user_id"),
+                        "tx_hash": case.get("tx_hash"),
+                        "refund_case_id": case.get("id"),
+                        "refund_status": status,
+                    },
+                    "created_at": case.get("created_at"),
+                }
+            )
     grouped = _group_payment_incidents(
         incidents,
         reason=reason,
@@ -248,6 +287,106 @@ def list_ops_payment_incidents(
         **grouped,
         "incidents": grouped["incidents"][:safe_limit],
     }
+
+
+def list_ops_refund_cases(
+    request: Request,
+    limit: int = 50,
+    status: str = "",
+) -> Dict[str, Any]:
+    _require_ops(request)
+    db = _get_db()
+    safe_limit = max(1, min(int(limit or 50), 200))
+    return {
+        "refunds": db.list_refund_cases(
+            limit=safe_limit,
+            status=str(status or "").strip().lower() or None,
+        )
+    }
+
+
+def create_ops_refund_case(
+    request: Request,
+    *,
+    reason: str,
+    intent_id: str = "",
+    tx_hash: str = "",
+    user_id: str = "",
+    amount_usdc: str = "",
+    note: str = "",
+) -> Dict[str, Any]:
+    admin = _require_ops(request) or {}
+    actor_email = str(admin.get("email") or "").strip().lower()
+    db = _get_db()
+    created = db.create_refund_case(
+        reason=reason,
+        intent_id=intent_id,
+        tx_hash=tx_hash,
+        user_id=user_id,
+        amount_usdc=amount_usdc,
+        created_by=actor_email,
+        note=note,
+    )
+    if not created or created.get("ok") is False:
+        raise HTTPException(status_code=400, detail=created or "refund_case_failed")
+    db.append_ops_audit_event(
+        action="refund_case_create",
+        actor_email=actor_email,
+        target_user_id=str(user_id or ""),
+        target_type="refund_case",
+        target_id=str(created.get("id") or ""),
+        payload={
+            "reason": reason,
+            "intent_id": intent_id,
+            "tx_hash": tx_hash,
+            "amount_usdc": amount_usdc,
+        },
+    )
+    db.append_payment_audit_event(
+        "payment_refund_required",
+        {
+            "reason": str(reason or "refund_required").strip().lower(),
+            "intent_id": intent_id,
+            "user_id": user_id,
+            "tx_hash": tx_hash,
+            "refund_case_id": created.get("id"),
+        },
+    )
+    return {"ok": True, "refund": created}
+
+
+def update_ops_refund_case(
+    request: Request,
+    *,
+    case_id: int,
+    status: str,
+    note: str = "",
+) -> Dict[str, Any]:
+    admin = _require_ops(request) or {}
+    actor_email = str(admin.get("email") or "").strip().lower()
+    db = _get_db()
+    updated = db.update_refund_case(
+        case_id,
+        status=status,
+        handled_by=actor_email,
+        note=note,
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="refund_case_not_found")
+    db.append_ops_audit_event(
+        action="refund_case_update",
+        actor_email=actor_email,
+        target_user_id=str(updated.get("user_id") or ""),
+        target_type="refund_case",
+        target_id=str(case_id),
+        payload={
+            "status": status,
+            "note": note,
+            "intent_id": updated.get("intent_id"),
+            "tx_hash": updated.get("tx_hash"),
+        },
+    )
+    return {"ok": True, "refund": updated}
 
 
 def resolve_ops_payment_incident(request: Request, event_id: int) -> Dict[str, Any]:

@@ -44,6 +44,7 @@ const navGroups = [
     items: [
       { href: "/ops/config", icon: Settings, label: "系统配置" },
       { href: "/ops/subscriptions", icon: ScrollText, label: "订阅操作" },
+      { href: "/ops/audit-log", icon: FileText, label: "审计日志" },
       { href: "/ops/view-logs", icon: FileText, label: "日志查看" },
     ],
   },

@@ -3,6 +3,7 @@ export type AuthMeResponse = {
   user_id?: string | null;
   email?: string | null;
   points?: number;
+  points_ledger?: PointsLedgerSummary;
   weekly_points?: number;
   weekly_rank?: number | string | null;
   entitlement_mode?: string | null;
@@ -23,6 +24,24 @@ export type AuthMeResponse = {
   degraded_reason?: string | null;
   entitlement_snapshot?: boolean | null;
   entitlement_snapshot_reason?: string | null;
+};
+
+export type PointsLedgerEntry = {
+  id?: number;
+  source?: string;
+  delta_points?: number;
+  balance_after?: number;
+  actor_email?: string;
+  reference_type?: string;
+  reference_id?: string;
+  metadata?: Record<string, unknown>;
+  created_at?: string;
+};
+
+export type PointsLedgerSummary = {
+  balance?: number;
+  recent?: PointsLedgerEntry[];
+  by_source?: Record<string, { points?: number; count?: number }>;
 };
 
 export type ReferralSummary = {

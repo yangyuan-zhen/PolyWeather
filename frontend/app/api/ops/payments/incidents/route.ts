@@ -22,8 +22,9 @@ export async function GET(req: NextRequest) {
     if (authError) return authError;
 
     const url = new URL(`${API_BASE}/api/ops/payments/incidents`);
-    const limit = req.nextUrl.searchParams.get("limit");
-    if (limit) url.searchParams.set("limit", limit);
+    req.nextUrl.searchParams.forEach((value, key) => {
+      url.searchParams.set(key, value);
+    });
 
     const res = await fetch(url.toString(), {
       headers: auth.headers,

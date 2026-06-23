@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
-import { ArrowLeft, BookOpen, Menu } from "lucide-react";
+import { ArrowLeft, BookOpen, Menu, Search } from "lucide-react";
 import styles from "./DocsLayout.module.css";
 import {
   DocsLocale,
@@ -171,8 +171,49 @@ export function DocsScreen({ page }: { page: DocsPage }) {
   const pathname = usePathname();
   const { locale } = useI18n();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const localizedPage = useMemo(() => page.content[locale], [locale, page]);
   const currentSlug = pathname?.split("/").filter(Boolean).at(-1) || page.slug;
+  const searchResults = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return [];
+    return DOCS_PAGES.flatMap((doc) => {
+      const content = doc.content[locale];
+      const sectionText = content.sections
+        .flatMap((section) => [
+          section.title,
+          ...section.blocks.flatMap((block) => {
+            if (block.type === "paragraph") return [block.text];
+            if (block.type === "callout") return [block.title || "", block.text];
+            if (block.type === "bullets" || block.type === "steps") return block.items;
+            if (block.type === "link") return [block.label, block.caption || ""];
+            if (block.type === "image") return [block.alt, block.caption || ""];
+            return [];
+          }),
+        ])
+        .join(" ");
+      const haystack = `${content.title} ${content.description} ${sectionText}`.toLowerCase();
+      if (!haystack.includes(query)) return [];
+      const matchedSection =
+        content.sections.find((section) => section.title.toLowerCase().includes(query)) ||
+        content.sections.find((section) =>
+          section.blocks.some((block) => {
+            if (block.type === "paragraph") return block.text.toLowerCase().includes(query);
+            if (block.type === "callout") return `${block.title || ""} ${block.text}`.toLowerCase().includes(query);
+            if (block.type === "bullets" || block.type === "steps") return block.items.join(" ").toLowerCase().includes(query);
+            return false;
+          }),
+        ) ||
+        content.sections[0];
+      return [{
+        slug: doc.slug,
+        title: content.title,
+        description: content.description,
+        sectionId: matchedSection?.id,
+        sectionTitle: matchedSection?.title,
+      }];
+    }).slice(0, 8);
+  }, [locale, searchQuery]);
 
   return (
     <div className={styles.docsShell}>
@@ -198,6 +239,36 @@ export function DocsScreen({ page }: { page: DocsPage }) {
               </div>
               <h1 className={styles.pageTitle}>{localizedPage.title}</h1>
               <p className={styles.pageDescription}>{localizedPage.description}</p>
+              <div className={styles.searchWrap}>
+                <Search size={16} aria-hidden="true" />
+                <input
+                  className={styles.searchInput}
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder={locale === "zh-CN" ? "搜索文档、章节或关键词" : "Search docs, sections, or keywords"}
+                  aria-label={locale === "zh-CN" ? "搜索文档" : "Search docs"}
+                />
+              </div>
+              {searchQuery.trim() ? (
+                <div className={styles.searchResults}>
+                  {searchResults.length === 0 ? (
+                    <div className={styles.searchEmpty}>
+                      {locale === "zh-CN" ? "没有匹配文档" : "No matching docs"}
+                    </div>
+                  ) : (
+                    searchResults.map((result) => (
+                      <Link
+                        key={`${result.slug}-${result.sectionId || "top"}`}
+                        href={`/docs/${result.slug}${result.sectionId ? `#${result.sectionId}` : ""}`}
+                        className={styles.searchResult}
+                      >
+                        <span>{result.title}</span>
+                        <small>{result.sectionTitle || result.description}</small>
+                      </Link>
+                    ))
+                  )}
+                </div>
+              ) : null}
               <div className={styles.pageMeta} aria-label={locale === "zh-CN" ? "文档范围" : "Document scope"}>
                 <span>{locale === "zh-CN" ? "当前工作台" : "Current terminal"}</span>
                 <span>{locale === "zh-CN" ? `${DOCS_PAGES.length} 篇文档` : `${DOCS_PAGES.length} docs`}</span>

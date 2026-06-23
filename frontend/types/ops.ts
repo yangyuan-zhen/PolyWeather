@@ -155,6 +155,8 @@ export type PaymentIncident = {
   intent_id?: string;
   user_id?: string;
   tx_hash?: string;
+  refund_case_id?: number | string | null;
+  refund_status?: string;
   payload_json?: string;
   created_at?: string;
   resolved?: boolean;
@@ -164,6 +166,42 @@ export type PaymentIncident = {
   event_ids?: number[];
   first_seen_at?: string;
   last_seen_at?: string;
+};
+
+export type RefundCase = {
+  id: number;
+  status?: string;
+  reason?: string;
+  intent_id?: string;
+  tx_hash?: string;
+  user_id?: string;
+  amount_usdc?: string;
+  created_by?: string;
+  handled_by?: string;
+  notes?: Array<{ note?: string; by?: string; at?: string }>;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type RefundCasesPayload = {
+  refunds?: RefundCase[];
+};
+
+export type OpsAuditEvent = {
+  id: number;
+  action?: string;
+  actor_email?: string;
+  target_user_id?: string;
+  target_email?: string;
+  target_type?: string;
+  target_id?: string;
+  payload?: Record<string, unknown>;
+  created_at?: string;
+};
+
+export type OpsAuditPayload = {
+  events?: OpsAuditEvent[];
+  total?: number;
 };
 
 export type IncidentsPayload = {
