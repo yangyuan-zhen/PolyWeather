@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 import os
 from collections import Counter
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import BackgroundTasks, Request
@@ -13,6 +14,7 @@ from fastapi.responses import PlainTextResponse
 from loguru import logger
 
 from src.database.db_manager import DBManager
+from src.database.sqlite_connection import connect_sqlite
 from src.utils.metrics import export_prometheus_metrics, gauge_set
 from web.core import build_health_payload, build_system_status_payload
 import web.routes as legacy_routes
@@ -211,3 +213,51 @@ def _refresh_operational_metrics() -> None:
             gauge_set("polyweather_sqlite_db_size_bytes", os.path.getsize(db_path))
         except OSError:
             pass
+        _refresh_training_data_metrics(db_path)
+
+
+def _target_date_stale_days(target_date: Optional[str]) -> Optional[int]:
+    raw = str(target_date or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.strptime(raw, "%Y-%m-%d").date()
+    except Exception:
+        return None
+    return max(0, (datetime.now(timezone.utc).date() - parsed).days)
+
+
+def _max_target_date(db_path: str, table_name: str) -> Optional[str]:
+    with connect_sqlite(db_path) as conn:
+        row = conn.execute(f"SELECT MAX(target_date) AS max_date FROM {table_name}").fetchone()
+    if not row:
+        return None
+    return row[0]
+
+
+def _refresh_training_data_metrics(db_path: str) -> None:
+    stale_threshold_days = max(
+        0,
+        int(os.getenv("POLYWEATHER_TRAINING_DATA_STALE_WARN_DAYS", "2") or "2"),
+    )
+    table_metrics = {
+        "daily_records_store": "polyweather_daily_records_stale_days",
+        "truth_records_store": "polyweather_truth_records_stale_days",
+        "training_feature_records_store": "polyweather_training_features_stale_days",
+    }
+    max_stale_days: Optional[int] = None
+    for table_name, metric_name in table_metrics.items():
+        try:
+            stale_days = _target_date_stale_days(_max_target_date(db_path, table_name))
+        except Exception:
+            stale_days = None
+        if stale_days is None:
+            gauge_set(metric_name, -1)
+            max_stale_days = max(max_stale_days or 0, stale_threshold_days + 1)
+            continue
+        gauge_set(metric_name, stale_days)
+        max_stale_days = max(max_stale_days or 0, stale_days)
+    gauge_set(
+        "polyweather_training_data_stale",
+        1 if max_stale_days is None or max_stale_days > stale_threshold_days else 0,
+    )

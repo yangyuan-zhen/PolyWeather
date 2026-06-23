@@ -350,6 +350,9 @@ compose_up_retry "observation collector" -d --no-deps polyweather_collector
 echo "Updating cache warmer..."
 compose_up_retry "cache warmer" -d --no-deps polyweather_warmer
 
+echo "Updating training settlement worker..."
+compose_up_retry "training settlement" -d --no-deps polyweather_training_settlement
+
 echo "Updating frontend..."
 compose_up_retry "frontend" -d --no-deps polyweather_frontend
 

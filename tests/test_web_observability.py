@@ -1,5 +1,6 @@
 
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 from starlette.requests import Request
@@ -9,13 +10,16 @@ import web.services.auth_api as auth_api
 from web.app import app
 import web.routes as routes
 import web.services.ops_api as ops_api
+import web.diagnostics.health as diagnostics_health
 import web.scan_terminal_cache as scan_terminal_cache
 import web.scan_terminal_service as scan_terminal_service
+import web.services.system_api as system_api
 import web.services.city_api as city_api
 import web.services.city_runtime as city_runtime
 from web.services.observation_freshness import build_observation_freshness
 from web.scan_terminal_cache import scan_terminal_cache_key
-from src.database.runtime_state import TruthRecordRepository
+from src.database.runtime_state import RuntimeStateDB, TruthRecordRepository
+from src.utils.metrics import export_prometheus_metrics
 
 
 client = TestClient(app)
@@ -83,6 +87,8 @@ def test_system_status_returns_summary_shape_for_ops_admin(monkeypatch):
     assert 'sse_connections' in payload['realtime']
     assert 'truth_records' in payload['training_data']
     assert 'training_features' in payload['training_data']
+    assert 'stale_days' in payload['training_data']['truth_records']
+    assert 'stale_days' in payload['training_data']['training_features']
     assert 'city_coverage' in payload['training_data']
     assert 'model_city_coverage' in payload['training_data']
     assert 'metar_entries' in payload['cache']
@@ -119,6 +125,85 @@ def test_metrics_endpoint_returns_prometheus_payload_for_ops_admin(monkeypatch):
     response = client.get('/metrics')
     assert response.status_code == 200
     assert 'polyweather_http_requests_total' in response.text
+
+
+def test_training_data_summary_reports_stale_days(tmp_path):
+    db = RuntimeStateDB(str(tmp_path / "training.db"))
+    yesterday = (datetime.now(timezone.utc).date() - timedelta(days=1)).strftime("%Y-%m-%d")
+    stale_day = (datetime.now(timezone.utc).date() - timedelta(days=5)).strftime("%Y-%m-%d")
+    with db.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO truth_records_store (
+                city, target_date, actual_high, settlement_source, updated_at, is_final
+            ) VALUES ('shanghai', ?, 31.2, 'metar', 1, 1)
+            """,
+            (yesterday,),
+        )
+        conn.execute(
+            """
+            INSERT INTO training_feature_records_store (
+                city, target_date, updated_at, payload_json
+            ) VALUES ('shanghai', ?, 1, '{}')
+            """,
+            (stale_day,),
+        )
+        conn.commit()
+
+    payload = diagnostics_health._training_data_summary(
+        SimpleNamespace(db_path=db.db_path),
+        {"shanghai": {"name": "Shanghai", "settlement_source": "metar", "icao": "ZSSS"}},
+    )
+
+    assert payload["truth_records"]["stale_days"] == 1
+    assert payload["training_features"]["stale_days"] == 5
+    assert payload["stale"] is True
+
+
+def test_prometheus_exports_training_data_stale_metrics(monkeypatch, tmp_path):
+    db = RuntimeStateDB(str(tmp_path / "training-metrics.db"))
+    stale_day = (datetime.now(timezone.utc).date() - timedelta(days=4)).strftime("%Y-%m-%d")
+    with db.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO daily_records_store (
+                city, target_date, actual_high, deb_prediction, mu, updated_at, payload_json
+            ) VALUES ('shanghai', ?, 31.2, 31.0, 31.1, 1, '{}')
+            """,
+            (stale_day,),
+        )
+        conn.execute(
+            """
+            INSERT INTO truth_records_store (
+                city, target_date, actual_high, settlement_source, updated_at, is_final
+            ) VALUES ('shanghai', ?, 31.2, 'metar', 1, 1)
+            """,
+            (stale_day,),
+        )
+        conn.execute(
+            """
+            INSERT INTO training_feature_records_store (
+                city, target_date, updated_at, payload_json
+            ) VALUES ('shanghai', ?, 1, '{}')
+            """,
+            (stale_day,),
+        )
+        conn.commit()
+
+    fake_db = SimpleNamespace(
+        db_path=db.db_path,
+        list_payment_audit_events=lambda **_kwargs: [],
+        list_refund_cases=lambda **_kwargs: [],
+    )
+    monkeypatch.setattr(system_api, "DBManager", lambda: fake_db)
+
+    system_api._refresh_operational_metrics()
+    metrics = export_prometheus_metrics()
+
+    assert "polyweather_daily_records_stale_days 4" in metrics
+    assert "polyweather_truth_records_stale_days 4" in metrics
+    assert "polyweather_training_features_stale_days 4" in metrics
+    assert "polyweather_training_data_stale 1" in metrics
 
 
 def test_system_cache_status_requires_ops_admin(monkeypatch):

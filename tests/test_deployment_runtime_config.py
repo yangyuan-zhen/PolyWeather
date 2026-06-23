@@ -94,6 +94,13 @@ def test_docker_compose_isolates_collector_from_web_and_bot_services():
         1,
     )[0]
     warmer_block = compose.split("  polyweather_warmer:", 1)[1].split(
+        "\n  polyweather_training_settlement:",
+        1,
+    )[0]
+    training_settlement_block = compose.split(
+        "  polyweather_training_settlement:",
+        1,
+    )[1].split(
         "\nx-polyweather-base:",
         1,
     )[0]
@@ -102,6 +109,7 @@ def test_docker_compose_isolates_collector_from_web_and_bot_services():
     assert "POLYWEATHER_SERVICE_ROLE: bot" in compose
     assert "POLYWEATHER_SERVICE_ROLE: collector" in collector_block
     assert "POLYWEATHER_SERVICE_ROLE: warmer" in warmer_block
+    assert "POLYWEATHER_SERVICE_ROLE: training_settlement" in training_settlement_block
     assert "redis-server --appendonly yes --maxmemory ${POLYWEATHER_REDIS_MAXMEMORY:-512mb} --maxmemory-policy noeviction" in compose
     assert "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'false'" in bot_block
     assert "POLYWEATHER_EVENT_STORE: ${POLYWEATHER_EVENT_STORE:-redis}" in web_block
@@ -117,6 +125,18 @@ def test_docker_compose_isolates_collector_from_web_and_bot_services():
     assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'false'" in web_block
     assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'true'" in collector_block
     assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'false'" in warmer_block
+    assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'false'" in training_settlement_block
+    assert "command: python -m web.training_settlement_worker" in training_settlement_block
+    assert (
+        "POLYWEATHER_TRAINING_SETTLEMENT_INTERVAL_SEC: "
+        "${POLYWEATHER_TRAINING_SETTLEMENT_INTERVAL_SEC:-21600}"
+        in training_settlement_block
+    )
+    assert (
+        "POLYWEATHER_TRAINING_SETTLEMENT_LOOKBACK_DAYS: "
+        "${POLYWEATHER_TRAINING_SETTLEMENT_LOOKBACK_DAYS:-10}"
+        in training_settlement_block
+    )
     assert "POLYWEATHER_CITY_DETAIL_BATCH_CONCURRENCY: ${POLYWEATHER_CITY_DETAIL_BATCH_CONCURRENCY:-3}" in web_block
     assert "POLYWEATHER_CITY_DETAIL_BATCH_GLOBAL_CONCURRENCY: ${POLYWEATHER_CITY_DETAIL_BATCH_GLOBAL_CONCURRENCY:-3}" in web_block
     assert "POLYWEATHER_CITY_DETAIL_BATCH_QUEUE_WAIT_MS: ${POLYWEATHER_CITY_DETAIL_BATCH_QUEUE_WAIT_MS:-3000}" in web_block
@@ -287,6 +307,7 @@ def test_deploy_script_retries_compose_recreate_races():
     assert 'compose_up_retry "backend services" -d --no-deps polyweather_web polyweather' in script
     assert 'compose_up_retry "observation collector" -d --no-deps polyweather_collector' in script
     assert 'compose_up_retry "cache warmer" -d --no-deps polyweather_warmer' in script
+    assert 'compose_up_retry "training settlement" -d --no-deps polyweather_training_settlement' in script
     assert 'compose_up_retry "frontend" -d --no-deps polyweather_frontend' in script
 
 
