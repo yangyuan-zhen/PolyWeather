@@ -1,3 +1,4 @@
+import web.training_settlement_service as training_settlement_service
 from web.training_settlement_service import run_training_settlement_cycle
 
 
@@ -75,3 +76,25 @@ def test_training_settlement_cycle_skips_reconcile_for_non_reconcile_sources():
     assert calls["analysis"] == ["taipei"]
     assert calls["reconcile"] == []
     assert result["items"][0]["reconcile"]["reason"] == "unsupported_reconcile_source"
+
+
+def test_default_actual_reconciler_bootstraps_missing_history(monkeypatch):
+    calls = []
+
+    def bootstrapper(city, *, lookback_days):
+        calls.append((city, lookback_days))
+        return {"ok": True, "seeded": 8, "updated": 8}
+
+    monkeypatch.setattr(
+        training_settlement_service,
+        "bootstrap_recent_daily_history_if_missing",
+        bootstrapper,
+    )
+
+    result = training_settlement_service._default_actual_reconciler(
+        "shanghai",
+        lookback_days=10,
+    )
+
+    assert result == {"ok": True, "seeded": 8, "updated": 8}
+    assert calls == [("shanghai", 10)]

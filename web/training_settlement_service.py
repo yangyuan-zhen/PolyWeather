@@ -6,7 +6,7 @@ from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Sequence
 
 from loguru import logger
 
-from src.analysis.deb_algorithm import reconcile_recent_actual_highs
+from src.analysis.deb_algorithm import bootstrap_recent_daily_history_if_missing
 from src.data_collection.city_registry import CITY_REGISTRY
 
 
@@ -58,7 +58,7 @@ def _default_analysis_runner(city: str) -> Mapping[str, Any]:
 
 
 def _default_actual_reconciler(city: str, *, lookback_days: int) -> Mapping[str, Any]:
-    return reconcile_recent_actual_highs(city, lookback_days=lookback_days)
+    return bootstrap_recent_daily_history_if_missing(city, lookback_days=lookback_days)
 
 
 def run_training_settlement_cycle(
