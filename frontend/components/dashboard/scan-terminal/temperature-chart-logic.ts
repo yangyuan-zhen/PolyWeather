@@ -901,6 +901,16 @@ function canonicalAirportPrimarySourceLabel(hourly: ChartRenderState) {
   return "";
 }
 
+function airportPrimaryHasMetarSource(hourly: ChartRenderState) {
+  const primary = hourly?.airportPrimary;
+  const tokens = [
+    primary?.source_code,
+    primary?.source_label,
+    (primary as any)?.source,
+  ].map((value) => String(value || "").trim().toLowerCase());
+  return tokens.some((value) => value === "metar" || value.includes(" metar"));
+}
+
 function airportCodeForSeriesLabel(
   hourly: ChartRenderState,
   row?: ScanOpportunityRow | null,
@@ -943,12 +953,15 @@ function airportPrimarySeriesLabel(
   const cityKey = normalizeCityKey(row?.city);
   const canonicalLabel = canonicalAirportPrimarySourceLabel(hourly);
   if (canonicalLabel === "MGM") return canonicalLabel;
+  const stationCode = airportCodeForSeriesLabel(hourly, row);
+  if (airportPrimaryHasMetarSource(hourly)) {
+    return stationCode ? `${stationCode} METAR` : "METAR";
+  }
   if ((cityKey === "ankara" || cityKey === "istanbul") && (!canonicalLabel || canonicalLabel === "NOAA MADIS")) {
     return "MGM";
   }
   const payloadLabel = String(hourly?.airportPrimary?.source_label || "").trim();
   if (payloadLabel && !isGenericAirportPrimaryLabel(payloadLabel)) return payloadLabel;
-  const stationCode = airportCodeForSeriesLabel(hourly, row);
   const isUsAirport = isUsAirportCode(stationCode);
   if (!isUsAirport) {
     if (canonicalLabel && canonicalLabel !== "NOAA MADIS") return canonicalLabel;
@@ -1316,6 +1329,17 @@ function conditionObservationTime(source: AirportCurrentConditions | null | unde
   );
 }
 
+function conditionObservationSourceKey(source: AirportCurrentConditions | null | undefined) {
+  const tokens = [
+    source?.source_code,
+    (source as any)?.source,
+    source?.source_label,
+  ].map((value) => String(value || "").trim().toLowerCase());
+  if (tokens.some((value) => value === "mgm" || value.includes("turkey_mgm"))) return "mgm";
+  if (tokens.some((value) => value === "metar" || value.includes(" metar"))) return "metar";
+  return tokens.find(Boolean) || "";
+}
+
 function mergeAirportCondition(
   base: AirportCurrentConditions | null | undefined,
   live: AirportCurrentConditions | null | undefined,
@@ -1336,6 +1360,19 @@ function mergeAirportCondition(
     merged.max_so_far = maxSoFar;
   }
   return merged;
+}
+
+function airportPrimaryObservationSourceChanged(
+  base: ChartRenderState,
+  live: ChartRenderState,
+) {
+  const baseSource =
+    conditionObservationSourceKey(base?.airportPrimary) ||
+    conditionObservationSourceKey(base?.airportCurrent);
+  const liveSource =
+    conditionObservationSourceKey(live?.airportPrimary) ||
+    conditionObservationSourceKey(live?.airportCurrent);
+  return Boolean(baseSource && liveSource && baseSource !== liveSource);
 }
 
 function runwayHistoryPointKey(point: Record<string, unknown>) {
@@ -1677,6 +1714,10 @@ function mergeHourlyWithLiveObservations(
         runway_plate_history: runwayPlateHistory,
       } as AmosData
     : detailSource.amos;
+  const useLiveAirportPrimary =
+    airportPrimaryObservationSourceChanged(base, live) &&
+    Array.isArray(live.airportPrimaryTodayObs) &&
+    live.airportPrimaryTodayObs.length > 0;
   return {
     ...detailSource,
     localDate,
@@ -1696,16 +1737,22 @@ function mergeHourlyWithLiveObservations(
       : forecastFallback.probabilities || null,
     runwayPlateHistory,
     amos,
-    airportCurrent: mergeAirportCondition(base.airportCurrent, live.airportCurrent, row, localDate),
-    airportPrimary: mergeAirportCondition(base.airportPrimary, live.airportPrimary, row, localDate),
+    airportCurrent: useLiveAirportPrimary
+      ? live.airportCurrent || live.airportPrimary || null
+      : mergeAirportCondition(base.airportCurrent, live.airportCurrent, row, localDate),
+    airportPrimary: useLiveAirportPrimary
+      ? live.airportPrimary || live.airportCurrent || null
+      : mergeAirportCondition(base.airportPrimary, live.airportPrimary, row, localDate),
     settlementTodayObs: mergeRawObservationPoints(base.settlementTodayObs, live.settlementTodayObs) as ObsPoint[] | undefined,
     settlementStationCode: detailSource.settlementStationCode || forecastFallback.settlementStationCode || row?.metar_context?.station || null,
     settlementStationLabel: detailSource.settlementStationLabel || forecastFallback.settlementStationLabel || null,
     metarTodayObs: mergeRawObservationPoints(base.metarTodayObs, live.metarTodayObs) as ObsPoint[] | undefined,
-    airportPrimaryTodayObs: mergeRawObservationPoints(
-      base.airportPrimaryTodayObs,
-      live.airportPrimaryTodayObs,
-    ),
+    airportPrimaryTodayObs: useLiveAirportPrimary
+      ? live.airportPrimaryTodayObs
+      : mergeRawObservationPoints(
+          base.airportPrimaryTodayObs,
+          live.airportPrimaryTodayObs,
+        ),
   };
 }
 

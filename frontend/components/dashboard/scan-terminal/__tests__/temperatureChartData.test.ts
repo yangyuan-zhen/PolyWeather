@@ -803,6 +803,87 @@ export function runTests() {
     "Ankara scan-row-seeded airport-primary curve should default to MGM instead of NOAA MADIS when source metadata is missing",
   );
 
+  const staleAnkaraDetail = toFullChartDetail({
+    localDate: "2026-06-23",
+    localTime: "13:51",
+    times: ["12:00", "13:00", "14:00", "15:00"],
+    temps: [22, 24, 25, 24],
+    airportPrimary: {
+      temp: 27.1,
+      obs_time: "2026-06-23T10:39:00Z",
+      source_code: "mgm",
+      source_label: "MGM",
+    },
+    airportPrimaryTodayObs: [["2026-06-23T10:39:00Z", 27.1]],
+    metarTodayObs: [["2026-06-23T10:20:00Z", 24.0]],
+    debHourlyPath: {
+      times: ["12:00", "13:00", "14:00", "15:00"],
+      temps: [20.5, 21.0, 21.2, 21.4],
+    },
+    modelTimes: ["12:00", "13:00", "14:00", "15:00"],
+    modelCurves: { ECMWF: [23.8, 24.4, 24.7, 24.0] },
+  } as any);
+  const freshAnkaraObservation = observationPayloadToSnapshot({
+    city: "ankara",
+    name: "ankara",
+    display_name: "Ankara",
+    local_date: "2026-06-23",
+    local_time: "13:30",
+    utc_offset_seconds: 3 * 60 * 60,
+    current: {
+      temp: 24.5,
+      source_code: "metar",
+      source_label: "METAR",
+      settlement_source: "metar",
+      settlement_source_label: "METAR",
+      station_code: "LTAC",
+      obs_time: "2026-06-23T10:30:00Z",
+    },
+    airport_current: {
+      temp: 24.5,
+      source_code: "metar",
+      source_label: "METAR",
+      station_code: "LTAC",
+      obs_time: "2026-06-23T10:30:00Z",
+    },
+    airport_primary: {
+      temp: 24.5,
+      source_code: "metar",
+      source_label: "METAR",
+      station_code: "LTAC",
+      obs_time: "2026-06-23T10:30:00Z",
+    },
+    timeseries: {
+      metar_today_obs: [{ time: "13:30", temp: 24.5 }],
+    },
+    metar_today_obs: [{ time: "13:30", temp: 24.5 }],
+  } as any);
+  const refreshedAnkaraDetail = mergeObservationSnapshotIntoHourly(
+    staleAnkaraDetail,
+    freshAnkaraObservation,
+  );
+  const refreshedAnkaraChart = buildFullDayChartData(
+    {
+      city: "ankara",
+      local_date: "2026-06-23",
+      local_time: "13:51",
+      tz_offset_seconds: 3 * 60 * 60,
+      airport: "LTAC",
+      temp_symbol: "°C",
+    } as any,
+    refreshedAnkaraDetail,
+    false,
+  );
+  const refreshedAnkaraAirportSeries = refreshedAnkaraChart.series.find((item) => item.key === "madis");
+  assert(
+    !refreshedAnkaraAirportSeries?.values.some((value) => value === 27.1),
+    "Ankara live observation refresh should discard stale cached MGM airport-primary points when the latest source is METAR",
+  );
+  assert(
+    refreshedAnkaraAirportSeries?.label === "LTAC METAR",
+    `Ankara refreshed airport-primary curve should be labelled as LTAC METAR, got ${refreshedAnkaraAirportSeries?.label}`,
+  );
+
   const guangzhouRunwayWithBadMadisChart = buildFullDayChartData(
     {
       city: "guangzhou",
