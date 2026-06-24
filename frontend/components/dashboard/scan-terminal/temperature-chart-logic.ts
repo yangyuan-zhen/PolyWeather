@@ -1605,7 +1605,16 @@ function seedRunwayPlateHistoryFromRow(
 type ChartRenderState = {
   forecastTodayHigh?: number | null;
   debPrediction?: number | null;
-  debQuality?: Pick<DebForecast, "quality_tier" | "recommendation" | "recent_hit_rate" | "recent_samples" | "recent_hits" | "recent_mae"> | null;
+  debQuality?: Pick<
+    DebForecast,
+    | "quality_tier"
+    | "recommendation"
+    | "recent_hit_rate"
+    | "recent_samples"
+    | "recent_hits"
+    | "recent_mae"
+    | "ensemble_signal"
+  > | null;
   debHourlyPath?: DebHourlyPath | null;
   localDate?: string | null;
   localTime?: string | null;
@@ -1995,6 +2004,7 @@ function parseFullChartDetailFromCityDetail(json: CityDetail | null): FullChartD
       recent_samples: json.deb.recent_samples,
       recent_hits: json.deb.recent_hits,
       recent_mae: json.deb.recent_mae,
+      ensemble_signal: json.deb.ensemble_signal,
     } : null,
     debHourlyPath: json.deb?.hourly_path || null,
     localDate: json.local_date || (json as any)?.overview?.local_date || null,

@@ -242,6 +242,72 @@ class TestMuCalculation:
         assert sd["peak_status"] == "before"
 
 
+class TestDebEnsembleSignal:
+    @patch(
+        "src.analysis.trend_engine.calculate_deb_prediction",
+        return_value={
+            "prediction": 30.1,
+            "raw_prediction": 30.1,
+            "weights_info": "test weights",
+        },
+    )
+    @patch("src.analysis.trend_engine.get_deb_accuracy", return_value=None)
+    @patch("src.analysis.trend_engine.update_daily_record")
+    def test_narrow_ensemble_supports_aligned_deb(self, _udr, _deb_acc, _deb):
+        data = _make_weather_data(
+            cur_temp=25.0,
+            max_so_far=25.2,
+            om_today_high=30.0,
+            ens_median=30.0,
+            ens_p10=29.4,
+            ens_p90=30.6,
+            local_time="2026-03-04 10:00",
+            multi_model={"ECMWF": 30.2, "GFS": 30.0},
+        )
+
+        _, ai_context, sd = analyze_weather_trend(data, "°C", "test_city")
+
+        signal = sd["deb_ensemble_signal"]
+        assert signal["available"] is True
+        assert signal["stance"] == "supporting"
+        assert signal["confidence_delta"] > 0
+        assert signal["spread"] == 1.2
+        assert "集合支撑" in ai_context
+        assert "GEFS" not in sd["current_forecasts"]
+        assert not any("ensemble" in name.lower() for name in sd["current_forecasts"])
+
+    @patch(
+        "src.analysis.trend_engine.calculate_deb_prediction",
+        return_value={
+            "prediction": 31.0,
+            "raw_prediction": 31.0,
+            "weights_info": "test weights",
+        },
+    )
+    @patch("src.analysis.trend_engine.get_deb_accuracy", return_value=None)
+    @patch("src.analysis.trend_engine.update_daily_record")
+    def test_wide_ensemble_marks_deb_as_caution(self, _udr, _deb_acc, _deb):
+        data = _make_weather_data(
+            cur_temp=25.0,
+            max_so_far=25.2,
+            om_today_high=30.0,
+            ens_median=29.0,
+            ens_p10=24.0,
+            ens_p90=34.0,
+            local_time="2026-03-04 10:00",
+            multi_model={"ECMWF": 30.2, "GFS": 31.0},
+        )
+
+        _, ai_context, sd = analyze_weather_trend(data, "°C", "test_city")
+
+        signal = sd["deb_ensemble_signal"]
+        assert signal["available"] is True
+        assert signal["stance"] == "caution"
+        assert signal["confidence_delta"] < 0
+        assert signal["spread"] == 10.0
+        assert "集合分歧" in ai_context
+
+
 # ─── Tests: Dead Market ───
 
 class TestDeadMarket:

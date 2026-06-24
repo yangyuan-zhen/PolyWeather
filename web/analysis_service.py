@@ -1075,6 +1075,7 @@ def _analyze(
     probabilities_all = []
     mu = None
     dynamic_commentary = {"summary": "", "notes": []}
+    deb_ensemble_signal = {}
     try:
         _, _ai_context, sd = _trend_analyze(raw, sym, city)
 
@@ -1082,6 +1083,7 @@ def _analyze(
         probabilities = sd.get("probabilities", [])
         probabilities_all = sd.get("probabilities_all", probabilities)
         dynamic_commentary = sd.get("dynamic_commentary") or dynamic_commentary
+        deb_ensemble_signal = sd.get("deb_ensemble_signal") or {}
         trend_info["is_dead_market"] = sd.get("trend_info", {}).get("is_dead_market", False)
         trend_info["direction"] = sd.get("trend_info", {}).get("direction", trend_info.get("direction", "unknown"))
         trend_info["is_cooling"] = sd.get("trend_info", {}).get("is_cooling", False)
@@ -1630,6 +1632,7 @@ def _analyze(
             "hourly_consensus": deb_hourly_consensus,
             "hourly_path": deb_hourly_path,
             "hourly_correction": (deb_hourly_path or {}).get("correction") if isinstance(deb_hourly_path, dict) else None,
+            "ensemble_signal": deb_ensemble_signal,
             **deb_quality,
         },
         "deviation_monitor": deviation_monitor,

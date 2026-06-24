@@ -59,6 +59,116 @@ def _median(values: List[float]) -> Optional[float]:
     return (sorted_values[mid - 1] + sorted_values[mid]) / 2.0
 
 
+def _build_deb_ensemble_signal(
+    *,
+    deb_prediction: Optional[float],
+    ens_median: Optional[float],
+    ens_p10: Optional[float],
+    ens_p90: Optional[float],
+    temp_symbol: str,
+) -> Dict[str, Any]:
+    unavailable = {
+        "available": False,
+        "stance": "unavailable",
+        "confidence_delta": 0.0,
+        "median": ens_median,
+        "p10": ens_p10,
+        "p90": ens_p90,
+        "spread": None,
+        "deb_distance": None,
+        "label_zh": "集合缺失",
+        "label_en": "No ensemble",
+        "reason_zh": "集合预报数据不完整，DEB 不做 ensemble 置信度校验。",
+        "reason_en": "Ensemble data is incomplete, so DEB confidence is not ensemble-checked.",
+    }
+    if (
+        deb_prediction is None
+        or ens_median is None
+        or ens_p10 is None
+        or ens_p90 is None
+    ):
+        return unavailable
+
+    low = min(ens_p10, ens_p90)
+    high = max(ens_p10, ens_p90)
+    spread = high - low
+    deb_distance = abs(deb_prediction - ens_median)
+    scale = 1.8 if "F" in str(temp_symbol).upper() else 1.0
+    narrow_spread = 1.5 * scale
+    wide_spread = 3.5 * scale
+    aligned_gap = 0.7 * scale
+    divergent_gap = 1.5 * scale
+
+    rounded_spread = round(spread, 1)
+    rounded_distance = round(deb_distance, 1)
+    unit = temp_symbol or "°"
+
+    if spread >= wide_spread or deb_distance >= max(divergent_gap, spread * 0.45):
+        return {
+            "available": True,
+            "stance": "caution",
+            "confidence_delta": -0.12,
+            "median": round(ens_median, 1),
+            "p10": round(low, 1),
+            "p90": round(high, 1),
+            "spread": rounded_spread,
+            "deb_distance": rounded_distance,
+            "label_zh": "集合分歧",
+            "label_en": "Ensemble caution",
+            "reason_zh": (
+                f"集合区间宽度 {rounded_spread}{unit}，DEB 距集合中位数 "
+                f"{rounded_distance}{unit}，该点位应降低置信度。"
+            ),
+            "reason_en": (
+                f"Ensemble spread is {rounded_spread}{unit}; DEB is "
+                f"{rounded_distance}{unit} from the ensemble median, so confidence is reduced."
+            ),
+        }
+
+    if spread <= narrow_spread and deb_distance <= aligned_gap:
+        return {
+            "available": True,
+            "stance": "supporting",
+            "confidence_delta": 0.08,
+            "median": round(ens_median, 1),
+            "p10": round(low, 1),
+            "p90": round(high, 1),
+            "spread": rounded_spread,
+            "deb_distance": rounded_distance,
+            "label_zh": "集合支撑",
+            "label_en": "Ensemble support",
+            "reason_zh": (
+                f"集合区间较窄，DEB 仅距集合中位数 {rounded_distance}{unit}，"
+                "可作为置信度加分。"
+            ),
+            "reason_en": (
+                f"Ensemble spread is tight and DEB is only {rounded_distance}{unit} "
+                "from the ensemble median, adding confidence."
+            ),
+        }
+
+    return {
+        "available": True,
+        "stance": "neutral",
+        "confidence_delta": 0.0,
+        "median": round(ens_median, 1),
+        "p10": round(low, 1),
+        "p90": round(high, 1),
+        "spread": rounded_spread,
+        "deb_distance": rounded_distance,
+        "label_zh": "集合中性",
+        "label_en": "Ensemble neutral",
+        "reason_zh": (
+            f"集合区间宽度 {rounded_spread}{unit}，DEB 距集合中位数 "
+            f"{rounded_distance}{unit}，暂不调整置信度。"
+        ),
+        "reason_en": (
+            f"Ensemble spread is {rounded_spread}{unit}; DEB is "
+            f"{rounded_distance}{unit} from the median, so confidence is unchanged."
+        ),
+    }
+
+
 def _peak_hours_from_hourly_values(
     hourly_values: List[Tuple[str, float]],
     *,
@@ -636,6 +746,13 @@ def analyze_weather_trend(
     ens_p90 = _sf(ensemble.get("p90"))
     ens_median = _sf(ensemble.get("median"))
     ens_data = {"p10": ens_p10, "p90": ens_p90, "median": ens_median}
+    deb_ensemble_signal = _build_deb_ensemble_signal(
+        deb_prediction=deb_prediction,
+        ens_median=ens_median,
+        ens_p10=ens_p10,
+        ens_p90=ens_p90,
+        temp_symbol=temp_symbol,
+    )
 
     sigma = None
     fallback_sigma = False
@@ -648,6 +765,14 @@ def analyze_weather_trend(
         if not is_cooling:
             insights.append(msg1)
         ai_features.append(msg1)
+        if deb_ensemble_signal.get("available") and deb_prediction is not None:
+            ensemble_deb_msg = (
+                f"🧬 {deb_ensemble_signal['label_zh']}: "
+                f"{deb_ensemble_signal['reason_zh']}"
+            )
+            ai_features.append(ensemble_deb_msg)
+            if deb_ensemble_signal.get("stance") == "caution":
+                insights.append(ensemble_deb_msg)
 
         if om_today is not None:
             if om_today > ens_p90 and (
@@ -1008,6 +1133,7 @@ def analyze_weather_trend(
         "deb_bias_samples": deb_bias_samples,
         "deb_weights": deb_weights,
         "deb_quality": deb_quality,
+        "deb_ensemble_signal": deb_ensemble_signal,
         "current_forecasts": current_forecasts,
         "ens_data": ens_data,
         "forecast_miss_deg": forecast_miss_deg,

@@ -43,6 +43,19 @@ type DebQuality = {
   recommendation?: string | null;
   recent_hit_rate?: number | null;
   recent_samples?: number | null;
+  ensemble_signal?: DebEnsembleSignal | null;
+};
+
+type DebEnsembleSignal = {
+  available?: boolean;
+  stance?: string | null;
+  label_zh?: string | null;
+  label_en?: string | null;
+  reason_zh?: string | null;
+  reason_en?: string | null;
+  spread?: number | null;
+  deb_distance?: number | null;
+  confidence_delta?: number | null;
 };
 
 function debQualityLabel(quality: DebQuality | null | undefined, isEn: boolean) {
@@ -55,6 +68,9 @@ function debQualityLabel(quality: DebQuality | null | undefined, isEn: boolean) 
 }
 
 function debQualityClass(quality: DebQuality | null | undefined) {
+  const stance = quality?.ensemble_signal?.available ? quality.ensemble_signal.stance : null;
+  if (stance === "caution") return "border-amber-300 bg-amber-50 text-amber-700";
+  if (stance === "supporting") return "border-emerald-200 bg-emerald-50 text-emerald-700";
   const tier = quality?.quality_tier;
   if (tier === "high") return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (tier === "medium") return "border-amber-200 bg-amber-50 text-amber-700";
@@ -62,22 +78,46 @@ function debQualityClass(quality: DebQuality | null | undefined) {
   return "border-slate-200 bg-slate-50 text-slate-500";
 }
 
-function DebQualityBadge({ quality, isEn }: { quality?: DebQuality | null; isEn: boolean }) {
+function debEnsembleShortLabel(signal: DebEnsembleSignal | null | undefined, isEn: boolean) {
+  if (!signal?.available) return "";
+  if (signal.stance === "supporting") return isEn ? "Ens+" : "集+";
+  if (signal.stance === "caution") return isEn ? "Ens!" : "集警";
+  return "";
+}
+
+function debQualityTitle(quality: DebQuality | null | undefined, isEn: boolean) {
   const label = debQualityLabel(quality, isEn);
-  if (!label) return null;
   const hitRate = quality?.recent_hit_rate;
   const samples = quality?.recent_samples;
+  const ensemble = quality?.ensemble_signal;
   const titleParts = [
-    isEn ? `DEB recommendation: ${label}` : `DEB 建议：${label}`,
+    label ? (isEn ? `DEB recommendation: ${label}` : `DEB 建议：${label}`) : null,
     hitRate == null ? null : `${hitRate.toFixed(0)}%`,
     samples == null ? null : `n=${samples}`,
+    ensemble?.available
+      ? `${isEn ? ensemble.label_en || "Ensemble" : ensemble.label_zh || "集合"}: ${
+          isEn ? ensemble.reason_en || "" : ensemble.reason_zh || ""
+        }`
+      : null,
   ].filter(Boolean);
+  return titleParts.join(" · ");
+}
+
+function DebQualityBadge({ quality, isEn }: { quality?: DebQuality | null; isEn: boolean }) {
+  const label = debQualityLabel(quality, isEn);
+  const ensembleLabel = debEnsembleShortLabel(quality?.ensemble_signal, isEn);
+  if (!label && !ensembleLabel) return null;
   return (
     <span
       className={clsx("ml-1.5 inline-flex items-center rounded border px-1.5 py-0.5 text-[9px] font-black uppercase leading-none", debQualityClass(quality))}
-      title={titleParts.join(" · ")}
+      title={debQualityTitle(quality, isEn)}
     >
-      {label}
+      {label || "DEB"}
+      {ensembleLabel && (
+        <span className="ml-1 border-l border-current/30 pl-1">
+          {ensembleLabel}
+        </span>
+      )}
     </span>
   );
 }
@@ -313,3 +353,6 @@ export function TemperatureStatsBars({
 
 export const __buildTemperatureStatsLabelsForTest = buildStatsLabels;
 export const __buildDebQualityLabelForTest = debQualityLabel;
+export const __buildDebQualityClassForTest = debQualityClass;
+export const __buildDebQualityTitleForTest = debQualityTitle;
+export const __buildDebEnsembleLabelForTest = debEnsembleShortLabel;

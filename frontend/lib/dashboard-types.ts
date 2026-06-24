@@ -221,6 +221,21 @@ export interface DebHourlyPath {
   correction?: Record<string, unknown> | null;
 }
 
+export interface DebEnsembleSignal {
+  available?: boolean;
+  stance?: "supporting" | "neutral" | "caution" | "unavailable" | string;
+  confidence_delta?: number | null;
+  median?: number | null;
+  p10?: number | null;
+  p90?: number | null;
+  spread?: number | null;
+  deb_distance?: number | null;
+  label_zh?: string | null;
+  label_en?: string | null;
+  reason_zh?: string | null;
+  reason_en?: string | null;
+}
+
 export interface DebForecast {
   prediction: number | null;
   raw_prediction?: number | null;
@@ -239,6 +254,7 @@ export interface DebForecast {
   intraday_adjustment?: number | null;
   hourly_path?: DebHourlyPath | null;
   hourly_correction?: Record<string, unknown> | null;
+  ensemble_signal?: DebEnsembleSignal | null;
 }
 
 export interface CitySummary {
