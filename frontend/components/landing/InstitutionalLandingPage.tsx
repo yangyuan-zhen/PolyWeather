@@ -7,6 +7,7 @@ import {
 } from "@/components/landing/LandingAuthActions";
 import {
   LANDING_LOCALE_COOKIE,
+  landingLocaleHref,
   pickLandingLocale,
   type LandingLocale,
 } from "@/components/landing/landingLocale";
@@ -324,7 +325,7 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
             <Link href="/docs/chart-guide" className="hover:text-slate-950">
               {isEn ? "Guide" : "读图"}
             </Link>
-            <Link href="/briefs" className="hover:text-slate-950">
+            <Link href={landingLocaleHref("/briefs", locale)} className="hover:text-slate-950">
               {isEn ? "Briefs" : "简报"}
             </Link>
             <a href="#pricing" className="hover:text-slate-950">

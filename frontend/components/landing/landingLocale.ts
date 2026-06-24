@@ -38,3 +38,10 @@ export function pickLandingLocale(
 export function nextLandingLocale(locale: LandingLocale): LandingLocale {
   return locale === "zh-CN" ? "en-US" : "zh-CN";
 }
+
+export function landingLocaleHref(pathname: string, locale: LandingLocale): string {
+  const [pathWithQuery, hash] = pathname.split("#", 2);
+  const separator = pathWithQuery.includes("?") ? "&" : "?";
+  const localizedPath = `${pathWithQuery}${separator}${LANDING_LOCALE_QUERY_PARAM}=${encodeURIComponent(locale)}`;
+  return hash ? `${localizedPath}#${hash}` : localizedPath;
+}

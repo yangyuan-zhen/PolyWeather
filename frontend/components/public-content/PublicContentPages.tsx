@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { LandingLocaleToggle } from "@/components/landing/LandingLocaleToggle";
-import type { LandingLocale } from "@/components/landing/landingLocale";
+import { landingLocaleHref, type LandingLocale } from "@/components/landing/landingLocale";
 import {
   METHODOLOGY_PAGES,
   PUBLIC_CONTENT_COPY,
@@ -44,21 +44,21 @@ function PublicHeader({ locale = "en-US" }: { locale?: LandingLocale }) {
   return (
     <header className="border-b border-slate-200 bg-white/90">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-        <Link className="text-base font-black text-slate-950" href="/">
+        <Link className="text-base font-black text-slate-950" href={landingLocaleHref("/", locale)}>
           PolyWeather
         </Link>
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <nav className="flex flex-wrap gap-2 text-sm font-semibold text-slate-700">
-            <Link className="rounded-md px-2.5 py-1.5 hover:bg-slate-100" href="/briefs">
+            <Link className="rounded-md px-2.5 py-1.5 hover:bg-slate-100" href={landingLocaleHref("/briefs", locale)}>
               {locale === "en-US" ? "Briefs" : "简报"}
             </Link>
-            <Link className="rounded-md px-2.5 py-1.5 hover:bg-slate-100" href="/methodology">
+            <Link className="rounded-md px-2.5 py-1.5 hover:bg-slate-100" href={landingLocaleHref("/methodology", locale)}>
               {copy.methodology}
             </Link>
-            <Link className="rounded-md px-2.5 py-1.5 hover:bg-slate-100" href="/sources">
+            <Link className="rounded-md px-2.5 py-1.5 hover:bg-slate-100" href={landingLocaleHref("/sources", locale)}>
               {copy.sources}
             </Link>
-            <Link className="rounded-md px-2.5 py-1.5 hover:bg-slate-100" href="/docs/intro">
+            <Link className="rounded-md px-2.5 py-1.5 hover:bg-slate-100" href={landingLocaleHref("/docs/intro", locale)}>
               {copy.docs}
             </Link>
           </nav>
@@ -103,7 +103,7 @@ function SourceLinks({ locale = "en-US", slugs }: { locale?: LandingLocale; slug
         return (
           <Link
             className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-            href={sourcePath(localizedSource)}
+            href={landingLocaleHref(sourcePath(localizedSource), locale)}
             key={slug}
           >
             {localizedSource.title}
@@ -124,7 +124,7 @@ function MethodologyLinks({ locale = "en-US", slugs }: { locale?: LandingLocale;
         return (
           <Link
             className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-            href={methodologyPath(localizedPage)}
+            href={landingLocaleHref(methodologyPath(localizedPage), locale)}
             key={slug}
           >
             {localizedPage.title}
@@ -152,7 +152,7 @@ function BriefCard({
             {brief.cityName} / {brief.date}
           </p>
           <h2 className="mt-2 text-xl font-black text-slate-950">
-            <Link href={briefPath(brief)}>{brief.title}</Link>
+            <Link href={landingLocaleHref(briefPath(brief), locale)}>{brief.title}</Link>
           </h2>
         </div>
         <span className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-800">
@@ -170,7 +170,7 @@ function BriefCard({
         ))}
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <Link className={secondaryButton} href={briefPath(brief)}>
+        <Link className={secondaryButton} href={landingLocaleHref(briefPath(brief), locale)}>
           {readBriefLabel}
         </Link>
         <SourceLinks locale={locale} slugs={brief.sourceSlugs.slice(0, 2)} />
@@ -291,7 +291,7 @@ export function BriefDetailPageView({
               >
                 {localizedBrief.primaryCtaLabel}
               </PublicContentCta>
-              <Link className={secondaryButton} href="/briefs">
+              <Link className={secondaryButton} href={landingLocaleHref("/briefs", locale)}>
                 {copy.allPublicBriefs}
               </Link>
             </div>
@@ -315,7 +315,7 @@ export function BriefDetailPageView({
             <div className="mt-4">
               <PublicContentOutboundLink
                 className={secondaryButton}
-                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(localizedBrief.distributionText)}&url=${encodeURIComponent(absolutePublicUrl(briefPath(localizedBrief)))}`}
+                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(localizedBrief.distributionText)}&url=${encodeURIComponent(absolutePublicUrl(landingLocaleHref(briefPath(localizedBrief), locale)))}`}
                 payload={{ city: localizedBrief.city, date: localizedBrief.date, destination: "x_intent" }}
               >
                 {copy.shareOnX}
@@ -365,26 +365,33 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function MethodologyIndexPageView() {
+export function MethodologyIndexPageView({
+  locale = "en-US",
+}: {
+  locale?: LandingLocale;
+} = {}) {
+  const copy = PUBLIC_CONTENT_COPY[locale];
+  const pages = METHODOLOGY_PAGES.map((page) => localizeMethodologyPage(page, locale));
+
   return (
     <div className={pageShell}>
-      <PublicHeader />
+      <PublicHeader locale={locale} />
       <PageIntro
-        description="Public methodology pages explain how PolyWeather handles DEB blending, settlement-source priority, freshness, and source reconciliation for prediction-market weather analysis."
-        eyebrow="Methodology"
-        title="How PolyWeather reads weather markets"
+        description={copy.methodologyIndexDescription}
+        eyebrow={copy.methodologyIndexEyebrow}
+        title={copy.methodologyIndexTitle}
       />
       <div className={contentWrap}>
         <section className="grid gap-4 md:grid-cols-2">
-          {METHODOLOGY_PAGES.map((page) => (
+          {pages.map((page) => (
             <article className={`${panel} p-5`} key={page.slug}>
-              <p className={sectionTitle}>{formatDate(page.updatedAt)}</p>
+              <p className={sectionTitle}>{formatDate(page.updatedAt, locale)}</p>
               <h2 className="mt-2 text-2xl font-black text-slate-950">
-                <Link href={methodologyPath(page)}>{page.title}</Link>
+                <Link href={landingLocaleHref(methodologyPath(page), locale)}>{page.title}</Link>
               </h2>
               <p className={`${bodyText} mt-3`}>{page.description}</p>
-              <Link className={`${secondaryButton} mt-5`} href={methodologyPath(page)}>
-                Read methodology
+              <Link className={`${secondaryButton} mt-5`} href={landingLocaleHref(methodologyPath(page), locale)}>
+                {copy.readMethodology}
               </Link>
             </article>
           ))}
@@ -394,7 +401,16 @@ export function MethodologyIndexPageView() {
   );
 }
 
-export function MethodologyDetailPageView({ page }: { page: MethodologyPage }) {
+export function MethodologyDetailPageView({
+  page,
+  locale = "en-US",
+}: {
+  page: MethodologyPage;
+  locale?: LandingLocale;
+}) {
+  const copy = PUBLIC_CONTENT_COPY[locale];
+  const localizedPage = localizeMethodologyPage(page, locale);
+
   return (
     <div className={pageShell}>
       <PublicContentAnalytics
@@ -402,13 +418,17 @@ export function MethodologyDetailPageView({ page }: { page: MethodologyPage }) {
         onceKey={`methodology:${page.slug}`}
         payload={{ slug: page.slug, content_type: "methodology" }}
       />
-      <PublicHeader />
-      <PageIntro description={page.description} eyebrow="Methodology" title={page.title} />
+      <PublicHeader locale={locale} />
+      <PageIntro
+        description={localizedPage.description}
+        eyebrow={copy.methodologyIndexEyebrow}
+        title={localizedPage.title}
+      />
       <div className={contentWrap}>
         <article className={`${panel} p-5`}>
-          <p className="max-w-3xl text-base leading-7 text-slate-700">{page.summary}</p>
+          <p className="max-w-3xl text-base leading-7 text-slate-700">{localizedPage.summary}</p>
           <div className="mt-8 grid gap-8">
-            {page.sections.map((section) => (
+            {localizedPage.sections.map((section) => (
               <section key={section.heading}>
                 <h2 className="text-xl font-black text-slate-950">{section.heading}</h2>
                 <p className={`${bodyText} mt-3`}>{section.body}</p>
@@ -428,26 +448,33 @@ export function MethodologyDetailPageView({ page }: { page: MethodologyPage }) {
   );
 }
 
-export function SourcesIndexPageView() {
+export function SourcesIndexPageView({
+  locale = "en-US",
+}: {
+  locale?: LandingLocale;
+} = {}) {
+  const copy = PUBLIC_CONTENT_COPY[locale];
+  const sources = SOURCE_PAGES.map((source) => localizeSourcePage(source, locale));
+
   return (
     <div className={pageShell}>
-      <PublicHeader />
+      <PublicHeader locale={locale} />
       <PageIntro
-        description="Source pages separate official observations, airport observations, and model guidance so readers can inspect why PolyWeather prioritizes settlement-relevant evidence."
-        eyebrow="Sources"
-        title="Weather source notes for public audit"
+        description={copy.sourceIndexDescription}
+        eyebrow={copy.sourceIndexEyebrow}
+        title={copy.sourceIndexTitle}
       />
       <div className={contentWrap}>
         <section className="grid gap-4 md:grid-cols-2">
-          {SOURCE_PAGES.map((source) => (
+          {sources.map((source) => (
             <article className={`${panel} p-5`} key={source.slug}>
               <p className={sectionTitle}>{source.operator}</p>
               <h2 className="mt-2 text-2xl font-black text-slate-950">
-                <Link href={sourcePath(source)}>{source.title}</Link>
+                <Link href={landingLocaleHref(sourcePath(source), locale)}>{source.title}</Link>
               </h2>
               <p className={`${bodyText} mt-3`}>{source.description}</p>
-              <Link className={`${secondaryButton} mt-5`} href={sourcePath(source)}>
-                Read source note
+              <Link className={`${secondaryButton} mt-5`} href={landingLocaleHref(sourcePath(source), locale)}>
+                {copy.readSourceNote}
               </Link>
             </article>
           ))}
@@ -457,32 +484,60 @@ export function SourcesIndexPageView() {
   );
 }
 
-export function SourceDetailPageView({ source }: { source: SourcePage }) {
+export function SourceDetailPageView({
+  source,
+  locale = "en-US",
+}: {
+  source: SourcePage;
+  locale?: LandingLocale;
+}) {
+  const localizedSource = localizeSourcePage(source, locale);
+  const labels =
+    locale === "en-US"
+      ? {
+          cadence: "Cadence",
+          coverage: "Coverage",
+          operator: "Operator",
+          reliability: "Reliability notes",
+          relatedMethodology: "Related methodology",
+          settlementUse: "Settlement use",
+          sourceNote: "Source note",
+        }
+      : {
+          cadence: "频率",
+          coverage: "覆盖范围",
+          operator: "运营方",
+          reliability: "可靠性备注",
+          relatedMethodology: "相关方法",
+          settlementUse: "结算用途",
+          sourceNote: "来源说明",
+        };
+
   return (
     <div className={pageShell}>
-      <PublicHeader />
-      <PageIntro description={source.description} eyebrow="Source note" title={source.title} />
+      <PublicHeader locale={locale} />
+      <PageIntro description={localizedSource.description} eyebrow={labels.sourceNote} title={localizedSource.title} />
       <div className={contentWrap}>
         <article className={`${panel} grid gap-6 p-5 lg:grid-cols-[0.9fr_1.4fr]`}>
           <dl className="grid gap-3 text-sm">
-            <InfoRow label="Operator" value={source.operator} />
-            <InfoRow label="Coverage" value={source.coverage} />
-            <InfoRow label="Cadence" value={source.cadence} />
-            <InfoRow label="Settlement use" value={source.settlementUse} />
+            <InfoRow label={labels.operator} value={localizedSource.operator} />
+            <InfoRow label={labels.coverage} value={localizedSource.coverage} />
+            <InfoRow label={labels.cadence} value={localizedSource.cadence} />
+            <InfoRow label={labels.settlementUse} value={localizedSource.settlementUse} />
           </dl>
           <div>
-            <p className={sectionTitle}>Reliability notes</p>
+            <p className={sectionTitle}>{labels.reliability}</p>
             <ul className="mt-4 grid gap-3">
-              {source.reliabilityNotes.map((note) => (
+              {localizedSource.reliabilityNotes.map((note) => (
                 <li className={bodyText} key={note}>
                   {note}
                 </li>
               ))}
             </ul>
             <div className="mt-6">
-              <p className={sectionTitle}>Related methodology</p>
+              <p className={sectionTitle}>{labels.relatedMethodology}</p>
               <div className="mt-4">
-                <MethodologyLinks slugs={source.relatedMethodologySlugs} />
+                <MethodologyLinks locale={locale} slugs={localizedSource.relatedMethodologySlugs} />
               </div>
             </div>
           </div>
@@ -499,8 +554,8 @@ function formatDateTime(value: string, locale: LandingLocale = "en-US") {
   }).format(new Date(value));
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en", {
+function formatDate(value: string, locale: LandingLocale = "en-US") {
+  return new Intl.DateTimeFormat(locale === "en-US" ? "en" : "zh-CN", {
     dateStyle: "medium",
   }).format(new Date(value));
 }

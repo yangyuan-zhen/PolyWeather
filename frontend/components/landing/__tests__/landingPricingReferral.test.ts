@@ -104,7 +104,11 @@ export function runTests() {
     "landing supported cities must render names and station codes from the generated city groups",
   );
   assert(source.includes("#contact"), "landing navigation must expose the contact section");
-  assert(source.includes('href="/briefs"'), "landing navigation must expose public Weather Market Brief assets");
+  assert(
+    source.includes("landingLocaleHref") &&
+      source.includes('href={landingLocaleHref("/briefs", locale)}'),
+    "landing navigation must expose public Weather Market Brief assets while preserving the current locale",
+  );
   assert(source.includes('isEn ? "Briefs" : "简报"'), "landing page must label the public brief entry in both languages");
   assert(source.includes('id="contact"'), "landing page must include a contact section");
   assert(source.includes("yhrsc30@gmail.com"), "landing page must show the operator contact email");

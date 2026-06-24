@@ -17,6 +17,7 @@ export function runTests() {
   const analyticsPath = path.join(root, "lib", "app-analytics.ts");
   const analyticsIslandPath = path.join(root, "components", "public-content", "PublicContentAnalytics.tsx");
   const publicPagesPath = path.join(root, "components", "public-content", "PublicContentPages.tsx");
+  const localeHelperPath = path.join(root, "components", "landing", "landingLocale.ts");
   const sitemapPath = path.join(root, "app", "sitemap.ts");
 
   for (const requiredPath of [
@@ -35,11 +36,14 @@ export function runTests() {
 
   const content = fs.readFileSync(contentPath, "utf8");
   const briefDetail = fs.readFileSync(briefDetailPath, "utf8");
+  const methodologyIndex = fs.readFileSync(methodologyIndexPath, "utf8");
   const methodologyDetail = fs.readFileSync(methodologyDetailPath, "utf8");
+  const sourcesIndex = fs.readFileSync(sourcesIndexPath, "utf8");
   const sourceDetail = fs.readFileSync(sourceDetailPath, "utf8");
   const analytics = fs.readFileSync(analyticsPath, "utf8");
   const analyticsIsland = fs.readFileSync(analyticsIslandPath, "utf8");
   const publicPages = fs.readFileSync(publicPagesPath, "utf8");
+  const localeHelper = fs.readFileSync(localeHelperPath, "utf8");
   const sitemap = fs.readFileSync(sitemapPath, "utf8");
   const briefsIndex = fs.readFileSync(briefsIndexPath, "utf8");
 
@@ -67,6 +71,13 @@ export function runTests() {
       content.includes("安卡拉") &&
       content.includes("阅读简报"),
     "public brief content must provide Chinese and English localized copy",
+  );
+  assert(
+    content.includes("METHODOLOGY_PAGE_LOCALIZATIONS") &&
+      content.includes("SOURCE_PAGE_LOCALIZATIONS") &&
+      content.includes("DEB 不是结算预言机") &&
+      content.includes("官方摘要可能滞后于原始点位观测"),
+    "public methodology and source pages must provide Chinese body-level localization, not title-only translation",
   );
   assert(
     content.includes("24.5°C") &&
@@ -103,6 +114,30 @@ export function runTests() {
       publicPages.includes("PUBLIC_CONTENT_COPY") &&
       publicPages.includes('locale === "en-US" ? "Briefs" : "简报"'),
     "public content pages must render the shared language toggle and localized brief copy",
+  );
+  assert(
+    localeHelper.includes("export function landingLocaleHref") &&
+      localeHelper.includes("LANDING_LOCALE_QUERY_PARAM"),
+    "landing locale helpers must expose a shared href builder for explicit locale navigation",
+  );
+  assert(
+    publicPages.includes("landingLocaleHref") &&
+      publicPages.includes('href={landingLocaleHref("/briefs", locale)}') &&
+      publicPages.includes("href={landingLocaleHref(briefPath(brief), locale)}") &&
+      publicPages.includes("href={landingLocaleHref(methodologyPath(localizedPage), locale)}") &&
+      publicPages.includes("href={landingLocaleHref(sourcePath(localizedSource), locale)}"),
+    "public content brief cards, nav, methodology, and source links must preserve the current locale",
+  );
+  assert(
+    methodologyIndex.includes("resolvePublicContentLocale(searchParams)") &&
+      methodologyIndex.includes("<MethodologyIndexPageView locale={locale} />") &&
+      methodologyDetail.includes("resolvePublicContentLocale(searchParams)") &&
+      methodologyDetail.includes("<MethodologyDetailPageView page={page} locale={locale} />") &&
+      sourcesIndex.includes("resolvePublicContentLocale(searchParams)") &&
+      sourcesIndex.includes("<SourcesIndexPageView locale={locale} />") &&
+      sourceDetail.includes("resolvePublicContentLocale(searchParams)") &&
+      sourceDetail.includes("<SourceDetailPageView source={source} locale={locale} />"),
+    "methodology and source public routes must resolve and pass the same locale as brief routes",
   );
   assert(
     analytics.includes('"brief_view"') &&

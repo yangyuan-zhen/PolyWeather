@@ -661,17 +661,143 @@ const BRIEF_LOCALIZATIONS: Record<string, Partial<PublicBrief>> = {
   },
 };
 
-const METHODOLOGY_TITLE_LOCALIZATIONS: Record<string, string> = {
-  deb: "DEB 预测方法",
-  "settlement-sources": "结算源优先级",
+const METHODOLOGY_PAGE_LOCALIZATIONS: Record<string, Partial<MethodologyPage>> = {
+  deb: {
+    title: "DEB 预测方法",
+    description:
+      "PolyWeather 如何把 DEB 融合预报用于预测市场温度判断，同时不替代结算源证据。",
+    summary:
+      "DEB 是 PolyWeather 融合预报层的公开名称。它把模型指引、实时观测动量、来源新鲜度和站点上下文放在一起，帮助用户用更少单模型误判来判断最高温区间。",
+    sections: [
+      {
+        heading: "DEB 用来做什么",
+        body:
+          "DEB 不是结算预言机。它是决策辅助层，让实时观测路径和模型分歧更容易对比。",
+        bullets: [
+          "当模型指引与结算源证据冲突时，优先看结算源证据。",
+          "把过期或孤立的来源值视为需要质检的候选点。",
+          "展示预报区间以及区间变宽或收窄的原因。",
+        ],
+      },
+      {
+        heading: "关键输入",
+        body:
+          "融合层有用，是因为它组合了不同证据类别，而不是假设一次模型运行就足够。",
+        bullets: [
+          "最新官方或机场观测及其新鲜度。",
+          "ECMWF、GFS、ICON、GEM 以及可用本地来源之间的模型共识和分歧。",
+          "城市特定来源行为、站点选择和日内最高温时段。",
+        ],
+      },
+      {
+        heading: "如何复盘 DEB 偏差",
+        body:
+          "DEB 偏差应拆开来源新鲜度、模型分歧和结算源修订来复盘。",
+        bullets: [
+          "如果晚到来源 patch 改变了观测高温，将其归类为新鲜度或 replay 问题。",
+          "如果所有来源都新鲜但高温落在区间外，复盘模型权重和本地站点特征。",
+          "如果只有单一来源跳变，先审计相邻观测，再围绕异常点重训。",
+        ],
+      },
+    ],
+  },
+  "settlement-sources": {
+    title: "结算源优先级",
+    description:
+      "为什么 PolyWeather 先展示官方结算相关观测，而不是通用天气 API 数值。",
+    summary:
+      "预测市场用户关心的是合约最终结算数字。因此 PolyWeather 把官方站、机场和运营方特定来源行为放在泛消费者天气均值之上。",
+    sections: [
+      {
+        heading: "为什么通用天气值不够",
+        body:
+          "消费者天气应用经常平滑站点数据，或展示城市级近似值。市场结算可能依赖更窄的官方来源。",
+        bullets: [
+          "一个城市标签可能隐藏多个日高温不同的站点。",
+          "机场 METAR 可能比公开摘要更新更快，但未必是最终结算源。",
+          "官方来源修订往往比平滑的预报曲线更重要。",
+        ],
+      },
+      {
+        heading: "PolyWeather 展示什么",
+        body:
+          "终端会拆开来源标签、观测时间戳、预报模型和新鲜度状态，让用户审计数字形成路径。",
+        bullets: [
+          "图表中的结算源标签和站点上下文。",
+          "来源新鲜度、缓存策略和 SSE patch 可见性。",
+          "DEB 预报上下文与实时观测并列展示，而不是替代观测。",
+        ],
+      },
+    ],
+  },
 };
 
-const SOURCE_TITLE_LOCALIZATIONS: Record<string, string> = {
-  ecmwf: "ECMWF 模型指引",
-  hko: "HKO 官方观测",
-  metar: "METAR 机场观测",
-  mgm: "MGM 天气来源",
-  noaa: "NOAA 天气上下文",
+const SOURCE_PAGE_LOCALIZATIONS: Record<string, Partial<SourcePage>> = {
+  mgm: {
+    title: "MGM 天气来源",
+    description: "PolyWeather 针对土耳其 MGM 观测的来源说明，用于安卡拉类温度市场分析。",
+    operator: "土耳其国家气象局",
+    coverage: "土耳其官方站网络，包含安卡拉市场上下文。",
+    cadence: "来源频率会随站点和发布路径变化；终端仍需要检查新鲜度。",
+    settlementUse: "当安卡拉市场引用土耳其官方观测时，作为主要官方来源族使用。",
+    reliabilityNotes: [
+      "单点尖峰在接受前应与相邻时间戳比对。",
+      "官方摘要可能滞后于原始点位观测。",
+      "数值突然出现时，应检查缓存和 SSE replay 状态。",
+    ],
+  },
+  metar: {
+    title: "METAR 机场观测",
+    description: "PolyWeather 针对机场 METAR 观测的来源说明，用作温度市场工作流中的快速证据。",
+    operator: "机场天气观测网络",
+    coverage: "覆盖受支持市场的机场关联观测。",
+    cadence: "通常为小时级或更短，取决于机场和发布行为。",
+    settlementUse: "适合快速证据和机场关联合约；仍必须与合约的精确结算源校验。",
+    reliabilityNotes: [
+      "METAR 可能比官方日摘要更新更快。",
+      "机场暴露环境可能不同于市区官方站。",
+      "临近收盘的晚些 METAR 周期可能改变最高温判断。",
+    ],
+  },
+  ecmwf: {
+    title: "ECMWF 模型指引",
+    description: "PolyWeather 针对 ECMWF 模型指引的来源说明，它是 DEB 融合预报的一个输入。",
+    operator: "欧洲中期天气预报中心",
+    coverage: "全球数值天气预报指引。",
+    cadence: "模型运行频率取决于产品和摄取时间。",
+    settlementUse: "仅用于预报上下文，不替代实时官方观测的结算解释。",
+    reliabilityNotes: [
+      "模型偏暖或偏冷都应由实时观测验证。",
+      "当来源证据尚未稳定时，模型运行间变化可以提供参考。",
+      "模型分歧应与结算源数据并列展示，而不是凌驾其上。",
+    ],
+  },
+  hko: {
+    title: "HKO 官方观测",
+    description: "PolyWeather 针对香港天文台观测的来源说明，用于香港市场分析。",
+    operator: "香港天文台",
+    coverage: "香港官方观测网络和站点级上下文。",
+    cadence: "观测产品频率不同；终端仍应检查来源新鲜度。",
+    settlementUse: "作为香港站点和城市市场解释中的官方来源族使用。",
+    reliabilityNotes: [
+      "站点选择可能显著改变最高温读数。",
+      "机场观测应与更广泛的 HKO 网络读数分开解释。",
+      "湿度、风和午后短时日照会影响最终高温。",
+    ],
+  },
+  noaa: {
+    title: "NOAA 天气上下文",
+    description: "PolyWeather 针对 NOAA 上下文的来源说明，用于校验美国天气市场观测和摘要。",
+    operator: "美国国家海洋和大气管理局",
+    coverage: "美国官方天气观测、摘要和上下文产品。",
+    cadence: "频率取决于产品族和站点报告行为。",
+    settlementUse: "当合约规则引用 NOAA/NWS 数据时，用于审计和解释美国官方观测。",
+    reliabilityNotes: [
+      "官方摘要可能晚于快速机场观测到达。",
+      "日高温解释应匹配合约的站点和时区规则。",
+      "使用 NOAA 上下文确认机场观测是否具代表性。",
+    ],
+  },
 };
 
 export function localizeBrief(brief: PublicBrief, locale: LandingLocale): PublicBrief {
@@ -693,17 +819,22 @@ export function localizeBriefs(locale: LandingLocale) {
 
 export function localizeMethodologyPage(page: MethodologyPage, locale: LandingLocale): MethodologyPage {
   if (locale === "en-US") return page;
+  const localized = METHODOLOGY_PAGE_LOCALIZATIONS[page.slug] || {};
   return {
     ...page,
-    title: METHODOLOGY_TITLE_LOCALIZATIONS[page.slug] || page.title,
+    ...localized,
+    sections: localized.sections || page.sections,
   };
 }
 
 export function localizeSourcePage(page: SourcePage, locale: LandingLocale): SourcePage {
   if (locale === "en-US") return page;
+  const localized = SOURCE_PAGE_LOCALIZATIONS[page.slug] || {};
   return {
     ...page,
-    title: SOURCE_TITLE_LOCALIZATIONS[page.slug] || page.title,
+    ...localized,
+    reliabilityNotes: localized.reliabilityNotes || page.reliabilityNotes,
+    relatedMethodologySlugs: localized.relatedMethodologySlugs || page.relatedMethodologySlugs,
   };
 }
 
