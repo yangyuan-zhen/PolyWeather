@@ -69,6 +69,12 @@ export function runTests() {
     "public brief content must provide Chinese and English localized copy",
   );
   assert(
+    content.includes("24.5°C") &&
+      content.includes("27.1°C") &&
+      !/\b\d+(?:\.\d+)? C\b/.test(content),
+    "public brief temperatures must use the degree Celsius symbol instead of a bare C",
+  );
+  assert(
     briefDetail.includes("generateStaticParams") &&
       briefDetail.includes("generateMetadata") &&
       briefDetail.includes("application/ld+json") &&

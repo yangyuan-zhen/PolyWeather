@@ -211,7 +211,7 @@ export const PUBLIC_BRIEFS: PublicBrief[] = [
     debRead:
       "DEB kept the intraday high-temperature read below the isolated MGM spike and closer to the observed official range.",
     sourceRead:
-      "MGM is treated as the primary settlement reference. A single 27.1 C point should be checked against adjacent official readings before it is accepted as a new high.",
+      "MGM is treated as the primary settlement reference. A single 27.1°C point should be checked against adjacent official readings before it is accepted as a new high.",
     modelRead:
       "ECMWF was warmer than the DEB blend in the early afternoon window, but the public brief weights official observations above model-only movement.",
     riskRead:
@@ -219,19 +219,19 @@ export const PUBLIC_BRIEFS: PublicBrief[] = [
     notFinancialAdvice:
       "This brief is weather-research content for prediction-market preparation. It is not financial advice and does not guarantee settlement outcomes.",
     distributionText:
-      "Ankara 2026-06-24 public Weather Market Brief: MGM official readings favored a 24.5 C observed high over an isolated 27.1 C spike; DEB stayed below the outlier. Not financial advice.",
+      "Ankara 2026-06-24 public Weather Market Brief: MGM official readings favored a 24.5°C observed high over an isolated 27.1°C spike; DEB stayed below the outlier. Not financial advice.",
     primaryCtaLabel: "Open live terminal",
     sourceSlugs: ["mgm", "metar", "ecmwf"],
     methodologySlugs: ["deb", "settlement-sources"],
     signals: [
       {
         label: "Observed high so far",
-        value: "24.5 C",
+        value: "24.5°C",
         detail: "Official-source value to compare against any isolated higher point.",
       },
       {
         label: "Outlier under review",
-        value: "27.1 C",
+        value: "27.1°C",
         detail: "A sudden single-source value needs neighboring-time validation.",
       },
       {
@@ -534,7 +534,7 @@ const BRIEF_LOCALIZATIONS: Record<string, Partial<PublicBrief>> = {
     debRead:
       "DEB 将日内最高温读数压在孤立 MGM 尖峰下方，更接近已观测的官方区间。",
     sourceRead:
-      "MGM 被视为主要结算参考。单个 27.1 C 点位在接受为新高前，需要与相邻官方读数比对。",
+      "MGM 被视为主要结算参考。单个 27.1°C 点位在接受为新高前，需要与相邻官方读数比对。",
     modelRead:
       "ECMWF 在午后窗口比 DEB 融合更暖，但公开简报把官方观测置于纯模型移动之上。",
     riskRead:
@@ -542,17 +542,17 @@ const BRIEF_LOCALIZATIONS: Record<string, Partial<PublicBrief>> = {
     notFinancialAdvice:
       "本简报是用于预测市场准备的天气研究内容，不构成金融建议，也不保证结算结果。",
     distributionText:
-      "安卡拉 2026-06-24 公开天气市场简报：MGM 官方读数更支持 24.5 C 已观测高温，而非孤立 27.1 C 尖峰；DEB 仍低于异常点。非金融建议。",
+      "安卡拉 2026-06-24 公开天气市场简报：MGM 官方读数更支持 24.5°C 已观测高温，而非孤立 27.1°C 尖峰；DEB 仍低于异常点。非金融建议。",
     primaryCtaLabel: "打开实时终端",
     signals: [
       {
         label: "目前官方高温",
-        value: "24.5 C",
+        value: "24.5°C",
         detail: "用于对比任何孤立更高点的官方来源值。",
       },
       {
         label: "异常点待复核",
-        value: "27.1 C",
+        value: "27.1°C",
         detail: "突然出现的单源值需要相邻时间验证。",
       },
       {
