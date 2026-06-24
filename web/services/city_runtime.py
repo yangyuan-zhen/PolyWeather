@@ -82,6 +82,10 @@ TRACKABLE_ANALYTICS_EVENTS = {
     "paywall_viewed",
     "checkout_started",
     "checkout_succeeded",
+    "brief_view",
+    "brief_cta_click",
+    "methodology_view",
+    "social_outbound_click",
 }
 
 DEFAULT_STATUS_CITIES = [

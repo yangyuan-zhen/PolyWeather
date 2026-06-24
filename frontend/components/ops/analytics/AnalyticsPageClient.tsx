@@ -28,10 +28,17 @@ type AuthDiagnostic = {
   unique_actors?: number;
   by_reason?: TopItem[];
 };
+type ContentEventSummary = {
+  total?: number;
+  unique_users?: number;
+  unique_actors?: number;
+};
 
 export function AnalyticsPageClient() {
   const [loading, setLoading] = useState(true);
   const [funnel, setFunnel] = useState<FunnelStep[]>([]);
+  const [contentEvents, setContentEvents] = useState<Record<string, ContentEventSummary>>({});
+  const [content, setContent] = useState<Record<string, TopItem[]>>({});
   const [diagnostics, setDiagnostics] = useState<Record<string, AuthDiagnostic>>({});
   const [rates, setRates] = useState<Record<string, number> | null>(null);
   const [traffic, setTraffic] = useState<Record<string, TopItem[]>>({});
@@ -42,6 +49,8 @@ export function AnalyticsPageClient() {
     try {
       const data = await opsApi.funnel(days);
       setFunnel(data.steps);
+      setContentEvents(data.contentEvents ?? {});
+      setContent(data.content ?? {});
       setDiagnostics(data.diagnostics ?? {});
       setRates(data.rates ?? null);
       setTraffic(data.traffic ?? {});
@@ -65,6 +74,10 @@ export function AnalyticsPageClient() {
   const trialCreated = stepByKey.trial_created;
   const paymentStart = stepByKey.payment_start;
   const paymentSuccess = stepByKey.payment_success;
+  const briefView = contentEvents.brief_view;
+  const briefCtaClick = contentEvents.brief_cta_click;
+  const methodologyView = contentEvents.methodology_view;
+  const socialOutboundClick = contentEvents.social_outbound_click;
   const overallRate =
     landingView?.uniqueActors && paymentSuccess?.uniqueActors
       ? ((paymentSuccess.uniqueActors / landingView.uniqueActors) * 100).toFixed(1)
@@ -140,6 +153,56 @@ export function AnalyticsPageClient() {
           </Card>
         </div>
       )}
+
+      <Card>
+        <CardHeader><CardTitle>公开内容获客</CardTitle></CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <ContentMetricCard
+              label="Brief 浏览"
+              total={briefView?.total}
+              uniqueActors={briefView?.unique_actors}
+            />
+            <ContentMetricCard
+              label="Brief CTA"
+              total={briefCtaClick?.total}
+              uniqueActors={briefCtaClick?.unique_actors}
+            />
+            <ContentMetricCard
+              label="方法论阅读"
+              total={methodologyView?.total}
+              uniqueActors={methodologyView?.unique_actors}
+            />
+            <ContentMetricCard
+              label="社交外链"
+              total={socialOutboundClick?.total}
+              uniqueActors={socialOutboundClick?.unique_actors}
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
+            {[
+              ["内容路径", content.paths ?? []],
+              ["Brief 城市", content.cities ?? []],
+            ].map(([title, rows]) => (
+              <div key={String(title)} className="space-y-2 rounded-lg border border-white/10 p-3">
+                <div className="text-xs font-bold text-slate-500">{String(title)}</div>
+                {(rows as TopItem[]).length === 0 ? (
+                  <div className="text-xs text-slate-500">暂无数据</div>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {(rows as TopItem[]).slice(0, 5).map((item) => (
+                      <li key={item.name} className="flex items-center gap-2">
+                        <span className="min-w-0 flex-1 truncate" title={item.name}>{item.name}</span>
+                        <span className="font-mono text-blue-600">{item.count}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
         <Card>
@@ -240,6 +303,24 @@ export function AnalyticsPageClient() {
           ) : null}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function ContentMetricCard({
+  label,
+  total,
+  uniqueActors,
+}: {
+  label: string;
+  total?: number;
+  uniqueActors?: number;
+}) {
+  return (
+    <div className="rounded-lg border border-white/10 p-4">
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className="text-xl font-bold text-white">{total ?? 0}</div>
+      <div className="mt-0.5 text-xs text-slate-500">独立 {uniqueActors ?? 0}</div>
     </div>
   );
 }

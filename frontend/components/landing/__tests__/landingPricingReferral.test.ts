@@ -104,6 +104,8 @@ export function runTests() {
     "landing supported cities must render names and station codes from the generated city groups",
   );
   assert(source.includes("#contact"), "landing navigation must expose the contact section");
+  assert(source.includes('href="/briefs"'), "landing navigation must expose public Weather Market Brief assets");
+  assert(source.includes("Weather Market Brief"), "landing page must label the public brief entry clearly");
   assert(source.includes('id="contact"'), "landing page must include a contact section");
   assert(source.includes("yhrsc30@gmail.com"), "landing page must show the operator contact email");
   assert(source.includes("mailto:${CONTACT_EMAIL}"), "landing contact email must be clickable");

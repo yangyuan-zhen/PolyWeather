@@ -25,16 +25,21 @@ export function runTests() {
 
   assert(
     opsApi.includes('"landing_view", "enter_terminal", "login_start", "signup_success", "trial_created", "payment_start", "payment_success"') &&
+      opsApi.includes("content_events?:") &&
+      opsApi.includes("contentEvents") &&
       opsApi.includes("diagnostics?:") &&
       opsApi.includes("traffic?:") &&
       opsApi.includes("uniqueActors"),
-    "ops funnel API client must preserve the full standard funnel and expose diagnostics/traffic dimensions",
+    "ops funnel API client must preserve the standard funnel and expose content/diagnostics/traffic dimensions",
   );
   assert(
     analyticsPage.includes("落地页访问") &&
       analyticsPage.includes("进入终端") &&
       analyticsPage.includes("注册成功") &&
       analyticsPage.includes("鉴权降级") &&
+      analyticsPage.includes("公开内容获客") &&
+      analyticsPage.includes("Brief 浏览") &&
+      analyticsPage.includes("briefCtaClick?.total") &&
       analyticsPage.includes("来源与设备") &&
       analyticsPage.includes("paymentSuccess?.count") &&
       !analyticsPage.includes("总注册") &&

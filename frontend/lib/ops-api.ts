@@ -34,6 +34,11 @@ export const opsApi = {
   async funnel(days = 30) {
     const raw = await opsFetch<{
       events?: Record<string, { total?: number; unique_users?: number; unique_actors?: number }>;
+      content_events?: Record<string, { total?: number; unique_users?: number; unique_actors?: number }>;
+      content?: {
+        paths?: { name: string; count: number }[];
+        cities?: { name: string; count: number }[];
+      };
       diagnostics?: Record<string, { total?: number; unique_actors?: number; by_reason?: { name: string; count: number }[] }>;
       rates?: Record<string, number>;
       traffic?: {
@@ -68,6 +73,8 @@ export const opsApi = {
       return { key, label: stepLabels[key] ?? key, count, uniqueActors, pct_of_prev };
     });
     return {
+      content: raw?.content ?? {},
+      contentEvents: raw?.content_events ?? {},
       diagnostics: raw?.diagnostics ?? {},
       rates: raw?.rates,
       steps,

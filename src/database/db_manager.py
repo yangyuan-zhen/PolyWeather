@@ -2672,6 +2672,12 @@ class DBManager:
             "payment_start",
             "payment_success",
         ]
+        content_event_names = [
+            "brief_view",
+            "brief_cta_click",
+            "methodology_view",
+            "social_outbound_click",
+        ]
         diagnostic_event_names = ["degraded_auth_profile"]
         event_aliases = {
             "landing_view": ("landing_view",),
@@ -2697,6 +2703,20 @@ class DBManager:
         }
         actor_sets: Dict[str, set[str]] = {name: set() for name in event_names}
         user_sets: Dict[str, set[str]] = {name: set() for name in event_names}
+        content_summary: Dict[str, Dict[str, Any]] = {
+            name: {
+                "total": 0,
+                "unique_users": 0,
+                "unique_actors": 0,
+            }
+            for name in content_event_names
+        }
+        content_actor_sets: Dict[str, set[str]] = {
+            name: set() for name in content_event_names
+        }
+        content_user_sets: Dict[str, set[str]] = {
+            name: set() for name in content_event_names
+        }
         diagnostics: Dict[str, Dict[str, Any]] = {
             name: {"total": 0, "unique_actors": 0, "by_reason": []}
             for name in diagnostic_event_names
@@ -2711,6 +2731,8 @@ class DBManager:
         country_counts: Counter = Counter()
         device_counts: Counter = Counter()
         landing_path_counts: Counter = Counter()
+        content_path_counts: Counter = Counter()
+        content_city_counts: Counter = Counter()
 
         def _payload(row: Dict[str, Any]) -> Dict[str, Any]:
             payload = row.get("payload")
@@ -2756,6 +2778,19 @@ class DBManager:
                 diagnostic_reason_counts[raw_event_type][reason[:120] or "unknown"] += 1
                 continue
 
+            if raw_event_type in content_summary:
+                content_summary[raw_event_type]["total"] += 1
+                user_id = str(row.get("user_id") or "").strip().lower()
+                if user_id:
+                    content_user_sets[raw_event_type].add(user_id)
+                content_actor_sets[raw_event_type].add(_actor_key(row))
+                path = str(payload.get("path") or "/").strip()[:120]
+                content_path_counts[path or "/"] += 1
+                city = str(payload.get("city") or "").strip().lower()
+                if city:
+                    content_city_counts[city[:80]] += 1
+                continue
+
             event_type = alias_to_event.get(raw_event_type)
             if not event_type:
                 continue
@@ -2778,6 +2813,9 @@ class DBManager:
         for name in event_names:
             summary[name]["unique_users"] = len(user_sets[name])
             summary[name]["unique_actors"] = len(actor_sets[name])
+        for name in content_event_names:
+            content_summary[name]["unique_users"] = len(content_user_sets[name])
+            content_summary[name]["unique_actors"] = len(content_actor_sets[name])
         for name in diagnostic_event_names:
             diagnostics[name]["unique_actors"] = len(diagnostic_actor_sets[name])
             diagnostics[name]["by_reason"] = _top(diagnostic_reason_counts[name], limit=6)
@@ -2793,6 +2831,11 @@ class DBManager:
             "window_days": safe_days,
             "since": since_dt.isoformat(),
             "events": summary,
+            "content_events": content_summary,
+            "content": {
+                "paths": _top(content_path_counts),
+                "cities": _top(content_city_counts),
+            },
             "diagnostics": diagnostics,
             "traffic": {
                 "referrers": _top(referrer_counts),

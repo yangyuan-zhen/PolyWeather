@@ -287,6 +287,10 @@ def test_standard_growth_funnel_events_are_trackable():
         "payment_start",
         "payment_success",
         "degraded_auth_profile",
+        "brief_view",
+        "brief_cta_click",
+        "methodology_view",
+        "social_outbound_click",
     }.issubset(city_runtime.TRACKABLE_ANALYTICS_EVENTS)
 
 
@@ -370,6 +374,61 @@ def test_growth_funnel_summarizes_traffic_sources(monkeypatch):
     assert {"name": "(direct)", "count": 1} in summary["traffic"]["referrers"]
     assert {"name": "US", "count": 1} in summary["traffic"]["countries"]
     assert {"name": "mobile", "count": 1} in summary["traffic"]["devices"]
+
+
+def test_growth_funnel_summarizes_public_content_events(monkeypatch):
+    from src.database.db_manager import DBManager
+
+    rows = [
+        {
+            "id": 1,
+            "event_type": "brief_view",
+            "user_id": "",
+            "client_id": "c1",
+            "session_id": "s1",
+            "payload": {"path": "/briefs/ankara/2026-06-24", "city": "ankara"},
+        },
+        {
+            "id": 2,
+            "event_type": "brief_cta_click",
+            "user_id": "",
+            "client_id": "c1",
+            "session_id": "s1",
+            "payload": {"path": "/briefs/ankara/2026-06-24", "cta": "terminal"},
+        },
+        {
+            "id": 3,
+            "event_type": "methodology_view",
+            "user_id": "",
+            "client_id": "c2",
+            "session_id": "s2",
+            "payload": {"path": "/methodology/deb", "slug": "deb"},
+        },
+        {
+            "id": 4,
+            "event_type": "social_outbound_click",
+            "user_id": "",
+            "client_id": "c3",
+            "session_id": "s3",
+            "payload": {"path": "/briefs/ankara/2026-06-24", "destination": "x_intent"},
+        },
+    ]
+    monkeypatch.setattr(
+        DBManager,
+        "list_app_analytics_events",
+        lambda self, limit=20000, since_iso=None: rows,
+    )
+
+    summary = DBManager().get_app_analytics_funnel_summary(days=7)
+
+    assert summary["content_events"]["brief_view"]["total"] == 1
+    assert summary["content_events"]["brief_cta_click"]["unique_actors"] == 1
+    assert summary["content_events"]["methodology_view"]["total"] == 1
+    assert summary["content_events"]["social_outbound_click"]["total"] == 1
+    assert summary["content"]["paths"][0] == {
+        "name": "/briefs/ankara/2026-06-24",
+        "count": 3,
+    }
 
 
 def test_ops_source_health_flags_expected_official_sources(monkeypatch):
