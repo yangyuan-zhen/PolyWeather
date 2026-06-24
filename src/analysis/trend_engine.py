@@ -974,6 +974,7 @@ def analyze_weather_trend(
             deb_prediction=_deb_to_save,
             mu=mu,
             probabilities=_prob_list,
+            actual_is_final=False,
         )
     except Exception:
         pass

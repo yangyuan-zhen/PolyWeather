@@ -880,6 +880,7 @@ def update_daily_record(
     shadow_probabilities=None,
     calibration_summary=None,
     hourly_error=None,
+    actual_is_final=True,
 ):
     """
     保存/更新某城市某天的各个模型预报与最终实测值
@@ -986,7 +987,7 @@ def update_daily_record(
 
     next_mu = round(mu, 2) if mu is not None else None
     if (
-        old_actual == actual_high
+        old_actual == (actual_high if actual_is_final else old_actual)
         and old_forecasts == merged_forecasts
         and (deb_prediction is None or old_deb == deb_prediction)
         and (mu is None or old_mu == next_mu)
@@ -1007,15 +1008,21 @@ def update_daily_record(
     ):
         return
 
-    # actual_high 应该是日内最高温，理论上不应下降；防止异常写入覆盖已确认高值
-    if old_actual is not None and actual_high is not None:
-        try:
-            actual_high = max(float(old_actual), float(actual_high))
-        except Exception:
-            pass
+    # Only final settlement truth may update actual_high. Intraday max_so_far is
+    # useful context, but treating it as settled truth poisons DEB training.
+    next_actual_high = old_actual
+    if actual_is_final:
+        next_actual_high = actual_high
+        # actual_high 应该是日内最高温，理论上不应下降；防止异常写入覆盖已确认高值
+        if old_actual is not None and actual_high is not None:
+            try:
+                next_actual_high = max(float(old_actual), float(actual_high))
+            except Exception:
+                pass
 
     existing["forecasts"] = merged_forecasts
-    existing["actual_high"] = actual_high
+    if actual_is_final or next_actual_high is not None:
+        existing["actual_high"] = next_actual_high
     if deb_prediction is not None:
         existing["deb_prediction"] = deb_prediction
     if mu is not None:
@@ -1031,16 +1038,16 @@ def update_daily_record(
     if next_hourly_error is not None:
         existing["hourly_error"] = next_hourly_error
 
-    if actual_high is not None:
+    if actual_is_final and next_actual_high is not None:
         try:
             _persist_truth_record(
                 city_name,
                 date_str,
-                float(actual_high),
+                float(next_actual_high),
                 updated_by="runtime:update_daily_record",
                 reason="update_daily_record",
                 source_payload={
-                    "actual_high": actual_high,
+                    "actual_high": next_actual_high,
                     "deb_prediction": deb_prediction,
                     "mu": next_mu,
                 },
@@ -1161,8 +1168,12 @@ def calculate_dynamic_weight_components(
     sorted_dates = sorted(city_data.keys(), reverse=True)
     today_str = datetime.now().strftime("%Y-%m-%d")
     available_days = sum(
-        1 for d in sorted_dates
-        if d != today_str and city_data[d].get("actual_high") is not None
+        1
+        for d in sorted_dates
+        if d != today_str
+        and city_data[d].get("actual_high") is not None
+        and isinstance(city_data[d].get("forecasts"), dict)
+        and any(v is not None for v in city_data[d].get("forecasts", {}).values())
     )
 
     # ── 改进3: 自适应 lookback — 数据多的城市用更多历史 ──
@@ -1187,6 +1198,7 @@ def calculate_dynamic_weight_components(
         if actual is None:
             continue
 
+        usable_day = False
         for model in forecasts.keys():
             if model in past_forecasts and past_forecasts[model] is not None:
                 try:
@@ -1194,6 +1206,7 @@ def calculate_dynamic_weight_components(
                     av = float(actual)
                 except (TypeError, ValueError):
                     continue
+                usable_day = True
                 # Track signed error for bias
                 model_biases[model] += (pv - av)  # positive = model overpredicts
                 bias_samples[model] += 1
@@ -1208,6 +1221,8 @@ def calculate_dynamic_weight_components(
                 decay_weight = decay_factor ** days_used
                 errors[model].append((blended_error, decay_weight))
 
+        if not usable_day:
+            continue
         days_used += 1
         if days_used >= effective_lookback:
             break
