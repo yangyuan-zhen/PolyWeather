@@ -17,7 +17,11 @@ type TrackableAnalyticsEvent =
   | "paywall_feature_clicked"
   | "paywall_viewed"
   | "checkout_started"
-  | "checkout_succeeded";
+  | "checkout_succeeded"
+  | "brief_view"
+  | "brief_cta_click"
+  | "methodology_view"
+  | "social_outbound_click";
 
 const CLIENT_ID_KEY = "polyweather:analytics:client-id";
 const SESSION_ID_KEY = "polyweather:analytics:session-id";
