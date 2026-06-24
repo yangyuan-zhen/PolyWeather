@@ -826,6 +826,9 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
         const lowerRaw = raw.toLowerCase();
         const maybePending =
           confirmRes.status === 408 ||
+          (confirmRes.status === 503 &&
+            (lowerRaw.includes("cannot connect payment rpc") ||
+              lowerRaw.includes("payment rpc chain mismatch"))) ||
           (confirmRes.status === 409 && (lowerRaw.includes("confirmations not enough") || lowerRaw.includes("tx indexed partially")));
         if (maybePending) {
           setPaymentInfo(`交易已提交: ${shortAddress(txHashNorm)}，等待链上确认中...`);

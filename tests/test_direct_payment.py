@@ -416,10 +416,12 @@ def test_direct_submit_tx_does_not_require_from_address(monkeypatch, tmp_path):
     assert submitted["tx_hash"] == "0x" + "2" * 64
 
 
-def test_submit_rejects_direct_tx_until_validation_passes(monkeypatch, tmp_path):
+def test_direct_submit_accepts_pending_validation_for_background_confirm(monkeypatch, tmp_path):
     _setup_env(monkeypatch, tmp_path)
     service = PaymentContractCheckoutService()
     tx_hash = "0x" + "7" * 64
+    submitted = {}
+    transactions = []
 
     monkeypatch.setattr(
         service,
@@ -458,17 +460,76 @@ def test_submit_rejects_direct_tx_until_validation_passes(monkeypatch, tmp_path)
             return []
         if method == "GET" and table == "payment_intents":
             return []
-        raise AssertionError(f"submit must not mutate {table} before validation passes")
+        if method == "PATCH" and table == "payment_intents":
+            submitted.update(kwargs["payload"])
+            return [{"ok": True}]
+        if method == "POST" and table == "payment_transactions":
+            transactions.append(kwargs["payload"])
+            return [kwargs["payload"]]
+        raise AssertionError((method, table, kwargs))
 
     monkeypatch.setattr(service, "_rest", fake_rest)
 
-    try:
-        service.submit_intent_tx("user-1", "intent-direct-pending", tx_hash, "")
-    except Exception as exc:
-        assert getattr(exc, "status_code", None) == 400
-        assert "tx_not_mined" in getattr(exc, "detail", "")
-    else:
-        raise AssertionError("expected tx_not_mined rejection")
+    result = service.submit_intent_tx("user-1", "intent-direct-pending", tx_hash, "")
+
+    assert result["status"] == "submitted"
+    assert submitted["status"] == "submitted"
+    assert submitted["tx_hash"] == tx_hash
+    assert transactions[0]["status"] == "submitted"
+
+
+def test_direct_submit_accepts_validation_exception_for_background_confirm(monkeypatch, tmp_path):
+    _setup_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    tx_hash = "0x" + "a" * 64
+    submitted = {}
+
+    monkeypatch.setattr(
+        service,
+        "get_intent",
+        lambda user_id, intent_id: service._serialize_intent(
+            {
+                "id": intent_id,
+                "plan_code": "pro_monthly",
+                "plan_id": 101,
+                "chain_id": 137,
+                "token_address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+                "receiver_address": "0xeD2f13Aa5fF033c58FB436E178451Cd07f693f32",
+                "amount_units": "5000000",
+                "payment_mode": "direct",
+                "allowed_wallet": None,
+                "order_id_hex": "0x" + "1" * 64,
+                "status": "created",
+                "expires_at": "2099-01-01T00:00:00+00:00",
+                "tx_hash": None,
+                "metadata": {},
+            }
+        ),
+    )
+
+    def fail_validation(*args, **kwargs):
+        raise RuntimeError("rpc timeout")
+
+    monkeypatch.setattr(service, "_validate_loaded_intent_tx", fail_validation)
+
+    def fake_rest(method, table, **kwargs):
+        if method == "GET" and table == "payment_transactions":
+            return []
+        if method == "GET" and table == "payment_intents":
+            return []
+        if method == "PATCH" and table == "payment_intents":
+            submitted.update(kwargs["payload"])
+            return [{"ok": True}]
+        if method == "POST" and table == "payment_transactions":
+            return [kwargs["payload"]]
+        raise AssertionError((method, table, kwargs))
+
+    monkeypatch.setattr(service, "_rest", fake_rest)
+
+    result = service.submit_intent_tx("user-1", "intent-direct-rpc-pending", tx_hash, "")
+
+    assert result["status"] == "submitted"
+    assert submitted["tx_hash"] == tx_hash
 
 
 def test_submit_rejects_mined_direct_tx_when_receiver_mismatches(monkeypatch, tmp_path):

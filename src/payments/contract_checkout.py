@@ -2470,18 +2470,32 @@ class PaymentContractCheckoutService:
         else:
             self._require_user_wallet(user_id, from_addr)
 
+        validation_pending_reasons = {
+            "payment_tx_validation_failed",
+            "tx_not_mined",
+        }
         try:
             validation = self._validate_loaded_intent_tx(intent, tx_hash_text)
         except Exception as exc:
-            raise PaymentCheckoutError(
-                400,
-                f"payment_tx_validation_failed: {exc}",
-            ) from exc
+            if intent.payment_mode != "direct":
+                raise PaymentCheckoutError(
+                    400,
+                    f"payment_tx_validation_failed: {exc}",
+                ) from exc
+            validation = {
+                "valid": False,
+                "reason": "payment_tx_validation_failed",
+                "detail": str(exc),
+            }
         if not bool(validation.get("valid")):
             reason = str(validation.get("reason") or "payment_tx_invalid").strip()
             detail = str(validation.get("detail") or reason).strip()
             message = reason if detail == reason else f"{reason}: {detail}"
-            raise PaymentCheckoutError(400, message)
+            is_pending_direct_validation = (
+                intent.payment_mode == "direct" and reason in validation_pending_reasons
+            )
+            if not is_pending_direct_validation:
+                raise PaymentCheckoutError(400, message)
 
         now_iso = _to_iso(now)
         self._rest(

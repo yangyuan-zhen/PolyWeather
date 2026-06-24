@@ -95,6 +95,12 @@ export function runTests() {
     "manual payment flow must validate tx hashes with the backend before submission",
   );
   assert(
+    paymentFlowSource.includes("confirmRes.status === 503") &&
+      paymentFlowSource.includes('lowerRaw.includes("cannot connect payment rpc")') &&
+      paymentFlowSource.includes('lowerRaw.includes("payment rpc chain mismatch")'),
+    "manual payment confirm must treat transient payment RPC failures as pending after tx hash submission",
+  );
+  assert(
     paymentFlowSource.includes("await waitForReceipt(txHashNorm, eth)") &&
       paymentFlowSource.indexOf("await waitForReceipt(txHashNorm, eth)") <
         paymentFlowSource.indexOf("const submitRes = await fetch(`/api/payments/intents/${intentId}/submit`"),
