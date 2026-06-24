@@ -1,17 +1,38 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cookies, headers } from "next/headers";
 import { BriefDetailPageView } from "@/components/public-content/PublicContentPages";
+import {
+  LANDING_LOCALE_COOKIE,
+  LANDING_LOCALE_QUERY_PARAM,
+  pickLandingLocale,
+  type LandingLocale,
+} from "@/components/landing/landingLocale";
 import {
   PUBLIC_BRIEFS,
   absolutePublicUrl,
   briefPath,
   getBrief,
+  localizeBrief,
 } from "@/content/public-content";
 
 type BriefPageParams = {
   city: string;
   date: string;
 };
+type BriefSearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+async function resolvePublicContentLocale(searchParams: BriefSearchParams): Promise<LandingLocale> {
+  const params = await searchParams;
+  const rawLocale = params[LANDING_LOCALE_QUERY_PARAM];
+  const queryLocale = Array.isArray(rawLocale) ? rawLocale[0] : rawLocale;
+  const [cookieStore, headerStore] = await Promise.all([cookies(), headers()]);
+  return pickLandingLocale(
+    queryLocale,
+    cookieStore.get(LANDING_LOCALE_COOKIE)?.value,
+    headerStore.get("accept-language"),
+  );
+}
 
 export function generateStaticParams() {
   return PUBLIC_BRIEFS.map((brief) => ({
@@ -22,10 +43,15 @@ export function generateStaticParams() {
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<BriefPageParams>;
+  searchParams: BriefSearchParams;
 }): Promise<Metadata> {
-  const { city, date } = await params;
+  const [{ city, date }, locale] = await Promise.all([
+    params,
+    resolvePublicContentLocale(searchParams),
+  ]);
   const brief = getBrief(city, date);
 
   if (!brief) {
@@ -34,51 +60,58 @@ export async function generateMetadata({
     };
   }
 
-  const pathname = briefPath(brief);
+  const localizedBrief = localizeBrief(brief, locale);
+  const pathname = briefPath(localizedBrief);
 
   return {
-    title: brief.title,
-    description: brief.description,
+    title: localizedBrief.title,
+    description: localizedBrief.description,
     alternates: {
       canonical: pathname,
     },
     openGraph: {
       type: "article",
-      title: brief.title,
-      description: brief.description,
+      title: localizedBrief.title,
+      description: localizedBrief.description,
       url: pathname,
-      publishedTime: brief.publishedAt,
-      modifiedTime: brief.updatedAt,
+      publishedTime: localizedBrief.publishedAt,
+      modifiedTime: localizedBrief.updatedAt,
     },
     twitter: {
       card: "summary",
-      title: brief.title,
-      description: brief.description,
+      title: localizedBrief.title,
+      description: localizedBrief.description,
     },
   };
 }
 
 export default async function BriefDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<BriefPageParams>;
+  searchParams: BriefSearchParams;
 }) {
-  const { city, date } = await params;
+  const [{ city, date }, locale] = await Promise.all([
+    params,
+    resolvePublicContentLocale(searchParams),
+  ]);
   const brief = getBrief(city, date);
 
   if (!brief) {
     notFound();
   }
 
-  const pathname = briefPath(brief);
+  const localizedBrief = localizeBrief(brief, locale);
+  const pathname = briefPath(localizedBrief);
   const jsonLd = [
     {
       "@context": "https://schema.org",
       "@type": "Article",
-      headline: brief.title,
-      description: brief.description,
-      datePublished: brief.publishedAt,
-      dateModified: brief.updatedAt,
+      headline: localizedBrief.title,
+      description: localizedBrief.description,
+      datePublished: localizedBrief.publishedAt,
+      dateModified: localizedBrief.updatedAt,
       mainEntityOfPage: absolutePublicUrl(pathname),
       author: {
         "@type": "Organization",
@@ -91,9 +124,9 @@ export default async function BriefDetailPage({
         url: "https://polyweather.top",
       },
       about: [
-        brief.cityName,
-        brief.market,
-        brief.settlementSource,
+        localizedBrief.cityName,
+        localizedBrief.market,
+        localizedBrief.settlementSource,
         "DEB forecast methodology",
       ],
     },
@@ -110,7 +143,7 @@ export default async function BriefDetailPage({
         {
           "@type": "ListItem",
           position: 2,
-          name: brief.cityName,
+          name: localizedBrief.cityName,
           item: absolutePublicUrl(pathname),
         },
       ],
@@ -123,7 +156,7 @@ export default async function BriefDetailPage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <BriefDetailPageView brief={brief} />
+      <BriefDetailPageView brief={brief} locale={locale} />
     </>
   );
 }

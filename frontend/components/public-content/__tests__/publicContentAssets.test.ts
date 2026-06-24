@@ -60,6 +60,15 @@ export function runTests() {
     "public briefs must carry disclaimer, freshness, settlement source, and shareable distribution copy",
   );
   assert(
+    content.includes("PUBLIC_CONTENT_COPY") &&
+      content.includes('"zh-CN"') &&
+      content.includes('"en-US"') &&
+      content.includes("公开天气市场简报") &&
+      content.includes("安卡拉") &&
+      content.includes("阅读简报"),
+    "public brief content must provide Chinese and English localized copy",
+  );
+  assert(
     briefDetail.includes("generateStaticParams") &&
       briefDetail.includes("generateMetadata") &&
       briefDetail.includes("application/ld+json") &&
@@ -77,10 +86,17 @@ export function runTests() {
     "methodology and source detail routes must expose structured data for GEO/SEO",
   );
   assert(
-    publicPages.includes('MethodologyLinks slugs={["deb", "settlement-sources"]}') &&
-      publicPages.includes('SourceLinks slugs={["mgm", "metar", "hko", "noaa"]}') &&
+    publicPages.includes('MethodologyLinks locale={locale} slugs={["deb", "settlement-sources"]}') &&
+      publicPages.includes('SourceLinks locale={locale} slugs={["mgm", "metar", "hko", "noaa"]}') &&
       briefsIndex.includes("Weather Market Brief"),
     "brief index must cross-link to DEB methodology and settlement source pages",
+  );
+  assert(
+    publicPages.includes("LandingLocaleToggle") &&
+      publicPages.includes("localizeBrief") &&
+      publicPages.includes("PUBLIC_CONTENT_COPY") &&
+      publicPages.includes('locale === "en-US" ? "Briefs" : "简报"'),
+    "public content pages must render the shared language toggle and localized brief copy",
   );
   assert(
     analytics.includes('"brief_view"') &&

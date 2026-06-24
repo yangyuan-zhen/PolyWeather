@@ -325,7 +325,7 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
               {isEn ? "Guide" : "读图"}
             </Link>
             <Link href="/briefs" className="hover:text-slate-950">
-              Weather Market Brief
+              {isEn ? "Briefs" : "简报"}
             </Link>
             <a href="#pricing" className="hover:text-slate-950">
               {isEn ? "Pricing" : "定价"}

@@ -105,7 +105,7 @@ export function runTests() {
   );
   assert(source.includes("#contact"), "landing navigation must expose the contact section");
   assert(source.includes('href="/briefs"'), "landing navigation must expose public Weather Market Brief assets");
-  assert(source.includes("Weather Market Brief"), "landing page must label the public brief entry clearly");
+  assert(source.includes('isEn ? "Briefs" : "简报"'), "landing page must label the public brief entry in both languages");
   assert(source.includes('id="contact"'), "landing page must include a contact section");
   assert(source.includes("yhrsc30@gmail.com"), "landing page must show the operator contact email");
   assert(source.includes("mailto:${CONTACT_EMAIL}"), "landing contact email must be clickable");

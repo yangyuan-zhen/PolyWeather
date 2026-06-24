@@ -1,3 +1,5 @@
+import type { LandingLocale } from "@/components/landing/landingLocale";
+
 export const PUBLIC_CONTENT_BASE_URL = "https://polyweather.top";
 
 export type PublicBriefSignal = {
@@ -55,6 +57,140 @@ export type SourcePage = {
   settlementUse: string;
   reliabilityNotes: string[];
   relatedMethodologySlugs: string[];
+};
+
+export type PublicContentCopy = {
+  allPublicBriefs: string;
+  briefIndexDescription: string;
+  briefIndexEyebrow: string;
+  briefIndexTitle: string;
+  checksBeforeActing: string;
+  distributionCopy: string;
+  docs: string;
+  freshness: string;
+  market: string;
+  methodology: string;
+  methodologyIndexDescription: string;
+  methodologyIndexEyebrow: string;
+  methodologyIndexTitle: string;
+  methodologyLinks: string;
+  methodologyPanelBody: string;
+  methodologyPanelTitle: string;
+  openLiveTerminal: string;
+  readBrief: string;
+  readMethodology: string;
+  readSourceNote: string;
+  settlementSource: string;
+  shareOnX: string;
+  snapshot: string;
+  sourceIndexDescription: string;
+  sourceIndexEyebrow: string;
+  sourceIndexTitle: string;
+  sourceLinks: string;
+  sourceNotes: string;
+  sourcePanelBody: string;
+  sourcePanelTitle: string;
+  sources: string;
+  updated: string;
+  detailLabels: {
+    debRead: string;
+    modelContext: string;
+    riskNotes: string;
+    settlementSourceRead: string;
+  };
+};
+
+export const PUBLIC_CONTENT_COPY: Record<LandingLocale, PublicContentCopy> = {
+  "zh-CN": {
+    allPublicBriefs: "全部公开简报",
+    briefIndexDescription:
+      "公开天气市场简报把选定城市的市场读数整理为可索引证据：结算源、DEB 背景、模型分歧、新鲜度备注，以及明确的研究免责声明。",
+    briefIndexEyebrow: "天气市场简报",
+    briefIndexTitle: "公开天气市场简报",
+    checksBeforeActing: "行动前检查",
+    distributionCopy: "分发文案",
+    docs: "文档",
+    freshness: "新鲜度",
+    market: "市场",
+    methodology: "方法",
+    methodologyIndexDescription:
+      "公开方法页解释 PolyWeather 如何处理 DEB 融合、结算源优先级、新鲜度和来源校验。",
+    methodologyIndexEyebrow: "方法",
+    methodologyIndexTitle: "PolyWeather 如何读取天气市场",
+    methodologyLinks: "方法链接",
+    methodologyPanelBody:
+      "简报会交叉链接 DEB 方法和结算源优先级页面，让读者能审计为什么 PolyWeather 不把通用城市预报直接当作市场真实值。",
+    methodologyPanelTitle: "公开读数如何产生",
+    openLiveTerminal: "打开实时终端",
+    readBrief: "阅读简报",
+    readMethodology: "阅读方法",
+    readSourceNote: "阅读来源说明",
+    settlementSource: "结算源",
+    shareOnX: "分享到 X",
+    snapshot: "快照",
+    sourceIndexDescription:
+      "来源页把官方观测、机场观测和模型指引分开展示，方便读者审计 PolyWeather 为什么优先使用与结算相关的证据。",
+    sourceIndexEyebrow: "来源",
+    sourceIndexTitle: "用于公开审计的天气来源说明",
+    sourceLinks: "来源链接",
+    sourceNotes: "来源说明",
+    sourcePanelBody:
+      "来源页解释为什么 MGM、METAR、HKO、NOAA 和模型指引会在 PolyWeather 工作流中分开展示。",
+    sourcePanelTitle: "官方来源上下文",
+    sources: "来源",
+    updated: "更新",
+    detailLabels: {
+      debRead: "DEB 读数",
+      modelContext: "模型上下文",
+      riskNotes: "风险备注",
+      settlementSourceRead: "结算源读数",
+    },
+  },
+  "en-US": {
+    allPublicBriefs: "All public briefs",
+    briefIndexDescription:
+      "Public Weather Market Brief pages turn selected city-market reads into indexable evidence: settlement source, DEB context, model disagreement, freshness notes, and a clear research disclaimer.",
+    briefIndexEyebrow: "Weather Market Brief",
+    briefIndexTitle: "Public market briefs for temperature judgment",
+    checksBeforeActing: "Checks before acting",
+    distributionCopy: "Distribution copy",
+    docs: "Docs",
+    freshness: "Freshness",
+    market: "Market",
+    methodology: "Methodology",
+    methodologyIndexDescription:
+      "Public methodology pages explain how PolyWeather handles DEB blending, settlement-source priority, freshness, and source reconciliation for prediction-market weather analysis.",
+    methodologyIndexEyebrow: "Methodology",
+    methodologyIndexTitle: "How PolyWeather reads weather markets",
+    methodologyLinks: "Methodology links",
+    methodologyPanelBody:
+      "Briefs cross-link to the DEB methodology and settlement-source priority pages so readers can audit why PolyWeather does not treat generic city forecasts as market truth.",
+    methodologyPanelTitle: "How the public read is produced",
+    openLiveTerminal: "Open live terminal",
+    readBrief: "Read brief",
+    readMethodology: "Read methodology",
+    readSourceNote: "Read source note",
+    settlementSource: "Settlement source",
+    shareOnX: "Share on X",
+    snapshot: "Snapshot",
+    sourceIndexDescription:
+      "Source pages separate official observations, airport observations, and model guidance so readers can inspect why PolyWeather prioritizes settlement-relevant evidence.",
+    sourceIndexEyebrow: "Sources",
+    sourceIndexTitle: "Weather source notes for public audit",
+    sourceLinks: "Source links",
+    sourceNotes: "Source notes",
+    sourcePanelBody:
+      "Source pages explain why MGM, METAR, HKO, NOAA, and model guidance are displayed separately in PolyWeather workflows.",
+    sourcePanelTitle: "Official-source context",
+    sources: "Sources",
+    updated: "Updated",
+    detailLabels: {
+      debRead: "DEB read",
+      modelContext: "Model context",
+      riskNotes: "Risk notes",
+      settlementSourceRead: "Settlement-source read",
+    },
+  },
 };
 
 export const PUBLIC_BRIEFS: PublicBrief[] = [
@@ -383,6 +519,193 @@ export const SOURCE_PAGES: SourcePage[] = [
     relatedMethodologySlugs: ["settlement-sources", "deb"],
   },
 ];
+
+const BRIEF_LOCALIZATIONS: Record<string, Partial<PublicBrief>> = {
+  "ankara:2026-06-24": {
+    cityName: "安卡拉",
+    countryName: "土耳其",
+    title: "安卡拉天气市场简报 - 2026年6月24日",
+    description:
+      "安卡拉最高温公开简报，聚焦 MGM 结算源行为、DEB 融合预报背景和异常值复核。",
+    market: "当日最高温判断",
+    settlementSource: "MGM 官方站",
+    dataFreshness:
+      "静态公开快照。付费终端用户行动前应核对最新官方观测和 SSE replay 状态。",
+    debRead:
+      "DEB 将日内最高温读数压在孤立 MGM 尖峰下方，更接近已观测的官方区间。",
+    sourceRead:
+      "MGM 被视为主要结算参考。单个 27.1 C 点位在接受为新高前，需要与相邻官方读数比对。",
+    modelRead:
+      "ECMWF 在午后窗口比 DEB 融合更暖，但公开简报把官方观测置于纯模型移动之上。",
+    riskRead:
+      "主要风险是晚些时候官方更新或来源侧修正，导致公开快照后的认可高温发生变化。",
+    notFinancialAdvice:
+      "本简报是用于预测市场准备的天气研究内容，不构成金融建议，也不保证结算结果。",
+    distributionText:
+      "安卡拉 2026-06-24 公开天气市场简报：MGM 官方读数更支持 24.5 C 已观测高温，而非孤立 27.1 C 尖峰；DEB 仍低于异常点。非金融建议。",
+    primaryCtaLabel: "打开实时终端",
+    signals: [
+      {
+        label: "目前官方高温",
+        value: "24.5 C",
+        detail: "用于对比任何孤立更高点的官方来源值。",
+      },
+      {
+        label: "异常点待复核",
+        value: "27.1 C",
+        detail: "突然出现的单源值需要相邻时间验证。",
+      },
+      {
+        label: "DEB 公开读数",
+        value: "低于尖峰",
+        detail: "融合路径仍更接近已验证观测带。",
+      },
+    ],
+    checkpoints: [
+      "检查疑似尖峰是否进入官方高温摘要。",
+      "在把单点视为结算相关之前，先比较相邻 MGM 观测。",
+      "市场关闭前查看付费终端的实时图表 patch 和来源新鲜度。",
+    ],
+  },
+  "hong-kong:2026-06-24": {
+    cityName: "香港",
+    countryName: "香港",
+    title: "香港天气市场简报 - 2026年6月24日",
+    description:
+      "公开简报展示 PolyWeather 如何把 HKO/长洲/机场观测与 DEB、模型分歧放在一起解释最高温市场。",
+    market: "城市与机场最高温判断",
+    settlementSource: "HKO 官方网络",
+    dataFreshness:
+      "静态公开快照。HKO 和站点缓存刷新后，实时终端数值可能不同。",
+    debRead:
+      "到午后后段，实况观测与模型分歧趋于一致，DEB 支持较窄的高温窗口。",
+    sourceRead:
+      "解释机场单独移动前，应先把 HKO 网络观测作为需要校验的来源族。",
+    modelRead:
+      "模型分歧有限，因此来源新鲜度和站点选择比大尺度天气不确定性更重要。",
+    riskRead:
+      "主要风险是午后后段特定站点保温，或官方摘要出现较晚修订。",
+    notFinancialAdvice:
+      "本简报是用于预测市场准备的天气研究内容，不构成金融建议，也不保证结算结果。",
+    distributionText:
+      "香港 2026-06-24 公开天气市场简报：来源选择和 HKO 新鲜度比模型分歧更关键。非金融建议。",
+    primaryCtaLabel: "打开实时终端",
+    signals: [
+      {
+        label: "来源族",
+        value: "HKO",
+        detail: "先使用官方站上下文，再解释机场读数。",
+      },
+      {
+        label: "模型分歧",
+        value: "低",
+        detail: "晚间不确定性主要来自站点行为。",
+      },
+      {
+        label: "终端需要",
+        value: "新鲜度",
+        detail: "实时来源时间戳决定公开快照是否仍有用。",
+      },
+    ],
+    checkpoints: [
+      "比较市场温度桶前先确认 HKO 站点时间戳。",
+      "把机场 METAR 观测与 HKO 网络读数分开解释。",
+      "如果公开快照已超过一个刷新周期，检查终端来源健康状态。",
+    ],
+  },
+  "new-york:2026-06-24": {
+    cityName: "纽约",
+    countryName: "美国",
+    title: "纽约天气市场简报 - 2026年6月24日",
+    description:
+      "纽约温度市场公开简报，连接 METAR、NOAA 上下文、DEB 融合和日内尾段风险检查。",
+    market: "机场关联最高温判断",
+    settlementSource: "METAR 与 NOAA 站点上下文",
+    dataFreshness:
+      "静态公开快照。付费终端用户应检查当前 METAR 观测和官方摘要。",
+    debRead:
+      "DEB 用最新观测趋势校验偏暖模型指引，而不是直接追随原始模型高温。",
+    sourceRead:
+      "METAR 提供快速机场证据，NOAA 上下文帮助确认机场读数是否具代表性。",
+    modelRead:
+      "偏暖模型指引只有在和机场实况、云量/风场上下文校验后才有价值。",
+    riskRead:
+      "主要风险是日内尾段云层短暂打开，将机场观测推入更高温度桶。",
+    notFinancialAdvice:
+      "本简报是用于预测市场准备的天气研究内容，不构成金融建议，也不保证结算结果。",
+    distributionText:
+      "纽约 2026-06-24 公开天气市场简报：DEB 将偏暖模型指引与机场实时证据融合。非金融建议。",
+    primaryCtaLabel: "打开实时终端",
+    signals: [
+      {
+        label: "快速证据",
+        value: "METAR",
+        detail: "机场观测定义短周期读数。",
+      },
+      {
+        label: "复核",
+        value: "NOAA",
+        detail: "官方上下文帮助审计最终最高温解释。",
+      },
+      {
+        label: "DEB 立场",
+        value: "融合",
+        detail: "没有实况确认，不追随偏暖模型运行。",
+      },
+    ],
+    checkpoints: [
+      "在每日高温窗口结束前观察最后两个 METAR 周期。",
+      "检查模型偏暖是否得到云量和风场观测支持。",
+      "最终解释结算前先使用官方来源上下文。",
+    ],
+  },
+};
+
+const METHODOLOGY_TITLE_LOCALIZATIONS: Record<string, string> = {
+  deb: "DEB 预测方法",
+  "settlement-sources": "结算源优先级",
+};
+
+const SOURCE_TITLE_LOCALIZATIONS: Record<string, string> = {
+  ecmwf: "ECMWF 模型指引",
+  hko: "HKO 官方观测",
+  metar: "METAR 机场观测",
+  mgm: "MGM 天气来源",
+  noaa: "NOAA 天气上下文",
+};
+
+export function localizeBrief(brief: PublicBrief, locale: LandingLocale): PublicBrief {
+  if (locale === "en-US") return brief;
+  const localized = BRIEF_LOCALIZATIONS[`${brief.city}:${brief.date}`] || {};
+  return {
+    ...brief,
+    ...localized,
+    checkpoints: localized.checkpoints || brief.checkpoints,
+    methodologySlugs: localized.methodologySlugs || brief.methodologySlugs,
+    signals: localized.signals || brief.signals,
+    sourceSlugs: localized.sourceSlugs || brief.sourceSlugs,
+  };
+}
+
+export function localizeBriefs(locale: LandingLocale) {
+  return PUBLIC_BRIEFS.map((brief) => localizeBrief(brief, locale));
+}
+
+export function localizeMethodologyPage(page: MethodologyPage, locale: LandingLocale): MethodologyPage {
+  if (locale === "en-US") return page;
+  return {
+    ...page,
+    title: METHODOLOGY_TITLE_LOCALIZATIONS[page.slug] || page.title,
+  };
+}
+
+export function localizeSourcePage(page: SourcePage, locale: LandingLocale): SourcePage {
+  if (locale === "en-US") return page;
+  return {
+    ...page,
+    title: SOURCE_TITLE_LOCALIZATIONS[page.slug] || page.title,
+  };
+}
 
 export function briefPath(brief: PublicBrief) {
   return `/briefs/${brief.city}/${brief.date}`;
