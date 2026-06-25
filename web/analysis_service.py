@@ -36,6 +36,7 @@ from src.data_collection.country_networks import build_country_network_snapshot
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
 from src.data_collection.city_time import get_city_utc_offset_seconds
 from src.data_collection.forecast_source_bundle import ensure_multi_model_hourly_payload
+from src.data_collection.multi_model_freshness import multi_model_forecasts_for_local_date
 from src.database.runtime_state import IntradayPathSnapshotRepository
 from web.services.city_payloads import (
     build_city_chart_detail_payload as _city_chart_payload_detail,
@@ -894,7 +895,7 @@ def _analyze(
     current_forecasts: Dict[str, float] = {}
     if om_today is not None:
         current_forecasts["Open-Meteo"] = om_today
-    for m, v in mm.get("forecasts", {}).items():
+    for m, v in multi_model_forecasts_for_local_date(mm, local_date_str).items():
         if v is not None and not _is_excluded_model_name(m):
             temp_val = _sf(v)
             if temp_val is not None:
@@ -1924,7 +1925,7 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     current_forecasts: Dict[str, float] = {}
     if om_today is not None:
         current_forecasts["Open-Meteo"] = om_today
-    for m, v in mm.get("forecasts", {}).items():
+    for m, v in multi_model_forecasts_for_local_date(mm, local_date_str).items():
         if v is not None and not _is_excluded_model_name(m):
             temp_val = _sf(v)
             if temp_val is not None:

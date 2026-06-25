@@ -1401,6 +1401,8 @@ def test_chart_data_cache_hit_starts_full_stale_refresh(monkeypatch):
 def test_chart_data_cache_hit_overlays_cached_multi_model_hourly(monkeypatch):
     import asyncio
 
+    local_date = datetime.now(timezone.utc).date().isoformat()
+
     class FakeCache:
         def get_city_cache(self, kind, city):
             assert kind == "full"
@@ -1408,7 +1410,7 @@ def test_chart_data_cache_hit_overlays_cached_multi_model_hourly(monkeypatch):
                 "payload": {
                     "name": city,
                     "display_name": city.title(),
-                    "local_date": "2026-06-16",
+                    "local_date": local_date,
                     "local_time": "15:20",
                     "temp_symbol": "°C",
                     "current": {"temp": 20.0},
@@ -1433,7 +1435,7 @@ def test_chart_data_cache_hit_overlays_cached_multi_model_hourly(monkeypatch):
     monkeypatch.setattr(collector, "_multi_model_cache", {
         "48.9694:2.4414:paris:c:v5": {
             "data": {
-                "hourly_times": ["2026-06-16T15:00"],
+                "hourly_times": [f"{local_date}T15:00"],
                 "hourly_forecasts": {"ECMWF": [24.5]},
                 "forecasts": {"ECMWF": 27.0},
             }
@@ -1458,6 +1460,9 @@ def test_chart_data_cache_hit_overlays_cached_multi_model_hourly(monkeypatch):
 def test_chart_data_cache_hit_replaces_stale_multi_model_hourly(monkeypatch):
     import asyncio
 
+    local_date = datetime.now(timezone.utc).date().isoformat()
+    stale_date = (datetime.now(timezone.utc).date() - timedelta(days=3)).isoformat()
+
     class FakeCache:
         def get_city_cache(self, kind, city):
             assert kind == "full"
@@ -1465,13 +1470,13 @@ def test_chart_data_cache_hit_replaces_stale_multi_model_hourly(monkeypatch):
                 "payload": {
                     "name": city,
                     "display_name": city.title(),
-                    "local_date": "2026-06-17",
+                    "local_date": local_date,
                     "local_time": "15:20",
                     "temp_symbol": "°C",
                     "current": {"temp": 20.0},
                     "hourly": {"times": ["15:00"], "temps": [20.0]},
                     "multi_model": {
-                        "hourly_times": ["2026-06-14T15:00", "2026-06-16T23:00"],
+                        "hourly_times": [f"{stale_date}T15:00", f"{stale_date}T23:00"],
                         "hourly_forecasts": {"ECMWF": [21.0, 22.0]},
                     },
                 },
@@ -1493,7 +1498,7 @@ def test_chart_data_cache_hit_replaces_stale_multi_model_hourly(monkeypatch):
     monkeypatch.setattr(collector, "_multi_model_cache", {
         "48.9694:2.4414:paris:c:v5": {
             "data": {
-                "hourly_times": ["2026-06-17T15:00", "2026-06-17T16:00"],
+                "hourly_times": [f"{local_date}T15:00", f"{local_date}T16:00"],
                 "hourly_forecasts": {"ECMWF": [24.5, 25.0]},
                 "forecasts": {"ECMWF": 27.0},
             }
@@ -1512,8 +1517,27 @@ def test_chart_data_cache_hit_replaces_stale_multi_model_hourly(monkeypatch):
 
     payload = asyncio.run(city_api._get_city_chart_data("paris", force_refresh=False))
 
-    assert payload["multi_model"]["hourly_times"] == ["2026-06-17T15:00", "2026-06-17T16:00"]
+    assert payload["multi_model"]["hourly_times"] == [f"{local_date}T15:00", f"{local_date}T16:00"]
     assert payload["multi_model"]["hourly_forecasts"]["ECMWF"] == [24.5, 25.0]
+
+
+def test_multi_model_daily_models_for_date_rejects_stale_dated_forecasts():
+    local_date = datetime.now(timezone.utc).date().isoformat()
+    stale_date = (datetime.now(timezone.utc).date() - timedelta(days=7)).isoformat()
+
+    models = city_api._multi_model_daily_models_for_date(
+        {
+            "daily_forecasts": {
+                stale_date: {"ECMWF": 24.0},
+            },
+            "hourly_times": [f"{stale_date}T15:00"],
+            "hourly_forecasts": {"ECMWF": [24.0]},
+            "forecasts": {"ECMWF": 24.0},
+        },
+        local_date,
+    )
+
+    assert models == {}
 
 
 def test_chart_data_cache_hit_refreshes_when_multi_model_cache_is_stale(monkeypatch):
@@ -1592,6 +1616,8 @@ def test_chart_data_cache_hit_refreshes_when_multi_model_cache_is_stale(monkeypa
 
 def test_chart_data_floors_stale_forecast_and_deb_with_observed_high(monkeypatch):
     import asyncio
+    local_date = datetime.now(timezone.utc).date().isoformat()
+    stale_date = (datetime.now(timezone.utc).date() - timedelta(days=7)).isoformat()
 
     class FakeCache:
         def get_city_cache(self, kind, city):
@@ -1600,7 +1626,7 @@ def test_chart_data_floors_stale_forecast_and_deb_with_observed_high(monkeypatch
                 "payload": {
                     "name": city,
                     "display_name": "Lucknow",
-                    "local_date": "2026-06-21",
+                    "local_date": local_date,
                     "local_time": "13:30",
                     "temp_symbol": "°C",
                     "current": {"temp": 38.0, "max_so_far": 38.0},
@@ -1608,11 +1634,18 @@ def test_chart_data_floors_stale_forecast_and_deb_with_observed_high(monkeypatch
                     "airport_primary": {"temp": 38.0, "max_so_far": 38.0},
                     "forecast": {
                         "today_high": 36.2,
-                        "daily": [{"date": "2026-06-14", "max_temp": 36.2}],
+                        "daily": [{"date": stale_date, "max_temp": 36.2}],
                     },
-                    "deb": {"prediction": 36.0, "raw_prediction": 36.0},
+                    "deb": {
+                        "prediction": 36.0,
+                        "raw_prediction": 36.0,
+                        "hourly_path": {
+                            "times": ["13:00", "14:00"],
+                            "temps": [36.0, 37.0],
+                        },
+                    },
                     "multi_model_daily": {
-                        "2026-06-14": {"models": {"Open-Meteo": 36.2}},
+                        stale_date: {"models": {"Open-Meteo": 36.2}},
                     },
                     "multi_model": {},
                     "hourly": {"times": ["13:00"], "temps": [36.0]},
@@ -1649,16 +1682,16 @@ def test_chart_data_floors_stale_forecast_and_deb_with_observed_high(monkeypatch
             cache_key: {
                 "data": {
                     "hourly_times": [
-                        "2026-06-21T13:00",
-                        "2026-06-21T14:00",
-                        "2026-06-21T15:00",
+                        f"{local_date}T13:00",
+                        f"{local_date}T14:00",
+                        f"{local_date}T15:00",
                     ],
                     "hourly_forecasts": {
                         "ECMWF": [38.7, 39.0, 38.0],
                         "GFS": [42.0, 44.1, 43.0],
                     },
                     "daily_forecasts": {
-                        "2026-06-21": {"ECMWF": 39.0, "GFS": 44.1},
+                        local_date: {"ECMWF": 39.0, "GFS": 44.1},
                     },
                     "forecasts": {"ECMWF": 39.0, "GFS": 44.1},
                 }
@@ -1681,10 +1714,12 @@ def test_chart_data_floors_stale_forecast_and_deb_with_observed_high(monkeypatch
 
     assert payload["forecast"]["today_high"] >= 38.0
     assert payload["deb"]["prediction"] >= 38.0
-    assert payload["multi_model_daily"]["2026-06-21"]["models"]["GFS"] == 44.1
+    assert max(payload["deb"]["hourly_path"]["temps"]) >= 38.0
+    assert payload["multi_model_daily"][local_date]["models"]["GFS"] == 44.1
     assert detail["forecast"]["today_high"] >= 38.0
     assert detail["overview"]["deb_prediction"] >= 38.0
-    assert detail["multi_model_daily"]["2026-06-21"]["models"]["GFS"] == 44.1
+    assert max(detail["deb"]["hourly_path"]["temps"]) >= 38.0
+    assert detail["multi_model_daily"][local_date]["models"]["GFS"] == 44.1
 
 
 def test_chart_data_cache_hit_overlays_latest_amsc_raw(monkeypatch):

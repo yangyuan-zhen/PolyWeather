@@ -1,3 +1,6 @@
+from datetime import datetime, timezone, timedelta
+import time
+
 from src.data_collection.nws_open_meteo_sources import (
     OPEN_METEO_MULTI_MODEL_ORDER,
     _parse_open_meteo_multi_model_daily,
@@ -268,6 +271,8 @@ def test_fetch_all_sources_delegates_non_hf_forecast_bundle(monkeypatch, tmp_pat
 def test_open_meteo_cache_only_reads_multi_model_without_forecast_cache():
     from src.data_collection.forecast_source_bundle import fetch_open_meteo_forecast_bundle
 
+    today = datetime.now(timezone.utc).date().isoformat()
+
     class DummyLock:
         def __enter__(self):
             return None
@@ -283,7 +288,7 @@ def test_open_meteo_cache_only_reads_multi_model_without_forecast_cache():
         _multi_model_cache = {
             "48.9694:2.4414:paris:c:v5": {
                 "data": {
-                    "hourly_times": ["2026-06-16T15:00"],
+                    "hourly_times": [f"{today}T15:00"],
                     "hourly_forecasts": {"ECMWF": [24.5]},
                     "forecasts": {"ECMWF": 27.0},
                 }
@@ -448,6 +453,64 @@ def test_persisted_open_meteo_cooldown_skips_outbound_request(monkeypatch, tmp_p
     result = collector.fetch_multi_model(40.1281, 32.9951, city="ankara")
 
     assert result is not None  # cooldown returns cached data
+
+
+def test_fetch_multi_model_ignores_cache_when_dates_are_stale(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPEN_METEO_DISK_CACHE_PATH", str(tmp_path / "om-cache.json"))
+    collector = WeatherDataCollector({})
+    today = datetime.now(timezone.utc).date()
+    old_dates = [
+        (today - timedelta(days=11)).isoformat(),
+        (today - timedelta(days=10)).isoformat(),
+    ]
+    fresh_dates = [today.isoformat(), (today + timedelta(days=1)).isoformat()]
+    cache_key = (
+        f"{round(float(48.9694), 4)}:{round(float(2.4414), 4)}:paris:"
+        f"c:{collector.multi_model_cache_version}"
+    )
+    collector._multi_model_cache[cache_key] = {
+        "t": time.time(),
+        "data": {
+            "dates": old_dates,
+            "daily_forecasts": {old_dates[0]: {"ECMWF": 24.0}},
+            "forecasts": {"ECMWF": 24.0},
+            "hourly_times": [f"{old_dates[0]}T15:00"],
+            "hourly_forecasts": {"ECMWF": [23.0]},
+        },
+    }
+    calls = []
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "daily": {
+                    "time": fresh_dates,
+                    "temperature_2m_max_ecmwf_ifs025": [39.2, 33.0],
+                    "temperature_2m_max_gfs_seamless": [38.6, 32.5],
+                },
+                "hourly": {
+                    "time": [f"{fresh_dates[0]}T15:00", f"{fresh_dates[0]}T16:00"],
+                    "temperature_2m_ecmwf_ifs025": [38.8, 39.2],
+                    "temperature_2m_gfs_seamless": [38.0, 38.6],
+                },
+            }
+
+    monkeypatch.setattr(collector, "_wait_open_meteo_slot", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        collector,
+        "_http_get",
+        lambda *args, **kwargs: calls.append((args, kwargs)) or FakeResponse(),
+    )
+
+    result = collector.fetch_multi_model(48.9694, 2.4414, city="paris")
+
+    assert len(calls) == 1
+    assert result["dates"][:2] == fresh_dates
+    assert result["forecasts"]["ECMWF"] == 39.2
+    assert result["forecasts"]["GFS"] == 38.6
 
 
 def test_multi_model_hourly_parser():

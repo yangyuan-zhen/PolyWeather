@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from src.data_collection.multi_model_freshness import multi_model_has_current_window
+
 
 def _open_meteo_cache_key(
     lat: float,
@@ -58,8 +60,9 @@ def _read_open_meteo_bundle_from_cache(
         )
         with collector._multi_model_cache_lock:
             mm_cached = collector._multi_model_cache.get(mm_key)
-        if mm_cached and isinstance(mm_cached.get("data"), dict):
-            results["multi_model"] = dict(mm_cached["data"])
+        mm_data = mm_cached.get("data") if isinstance(mm_cached, dict) else None
+        if isinstance(mm_data, dict) and multi_model_has_current_window(mm_data):
+            results["multi_model"] = dict(mm_data)
     return results
 
 

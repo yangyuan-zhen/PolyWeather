@@ -20,6 +20,7 @@ from src.analysis.deb_hourly_consensus import build_deb_hourly_consensus_path
 from src.analysis.settlement_rounding import apply_city_settlement, is_exact_settlement_city
 from src.data_collection.city_registry import CITY_REGISTRY
 from src.data_collection.city_risk_profiles import get_city_risk_profile
+from src.data_collection.multi_model_freshness import multi_model_forecasts_for_local_date
 
 SETTLEMENT_SOURCE_LABELS = {
     "metar": "METAR",
@@ -464,11 +465,6 @@ def analyze_weather_trend(
     if weather_data.get("cwa_forecast") is not None:
         current_forecasts["CWA(台气象)"] = _sf(weather_data.get("cwa_forecast"))
 
-    mm_forecasts = weather_data.get("multi_model", {}).get("forecasts", {})
-    for m_name, m_val in mm_forecasts.items():
-        if m_val is not None and not _is_excluded_model_name(m_name):
-            current_forecasts[m_name] = _sf(m_val)
-
     forecast_highs = [h for h in current_forecasts.values() if h is not None]
     forecast_high = max(forecast_highs) if forecast_highs else None
     forecast_median = (
@@ -545,11 +541,18 @@ def analyze_weather_trend(
                 current_forecasts["Open-Meteo"] = local_day_high
         except Exception:
             pass
-        forecast_highs = [h for h in current_forecasts.values() if h is not None]
-        forecast_high = max(forecast_highs) if forecast_highs else None
-        forecast_median = (
-            sorted(forecast_highs)[len(forecast_highs) // 2] if forecast_highs else None
-        )
+    mm_forecasts = multi_model_forecasts_for_local_date(
+        weather_data.get("multi_model", {}),
+        local_date_str,
+    )
+    for m_name, m_val in mm_forecasts.items():
+        if m_val is not None and not _is_excluded_model_name(m_name):
+            current_forecasts[m_name] = _sf(m_val)
+    forecast_highs = [h for h in current_forecasts.values() if h is not None]
+    forecast_high = max(forecast_highs) if forecast_highs else None
+    forecast_median = (
+        sorted(forecast_highs)[len(forecast_highs) // 2] if forecast_highs else None
+    )
 
     # === DEB ===
     deb_prediction = None

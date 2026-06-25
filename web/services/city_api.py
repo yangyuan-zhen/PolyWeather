@@ -18,6 +18,7 @@ from src.data_collection.forecast_source_bundle import (
     _multi_model_cache_key,
     fetch_open_meteo_forecast_bundle,
 )
+from src.data_collection.multi_model_freshness import multi_model_forecasts_for_local_date
 import web.routes as legacy_routes
 from web.analysis_service import _runway_history_temp_for_city
 from web.services.canonical_temperature import build_city_weather_from_canonical
@@ -868,6 +869,7 @@ def _floor_chart_forecast_with_observed_high(payload: Dict[str, Any]) -> Dict[st
     rounded_floor = round(float(observed_floor), 1)
     next_payload = _floor_forecast_today_high(next_payload, local_date, rounded_floor)
     next_payload = _floor_deb_prediction(next_payload, rounded_floor)
+    next_payload = _floor_deb_hourly_path(next_payload, rounded_floor)
     next_payload = _floor_multi_model_daily_deb(next_payload, local_date, rounded_floor)
     next_payload = _floor_probability_mu(next_payload, rounded_floor)
     return next_payload
@@ -923,31 +925,13 @@ def _first_float(block: Dict[str, Any], keys: Tuple[str, ...]) -> Optional[float
 
 
 def _multi_model_daily_models_for_date(multi_model: Any, local_date: str) -> Dict[str, float]:
-    if not isinstance(multi_model, dict) or not local_date:
-        return {}
-
-    models: Dict[str, float] = {}
-    daily = multi_model.get("daily_forecasts") if isinstance(multi_model.get("daily_forecasts"), dict) else {}
-    day_models = daily.get(local_date) if isinstance(daily, dict) else {}
-    if isinstance(day_models, dict):
-        for model, value in day_models.items():
-            parsed = _float_or_none(value)
-            if parsed is not None:
-                models[str(model)] = round(parsed, 1)
-
-    hourly_models = _multi_model_daily_models_from_hourly(multi_model, local_date)
-    for model, value in hourly_models.items():
-        current = models.get(model)
-        models[model] = value if current is None else round(max(current, value), 1)
-
-    if not models:
-        forecasts = multi_model.get("forecasts") if isinstance(multi_model.get("forecasts"), dict) else {}
-        for model, value in forecasts.items():
-            parsed = _float_or_none(value)
-            if parsed is not None:
-                models[str(model)] = round(parsed, 1)
-
-    return models
+    return {
+        model: round(value, 1)
+        for model, value in multi_model_forecasts_for_local_date(
+            multi_model,
+            local_date,
+        ).items()
+    }
 
 
 def _multi_model_daily_models_from_hourly(multi_model: Dict[str, Any], local_date: str) -> Dict[str, float]:
@@ -1059,6 +1043,34 @@ def _floor_deb_prediction(payload: Dict[str, Any], observed_floor: float) -> Dic
         next_overview = dict(next_payload.get("overview") or {})
         next_overview["deb_prediction"] = observed_floor
         next_payload["overview"] = next_overview
+    return next_payload
+
+
+def _floor_deb_hourly_path(payload: Dict[str, Any], observed_floor: float) -> Dict[str, Any]:
+    deb = payload.get("deb") if isinstance(payload.get("deb"), dict) else {}
+    path = deb.get("hourly_path") if isinstance(deb.get("hourly_path"), dict) else {}
+    temps = path.get("temps") if isinstance(path.get("temps"), list) else []
+    parsed_temps = [_float_or_none(value) for value in temps]
+    valid_temps = [value for value in parsed_temps if value is not None]
+    if not valid_temps:
+        return payload
+    path_max = max(valid_temps)
+    if path_max >= observed_floor:
+        return payload
+
+    offset = observed_floor - path_max
+    next_payload = deepcopy(payload)
+    next_deb = dict(next_payload.get("deb") or {})
+    next_path = dict(next_deb.get("hourly_path") or {})
+    next_path["temps"] = [
+        round(value + offset, 1) if value is not None else raw_value
+        for raw_value, value in zip(temps, parsed_temps)
+    ]
+    next_path["observed_floor_applied"] = True
+    next_path["observed_floor_offset"] = round(offset, 1)
+    next_deb["hourly_path"] = next_path
+    next_deb["observed_floor_applied"] = True
+    next_payload["deb"] = next_deb
     return next_payload
 
 
