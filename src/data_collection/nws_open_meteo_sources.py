@@ -6,7 +6,10 @@ from typing import Any, Dict, Optional
 
 from loguru import logger
 
-from src.data_collection.multi_model_freshness import multi_model_has_current_window
+from src.data_collection.multi_model_freshness import (
+    multi_model_has_current_window,
+    open_meteo_forecast_has_current_window,
+)
 from src.utils.metrics import record_source_call
 
 
@@ -528,16 +531,18 @@ class NwsOpenMeteoSourceMixin:
                 logger.debug(f"Open-Meteo 冷却期中，跳过请求，还需 {remaining}s")
                 with self._open_meteo_cache_lock:
                         stale = self._open_meteo_cache.get(cache_key)
-                        if stale and isinstance(stale.get("data"), dict):
+                        stale_data = stale.get("data") if isinstance(stale, dict) else None
+                        if isinstance(stale_data, dict) and open_meteo_forecast_has_current_window(stale_data):
                             record_source_call("open_meteo", "forecast", "stale_cache", (time.perf_counter() - started) * 1000.0)
-                            return dict(stale["data"])
+                            return dict(stale_data)
                 # Memory miss: force-reload from disk and retry once
                 self._load_open_meteo_disk_cache()
                 with self._open_meteo_cache_lock:
                     stale2 = self._open_meteo_cache.get(cache_key)
-                    if stale2 and isinstance(stale2.get("data"), dict):
+                    stale2_data = stale2.get("data") if isinstance(stale2, dict) else None
+                    if isinstance(stale2_data, dict) and open_meteo_forecast_has_current_window(stale2_data):
                         record_source_call("open_meteo", "forecast", "disk_fallback", (time.perf_counter() - started) * 1000.0)
-                        return dict(stale2["data"])
+                        return dict(stale2_data)
                 record_source_call("open_meteo", "forecast", "cooldown_skip", (time.perf_counter() - started) * 1000.0)
                 return None
         with self._open_meteo_cache_lock:
@@ -547,6 +552,11 @@ class NwsOpenMeteoSourceMixin:
                 and now_ts - float(cached.get("t", 0)) < self.open_meteo_cache_ttl_sec
             ):
                 cached_data = cached.get("data")
+                if isinstance(cached_data, dict):
+                    if not open_meteo_forecast_has_current_window(cached_data):
+                        self._open_meteo_cache.pop(cache_key, None)
+                        record_source_call("open_meteo", "forecast", "expired_cache_skip", (time.perf_counter() - started) * 1000.0)
+                        cached_data = None
                 if isinstance(cached_data, dict):
                     record_source_call("open_meteo", "forecast", "cache_hit", (time.perf_counter() - started) * 1000.0)
                     return dict(cached_data)
@@ -672,8 +682,9 @@ class NwsOpenMeteoSourceMixin:
                 logger.error(f"Open-Meteo forecast failed: {e}")
             with self._open_meteo_cache_lock:
                 stale = self._open_meteo_cache.get(cache_key)
-                if stale and isinstance(stale.get("data"), dict):
-                    fallback = dict(stale["data"])
+                stale_data = stale.get("data") if isinstance(stale, dict) else None
+                if isinstance(stale_data, dict) and open_meteo_forecast_has_current_window(stale_data):
+                    fallback = dict(stale_data)
                     fallback["stale_cache"] = True
                     record_source_call("open_meteo", "forecast", "stale_cache", (time.perf_counter() - started) * 1000.0)
                     return fallback

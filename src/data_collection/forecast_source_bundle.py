@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from src.data_collection.multi_model_freshness import multi_model_has_current_window
+from src.data_collection.multi_model_freshness import (
+    multi_model_has_current_window,
+    open_meteo_forecast_has_current_window,
+)
 
 
 def _open_meteo_cache_key(
@@ -48,8 +51,9 @@ def _read_open_meteo_bundle_from_cache(
     with collector._open_meteo_cache_lock:
         om_cached = collector._open_meteo_cache.get(om_key)
 
-    if om_cached and isinstance(om_cached.get("data"), dict):
-        results["open-meteo"] = dict(om_cached["data"])
+    om_data = om_cached.get("data") if isinstance(om_cached, dict) else None
+    if isinstance(om_data, dict) and open_meteo_forecast_has_current_window(om_data):
+        results["open-meteo"] = dict(om_data)
     if include_multi_model:
         mm_key = _multi_model_cache_key(
             collector,

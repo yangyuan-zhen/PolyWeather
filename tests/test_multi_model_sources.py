@@ -513,6 +513,65 @@ def test_fetch_multi_model_ignores_cache_when_dates_are_stale(monkeypatch, tmp_p
     assert result["forecasts"]["GFS"] == 38.6
 
 
+def test_fetch_open_meteo_ignores_cache_when_dates_are_stale(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPEN_METEO_DISK_CACHE_PATH", str(tmp_path / "om-cache.json"))
+    collector = WeatherDataCollector({})
+    today = datetime.now(timezone.utc).date()
+    old_dates = [
+        (today - timedelta(days=11)).isoformat(),
+        (today - timedelta(days=10)).isoformat(),
+    ]
+    fresh_dates = [today.isoformat(), (today + timedelta(days=1)).isoformat()]
+    cache_key = f"{round(float(48.9694), 4)}:{round(float(2.4414), 4)}:14:c"
+    collector._open_meteo_cache[cache_key] = {
+        "t": time.time(),
+        "data": {
+            "source": "open-meteo",
+            "daily": {
+                "time": old_dates,
+                "temperature_2m_max": [24.5, 26.6],
+            },
+            "hourly": {"time": [f"{old_dates[0]}T15:00"], "temperature_2m": [24.0]},
+        },
+    }
+    calls = []
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "current_weather": {"temperature": 32.0},
+                "utc_offset_seconds": 7200,
+                "timezone": "Europe/Paris",
+                "daily": {
+                    "time": fresh_dates,
+                    "temperature_2m_max": [39.2, 33.0],
+                    "sunrise": [f"{fresh_dates[0]}T05:30", f"{fresh_dates[1]}T05:31"],
+                    "sunset": [f"{fresh_dates[0]}T21:55", f"{fresh_dates[1]}T21:55"],
+                    "sunshine_duration": [36000, 33000],
+                },
+                "hourly": {
+                    "time": [f"{fresh_dates[0]}T15:00", f"{fresh_dates[0]}T16:00"],
+                    "temperature_2m": [38.8, 39.2],
+                },
+            }
+
+    monkeypatch.setattr(collector, "_wait_open_meteo_slot", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        collector,
+        "_http_get",
+        lambda *args, **kwargs: calls.append((args, kwargs)) or FakeResponse(),
+    )
+
+    result = collector.fetch_from_open_meteo(48.9694, 2.4414)
+
+    assert len(calls) == 1
+    assert result["daily"]["time"][:2] == fresh_dates
+    assert result["daily"]["temperature_2m_max"][0] == 39.2
+
+
 def test_multi_model_hourly_parser():
     from src.data_collection.nws_open_meteo_sources import _parse_open_meteo_multi_model_hourly
 

@@ -63,6 +63,26 @@ def multi_model_has_current_window(multi_model: Any, *, today: Optional[date] = 
     return max(parsed_dates) >= today
 
 
+def open_meteo_forecast_has_current_window(
+    forecast: Any,
+    *,
+    today: Optional[date] = None,
+) -> bool:
+    """Return False when cached Open-Meteo forecast data is definitely older than today."""
+    if not isinstance(forecast, dict):
+        return False
+    today = today or datetime.now(timezone.utc).date()
+    raw_date_values = []
+    daily = forecast.get("daily") if isinstance(forecast.get("daily"), dict) else {}
+    raw_date_values.extend(daily.get("time") or [])
+    hourly = forecast.get("hourly") if isinstance(forecast.get("hourly"), dict) else {}
+    raw_date_values.extend(hourly.get("time") or [])
+    parsed_dates = [parsed for raw in raw_date_values for parsed in [_parse_date(raw)] if parsed]
+    if not parsed_dates:
+        return True
+    return max(parsed_dates) >= today
+
+
 def multi_model_covers_local_date(multi_model: Any, local_date: str) -> bool:
     if not isinstance(multi_model, dict):
         return False
