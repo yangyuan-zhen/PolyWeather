@@ -185,10 +185,20 @@ def test_bindtopic_rejects_non_admin(monkeypatch):
     assert "管理员" in bot.replies[0]["text"]
 
 
-def test_start_bind_token_binds_telegram_to_web_account():
+def test_start_bind_token_binds_telegram_to_web_account(monkeypatch):
+    import src.bot.handlers.basic as basic
+
     bot = DummyBot()
     consumed = []
     bound = []
+
+    monkeypatch.setattr(
+        basic,
+        "TelegramGroupPricing",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("web bind tokens must not require Telegram group membership")
+        ),
+    )
 
     def _consume(token):
         consumed.append(token)

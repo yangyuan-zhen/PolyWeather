@@ -143,6 +143,24 @@ read_env_file_value() {
     ' .env | tail -n 1
 }
 
+stop_existing_bot_receivers() {
+    echo "Stopping existing Telegram bot receivers..."
+    docker compose stop polyweather || true
+
+    local legacy_pattern='python(3)? .*bot_[l]istener\.py'
+    if pgrep -af "$legacy_pattern" >/dev/null 2>&1; then
+        echo "Stopping legacy host bot_listener.py processes..."
+        pkill -TERM -f "$legacy_pattern" || true
+        sleep 3
+        if pgrep -af "$legacy_pattern" >/dev/null 2>&1; then
+            echo "Force-stopping legacy host bot_listener.py processes..."
+            pkill -KILL -f "$legacy_pattern" || true
+        fi
+    else
+        echo "No legacy host bot_listener.py process found"
+    fi
+}
+
 resolve_env_value() {
     local primary_key="$1"
     local fallback_key="${2:-}"
@@ -175,6 +193,7 @@ if [ -n "$resolved_supabase_anon_key" ]; then
 else
     unset SUPABASE_ANON_KEY
 fi
+stop_existing_bot_receivers
 pull_ok=0
 for pull_attempt in $(seq 1 6); do
     docker compose pull && pull_ok=1 && break
