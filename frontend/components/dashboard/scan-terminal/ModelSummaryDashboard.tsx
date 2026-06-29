@@ -6,11 +6,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 import {
   MODEL_SUMMARY_MODEL_COLUMNS,
+  buildModelSummaryProbabilityColumns,
   buildModelSummaryRows,
   filterModelSummaryRows,
+  formatModelSummaryProbability,
   formatModelSummaryLocalTime,
   formatModelSummaryTemp,
   hasModelSummaryForecastData,
+  type ModelSummaryProbabilityColumn,
   type ModelSummaryRow,
 } from "@/lib/model-summary";
 
@@ -30,6 +33,7 @@ const SUMMARY_TEXT = {
   city: { en: "City", zh: "城市" },
   region: { en: "Region", zh: "区域" },
   localTime: { en: "Local Time", zh: "当地时间" },
+  gaussianMu: { en: "Gaussian μ", zh: "高斯 μ" },
   median: { en: "Median", zh: "模型中位数" },
   spread: { en: "Spread", zh: "分歧范围" },
   empty: { en: "No model summary rows match the current filters.", zh: "当前筛选下没有模型汇总数据。" },
@@ -97,9 +101,11 @@ function FilterToggle({
 function ModelSummaryRowView({
   row,
   nowMs,
+  probabilityColumns,
 }: {
   row: ModelSummaryRow;
   nowMs: number | null;
+  probabilityColumns: ModelSummaryProbabilityColumn[];
 }) {
   return (
     <tr className="group border-b border-slate-100 hover:bg-blue-50/40">
@@ -109,7 +115,7 @@ function ModelSummaryRowView({
       >
         <span className="block truncate">{row.cityName}</span>
       </th>
-      <td className="min-w-[150px] px-3 py-2 text-xs font-semibold text-slate-600">
+      <td className="min-w-[96px] max-w-[112px] px-2 py-2 text-xs font-semibold text-slate-600">
         <span className="block truncate">{row.regionLabel}</span>
       </td>
       <td className="min-w-[96px] px-3 py-2 text-right font-mono text-[11px] font-bold text-slate-700">
@@ -129,6 +135,29 @@ function ModelSummaryRowView({
       <td className="min-w-[100px] px-3 py-2 text-right">
         <TemperatureCell value={row.modelSpread} symbol={row.tempSymbol} />
       </td>
+      <td className="min-w-[92px] px-3 py-2 text-right">
+        <TemperatureCell value={row.gaussianMu} symbol={row.tempSymbol} emphasis="median" />
+      </td>
+      {probabilityColumns.map((column) => {
+        const bucket = row.probabilityBucketMap[column.key] || null;
+        const isTopBucket = bucket?.key === row.topProbabilityBucketKey;
+        return (
+          <td key={column.key} className="min-w-[86px] px-2 py-2 text-right">
+            <span
+              className={clsx(
+                "inline-flex min-w-[42px] justify-end rounded px-1.5 py-0.5 font-mono tabular-nums",
+                bucket == null
+                  ? "font-semibold text-slate-300"
+                  : isTopBucket
+                    ? "bg-violet-50 font-black text-violet-800 ring-1 ring-violet-200"
+                    : "font-bold text-violet-700",
+              )}
+            >
+              {formatModelSummaryProbability(bucket?.probability)}
+            </span>
+          </td>
+        );
+      })}
     </tr>
   );
 }
@@ -204,6 +233,11 @@ export function ModelSummaryDashboard({
     }
   }, [incomingSummaryRows, incomingHasForecastData]);
 
+  const probabilityColumns = useMemo(
+    () => buildModelSummaryProbabilityColumns(summaryRows),
+    [summaryRows],
+  );
+
   const visibleRows = useMemo(
     () =>
       filterModelSummaryRows(summaryRows, {
@@ -259,13 +293,16 @@ export function ModelSummaryDashboard({
       </header>
 
       <div className="min-h-0 flex-1 overflow-auto">
-        <table className="w-full min-w-[1460px] border-collapse text-xs">
+        <table
+          className="w-full border-collapse text-xs"
+          style={{ minWidth: `${1560 + probabilityColumns.length * 86}px` }}
+        >
           <thead className="sticky top-0 z-20 bg-slate-50 text-[10px] font-black uppercase tracking-wide text-slate-500 shadow-[0_1px_0_0_#e2e8f0]">
             <tr>
               <th className="sticky left-0 z-30 w-[160px] min-w-[160px] border-r border-slate-200 bg-slate-50 px-3 py-2 text-left">
                 {copy("city", isEn)}
               </th>
-              <th className="min-w-[150px] px-3 py-2 text-left">{copy("region", isEn)}</th>
+              <th className="min-w-[96px] max-w-[112px] px-2 py-2 text-left">{copy("region", isEn)}</th>
               <th className="min-w-[96px] px-3 py-2 text-right">{copy("localTime", isEn)}</th>
               <th className="min-w-[90px] px-3 py-2 text-right text-orange-600">DEB</th>
               {MODEL_SUMMARY_MODEL_COLUMNS.map((column) => (
@@ -277,11 +314,28 @@ export function ModelSummaryDashboard({
                 {copy("median", isEn)}
               </th>
               <th className="min-w-[100px] px-3 py-2 text-right">{copy("spread", isEn)}</th>
+              <th className="min-w-[92px] px-3 py-2 text-right text-violet-700">
+                {copy("gaussianMu", isEn)}
+              </th>
+              {probabilityColumns.map((column) => (
+                <th
+                  key={column.key}
+                  className="min-w-[86px] px-2 py-2 text-right text-violet-700"
+                  title={column.label}
+                >
+                  {column.label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
             {visibleRows.map((row) => (
-              <ModelSummaryRowView key={row.cityKey} row={row} nowMs={nowMs} />
+              <ModelSummaryRowView
+                key={row.cityKey}
+                row={row}
+                nowMs={nowMs}
+                probabilityColumns={probabilityColumns}
+              />
             ))}
           </tbody>
         </table>

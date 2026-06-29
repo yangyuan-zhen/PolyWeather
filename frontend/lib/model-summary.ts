@@ -20,6 +20,23 @@ export const MODEL_SUMMARY_MODEL_COLUMNS = [
 
 export type ModelSummaryColumnKey = (typeof MODEL_SUMMARY_MODEL_COLUMNS)[number]["key"];
 
+export type ModelSummaryProbabilityBucket = {
+  key: string;
+  label: string;
+  value: number;
+  lower: number;
+  upper: number;
+  probability: number;
+};
+
+export type ModelSummaryProbabilityColumn = {
+  key: string;
+  label: string;
+  lower: number;
+  upper: number;
+  unit: string;
+};
+
 export type ModelSummaryRow = {
   cityKey: string;
   cityName: string;
@@ -33,6 +50,11 @@ export type ModelSummaryRow = {
   models: Record<ModelSummaryColumnKey, number | null>;
   modelMedian: number | null;
   modelSpread: number | null;
+  probabilityBuckets: ModelSummaryProbabilityBucket[];
+  probabilityBucketMap: Record<string, ModelSummaryProbabilityBucket>;
+  gaussianMu: number | null;
+  probabilityEngine: string | null;
+  topProbabilityBucketKey: string | null;
   searchText: string;
 };
 
@@ -66,6 +88,80 @@ function median(values: number[]) {
 function spread(values: number[]) {
   if (!values.length) return null;
   return roundToOneDecimal(Math.max(...values) - Math.min(...values));
+}
+
+function probabilityFromBucket(bucket: Record<string, unknown>) {
+  const raw = finiteNumber(bucket.probability ?? bucket.model_probability);
+  if (raw == null) return null;
+  return raw > 1 ? raw / 100 : raw;
+}
+
+function rangeFromBucket(bucket: Record<string, unknown>, value: number) {
+  const rawRange = String(bucket.range || bucket.bucket || bucket.label || "").trim();
+  const rangeMatch = rawRange.match(/(-?\d+(?:\.\d+)?)\s*(?:~|-|to)\s*(-?\d+(?:\.\d+)?)/i);
+  if (rangeMatch) {
+    const lower = Number(rangeMatch[1]);
+    const upper = Number(rangeMatch[2]);
+    if (Number.isFinite(lower) && Number.isFinite(upper) && upper > lower) {
+      return { lower, upper };
+    }
+  }
+  return {
+    lower: Number((value - 0.5).toFixed(2)),
+    upper: Number((value + 0.5).toFixed(2)),
+  };
+}
+
+function formatBucketBound(value: number) {
+  return Number(value.toFixed(1)).toString();
+}
+
+function probabilityBucketKey(lower: number, upper: number, unit: string) {
+  return `${formatBucketBound(lower)}-${formatBucketBound(upper)}${unit || "°C"}`;
+}
+
+function probabilityBucketLabel(lower: number, upper: number, unit: string) {
+  return probabilityBucketKey(lower, upper, unit);
+}
+
+function buildProbabilityBuckets(row: ScanOpportunityRow): ModelSummaryProbabilityBucket[] {
+  const rawBuckets = (
+    Array.isArray(row.distribution_full) && row.distribution_full.length
+      ? row.distribution_full
+      : Array.isArray(row.distribution_preview)
+        ? row.distribution_preview
+        : []
+  ) as Array<Record<string, unknown>>;
+  const unit = row.temp_symbol || "°C";
+
+  return rawBuckets
+    .map((bucket) => {
+      const value = finiteNumber(bucket.value ?? bucket.temp ?? bucket.temperature);
+      const probability = probabilityFromBucket(bucket);
+      if (value == null || probability == null || probability <= 0) return null;
+      const { lower, upper } = rangeFromBucket(bucket, value);
+      const key = probabilityBucketKey(lower, upper, unit);
+      return {
+        key,
+        label: probabilityBucketLabel(lower, upper, unit),
+        value,
+        lower,
+        upper,
+        probability,
+      };
+    })
+    .filter((bucket): bucket is ModelSummaryProbabilityBucket => bucket !== null)
+    .sort((a, b) => a.lower - b.lower || a.upper - b.upper);
+}
+
+function weightedProbabilityMu(buckets: ModelSummaryProbabilityBucket[]) {
+  const totalProbability = buckets.reduce((sum, bucket) => sum + bucket.probability, 0);
+  if (totalProbability <= 0) return null;
+  const weightedValue = buckets.reduce(
+    (sum, bucket) => sum + bucket.value * bucket.probability,
+    0,
+  );
+  return roundToOneDecimal(weightedValue / totalProbability);
 }
 
 function normalizeCityKey(row: ScanOpportunityRow, index: number) {
@@ -111,6 +207,12 @@ export function formatModelSummaryTemp(value: number | null | undefined, symbol 
   return `${numericValue.toFixed(1)}${symbol || "°C"}`;
 }
 
+export function formatModelSummaryProbability(value: number | null | undefined) {
+  const numericValue = finiteNumber(value);
+  if (numericValue == null) return "—";
+  return `${Math.round((numericValue > 1 ? numericValue / 100 : numericValue) * 100)}%`;
+}
+
 export function formatModelSummaryLocalTime(
   row: Pick<ModelSummaryRow, "localTime" | "timezoneOffsetSeconds">,
   nowMs: number | null | undefined = Date.now(),
@@ -152,6 +254,19 @@ export function buildModelSummaryRows(
     )
       .map((column) => column.label)
       .join(" ");
+    const probabilityBuckets = buildProbabilityBuckets(row);
+    const probabilityBucketMap = Object.fromEntries(
+      probabilityBuckets.map((bucket) => [bucket.key, bucket]),
+    );
+    const topProbabilityBucket =
+      probabilityBuckets.length > 0
+        ? probabilityBuckets.reduce((best, bucket) =>
+            bucket.probability > best.probability ? bucket : best,
+          )
+        : null;
+    const probabilitySearchText = probabilityBuckets
+      .map((bucket) => `${bucket.label} ${formatModelSummaryProbability(bucket.probability)}`)
+      .join(" ");
 
     byCity.set(cityKey, {
       cityKey,
@@ -166,7 +281,13 @@ export function buildModelSummaryRows(
       models,
       modelMedian: median(modelValues),
       modelSpread: spread(modelValues),
-      searchText: `${cityName} ${row.city || ""} ${region.labelEn} ${region.labelZh} ${modelSearchText}`.toLowerCase(),
+      probabilityBuckets,
+      probabilityBucketMap,
+      gaussianMu: weightedProbabilityMu(probabilityBuckets),
+      probabilityEngine: row.probability_engine || (probabilityBuckets.length ? "legacy" : null),
+      topProbabilityBucketKey: topProbabilityBucket?.key || null,
+      searchText:
+        `${cityName} ${row.city || ""} ${region.labelEn} ${region.labelZh} ${modelSearchText} ${probabilitySearchText}`.toLowerCase(),
     });
   });
 
@@ -201,5 +322,29 @@ export function hasModelSummaryForecastData(rows: ModelSummaryRow[]) {
   return rows.some((row) => {
     if (row.debPrediction != null) return true;
     return MODEL_SUMMARY_MODEL_COLUMNS.some((column) => row.models[column.key] != null);
+  });
+}
+
+export function buildModelSummaryProbabilityColumns(
+  rows: ModelSummaryRow[],
+): ModelSummaryProbabilityColumn[] {
+  const byKey = new Map<string, ModelSummaryProbabilityColumn>();
+  rows.forEach((row) => {
+    row.probabilityBuckets.forEach((bucket) => {
+      if (byKey.has(bucket.key)) return;
+      const unitMatch = bucket.key.match(/[^\d.\-\s]+$/);
+      byKey.set(bucket.key, {
+        key: bucket.key,
+        label: bucket.label,
+        lower: bucket.lower,
+        upper: bucket.upper,
+        unit: unitMatch?.[0] || row.tempSymbol || "°C",
+      });
+    });
+  });
+
+  return [...byKey.values()].sort((a, b) => {
+    if (a.unit !== b.unit) return a.unit.localeCompare(b.unit);
+    return a.lower - b.lower || a.upper - b.upper;
   });
 }
