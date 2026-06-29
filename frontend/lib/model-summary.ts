@@ -28,6 +28,7 @@ export type ModelSummaryRow = {
   regionSort: number;
   tempSymbol: string;
   localTime: string;
+  timezoneOffsetSeconds: number | null;
   debPrediction: number | null;
   models: Record<ModelSummaryColumnKey, number | null>;
   modelMedian: number | null;
@@ -110,6 +111,19 @@ export function formatModelSummaryTemp(value: number | null | undefined, symbol 
   return `${numericValue.toFixed(1)}${symbol || "°C"}`;
 }
 
+export function formatModelSummaryLocalTime(
+  row: Pick<ModelSummaryRow, "localTime" | "timezoneOffsetSeconds">,
+  nowMs: number | null | undefined = Date.now(),
+) {
+  const offsetSeconds = finiteNumber(row.timezoneOffsetSeconds);
+  const timestampMs = finiteNumber(nowMs);
+  if (offsetSeconds == null || timestampMs == null) return row.localTime || "—";
+  const localDate = new Date(timestampMs + offsetSeconds * 1000);
+  const hours = String(localDate.getUTCHours()).padStart(2, "0");
+  const minutes = String(localDate.getUTCMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
 export function buildModelSummaryRows(
   rows: ScanOpportunityRow[],
   isEn: boolean,
@@ -147,6 +161,7 @@ export function buildModelSummaryRows(
       regionSort: region.sort,
       tempSymbol: row.temp_symbol || "°C",
       localTime: normalizeLocalTime(row.local_time),
+      timezoneOffsetSeconds: finiteNumber(row.tz_offset_seconds),
       debPrediction: finiteNumber(row.deb_prediction),
       models,
       modelMedian: median(modelValues),

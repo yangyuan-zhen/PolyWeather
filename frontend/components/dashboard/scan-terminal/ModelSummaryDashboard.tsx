@@ -2,12 +2,13 @@
 
 import clsx from "clsx";
 import { Search, Table2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 import {
   MODEL_SUMMARY_MODEL_COLUMNS,
   buildModelSummaryRows,
   filterModelSummaryRows,
+  formatModelSummaryLocalTime,
   formatModelSummaryTemp,
   type ModelSummaryRow,
 } from "@/lib/model-summary";
@@ -94,8 +95,10 @@ function FilterToggle({
 
 function ModelSummaryRowView({
   row,
+  nowMs,
 }: {
   row: ModelSummaryRow;
+  nowMs: number | null;
 }) {
   return (
     <tr className="group border-b border-slate-100 hover:bg-blue-50/40">
@@ -109,7 +112,7 @@ function ModelSummaryRowView({
         <span className="block truncate">{row.regionLabel}</span>
       </td>
       <td className="min-w-[96px] px-3 py-2 text-right font-mono text-[11px] font-bold text-slate-700">
-        {row.localTime || "—"}
+        {formatModelSummaryLocalTime(row, nowMs)}
       </td>
       <td className="min-w-[90px] px-3 py-2 text-right">
         <TemperatureCell value={row.debPrediction} symbol={row.tempSymbol} emphasis="deb" />
@@ -137,6 +140,14 @@ export function ModelSummaryDashboard({
   const [query, setQuery] = useState("");
   const [debOnly, setDebOnly] = useState(false);
   const [wideSpreadOnly, setWideSpreadOnly] = useState(false);
+  const [nowMs, setNowMs] = useState<number | null>(null);
+
+  useEffect(() => {
+    const syncClock = () => setNowMs(Date.now());
+    syncClock();
+    const timer = window.setInterval(syncClock, 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const summaryRows = useMemo(() => buildModelSummaryRows(rows, isEn), [rows, isEn]);
   const visibleRows = useMemo(
@@ -216,7 +227,7 @@ export function ModelSummaryDashboard({
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
             {visibleRows.map((row) => (
-              <ModelSummaryRowView key={row.cityKey} row={row} />
+              <ModelSummaryRowView key={row.cityKey} row={row} nowMs={nowMs} />
             ))}
           </tbody>
         </table>

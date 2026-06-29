@@ -4,6 +4,7 @@ import {
   MODEL_SUMMARY_MODEL_COLUMNS,
   buildModelSummaryRows,
   filterModelSummaryRows,
+  formatModelSummaryLocalTime,
   formatModelSummaryTemp,
 } from "@/lib/model-summary";
 
@@ -13,6 +14,22 @@ function assert(condition: unknown, message: string) {
 
 export function runTests() {
   const rows = [
+    {
+      city: "beijing",
+      city_display_name: "Beijing",
+      trading_region_label: "East Asia",
+      trading_region_label_zh: "东亚",
+      trading_region_sort: 1,
+      temp_symbol: "°C",
+      current_max_so_far: 28,
+      deb_prediction: 29.1,
+      local_time: "18:46",
+      tz_offset_seconds: 28800,
+      model_cluster_sources: {
+        ECMWF: 28.8,
+        GFS: 29.4,
+      },
+    },
     {
       city: "paris",
       city_display_name: "Paris",
@@ -68,6 +85,10 @@ export function runTests() {
   ] as any;
   const originalFirstModelSources = rows[0].model_cluster_sources;
   const summaryRows = buildModelSummaryRows(rows, false);
+  const amsterdamRow = summaryRows.find((row) => row.cityName === "Amsterdam");
+  const beijingRow = summaryRows.find((row) => row.cityName === "Beijing");
+  const madridRow = summaryRows.find((row) => row.cityName === "Madrid");
+  const parisRow = summaryRows.find((row) => row.cityName === "Paris");
 
   assert(
     MODEL_SUMMARY_MODEL_COLUMNS.map((column) => column.key).includes("AROME HD") &&
@@ -75,17 +96,21 @@ export function runTests() {
       MODEL_SUMMARY_MODEL_COLUMNS.map((column) => column.key).includes("NAM"),
     "model summary must expose the fixed model columns including optional short-range models",
   );
-  assert(summaryRows.length === 3, "model summary should keep one row per city");
-  assert(summaryRows[0].cityName === "Amsterdam", "model summary should sort by resolved region then city name");
-  assert(summaryRows[1].cityName === "Madrid", "model summary should sort by resolved region then city name");
-  assert(summaryRows[2].cityName === "Paris", "model summary should sort by resolved region then city name");
-  assert(summaryRows[0].regionLabel === "欧洲 / 非洲", "model summary should override stale backend timezone regions for known European cities");
-  assert(summaryRows[0].localTime === "12:11", "model summary should expose local time in place of current high");
-  assert(summaryRows[2].debPrediction === 31.6, "model summary should preserve DEB prediction");
-  assert(summaryRows[2].models.GFS === 33.4, "model summary should preserve model high temperature");
-  assert(summaryRows[2].models.HRRR === null, "missing models should be normalized to null");
-  assert(summaryRows[2].modelMedian === 32.1, "model median should use available model values only");
-  assert(summaryRows[2].modelSpread === 2.5, "model spread should use available model min/max only");
+  assert(summaryRows.length === 4, "model summary should keep one row per city");
+  assert(summaryRows[0].cityName === "Beijing", "model summary should sort by resolved region then city name");
+  assert(amsterdamRow?.regionLabel === "欧洲 / 非洲", "model summary should override stale backend timezone regions for known European cities");
+  if (!madridRow || !parisRow) throw new Error("model summary should keep European rows");
+  assert(beijingRow?.localTime === "18:46", "model summary should keep stale source local_time only as a fallback");
+  assert(
+    beijingRow &&
+      formatModelSummaryLocalTime(beijingRow, Date.parse("2026-06-29T12:05:00Z")) === "20:05",
+    "model summary should display live local time from timezone offset instead of stale cached local_time",
+  );
+  assert(parisRow.debPrediction === 31.6, "model summary should preserve DEB prediction");
+  assert(parisRow.models.GFS === 33.4, "model summary should preserve model high temperature");
+  assert(parisRow.models.HRRR === null, "missing models should be normalized to null");
+  assert(parisRow.modelMedian === 32.1, "model median should use available model values only");
+  assert(parisRow.modelSpread === 2.5, "model spread should use available model min/max only");
   assert(formatModelSummaryTemp(null, "°C") === "—", "missing model temperatures should render as an em dash");
   assert(formatModelSummaryTemp(32.16, "°C") === "32.2°C", "model temperatures should render to one decimal");
 
