@@ -59,6 +59,16 @@ export function runTests() {
         { value: 33, model_probability: 0.31, range: "[32.5~33.5)" },
       ],
       probability_engine: "legacy",
+      all_buckets: [
+        {
+          label: "31.5-32.5°C",
+          model_probability: 0.42,
+        },
+        {
+          label: "33.5-34.5°C",
+          model_probability: 0.08,
+        },
+      ],
     },
     {
       city: "madrid",
@@ -131,6 +141,18 @@ export function runTests() {
       parisRow.topProbabilityBucketKey === "31.5-32.5°C",
     "model summary should map probability buckets and identify the top bucket",
   );
+  assert(parisRow.marketMatches.length === 2, "model summary should keep every Polymarket tradable bucket");
+  assert(
+    parisRow.marketMatches[0].label === "31.5-32.5°C" &&
+      parisRow.marketMatches[0].modelProbability === 0.42 &&
+      parisRow.marketMatches[0].marketUrl === null,
+    "model summary should expose model probability for market-matched buckets without requiring market price",
+  );
+  assert(
+    parisRow.marketMatches[1].label === "33.5-34.5°C" &&
+      parisRow.marketMatches[1].modelProbability === 0.08,
+    "model summary should keep low-probability tradable buckets for manual NO review",
+  );
   assert(formatModelSummaryProbability(null) === "—", "missing probability should render as an em dash");
   assert(formatModelSummaryProbability(0.424) === "42%", "probability buckets should render as rounded percentages");
   assert(formatModelSummaryTemp(null, "°C") === "—", "missing model temperatures should render as an em dash");
@@ -199,10 +221,14 @@ export function runTests() {
       modelSummarySource.includes("hasModelSummaryForecastData") &&
       modelSummarySource.includes("Gaussian μ") &&
       modelSummarySource.includes("高斯 μ") &&
-      modelSummarySource.includes("Probability Distribution") &&
-      modelSummarySource.includes("概率分布") &&
-      modelSummarySource.includes("topProbabilityBucketKey") &&
-      modelSummarySource.includes("probabilityBuckets.map") &&
+      modelSummarySource.includes("Market Match") &&
+      modelSummarySource.includes("市场匹配") &&
+      modelSummarySource.includes("marketMatches.map") &&
+      !modelSummarySource.includes("formatModelSummaryEdge") &&
+      !modelSummarySource.includes("marketProbability") &&
+      !modelSummarySource.includes("edgePercent") &&
+      !modelSummarySource.includes("Probability Distribution") &&
+      !modelSummarySource.includes("概率分布") &&
       !modelSummarySource.includes("probabilityColumns") &&
       modelSummarySource.includes("min-w-[96px]") &&
       modelSummarySource.includes("Local Time") &&

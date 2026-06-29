@@ -29,6 +29,13 @@ export type ModelSummaryProbabilityBucket = {
   probability: number;
 };
 
+export type ModelSummaryMarketMatch = {
+  key: string;
+  label: string;
+  modelProbability: number | null;
+  marketUrl: string | null;
+};
+
 export type ModelSummaryRow = {
   cityKey: string;
   cityName: string;
@@ -47,6 +54,7 @@ export type ModelSummaryRow = {
   gaussianMu: number | null;
   probabilityEngine: string | null;
   topProbabilityBucketKey: string | null;
+  marketMatches: ModelSummaryMarketMatch[];
   searchText: string;
 };
 
@@ -156,6 +164,54 @@ function weightedProbabilityMu(buckets: ModelSummaryProbabilityBucket[]) {
   return roundToOneDecimal(weightedValue / totalProbability);
 }
 
+function normalizeProbability(value: unknown) {
+  const numericValue = finiteNumber(value);
+  if (numericValue == null) return null;
+  return numericValue > 1 ? numericValue / 100 : numericValue;
+}
+
+function marketBucketLabel(bucket: Record<string, unknown>, tempSymbol: string) {
+  const textLabel = String(bucket.label || bucket.bucket || bucket.range || "").trim();
+  if (textLabel) return textLabel;
+  const lower = finiteNumber(bucket.lower);
+  const upper = finiteNumber(bucket.upper);
+  if (lower != null && upper != null && upper > lower) {
+    return probabilityBucketLabel(lower, upper, String(bucket.unit || tempSymbol || "°C"));
+  }
+  const value = finiteNumber(bucket.value ?? bucket.temp ?? bucket.temperature);
+  return value == null ? "—" : `${formatBucketBound(value)}${bucket.unit || tempSymbol || "°C"}`;
+}
+
+function buildMarketMatches(row: ScanOpportunityRow): ModelSummaryMarketMatch[] {
+  const marketRow = row as ScanOpportunityRow & {
+    all_buckets?: Array<Record<string, unknown>> | null;
+    top_buckets?: Array<Record<string, unknown>> | null;
+  };
+  const sourceBuckets = (
+    Array.isArray(marketRow.all_buckets) && marketRow.all_buckets.length
+      ? marketRow.all_buckets
+      : Array.isArray(marketRow.top_buckets)
+        ? marketRow.top_buckets
+        : []
+  ) as Array<Record<string, unknown>>;
+  const tempSymbol = row.temp_symbol || "°C";
+
+  return sourceBuckets
+    .map((bucket, index) => {
+      const label = marketBucketLabel(bucket, tempSymbol);
+      const modelProbability = normalizeProbability(bucket.model_probability ?? bucket.probability);
+      return {
+        key: `${label}-${index}`,
+        label,
+        modelProbability,
+        marketUrl: typeof bucket.market_url === "string" ? bucket.market_url : null,
+      };
+    })
+    .sort((a, b) => {
+      return (b.modelProbability ?? -1) - (a.modelProbability ?? -1);
+    });
+}
+
 function normalizeCityKey(row: ScanOpportunityRow, index: number) {
   const rawKey = row.city || row.city_display_name || row.display_name || `row-${index}`;
   return String(rawKey).trim().toLowerCase();
@@ -259,6 +315,13 @@ export function buildModelSummaryRows(
     const probabilitySearchText = probabilityBuckets
       .map((bucket) => `${bucket.label} ${formatModelSummaryProbability(bucket.probability)}`)
       .join(" ");
+    const marketMatches = buildMarketMatches(row);
+    const marketSearchText = marketMatches
+      .map(
+        (match) =>
+          `${match.label} ${formatModelSummaryProbability(match.modelProbability)}`,
+      )
+      .join(" ");
 
     byCity.set(cityKey, {
       cityKey,
@@ -278,8 +341,9 @@ export function buildModelSummaryRows(
       gaussianMu: weightedProbabilityMu(probabilityBuckets),
       probabilityEngine: row.probability_engine || (probabilityBuckets.length ? "legacy" : null),
       topProbabilityBucketKey: topProbabilityBucket?.key || null,
+      marketMatches,
       searchText:
-        `${cityName} ${row.city || ""} ${region.labelEn} ${region.labelZh} ${modelSearchText} ${probabilitySearchText}`.toLowerCase(),
+        `${cityName} ${row.city || ""} ${region.labelEn} ${region.labelZh} ${modelSearchText} ${probabilitySearchText} ${marketSearchText}`.toLowerCase(),
     });
   });
 

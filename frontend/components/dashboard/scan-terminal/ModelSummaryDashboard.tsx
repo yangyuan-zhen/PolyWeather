@@ -32,7 +32,7 @@ const SUMMARY_TEXT = {
   region: { en: "Region", zh: "区域" },
   localTime: { en: "Local Time", zh: "当地时间" },
   gaussianMu: { en: "Gaussian μ", zh: "高斯 μ" },
-  probabilityDistribution: { en: "Probability Distribution", zh: "概率分布" },
+  marketMatch: { en: "Market Match", zh: "市场匹配" },
   median: { en: "Median", zh: "模型中位数" },
   spread: { en: "Spread", zh: "分歧范围" },
   empty: { en: "No model summary rows match the current filters.", zh: "当前筛选下没有模型汇总数据。" },
@@ -100,9 +100,11 @@ function FilterToggle({
 function ModelSummaryRowView({
   row,
   nowMs,
+  isEn,
 }: {
   row: ModelSummaryRow;
   nowMs: number | null;
+  isEn: boolean;
 }) {
   return (
     <tr className="group border-b border-slate-100 hover:bg-blue-50/40">
@@ -136,24 +138,26 @@ function ModelSummaryRowView({
         <TemperatureCell value={row.gaussianMu} symbol={row.tempSymbol} emphasis="median" />
       </td>
       <td className="min-w-[420px] max-w-[520px] px-3 py-1.5 text-left">
-        {row.probabilityBuckets.length ? (
+        {row.marketMatches.length ? (
           <div className="flex flex-wrap items-center gap-1">
-            {row.probabilityBuckets.map((bucket) => {
-              const isTopBucket = bucket.key === row.topProbabilityBucketKey;
+            {row.marketMatches.map((match) => {
               return (
-                <span
-                  key={bucket.key}
+                <a
+                  key={match.key}
+                  href={match.marketUrl || undefined}
+                  target={match.marketUrl ? "_blank" : undefined}
+                  rel={match.marketUrl ? "noreferrer" : undefined}
                   className={clsx(
-                    "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] tabular-nums",
-                    isTopBucket
-                      ? "border-violet-200 bg-violet-50 font-black text-violet-800"
-                      : "border-slate-200 bg-slate-50 font-bold text-violet-700",
+                    "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tabular-nums",
+                    (match.modelProbability ?? 0) >= 0.2
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                      : "border-slate-200 bg-slate-50 text-slate-600",
                   )}
-                  title={bucket.label}
+                  title={`${match.label} model ${formatModelSummaryProbability(match.modelProbability)}`}
                 >
-                  <span>{bucket.label}</span>
-                  <strong>{formatModelSummaryProbability(bucket.probability)}</strong>
-                </span>
+                  <span className="font-black">{match.label}</span>
+                  <span>{isEn ? "M" : "模"} {formatModelSummaryProbability(match.modelProbability)}</span>
+                </a>
               );
             })}
           </div>
@@ -315,8 +319,8 @@ export function ModelSummaryDashboard({
               <th className="min-w-[92px] px-3 py-2 text-right text-violet-700">
                 {copy("gaussianMu", isEn)}
               </th>
-              <th className="min-w-[420px] max-w-[520px] px-3 py-2 text-left text-violet-700">
-                {copy("probabilityDistribution", isEn)}
+              <th className="min-w-[420px] max-w-[520px] px-3 py-2 text-left text-emerald-700">
+                {copy("marketMatch", isEn)}
               </th>
             </tr>
           </thead>
@@ -326,6 +330,7 @@ export function ModelSummaryDashboard({
                 key={row.cityKey}
                 row={row}
                 nowMs={nowMs}
+                isEn={isEn}
               />
             ))}
           </tbody>
