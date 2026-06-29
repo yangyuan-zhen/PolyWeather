@@ -27,10 +27,9 @@ const SUMMARY_TEXT = {
   search: { en: "Search city or model", zh: "搜索城市或模型" },
   city: { en: "City", zh: "城市" },
   region: { en: "Region", zh: "区域" },
-  currentHigh: { en: "Current High", zh: "当前最高" },
+  localTime: { en: "Local Time", zh: "当地时间" },
   median: { en: "Median", zh: "模型中位数" },
   spread: { en: "Spread", zh: "分歧范围" },
-  updated: { en: "Updated", zh: "更新时间" },
   empty: { en: "No model summary rows match the current filters.", zh: "当前筛选下没有模型汇总数据。" },
   generated: { en: "Generated", zh: "生成" },
   total: { en: "rows", zh: "行" },
@@ -109,8 +108,8 @@ function ModelSummaryRowView({
       <td className="min-w-[150px] px-3 py-2 text-xs font-semibold text-slate-600">
         <span className="block truncate">{row.regionLabel}</span>
       </td>
-      <td className="min-w-[96px] px-3 py-2 text-right">
-        <TemperatureCell value={row.currentHigh} symbol={row.tempSymbol} />
+      <td className="min-w-[96px] px-3 py-2 text-right font-mono text-[11px] font-bold text-slate-700">
+        {row.localTime || "—"}
       </td>
       <td className="min-w-[90px] px-3 py-2 text-right">
         <TemperatureCell value={row.debPrediction} symbol={row.tempSymbol} emphasis="deb" />
@@ -125,9 +124,6 @@ function ModelSummaryRowView({
       </td>
       <td className="min-w-[100px] px-3 py-2 text-right">
         <TemperatureCell value={row.modelSpread} symbol={row.tempSymbol} />
-      </td>
-      <td className="min-w-[130px] px-3 py-2 text-right font-mono text-[11px] font-semibold text-slate-500">
-        {row.updatedAt || "—"}
       </td>
     </tr>
   );
@@ -198,14 +194,14 @@ export function ModelSummaryDashboard({
       </header>
 
       <div className="min-h-0 flex-1 overflow-auto">
-        <table className="w-full min-w-[1580px] border-collapse text-xs">
+        <table className="w-full min-w-[1460px] border-collapse text-xs">
           <thead className="sticky top-0 z-20 bg-slate-50 text-[10px] font-black uppercase tracking-wide text-slate-500 shadow-[0_1px_0_0_#e2e8f0]">
             <tr>
               <th className="sticky left-0 z-30 w-[160px] min-w-[160px] border-r border-slate-200 bg-slate-50 px-3 py-2 text-left">
                 {copy("city", isEn)}
               </th>
               <th className="min-w-[150px] px-3 py-2 text-left">{copy("region", isEn)}</th>
-              <th className="min-w-[96px] px-3 py-2 text-right">{copy("currentHigh", isEn)}</th>
+              <th className="min-w-[96px] px-3 py-2 text-right">{copy("localTime", isEn)}</th>
               <th className="min-w-[90px] px-3 py-2 text-right text-orange-600">DEB</th>
               {MODEL_SUMMARY_MODEL_COLUMNS.map((column) => (
                 <th key={column.key} className="min-w-[92px] px-3 py-2 text-right">
@@ -216,7 +212,6 @@ export function ModelSummaryDashboard({
                 {copy("median", isEn)}
               </th>
               <th className="min-w-[100px] px-3 py-2 text-right">{copy("spread", isEn)}</th>
-              <th className="min-w-[130px] px-3 py-2 text-right">{copy("updated", isEn)}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">

@@ -24,20 +24,20 @@ const UPDATE_ANNOUNCEMENT_SEEN_KEY = "polyweather_update_announcement_seen_v1";
 
 const STATIC_UPDATE_ANNOUNCEMENTS: StaticUpdateAnnouncement[] = [
   {
-    id: "model-summary-table-2026-06-29",
-    publishedAt: "2026-06-29T19:20:00+08:00",
+    id: "model-summary-table-local-time-2026-06-29",
+    publishedAt: "2026-06-29T19:35:00+08:00",
     expiresAt: "2026-08-15T00:00:00+08:00",
     zh: {
       title: "更新公告：模型汇总表上线",
       body:
-        "终端左侧新增「模型汇总」菜单，按今日最高温口径汇总全部城市：当前最高、DEB 预测，以及 ECMWF、ECMWF AIFS、GFS、ICON、ICON-EU、GEM、GDPS、JMA、AROME HD、HRRR、NAM 等模型高温预测集中到一张表里。\n\n" +
+        "终端左侧新增「模型汇总」菜单，按今日最高温口径汇总全部城市：当地时间、DEB 预测，以及 ECMWF、ECMWF AIFS、GFS、ICON、ICON-EU、GEM、GDPS、JMA、AROME HD、HRRR、NAM 等模型高温预测集中到一张表里。\n\n" +
         "缺失模型会显示 —；模型中位数和分歧范围只基于已有模型值计算，方便快速发现 DEB 与多模型之间的偏离。\n\n" +
         "页面支持搜索城市或模型，并提供「仅 DEB」和「分歧较大」筛选。移动端可横向滚动，首列城市固定。刷新终端后即可使用。",
     },
     en: {
       title: "Update: Model Summary table is live",
       body:
-        "The left terminal navigation now includes Model Summary, a city-by-city table for today's high-temperature view: current high, DEB forecast, plus ECMWF, ECMWF AIFS, GFS, ICON, ICON-EU, GEM, GDPS, JMA, AROME HD, HRRR, and NAM model highs in one workspace.\n\n" +
+        "The left terminal navigation now includes Model Summary, a city-by-city table for today's high-temperature view: local time, DEB forecast, plus ECMWF, ECMWF AIFS, GFS, ICON, ICON-EU, GEM, GDPS, JMA, AROME HD, HRRR, and NAM model highs in one workspace.\n\n" +
         "Missing models render as —. Model median and spread are calculated only from available model values, making it easier to spot where DEB diverges from the model cluster.\n\n" +
         "The page supports city or model search, plus Only DEB and Large spread filters. Mobile keeps the city column sticky with horizontal table scrolling. Refresh the terminal to use it.",
     },

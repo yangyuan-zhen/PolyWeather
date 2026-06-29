@@ -1,4 +1,8 @@
 import type { ScanOpportunityRow } from "@/lib/dashboard-types";
+import {
+  REGIONS,
+  getCityRegion,
+} from "@/components/dashboard/scan-terminal/continent-grouping";
 
 export const MODEL_SUMMARY_MODEL_COLUMNS = [
   { key: "ECMWF", label: "ECMWF" },
@@ -23,12 +27,11 @@ export type ModelSummaryRow = {
   regionLabelZh: string;
   regionSort: number;
   tempSymbol: string;
-  currentHigh: number | null;
+  localTime: string;
   debPrediction: number | null;
   models: Record<ModelSummaryColumnKey, number | null>;
   modelMedian: number | null;
   modelSpread: number | null;
-  updatedAt: string;
   searchText: string;
 };
 
@@ -69,6 +72,38 @@ function normalizeCityKey(row: ScanOpportunityRow, index: number) {
   return String(rawKey).trim().toLowerCase();
 }
 
+function normalizeLocalTime(value: unknown) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const match = text.match(/(\d{1,2}):(\d{2})/);
+  if (!match) return text;
+  return `${match[1].padStart(2, "0")}:${match[2]}`;
+}
+
+function resolveRegion(row: ScanOpportunityRow, isEn: boolean) {
+  const configuredRegionKey = getCityRegion(row);
+  const configuredRegion = configuredRegionKey
+    ? REGIONS.find((region) => region.key === configuredRegionKey)
+    : null;
+  if (configuredRegion) {
+    return {
+      label: isEn ? configuredRegion.labelEn : configuredRegion.labelZh,
+      labelEn: configuredRegion.labelEn,
+      labelZh: configuredRegion.labelZh,
+      sort: configuredRegion.sort,
+    };
+  }
+
+  const labelEn = row.trading_region_label || row.trading_region_label_zh || "—";
+  const labelZh = row.trading_region_label_zh || row.trading_region_label || "—";
+  return {
+    label: isEn ? labelEn : labelZh,
+    labelEn,
+    labelZh,
+    sort: finiteNumber(row.trading_region_sort) ?? 999,
+  };
+}
+
 export function formatModelSummaryTemp(value: number | null | undefined, symbol = "°C") {
   const numericValue = finiteNumber(value);
   if (numericValue == null) return "—";
@@ -86,9 +121,7 @@ export function buildModelSummaryRows(
     if (byCity.has(cityKey)) return;
 
     const cityName = row.city_display_name || row.display_name || row.city || "—";
-    const regionLabel = row.trading_region_label || row.trading_region_label_zh || "—";
-    const regionLabelZh = row.trading_region_label_zh || row.trading_region_label || "—";
-    const displayRegionLabel = isEn ? regionLabel : regionLabelZh;
+    const region = resolveRegion(row, isEn);
     const rawModelSources = row.model_cluster_sources || {};
     const models = MODEL_SUMMARY_MODEL_COLUMNS.reduce(
       (acc, column) => {
@@ -109,17 +142,16 @@ export function buildModelSummaryRows(
     byCity.set(cityKey, {
       cityKey,
       cityName,
-      regionLabel: displayRegionLabel,
-      regionLabelZh,
-      regionSort: finiteNumber(row.trading_region_sort) ?? 999,
+      regionLabel: region.label,
+      regionLabelZh: region.labelZh,
+      regionSort: region.sort,
       tempSymbol: row.temp_symbol || "°C",
-      currentHigh: finiteNumber(row.current_max_so_far),
+      localTime: normalizeLocalTime(row.local_time),
       debPrediction: finiteNumber(row.deb_prediction),
       models,
       modelMedian: median(modelValues),
       modelSpread: spread(modelValues),
-      updatedAt: row.local_time || row.local_date || row.selected_date || "",
-      searchText: `${cityName} ${row.city || ""} ${regionLabel} ${regionLabelZh} ${modelSearchText}`.toLowerCase(),
+      searchText: `${cityName} ${row.city || ""} ${region.labelEn} ${region.labelZh} ${modelSearchText}`.toLowerCase(),
     });
   });
 

@@ -50,6 +50,21 @@ export function runTests() {
         GFS: 38.2,
       },
     },
+    {
+      city: "amsterdam",
+      city_display_name: "Amsterdam",
+      trading_region_label: "West Asia / Middle East",
+      trading_region_label_zh: "西亚 / 中东",
+      trading_region_sort: 4,
+      temp_symbol: "°C",
+      current_max_so_far: 16,
+      deb_prediction: 17.1,
+      local_time: "12:11",
+      model_cluster_sources: {
+        ECMWF: 15.6,
+        GFS: 17.2,
+      },
+    },
   ] as any;
   const originalFirstModelSources = rows[0].model_cluster_sources;
   const summaryRows = buildModelSummaryRows(rows, false);
@@ -60,14 +75,17 @@ export function runTests() {
       MODEL_SUMMARY_MODEL_COLUMNS.map((column) => column.key).includes("NAM"),
     "model summary must expose the fixed model columns including optional short-range models",
   );
-  assert(summaryRows.length === 2, "model summary should keep one row per city");
-  assert(summaryRows[0].cityName === "Madrid", "model summary should sort by region then city name");
-  assert(summaryRows[1].cityName === "Paris", "model summary should sort by region then city name");
-  assert(summaryRows[1].debPrediction === 31.6, "model summary should preserve DEB prediction");
-  assert(summaryRows[1].models.GFS === 33.4, "model summary should preserve model high temperature");
-  assert(summaryRows[1].models.HRRR === null, "missing models should be normalized to null");
-  assert(summaryRows[1].modelMedian === 32.1, "model median should use available model values only");
-  assert(summaryRows[1].modelSpread === 2.5, "model spread should use available model min/max only");
+  assert(summaryRows.length === 3, "model summary should keep one row per city");
+  assert(summaryRows[0].cityName === "Amsterdam", "model summary should sort by resolved region then city name");
+  assert(summaryRows[1].cityName === "Madrid", "model summary should sort by resolved region then city name");
+  assert(summaryRows[2].cityName === "Paris", "model summary should sort by resolved region then city name");
+  assert(summaryRows[0].regionLabel === "欧洲 / 非洲", "model summary should override stale backend timezone regions for known European cities");
+  assert(summaryRows[0].localTime === "12:11", "model summary should expose local time in place of current high");
+  assert(summaryRows[2].debPrediction === 31.6, "model summary should preserve DEB prediction");
+  assert(summaryRows[2].models.GFS === 33.4, "model summary should preserve model high temperature");
+  assert(summaryRows[2].models.HRRR === null, "missing models should be normalized to null");
+  assert(summaryRows[2].modelMedian === 32.1, "model median should use available model values only");
+  assert(summaryRows[2].modelSpread === 2.5, "model spread should use available model min/max only");
   assert(formatModelSummaryTemp(null, "°C") === "—", "missing model temperatures should render as an em dash");
   assert(formatModelSummaryTemp(32.16, "°C") === "32.2°C", "model temperatures should render to one decimal");
 
@@ -112,6 +130,10 @@ export function runTests() {
   );
   assert(
     modelSummarySource.includes("MODEL_SUMMARY_MODEL_COLUMNS") &&
+      modelSummarySource.includes("Local Time") &&
+      modelSummarySource.includes("当地时间") &&
+      !modelSummarySource.includes("Current High") &&
+      !modelSummarySource.includes("当前最高") &&
       modelSummarySource.includes("Only DEB") &&
       modelSummarySource.includes("仅 DEB") &&
       modelSummarySource.includes("Large spread") &&

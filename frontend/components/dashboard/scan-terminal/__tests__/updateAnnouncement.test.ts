@@ -72,6 +72,7 @@ export function runTests() {
   assert(
     componentSource.includes("模型汇总表上线") &&
       componentSource.includes("模型汇总") &&
+      componentSource.includes("当地时间") &&
       componentSource.includes("DEB") &&
       componentSource.includes("ECMWF") &&
       componentSource.includes("ECMWF AIFS") &&
@@ -90,6 +91,7 @@ export function runTests() {
   assert(
     componentSource.includes("Model Summary table is live") &&
       componentSource.includes("city-by-city table") &&
+      componentSource.includes("local time") &&
       componentSource.includes("DEB") &&
       componentSource.includes("ECMWF") &&
       componentSource.includes("ECMWF AIFS") &&
