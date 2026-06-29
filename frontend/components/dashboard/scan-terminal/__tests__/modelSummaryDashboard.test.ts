@@ -1,0 +1,121 @@
+import fs from "node:fs";
+import path from "node:path";
+import {
+  MODEL_SUMMARY_MODEL_COLUMNS,
+  buildModelSummaryRows,
+  filterModelSummaryRows,
+  formatModelSummaryTemp,
+} from "@/lib/model-summary";
+
+function assert(condition: unknown, message: string) {
+  if (!condition) throw new Error(message);
+}
+
+export function runTests() {
+  const rows = [
+    {
+      city: "paris",
+      city_display_name: "Paris",
+      trading_region_label: "Europe / Africa",
+      trading_region_label_zh: "欧洲 / 非洲",
+      trading_region_sort: 5,
+      temp_symbol: "°C",
+      current_max_so_far: 32,
+      deb_prediction: 31.6,
+      local_time: "2026-06-29T10:00",
+      model_cluster_sources: {
+        ECMWF: 32.2,
+        "ECMWF AIFS": 31.9,
+        GFS: 33.4,
+        ICON: 31.2,
+        "ICON-EU": 31.4,
+        GEM: 32.8,
+        GDPS: 32.5,
+        JMA: 30.9,
+        "AROME HD": 32.1,
+      },
+    },
+    {
+      city: "madrid",
+      city_display_name: "Madrid",
+      trading_region_label: "Europe / Africa",
+      trading_region_label_zh: "欧洲 / 非洲",
+      trading_region_sort: 5,
+      temp_symbol: "°C",
+      current_max_so_far: 34.2,
+      deb_prediction: null,
+      local_time: "2026-06-29T10:05",
+      model_cluster_sources: {
+        ECMWF: 37,
+        GFS: 38.2,
+      },
+    },
+  ] as any;
+  const originalFirstModelSources = rows[0].model_cluster_sources;
+  const summaryRows = buildModelSummaryRows(rows, false);
+
+  assert(
+    MODEL_SUMMARY_MODEL_COLUMNS.map((column) => column.key).includes("AROME HD") &&
+      MODEL_SUMMARY_MODEL_COLUMNS.map((column) => column.key).includes("HRRR") &&
+      MODEL_SUMMARY_MODEL_COLUMNS.map((column) => column.key).includes("NAM"),
+    "model summary must expose the fixed model columns including optional short-range models",
+  );
+  assert(summaryRows.length === 2, "model summary should keep one row per city");
+  assert(summaryRows[0].cityName === "Madrid", "model summary should sort by region then city name");
+  assert(summaryRows[1].cityName === "Paris", "model summary should sort by region then city name");
+  assert(summaryRows[1].debPrediction === 31.6, "model summary should preserve DEB prediction");
+  assert(summaryRows[1].models.GFS === 33.4, "model summary should preserve model high temperature");
+  assert(summaryRows[1].models.HRRR === null, "missing models should be normalized to null");
+  assert(summaryRows[1].modelMedian === 32.1, "model median should use available model values only");
+  assert(summaryRows[1].modelSpread === 2.5, "model spread should use available model min/max only");
+  assert(formatModelSummaryTemp(null, "°C") === "—", "missing model temperatures should render as an em dash");
+  assert(formatModelSummaryTemp(32.16, "°C") === "32.2°C", "model temperatures should render to one decimal");
+
+  const searched = filterModelSummaryRows(summaryRows, {
+    debOnly: true,
+    query: "par",
+    wideSpreadOnly: false,
+  });
+  assert(searched.length === 1 && searched[0].cityName === "Paris", "model summary search and DEB filter should compose");
+  const wideSpread = filterModelSummaryRows(summaryRows, {
+    debOnly: false,
+    query: "",
+    wideSpreadOnly: true,
+  });
+  assert(
+    wideSpread.length === 1 && wideSpread[0].cityName === "Paris",
+    "wide-spread filter should only keep rows with model spread >= 2°C",
+  );
+  assert(rows[0].model_cluster_sources === originalFirstModelSources, "model summary filters must not mutate source rows");
+
+  const projectRoot = process.cwd();
+  const dashboardSource = fs.readFileSync(
+    path.join(projectRoot, "components", "dashboard", "ScanTerminalDashboard.tsx"),
+    "utf8",
+  );
+  const modelSummarySource = fs.readFileSync(
+    path.join(projectRoot, "components", "dashboard", "scan-terminal", "ModelSummaryDashboard.tsx"),
+    "utf8",
+  );
+  assert(
+    dashboardSource.includes("modelSummary") &&
+      dashboardSource.includes("模型汇总") &&
+      dashboardSource.includes("Model Summary") &&
+      dashboardSource.includes("Table2"),
+    "terminal sidebar must expose the model summary nav item",
+  );
+  assert(
+    dashboardSource.includes("<ModelSummaryDashboard") &&
+      dashboardSource.includes("rows={rows}") &&
+      dashboardSource.includes("generatedText={generatedText}"),
+    "terminal model summary view must use existing scan rows instead of fetching city detail",
+  );
+  assert(
+    modelSummarySource.includes("MODEL_SUMMARY_MODEL_COLUMNS") &&
+      modelSummarySource.includes("Only DEB") &&
+      modelSummarySource.includes("仅 DEB") &&
+      modelSummarySource.includes("Large spread") &&
+      modelSummarySource.includes("分歧较大"),
+    "model summary dashboard must render the fixed model table and filters",
+  );
+}

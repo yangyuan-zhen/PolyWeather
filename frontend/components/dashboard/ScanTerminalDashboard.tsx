@@ -14,6 +14,7 @@ import {
   Menu,
   MessageSquare,
   Search,
+  Table2,
   UserRound,
   Users,
 } from "lucide-react";
@@ -48,6 +49,7 @@ import { scanRootClass } from "@/components/dashboard/scan-root-styles";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
 import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { UsageGuideDashboard } from "@/components/dashboard/scan-terminal/UsageGuideDashboard";
+import { ModelSummaryDashboard } from "@/components/dashboard/scan-terminal/ModelSummaryDashboard";
 import {
   LiveTemperatureThresholdChart,
   clearCityDetailCache,
@@ -99,6 +101,7 @@ const TrainingDashboard = dynamic(
 const ONLINE_USERS_REFRESH_MS = 5 * 60_000;
 const TERMINAL_NAV_ITEMS = [
   { key: "thresholds", Icon: Activity, labelEn: "Decision", labelZh: "天气决策" },
+  { key: "modelSummary", Icon: Table2, labelEn: "Model Summary", labelZh: "模型汇总" },
   { key: "training", Icon: GraduationCap, labelEn: "Training", labelZh: "训练数据" },
   { key: "guide", Icon: BookOpenCheck, labelEn: "Guide", labelZh: "使用指南" },
 ] as const;
@@ -1122,6 +1125,8 @@ function PolyWeatherTerminal({
         <main className="min-h-0 flex-1 overflow-hidden flex flex-col p-2 bg-[#eef2f6]">
           {activeNavKey === "training" ? (
             <TrainingDashboard isEn={isEn} />
+          ) : activeNavKey === "modelSummary" ? (
+            <ModelSummaryDashboard rows={rows} isEn={isEn} generatedText={generatedText} />
           ) : activeNavKey === "guide" ? (
             <UsageGuideDashboard isEn={isEn} />
           ) : (
