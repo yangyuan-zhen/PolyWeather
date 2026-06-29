@@ -60,7 +60,7 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 This repository is licensed under **GNU AGPL-3.0 only** from `2026-03-30` onward.
 
 - Public in repo: weather aggregation, core analysis, dashboard, bot baseline, and standard payment flow.
-- Not included in this repository: private production data, internal operating thresholds, commercial risk rules, pricing strategy details, and growth tooling.
+- Not included in this repository: private production data, internal operating thresholds, commercial risk rules, pricing strategy details, growth tooling, internal mispricing strategy, position sizing rules, and trading bot execution code.
 - Trademark, brand, domain, production databases, and hosted-service operations are **not** granted by the code license.
 
 See: [AGPL-3.0 & Commercial Boundary](docs/OPEN_CORE_POLICY.md)

@@ -260,18 +260,20 @@ export function runTests() {
       modelSummarySource.includes("hasModelSummaryForecastData") &&
       modelSummarySource.includes("Gaussian μ") &&
       modelSummarySource.includes("高斯 μ") &&
-      modelSummarySource.includes("Market Option Probability") &&
-      modelSummarySource.includes("市场选项概率") &&
+      modelSummarySource.includes("Gaussian Distribution Probability") &&
+      modelSummarySource.includes("高斯分布概率") &&
       modelSummarySource.includes("expandedCityKeys") &&
       modelSummarySource.includes("toggleExpandedCity") &&
       modelSummarySource.includes("aria-expanded") &&
       modelSummarySource.includes("ChevronRight") &&
       modelSummarySource.includes("probabilityBuckets.map") &&
+      !modelSummarySource.includes("Market Option Probability") &&
+      !modelSummarySource.includes("市场选项概率") &&
       !modelSummarySource.includes("Detailed Probability") &&
       !modelSummarySource.includes("详细概率分布") &&
-      modelSummarySource.includes("Market Match") &&
-      modelSummarySource.includes("市场匹配") &&
-      modelSummarySource.includes("marketMatches.map") &&
+      !modelSummarySource.includes("Market Match") &&
+      !modelSummarySource.includes("市场匹配") &&
+      !modelSummarySource.includes("marketMatches.map") &&
       !modelSummarySource.includes("formatModelSummaryEdge") &&
       !modelSummarySource.includes("marketProbability") &&
       !modelSummarySource.includes("edgePercent") &&

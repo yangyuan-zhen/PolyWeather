@@ -32,9 +32,8 @@ const SUMMARY_TEXT = {
   region: { en: "Region", zh: "区域" },
   localTime: { en: "Local Time", zh: "当地时间" },
   gaussianMu: { en: "Gaussian μ", zh: "高斯 μ" },
-  detailedProbability: { en: "Market Option Probability", zh: "市场选项概率" },
+  detailedProbability: { en: "Gaussian Distribution Probability", zh: "高斯分布概率" },
   noProbabilityDistribution: { en: "No probability distribution", zh: "暂无详细概率" },
-  marketMatch: { en: "Market Match", zh: "市场匹配" },
   median: { en: "Median", zh: "模型中位数" },
   spread: { en: "Spread", zh: "分歧范围" },
   empty: { en: "No model summary rows match the current filters.", zh: "当前筛选下没有模型汇总数据。" },
@@ -42,7 +41,7 @@ const SUMMARY_TEXT = {
   total: { en: "rows", zh: "行" },
 } as const;
 
-const MODEL_SUMMARY_COLUMN_COUNT = MODEL_SUMMARY_MODEL_COLUMNS.length + 8;
+const MODEL_SUMMARY_COLUMN_COUNT = MODEL_SUMMARY_MODEL_COLUMNS.length + 7;
 
 function copy(key: keyof typeof SUMMARY_TEXT, isEn: boolean) {
   return SUMMARY_TEXT[key][isEn ? "en" : "zh"];
@@ -159,34 +158,6 @@ function ModelSummaryRowView({
         </td>
         <td className="min-w-[92px] px-3 py-2 text-right">
           <TemperatureCell value={row.gaussianMu} symbol={row.tempSymbol} emphasis="median" />
-        </td>
-        <td className="min-w-[420px] max-w-[520px] px-3 py-1.5 text-left">
-          {row.marketMatches.length ? (
-            <div className="flex flex-wrap items-center gap-1">
-              {row.marketMatches.map((match) => {
-                return (
-                  <a
-                    key={match.key}
-                    href={match.marketUrl || undefined}
-                    target={match.marketUrl ? "_blank" : undefined}
-                    rel={match.marketUrl ? "noreferrer" : undefined}
-                    className={clsx(
-                      "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tabular-nums",
-                      (match.modelProbability ?? 0) >= 0.2
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                        : "border-slate-200 bg-slate-50 text-slate-600",
-                    )}
-                    title={`${match.label} model ${formatModelSummaryProbability(match.modelProbability)}`}
-                  >
-                    <span className="font-black">{match.label}</span>
-                    <span>{isEn ? "M" : "模"} {formatModelSummaryProbability(match.modelProbability)}</span>
-                  </a>
-                );
-              })}
-            </div>
-          ) : (
-            <span className="font-mono text-xs font-semibold text-slate-300">—</span>
-          )}
         </td>
       </tr>
       {expanded ? (
@@ -392,7 +363,7 @@ export function ModelSummaryDashboard({
       <div className="min-h-0 flex-1 overflow-auto">
         <table
           className="w-full border-collapse text-xs"
-          style={{ minWidth: "1940px" }}
+          style={{ minWidth: "1520px" }}
         >
           <thead className="sticky top-0 z-20 bg-slate-50 text-[10px] font-black uppercase tracking-wide text-slate-500 shadow-[0_1px_0_0_#e2e8f0]">
             <tr>
@@ -413,9 +384,6 @@ export function ModelSummaryDashboard({
               <th className="min-w-[100px] px-3 py-2 text-right">{copy("spread", isEn)}</th>
               <th className="min-w-[92px] px-3 py-2 text-right text-violet-700">
                 {copy("gaussianMu", isEn)}
-              </th>
-              <th className="min-w-[420px] max-w-[520px] px-3 py-2 text-left text-emerald-700">
-                {copy("marketMatch", isEn)}
               </th>
             </tr>
           </thead>
