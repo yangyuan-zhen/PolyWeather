@@ -1,8 +1,8 @@
 "use client";
 
 import clsx from "clsx";
-import { Search, Table2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronRight, Search, Table2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 import {
   MODEL_SUMMARY_MODEL_COLUMNS,
@@ -32,6 +32,8 @@ const SUMMARY_TEXT = {
   region: { en: "Region", zh: "区域" },
   localTime: { en: "Local Time", zh: "当地时间" },
   gaussianMu: { en: "Gaussian μ", zh: "高斯 μ" },
+  detailedProbability: { en: "Detailed Probability", zh: "详细概率分布" },
+  noProbabilityDistribution: { en: "No probability distribution", zh: "暂无详细概率" },
   marketMatch: { en: "Market Match", zh: "市场匹配" },
   median: { en: "Median", zh: "模型中位数" },
   spread: { en: "Spread", zh: "分歧范围" },
@@ -39,6 +41,8 @@ const SUMMARY_TEXT = {
   generated: { en: "Generated", zh: "生成" },
   total: { en: "rows", zh: "行" },
 } as const;
+
+const MODEL_SUMMARY_COLUMN_COUNT = MODEL_SUMMARY_MODEL_COLUMNS.length + 8;
 
 function copy(key: keyof typeof SUMMARY_TEXT, isEn: boolean) {
   return SUMMARY_TEXT[key][isEn ? "en" : "zh"];
@@ -101,71 +105,133 @@ function ModelSummaryRowView({
   row,
   nowMs,
   isEn,
+  expanded,
+  onToggle,
 }: {
   row: ModelSummaryRow;
   nowMs: number | null;
   isEn: boolean;
+  expanded: boolean;
+  onToggle: () => void;
 }) {
   return (
-    <tr className="group border-b border-slate-100 hover:bg-blue-50/40">
-      <th
-        scope="row"
-        className="sticky left-0 z-10 w-[160px] min-w-[160px] max-w-[160px] border-r border-slate-200 bg-white px-3 py-2 text-left align-middle text-xs font-black text-slate-900 group-hover:bg-blue-50"
-      >
-        <span className="block truncate">{row.cityName}</span>
-      </th>
-      <td className="min-w-[96px] max-w-[112px] px-2 py-2 text-xs font-semibold text-slate-600">
-        <span className="block truncate">{row.regionLabel}</span>
-      </td>
-      <td className="min-w-[96px] px-3 py-2 text-right font-mono text-[11px] font-bold text-slate-700">
-        {formatModelSummaryLocalTime(row, nowMs)}
-      </td>
-      <td className="min-w-[90px] px-3 py-2 text-right">
-        <TemperatureCell value={row.debPrediction} symbol={row.tempSymbol} emphasis="deb" />
-      </td>
-      {MODEL_SUMMARY_MODEL_COLUMNS.map((column) => (
-        <td key={column.key} className="min-w-[92px] px-3 py-2 text-right">
-          <TemperatureCell value={row.models[column.key]} symbol={row.tempSymbol} />
+    <>
+      <tr className="group border-b border-slate-100 hover:bg-blue-50/40">
+        <th
+          scope="row"
+          className="sticky left-0 z-10 w-[160px] min-w-[160px] max-w-[160px] border-r border-slate-200 bg-white px-2 py-2 text-left align-middle text-xs font-black text-slate-900 group-hover:bg-blue-50"
+        >
+          <button
+            type="button"
+            aria-expanded={expanded}
+            onClick={onToggle}
+            className="flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-left outline-none transition hover:bg-blue-100/70 focus-visible:ring-2 focus-visible:ring-blue-300"
+          >
+            <ChevronRight
+              size={13}
+              className={clsx(
+                "shrink-0 text-slate-400 transition-transform",
+                expanded && "rotate-90 text-blue-600",
+              )}
+            />
+            <span className="block truncate">{row.cityName}</span>
+          </button>
+        </th>
+        <td className="min-w-[96px] max-w-[112px] px-2 py-2 text-xs font-semibold text-slate-600">
+          <span className="block truncate">{row.regionLabel}</span>
         </td>
-      ))}
-      <td className="min-w-[110px] px-3 py-2 text-right">
-        <TemperatureCell value={row.modelMedian} symbol={row.tempSymbol} emphasis="median" />
-      </td>
-      <td className="min-w-[100px] px-3 py-2 text-right">
-        <TemperatureCell value={row.modelSpread} symbol={row.tempSymbol} />
-      </td>
-      <td className="min-w-[92px] px-3 py-2 text-right">
-        <TemperatureCell value={row.gaussianMu} symbol={row.tempSymbol} emphasis="median" />
-      </td>
-      <td className="min-w-[420px] max-w-[520px] px-3 py-1.5 text-left">
-        {row.marketMatches.length ? (
-          <div className="flex flex-wrap items-center gap-1">
-            {row.marketMatches.map((match) => {
-              return (
-                <a
-                  key={match.key}
-                  href={match.marketUrl || undefined}
-                  target={match.marketUrl ? "_blank" : undefined}
-                  rel={match.marketUrl ? "noreferrer" : undefined}
-                  className={clsx(
-                    "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tabular-nums",
-                    (match.modelProbability ?? 0) >= 0.2
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                      : "border-slate-200 bg-slate-50 text-slate-600",
-                  )}
-                  title={`${match.label} model ${formatModelSummaryProbability(match.modelProbability)}`}
-                >
-                  <span className="font-black">{match.label}</span>
-                  <span>{isEn ? "M" : "模"} {formatModelSummaryProbability(match.modelProbability)}</span>
-                </a>
-              );
-            })}
-          </div>
-        ) : (
-          <span className="font-mono text-xs font-semibold text-slate-300">—</span>
-        )}
-      </td>
-    </tr>
+        <td className="min-w-[96px] px-3 py-2 text-right font-mono text-[11px] font-bold text-slate-700">
+          {formatModelSummaryLocalTime(row, nowMs)}
+        </td>
+        <td className="min-w-[90px] px-3 py-2 text-right">
+          <TemperatureCell value={row.debPrediction} symbol={row.tempSymbol} emphasis="deb" />
+        </td>
+        {MODEL_SUMMARY_MODEL_COLUMNS.map((column) => (
+          <td key={column.key} className="min-w-[92px] px-3 py-2 text-right">
+            <TemperatureCell value={row.models[column.key]} symbol={row.tempSymbol} />
+          </td>
+        ))}
+        <td className="min-w-[110px] px-3 py-2 text-right">
+          <TemperatureCell value={row.modelMedian} symbol={row.tempSymbol} emphasis="median" />
+        </td>
+        <td className="min-w-[100px] px-3 py-2 text-right">
+          <TemperatureCell value={row.modelSpread} symbol={row.tempSymbol} />
+        </td>
+        <td className="min-w-[92px] px-3 py-2 text-right">
+          <TemperatureCell value={row.gaussianMu} symbol={row.tempSymbol} emphasis="median" />
+        </td>
+        <td className="min-w-[420px] max-w-[520px] px-3 py-1.5 text-left">
+          {row.marketMatches.length ? (
+            <div className="flex flex-wrap items-center gap-1">
+              {row.marketMatches.map((match) => {
+                return (
+                  <a
+                    key={match.key}
+                    href={match.marketUrl || undefined}
+                    target={match.marketUrl ? "_blank" : undefined}
+                    rel={match.marketUrl ? "noreferrer" : undefined}
+                    className={clsx(
+                      "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tabular-nums",
+                      (match.modelProbability ?? 0) >= 0.2
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                        : "border-slate-200 bg-slate-50 text-slate-600",
+                    )}
+                    title={`${match.label} model ${formatModelSummaryProbability(match.modelProbability)}`}
+                  >
+                    <span className="font-black">{match.label}</span>
+                    <span>{isEn ? "M" : "模"} {formatModelSummaryProbability(match.modelProbability)}</span>
+                  </a>
+                );
+              })}
+            </div>
+          ) : (
+            <span className="font-mono text-xs font-semibold text-slate-300">—</span>
+          )}
+        </td>
+      </tr>
+      {expanded ? (
+        <tr className="border-b border-blue-100 bg-blue-50/35">
+          <td colSpan={MODEL_SUMMARY_COLUMN_COUNT} className="px-3 py-2">
+            <div className="flex flex-col gap-2 md:flex-row md:items-start">
+              <div className="flex w-full shrink-0 items-center gap-2 text-xs md:w-[220px]">
+                <span className="font-black text-slate-800">
+                  {copy("detailedProbability", isEn)}
+                </span>
+                <span className="font-mono text-[11px] font-bold text-violet-700">
+                  μ {formatModelSummaryTemp(row.gaussianMu, row.tempSymbol)}
+                </span>
+              </div>
+              {row.probabilityBuckets.length ? (
+                <div className="flex flex-1 flex-wrap items-center gap-1.5">
+                  {row.probabilityBuckets.map((bucket) => {
+                    const isTopBucket = bucket.key === row.topProbabilityBucketKey;
+                    return (
+                      <span
+                        key={bucket.key}
+                        className={clsx(
+                          "inline-flex items-center gap-1 rounded border px-2 py-1 font-mono text-[10px] font-bold tabular-nums",
+                          isTopBucket
+                            ? "border-violet-300 bg-violet-100 text-violet-800 shadow-sm"
+                            : "border-slate-200 bg-white text-slate-600",
+                        )}
+                        title={bucket.label}
+                      >
+                        <span>{bucket.label}</span>
+                        <span>{formatModelSummaryProbability(bucket.probability)}</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              ) : (
+                <span className="text-xs font-bold text-slate-400">
+                  {copy("noProbabilityDistribution", isEn)}
+                </span>
+              )}
+            </div>
+          </td>
+        </tr>
+      ) : null}
+    </>
   );
 }
 
@@ -215,6 +281,7 @@ export function ModelSummaryDashboard({
   const [debOnly, setDebOnly] = useState(false);
   const [wideSpreadOnly, setWideSpreadOnly] = useState(false);
   const [nowMs, setNowMs] = useState<number | null>(null);
+  const [expandedCityKeys, setExpandedCityKeys] = useState<Set<string>>(() => new Set());
   const lastGoodSummaryRowsRef = useRef<ModelSummaryRow[]>([]);
 
   useEffect(() => {
@@ -249,6 +316,34 @@ export function ModelSummaryDashboard({
       }),
     [summaryRows, query, debOnly, wideSpreadOnly],
   );
+
+  const toggleExpandedCity = useCallback((cityKey: string) => {
+    setExpandedCityKeys((current) => {
+      const next = new Set(current);
+      if (next.has(cityKey)) {
+        next.delete(cityKey);
+      } else {
+        next.add(cityKey);
+      }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    const visibleCityKeys = new Set(visibleRows.map((row) => row.cityKey));
+    setExpandedCityKeys((current) => {
+      let changed = false;
+      const next = new Set<string>();
+      current.forEach((cityKey) => {
+        if (visibleCityKeys.has(cityKey)) {
+          next.add(cityKey);
+        } else {
+          changed = true;
+        }
+      });
+      return changed ? next : current;
+    });
+  }, [visibleRows]);
 
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded border border-[#d2d9e2] bg-white shadow-sm">
@@ -331,6 +426,8 @@ export function ModelSummaryDashboard({
                 row={row}
                 nowMs={nowMs}
                 isEn={isEn}
+                expanded={expandedCityKeys.has(row.cityKey)}
+                onToggle={() => toggleExpandedCity(row.cityKey)}
               />
             ))}
           </tbody>
