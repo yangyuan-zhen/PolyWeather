@@ -70,32 +70,40 @@ export function runTests() {
     "announcement component must persist seen announcement ids and render an unread indicator for unseen updates",
   );
   assert(
-    componentSource.includes("实时观测链路已和模型缓存拆分") &&
-      componentSource.includes("SSE") &&
-      componentSource.includes("3 分钟") &&
+    componentSource.includes("模型汇总表上线") &&
+      componentSource.includes("模型汇总") &&
       componentSource.includes("DEB") &&
+      componentSource.includes("ECMWF") &&
+      componentSource.includes("ECMWF AIFS") &&
+      componentSource.includes("GFS") &&
+      componentSource.includes("ICON-EU") &&
       componentSource.includes("JMA") &&
-      componentSource.includes("AMOS") &&
-      componentSource.includes("MGM") &&
-      componentSource.includes("CWA") &&
-      componentSource.includes("NOAA MADIS") &&
-      componentSource.includes("预测曲线缺段") &&
-      componentSource.includes("首屏 loading"),
-    "terminal announcement should summarize the live-observation architecture update and recent chart fixes in Chinese",
+      componentSource.includes("AROME HD") &&
+      componentSource.includes("HRRR") &&
+      componentSource.includes("NAM") &&
+      componentSource.includes("模型中位数") &&
+      componentSource.includes("分歧范围") &&
+      componentSource.includes("仅 DEB") &&
+      componentSource.includes("分歧较大"),
+    "terminal announcement should summarize the model summary table release in Chinese",
   );
   assert(
-    componentSource.includes("Live observations are now separated from cached model detail") &&
-      componentSource.includes("SSE") &&
-      componentSource.includes("3-minute") &&
+    componentSource.includes("Model Summary table is live") &&
+      componentSource.includes("city-by-city table") &&
       componentSource.includes("DEB") &&
+      componentSource.includes("ECMWF") &&
+      componentSource.includes("ECMWF AIFS") &&
+      componentSource.includes("GFS") &&
+      componentSource.includes("ICON-EU") &&
       componentSource.includes("JMA") &&
-      componentSource.includes("AMOS") &&
-      componentSource.includes("MGM") &&
-      componentSource.includes("CWA") &&
-      componentSource.includes("NOAA MADIS") &&
-      componentSource.includes("truncated forecast curves") &&
-      componentSource.includes("first-load chart loading"),
-    "terminal announcement should summarize the live-observation architecture update and recent chart fixes in English",
+      componentSource.includes("AROME HD") &&
+      componentSource.includes("HRRR") &&
+      componentSource.includes("NAM") &&
+      componentSource.includes("Model median") &&
+      componentSource.includes("spread") &&
+      componentSource.includes("Only DEB") &&
+      componentSource.includes("Large spread"),
+    "terminal announcement should summarize the model summary table release in English",
   );
   assert(
     !middlewareSource.includes("/api/system/update-announcement"),

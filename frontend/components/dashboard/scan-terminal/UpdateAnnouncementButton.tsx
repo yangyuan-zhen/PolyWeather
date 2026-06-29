@@ -24,22 +24,22 @@ const UPDATE_ANNOUNCEMENT_SEEN_KEY = "polyweather_update_announcement_seen_v1";
 
 const STATIC_UPDATE_ANNOUNCEMENTS: StaticUpdateAnnouncement[] = [
   {
-    id: "live-observation-chart-2026-06",
-    publishedAt: "2026-06-17T00:00:00+08:00",
-    expiresAt: "2026-07-31T00:00:00+08:00",
+    id: "model-summary-table-2026-06-29",
+    publishedAt: "2026-06-29T19:20:00+08:00",
+    expiresAt: "2026-08-15T00:00:00+08:00",
     zh: {
-      title: "更新公告：实时观测和图表稳定性升级",
+      title: "更新公告：模型汇总表上线",
       body:
-        "实时观测链路已和模型缓存拆分：SSE 到达会立即更新图表；如果 SSE 断线，终端会每 3 分钟拉取一次轻量观测兜底。DEB、模型曲线、概率和历史数据继续走独立缓存，不再跟着实时温度强刷。\n\n" +
-        "这次也补齐了更多官方观测覆盖，包括东京 JMA、韩国 AMOS、土耳其 MGM、台北 CWA 等，并修正 NOAA MADIS 只应用于美国城市，避免非美国城市串台。\n\n" +
-        "图表侧同步修复了预测曲线缺段、首屏 loading 不明显、旧缓存覆盖最新观测等问题。刷新终端后即可使用新逻辑。",
+        "终端左侧新增「模型汇总」菜单，按今日最高温口径汇总全部城市：当前最高、DEB 预测，以及 ECMWF、ECMWF AIFS、GFS、ICON、ICON-EU、GEM、GDPS、JMA、AROME HD、HRRR、NAM 等模型高温预测集中到一张表里。\n\n" +
+        "缺失模型会显示 —；模型中位数和分歧范围只基于已有模型值计算，方便快速发现 DEB 与多模型之间的偏离。\n\n" +
+        "页面支持搜索城市或模型，并提供「仅 DEB」和「分歧较大」筛选。移动端可横向滚动，首列城市固定。刷新终端后即可使用。",
     },
     en: {
-      title: "Update: live observations and chart stability",
+      title: "Update: Model Summary table is live",
       body:
-        "Live observations are now separated from cached model detail. SSE patches update charts immediately; if SSE is unavailable, the terminal falls back to a lightweight observation fetch every 3-minute interval. DEB, model curves, probabilities, and historical data stay on their own cache path instead of refreshing with every live temperature update.\n\n" +
-        "Official observation coverage has also expanded, including Tokyo JMA, Korea AMOS, Turkey MGM, and Taipei CWA. NOAA MADIS is now restricted to US cities to avoid cross-region source leakage.\n\n" +
-        "Charts also include fixes for truncated forecast curves, first-load chart loading visibility, and stale cache overriding newer observations. Refresh the terminal to use the new flow.",
+        "The left terminal navigation now includes Model Summary, a city-by-city table for today's high-temperature view: current high, DEB forecast, plus ECMWF, ECMWF AIFS, GFS, ICON, ICON-EU, GEM, GDPS, JMA, AROME HD, HRRR, and NAM model highs in one workspace.\n\n" +
+        "Missing models render as —. Model median and spread are calculated only from available model values, making it easier to spot where DEB diverges from the model cluster.\n\n" +
+        "The page supports city or model search, plus Only DEB and Large spread filters. Mobile keeps the city column sticky with horizontal table scrolling. Refresh the terminal to use it.",
     },
   },
 ];
