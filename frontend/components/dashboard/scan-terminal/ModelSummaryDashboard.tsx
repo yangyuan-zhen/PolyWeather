@@ -32,7 +32,7 @@ const SUMMARY_TEXT = {
   region: { en: "Region", zh: "区域" },
   localTime: { en: "Local Time", zh: "当地时间" },
   gaussianMu: { en: "Gaussian μ", zh: "高斯 μ" },
-  detailedProbability: { en: "Detailed Probability", zh: "详细概率分布" },
+  detailedProbability: { en: "Market Option Probability", zh: "市场选项概率" },
   noProbabilityDistribution: { en: "No probability distribution", zh: "暂无详细概率" },
   marketMatch: { en: "Market Match", zh: "市场匹配" },
   median: { en: "Median", zh: "模型中位数" },

@@ -54,19 +54,26 @@ export function runTests() {
         "AROME HD": 32.1,
       },
       distribution_full: [
-        { value: 31, model_probability: 0.16, range: "[30.5~31.5)" },
-        { value: 32, model_probability: 0.42, range: "[31.5~32.5)" },
-        { value: 33, model_probability: 0.31, range: "[32.5~33.5)" },
+        { value: 32, model_probability: 0.41, range: "[31.5~32.5)" },
+        { value: 33, model_probability: 0.56, range: "[32.5~33.5)" },
+        { value: 34, model_probability: 0.03, range: "[33.5~34.5)" },
       ],
       probability_engine: "legacy",
       all_buckets: [
         {
-          label: "31.5-32.5°C",
-          model_probability: 0.42,
+          label: "32°C",
+          lower: 31.5,
+          upper: 32.5,
         },
         {
-          label: "33.5-34.5°C",
-          model_probability: 0.08,
+          label: "33°C",
+          lower: 32.5,
+          upper: 33.5,
+        },
+        {
+          label: "34°C",
+          lower: 33.5,
+          upper: 34.5,
         },
       ],
     },
@@ -87,6 +94,27 @@ export function runTests() {
       distribution_preview: [
         { value: 35, probability: 0.18 },
         { value: 36, probability: 0.52 },
+      ],
+    },
+    {
+      city: "houston",
+      city_display_name: "Houston",
+      trading_region_label: "North America",
+      trading_region_label_zh: "北美",
+      trading_region_sort: 7,
+      temp_symbol: "°F",
+      current_max_so_far: 90,
+      deb_prediction: 94.2,
+      local_time: "09:30",
+      model_cluster_sources: {
+        ECMWF: 94,
+        GFS: 96,
+      },
+      distribution_full: [
+        { value: 94, probability: 0.4 },
+        { value: 95, probability: 0.25 },
+        { value: 96, probability: 0.08 },
+        { value: 97, probability: 0.02 },
       ],
     },
     {
@@ -111,6 +139,7 @@ export function runTests() {
   const beijingRow = summaryRows.find((row) => row.cityName === "Beijing");
   const madridRow = summaryRows.find((row) => row.cityName === "Madrid");
   const parisRow = summaryRows.find((row) => row.cityName === "Paris");
+  const houstonRow = summaryRows.find((row) => row.cityName === "Houston");
 
   assert(
     MODEL_SUMMARY_MODEL_COLUMNS.map((column) => column.key).includes("AROME HD") &&
@@ -118,7 +147,7 @@ export function runTests() {
       MODEL_SUMMARY_MODEL_COLUMNS.map((column) => column.key).includes("NAM"),
     "model summary must expose the fixed model columns including optional short-range models",
   );
-  assert(summaryRows.length === 4, "model summary should keep one row per city");
+  assert(summaryRows.length === 5, "model summary should keep one row per city");
   assert(summaryRows[0].cityName === "Beijing", "model summary should sort by resolved region then city name");
   assert(amsterdamRow?.regionLabel === "欧洲 / 非洲", "model summary should override stale backend timezone regions for known European cities");
   if (!madridRow || !parisRow) throw new Error("model summary should keep European rows");
@@ -133,24 +162,32 @@ export function runTests() {
   assert(parisRow.models.HRRR === null, "missing models should be normalized to null");
   assert(parisRow.modelMedian === 32.1, "model median should use available model values only");
   assert(parisRow.modelSpread === 2.5, "model spread should use available model min/max only");
-  assert(parisRow.gaussianMu === 32.2, "model summary should compute Gaussian mu from probability buckets");
+  assert(parisRow.gaussianMu === 32.6, "model summary should compute Gaussian mu from probability buckets");
   assert(parisRow.probabilityEngine === "legacy", "model summary should preserve probability engine metadata");
-  assert(parisRow.probabilityBuckets.length === 3, "model summary should keep every probability bucket");
+  assert(parisRow.probabilityBuckets.length === 3, "model summary should keep every market-option probability bucket");
   assert(
-    parisRow.probabilityBucketMap["31.5-32.5°C"]?.probability === 0.42 &&
-      parisRow.topProbabilityBucketKey === "31.5-32.5°C",
-    "model summary should map probability buckets and identify the top bucket",
+    parisRow.probabilityBucketMap["32°C"]?.probability === 0.41 &&
+      parisRow.probabilityBucketMap["33°C"]?.probability === 0.56 &&
+      parisRow.topProbabilityBucketKey === "33°C" &&
+      !parisRow.probabilityBucketMap["31.5-32.5°C"],
+    "model summary should map Celsius probabilities to market option labels instead of half-degree ranges",
   );
-  assert(parisRow.marketMatches.length === 2, "model summary should keep every Polymarket tradable bucket");
   assert(
-    parisRow.marketMatches[0].label === "31.5-32.5°C" &&
-      parisRow.marketMatches[0].modelProbability === 0.42 &&
+    houstonRow?.probabilityBucketMap["94-95°F"]?.probability === 0.65 &&
+      houstonRow.probabilityBucketMap["96-97°F"]?.probability === 0.1 &&
+      houstonRow.topProbabilityBucketKey === "94-95°F",
+    "model summary should aggregate Fahrenheit probabilities into two-degree market option labels",
+  );
+  assert(parisRow.marketMatches.length === 3, "model summary should keep every Polymarket tradable bucket");
+  assert(
+    parisRow.marketMatches[0].label === "32°C" &&
+      parisRow.marketMatches[0].modelProbability === null &&
       parisRow.marketMatches[0].marketUrl === null,
     "model summary should expose model probability for market-matched buckets without requiring market price",
   );
   assert(
-    parisRow.marketMatches[1].label === "33.5-34.5°C" &&
-      parisRow.marketMatches[1].modelProbability === 0.08,
+    parisRow.marketMatches[1].label === "33°C" &&
+      parisRow.marketMatches[1].modelProbability === null,
     "model summary should keep low-probability tradable buckets for manual NO review",
   );
   assert(formatModelSummaryProbability(null) === "—", "missing probability should render as an em dash");
@@ -188,7 +225,9 @@ export function runTests() {
     wideSpreadOnly: true,
   });
   assert(
-    wideSpread.length === 1 && wideSpread[0].cityName === "Paris",
+    wideSpread.length === 2 &&
+      wideSpread.some((row) => row.cityName === "Paris") &&
+      wideSpread.some((row) => row.cityName === "Houston"),
     "wide-spread filter should only keep rows with model spread >= 2°C",
   );
   assert(rows[0].model_cluster_sources === originalFirstModelSources, "model summary filters must not mutate source rows");
@@ -221,13 +260,15 @@ export function runTests() {
       modelSummarySource.includes("hasModelSummaryForecastData") &&
       modelSummarySource.includes("Gaussian μ") &&
       modelSummarySource.includes("高斯 μ") &&
-      modelSummarySource.includes("Detailed Probability") &&
-      modelSummarySource.includes("详细概率分布") &&
+      modelSummarySource.includes("Market Option Probability") &&
+      modelSummarySource.includes("市场选项概率") &&
       modelSummarySource.includes("expandedCityKeys") &&
       modelSummarySource.includes("toggleExpandedCity") &&
       modelSummarySource.includes("aria-expanded") &&
       modelSummarySource.includes("ChevronRight") &&
       modelSummarySource.includes("probabilityBuckets.map") &&
+      !modelSummarySource.includes("Detailed Probability") &&
+      !modelSummarySource.includes("详细概率分布") &&
       modelSummarySource.includes("Market Match") &&
       modelSummarySource.includes("市场匹配") &&
       modelSummarySource.includes("marketMatches.map") &&

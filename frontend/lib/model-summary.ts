@@ -96,22 +96,6 @@ function probabilityFromBucket(bucket: Record<string, unknown>) {
   return raw > 1 ? raw / 100 : raw;
 }
 
-function rangeFromBucket(bucket: Record<string, unknown>, value: number) {
-  const rawRange = String(bucket.range || bucket.bucket || bucket.label || "").trim();
-  const rangeMatch = rawRange.match(/(-?\d+(?:\.\d+)?)\s*(?:~|-|to)\s*(-?\d+(?:\.\d+)?)/i);
-  if (rangeMatch) {
-    const lower = Number(rangeMatch[1]);
-    const upper = Number(rangeMatch[2]);
-    if (Number.isFinite(lower) && Number.isFinite(upper) && upper > lower) {
-      return { lower, upper };
-    }
-  }
-  return {
-    lower: Number((value - 0.5).toFixed(2)),
-    upper: Number((value + 0.5).toFixed(2)),
-  };
-}
-
 function formatBucketBound(value: number) {
   return Number(value.toFixed(1)).toString();
 }
@@ -124,6 +108,101 @@ function probabilityBucketLabel(lower: number, upper: number, unit: string) {
   return probabilityBucketKey(lower, upper, unit);
 }
 
+function isFahrenheitUnit(unit: string) {
+  return unit.toUpperCase().includes("F");
+}
+
+function marketOptionBucketForValue(value: number, unit: string) {
+  const settledValue = Math.round(value);
+  if (isFahrenheitUnit(unit)) {
+    const lowerValue = settledValue % 2 === 0 ? settledValue : settledValue - 1;
+    const upperValue = lowerValue + 1;
+    return {
+      key: `${lowerValue}-${upperValue}${unit || "°F"}`,
+      label: `${lowerValue}-${upperValue}${unit || "°F"}`,
+      lower: lowerValue - 0.5,
+      upper: upperValue + 0.5,
+    };
+  }
+  return {
+    key: `${settledValue}${unit || "°C"}`,
+    label: `${settledValue}${unit || "°C"}`,
+    lower: settledValue - 0.5,
+    upper: settledValue + 0.5,
+  };
+}
+
+function roundProbability(value: number) {
+  return Math.round(value * 1000) / 1000;
+}
+
+function sourceMarketBuckets(row: ScanOpportunityRow) {
+  const marketRow = row as ScanOpportunityRow & {
+    all_buckets?: Array<Record<string, unknown>> | null;
+    top_buckets?: Array<Record<string, unknown>> | null;
+  };
+  return (
+    Array.isArray(marketRow.all_buckets) && marketRow.all_buckets.length
+      ? marketRow.all_buckets
+      : Array.isArray(marketRow.top_buckets)
+        ? marketRow.top_buckets
+        : []
+  ) as Array<Record<string, unknown>>;
+}
+
+function parseMarketOptionBucket(bucket: Record<string, unknown>, unit: string) {
+  const rawLabel = String(bucket.label || bucket.bucket || bucket.range || "").trim();
+  const labelNumbers = rawLabel.match(/-?\d+(?:\.\d+)?/g)?.map(Number) || [];
+  const lower = finiteNumber(bucket.lower);
+  const upper = finiteNumber(bucket.upper);
+  let lowerValue: number | null = null;
+  let upperValue: number | null = null;
+
+  if (/below/i.test(rawLabel) && labelNumbers.length) {
+    upperValue = Math.round(labelNumbers[0]);
+  } else if (/higher/i.test(rawLabel) && labelNumbers.length) {
+    lowerValue = Math.round(labelNumbers[0]);
+  } else if (labelNumbers.length >= 2) {
+    lowerValue = Math.round(labelNumbers[0]);
+    upperValue = Math.round(labelNumbers[1]);
+  } else if (labelNumbers.length === 1) {
+    lowerValue = Math.round(labelNumbers[0]);
+    upperValue = Math.round(labelNumbers[0]);
+  } else if (lower != null && upper != null && upper > lower) {
+    lowerValue = Math.ceil(lower);
+    upperValue = Math.ceil(upper) - 1;
+  } else {
+    const value = finiteNumber(bucket.value ?? bucket.temp ?? bucket.temperature);
+    if (value == null) return null;
+    const option = marketOptionBucketForValue(value, unit);
+    lowerValue = Math.ceil(option.lower);
+    upperValue = Math.ceil(option.upper) - 1;
+  }
+
+  const finiteLower = lowerValue ?? Number.NEGATIVE_INFINITY;
+  const finiteUpper = upperValue ?? Number.POSITIVE_INFINITY;
+  if (finiteUpper < finiteLower) return null;
+
+  let label = rawLabel;
+  if (!label || /\.5\b/.test(label)) {
+    const representative =
+      Number.isFinite(finiteLower) && Number.isFinite(finiteUpper)
+        ? (finiteLower + finiteUpper) / 2
+        : Number.isFinite(finiteLower)
+          ? finiteLower
+          : finiteUpper;
+    label = marketOptionBucketForValue(representative, unit).label;
+  }
+
+  return {
+    key: label,
+    label,
+    lowerValue: finiteLower,
+    upperValue: finiteUpper,
+    sortValue: Number.isFinite(finiteLower) ? finiteLower : finiteUpper,
+  };
+}
+
 function buildProbabilityBuckets(row: ScanOpportunityRow): ModelSummaryProbabilityBucket[] {
   const rawBuckets = (
     Array.isArray(row.distribution_full) && row.distribution_full.length
@@ -133,24 +212,88 @@ function buildProbabilityBuckets(row: ScanOpportunityRow): ModelSummaryProbabili
         : []
   ) as Array<Record<string, unknown>>;
   const unit = row.temp_symbol || "°C";
-
-  return rawBuckets
+  const rawProbabilityPoints = rawBuckets
     .map((bucket) => {
       const value = finiteNumber(bucket.value ?? bucket.temp ?? bucket.temperature);
       const probability = probabilityFromBucket(bucket);
       if (value == null || probability == null || probability <= 0) return null;
-      const { lower, upper } = rangeFromBucket(bucket, value);
-      const key = probabilityBucketKey(lower, upper, unit);
-      return {
-        key,
-        label: probabilityBucketLabel(lower, upper, unit),
-        value,
-        lower,
-        upper,
-        probability,
-      };
+      return { value, settledValue: Math.round(value), probability };
     })
-    .filter((bucket): bucket is ModelSummaryProbabilityBucket => bucket !== null)
+    .filter((point): point is { value: number; settledValue: number; probability: number } => point !== null);
+
+  const marketBuckets = sourceMarketBuckets(row)
+    .map((bucket) => parseMarketOptionBucket(bucket, unit))
+    .filter((bucket): bucket is NonNullable<typeof bucket> => bucket !== null);
+
+  if (marketBuckets.length && rawProbabilityPoints.length) {
+    const fromMarketBuckets = marketBuckets
+      .map((bucket) => {
+        const matchingPoints = rawProbabilityPoints.filter(
+          (point) =>
+            point.settledValue >= bucket.lowerValue &&
+            point.settledValue <= bucket.upperValue,
+        );
+        const probability = matchingPoints.reduce((sum, point) => sum + point.probability, 0);
+        if (probability <= 0) return null;
+        const weightedValue = matchingPoints.reduce(
+          (sum, point) => sum + point.value * point.probability,
+          0,
+        );
+        return {
+          key: bucket.key,
+          label: bucket.label,
+          value: roundToOneDecimal(weightedValue / probability),
+          lower: bucket.sortValue,
+          upper: bucket.sortValue,
+          probability: roundProbability(probability),
+        };
+      })
+      .filter((bucket): bucket is ModelSummaryProbabilityBucket => bucket !== null)
+      .sort((a, b) => a.lower - b.lower || a.upper - b.upper);
+
+    if (fromMarketBuckets.length) return fromMarketBuckets;
+  }
+
+  const grouped = new Map<
+    string,
+    {
+      label: string;
+      lower: number;
+      upper: number;
+      probability: number;
+      weightedValue: number;
+    }
+  >();
+
+  rawProbabilityPoints.forEach(({ value, probability }) => {
+    const option = marketOptionBucketForValue(value, unit);
+    const existing = grouped.get(option.key);
+    if (existing) {
+      existing.probability += probability;
+      existing.weightedValue += value * probability;
+      return;
+    }
+    grouped.set(option.key, {
+      label: option.label,
+      lower: option.lower,
+      upper: option.upper,
+      probability,
+      weightedValue: value * probability,
+    });
+  });
+
+  return [...grouped.entries()]
+    .map(([key, bucket]) => ({
+      key,
+      label: bucket.label,
+      value:
+        bucket.probability > 0
+          ? roundToOneDecimal(bucket.weightedValue / bucket.probability)
+          : roundToOneDecimal((bucket.lower + bucket.upper) / 2),
+      lower: bucket.lower,
+      upper: bucket.upper,
+      probability: roundProbability(bucket.probability),
+    }))
     .sort((a, b) => a.lower - b.lower || a.upper - b.upper);
 }
 
