@@ -29,14 +29,6 @@ export type ModelSummaryProbabilityBucket = {
   probability: number;
 };
 
-export type ModelSummaryProbabilityColumn = {
-  key: string;
-  label: string;
-  lower: number;
-  upper: number;
-  unit: string;
-};
-
 export type ModelSummaryRow = {
   cityKey: string;
   cityName: string;
@@ -322,29 +314,5 @@ export function hasModelSummaryForecastData(rows: ModelSummaryRow[]) {
   return rows.some((row) => {
     if (row.debPrediction != null) return true;
     return MODEL_SUMMARY_MODEL_COLUMNS.some((column) => row.models[column.key] != null);
-  });
-}
-
-export function buildModelSummaryProbabilityColumns(
-  rows: ModelSummaryRow[],
-): ModelSummaryProbabilityColumn[] {
-  const byKey = new Map<string, ModelSummaryProbabilityColumn>();
-  rows.forEach((row) => {
-    row.probabilityBuckets.forEach((bucket) => {
-      if (byKey.has(bucket.key)) return;
-      const unitMatch = bucket.key.match(/[^\d.\-\s]+$/);
-      byKey.set(bucket.key, {
-        key: bucket.key,
-        label: bucket.label,
-        lower: bucket.lower,
-        upper: bucket.upper,
-        unit: unitMatch?.[0] || row.tempSymbol || "°C",
-      });
-    });
-  });
-
-  return [...byKey.values()].sort((a, b) => {
-    if (a.unit !== b.unit) return a.unit.localeCompare(b.unit);
-    return a.lower - b.lower || a.upper - b.upper;
   });
 }

@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   MODEL_SUMMARY_MODEL_COLUMNS,
-  buildModelSummaryProbabilityColumns,
   buildModelSummaryRows,
   filterModelSummaryRows,
   formatModelSummaryProbability,
@@ -132,12 +131,6 @@ export function runTests() {
       parisRow.topProbabilityBucketKey === "31.5-32.5°C",
     "model summary should map probability buckets and identify the top bucket",
   );
-  const probabilityColumns = buildModelSummaryProbabilityColumns(summaryRows);
-  assert(
-    probabilityColumns.map((column) => column.key).join("|") ===
-      "30.5-31.5°C|31.5-32.5°C|32.5-33.5°C|34.5-35.5°C|35.5-36.5°C",
-    "model summary should expose dynamic probability bucket columns sorted by temperature",
-  );
   assert(formatModelSummaryProbability(null) === "—", "missing probability should render as an em dash");
   assert(formatModelSummaryProbability(0.424) === "42%", "probability buckets should render as rounded percentages");
   assert(formatModelSummaryTemp(null, "°C") === "—", "missing model temperatures should render as an em dash");
@@ -204,10 +197,13 @@ export function runTests() {
     modelSummarySource.includes("MODEL_SUMMARY_MODEL_COLUMNS") &&
       modelSummarySource.includes("lastGoodSummaryRowsRef") &&
       modelSummarySource.includes("hasModelSummaryForecastData") &&
-      modelSummarySource.includes("buildModelSummaryProbabilityColumns") &&
       modelSummarySource.includes("Gaussian μ") &&
       modelSummarySource.includes("高斯 μ") &&
+      modelSummarySource.includes("Probability Distribution") &&
+      modelSummarySource.includes("概率分布") &&
       modelSummarySource.includes("topProbabilityBucketKey") &&
+      modelSummarySource.includes("probabilityBuckets.map") &&
+      !modelSummarySource.includes("probabilityColumns") &&
       modelSummarySource.includes("min-w-[96px]") &&
       modelSummarySource.includes("Local Time") &&
       modelSummarySource.includes("当地时间") &&
