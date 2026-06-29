@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import { Search, Table2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 import {
   MODEL_SUMMARY_MODEL_COLUMNS,
@@ -10,6 +10,7 @@ import {
   filterModelSummaryRows,
   formatModelSummaryLocalTime,
   formatModelSummaryTemp,
+  hasModelSummaryForecastData,
   type ModelSummaryRow,
 } from "@/lib/model-summary";
 
@@ -132,6 +133,43 @@ function ModelSummaryRowView({
   );
 }
 
+function mergeWithLastGoodSummaryRows(
+  incomingRows: ModelSummaryRow[],
+  lastGoodRows: ModelSummaryRow[],
+) {
+  if (!lastGoodRows.length) return incomingRows;
+  if (!incomingRows.length) return lastGoodRows;
+
+  const incomingCityKeys = new Set<string>();
+  const lastGoodByCity = new Map(lastGoodRows.map((row) => [row.cityKey, row]));
+  const mergedRows = incomingRows.map((incomingRow) => {
+    incomingCityKeys.add(incomingRow.cityKey);
+    const lastGoodRow = lastGoodByCity.get(incomingRow.cityKey);
+    if (!lastGoodRow) return incomingRow;
+
+    return {
+      ...lastGoodRow,
+      cityName: incomingRow.cityName,
+      regionLabel: incomingRow.regionLabel,
+      regionLabelZh: incomingRow.regionLabelZh,
+      regionSort: incomingRow.regionSort,
+      tempSymbol: incomingRow.tempSymbol || lastGoodRow.tempSymbol,
+      localTime: incomingRow.localTime || lastGoodRow.localTime,
+      timezoneOffsetSeconds:
+        incomingRow.timezoneOffsetSeconds ?? lastGoodRow.timezoneOffsetSeconds,
+      searchText: incomingRow.searchText || lastGoodRow.searchText,
+    };
+  });
+
+  return [
+    ...mergedRows,
+    ...lastGoodRows.filter((row) => !incomingCityKeys.has(row.cityKey)),
+  ].sort((a, b) => {
+    if (a.regionSort !== b.regionSort) return a.regionSort - b.regionSort;
+    return a.cityName.localeCompare(b.cityName, "en", { sensitivity: "base" });
+  });
+}
+
 export function ModelSummaryDashboard({
   rows,
   isEn,
@@ -141,6 +179,7 @@ export function ModelSummaryDashboard({
   const [debOnly, setDebOnly] = useState(false);
   const [wideSpreadOnly, setWideSpreadOnly] = useState(false);
   const [nowMs, setNowMs] = useState<number | null>(null);
+  const lastGoodSummaryRowsRef = useRef<ModelSummaryRow[]>([]);
 
   useEffect(() => {
     const syncClock = () => setNowMs(Date.now());
@@ -149,7 +188,22 @@ export function ModelSummaryDashboard({
     return () => window.clearInterval(timer);
   }, []);
 
-  const summaryRows = useMemo(() => buildModelSummaryRows(rows, isEn), [rows, isEn]);
+  const incomingSummaryRows = useMemo(() => buildModelSummaryRows(rows, isEn), [rows, isEn]);
+  const incomingHasForecastData = hasModelSummaryForecastData(incomingSummaryRows);
+  const summaryRows = useMemo(
+    () =>
+      incomingHasForecastData
+        ? incomingSummaryRows
+        : mergeWithLastGoodSummaryRows(incomingSummaryRows, lastGoodSummaryRowsRef.current),
+    [incomingSummaryRows, incomingHasForecastData],
+  );
+
+  useEffect(() => {
+    if (incomingHasForecastData) {
+      lastGoodSummaryRowsRef.current = incomingSummaryRows;
+    }
+  }, [incomingSummaryRows, incomingHasForecastData]);
+
   const visibleRows = useMemo(
     () =>
       filterModelSummaryRows(summaryRows, {

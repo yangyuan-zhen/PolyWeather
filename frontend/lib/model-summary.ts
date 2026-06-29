@@ -196,3 +196,10 @@ export function filterModelSummaryRows(
     return true;
   });
 }
+
+export function hasModelSummaryForecastData(rows: ModelSummaryRow[]) {
+  return rows.some((row) => {
+    if (row.debPrediction != null) return true;
+    return MODEL_SUMMARY_MODEL_COLUMNS.some((column) => row.models[column.key] != null);
+  });
+}

@@ -6,6 +6,7 @@ import {
   filterModelSummaryRows,
   formatModelSummaryLocalTime,
   formatModelSummaryTemp,
+  hasModelSummaryForecastData,
 } from "@/lib/model-summary";
 
 function assert(condition: unknown, message: string) {
@@ -113,6 +114,24 @@ export function runTests() {
   assert(parisRow.modelSpread === 2.5, "model spread should use available model min/max only");
   assert(formatModelSummaryTemp(null, "°C") === "—", "missing model temperatures should render as an em dash");
   assert(formatModelSummaryTemp(32.16, "°C") === "32.2°C", "model temperatures should render to one decimal");
+  assert(hasModelSummaryForecastData(summaryRows), "model summary should recognize populated forecast rows");
+  assert(
+    !hasModelSummaryForecastData(
+      buildModelSummaryRows([
+        {
+          id: "fallback:beijing",
+          city: "beijing",
+          city_display_name: "Beijing",
+          trading_region_label: "East Asia",
+          trading_region_label_zh: "东亚",
+          trading_region_sort: 1,
+          local_time: "21:11",
+          tz_offset_seconds: 28800,
+        },
+      ] as any, false),
+    ),
+    "model summary should recognize fallback-only rows without DEB or model forecasts",
+  );
 
   const searched = filterModelSummaryRows(summaryRows, {
     debOnly: true,
@@ -155,6 +174,8 @@ export function runTests() {
   );
   assert(
     modelSummarySource.includes("MODEL_SUMMARY_MODEL_COLUMNS") &&
+      modelSummarySource.includes("lastGoodSummaryRowsRef") &&
+      modelSummarySource.includes("hasModelSummaryForecastData") &&
       modelSummarySource.includes("Local Time") &&
       modelSummarySource.includes("当地时间") &&
       !modelSummarySource.includes("Current High") &&
