@@ -253,7 +253,6 @@ main() {
 
   check_cached_endpoint "/api/history/ankara" "history"
   check_if_none_match_304 "/api/history/ankara" "history"
-  check_cloudflare_cache_hit "/api/scan/terminal?limit=1" "scan terminal edge cache"
 
   print_line ""
   if [ "$FAIL_COUNT" -gt 0 ]; then

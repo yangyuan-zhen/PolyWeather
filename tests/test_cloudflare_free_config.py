@@ -14,7 +14,7 @@ def test_cloudflare_managed_rules_apply_path_specific_edge_ttls_then_bypass_sens
         f"{MANAGED_RULE_REF_PREFIX}pages",
         f"{MANAGED_RULE_REF_PREFIX}cities",
         f"{MANAGED_RULE_REF_PREFIX}city_detail",
-        f"{MANAGED_RULE_REF_PREFIX}scan",
+        f"{MANAGED_RULE_REF_PREFIX}system_status",
         f"{MANAGED_RULE_REF_PREFIX}bypass",
     ]
     assert [
@@ -31,6 +31,8 @@ def test_cloudflare_managed_rules_apply_path_specific_edge_ttls_then_bypass_sens
             "cache": True,
             "browser_ttl": {"mode": "respect_origin"},
         }
+    assert 'http.request.uri.path eq "/api/system/status"' in rules[4]["expression"]
+    assert "/api/scan/terminal" not in rules[4]["expression"]
     assert rules[-1]["action_parameters"]["cache"] is False
     assert 'http.host eq "api.polyweather.top"' in rules[-1]["expression"]
     assert 'http.request.uri.query contains "force_refresh=true"' in rules[-1]["expression"]
@@ -64,7 +66,7 @@ def test_cloudflare_rule_merge_preserves_unmanaged_rules_and_puts_bypass_last():
         f"{MANAGED_RULE_REF_PREFIX}pages",
         f"{MANAGED_RULE_REF_PREFIX}cities",
         f"{MANAGED_RULE_REF_PREFIX}city_detail",
-        f"{MANAGED_RULE_REF_PREFIX}scan",
+        f"{MANAGED_RULE_REF_PREFIX}system_status",
         f"{MANAGED_RULE_REF_PREFIX}bypass",
     ]
     assert merged[-1]["action_parameters"]["cache"] is False

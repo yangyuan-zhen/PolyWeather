@@ -144,9 +144,7 @@ def test_scan_terminal_response_includes_backend_server_timing(monkeypatch):
     assert "scan_terminal_assert_entitlement" in server_timing
     assert "scan_terminal_build_payload" in server_timing
     assert "scan_terminal_total" in server_timing
-    assert response.headers["cache-control"] == (
-        "public, max-age=0, s-maxage=300, stale-while-revalidate=900"
-    )
+    assert response.headers["cache-control"] == "no-store, max-age=0"
     assert response.headers["cloudflare-cdn-cache-control"] == response.headers["cache-control"]
 
 

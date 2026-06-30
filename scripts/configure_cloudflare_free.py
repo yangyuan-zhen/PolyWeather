@@ -64,8 +64,7 @@ SCAN_EXPRESSION = """(
   http.host eq "polyweather.top"
   and http.request.method in {"GET" "HEAD"}
   and (
-    http.request.uri.path eq "/api/scan/terminal"
-    or http.request.uri.path eq "/api/system/status"
+    http.request.uri.path eq "/api/system/status"
   )
 )"""
 
@@ -135,7 +134,7 @@ def build_managed_cache_rules() -> List[Dict[str, Any]]:
         _cache_rule("pages", "PolyWeather: cache public pages for ten minutes", PUBLIC_PAGES_EXPRESSION, 600),
         _cache_rule("cities", "PolyWeather: cache the public city list for five minutes", CITIES_EXPRESSION, 300),
         _cache_rule("city_detail", "PolyWeather: cache public city detail when the origin allows it", CITY_DETAIL_EXPRESSION),
-        _cache_rule("scan", "PolyWeather: cache scan and system status when the origin allows it", SCAN_EXPRESSION),
+        _cache_rule("system_status", "PolyWeather: cache system status when the origin allows it", SCAN_EXPRESSION),
         {
             "ref": f"{MANAGED_RULE_REF_PREFIX}bypass",
             "description": "PolyWeather: bypass backend, sensitive, realtime, and force-refresh requests",

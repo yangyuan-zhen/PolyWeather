@@ -3,7 +3,6 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   buildCityListCacheControl,
-  buildScanTerminalResponseCacheControl,
   buildCityDetailProxyCachePolicy,
   buildForceRefreshProxyCachePolicy,
   buildPublicEdgeCacheControl,
@@ -40,42 +39,19 @@ export function runTests() {
   const scanForced = buildForceRefreshProxyCachePolicy("true", 10);
   assert.equal(scanForced.fetchMode, "no-store");
 
-  const normalScanCache = "public, max-age=0, s-maxage=300, stale-while-revalidate=900";
-  assert.equal(
-    buildScanTerminalResponseCacheControl({ status: "ready", stale: false }, normalScanCache),
-    normalScanCache,
-  );
-  assert.equal(
-    buildScanTerminalResponseCacheControl({ status: "failed", stale: false }, normalScanCache),
-    NO_STORE_CACHE_CONTROL,
-  );
-  assert.equal(
-    buildScanTerminalResponseCacheControl({ status: "partial", stale: false }, normalScanCache),
-    NO_STORE_CACHE_CONTROL,
-  );
-  assert.equal(
-    buildScanTerminalResponseCacheControl({ status: "ready", stale: true }, normalScanCache),
-    NO_STORE_CACHE_CONTROL,
-  );
-
   const scanTerminalProxySource = fs.readFileSync(
     path.join(process.cwd(), "app", "api", "scan", "terminal", "route.ts"),
     "utf8",
   );
-  assert.match(
-    scanTerminalProxySource,
-    /DASHBOARD_REFRESH_POLICY_SEC\.scanRows/,
-    "scan terminal proxy cache TTL should match the dashboard scan refresh cadence instead of a short literal TTL",
-  );
   assert.doesNotMatch(
     scanTerminalProxySource,
-    /buildForceRefreshProxyCachePolicy\(forceRefresh,\s*10\)/,
-    "scan terminal proxy must not use the old 10 second edge cache because it over-drives the slow scan endpoint",
+    /buildForceRefreshProxyCachePolicy/,
+    "scan terminal proxy must not use public edge cache because rows depend on user entitlement and live scan state",
   );
   assert.match(
     scanTerminalProxySource,
-    /cacheControlForData:\s*\(data\)\s*=>\s*buildScanTerminalResponseCacheControl/,
-    "scan terminal proxy must not CDN-cache failed, stale, or partial business payloads",
+    /cacheControlForData:\s*\(\)\s*=>\s*NO_STORE_CACHE_CONTROL/,
+    "scan terminal proxy must keep all scan payloads out of shared CDN caches",
   );
   assert.match(
     scanTerminalProxySource,

@@ -14,4 +14,4 @@ def test_frontend_cache_validator_checks_cloudflare_edge_hits():
     assert "MISS" in script
     assert "REVALIDATED" in script
     assert 'check_cloudflare_cache_hit "/api/cities" "cities edge cache"' in script
-    assert 'check_cloudflare_cache_hit "/api/scan/terminal?limit=1" "scan terminal edge cache"' in script
+    assert "/api/scan/terminal?limit=1" not in script

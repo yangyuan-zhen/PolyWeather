@@ -29,7 +29,10 @@ from web.scan_terminal_cache import (
     set_cached_scan_terminal_payload,
     set_scan_terminal_failure_state,
 )
-from web.scan_terminal_city_row import _scan_city_terminal_rows
+from web.scan_terminal_city_row import (
+    _fetch_scan_terminal_multi_model_batch,
+    _scan_city_terminal_rows,
+)
 from web.scan_terminal_filters import (
     normalize_scan_terminal_filters as _normalize_scan_terminal_filters,
 )
@@ -65,6 +68,19 @@ def _normalize_city_key(value: Any) -> str:
 def _rows_count(payload: Dict[str, Any]) -> int:
     rows = payload.get("rows")
     return len(rows) if isinstance(rows, list) else 0
+
+
+def _model_bearing_rows_count(rows: Any) -> int:
+    if not isinstance(rows, list):
+        return 0
+    count = 0
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        sources = row.get("model_cluster_sources")
+        if isinstance(sources, dict) and sources:
+            count += 1
+    return count
 
 
 def _success_payload_within_stale_window(cached_entry: Dict[str, Any]) -> bool:
@@ -115,6 +131,10 @@ def _build_stale_payload_for_timeout_if_better_cached(
 ) -> Optional[Dict[str, Any]]:
     success_payload = cached_entry.get("success_payload")
     if not isinstance(success_payload, dict) or not success_payload.get("rows"):
+        return None
+    if _model_bearing_rows_count(ranked_rows) > _model_bearing_rows_count(
+        success_payload.get("rows")
+    ):
         return None
     if _rows_count(success_payload) < len(ranked_rows):
         return None
@@ -184,59 +204,86 @@ def _build_scan_terminal_payload_uncached(
                 return _tz_region(tz)["key"] == region_filter
 
             city_names = [c for c in city_names if _city_in_region(c)]
-        max_workers = max(1, min(SCAN_TERMINAL_MAX_WORKERS, len(city_names)))
         city_results: List[Dict[str, Any]] = []
         failed_cities: List[str] = []
         failed_reasons: List[str] = []
+        multi_model_overrides = _fetch_scan_terminal_multi_model_batch(city_names)
+        scan_city_names = (
+            [city_name for city_name in city_names if city_name in multi_model_overrides]
+            if multi_model_overrides
+            else city_names
+        )
+        max_workers = max(1, min(SCAN_TERMINAL_MAX_WORKERS, len(scan_city_names)))
 
         timed_out = False
         timeout_message: Optional[str] = None
-        executor = ThreadPoolExecutor(max_workers=max_workers)
-        future_map = {
-            executor.submit(
-                _scan_city_terminal_rows,
-                city_name,
-                filters,
-                force_refresh=force_refresh,
-            ): city_name
-            for city_name in city_names
-        }
-        try:
-            try:
-                completed = as_completed(
-                    future_map,
-                    timeout=build_timeout_sec,
-                )
-                for future in completed:
-                    city_name = future_map[future]
-                    try:
-                        city_results.append(future.result())
-                    except Exception as exc:
-                        failed_cities.append(city_name)
-                        failed_reasons.append(str(exc))
-                        logger.warning(
-                            "scan terminal city failed city={}: {}", city_name, exc
+        if multi_model_overrides:
+            for city_name in scan_city_names:
+                try:
+                    city_results.append(
+                        _scan_city_terminal_rows(
+                            city_name,
+                            filters,
+                            force_refresh=force_refresh,
+                            multi_model_override=multi_model_overrides.get(city_name),
+                            allow_direct_fetch=False,
                         )
-            except FutureTimeoutError:
-                timed_out = True
-                timeout_message = (
-                    f"scan terminal build timed out after {build_timeout_sec:g}s"
-                )
-                failed_reasons.append(timeout_message)
-                for future, city_name in future_map.items():
-                    if not future.done():
-                        future.cancel()
-                        failed_cities.append(city_name)
-                logger.warning(
-                    "{}; completed={}/{}",
-                    timeout_message,
-                    len(city_results),
-                    len(city_names),
-                )
-        finally:
-            executor.shutdown(wait=False)
+                    )
+                except Exception as exc:
+                    failed_cities.append(city_name)
+                    failed_reasons.append(str(exc))
+                    logger.warning(
+                        "scan terminal city failed city={}: {}", city_name, exc
+                    )
+        else:
+            executor = ThreadPoolExecutor(max_workers=max_workers)
+            future_map = {
+                executor.submit(
+                    _scan_city_terminal_rows,
+                    city_name,
+                    filters,
+                    force_refresh=force_refresh,
+                    multi_model_override=multi_model_overrides.get(city_name),
+                    allow_direct_fetch=False,
+                ): city_name
+                for city_name in scan_city_names
+            }
+            try:
+                try:
+                    completed = as_completed(
+                        future_map,
+                        timeout=build_timeout_sec,
+                    )
+                    for future in completed:
+                        city_name = future_map[future]
+                        try:
+                            city_results.append(future.result())
+                        except Exception as exc:
+                            failed_cities.append(city_name)
+                            failed_reasons.append(str(exc))
+                            logger.warning(
+                                "scan terminal city failed city={}: {}", city_name, exc
+                            )
+                except FutureTimeoutError:
+                    timed_out = True
+                    timeout_message = (
+                        f"scan terminal build timed out after {build_timeout_sec:g}s"
+                    )
+                    failed_reasons.append(timeout_message)
+                    for future, city_name in future_map.items():
+                        if not future.done():
+                            future.cancel()
+                            failed_cities.append(city_name)
+                    logger.warning(
+                        "{}; completed={}/{}",
+                        timeout_message,
+                        len(city_results),
+                        len(scan_city_names),
+                    )
+            finally:
+                executor.shutdown(wait=False)
 
-        if city_names and len(failed_cities) >= len(city_names):
+        if scan_city_names and len(failed_cities) >= len(scan_city_names):
             error_message = (
                 failed_reasons[0] if failed_reasons else "all city market scans failed"
             )

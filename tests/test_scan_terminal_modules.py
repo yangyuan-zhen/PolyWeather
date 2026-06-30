@@ -59,6 +59,19 @@ def test_scan_terminal_cache_hydrates_success_payload_from_redis(monkeypatch):
     assert cached["summary"]["candidate_total"] == 1
 
 
+def test_scan_terminal_redis_cache_prefix_skips_legacy_blank_snapshots(monkeypatch):
+    monkeypatch.delenv("POLYWEATHER_SCAN_TERMINAL_REDIS_CACHE_PREFIX", raising=False)
+
+    assert scan_terminal_cache._redis_cache_prefix() == "polyweather:scan_terminal:v2:"
+
+    monkeypatch.setenv(
+        "POLYWEATHER_SCAN_TERMINAL_REDIS_CACHE_PREFIX",
+        "polyweather:scan_terminal:v1:",
+    )
+
+    assert scan_terminal_cache._redis_cache_prefix() == "polyweather:scan_terminal:v2:"
+
+
 def test_scan_terminal_failure_state_preserves_redis_success_payload(monkeypatch):
     fake_redis = _FakeRedis()
     monkeypatch.setenv("POLYWEATHER_SCAN_TERMINAL_REDIS_CACHE_ENABLED", "true")
@@ -431,6 +444,270 @@ def test_scan_city_terminal_rows_refreshes_models_for_wrong_local_date_panel(mon
             "reason": "scan_terminal_stale_panel_date",
         }
     ]
+
+
+def test_scan_terminal_fetches_multi_model_daily_in_batches(monkeypatch):
+    today_paris = _local_date_for_offset(3600)
+    today_houston = _local_date_for_offset(-18000)
+    monkeypatch.setattr(
+        scan_terminal_city_row,
+        "CITIES",
+        {
+            "paris": {"lat": 48.85, "lon": 2.35, "tz": 3600},
+            "houston": {"lat": 29.76, "lon": -95.36, "tz": -18000, "f": True},
+        },
+    )
+    monkeypatch.setattr(
+        scan_terminal_city_row._weather,
+        "_multi_model_cache",
+        {},
+        raising=False,
+    )
+    monkeypatch.setattr(
+        scan_terminal_city_row._weather,
+        "_maybe_reload_open_meteo_disk_cache",
+        lambda: None,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        scan_terminal_city_row._weather,
+        "_flush_open_meteo_disk_cache",
+        lambda: None,
+        raising=False,
+    )
+
+    requests = []
+
+    class _Response:
+        def __init__(self, payload):
+            self._payload = payload
+
+        @staticmethod
+        def raise_for_status():
+            return None
+
+        def json(self):
+            return self._payload
+
+    def _http_get(_url, *, params, timeout):
+        requests.append((params, timeout))
+        unit_is_f = params.get("temperature_unit") == "fahrenheit"
+        date = today_houston if unit_is_f else today_paris
+        value = 94.0 if unit_is_f else 24.0
+        return _Response(
+            [
+                {
+                    "daily": {
+                        "time": [date],
+                        "temperature_2m_max_ecmwf_ifs025": [value],
+                        "temperature_2m_max_gfs_seamless": [value + 1],
+                    }
+                }
+            ]
+        )
+
+    monkeypatch.setattr(scan_terminal_city_row._weather, "_http_get", _http_get, raising=False)
+    monkeypatch.setattr(
+        scan_terminal_city_row._weather,
+        "_wait_open_meteo_slot",
+        lambda _endpoint: None,
+        raising=False,
+    )
+
+    result = scan_terminal_city_row._fetch_scan_terminal_multi_model_batch(["paris", "houston"])
+
+    assert len(requests) == 2
+    assert requests[0][0]["latitude"] == "48.85"
+    assert requests[1][0]["temperature_unit"] == "fahrenheit"
+    assert result["paris"]["daily_forecasts"][today_paris]["ECMWF"] == 24.0
+    assert result["paris"]["daily_forecasts"][today_paris]["GFS"] == 25.0
+    assert result["houston"]["daily_forecasts"][today_houston]["ECMWF"] == 94.0
+
+
+def test_scan_terminal_multi_model_batch_chunks_long_city_lists(monkeypatch):
+    today = _local_date_for_offset(0)
+    cities = {
+        f"city{i}": {"lat": float(i), "lon": float(i + 1), "tz": 0}
+        for i in range(45)
+    }
+    monkeypatch.setattr(scan_terminal_city_row, "CITIES", cities)
+    monkeypatch.setattr(
+        scan_terminal_city_row._weather,
+        "_multi_model_cache",
+        {},
+        raising=False,
+    )
+    monkeypatch.setattr(
+        scan_terminal_city_row._weather,
+        "_maybe_reload_open_meteo_disk_cache",
+        lambda: None,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        scan_terminal_city_row._weather,
+        "_flush_open_meteo_disk_cache",
+        lambda: None,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        scan_terminal_city_row._weather,
+        "_wait_open_meteo_slot",
+        lambda _endpoint: None,
+        raising=False,
+    )
+    requests = []
+
+    class _Response:
+        def __init__(self, count):
+            self.count = count
+
+        @staticmethod
+        def raise_for_status():
+            return None
+
+        def json(self):
+            return [
+                {
+                    "daily": {
+                        "time": [today],
+                        "temperature_2m_max_ecmwf_ifs025": [20.0 + idx],
+                    }
+                }
+                for idx in range(self.count)
+            ]
+
+    def _http_get(_url, *, params, timeout):
+        latitude_count = len(str(params["latitude"]).split(","))
+        requests.append(latitude_count)
+        return _Response(latitude_count)
+
+    monkeypatch.setattr(scan_terminal_city_row._weather, "_http_get", _http_get, raising=False)
+
+    result = scan_terminal_city_row._fetch_scan_terminal_multi_model_batch(list(cities.keys()))
+
+    assert requests == [20, 20, 5]
+    assert len(result) == 45
+    assert result["city0"]["daily_forecasts"][today]["ECMWF"] == 20.0
+    assert result["city44"]["daily_forecasts"][today]["ECMWF"] == 24.0
+
+
+def test_scan_terminal_uncached_passes_batch_multi_model_overrides(monkeypatch):
+    scan_terminal_cache._SCAN_TERMINAL_CACHE.clear()
+    monkeypatch.setattr(
+        scan_terminal_service,
+        "CITIES",
+        {"paris": {"tz": 3600}, "houston": {"tz": -18000}},
+    )
+    monkeypatch.setattr(scan_terminal_service, "SCAN_TERMINAL_MAX_WORKERS", 2)
+    monkeypatch.setattr(
+        scan_terminal_service,
+        "_fetch_scan_terminal_multi_model_batch",
+        lambda cities: {"paris": {"source": "batch-paris"}},
+    )
+    seen = []
+
+    def _scan_city(
+        city,
+        _filters,
+        *,
+        force_refresh=False,
+        multi_model_override=None,
+        allow_direct_fetch=True,
+    ):
+        seen.append((city, force_refresh, multi_model_override, allow_direct_fetch))
+        return {
+            "city": city,
+            "candidate_total": 1,
+            "primary_scores": [1.0],
+            "rows": [
+                {
+                    "id": f"{city}:today",
+                    "market_key": f"{city}:today",
+                    "final_score": 1.0,
+                    "edge_percent": 0.0,
+                    "volume": 0.0,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(scan_terminal_service, "_scan_city_terminal_rows", _scan_city)
+
+    payload = scan_terminal_service._build_scan_terminal_payload_uncached(
+        {"limit": 2},
+        force_refresh=True,
+        timeout_sec=5,
+    )
+
+    assert payload["status"] == "ready"
+    assert sorted(seen) == [
+        ("paris", True, {"source": "batch-paris"}, False),
+    ]
+    assert payload["summary"]["total_city_count"] == 2
+    assert payload["summary"]["scanned_city_count"] == 1
+
+
+def test_scan_city_terminal_rows_builds_forecast_only_row_from_batch_override(monkeypatch):
+    today = _local_date_for_offset(3600)
+
+    class _Cache:
+        @staticmethod
+        def get_city_cache(*_args, **_kwargs):
+            raise AssertionError("batch forecast rows should not read panel cache")
+
+        @staticmethod
+        def get_canonical_temperature(*_args, **_kwargs):
+            raise AssertionError("batch forecast rows should not read canonical cache")
+
+    monkeypatch.setattr(scan_terminal_city_row, "_PANEL_CACHE_DB", _Cache())
+    monkeypatch.setattr(
+        scan_terminal_city_row,
+        "calculate_deb_prediction",
+        lambda city, forecasts, raw_calculator=None: {"prediction": 24.5},
+    )
+
+    result = scan_terminal_city_row._scan_city_terminal_rows(
+        "paris",
+        {"market_type": "maxtemp"},
+        force_refresh=True,
+        multi_model_override={
+            "daily_forecasts": {today: {"ECMWF": 24.0, "GFS": 25.0}},
+            "dates": [today],
+            "unit": "celsius",
+        },
+        allow_direct_fetch=False,
+    )
+
+    row = result["rows"][0]
+    assert row["local_date"] == today
+    assert row["deb_prediction"] == 24.5
+    assert row["model_cluster_sources"] == {"ECMWF": 24.0, "GFS": 25.0}
+    assert row["forecast_refreshed"] is True
+
+
+def test_scan_timeout_prefers_partial_rows_with_models_over_blank_stale_cache(monkeypatch):
+    cached_entry = {
+        "success_payload": {
+            "rows": [
+                {"id": "old-1", "model_cluster_sources": {}},
+                {"id": "old-2", "model_cluster_sources": {}},
+            ]
+        },
+        "last_failed_at": None,
+    }
+
+    stale = scan_terminal_service._build_stale_payload_for_timeout_if_better_cached(
+        filters={"limit": 2},
+        cached_entry=cached_entry,
+        ranked_rows=[
+            {
+                "id": "new-1",
+                "model_cluster_sources": {"ECMWF": 24.0},
+            }
+        ],
+        timeout_message="scan terminal build timed out after 30s",
+    )
+
+    assert stale is None
 
 
 def test_scan_city_terminal_rows_uses_canonical_without_analyze(monkeypatch):

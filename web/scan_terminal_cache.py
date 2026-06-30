@@ -43,10 +43,13 @@ def _redis_cache_ttl_sec() -> int:
 
 
 def _redis_cache_prefix() -> str:
-    return os.getenv(
+    prefix = os.getenv(
         "POLYWEATHER_SCAN_TERMINAL_REDIS_CACHE_PREFIX",
-        "polyweather:scan_terminal:v1:",
+        "polyweather:scan_terminal:v2:",
     )
+    if prefix.endswith(":v1:"):
+        return f"{prefix[:-4]}:v2:"
+    return prefix
 
 
 def _redis_entry_key(cache_key: str) -> str:

@@ -117,12 +117,12 @@ export function runTests() {
   assert.match(scanTerminalProxy, /timing:\s*timer/);
   assert.match(
     scanTerminalProxy,
-    /POLYWEATHER_SCAN_TERMINAL_PROXY_TIMEOUT_MS\s*\|\|\s*"35000"/,
-    "scan terminal proxy should allow the production backend enough time to return before the 45 second route cap",
+    /POLYWEATHER_SCAN_TERMINAL_PROXY_TIMEOUT_MS\s*\|\|\s*"60000"/,
+    "scan terminal proxy should allow the production backend enough time for batched model refreshes",
   );
   assert.match(
     scanTerminalProxy,
-    /export const maxDuration = 45/,
+    /export const maxDuration = 70/,
     "scan terminal proxy timeout budget should remain below the Next route execution cap",
   );
 

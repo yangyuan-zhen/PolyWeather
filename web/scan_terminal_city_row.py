@@ -8,6 +8,10 @@ from typing import Any, Dict, List, Optional
 
 from src.analysis.deb_algorithm import calculate_deb_prediction, calculate_dynamic_weights
 from src.analysis.trend_engine import calculate_prob_distribution
+from src.data_collection.nws_open_meteo_sources import (
+    OPEN_METEO_MULTI_MODEL_ORDER,
+    _parse_open_meteo_multi_model_daily,
+)
 from src.data_collection.multi_model_freshness import multi_model_forecasts_for_local_date
 from src.database.db_manager import DBManager
 from src.utils.refresh_policy import SCAN_ROWS_REFRESH_SEC
@@ -22,6 +26,7 @@ from web.services.city_payloads import aggregate_runway_history
 
 SCAN_ROW_RUNWAY_HISTORY_RESOLUTION = "10m"
 SCAN_ROW_MAX_RUNWAY_POINTS = 144
+SCAN_TERMINAL_MULTI_MODEL_BATCH_SIZE = 20
 _PANEL_CACHE_DB = DBManager()
 _analyze = None  # compatibility hook for tests that assert scan terminal stays cache-only.
 SCAN_PANEL_CACHE_MAX_AGE_SEC = max(300, int(SCAN_ROWS_REFRESH_SEC) * 3)
@@ -101,9 +106,192 @@ def _model_spread_sigma(forecasts: Dict[str, float], temp_symbol: str) -> float:
     return max(0.8 * scale, min(4.0 * scale, spread / 2.0))
 
 
+def _multi_model_cache_key(
+    city: str,
+    lat: float,
+    lon: float,
+    *,
+    use_fahrenheit: bool,
+) -> str:
+    version = str(getattr(_weather, "multi_model_cache_version", "v5") or "v5")
+    return (
+        f"{round(float(lat), 4)}:{round(float(lon), 4)}:{str(city or '').strip().lower()}:"
+        f"{'f' if use_fahrenheit else 'c'}:{version}"
+    )
+
+
+def _read_cached_multi_model_for_today(
+    city: str,
+    *,
+    lat: float,
+    lon: float,
+    use_fahrenheit: bool,
+    local_date: str,
+) -> Optional[Dict[str, Any]]:
+    maybe_reload = getattr(_weather, "_maybe_reload_open_meteo_disk_cache", None)
+    if callable(maybe_reload):
+        try:
+            maybe_reload()
+        except Exception:
+            pass
+    cache = getattr(_weather, "_multi_model_cache", None)
+    lock = getattr(_weather, "_multi_model_cache_lock", None)
+    if not isinstance(cache, dict) or lock is None:
+        return None
+    key = _multi_model_cache_key(city, lat, lon, use_fahrenheit=use_fahrenheit)
+    try:
+        with lock:
+            entry = cache.get(key)
+            data = entry.get("data") if isinstance(entry, dict) else None
+    except Exception:
+        return None
+    if isinstance(data, dict) and multi_model_forecasts_for_local_date(data, local_date):
+        return dict(data)
+    return None
+
+
+def _store_multi_model_cache(
+    city: str,
+    payload: Dict[str, Any],
+    *,
+    lat: float,
+    lon: float,
+    use_fahrenheit: bool,
+) -> None:
+    cache = getattr(_weather, "_multi_model_cache", None)
+    lock = getattr(_weather, "_multi_model_cache_lock", None)
+    if not isinstance(cache, dict) or lock is None:
+        return
+    key = _multi_model_cache_key(city, lat, lon, use_fahrenheit=use_fahrenheit)
+    try:
+        with lock:
+            cache[key] = {"t": time.time(), "data": dict(payload)}
+    except Exception:
+        return
+
+
+def _fetch_scan_terminal_multi_model_batch(city_names: List[str]) -> Dict[str, Dict[str, Any]]:
+    """Fetch daily max multi-model payloads for scan rows in batch.
+
+    The scan terminal only needs today's max per model.  A batched daily request
+    avoids 50 per-city calls while still preserving city-local dates.
+    """
+    grouped: Dict[bool, List[Dict[str, Any]]] = {False: [], True: []}
+    results: Dict[str, Dict[str, Any]] = {}
+    for city in city_names:
+        city_meta = CITIES.get(city) or {}
+        lat = _safe_float(city_meta.get("lat"))
+        lon = _safe_float(city_meta.get("lon"))
+        if lat is None or lon is None:
+            continue
+        use_fahrenheit = bool(city_meta.get("f"))
+        local_date = _city_local_date(city, _safe_int(city_meta.get("tz"), 0))
+        cached = _read_cached_multi_model_for_today(
+            city,
+            lat=lat,
+            lon=lon,
+            use_fahrenheit=use_fahrenheit,
+            local_date=local_date,
+        )
+        if cached:
+            results[city] = cached
+            continue
+        grouped[use_fahrenheit].append(
+            {
+                "city": city,
+                "lat": lat,
+                "lon": lon,
+                "local_date": local_date,
+            }
+        )
+
+    http_get = getattr(_weather, "_http_get", None)
+    if not callable(http_get):
+        return results
+
+    stored_any = False
+    for use_fahrenheit, unit_items in grouped.items():
+        if not unit_items:
+            continue
+        for start in range(0, len(unit_items), SCAN_TERMINAL_MULTI_MODEL_BATCH_SIZE):
+            items = unit_items[start : start + SCAN_TERMINAL_MULTI_MODEL_BATCH_SIZE]
+            if not items:
+                continue
+            try:
+                wait_slot = getattr(_weather, "_wait_open_meteo_slot", None)
+                if callable(wait_slot):
+                    wait_slot("scan-terminal-multi-model-batch")
+                params: Dict[str, Any] = {
+                    "latitude": ",".join(str(item["lat"]) for item in items),
+                    "longitude": ",".join(str(item["lon"]) for item in items),
+                    "daily": "temperature_2m_max",
+                    "models": ",".join(OPEN_METEO_MULTI_MODEL_ORDER),
+                    "timezone": "auto",
+                    "forecast_days": 3,
+                }
+                if use_fahrenheit:
+                    params["temperature_unit"] = "fahrenheit"
+                response = http_get(
+                    "https://api.open-meteo.com/v1/forecast",
+                    params=params,
+                    timeout=max(10.0, float(getattr(_weather, "open_meteo_timeout_sec", 5.0))),
+                )
+                response.raise_for_status()
+                raw = response.json()
+                payloads = raw if isinstance(raw, list) else [raw]
+                for item, location_payload in zip(items, payloads):
+                    daily = location_payload.get("daily", {}) if isinstance(location_payload, dict) else {}
+                    if not isinstance(daily, dict):
+                        continue
+                    dates, daily_forecasts, model_metadata, model_keys = _parse_open_meteo_multi_model_daily(daily)
+                    if not daily_forecasts:
+                        continue
+                    local_date = item["local_date"]
+                    forecasts = daily_forecasts.get(local_date) or {}
+                    if not forecasts:
+                        continue
+                    city = str(item["city"])
+                    result = {
+                        "source": "multi_model",
+                        "provider": "open-meteo",
+                        "forecasts": forecasts,
+                        "daily_forecasts": daily_forecasts,
+                        "hourly_times": [],
+                        "hourly_forecasts": {},
+                        "model_metadata": model_metadata,
+                        "model_keys": model_keys,
+                        "dates": dates,
+                        "unit": "fahrenheit" if use_fahrenheit else "celsius",
+                        "attribution": "Open-Meteo forecast model API; underlying models from ECMWF, DWD, ECCC, NOAA/NCEP, Google and JMA.",
+                        "scan_terminal_batch": True,
+                    }
+                    results[city] = result
+                    _store_multi_model_cache(
+                        city,
+                        result,
+                        lat=float(item["lat"]),
+                        lon=float(item["lon"]),
+                        use_fahrenheit=use_fahrenheit,
+                    )
+                    stored_any = True
+            except Exception:
+                continue
+    if stored_any:
+        flush = getattr(_weather, "_flush_open_meteo_disk_cache", None)
+        if callable(flush):
+            try:
+                flush()
+            except Exception:
+                pass
+    return results
+
+
 def _fetch_today_forecast_panel_payload(
     city: str,
     payload: Dict[str, Any],
+    *,
+    multi_model_override: Optional[Dict[str, Any]] = None,
+    allow_direct_fetch: bool = True,
 ) -> Optional[Dict[str, Any]]:
     city_meta = CITIES.get(city) or {}
     lat = _safe_float(city_meta.get("lat"))
@@ -120,15 +308,19 @@ def _fetch_today_forecast_panel_payload(
     local_date = _city_local_date(city, tz_offset_int)
     local_time = _city_local_time(city, tz_offset_int)
 
-    try:
-        multi_model = _weather.fetch_multi_model(
-            lat,
-            lon,
-            city=city,
-            use_fahrenheit=use_fahrenheit,
-        )
-    except Exception:
-        multi_model = None
+    multi_model = multi_model_override
+    if not isinstance(multi_model, dict):
+        if not allow_direct_fetch:
+            return None
+        try:
+            multi_model = _weather.fetch_multi_model(
+                lat,
+                lon,
+                city=city,
+                use_fahrenheit=use_fahrenheit,
+            )
+        except Exception:
+            multi_model = None
     forecasts = multi_model_forecasts_for_local_date(multi_model, local_date)
     if not forecasts:
         return None
@@ -186,7 +378,34 @@ def _fetch_today_forecast_panel_payload(
     }
 
 
-def _load_scan_panel_payload(city: str, *, force_refresh: bool) -> Optional[Dict[str, Any]]:
+def _build_forecast_only_panel_payload(
+    city: str,
+    multi_model: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    city_meta = CITIES.get(city) or {}
+    temp_symbol = "°F" if bool(city_meta.get("f")) else "°C"
+    return _fetch_today_forecast_panel_payload(
+        city,
+        {
+            "display_name": city_meta.get("name") or city_meta.get("display_name") or city,
+            "current": {},
+            "risk": {},
+            "probabilities": {},
+            "temp_symbol": temp_symbol,
+            "utc_offset_seconds": _safe_int(city_meta.get("tz"), 0),
+        },
+        multi_model_override=multi_model,
+        allow_direct_fetch=False,
+    )
+
+
+def _load_scan_panel_payload(
+    city: str,
+    *,
+    force_refresh: bool,
+    multi_model_override: Optional[Dict[str, Any]] = None,
+    allow_direct_fetch: bool = True,
+) -> Optional[Dict[str, Any]]:
     refresh_already_queued = False
     cached_entry = _PANEL_CACHE_DB.get_city_cache("panel", city)
     cached_payload = cached_entry.get("payload") if isinstance(cached_entry, dict) else None
@@ -196,7 +415,12 @@ def _load_scan_panel_payload(city: str, *, force_refresh: bool) -> Optional[Dict
             return cached_payload
         _enqueue_scan_terminal_refresh(city, reason=stale_reason or "scan_terminal_force_forecast_refresh")
         refresh_already_queued = True
-        refreshed_payload = _fetch_today_forecast_panel_payload(city, cached_payload)
+        refreshed_payload = _fetch_today_forecast_panel_payload(
+            city,
+            cached_payload,
+            multi_model_override=multi_model_override,
+            allow_direct_fetch=allow_direct_fetch,
+        )
         if refreshed_payload:
             return refreshed_payload
 
@@ -212,7 +436,12 @@ def _load_scan_panel_payload(city: str, *, force_refresh: bool) -> Optional[Dict
         city_meta = CITIES.get(city) or {}
         payload.setdefault("display_name", city_meta.get("name") or city_meta.get("display_name") or city)
         payload.setdefault("temp_symbol", canonical.get("temp_symbol") or "°C")
-        refreshed_payload = _fetch_today_forecast_panel_payload(city, payload)
+        refreshed_payload = _fetch_today_forecast_panel_payload(
+            city,
+            payload,
+            multi_model_override=multi_model_override,
+            allow_direct_fetch=allow_direct_fetch,
+        )
         if refreshed_payload:
             payload = refreshed_payload
         _enqueue_scan_terminal_refresh(city, reason="scan_terminal_canonical_fallback")
@@ -353,8 +582,16 @@ def _scan_city_terminal_rows(
     filters: Dict[str, Any],
     *,
     force_refresh: bool = False,
+    multi_model_override: Optional[Dict[str, Any]] = None,
+    allow_direct_fetch: bool = True,
 ) -> Dict[str, Any]:
-    return _scan_city_terminal_rows_quick(city, filters, force_refresh=force_refresh)
+    return _scan_city_terminal_rows_quick(
+        city,
+        filters,
+        force_refresh=force_refresh,
+        multi_model_override=multi_model_override,
+        allow_direct_fetch=allow_direct_fetch,
+    )
 
 
 def _scan_city_terminal_rows_quick(
@@ -362,10 +599,28 @@ def _scan_city_terminal_rows_quick(
     filters: Dict[str, Any],
     *,
     force_refresh: bool = False,
+    multi_model_override: Optional[Dict[str, Any]] = None,
+    allow_direct_fetch: bool = True,
 ) -> Dict[str, Any]:
     """Fast path that returns cached analysis rows only — returns a single row per city
     with cached analysis data (Obs, DEB, probabilities) but no market prices."""
-    data = _load_scan_panel_payload(city, force_refresh=force_refresh)
+    if isinstance(multi_model_override, dict) and multi_model_override:
+        data = _build_forecast_only_panel_payload(city, multi_model_override)
+        if data:
+            row = _build_quick_row(city=city, data=data)
+            return {
+                "city": city,
+                "rows": [row] if row else [],
+                "candidate_total": 1,
+                "primary_scores": [float(row.get("final_score") or 0)] if row else [],
+            }
+
+    data = _load_scan_panel_payload(
+        city,
+        force_refresh=force_refresh,
+        multi_model_override=multi_model_override,
+        allow_direct_fetch=allow_direct_fetch,
+    )
     if not data:
         return {
             "city": city,
