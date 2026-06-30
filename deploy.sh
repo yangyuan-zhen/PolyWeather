@@ -297,6 +297,10 @@ wait_for_scan_terminal_snapshot() {
                 echo "✅ $name ready after attempt $i/$attempts"
                 return 0
             fi
+            if printf '%s' "$compact" | grep -q '"status":"stale"'; then
+                echo "✅ $name stale snapshot available after attempt $i/$attempts"
+                return 0
+            fi
             if printf '%s' "$compact" | grep -q '"stale_reason":"市场扫描快照正在初始化"'; then
                 echo "✅ $name initializing after attempt $i/$attempts"
                 return 0
@@ -311,7 +315,7 @@ wait_for_scan_terminal_snapshot() {
         fi
     done
 
-    echo "❌ $name did not return status=ready or http=401"
+    echo "❌ $name did not return status=ready/stale or http=401"
     return 1
 }
 

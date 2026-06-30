@@ -277,6 +277,8 @@ def test_deploy_script_retries_startup_smoke_checks():
     assert "smoke_check()" in script
     assert "wait_for_scan_terminal_snapshot()" in script
     assert '"status":"ready"' in script
+    assert '"status":"stale"' in script
+    assert "stale snapshot available" in script
     assert "http=401" in script
     assert '"stale_reason":"市场扫描快照正在初始化"' in script
     assert "initializing after attempt" in script
