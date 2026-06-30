@@ -335,6 +335,21 @@ def _build_scan_terminal_payload_uncached(
             )
             if stale_payload is not None:
                 return stale_payload
+        success_payload = cached_entry.get("success_payload")
+        if (
+            isinstance(success_payload, dict)
+            and _model_bearing_rows_count(success_payload.get("rows")) > 0
+            and _model_bearing_rows_count(ranked_rows) == 0
+        ):
+            error_message = "scan terminal refresh returned rows without model forecasts"
+            set_scan_terminal_failure_state(filters, error_message=error_message)
+            failed_entry = get_scan_terminal_cache_entry(filters) or {}
+            return build_stale_scan_terminal_payload(
+                filters=filters,
+                success_payload=success_payload,
+                error_message=error_message,
+                failed_at=failed_entry.get("last_failed_at"),
+            )
 
         payload = {
             "generated_at": datetime.utcnow().isoformat() + "Z",

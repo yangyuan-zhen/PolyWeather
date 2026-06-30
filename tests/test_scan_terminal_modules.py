@@ -446,6 +446,84 @@ def test_scan_city_terminal_rows_refreshes_models_for_wrong_local_date_panel(mon
     ]
 
 
+def test_scan_city_terminal_rows_reuses_cached_today_models_when_direct_fetch_disabled(monkeypatch):
+    today = _local_date_for_offset(3600)
+    enqueued = []
+    payload = {
+        "display_name": "Paris",
+        "local_date": "2000-01-01",
+        "local_time": "12:00",
+        "utc_offset_seconds": 3600,
+        "current": {"max_so_far": 20.0},
+        "risk": {},
+        "deb": {"prediction": 20.0},
+        "probabilities": {},
+        "multi_model_daily": {
+            today: {
+                "deb": {"prediction": 22.4},
+                "models": {"ECMWF": 22.0, "GFS": 23.0},
+            }
+        },
+    }
+
+    class _Cache:
+        @staticmethod
+        def get_city_cache(kind, city):
+            assert (kind, city) == ("panel", "paris")
+            return {"payload": payload, "updated_at_ts": 1}
+
+        @staticmethod
+        def get_canonical_temperature(city):
+            assert city == "paris"
+            return None
+
+        @staticmethod
+        def enqueue_observation_refresh_request(**kwargs):
+            enqueued.append(kwargs)
+            return True
+
+    monkeypatch.setattr(
+        scan_terminal_city_row,
+        "CITIES",
+        {"paris": {"lat": 48.85, "lon": 2.35, "tz": 3600}},
+    )
+    monkeypatch.setattr(scan_terminal_city_row, "_PANEL_CACHE_DB", _Cache())
+    monkeypatch.setattr(
+        scan_terminal_city_row._weather,
+        "fetch_multi_model",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("direct multi-model fetch should stay disabled")
+        ),
+    )
+    monkeypatch.setattr(
+        scan_terminal_city_row,
+        "calculate_deb_prediction",
+        lambda city, forecasts, raw_calculator=None: {"prediction": 22.4},
+    )
+
+    result = scan_terminal_city_row._scan_city_terminal_rows(
+        "paris",
+        {"market_type": "maxtemp"},
+        force_refresh=False,
+        allow_direct_fetch=False,
+    )
+
+    row = result["rows"][0]
+    assert row["local_date"] == today
+    assert row["forecast_refreshed"] is True
+    assert row["forecast_source_local_date"] == today
+    assert row["deb_prediction"] == 22.4
+    assert row["model_cluster_sources"] == {"ECMWF": 22.0, "GFS": 23.0}
+    assert enqueued == [
+        {
+            "city": "paris",
+            "kind": "panel",
+            "priority": "high",
+            "reason": "scan_terminal_stale_panel",
+        }
+    ]
+
+
 def test_scan_terminal_fetches_multi_model_daily_in_batches(monkeypatch):
     today_paris = _local_date_for_offset(3600)
     today_houston = _local_date_for_offset(-18000)
@@ -708,6 +786,76 @@ def test_scan_timeout_prefers_partial_rows_with_models_over_blank_stale_cache(mo
     )
 
     assert stale is None
+
+
+def test_scan_terminal_refresh_without_model_rows_keeps_previous_model_snapshot(monkeypatch):
+    cached_entry = {
+        "success_payload": {
+            "generated_at": "2026-06-01T00:00:00Z",
+            "snapshot_id": "good-model-snapshot",
+            "rows": [
+                {
+                    "id": "paris:today",
+                    "market_key": "paris:today",
+                    "model_cluster_sources": {"ECMWF": 24.0},
+                }
+            ],
+            "summary": {"candidate_total": 1},
+            "top_signal": None,
+        },
+        "last_failed_at": "2026-06-01T00:01:00Z",
+    }
+    failures = []
+
+    monkeypatch.setattr(scan_terminal_service, "CITIES", {"paris": {"tz": 3600}})
+    monkeypatch.setattr(scan_terminal_service, "_fetch_scan_terminal_multi_model_batch", lambda _cities: {})
+    monkeypatch.setattr(
+        scan_terminal_service,
+        "get_scan_terminal_cache_entry",
+        lambda _filters: cached_entry,
+    )
+    monkeypatch.setattr(
+        scan_terminal_service,
+        "set_scan_terminal_failure_state",
+        lambda _filters, *, error_message: failures.append(error_message),
+    )
+    monkeypatch.setattr(
+        scan_terminal_service,
+        "set_cached_scan_terminal_payload",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("blank model refresh must not overwrite success payload")
+        ),
+    )
+
+    def _scan_city(*_args, **_kwargs):
+        return {
+            "city": "paris",
+            "candidate_total": 1,
+            "primary_scores": [0.0],
+            "rows": [
+                {
+                    "id": "paris:today",
+                    "market_key": "paris:today",
+                    "final_score": 0.0,
+                    "edge_percent": 0.0,
+                    "volume": 0.0,
+                    "model_cluster_sources": {},
+                }
+            ],
+        }
+
+    monkeypatch.setattr(scan_terminal_service, "_scan_city_terminal_rows", _scan_city)
+
+    payload = scan_terminal_service._build_scan_terminal_payload_uncached(
+        {"limit": 1},
+        timeout_sec=5,
+    )
+
+    assert payload["status"] == "stale"
+    assert payload["stale"] is True
+    assert payload["snapshot_id"] == "good-model-snapshot"
+    assert payload["rows"][0]["model_cluster_sources"] == {"ECMWF": 24.0}
+    assert failures == ["scan terminal refresh returned rows without model forecasts"]
 
 
 def test_scan_city_terminal_rows_uses_canonical_without_analyze(monkeypatch):

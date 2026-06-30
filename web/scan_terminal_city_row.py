@@ -93,6 +93,47 @@ def _panel_cache_stale_reason(city: str, cached_entry: Dict[str, Any], payload: 
     return None
 
 
+def _cached_panel_multi_model_for_local_date(
+    payload: Dict[str, Any],
+    local_date: str,
+    *,
+    use_fahrenheit: bool,
+) -> Optional[Dict[str, Any]]:
+    daily = payload.get("multi_model_daily")
+    if isinstance(daily, dict):
+        daily_entry = daily.get(local_date)
+        if isinstance(daily_entry, dict):
+            raw_models = daily_entry.get("models")
+            if isinstance(raw_models, dict):
+                forecasts = {
+                    str(model): value
+                    for model, value in raw_models.items()
+                    if _safe_float(value) is not None
+                }
+                if forecasts:
+                    return {
+                        "source": "cached_panel_multi_model_daily",
+                        "provider": "panel-cache",
+                        "forecasts": forecasts,
+                        "daily_forecasts": {local_date: forecasts},
+                        "hourly_times": [],
+                        "hourly_forecasts": {},
+                        "model_metadata": {},
+                        "model_keys": list(forecasts.keys()),
+                        "dates": [local_date],
+                        "unit": "fahrenheit" if use_fahrenheit else "celsius",
+                        "scan_terminal_panel_cache": True,
+                    }
+
+    multi_model = payload.get("multi_model")
+    if isinstance(multi_model, dict) and multi_model_forecasts_for_local_date(
+        multi_model,
+        local_date,
+    ):
+        return dict(multi_model)
+    return None
+
+
 def _model_spread_sigma(forecasts: Dict[str, float], temp_symbol: str) -> float:
     values = [
         value
@@ -413,12 +454,26 @@ def _load_scan_panel_payload(
         stale_reason = _panel_cache_stale_reason(city, cached_entry, cached_payload)
         if not force_refresh and stale_reason is None:
             return cached_payload
+        effective_multi_model_override = multi_model_override
+        if not isinstance(effective_multi_model_override, dict):
+            city_meta = CITIES.get(city) or {}
+            tz_offset = cached_payload.get("utc_offset_seconds")
+            if tz_offset is None:
+                tz_offset = city_meta.get("tz")
+            local_date = _city_local_date(city, _safe_int(tz_offset, 0))
+            cached_panel_multi_model = _cached_panel_multi_model_for_local_date(
+                cached_payload,
+                local_date,
+                use_fahrenheit=bool(city_meta.get("f")),
+            )
+            if cached_panel_multi_model:
+                effective_multi_model_override = cached_panel_multi_model
         _enqueue_scan_terminal_refresh(city, reason=stale_reason or "scan_terminal_force_forecast_refresh")
         refresh_already_queued = True
         refreshed_payload = _fetch_today_forecast_panel_payload(
             city,
             cached_payload,
-            multi_model_override=multi_model_override,
+            multi_model_override=effective_multi_model_override,
             allow_direct_fetch=allow_direct_fetch,
         )
         if refreshed_payload:
