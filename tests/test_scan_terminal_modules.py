@@ -328,6 +328,7 @@ def test_scan_city_terminal_rows_rejects_expired_panel_cache(monkeypatch):
             return True
 
     monkeypatch.setattr(scan_terminal_city_row, "_PANEL_CACHE_DB", _Cache())
+    monkeypatch.setattr(scan_terminal_city_row._weather, "fetch_multi_model", lambda *args, **kwargs: None)
 
     result = scan_terminal_city_row._scan_city_terminal_rows(
         "paris",
@@ -466,6 +467,7 @@ def test_scan_city_terminal_rows_uses_canonical_without_analyze(monkeypatch):
             return True
 
     monkeypatch.setattr(scan_terminal_city_row, "_PANEL_CACHE_DB", _Cache())
+    monkeypatch.setattr(scan_terminal_city_row._weather, "fetch_multi_model", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         scan_terminal_city_row,
         "_analyze",

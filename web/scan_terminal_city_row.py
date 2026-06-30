@@ -188,19 +188,17 @@ def _fetch_today_forecast_panel_payload(
 
 def _load_scan_panel_payload(city: str, *, force_refresh: bool) -> Optional[Dict[str, Any]]:
     refresh_already_queued = False
-    if not force_refresh:
-        cached_entry = _PANEL_CACHE_DB.get_city_cache("panel", city)
-        cached_payload = cached_entry.get("payload") if isinstance(cached_entry, dict) else None
-        if isinstance(cached_payload, dict):
-            stale_reason = _panel_cache_stale_reason(city, cached_entry, cached_payload)
-            if stale_reason is None:
-                return cached_payload
-            _enqueue_scan_terminal_refresh(city, reason=stale_reason)
-            refresh_already_queued = True
-            if stale_reason == "scan_terminal_stale_panel_date":
-                refreshed_payload = _fetch_today_forecast_panel_payload(city, cached_payload)
-                if refreshed_payload:
-                    return refreshed_payload
+    cached_entry = _PANEL_CACHE_DB.get_city_cache("panel", city)
+    cached_payload = cached_entry.get("payload") if isinstance(cached_entry, dict) else None
+    if isinstance(cached_payload, dict):
+        stale_reason = _panel_cache_stale_reason(city, cached_entry, cached_payload)
+        if not force_refresh and stale_reason is None:
+            return cached_payload
+        _enqueue_scan_terminal_refresh(city, reason=stale_reason or "scan_terminal_force_forecast_refresh")
+        refresh_already_queued = True
+        refreshed_payload = _fetch_today_forecast_panel_payload(city, cached_payload)
+        if refreshed_payload:
+            return refreshed_payload
 
     canonical_getter = getattr(_PANEL_CACHE_DB, "get_canonical_temperature", None)
     canonical_entry = canonical_getter(city) if callable(canonical_getter) else None
@@ -214,6 +212,9 @@ def _load_scan_panel_payload(city: str, *, force_refresh: bool) -> Optional[Dict
         city_meta = CITIES.get(city) or {}
         payload.setdefault("display_name", city_meta.get("name") or city_meta.get("display_name") or city)
         payload.setdefault("temp_symbol", canonical.get("temp_symbol") or "°C")
+        refreshed_payload = _fetch_today_forecast_panel_payload(city, payload)
+        if refreshed_payload:
+            payload = refreshed_payload
         _enqueue_scan_terminal_refresh(city, reason="scan_terminal_canonical_fallback")
         return payload
 
