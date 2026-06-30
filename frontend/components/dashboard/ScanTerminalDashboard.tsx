@@ -142,6 +142,14 @@ function createLocalAccess(): ProAccessState {
   };
 }
 
+function hasTerminalForecastRows(rows: ScanOpportunityRow[]) {
+  return rows.some((row) => {
+    if (row.deb_prediction != null) return true;
+    const sources = row.model_cluster_sources;
+    return Boolean(sources && Object.keys(sources).length > 0);
+  });
+}
+
 function isFutureAccessExpiry(value: string | null | undefined, now = Date.now()) {
   if (!value) return true;
   const ts = Date.parse(value);
@@ -751,6 +759,28 @@ function PolyWeatherTerminal({
   const [onlineCount, setOnlineCount] = useState<number | null>(null);
   const [feedbackDraft, setFeedbackDraft] = useState<FeedbackDraft | null>(null);
   const [feedbackRefreshKey, setFeedbackRefreshKey] = useState(0);
+  const { terminalData: modelSummaryTerminalData } = useScanTerminalQuery({
+    cacheScope: "model-summary",
+    isPro: activeNavKey === "modelSummary",
+    modelSummary: true,
+    proAccessLoading: false,
+    terminalActivationRefreshKey,
+    timezoneOffsetSeconds: null,
+    tradingRegion: "all",
+  });
+  const modelSummaryRows = useMemo(
+    () =>
+      sortRowsByUserTime(
+        modelSummaryTerminalData?.rows?.length
+          ? modelSummaryTerminalData.rows
+          : hasTerminalForecastRows(rows)
+            ? rows
+            : [],
+      ),
+    [modelSummaryTerminalData?.rows, rows],
+  );
+  const modelSummaryGeneratedText =
+    useRelativeTime(modelSummaryTerminalData?.generated_at ?? null) || generatedText;
   const trialExpiryMs = Date.parse(String(trialSubscriptionExpiresAt || ""));
   const trialHoursLeft = Number.isFinite(trialExpiryMs)
     ? Math.max(0, Math.ceil((trialExpiryMs - Date.now()) / 3_600_000))
@@ -1126,7 +1156,11 @@ function PolyWeatherTerminal({
           {activeNavKey === "training" ? (
             <TrainingDashboard isEn={isEn} />
           ) : activeNavKey === "modelSummary" ? (
-            <ModelSummaryDashboard rows={rows} isEn={isEn} generatedText={generatedText} />
+            <ModelSummaryDashboard
+              rows={modelSummaryRows}
+              isEn={isEn}
+              generatedText={modelSummaryGeneratedText}
+            />
           ) : activeNavKey === "guide" ? (
             <UsageGuideDashboard isEn={isEn} />
           ) : (

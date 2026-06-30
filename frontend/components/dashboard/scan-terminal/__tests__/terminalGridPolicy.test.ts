@@ -178,7 +178,7 @@ export function runTests() {
   assert(
     scanQuerySource.includes("MAX_STALE_SCAN_CACHE_MS") &&
       scanQuerySource.includes("allowStale") &&
-      scanQuerySource.includes("setCachedRows(readScanCache(tradingRegion || \"\", { allowStale: true }))"),
+      scanQuerySource.includes("setCachedRows(readScanCache(tradingRegion || \"\", cacheScope, { allowStale: true }))"),
     "terminal data hook must render stale scan rows immediately while revalidating the first-screen API",
   );
   assert(

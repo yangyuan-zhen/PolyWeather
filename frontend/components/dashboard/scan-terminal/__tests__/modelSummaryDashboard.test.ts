@@ -250,9 +250,12 @@ export function runTests() {
   );
   assert(
     dashboardSource.includes("<ModelSummaryDashboard") &&
-      dashboardSource.includes("rows={rows}") &&
-      dashboardSource.includes("generatedText={generatedText}"),
-    "terminal model summary view must use existing scan rows instead of fetching city detail",
+      dashboardSource.includes("rows={modelSummaryRows}") &&
+      dashboardSource.includes("cacheScope: \"model-summary\"") &&
+      dashboardSource.includes("modelSummary: true") &&
+      dashboardSource.includes("hasTerminalForecastRows(rows)") &&
+      dashboardSource.includes("generatedText={modelSummaryGeneratedText}"),
+    "terminal model summary view must use direct scan terminal rows without city fallback rows",
   );
   assert(
     modelSummarySource.includes("MODEL_SUMMARY_MODEL_COLUMNS") &&

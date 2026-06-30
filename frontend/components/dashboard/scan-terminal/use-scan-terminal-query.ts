@@ -18,7 +18,7 @@ import type {
   ScanTerminalResponse,
 } from "@/lib/dashboard-types";
 
-const SCAN_CACHE_PREFIX = "polyweather_scan_v2";
+const SCAN_CACHE_PREFIX = "polyweather_scan_v3";
 const SCAN_CACHE_TTL_MS = DASHBOARD_REFRESH_POLICY_MS.scanRows;
 const FOREGROUND_SCAN_REFRESH_AFTER_SUCCESS_MS = 60_000;
 const MAX_STALE_SCAN_CACHE_MS = 6 * 60 * 60 * 1000;
@@ -32,16 +32,17 @@ const DERIVED_SCAN_PATCH_NUMBER_FIELDS = [
   "deb_prediction",
 ] as const;
 
-function scanCacheKey(tradingRegion: string): string {
-  return `${SCAN_CACHE_PREFIX}:${tradingRegion || "all"}`;
+function scanCacheKey(tradingRegion: string, cacheScope: string): string {
+  return `${SCAN_CACHE_PREFIX}:${cacheScope || "terminal"}:${tradingRegion || "all"}`;
 }
 
 function readScanCache(
   tradingRegion: string,
+  cacheScope: string,
   options?: { allowStale?: boolean },
 ): ScanTerminalResponse | null {
   try {
-    const raw = localStorage.getItem(scanCacheKey(tradingRegion));
+    const raw = localStorage.getItem(scanCacheKey(tradingRegion, cacheScope));
     if (!raw) return null;
     const cached = JSON.parse(raw);
     const age = Date.now() - Number(cached.ts || 0);
@@ -53,8 +54,8 @@ function readScanCache(
   return null;
 }
 
-function writeScanCache(data: ScanTerminalResponse, tradingRegion: string) {
-  try { localStorage.setItem(scanCacheKey(tradingRegion), JSON.stringify({ ts: Date.now(), data })); } catch { /* ignore */ }
+function writeScanCache(data: ScanTerminalResponse, tradingRegion: string, cacheScope: string) {
+  try { localStorage.setItem(scanCacheKey(tradingRegion, cacheScope), JSON.stringify({ ts: Date.now(), data })); } catch { /* ignore */ }
 }
 
 function normalizeCityKey(city: string | null | undefined) {
@@ -225,13 +226,17 @@ function mergeScanTerminalIncrementalResponse(
 }
 
 export function useScanTerminalQuery({
+  cacheScope = "terminal",
   isPro,
+  modelSummary = false,
   proAccessLoading,
   terminalActivationRefreshKey = 0,
   timezoneOffsetSeconds,
   tradingRegion,
 }: {
+  cacheScope?: string;
   isPro: boolean;
+  modelSummary?: boolean;
   proAccessLoading: boolean;
   terminalActivationRefreshKey?: number;
   timezoneOffsetSeconds?: number | null;
@@ -252,7 +257,7 @@ export function useScanTerminalQuery({
   const patchVersion = useSsePatchVersion();
   const [cachedRows, setCachedRows] = useState<ScanTerminalResponse | null>(() => {
     if (typeof window !== "undefined") {
-      return readScanCache(tradingRegion || "", { allowStale: true });
+      return readScanCache(tradingRegion || "", cacheScope, { allowStale: true });
     }
     return null;
   });
@@ -264,8 +269,8 @@ export function useScanTerminalQuery({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    setCachedRows(readScanCache(tradingRegion || "", { allowStale: true }));
-  }, [tradingRegion]);
+    setCachedRows(readScanCache(tradingRegion || "", cacheScope, { allowStale: true }));
+  }, [cacheScope, tradingRegion]);
 
   const fetchScanTerminal = useCallback(
     async ({
@@ -287,6 +292,7 @@ export function useScanTerminalQuery({
           const previous = latestScanDataRef.current;
           const next = await scanTerminalClient.getTerminal({
             forceRefresh,
+            modelSummary,
             signal,
             sinceSnapshotId: !forceRefresh ? previous?.snapshot_id : null,
             timezoneOffsetSeconds,
@@ -297,12 +303,12 @@ export function useScanTerminalQuery({
         showLoading,
         onSuccess: (data) => {
           lastScanSuccessAtRef.current = Date.now();
-          writeScanCache(data, tradingRegion || "");
+          writeScanCache(data, tradingRegion || "", cacheScope);
           setCachedRows(data);
         },
       });
     },
-    [isPro, proAccessLoading, run, timezoneOffsetSeconds, tradingRegion],
+    [cacheScope, isPro, modelSummary, proAccessLoading, run, timezoneOffsetSeconds, tradingRegion],
   );
 
   useEffect(() => {
@@ -392,14 +398,14 @@ export function useScanTerminalQuery({
     if (!neighbors.length) return;
 
     const preloadOne = (region: string) => {
-      if (readScanCache(region)) return; // already cached
+      if (readScanCache(region, cacheScope)) return; // already cached
       const idleFn = (window as any).requestIdleCallback || ((cb: () => void) => setTimeout(cb, 5000));
       const handle = idleFn(() => {
         void scanTerminalClient.getTerminal({
           forceRefresh: false,
           signal: new AbortController().signal,
           tradingRegion: region,
-        }).then((data) => { writeScanCache(data, region); });
+        }).then((data) => { writeScanCache(data, region, cacheScope); });
       });
       return handle;
     };
@@ -409,7 +415,7 @@ export function useScanTerminalQuery({
       const cancelFn = (window as any).cancelIdleCallback || clearTimeout;
       handles.forEach((h) => { try { cancelFn(h); } catch { /* */ } });
     };
-  }, [tradingRegion, isPro]);
+  }, [cacheScope, tradingRegion, isPro]);
 
   return {
     refreshScanTerminalManually,

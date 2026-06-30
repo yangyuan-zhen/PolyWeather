@@ -26,6 +26,7 @@ const SCAN_TERMINAL_PAYLOAD_VERSION = "runway-slim-v1";
 
 type TerminalQueryOptions = {
   forceRefresh?: boolean;
+  modelSummary?: boolean;
   signal?: AbortSignal;
   sinceSnapshotId?: string | null;
   timezoneOffsetSeconds?: number | null;
@@ -123,6 +124,7 @@ async function readJsonOrThrow<T>(path: string, init?: RequestInit): Promise<T> 
 
 async function getTerminal({
   forceRefresh = false,
+  modelSummary = false,
   signal,
   sinceSnapshotId,
   timezoneOffsetSeconds,
@@ -139,14 +141,14 @@ async function getTerminal({
     limit: "180",
     force_refresh: String(forceRefresh),
   });
-  if (tradingRegion && tradingRegion !== "all") {
+  if (!modelSummary && tradingRegion && tradingRegion !== "all") {
     params.set("trading_region", tradingRegion);
   }
-  if (Number.isFinite(timezoneOffsetSeconds)) {
+  if (!modelSummary && Number.isFinite(timezoneOffsetSeconds)) {
     params.set("timezone_offset_seconds", String(Math.trunc(Number(timezoneOffsetSeconds))));
   }
   const trimmedSnapshotId = String(sinceSnapshotId || "").trim();
-  if (!forceRefresh && trimmedSnapshotId) {
+  if (!modelSummary && !forceRefresh && trimmedSnapshotId) {
     params.set("diff", "true");
     params.set("since_snapshot_id", trimmedSnapshotId);
   }
