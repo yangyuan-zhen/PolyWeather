@@ -297,6 +297,10 @@ wait_for_scan_terminal_snapshot() {
                 echo "✅ $name ready after attempt $i/$attempts"
                 return 0
             fi
+            if printf '%s' "$compact" | grep -q '"stale_reason":"市场扫描快照正在初始化"'; then
+                echo "✅ $name initializing after attempt $i/$attempts"
+                return 0
+            fi
             status="$(printf '%s' "$compact" | sed -n 's/.*"status":"\([^"]*\)".*/\1/p' | head -n 1)"
             echo "   $name not ready attempt $i/$attempts http=${http_status:-unknown} status=${status:-unknown}"
         else
