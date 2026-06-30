@@ -6,9 +6,12 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from src.analysis.deb_algorithm import calculate_deb_prediction, calculate_dynamic_weights
+from src.analysis.trend_engine import calculate_prob_distribution
+from src.data_collection.multi_model_freshness import multi_model_forecasts_for_local_date
 from src.database.db_manager import DBManager
 from src.utils.refresh_policy import SCAN_ROWS_REFRESH_SEC
-from web.core import CITIES, _sf as _safe_float
+from web.core import CITIES, _sf as _safe_float, _weather
 from web.scan_terminal_filters import (
     market_region_from_tz_offset as _market_region_from_tz_offset,
     safe_int as _safe_int,
@@ -50,7 +53,7 @@ def _enqueue_scan_terminal_refresh(city: str, *, reason: str) -> None:
         return
 
 
-def _city_local_date(city: str, utc_offset_seconds: Optional[int] = None) -> str:
+def _city_local_now(city: str, utc_offset_seconds: Optional[int] = None) -> datetime:
     city_meta = CITIES.get(city) or {}
     offset = utc_offset_seconds
     if offset is None:
@@ -59,7 +62,15 @@ def _city_local_date(city: str, utc_offset_seconds: Optional[int] = None) -> str
         offset = int(offset or 0)
     except Exception:
         offset = 0
-    return (datetime.now(timezone.utc) + timedelta(seconds=offset)).strftime("%Y-%m-%d")
+    return datetime.now(timezone.utc) + timedelta(seconds=offset)
+
+
+def _city_local_date(city: str, utc_offset_seconds: Optional[int] = None) -> str:
+    return _city_local_now(city, utc_offset_seconds).strftime("%Y-%m-%d")
+
+
+def _city_local_time(city: str, utc_offset_seconds: Optional[int] = None) -> str:
+    return _city_local_now(city, utc_offset_seconds).strftime("%H:%M")
 
 
 def _panel_cache_stale_reason(city: str, cached_entry: Dict[str, Any], payload: Dict[str, Any]) -> Optional[str]:
@@ -77,6 +88,104 @@ def _panel_cache_stale_reason(city: str, cached_entry: Dict[str, Any], payload: 
     return None
 
 
+def _model_spread_sigma(forecasts: Dict[str, float], temp_symbol: str) -> float:
+    values = [
+        value
+        for value in (_safe_float(item) for item in forecasts.values())
+        if value is not None
+    ]
+    scale = 1.8 if "F" in str(temp_symbol or "").upper() else 1.0
+    if len(values) < 2:
+        return 1.2 * scale
+    spread = max(values) - min(values)
+    return max(0.8 * scale, min(4.0 * scale, spread / 2.0))
+
+
+def _fetch_today_forecast_panel_payload(
+    city: str,
+    payload: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    city_meta = CITIES.get(city) or {}
+    lat = _safe_float(city_meta.get("lat"))
+    lon = _safe_float(city_meta.get("lon"))
+    if lat is None or lon is None:
+        return None
+
+    use_fahrenheit = bool(city_meta.get("f"))
+    temp_symbol = "°F" if use_fahrenheit else "°C"
+    tz_offset = payload.get("utc_offset_seconds")
+    if tz_offset is None:
+        tz_offset = city_meta.get("tz")
+    tz_offset_int = _safe_int(tz_offset, 0)
+    local_date = _city_local_date(city, tz_offset_int)
+    local_time = _city_local_time(city, tz_offset_int)
+
+    try:
+        multi_model = _weather.fetch_multi_model(
+            lat,
+            lon,
+            city=city,
+            use_fahrenheit=use_fahrenheit,
+        )
+    except Exception:
+        multi_model = None
+    forecasts = multi_model_forecasts_for_local_date(multi_model, local_date)
+    if not forecasts:
+        return None
+
+    try:
+        deb_result = calculate_deb_prediction(
+            city,
+            forecasts,
+            raw_calculator=calculate_dynamic_weights,
+        )
+    except Exception:
+        deb_result = {}
+    deb_prediction = _safe_float(deb_result.get("prediction"))
+
+    probabilities: Dict[str, Any] = {"mu": None, "distribution": [], "distribution_all": []}
+    if deb_prediction is not None:
+        sigma = _model_spread_sigma(forecasts, temp_symbol)
+        current = payload.get("current") if isinstance(payload.get("current"), dict) else {}
+        max_so_far = _safe_float(current.get("max_so_far"))
+        probs = calculate_prob_distribution(
+            deb_prediction,
+            sigma,
+            max_so_far,
+            temp_symbol,
+            city,
+        )
+        probabilities = {
+            "mu": probs.get("mu", deb_prediction),
+            "sigma": probs.get("sigma", sigma),
+            "distribution": probs.get("probabilities") or [],
+            "distribution_all": probs.get("probabilities_all") or probs.get("probabilities") or [],
+            "engine": "legacy_gaussian_live_multimodel",
+            "calibration_mode": "scan_terminal_live_refresh",
+        }
+
+    source_local_date = str(payload.get("local_date") or "").strip()
+    return {
+        **payload,
+        "local_date": local_date,
+        "local_time": local_time,
+        "utc_offset_seconds": tz_offset_int,
+        "temp_symbol": temp_symbol,
+        "multi_model": multi_model or {},
+        "multi_model_daily": {
+            local_date: {
+                "models": forecasts,
+                "deb": deb_result if deb_result else {"prediction": deb_prediction},
+            }
+        },
+        "deb": deb_result if deb_result else {"prediction": deb_prediction},
+        "probabilities": probabilities,
+        "forecast_refreshed": True,
+        "forecast_source_local_date": local_date,
+        "forecast_previous_local_date": source_local_date or None,
+    }
+
+
 def _load_scan_panel_payload(city: str, *, force_refresh: bool) -> Optional[Dict[str, Any]]:
     refresh_already_queued = False
     if not force_refresh:
@@ -88,6 +197,10 @@ def _load_scan_panel_payload(city: str, *, force_refresh: bool) -> Optional[Dict
                 return cached_payload
             _enqueue_scan_terminal_refresh(city, reason=stale_reason)
             refresh_already_queued = True
+            if stale_reason == "scan_terminal_stale_panel_date":
+                refreshed_payload = _fetch_today_forecast_panel_payload(city, cached_payload)
+                if refreshed_payload:
+                    return refreshed_payload
 
     canonical_getter = getattr(_PANEL_CACHE_DB, "get_canonical_temperature", None)
     canonical_entry = canonical_getter(city) if callable(canonical_getter) else None
@@ -332,6 +445,9 @@ def _build_quick_row(
         "distribution_full": probs.get("distribution_all") or distribution,
         "probability_engine": probs.get("engine"),
         "probability_calibration_mode": probs.get("calibration_mode"),
+        "forecast_refreshed": bool(data.get("forecast_refreshed")),
+        "forecast_source_local_date": data.get("forecast_source_local_date"),
+        "forecast_previous_local_date": data.get("forecast_previous_local_date"),
         "trading_region": market_region["key"],
         "trading_region_label": market_region["label_en"],
         "trading_region_label_zh": market_region["label_zh"],

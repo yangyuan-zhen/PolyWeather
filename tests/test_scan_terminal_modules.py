@@ -347,8 +347,9 @@ def test_scan_city_terminal_rows_rejects_expired_panel_cache(monkeypatch):
     ]
 
 
-def test_scan_city_terminal_rows_rejects_wrong_local_date_panel_cache(monkeypatch):
+def test_scan_city_terminal_rows_refreshes_models_for_wrong_local_date_panel(monkeypatch):
     enqueued = []
+    today = _local_date_for_offset(3600)
     payload = {
         "display_name": "Paris",
         "local_date": "2000-01-01",
@@ -364,6 +365,7 @@ def test_scan_city_terminal_rows_rejects_wrong_local_date_panel_cache(monkeypatc
             }
         },
     }
+    fetched = []
 
     class _Cache:
         @staticmethod
@@ -382,6 +384,30 @@ def test_scan_city_terminal_rows_rejects_wrong_local_date_panel_cache(monkeypatc
             return True
 
     monkeypatch.setattr(scan_terminal_city_row, "_PANEL_CACHE_DB", _Cache())
+    monkeypatch.setattr(
+        scan_terminal_city_row._weather,
+        "fetch_multi_model",
+        lambda lat, lon, city="", use_fahrenheit=False: (
+            fetched.append((lat, lon, city, use_fahrenheit))
+            or {
+                "daily_forecasts": {
+                    today: {"ECMWF": 22.0, "GFS": 23.0},
+                },
+                "forecasts": {"ECMWF": 99.0},
+                "dates": [today],
+                "unit": "celsius",
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        scan_terminal_city_row,
+        "calculate_deb_prediction",
+        lambda city, forecasts, raw_calculator=None: {
+            "prediction": 22.4,
+            "raw_prediction": 22.5,
+            "version": "test-deb",
+        },
+    )
 
     result = scan_terminal_city_row._scan_city_terminal_rows(
         "paris",
@@ -390,7 +416,12 @@ def test_scan_city_terminal_rows_rejects_wrong_local_date_panel_cache(monkeypatc
     )
 
     assert result["city"] == "paris"
-    assert result["rows"] == []
+    assert fetched, "scan terminal should fetch today's multi-model forecast when panel date is stale"
+    assert result["rows"][0]["local_date"] == today
+    assert result["rows"][0]["forecast_refreshed"] is True
+    assert result["rows"][0]["forecast_source_local_date"] == today
+    assert result["rows"][0]["deb_prediction"] == 22.4
+    assert result["rows"][0]["model_cluster_sources"] == {"ECMWF": 22.0, "GFS": 23.0}
     assert enqueued == [
         {
             "city": "paris",
