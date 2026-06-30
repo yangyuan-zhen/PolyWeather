@@ -1,3 +1,6 @@
+import time
+from datetime import datetime, timedelta, timezone
+
 from web.scan_terminal_filters import normalize_scan_terminal_filters
 from web import scan_terminal_cache
 from web import scan_terminal_service
@@ -16,6 +19,10 @@ from web import scan_terminal_city_row
 from web.scan_terminal_city_row import _build_quick_row
 from web.routers.scan import router as scan_router
 from web.scan_terminal_service import _scan_terminal_prewarm_filters
+
+
+def _local_date_for_offset(offset_seconds):
+    return (datetime.now(timezone.utc) + timedelta(seconds=offset_seconds)).strftime("%Y-%m-%d")
 
 
 class _FakeRedis:
@@ -257,7 +264,7 @@ def test_scan_terminal_prewarm_queues_city_refresh_without_analyze(monkeypatch):
 def test_scan_city_terminal_rows_reuses_persisted_panel_cache(monkeypatch):
     payload = {
         "display_name": "Paris",
-        "local_date": "2026-06-10",
+        "local_date": _local_date_for_offset(3600),
         "local_time": "12:00",
         "current": {"temp": 18.0},
         "risk": {},
@@ -270,7 +277,7 @@ def test_scan_city_terminal_rows_reuses_persisted_panel_cache(monkeypatch):
         @staticmethod
         def get_city_cache(kind, city):
             assert (kind, city) == ("panel", "paris")
-            return {"payload": payload}
+            return {"payload": payload, "updated_at_ts": time.time()}
 
     monkeypatch.setattr(scan_terminal_city_row, "_PANEL_CACHE_DB", _Cache())
     monkeypatch.setattr(
@@ -289,6 +296,109 @@ def test_scan_city_terminal_rows_reuses_persisted_panel_cache(monkeypatch):
 
     assert result["city"] == "paris"
     assert result["rows"][0]["current_temp"] == 18.0
+
+
+def test_scan_city_terminal_rows_rejects_expired_panel_cache(monkeypatch):
+    enqueued = []
+    payload = {
+        "display_name": "Paris",
+        "local_date": _local_date_for_offset(3600),
+        "local_time": "12:00",
+        "current": {"temp": 18.0},
+        "risk": {},
+        "deb": {"prediction": 20.0},
+        "probabilities": {},
+        "multi_model_daily": {},
+    }
+
+    class _Cache:
+        @staticmethod
+        def get_city_cache(kind, city):
+            assert (kind, city) == ("panel", "paris")
+            return {"payload": payload, "updated_at_ts": 1}
+
+        @staticmethod
+        def get_canonical_temperature(city):
+            assert city == "paris"
+            return None
+
+        @staticmethod
+        def enqueue_observation_refresh_request(**kwargs):
+            enqueued.append(kwargs)
+            return True
+
+    monkeypatch.setattr(scan_terminal_city_row, "_PANEL_CACHE_DB", _Cache())
+
+    result = scan_terminal_city_row._scan_city_terminal_rows(
+        "paris",
+        {"market_type": "maxtemp"},
+        force_refresh=False,
+    )
+
+    assert result["city"] == "paris"
+    assert result["rows"] == []
+    assert enqueued == [
+        {
+            "city": "paris",
+            "kind": "panel",
+            "priority": "high",
+            "reason": "scan_terminal_stale_panel",
+        }
+    ]
+
+
+def test_scan_city_terminal_rows_rejects_wrong_local_date_panel_cache(monkeypatch):
+    enqueued = []
+    payload = {
+        "display_name": "Paris",
+        "local_date": "2000-01-01",
+        "local_time": "12:00",
+        "current": {"temp": 18.0},
+        "risk": {},
+        "deb": {"prediction": 20.0},
+        "probabilities": {},
+        "multi_model_daily": {
+            "2000-01-01": {
+                "deb": {"prediction": 20.0},
+                "models": {"ECMWF": 19.0},
+            }
+        },
+    }
+
+    class _Cache:
+        @staticmethod
+        def get_city_cache(kind, city):
+            assert (kind, city) == ("panel", "paris")
+            return {"payload": payload, "updated_at_ts": time.time()}
+
+        @staticmethod
+        def get_canonical_temperature(city):
+            assert city == "paris"
+            return None
+
+        @staticmethod
+        def enqueue_observation_refresh_request(**kwargs):
+            enqueued.append(kwargs)
+            return True
+
+    monkeypatch.setattr(scan_terminal_city_row, "_PANEL_CACHE_DB", _Cache())
+
+    result = scan_terminal_city_row._scan_city_terminal_rows(
+        "paris",
+        {"market_type": "maxtemp"},
+        force_refresh=False,
+    )
+
+    assert result["city"] == "paris"
+    assert result["rows"] == []
+    assert enqueued == [
+        {
+            "city": "paris",
+            "kind": "panel",
+            "priority": "high",
+            "reason": "scan_terminal_stale_panel_date",
+        }
+    ]
 
 
 def test_scan_city_terminal_rows_uses_canonical_without_analyze(monkeypatch):

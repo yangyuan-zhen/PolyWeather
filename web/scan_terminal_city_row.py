@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import re
-from datetime import datetime, timedelta
+import time
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from src.database.db_manager import DBManager
+from src.utils.refresh_policy import SCAN_ROWS_REFRESH_SEC
 from web.core import CITIES, _sf as _safe_float
 from web.scan_terminal_filters import (
     market_region_from_tz_offset as _market_region_from_tz_offset,
@@ -19,6 +21,7 @@ SCAN_ROW_RUNWAY_HISTORY_RESOLUTION = "10m"
 SCAN_ROW_MAX_RUNWAY_POINTS = 144
 _PANEL_CACHE_DB = DBManager()
 _analyze = None  # compatibility hook for tests that assert scan terminal stays cache-only.
+SCAN_PANEL_CACHE_MAX_AGE_SEC = max(300, int(SCAN_ROWS_REFRESH_SEC) * 3)
 
 
 def _compact_runway_plate_history_for_scan(raw_history: Any) -> Dict[str, List[Dict[str, Any]]]:
@@ -47,12 +50,44 @@ def _enqueue_scan_terminal_refresh(city: str, *, reason: str) -> None:
         return
 
 
+def _city_local_date(city: str, utc_offset_seconds: Optional[int] = None) -> str:
+    city_meta = CITIES.get(city) or {}
+    offset = utc_offset_seconds
+    if offset is None:
+        offset = _safe_int(city_meta.get("tz"), 0)
+    try:
+        offset = int(offset or 0)
+    except Exception:
+        offset = 0
+    return (datetime.now(timezone.utc) + timedelta(seconds=offset)).strftime("%Y-%m-%d")
+
+
+def _panel_cache_stale_reason(city: str, cached_entry: Dict[str, Any], payload: Dict[str, Any]) -> Optional[str]:
+    updated_at_ts = _safe_float(cached_entry.get("updated_at_ts"))
+    if updated_at_ts is None or time.time() - updated_at_ts > SCAN_PANEL_CACHE_MAX_AGE_SEC:
+        return "scan_terminal_stale_panel"
+
+    tz_offset = payload.get("utc_offset_seconds")
+    if tz_offset is None:
+        tz_offset = (CITIES.get(city) or {}).get("tz")
+    expected_date = _city_local_date(city, _safe_int(tz_offset, 0))
+    payload_date = str(payload.get("local_date") or "").strip()
+    if payload_date and payload_date != expected_date:
+        return "scan_terminal_stale_panel_date"
+    return None
+
+
 def _load_scan_panel_payload(city: str, *, force_refresh: bool) -> Optional[Dict[str, Any]]:
+    refresh_already_queued = False
     if not force_refresh:
         cached_entry = _PANEL_CACHE_DB.get_city_cache("panel", city)
         cached_payload = cached_entry.get("payload") if isinstance(cached_entry, dict) else None
         if isinstance(cached_payload, dict):
-            return cached_payload
+            stale_reason = _panel_cache_stale_reason(city, cached_entry, cached_payload)
+            if stale_reason is None:
+                return cached_payload
+            _enqueue_scan_terminal_refresh(city, reason=stale_reason)
+            refresh_already_queued = True
 
     canonical_getter = getattr(_PANEL_CACHE_DB, "get_canonical_temperature", None)
     canonical_entry = canonical_getter(city) if callable(canonical_getter) else None
@@ -69,7 +104,8 @@ def _load_scan_panel_payload(city: str, *, force_refresh: bool) -> Optional[Dict
         _enqueue_scan_terminal_refresh(city, reason="scan_terminal_canonical_fallback")
         return payload
 
-    _enqueue_scan_terminal_refresh(city, reason="scan_terminal_cold_start")
+    if not refresh_already_queued:
+        _enqueue_scan_terminal_refresh(city, reason="scan_terminal_cold_start")
     return None
 
 
