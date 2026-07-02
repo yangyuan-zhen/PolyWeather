@@ -36,7 +36,7 @@ function scanCacheKey(tradingRegion: string, cacheScope: string): string {
   return `${SCAN_CACHE_PREFIX}:${cacheScope || "terminal"}:${tradingRegion || "all"}`;
 }
 
-function readScanCache(
+export function readScanCache(
   tradingRegion: string,
   cacheScope: string,
   options?: { allowStale?: boolean },
@@ -47,15 +47,27 @@ function readScanCache(
     const cached = JSON.parse(raw);
     const age = Date.now() - Number(cached.ts || 0);
     const maxAge = options?.allowStale ? MAX_STALE_SCAN_CACHE_MS : SCAN_CACHE_TTL_MS;
-    if (cached.ts && age >= 0 && age < maxAge && cached.data?.rows) {
+    if (
+      cached.ts &&
+      age >= 0 &&
+      age < maxAge &&
+      Array.isArray(cached.data?.rows) &&
+      cached.data.rows.length > 0
+    ) {
       return cached.data;
     }
   } catch { /* ignore */ }
   return null;
 }
 
-function writeScanCache(data: ScanTerminalResponse, tradingRegion: string, cacheScope: string) {
-  try { localStorage.setItem(scanCacheKey(tradingRegion, cacheScope), JSON.stringify({ ts: Date.now(), data })); } catch { /* ignore */ }
+export function writeScanCache(data: ScanTerminalResponse, tradingRegion: string, cacheScope: string) {
+  try {
+    if (!Array.isArray(data.rows) || data.rows.length <= 0) {
+      localStorage.removeItem(scanCacheKey(tradingRegion, cacheScope));
+      return;
+    }
+    localStorage.setItem(scanCacheKey(tradingRegion, cacheScope), JSON.stringify({ ts: Date.now(), data }));
+  } catch { /* ignore */ }
 }
 
 function normalizeCityKey(city: string | null | undefined) {

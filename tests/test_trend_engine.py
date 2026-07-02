@@ -241,6 +241,64 @@ class TestMuCalculation:
         assert sd["peak_hours"] == ["15:00", "16:00"]
         assert sd["peak_status"] == "before"
 
+    @patch("src.analysis.trend_engine.calculate_dynamic_weights", return_value=(None, ""))
+    @patch("src.analysis.trend_engine.get_deb_accuracy", return_value=None)
+    @patch("src.analysis.trend_engine.update_daily_record")
+    def test_weathernext2_probability_replaces_legacy_distribution(
+        self, _udr, _deb_acc, _dw
+    ):
+        data = _make_weather_data(
+            cur_temp=30.0,
+            max_so_far=31.0,
+            om_today_high=33.0,
+            ens_median=32.0,
+            local_time="2026-03-04 11:00",
+        )
+        data["weathernext2"] = {
+            "summary": {"median": 33.1},
+            "buckets": [
+                {
+                    "label": "32°C",
+                    "value": 32.1,
+                    "lower": 31.5,
+                    "upper": 32.5,
+                    "probability": 0.41,
+                },
+                {
+                    "label": "33°C",
+                    "value": 33.0,
+                    "lower": 32.5,
+                    "upper": 33.5,
+                    "probability": 0.56,
+                },
+            ],
+        }
+
+        _, ai_context, sd = analyze_weather_trend(data, "°C", "test_city")
+
+        assert sd["probability_engine"] == "weathernext2"
+        assert sd["probabilities_all"] == data["weathernext2"]["buckets"]
+        assert sd["mu"] == 33.1
+        assert "WeatherNext 2 概率分布" in ai_context
+
+    @patch("src.analysis.trend_engine.calculate_dynamic_weights", return_value=(None, ""))
+    @patch("src.analysis.trend_engine.get_deb_accuracy", return_value=None)
+    @patch("src.analysis.trend_engine.update_daily_record")
+    def test_weathernext2_median_enters_current_forecasts(
+        self, _udr, _deb_acc, _dw
+    ):
+        data = _make_weather_data(local_time="2026-03-04 11:00")
+        data["weathernext2"] = {
+            "summary": {"median": 33.1},
+            "buckets": [
+                {"label": "33°C", "value": 33.0, "probability": 0.56},
+            ],
+        }
+
+        _, _, sd = analyze_weather_trend(data, "°C", "test_city")
+
+        assert sd["current_forecasts"]["WeatherNext 2"] == 33.1
+
 
 class TestDebEnsembleSignal:
     @patch(

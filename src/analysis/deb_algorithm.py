@@ -110,6 +110,7 @@ def _deb_model_priority(model_name: str) -> int:
         "hko": 45,
         "lgbm": 50,
         "openmeteo": 15,
+        "weathernext2": 30,
     }.get(normalized, 10)
 
 

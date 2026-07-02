@@ -1,5 +1,8 @@
 # Secrets
 .env
+secrets/
+*.service-account.json
+gcp-sa.json
 
 # Scratch / temp scripts
 scratch/

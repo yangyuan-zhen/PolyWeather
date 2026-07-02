@@ -18,6 +18,7 @@ from src.data_collection.metar_sources import MetarSourceMixin
 from src.data_collection.mgm_sources import MgmSourceMixin
 from src.data_collection.jma_amedas_sources import JmaAmedasSourceMixin
 from src.data_collection.nws_open_meteo_sources import NwsOpenMeteoSourceMixin
+from src.data_collection.weathernext2_sources import WeatherNext2SourceMixin
 from src.data_collection.amos_station_sources import AmosStationSourceMixin
 from src.data_collection.amsc_awos_sources import AmscAwosSourceMixin
 from src.data_collection.fmi_sources import FmiSourceMixin
@@ -35,7 +36,7 @@ from src.data_collection.forecast_source_bundle import fetch_open_meteo_forecast
 from src.database.db_manager import DBManager
 
 
-class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, JmaAmedasSourceMixin, NwsOpenMeteoSourceMixin, AmosStationSourceMixin, AmscAwosSourceMixin, FmiSourceMixin, KnmiSourceMixin, HkoObsSourceMixin, CowinSourceMixin, MadisSourceMixin, SingaporeMssSourceMixin, ImsSourceMixin, NcmSourceMixin, AerowebSourceMixin, WundergroundHistoricalMixin):
+class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, JmaAmedasSourceMixin, NwsOpenMeteoSourceMixin, WeatherNext2SourceMixin, AmosStationSourceMixin, AmscAwosSourceMixin, FmiSourceMixin, KnmiSourceMixin, HkoObsSourceMixin, CowinSourceMixin, MadisSourceMixin, SingaporeMssSourceMixin, ImsSourceMixin, NcmSourceMixin, AerowebSourceMixin, WundergroundHistoricalMixin):
     """
     Multi-source weather data collector
 
@@ -189,9 +190,11 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         self._open_meteo_cache: Dict[str, Dict] = {}
         self._ensemble_cache: Dict[str, Dict] = {}
         self._multi_model_cache: Dict[str, Dict] = {}
+        self._weathernext2_cache: Dict[str, Dict] = {}
         self._open_meteo_cache_lock = threading.Lock()
         self._ensemble_cache_lock = threading.Lock()
         self._multi_model_cache_lock = threading.Lock()
+        self._weathernext2_cache_lock = threading.Lock()
         # Open-Meteo 共享 429 冷却计时器：触发限流后所有 OM 端点暂停请求
         self._open_meteo_rate_limit_until: float = 0.0
         self._open_meteo_rl_cooldown: int = int(
@@ -1740,6 +1743,26 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             if multi_model_data:
                 results["multi_model"] = multi_model_data
 
+    def _attach_weathernext2_model(
+        self,
+        results: Dict,
+        city: str,
+        lat: float,
+        lon: float,
+        use_fahrenheit: bool,
+        *,
+        timezone_offset_seconds: Optional[int] = None,
+    ) -> None:
+        payload = self.fetch_weathernext2_probability(
+            city,
+            lat,
+            lon,
+            use_fahrenheit=use_fahrenheit,
+            timezone_offset_seconds=timezone_offset_seconds,
+        )
+        if payload:
+            results["weathernext2"] = payload
+
     def fetch_all_sources(
         self,
         city: str,
@@ -1794,6 +1817,14 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 results["open-meteo"] = open_meteo
                 # 获取时区偏移以过滤 METAR
                 utc_offset = open_meteo.get("utc_offset", 0)
+                self._attach_weathernext2_model(
+                    results,
+                    city_lower,
+                    lat,
+                    lon,
+                    use_fahrenheit,
+                    timezone_offset_seconds=utc_offset,
+                )
                 if supports_aviationweather:
                     metar_data = self.fetch_metar(
                         city, use_fahrenheit=use_fahrenheit, utc_offset=utc_offset
@@ -1843,6 +1874,14 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             else:
                 fallback_utc_offset = int(
                     self.CITY_REGISTRY.get(city_lower, {}).get("tz_offset", 0)
+                )
+                self._attach_weathernext2_model(
+                    results,
+                    city_lower,
+                    lat,
+                    lon,
+                    use_fahrenheit,
+                    timezone_offset_seconds=fallback_utc_offset,
                 )
                 if supports_aviationweather:
                     metar_data = self.fetch_metar(

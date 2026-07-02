@@ -50,6 +50,49 @@ def _sf(v):
         return None
 
 
+def _weathernext2_probability_payload(
+    weather_data: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    source = weather_data.get("weathernext2")
+    if not isinstance(source, dict):
+        return None
+    raw_buckets = source.get("buckets")
+    if not isinstance(raw_buckets, list) or not raw_buckets:
+        return None
+
+    buckets = []
+    for bucket in raw_buckets:
+        if not isinstance(bucket, dict):
+            continue
+        probability = _sf(bucket.get("probability"))
+        if probability is None or probability <= 0:
+            continue
+        copied = dict(bucket)
+        copied["probability"] = round(probability, 3)
+        buckets.append(copied)
+    if not buckets:
+        return None
+
+    summary = source.get("summary") if isinstance(source.get("summary"), dict) else {}
+    mu = _sf(summary.get("median"))
+    if mu is None:
+        mu = _sf(summary.get("mean"))
+    if mu is None:
+        top_bucket = max(buckets, key=lambda item: _sf(item.get("probability")) or 0)
+        mu = _sf(top_bucket.get("value"))
+
+    return {
+        "engine": "weathernext2",
+        "mu": mu,
+        "probabilities": sorted(
+            buckets,
+            key=lambda item: _sf(item.get("probability")) or 0,
+            reverse=True,
+        )[:4],
+        "probabilities_all": buckets,
+    }
+
+
 def _median(values: List[float]) -> Optional[float]:
     if not values:
         return None
@@ -548,6 +591,18 @@ def analyze_weather_trend(
     for m_name, m_val in mm_forecasts.items():
         if m_val is not None and not _is_excluded_model_name(m_name):
             current_forecasts[m_name] = _sf(m_val)
+    weathernext2 = weather_data.get("weathernext2")
+    if isinstance(weathernext2, dict):
+        weathernext2_summary = (
+            weathernext2.get("summary")
+            if isinstance(weathernext2.get("summary"), dict)
+            else {}
+        )
+        weathernext2_median = _sf(weathernext2_summary.get("median"))
+        if weathernext2_median is None:
+            weathernext2_median = _sf(weathernext2_summary.get("mean"))
+        if weathernext2_median is not None:
+            current_forecasts["WeatherNext 2"] = weathernext2_median
     forecast_highs = [h for h in current_forecasts.values() if h is not None]
     forecast_high = max(forecast_highs) if forecast_highs else None
     forecast_median = (
@@ -865,9 +920,12 @@ def analyze_weather_trend(
     # === Probability Engine ===
     probabilities: List[Dict[str, Any]] = []
     probabilities_all: List[Dict[str, Any]] = []
+    probability_engine = "legacy"
     forecast_miss_deg = 0.0
+    weathernext2_probs = _weathernext2_probability_payload(weather_data)
 
     if is_dead_market:
+        probability_engine = "dead_market"
         settled_wu = apply_city_settlement(city_name, max_so_far) if max_so_far is not None else 0
         dead_msg = (
             f"🎲 <b>结算预测</b>：已锁定 {settled_wu}{temp_symbol} "
@@ -881,6 +939,24 @@ def analyze_weather_trend(
                 {"value": settled_wu, "range": f"[{settled_wu-0.5}~{settled_wu+0.5})", "probability": 1.0}
             ]
             probabilities_all = probabilities
+    elif weathernext2_probs:
+        if max_so_far is not None and forecast_median is not None:
+            forecast_miss_deg = round(forecast_median - max_so_far, 1)
+        probability_engine = "weathernext2"
+        mu = weathernext2_probs.get("mu") or mu
+        probabilities = weathernext2_probs.get("probabilities", [])
+        probabilities_all = weathernext2_probs.get("probabilities_all", probabilities)
+        prob_parts = []
+        for bucket in probabilities[:4]:
+            label = str(bucket.get("label") or bucket.get("range") or bucket.get("value") or "").strip()
+            probability = _sf(bucket.get("probability"))
+            if label and probability is not None:
+                prob_parts.append(f"{label} {probability * 100:.0f}%")
+        if prob_parts:
+            mu_label = f"μ={mu:.1f}" if mu is not None else "μ=--"
+            prob_str = " | ".join(prob_parts)
+            insights.append(f"🎲 <b>WeatherNext 2 概率</b> ({mu_label})：{prob_str}")
+            ai_features.append(f"🎲 WeatherNext 2 概率分布：{prob_str}")
     elif (ens_p10 is not None and ens_p90 is not None) or fallback_sigma:
         # Forecast miss magnitude
         if max_so_far is not None and forecast_median is not None:
@@ -1117,7 +1193,7 @@ def analyze_weather_trend(
         "mu": mu,
         "probabilities": probabilities,
         "probabilities_all": probabilities_all or probabilities,
-        "probability_engine": "legacy",
+        "probability_engine": probability_engine,
         "trend_info": {
             "direction": trend_direction if 'trend_direction' in dir() else "unknown",
             "recent": recent_list,

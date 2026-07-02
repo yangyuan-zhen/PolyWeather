@@ -78,6 +78,34 @@ def _city_local_time(city: str, utc_offset_seconds: Optional[int] = None) -> str
     return _city_local_now(city, utc_offset_seconds).strftime("%H:%M")
 
 
+def _model_sources_with_weathernext2(
+    base_models: Any,
+    data: Dict[str, Any],
+) -> Dict[str, Any]:
+    models = (
+        {
+            str(k): v
+            for k, v in (base_models or {}).items()
+            if v is not None
+        }
+        if isinstance(base_models, dict)
+        else {}
+    )
+    weathernext2 = data.get("weathernext2")
+    if isinstance(weathernext2, dict):
+        summary = (
+            weathernext2.get("summary")
+            if isinstance(weathernext2.get("summary"), dict)
+            else {}
+        )
+        representative = _safe_float(summary.get("median"))
+        if representative is None:
+            representative = _safe_float(summary.get("mean"))
+        if representative is not None:
+            models["WeatherNext 2"] = round(float(representative), 1)
+    return models
+
+
 def _panel_cache_stale_reason(city: str, cached_entry: Dict[str, Any], payload: Dict[str, Any]) -> Optional[str]:
     updated_at_ts = _safe_float(cached_entry.get("updated_at_ts"))
     if updated_at_ts is None or time.time() - updated_at_ts > SCAN_PANEL_CACHE_MAX_AGE_SEC:
@@ -611,7 +639,12 @@ def _build_terminal_row(
         "distribution_full": scan.get("distribution_full") or scan.get("distribution_preview") or row.get("distribution_preview") or [],
         "probability_engine": scan.get("probability_engine") or (data.get("probabilities") or {}).get("engine"),
         "probability_calibration_mode": scan.get("probability_calibration_mode") or (data.get("probabilities") or {}).get("calibration_mode"),
-        "model_cluster_sources": daily_entry.get("models") if isinstance(daily_entry.get("models"), dict) else data.get("multi_model", {}).get("forecasts"),
+        "model_cluster_sources": _model_sources_with_weathernext2(
+            daily_entry.get("models")
+            if isinstance(daily_entry.get("models"), dict)
+            else data.get("multi_model", {}).get("forecasts"),
+            data,
+        ),
         "window_phase": row.get("window_phase") or scan.get("window_phase"),
         "window_score": row.get("window_score") if row.get("window_score") is not None else scan.get("window_score"),
         "signal_status": scan.get("signal_status"),
@@ -744,13 +777,11 @@ def _build_quick_row(
         "network_provider": data.get("official_network_source") or official_status.get("provider_code"),
         "network_provider_label": official_status.get("provider_label"),
         "deb_prediction": deb.get("prediction"),
-        "model_cluster_sources": (
+        "model_cluster_sources": _model_sources_with_weathernext2(
             daily_entry.get("models")
             if isinstance(daily_entry.get("models"), dict)
-            else {
-                str(k): v for k, v in multi.get("forecasts", {}).items()
-                if v is not None
-            }
+            else multi.get("forecasts", {}),
+            data,
         ),
         "distribution_preview": distribution[:6] if distribution else [],
         "distribution_full": probs.get("distribution_all") or distribution,

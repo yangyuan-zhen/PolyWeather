@@ -16,6 +16,7 @@ export const MODEL_SUMMARY_MODEL_COLUMNS = [
   { key: "AROME HD", label: "AROME HD" },
   { key: "HRRR", label: "HRRR" },
   { key: "NAM", label: "NAM" },
+  { key: "WeatherNext 2", label: "WeatherNext 2" },
 ] as const;
 
 export type ModelSummaryColumnKey = (typeof MODEL_SUMMARY_MODEL_COLUMNS)[number]["key"];

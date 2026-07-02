@@ -101,6 +101,13 @@ def test_docker_compose_isolates_collector_from_web_and_bot_services():
         "  polyweather_training_settlement:",
         1,
     )[1].split(
+        "\n  polyweather_weathernext2_worker:",
+        1,
+    )[0]
+    weathernext2_block = compose.split(
+        "  polyweather_weathernext2_worker:",
+        1,
+    )[1].split(
         "\nx-polyweather-base:",
         1,
     )[0]
@@ -110,6 +117,7 @@ def test_docker_compose_isolates_collector_from_web_and_bot_services():
     assert "POLYWEATHER_SERVICE_ROLE: collector" in collector_block
     assert "POLYWEATHER_SERVICE_ROLE: warmer" in warmer_block
     assert "POLYWEATHER_SERVICE_ROLE: training_settlement" in training_settlement_block
+    assert "POLYWEATHER_SERVICE_ROLE: weathernext2_worker" in weathernext2_block
     assert "redis-server --appendonly yes --maxmemory ${POLYWEATHER_REDIS_MAXMEMORY:-512mb} --maxmemory-policy noeviction" in compose
     assert "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'false'" in bot_block
     assert "POLYWEATHER_EVENT_STORE: ${POLYWEATHER_EVENT_STORE:-redis}" in web_block
@@ -126,7 +134,9 @@ def test_docker_compose_isolates_collector_from_web_and_bot_services():
     assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'true'" in collector_block
     assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'false'" in warmer_block
     assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'false'" in training_settlement_block
+    assert "POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'false'" in weathernext2_block
     assert "command: python -m web.training_settlement_worker" in training_settlement_block
+    assert "command: python -m web.weathernext2_worker" in weathernext2_block
     assert (
         "POLYWEATHER_TRAINING_SETTLEMENT_INTERVAL_SEC: "
         "${POLYWEATHER_TRAINING_SETTLEMENT_INTERVAL_SEC:-21600}"
@@ -142,6 +152,25 @@ def test_docker_compose_isolates_collector_from_web_and_bot_services():
     assert "POLYWEATHER_CITY_DETAIL_BATCH_QUEUE_WAIT_MS: ${POLYWEATHER_CITY_DETAIL_BATCH_QUEUE_WAIT_MS:-3000}" in web_block
     assert "POLYWEATHER_CITY_DETAIL_BATCH_PARTIAL_TIMEOUT_MS: ${POLYWEATHER_CITY_DETAIL_BATCH_PARTIAL_TIMEOUT_MS:-8000}" in web_block
     assert "UVICORN_WORKERS: ${UVICORN_WORKERS:-2}" in web_block
+    assert "WEATHERNEXT2_ENABLED: ${WEATHERNEXT2_ENABLED:-1}" in web_block
+    assert "WEATHERNEXT2_ENABLED: ${WEATHERNEXT2_ENABLED:-1}" in weathernext2_block
+    assert "WEATHERNEXT2_BACKEND: ${WEATHERNEXT2_BACKEND:-gcs_zarr}" in weathernext2_block
+    assert (
+        "WEATHERNEXT2_GCS_ZARR_URI: "
+        "${WEATHERNEXT2_GCS_ZARR_URI:-gs://weathernext/weathernext_2_0_0/zarr}"
+        in weathernext2_block
+    )
+    assert (
+        "WEATHERNEXT2_MODEL_DIR: "
+        "${WEATHERNEXT2_MODEL_DIR:-/app/data/models/weathernext2_calibrator}"
+        in weathernext2_block
+    )
+    assert (
+        "GOOGLE_APPLICATION_CREDENTIALS: "
+        "${GOOGLE_APPLICATION_CREDENTIALS:-/app/secrets/gcp-sa.json}"
+        in weathernext2_block
+    )
+    assert "./secrets:/app/secrets:ro" in weathernext2_block
     assert "POLYWEATHER_COLLECTOR_PATCH_ENDPOINT: ''" in bot_block
     assert "POLYWEATHER_COLLECTOR_PATCH_ENDPOINT: ''" in web_block
     assert (
@@ -312,6 +341,7 @@ def test_deploy_script_retries_compose_recreate_races():
     assert 'compose_up_retry "observation collector" -d --no-deps polyweather_collector' in script
     assert 'compose_up_retry "cache warmer" -d --no-deps polyweather_warmer' in script
     assert 'compose_up_retry "training settlement" -d --no-deps polyweather_training_settlement' in script
+    assert 'compose_up_retry "WeatherNext2 worker" -d --no-deps polyweather_weathernext2_worker' in script
     assert 'compose_up_retry "frontend" -d --no-deps polyweather_frontend' in script
 
 
