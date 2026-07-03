@@ -47,7 +47,7 @@ export function runTests() {
     "选项",
     "方向",
     "买入价",
-    "模型概率",
+    "方向概率",
     "Edge",
     "市场链接",
   ]) {
@@ -62,5 +62,11 @@ export function runTests() {
       client.includes("最小 Edge") &&
       client.includes('showAllLowPrice ? "-1" : minEdge'),
     "market opportunities filters must label price versus edge and not edge-filter the show-all-low-price view",
+  );
+  assert(
+    client.includes("side_probability") &&
+      client.includes("yes_probability") &&
+      client.includes("YES"),
+    "NO opportunities must show side probability while keeping the underlying YES probability visible",
   );
 }

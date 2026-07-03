@@ -15,6 +15,8 @@ type MarketOpportunityRow = {
   side?: string;
   ask_price?: number;
   model_probability?: number;
+  yes_probability?: number;
+  side_probability?: number;
   edge?: number;
   liquidity?: number | null;
   volume?: number | null;
@@ -72,6 +74,19 @@ function sideTone(side?: string) {
   return String(side).toLowerCase() === "no"
     ? "border-red-200 bg-red-50 text-red-700"
     : "border-emerald-200 bg-emerald-50 text-emerald-700";
+}
+
+function yesProbability(row: MarketOpportunityRow) {
+  return typeof row.yes_probability === "number" ? row.yes_probability : row.model_probability;
+}
+
+function sideProbability(row: MarketOpportunityRow) {
+  if (typeof row.side_probability === "number") return row.side_probability;
+  const yes = yesProbability(row);
+  if (String(row.side).toLowerCase() === "no" && typeof yes === "number") {
+    return 1 - yes;
+  }
+  return yes;
 }
 
 function Stat({
@@ -152,9 +167,9 @@ export function MarketOpportunitiesPageClient() {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <Stat label="机会数" value={summary.opportunity_count ?? rows.length} sub="当前筛选结果" />
-        <Stat label="正边际" value={summary.positive_edge_count ?? 0} sub="模型概率高于买入价" />
+        <Stat label="正边际" value={summary.positive_edge_count ?? 0} sub="方向概率高于买入价" />
         <Stat label="最低价格" value={cents(summary.min_price)} sub="低价合约下限" />
-        <Stat label="最大 Edge" value={percent(summary.max_edge)} sub="模型概率 - 市场价" />
+        <Stat label="最大 Edge" value={percent(summary.max_edge)} sub="方向概率 - 市场价" />
         <Stat label="报价状态" value={quoteStatus} sub={`${summary.matched_event_count ?? 0}/${summary.scanned_city_count ?? 0} 城市匹配`} />
       </div>
 
@@ -243,7 +258,7 @@ export function MarketOpportunitiesPageClient() {
                   <th className="px-3 py-2">选项</th>
                   <th className="px-3 py-2">方向</th>
                   <th className="px-3 py-2 text-right">买入价</th>
-                  <th className="px-3 py-2 text-right">模型概率</th>
+                  <th className="px-3 py-2 text-right">方向概率</th>
                   <th className="px-3 py-2 text-right">Edge</th>
                   <th className="px-3 py-2 text-right">当前最高</th>
                   <th className="px-3 py-2 text-right">DEB</th>
@@ -277,7 +292,14 @@ export function MarketOpportunitiesPageClient() {
                         </span>
                       </td>
                       <td className="px-3 py-2 text-right font-black text-slate-950">{cents(row.ask_price)}</td>
-                      <td className="px-3 py-2 text-right font-bold text-blue-700">{percent(row.model_probability)}</td>
+                      <td className="px-3 py-2 text-right">
+                        <div className="font-bold text-blue-700">{percent(sideProbability(row))}</div>
+                        {String(row.side).toLowerCase() === "no" ? (
+                          <div className="mt-0.5 text-[11px] font-semibold text-slate-400">
+                            YES {percent(yesProbability(row))}
+                          </div>
+                        ) : null}
+                      </td>
                       <td className="px-3 py-2 text-right font-black text-emerald-700">{percent(row.edge)}</td>
                       <td className="px-3 py-2 text-right font-semibold text-slate-700">{tempLabel(row.current_max_so_far)}</td>
                       <td className="px-3 py-2 text-right font-semibold text-orange-700">{tempLabel(row.deb_prediction)}</td>

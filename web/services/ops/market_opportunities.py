@@ -336,6 +336,8 @@ def build_market_opportunity_rows(
                         "side": option_side,
                         "ask_price": _round_price(ask_number),
                         "model_probability": model_probability,
+                        "yes_probability": model_probability,
+                        "side_probability": target_probability,
                         "edge": edge,
                         "liquidity": _finite_number(market.get("liquidity")),
                         "volume": _finite_number(market.get("volume")),

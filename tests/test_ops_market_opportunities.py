@@ -101,9 +101,13 @@ def test_build_market_opportunities_scans_yes_and_no_low_price_edges():
     no = next(row for row in rows if row["bucket_label"] == "31°C" and row["side"] == "no")
 
     assert yes["model_probability"] == 0.46
+    assert yes["yes_probability"] == 0.46
+    assert yes["side_probability"] == 0.46
     assert yes["ask_price"] == 0.18
     assert round(yes["edge"], 2) == 0.28
     assert no["model_probability"] == 0.10
+    assert no["yes_probability"] == 0.10
+    assert no["side_probability"] == 0.90
     assert no["ask_price"] == 0.18
     assert round(no["edge"], 2) == 0.72
     assert all(row["ask_price"] < 0.20 for row in rows)
