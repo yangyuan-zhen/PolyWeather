@@ -57,4 +57,10 @@ export function runTests() {
     client.includes("positive_edge_only") && client.includes("显示全部低价"),
     "market opportunities page must default to positive edge and allow showing every low-price option",
   );
+  assert(
+    client.includes("最高买入价") &&
+      client.includes("最小 Edge") &&
+      client.includes('showAllLowPrice ? "-1" : minEdge'),
+    "market opportunities filters must label price versus edge and not edge-filter the show-all-low-price view",
+  );
 }

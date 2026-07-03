@@ -180,3 +180,28 @@ def test_ops_market_opportunities_degrades_when_quotes_fail(monkeypatch):
     assert payload["summary"]["quote_status"] == "unavailable"
     assert payload["summary"]["error"] == "polymarket down"
     assert payload["rows"] == []
+
+
+def test_ops_market_opportunities_reuses_prewarmed_terminal_snapshot(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(market_opportunities, "_require_ops", lambda _request: {"email": "ops@example.com"})
+
+    def fake_scan(filters, *, force_refresh=False):
+        captured["filters"] = filters
+        captured["force_refresh"] = force_refresh
+        return {"rows": [_row()]}
+
+    monkeypatch.setattr(market_opportunities, "build_scan_terminal_payload", fake_scan)
+    monkeypatch.setattr(
+        market_opportunities,
+        "_collect_events_and_prices",
+        lambda rows, _scanner: ({row["city"]: None for row in rows}, {}, "ready"),
+    )
+
+    payload = get_ops_market_opportunities(object(), max_price=0.90, min_edge=0.0)
+
+    assert payload["summary"]["scanned_city_count"] == 1
+    assert captured["force_refresh"] is False
+    assert captured["filters"]["limit"] == 180
+    assert captured["filters"]["min_edge_pct"] == 2
+    assert captured["filters"]["min_liquidity"] == 500

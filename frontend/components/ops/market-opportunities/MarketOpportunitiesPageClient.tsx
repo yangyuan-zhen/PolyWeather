@@ -112,7 +112,7 @@ export function MarketOpportunitiesPageClient() {
         q: query.trim(),
         side,
         max_price: maxPrice,
-        min_edge: minEdge,
+        min_edge: showAllLowPrice ? "-1" : minEdge,
         positive_edge_only,
         limit: 200,
       });
@@ -142,7 +142,7 @@ export function MarketOpportunitiesPageClient() {
             市场机会
           </h1>
           <p className="mt-1 text-sm text-slate-300">
-            仅 Ops 内部使用，扫描低于 20¢ 的 Yes/No 选项，并按模型概率与市场价格差排序。
+            仅 Ops 内部使用，按价格上限扫描 Yes/No 选项，并按模型概率与市场价格差排序。
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={load} className="gap-1.5">
@@ -161,7 +161,7 @@ export function MarketOpportunitiesPageClient() {
       <Card>
         <CardHeader className="gap-3">
           <CardTitle>低价选项扫描</CardTitle>
-          <div className="grid gap-2 md:grid-cols-[minmax(180px,1fr)_120px_120px_120px_auto]">
+          <div className="grid items-end gap-2 md:grid-cols-[minmax(180px,1fr)_120px_132px_132px_auto]">
             <label className="relative block">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
@@ -174,29 +174,42 @@ export function MarketOpportunitiesPageClient() {
                 placeholder="搜索城市或选项"
               />
             </label>
-            <select
-              value={side}
-              onChange={(event) => setSide(event.target.value)}
-              className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm font-semibold text-slate-700"
-            >
-              <option value="both">Yes / No</option>
-              <option value="yes">仅 Yes</option>
-              <option value="no">仅 No</option>
-            </select>
-            <input
-              value={maxPrice}
-              onChange={(event) => setMaxPrice(event.target.value)}
-              className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm font-semibold text-slate-700"
-              inputMode="decimal"
-              aria-label="最高买入价"
-            />
-            <input
-              value={minEdge}
-              onChange={(event) => setMinEdge(event.target.value)}
-              className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm font-semibold text-slate-700"
-              inputMode="decimal"
-              aria-label="最小 Edge"
-            />
+            <label className="block">
+              <span className="sr-only">方向</span>
+              <select
+                value={side}
+                onChange={(event) => setSide(event.target.value)}
+                className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm font-semibold text-slate-700"
+              >
+                <option value="both">Yes / No</option>
+                <option value="yes">仅 Yes</option>
+                <option value="no">仅 No</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-black uppercase tracking-wide text-slate-500">
+                最高买入价
+              </span>
+              <input
+                value={maxPrice}
+                onChange={(event) => setMaxPrice(event.target.value)}
+                className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm font-semibold text-slate-700"
+                inputMode="decimal"
+                aria-label="最高买入价"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-black uppercase tracking-wide text-slate-500">
+                最小 Edge
+              </span>
+              <input
+                value={minEdge}
+                onChange={(event) => setMinEdge(event.target.value)}
+                className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm font-semibold text-slate-700"
+                inputMode="decimal"
+                aria-label="最小 Edge"
+              />
+            </label>
             <Button variant="outline" size="sm" onClick={load}>
               应用筛选
             </Button>
