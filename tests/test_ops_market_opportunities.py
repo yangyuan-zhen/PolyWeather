@@ -114,6 +114,37 @@ def test_build_market_opportunities_scans_yes_and_no_low_price_edges():
     assert rows[0]["edge"] >= rows[-1]["edge"]
 
 
+def test_build_market_opportunities_includes_ask_equal_to_max_price():
+    event = {
+        "slug": "highest-temperature-in-shanghai-on-july-3-2026",
+        "markets": [
+            {
+                "question": "Will the highest temperature in Shanghai be 33°C on July 3?",
+                "slug": "highest-temperature-in-shanghai-on-july-3-2026-33c",
+                "active": True,
+                "closed": False,
+                "enableOrderBook": True,
+                "outcomes": '["Yes", "No"]',
+                "clobTokenIds": '["yes-33", "no-33"]',
+            }
+        ],
+    }
+
+    rows = build_market_opportunity_rows(
+        [_row()],
+        {"shanghai": event},
+        {"yes-33": 0.18, "no-33": 0.82},
+        max_price=0.18,
+        side="yes",
+        positive_edge_only=True,
+        min_edge=0.0,
+        limit=20,
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["ask_price"] == 0.18
+
+
 def test_build_market_opportunities_aggregates_fahrenheit_distribution():
     event = {
         "slug": "highest-temperature-in-houston-on-july-3-2026",
@@ -294,6 +325,45 @@ def test_ops_market_opportunities_reuses_prewarmed_terminal_snapshot(monkeypatch
     assert captured["filters"]["limit"] == 180
     assert captured["filters"]["min_edge_pct"] == 2
     assert captured["filters"]["min_liquidity"] == 500
+
+
+def test_ops_market_opportunities_force_refreshes_empty_terminal_snapshot(monkeypatch):
+    calls = []
+    monkeypatch.setattr(market_opportunities, "_require_ops", lambda _request: {"email": "ops@example.com"})
+
+    def fake_scan(_filters, *, force_refresh=False):
+        calls.append(force_refresh)
+        return {"rows": [_row()]} if force_refresh else {"rows": [], "status": "ready"}
+
+    monkeypatch.setattr(market_opportunities, "build_scan_terminal_payload", fake_scan)
+    monkeypatch.setattr(
+        market_opportunities,
+        "_collect_events_and_prices",
+        lambda rows, _scanner: ({row["city"]: None for row in rows}, {}, "ready"),
+    )
+
+    payload = get_ops_market_opportunities(object(), max_price=0.90, min_edge=0.0)
+
+    assert calls == [False, True]
+    assert payload["summary"]["scanned_city_count"] == 1
+    assert payload["summary"]["quote_status"] == "ready"
+    assert payload["summary"]["scan_source"] == "force_refresh"
+
+
+def test_ops_market_opportunities_reports_scan_empty_when_refresh_is_empty(monkeypatch):
+    monkeypatch.setattr(market_opportunities, "_require_ops", lambda _request: {"email": "ops@example.com"})
+    monkeypatch.setattr(
+        market_opportunities,
+        "build_scan_terminal_payload",
+        lambda *_args, **_kwargs: {"rows": [], "status": "ready"},
+    )
+
+    payload = get_ops_market_opportunities(object(), max_price=0.90, min_edge=0.0)
+
+    assert payload["summary"]["scanned_city_count"] == 0
+    assert payload["summary"]["quote_status"] == "scan_empty"
+    assert payload["summary"]["matched_event_count"] == 0
+    assert payload["rows"] == []
 
 
 def test_collect_events_and_prices_uses_gamma_hint_prices_without_clob_fanout():

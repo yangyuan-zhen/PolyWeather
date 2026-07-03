@@ -367,7 +367,7 @@ def build_market_opportunity_rows(
                     continue
                 ask = ask_prices_by_token.get(token_id)
                 ask_number = _finite_number(ask)
-                if ask_number is None or ask_number <= 0 or ask_number >= float(max_price):
+                if ask_number is None or ask_number <= 0 or ask_number > float(max_price):
                     continue
                 if option_side == "no" and _is_late_priced_no_noise(
                     scan_row,
@@ -549,20 +549,38 @@ def get_ops_market_opportunities(
     scan_rows = scan_payload.get("rows") if isinstance(scan_payload, dict) else []
     if not isinstance(scan_rows, list):
         scan_rows = []
+    scan_source = "cache"
+    if not scan_rows:
+        refreshed_payload = build_scan_terminal_payload(filters, force_refresh=True)
+        refreshed_rows = refreshed_payload.get("rows") if isinstance(refreshed_payload, dict) else []
+        if isinstance(refreshed_rows, list) and refreshed_rows:
+            scan_payload = refreshed_payload
+            scan_rows = refreshed_rows
+            scan_source = "force_refresh"
 
     quote_status = "ready"
-    try:
-        events_by_city, ask_prices, quote_status = _collect_events_and_prices(
-            scan_rows,
-            PolymarketQuoteScanner(),
-        )
-    except Exception as exc:
+    if not scan_rows:
         events_by_city = {}
         ask_prices = {}
-        quote_status = "unavailable"
-        error = str(exc)
+        quote_status = "scan_empty"
+        error = (
+            str(scan_payload.get("stale_reason") or scan_payload.get("error") or "")
+            if isinstance(scan_payload, dict)
+            else ""
+        ) or "scan terminal returned no rows"
     else:
-        error = None
+        try:
+            events_by_city, ask_prices, quote_status = _collect_events_and_prices(
+                scan_rows,
+                PolymarketQuoteScanner(),
+            )
+        except Exception as exc:
+            events_by_city = {}
+            ask_prices = {}
+            quote_status = "unavailable"
+            error = str(exc)
+        else:
+            error = None
 
     rows = build_market_opportunity_rows(
         scan_rows,
@@ -595,6 +613,7 @@ def get_ops_market_opportunities(
             "min_price": min(prices) if prices else None,
             "max_edge": max(edges) if edges else None,
             "quote_status": quote_status,
+            "scan_source": scan_source,
             "scanned_city_count": len(scan_rows),
             "matched_event_count": sum(1 for event in events_by_city.values() if isinstance(event, Mapping)),
             "error": error,
