@@ -299,7 +299,17 @@ def _option_near_value(option: Mapping[str, Any], value: Any) -> bool:
     return False
 
 
-def _is_late_priced_no_noise(
+def _option_effective_bounds(option: Mapping[str, Any]) -> Tuple[Optional[float], Optional[float]]:
+    lower = _finite_number(option.get("lower"))
+    upper = _finite_number(option.get("upper"))
+    unit = str(option.get("unit") or "").upper()
+    half_width = 1.0 if "F" in unit and lower != upper else 0.5
+    effective_lower = lower - half_width if lower is not None else None
+    effective_upper = upper + half_width if upper is not None else None
+    return effective_lower, effective_upper
+
+
+def _is_priced_no_noise(
     row: Mapping[str, Any],
     option: Mapping[str, Any],
     ask_prices_by_token: Mapping[str, Optional[float]],
@@ -309,26 +319,30 @@ def _is_late_priced_no_noise(
     model_median: Optional[float],
     model_relation: Optional[Mapping[str, Any]] = None,
 ) -> bool:
-    if no_ask > 0.05:
-        return False
-    hour = _local_hour(row)
-    if hour is None or hour < 17:
+    if no_ask > 0.20:
         return False
     yes_token = tokens.get("yes")
     yes_ask = _finite_number(ask_prices_by_token.get(yes_token)) if yes_token else None
     if yes_ask is not None and yes_ask < 0.80:
         return False
     relation = model_relation or _model_option_relation(row, option)
-    outside = int(relation.get("models_above_bucket") or 0) + int(relation.get("models_below_bucket") or 0)
+    above = int(relation.get("models_above_bucket") or 0)
+    below = int(relation.get("models_below_bucket") or 0)
     inside = int(relation.get("models_in_bucket") or 0)
-    if outside > inside:
+    if above > max(inside, below):
         return False
     anchors = (
         row.get("current_max_so_far"),
         row.get("deb_prediction"),
         model_median,
     )
-    return any(_option_near_value(option, anchor) for anchor in anchors)
+    if any(_option_near_value(option, anchor) for anchor in anchors):
+        return True
+    effective_lower, _effective_upper = _option_effective_bounds(option)
+    model_max = _finite_number(relation.get("model_max"))
+    if above == 0 and inside > 0 and effective_lower is not None and model_max is not None:
+        return model_max >= effective_lower
+    return False
 
 
 def _market_tokens(market: Mapping[str, Any]) -> Dict[str, Optional[str]]:
@@ -418,7 +432,7 @@ def build_market_opportunity_rows(
                 ask_number = _finite_number(ask)
                 if ask_number is None or ask_number <= 0 or ask_number > float(max_price):
                     continue
-                if option_side == "no" and _is_late_priced_no_noise(
+                if option_side == "no" and _is_priced_no_noise(
                     scan_row,
                     option,
                     ask_prices_by_token,
