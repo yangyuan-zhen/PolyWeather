@@ -205,3 +205,50 @@ def test_ops_market_opportunities_reuses_prewarmed_terminal_snapshot(monkeypatch
     assert captured["filters"]["limit"] == 180
     assert captured["filters"]["min_edge_pct"] == 2
     assert captured["filters"]["min_liquidity"] == 500
+
+
+def test_collect_events_and_prices_uses_gamma_hint_prices_without_clob_fanout():
+    class FakeScanner:
+        def fetch_event(self, _slug):
+            return {
+                "slug": "highest-temperature-in-shanghai-on-july-3-2026",
+                "markets": [
+                    {
+                        "question": "Will the highest temperature in Shanghai be 33°C on July 3?",
+                        "outcomes": '["Yes", "No"]',
+                        "clobTokenIds": '["yes-33", "no-33"]',
+                        "outcomePrices": '["0.12", "0.88"]',
+                    }
+                ],
+            }
+
+        def fetch_ask_price(self, _token_id):
+            raise AssertionError("CLOB should not be called when Gamma outcomePrices are present")
+
+    events, prices, status = market_opportunities._collect_events_and_prices(
+        [_row()],
+        FakeScanner(),
+    )
+
+    assert status == "ready"
+    assert "shanghai" in events
+    assert prices == {"yes-33": 0.12, "no-33": 0.88}
+
+
+def test_collect_events_and_prices_stops_on_time_budget():
+    class SlowScanner:
+        def fetch_event(self, _slug):
+            raise AssertionError("time budget should stop external event fetching")
+
+        def fetch_ask_price(self, _token_id):
+            raise AssertionError("time budget should stop external price fetching")
+
+    events, prices, status = market_opportunities._collect_events_and_prices(
+        [_row()],
+        SlowScanner(),
+        time_budget_sec=0,
+    )
+
+    assert status == "partial"
+    assert events == {}
+    assert prices == {}

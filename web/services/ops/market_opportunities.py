@@ -18,6 +18,7 @@ GAMMA_API_BASE = "https://gamma-api.polymarket.com"
 CLOB_API_BASE = "https://clob.polymarket.com"
 _QUOTE_CACHE_TTL_SEC = 60
 _EVENT_CACHE_TTL_SEC = 180
+_QUOTE_COLLECTION_TIME_BUDGET_SEC = 18.0
 
 _CACHE_LOCK = threading.Lock()
 _EVENT_CACHE: Dict[str, Tuple[float, Optional[Dict[str, Any]]]] = {}
@@ -405,11 +406,21 @@ class PolymarketQuoteScanner:
 def _collect_events_and_prices(
     rows: List[Dict[str, Any]],
     scanner: PolymarketQuoteScanner,
+    *,
+    time_budget_sec: float = _QUOTE_COLLECTION_TIME_BUDGET_SEC,
 ) -> Tuple[Dict[str, Optional[Dict[str, Any]]], Dict[str, Optional[float]], str]:
     events_by_city: Dict[str, Optional[Dict[str, Any]]] = {}
     prices: Dict[str, Optional[float]] = {}
     status = "ready"
+    started_at = time.monotonic()
+
+    def budget_exhausted() -> bool:
+        return time.monotonic() - started_at >= max(0.0, float(time_budget_sec))
+
     for row in rows:
+        if budget_exhausted():
+            status = "partial"
+            break
         city_key = _normalize_key(row.get("city"))
         if not city_key or city_key in events_by_city:
             continue
@@ -433,8 +444,11 @@ def _collect_events_and_prices(
                 if not token_id or token_id in prices:
                     continue
                 hint_price = hint_prices.get(market_side)
-                if hint_price is not None and hint_price > 0.30:
+                if hint_price is not None:
                     prices[token_id] = hint_price
+                    continue
+                if budget_exhausted():
+                    status = "partial"
                     continue
                 try:
                     prices[token_id] = scanner.fetch_ask_price(token_id)
