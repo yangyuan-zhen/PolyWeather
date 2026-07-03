@@ -10,6 +10,7 @@ import {
   Users,
   UserCheck,
   BarChart3,
+  TrendingUp,
   Settings,
   FileText,
   ScrollText,
@@ -27,6 +28,7 @@ const navGroups = [
       { href: "/ops/system", icon: Cpu, label: "系统状态" },
       { href: "/ops/training", icon: Database, label: "训练数据" },
       { href: "/ops/analytics", icon: BarChart3, label: "转化分析" },
+      { href: "/ops/market-opportunities", icon: TrendingUp, label: "市场机会" },
     ],
   },
   {

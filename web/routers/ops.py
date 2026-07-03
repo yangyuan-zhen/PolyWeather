@@ -12,6 +12,7 @@ from web.services.ops_api import (
     get_ops_sensitive_config,
     get_ops_memberships_growth,
     get_ops_memberships_overview,
+    get_ops_market_opportunities,
     get_ops_health_check,
     get_ops_logs,
     get_ops_observation_collector_status,
@@ -353,5 +354,28 @@ async def ops_training_accuracy(request: Request):
 @router.get("/api/ops/telegram/members-audit")
 async def ops_telegram_audit(request: Request):
     return get_ops_telegram_audit(request)
+
+
+@router.get("/api/ops/market-opportunities")
+async def ops_market_opportunities(
+    request: Request,
+    max_price: float = 0.20,
+    side: str = "both",
+    positive_edge_only: bool = True,
+    min_edge: float = 0.0,
+    limit: int = 200,
+    q: str = "",
+    region: str = "",
+):
+    return get_ops_market_opportunities(
+        request,
+        max_price=max_price,
+        side=side,
+        positive_edge_only=positive_edge_only,
+        min_edge=min_edge,
+        limit=limit,
+        query=q,
+        region=region,
+    )
 
 

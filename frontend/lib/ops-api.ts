@@ -293,6 +293,29 @@ export const opsApi = {
       };
     }>("/api/ops/training/accuracy");
   },
+  marketOpportunities(params: Record<string, string | number | boolean | undefined> = {}) {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value === undefined || value === "") return;
+      qs.set(key, String(value));
+    });
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return opsFetch<{
+      generated_at?: string;
+      filters?: Record<string, unknown>;
+      summary?: {
+        opportunity_count?: number;
+        positive_edge_count?: number;
+        min_price?: number | null;
+        max_edge?: number | null;
+        quote_status?: string;
+        scanned_city_count?: number;
+        matched_event_count?: number;
+        error?: string | null;
+      };
+      rows?: Array<Record<string, unknown>>;
+    }>(`/api/ops/market-opportunities${suffix}`);
+  },
   telegramAudit() {
     return opsFetch<{
       anomalies: Array<{
