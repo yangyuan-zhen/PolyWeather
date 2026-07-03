@@ -49,6 +49,7 @@ export function runTests() {
     "买入价",
     "方向概率",
     "Edge",
+    "多模型",
     "市场链接",
   ]) {
     assert(client.includes(column), `market opportunities table must include ${column}`);
@@ -68,5 +69,12 @@ export function runTests() {
       client.includes("yes_probability") &&
       client.includes("YES"),
     "NO opportunities must show side probability while keeping the underlying YES probability visible",
+  );
+  assert(
+    client.includes("model_cluster_sources") &&
+      client.includes("models_above_bucket") &&
+      client.includes("models_below_bucket") &&
+      client.includes("models_in_bucket"),
+    "market opportunities must expose multi-model context and bucket-relative model counts",
   );
 }

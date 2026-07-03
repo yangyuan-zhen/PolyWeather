@@ -103,6 +103,13 @@ def test_build_market_opportunities_scans_yes_and_no_low_price_edges():
     assert yes["model_probability"] == 0.46
     assert yes["yes_probability"] == 0.46
     assert yes["side_probability"] == 0.46
+    assert yes["model_cluster_sources"] == {"ECMWF": 32.0, "GFS": 33.0, "ICON": 31.0}
+    assert yes["model_min"] == 31.0
+    assert yes["model_max"] == 33.0
+    assert yes["models_below_bucket"] == 2
+    assert yes["models_in_bucket"] == 1
+    assert yes["models_above_bucket"] == 0
+    assert yes["models_above_deb"] == 1
     assert yes["ask_price"] == 0.18
     assert round(yes["edge"], 2) == 0.28
     assert no["model_probability"] == 0.10
@@ -185,7 +192,7 @@ def test_build_market_opportunities_aggregates_fahrenheit_distribution():
     assert round(rows[0]["edge"], 2) == 0.46
 
 
-def test_build_market_opportunities_filters_late_priced_no_noise():
+def test_build_market_opportunities_filters_late_priced_no_when_models_are_in_bucket():
     event = {
         "slug": "highest-temperature-in-jeddah-on-july-3-2026",
         "markets": [
@@ -205,8 +212,8 @@ def test_build_market_opportunities_filters_late_priced_no_noise():
     row = _row("jeddah")
     row["local_time"] = "19:22"
     row["current_max_so_far"] = None
-    row["deb_prediction"] = 35.3
-    row["model_cluster_sources"] = {"ECMWF": 34.5, "GFS": 44.0, "ICON": 35.0}
+    row["deb_prediction"] = 35.8
+    row["model_cluster_sources"] = {"ECMWF": 35.7, "GFS": 36.1, "ICON": 36.2}
     row["distribution_full"] = [
         {"value": 36, "probability": 0.10},
         {"value": 37, "probability": 0.90},
@@ -268,6 +275,50 @@ def test_build_market_opportunities_keeps_late_no_when_bucket_conflicts_with_anc
     assert rows[0]["bucket_label"] == "36°C"
     assert rows[0]["side"] == "no"
     assert rows[0]["side_probability"] == 0.90
+
+
+def test_build_market_opportunities_keeps_late_no_when_models_are_above_bucket():
+    event = {
+        "slug": "highest-temperature-in-jeddah-on-july-3-2026",
+        "markets": [
+            {
+                "question": "Will the highest temperature in Jeddah be 36°C on July 3?",
+                "slug": "highest-temperature-in-jeddah-on-july-3-2026-36c",
+                "active": True,
+                "closed": False,
+                "enableOrderBook": True,
+                "liquidity": "154",
+                "volume": "6833",
+                "outcomes": '["Yes", "No"]',
+                "clobTokenIds": '["yes-36", "no-36"]',
+            }
+        ],
+    }
+    row = _row("jeddah")
+    row["local_time"] = "19:22"
+    row["current_max_so_far"] = None
+    row["deb_prediction"] = 35.3
+    row["model_cluster_sources"] = {"ECMWF": 37.0, "GFS": 38.5, "ICON": 36.8}
+    row["distribution_full"] = [
+        {"value": 36, "probability": 0.10},
+        {"value": 37, "probability": 0.90},
+    ]
+
+    rows = build_market_opportunity_rows(
+        [row],
+        {"jeddah": event},
+        {"yes-36": 0.99, "no-36": 0.01},
+        max_price=0.20,
+        side="both",
+        positive_edge_only=True,
+        min_edge=0.0,
+        limit=20,
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["models_above_bucket"] == 3
+    assert rows[0]["models_in_bucket"] == 0
+    assert rows[0]["side"] == "no"
 
 
 def test_ops_market_opportunities_requires_ops_admin(monkeypatch):

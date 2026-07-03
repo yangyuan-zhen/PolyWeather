@@ -17,6 +17,14 @@ type MarketOpportunityRow = {
   model_probability?: number;
   yes_probability?: number;
   side_probability?: number;
+  model_cluster_sources?: Record<string, number>;
+  model_count?: number;
+  model_min?: number | null;
+  model_max?: number | null;
+  models_below_bucket?: number;
+  models_in_bucket?: number;
+  models_above_bucket?: number;
+  models_above_deb?: number;
   edge?: number;
   liquidity?: number | null;
   volume?: number | null;
@@ -87,6 +95,16 @@ function sideProbability(row: MarketOpportunityRow) {
     return 1 - yes;
   }
   return yes;
+}
+
+function modelSourceSummary(row: MarketOpportunityRow) {
+  const sources = row.model_cluster_sources || {};
+  return Object.entries(sources)
+    .filter(([, value]) => typeof value === "number" && Number.isFinite(value))
+    .sort(([left], [right]) => left.localeCompare(right))
+    .slice(0, 6)
+    .map(([name, value]) => `${name} ${value.toFixed(1)}`)
+    .join(" · ");
 }
 
 function Stat({
@@ -251,7 +269,7 @@ export function MarketOpportunitiesPageClient() {
             </div>
           ) : null}
           <div className="overflow-x-auto rounded-lg border border-slate-200">
-            <table className="min-w-[1320px] w-full border-collapse text-sm">
+            <table className="min-w-[1460px] w-full border-collapse text-sm">
               <thead className="bg-slate-50 text-left text-xs font-black uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-3 py-2">城市</th>
@@ -263,6 +281,7 @@ export function MarketOpportunitiesPageClient() {
                   <th className="px-3 py-2 text-right">当前最高</th>
                   <th className="px-3 py-2 text-right">DEB</th>
                   <th className="px-3 py-2 text-right">模型中位数</th>
+                  <th className="px-3 py-2">多模型</th>
                   <th className="px-3 py-2 text-right">分歧</th>
                   <th className="px-3 py-2 text-right">流动性</th>
                   <th className="px-3 py-2 text-right">成交量</th>
@@ -272,7 +291,7 @@ export function MarketOpportunitiesPageClient() {
               <tbody className="divide-y divide-slate-100 bg-white">
                 {loading ? (
                   <tr>
-                    <td colSpan={13} className="px-3 py-10 text-center text-sm font-semibold text-slate-400">
+                    <td colSpan={14} className="px-3 py-10 text-center text-sm font-semibold text-slate-400">
                       加载中...
                     </td>
                   </tr>
@@ -304,6 +323,17 @@ export function MarketOpportunitiesPageClient() {
                       <td className="px-3 py-2 text-right font-semibold text-slate-700">{tempLabel(row.current_max_so_far)}</td>
                       <td className="px-3 py-2 text-right font-semibold text-orange-700">{tempLabel(row.deb_prediction)}</td>
                       <td className="px-3 py-2 text-right font-semibold text-slate-700">{tempLabel(row.model_median)}</td>
+                      <td className="px-3 py-2">
+                        <div className="font-bold text-slate-800">
+                          {tempLabel(row.model_min)}-{tempLabel(row.model_max)}
+                        </div>
+                        <div className="mt-0.5 text-[11px] font-semibold text-slate-500">
+                          低 {row.models_below_bucket ?? 0} · 内 {row.models_in_bucket ?? 0} · 高 {row.models_above_bucket ?? 0}
+                        </div>
+                        <div className="mt-0.5 max-w-[260px] truncate text-[11px] font-semibold text-slate-400" title={modelSourceSummary(row)}>
+                          {modelSourceSummary(row) || "—"}
+                        </div>
+                      </td>
                       <td className="px-3 py-2 text-right font-semibold text-slate-700">{tempLabel(row.model_spread)}</td>
                       <td className="px-3 py-2 text-right text-slate-600">{numberLabel(row.liquidity)}</td>
                       <td className="px-3 py-2 text-right text-slate-600">{numberLabel(row.volume)}</td>
@@ -325,7 +355,7 @@ export function MarketOpportunitiesPageClient() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={13} className="px-3 py-10 text-center text-sm font-semibold text-slate-400">
+                    <td colSpan={14} className="px-3 py-10 text-center text-sm font-semibold text-slate-400">
                       当前筛选下没有低价市场机会。
                     </td>
                   </tr>

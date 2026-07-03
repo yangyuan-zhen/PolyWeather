@@ -213,20 +213,62 @@ def _bucket_probability(row: Mapping[str, Any], option: Mapping[str, Any]) -> Op
     return _round_probability(probability)
 
 
-def _model_stats(row: Mapping[str, Any]) -> Tuple[Optional[float], Optional[float]]:
+def _model_sources(row: Mapping[str, Any]) -> Dict[str, float]:
     sources = row.get("model_cluster_sources") or {}
     if not isinstance(sources, Mapping):
-        return None, None
-    values = sorted(
-        number
-        for number in (_finite_number(value) for value in sources.values())
-        if number is not None
-    )
+        return {}
+    result: Dict[str, float] = {}
+    for name, value in sources.items():
+        number = _finite_number(value)
+        if number is None:
+            continue
+        result[str(name)] = round(number, 1)
+    return result
+
+
+def _model_stats(row: Mapping[str, Any]) -> Tuple[Optional[float], Optional[float]]:
+    values = sorted(_model_sources(row).values())
     if not values:
         return None, None
     mid = len(values) // 2
     median = values[mid] if len(values) % 2 else (values[mid - 1] + values[mid]) / 2
     return round(median, 1), round(max(values) - min(values), 1)
+
+
+def _model_option_relation(
+    row: Mapping[str, Any],
+    option: Mapping[str, Any],
+) -> Dict[str, Any]:
+    sources = _model_sources(row)
+    values = list(sources.values())
+    lower = _finite_number(option.get("lower"))
+    upper = _finite_number(option.get("upper"))
+    unit = str(option.get("unit") or "").upper()
+    half_width = 1.0 if "F" in unit and lower != upper else 0.5
+    effective_lower = lower - half_width if lower is not None else None
+    effective_upper = upper + half_width if upper is not None else None
+    below = 0
+    inside = 0
+    above = 0
+    for value in values:
+        if effective_lower is not None and value < effective_lower:
+            below += 1
+        elif effective_upper is not None and value > effective_upper:
+            above += 1
+        else:
+            inside += 1
+    deb = _finite_number(row.get("deb_prediction"))
+    above_deb = sum(1 for value in values if deb is not None and value > deb)
+    return {
+        "model_cluster_sources": sources,
+        "model_count": len(values),
+        "model_min": round(min(values), 1) if values else None,
+        "model_max": round(max(values), 1) if values else None,
+        "models_below_bucket": below,
+        "models_in_bucket": inside,
+        "models_above_bucket": above,
+        "models_above_deb": above_deb,
+    }
 
 
 def _local_hour(row: Mapping[str, Any]) -> Optional[int]:
@@ -265,6 +307,7 @@ def _is_late_priced_no_noise(
     *,
     no_ask: float,
     model_median: Optional[float],
+    model_relation: Optional[Mapping[str, Any]] = None,
 ) -> bool:
     if no_ask > 0.05:
         return False
@@ -274,6 +317,11 @@ def _is_late_priced_no_noise(
     yes_token = tokens.get("yes")
     yes_ask = _finite_number(ask_prices_by_token.get(yes_token)) if yes_token else None
     if yes_ask is not None and yes_ask < 0.80:
+        return False
+    relation = model_relation or _model_option_relation(row, option)
+    outside = int(relation.get("models_above_bucket") or 0) + int(relation.get("models_below_bucket") or 0)
+    inside = int(relation.get("models_in_bucket") or 0)
+    if outside > inside:
         return False
     anchors = (
         row.get("current_max_so_far"),
@@ -361,6 +409,7 @@ def build_market_opportunity_rows(
             if model_probability is None:
                 continue
             tokens = _market_tokens(market)
+            model_relation = _model_option_relation(scan_row, option)
             for option_side in _iter_market_sides(side):
                 token_id = tokens.get(option_side)
                 if not token_id:
@@ -376,6 +425,7 @@ def build_market_opportunity_rows(
                     tokens,
                     no_ask=ask_number,
                     model_median=model_median,
+                    model_relation=model_relation,
                 ):
                     continue
                 target_probability = (
@@ -411,6 +461,7 @@ def build_market_opportunity_rows(
                         "deb_prediction": _finite_number(scan_row.get("deb_prediction")),
                         "model_median": model_median,
                         "model_spread": model_spread,
+                        **model_relation,
                         "local_time": scan_row.get("local_time"),
                         "region": row_region,
                     }
