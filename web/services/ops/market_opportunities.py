@@ -229,6 +229,60 @@ def _model_stats(row: Mapping[str, Any]) -> Tuple[Optional[float], Optional[floa
     return round(median, 1), round(max(values) - min(values), 1)
 
 
+def _local_hour(row: Mapping[str, Any]) -> Optional[int]:
+    text = str(row.get("local_time") or "").strip()
+    if not text:
+        return None
+    try:
+        hour = int(text.split(":", 1)[0])
+    except (TypeError, ValueError):
+        return None
+    return hour if 0 <= hour <= 23 else None
+
+
+def _option_near_value(option: Mapping[str, Any], value: Any) -> bool:
+    number = _finite_number(value)
+    if number is None:
+        return False
+    unit = str(option.get("unit") or "").upper()
+    tolerance = 2.0 if "F" in unit else 1.0
+    lower = _finite_number(option.get("lower"))
+    upper = _finite_number(option.get("upper"))
+    if lower is not None and upper is not None:
+        return lower - tolerance <= number <= upper + tolerance
+    if lower is not None:
+        return number >= lower - tolerance
+    if upper is not None:
+        return number <= upper + tolerance
+    return False
+
+
+def _is_late_priced_no_noise(
+    row: Mapping[str, Any],
+    option: Mapping[str, Any],
+    ask_prices_by_token: Mapping[str, Optional[float]],
+    tokens: Mapping[str, Optional[str]],
+    *,
+    no_ask: float,
+    model_median: Optional[float],
+) -> bool:
+    if no_ask > 0.05:
+        return False
+    hour = _local_hour(row)
+    if hour is None or hour < 17:
+        return False
+    yes_token = tokens.get("yes")
+    yes_ask = _finite_number(ask_prices_by_token.get(yes_token)) if yes_token else None
+    if yes_ask is not None and yes_ask < 0.80:
+        return False
+    anchors = (
+        row.get("current_max_so_far"),
+        row.get("deb_prediction"),
+        model_median,
+    )
+    return any(_option_near_value(option, anchor) for anchor in anchors)
+
+
 def _market_tokens(market: Mapping[str, Any]) -> Dict[str, Optional[str]]:
     outcomes = [str(item).strip().lower() for item in _json_list(market.get("outcomes"))]
     token_ids = [str(item).strip() for item in _json_list(market.get("clobTokenIds"))]
@@ -314,6 +368,15 @@ def build_market_opportunity_rows(
                 ask = ask_prices_by_token.get(token_id)
                 ask_number = _finite_number(ask)
                 if ask_number is None or ask_number <= 0 or ask_number >= float(max_price):
+                    continue
+                if option_side == "no" and _is_late_priced_no_noise(
+                    scan_row,
+                    option,
+                    ask_prices_by_token,
+                    tokens,
+                    no_ask=ask_number,
+                    model_median=model_median,
+                ):
                     continue
                 target_probability = (
                     model_probability

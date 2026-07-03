@@ -154,6 +154,91 @@ def test_build_market_opportunities_aggregates_fahrenheit_distribution():
     assert round(rows[0]["edge"], 2) == 0.46
 
 
+def test_build_market_opportunities_filters_late_priced_no_noise():
+    event = {
+        "slug": "highest-temperature-in-jeddah-on-july-3-2026",
+        "markets": [
+            {
+                "question": "Will the highest temperature in Jeddah be 36°C on July 3?",
+                "slug": "highest-temperature-in-jeddah-on-july-3-2026-36c",
+                "active": True,
+                "closed": False,
+                "enableOrderBook": True,
+                "liquidity": "154",
+                "volume": "6833",
+                "outcomes": '["Yes", "No"]',
+                "clobTokenIds": '["yes-36", "no-36"]',
+            }
+        ],
+    }
+    row = _row("jeddah")
+    row["local_time"] = "19:22"
+    row["current_max_so_far"] = None
+    row["deb_prediction"] = 35.3
+    row["model_cluster_sources"] = {"ECMWF": 34.5, "GFS": 44.0, "ICON": 35.0}
+    row["distribution_full"] = [
+        {"value": 36, "probability": 0.10},
+        {"value": 37, "probability": 0.90},
+    ]
+
+    rows = build_market_opportunity_rows(
+        [row],
+        {"jeddah": event},
+        {"yes-36": 0.99, "no-36": 0.01},
+        max_price=0.20,
+        side="both",
+        positive_edge_only=True,
+        min_edge=0.0,
+        limit=20,
+    )
+
+    assert rows == []
+
+
+def test_build_market_opportunities_keeps_late_no_when_bucket_conflicts_with_anchors():
+    event = {
+        "slug": "highest-temperature-in-jeddah-on-july-3-2026",
+        "markets": [
+            {
+                "question": "Will the highest temperature in Jeddah be 36°C on July 3?",
+                "slug": "highest-temperature-in-jeddah-on-july-3-2026-36c",
+                "active": True,
+                "closed": False,
+                "enableOrderBook": True,
+                "liquidity": "154",
+                "volume": "6833",
+                "outcomes": '["Yes", "No"]',
+                "clobTokenIds": '["yes-36", "no-36"]',
+            }
+        ],
+    }
+    row = _row("jeddah")
+    row["local_time"] = "19:22"
+    row["current_max_so_far"] = None
+    row["deb_prediction"] = 31.0
+    row["model_cluster_sources"] = {"ECMWF": 30.5, "GFS": 31.0, "ICON": 31.5}
+    row["distribution_full"] = [
+        {"value": 36, "probability": 0.10},
+        {"value": 31, "probability": 0.90},
+    ]
+
+    rows = build_market_opportunity_rows(
+        [row],
+        {"jeddah": event},
+        {"yes-36": 0.99, "no-36": 0.01},
+        max_price=0.20,
+        side="both",
+        positive_edge_only=True,
+        min_edge=0.0,
+        limit=20,
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["bucket_label"] == "36°C"
+    assert rows[0]["side"] == "no"
+    assert rows[0]["side_probability"] == 0.90
+
+
 def test_ops_market_opportunities_requires_ops_admin(monkeypatch):
     def deny(_request):
         raise HTTPException(status_code=403, detail="ops only")
