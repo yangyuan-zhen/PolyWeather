@@ -282,6 +282,19 @@ def _local_hour(row: Mapping[str, Any]) -> Optional[int]:
     return hour if 0 <= hour <= 23 else None
 
 
+def _local_day_phase(row: Mapping[str, Any]) -> Optional[str]:
+    hour = _local_hour(row)
+    if hour is None:
+        return None
+    if hour < 9:
+        return "early"
+    if hour < 14:
+        return "heating"
+    if hour < 17:
+        return "late"
+    return "settlement_like"
+
+
 def _option_near_value(option: Mapping[str, Any], value: Any) -> bool:
     number = _finite_number(value)
     if number is None:
@@ -320,6 +333,9 @@ def _is_priced_no_noise(
     model_relation: Optional[Mapping[str, Any]] = None,
 ) -> bool:
     if no_ask > 0.20:
+        return False
+    hour = _local_hour(row)
+    if hour is None or hour < 14:
         return False
     yes_token = tokens.get("yes")
     yes_ask = _finite_number(ask_prices_by_token.get(yes_token)) if yes_token else None
@@ -408,6 +424,7 @@ def build_market_opportunity_rows(
             continue
         market_url = _market_url(str(event.get("slug") or ""))
         model_median, model_spread = _model_stats(scan_row)
+        local_day_phase = _local_day_phase(scan_row)
         for market in event.get("markets") or []:
             if not isinstance(market, Mapping):
                 continue
@@ -477,6 +494,7 @@ def build_market_opportunity_rows(
                         "model_spread": model_spread,
                         **model_relation,
                         "local_time": scan_row.get("local_time"),
+                        "local_day_phase": local_day_phase,
                         "region": row_region,
                     }
                 )

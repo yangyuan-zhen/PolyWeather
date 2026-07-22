@@ -80,6 +80,12 @@ def _check_amsc_awos_health(timeout: int = 8) -> dict[str, Any]:
             payload = response.json() if response.content else {}
         except ValueError:
             payload = {}
+        upstream_error = None
+        if isinstance(payload, dict) and payload.get("errCode") is not None:
+            upstream_error = {
+                "code": payload.get("errCode"),
+                "message": str(payload.get("errMsg") or "")[:100],
+            }
         parsed = _amsc_parse_wind_plate_payload(
             payload if isinstance(payload, dict) else {},
             city_key="shanghai",
@@ -103,7 +109,20 @@ def _check_amsc_awos_health(timeout: int = 8) -> dict[str, Any]:
             result["sample_city"] = "shanghai"
             result["observation_time_local"] = parsed.get("observation_time_local")
         if not ok:
-            result["error"] = "empty_or_unauthorized_response"
+            if upstream_error:
+                err_code = upstream_error["code"]
+                if err_code == -12005:
+                    result["error"] = "invalid_session_id"
+                elif err_code == -12010:
+                    result["error"] = "permission_denied"
+                elif err_code == -12013:
+                    result["error"] = "login_expired"
+                else:
+                    result["error"] = "upstream_error"
+                result["upstream_err_code"] = err_code
+                result["upstream_err_msg"] = upstream_error["message"]
+            else:
+                result["error"] = "empty_or_unauthorized_response"
         return result
     except Exception as exc:
         return {

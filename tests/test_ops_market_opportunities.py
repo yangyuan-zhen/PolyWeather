@@ -284,6 +284,59 @@ def test_build_market_opportunities_filters_priced_no_when_models_support_market
     assert rows == []
 
 
+def test_build_market_opportunities_keeps_morning_priced_no_for_time_risk():
+    event = {
+        "slug": "highest-temperature-in-buenos-aires-on-july-3-2026",
+        "markets": [
+            {
+                "question": "Will the highest temperature in Buenos Aires be 10°C on July 3?",
+                "slug": "highest-temperature-in-buenos-aires-on-july-3-2026-10c",
+                "active": True,
+                "closed": False,
+                "enableOrderBook": True,
+                "liquidity": "141",
+                "volume": "7749",
+                "outcomes": '["Yes", "No"]',
+                "clobTokenIds": '["yes-10", "no-10"]',
+            }
+        ],
+    }
+    row = _row("buenos aires")
+    row["local_time"] = "10:21"
+    row["current_max_so_far"] = None
+    row["deb_prediction"] = 8.7
+    row["model_cluster_sources"] = {
+        "AI-GFS": 8.4,
+        "ECMWF": 8.3,
+        "ECMWF AIFS": 9.2,
+        "GFS": 9.5,
+        "ICON": 9.1,
+        "GEM": 9.0,
+        "GDPS": 8.9,
+        "JMA": 8.8,
+        "AROME HD": 9.5,
+    }
+    row["distribution_full"] = [
+        {"value": 9, "probability": 0.27},
+        {"value": 10, "probability": 0.73},
+    ]
+
+    rows = build_market_opportunity_rows(
+        [row],
+        {"buenos aires": event},
+        {"yes-10": 0.94, "no-10": 0.08},
+        max_price=0.20,
+        side="both",
+        positive_edge_only=True,
+        min_edge=0.0,
+        limit=20,
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["bucket_label"] == "10°C"
+    assert rows[0]["side"] == "no"
+
+
 def test_build_market_opportunities_keeps_late_no_when_bucket_conflicts_with_anchors():
     event = {
         "slug": "highest-temperature-in-jeddah-on-july-3-2026",

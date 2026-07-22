@@ -34,6 +34,7 @@ type MarketOpportunityRow = {
   model_median?: number | null;
   model_spread?: number | null;
   local_time?: string;
+  local_day_phase?: string | null;
   region?: string;
 };
 
@@ -105,6 +106,21 @@ function modelSourceSummary(row: MarketOpportunityRow) {
     .slice(0, 6)
     .map(([name, value]) => `${name} ${value.toFixed(1)}`)
     .join(" · ");
+}
+
+function localDayPhaseLabel(value?: string | null) {
+  switch (value) {
+    case "early":
+      return "早盘";
+    case "heating":
+      return "升温";
+    case "late":
+      return "后段";
+    case "settlement_like":
+      return "近结算";
+    default:
+      return "—";
+  }
 }
 
 function Stat({
@@ -269,10 +285,11 @@ export function MarketOpportunitiesPageClient() {
             </div>
           ) : null}
           <div className="overflow-x-auto rounded-lg border border-slate-200">
-            <table className="min-w-[1460px] w-full border-collapse text-sm">
+            <table className="min-w-[1540px] w-full border-collapse text-sm">
               <thead className="bg-slate-50 text-left text-xs font-black uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-3 py-2">城市</th>
+                  <th className="px-3 py-2">时间阶段</th>
                   <th className="px-3 py-2">选项</th>
                   <th className="px-3 py-2">方向</th>
                   <th className="px-3 py-2 text-right">买入价</th>
@@ -291,7 +308,7 @@ export function MarketOpportunitiesPageClient() {
               <tbody className="divide-y divide-slate-100 bg-white">
                 {loading ? (
                   <tr>
-                    <td colSpan={14} className="px-3 py-10 text-center text-sm font-semibold text-slate-400">
+                    <td colSpan={15} className="px-3 py-10 text-center text-sm font-semibold text-slate-400">
                       加载中...
                     </td>
                   </tr>
@@ -303,6 +320,11 @@ export function MarketOpportunitiesPageClient() {
                         <div className="mt-0.5 text-[11px] font-semibold text-slate-400">
                           {row.local_time || "—"} · {row.target_date || "—"}
                         </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className="inline-flex rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-black text-slate-600">
+                          {localDayPhaseLabel(row.local_day_phase)}
+                        </span>
                       </td>
                       <td className="px-3 py-2 font-bold text-slate-800">{row.bucket_label || "—"}</td>
                       <td className="px-3 py-2">
@@ -355,7 +377,7 @@ export function MarketOpportunitiesPageClient() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={14} className="px-3 py-10 text-center text-sm font-semibold text-slate-400">
+                    <td colSpan={15} className="px-3 py-10 text-center text-sm font-semibold text-slate-400">
                       当前筛选下没有低价市场机会。
                     </td>
                   </tr>

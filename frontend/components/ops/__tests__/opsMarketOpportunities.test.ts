@@ -77,4 +77,8 @@ export function runTests() {
       client.includes("models_in_bucket"),
     "market opportunities must expose multi-model context and bucket-relative model counts",
   );
+  assert(
+    client.includes("local_day_phase") && client.includes("时间阶段"),
+    "market opportunities must expose local day phase for time-aware opportunity review",
+  );
 }

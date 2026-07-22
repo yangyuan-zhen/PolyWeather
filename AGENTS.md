@@ -1,78 +1,75 @@
 # PolyWeather Agent Instructions
 
-## 语言和沟通
+## 沟通
 
-- 默认用中文回复用户。
-- 直接说明正在做什么、查到了什么、下一步是什么；不要写空泛客套话。
-- 如果用户要求“提交推送”“部署”“看日志”，必须在本地验证后再提交、推送，并检查 GitHub Actions 或线上状态。
-- 不要把多个不相关任务混在一个结论里；遇到新方向时，建议用户在同一个 Project 下开新 Thread。
+- 默认用中文回复。直接说在做什么、查到什么、下一步。
+- 每个具体任务用独立 Thread，避免旧上下文污染新任务。
 
-## 项目和线程使用
+## 项目结构
 
-- 一个 Project 对应 PolyWeather 这个共享代码库和长期方向。
-- 每个具体任务使用一条独立 Thread / Chat，例如：
-  - 落地页与产品包装
-  - 观测数据采集与 SSE patch
-  - Telegram 推送
-  - 付款与会员
-  - 部署、CI、服务器状态
-- 同一个 Project 下的 Thread 共享文件夹和 `AGENTS.md`，但上下文分开，避免旧问题影响新任务判断。
+```
+E:\web\PolyWeather
+├── web/                 # FastAPI 后端 (app.py → create_app)
+├── src/                 # Python 核心库 (analysis, data_collection, bot, database, payments)
+├── tests/               # pytest (85 个文件)
+├── frontend/            # Next.js 15 + React 19 + TypeScript
+├── scripts/             # 运维/工具脚本 (Python)
+├── deploy.sh            # VPS 部署脚本
+├── docker-compose.yml   # 6+ 服务: web, frontend, bot, collector, warmer, training, weathernext2
+├── bot_listener.py      # Telegram 机器人入口
+├── run.py               # 机器人启动脚本 (调用 bot_listener.py)
+├── pyproject.toml       # ruff 配置: E/F rules, line-length=88, py311
+├── pytest.ini           # testpaths = tests
+└── .github/workflows/ci.yml
+```
 
-## 代码工作原则
+## 关键命令
 
-- 先读现有代码和配置，再改动；优先沿用项目已有模式。
-- 使用 `rg` / `rg --files` 查找文件和文本。
-- 手动编辑文件使用 `apply_patch`。
-- 不要回滚用户或其他 agent 已经做过的无关改动。
-- 只改和当前任务直接相关的文件，避免顺手重构。
-- 新增复杂逻辑时补充聚焦测试；窄改动保持验证范围匹配风险。
+```bash
+# 后端
+ruff check .                    # lint
+ruff format .                   # 格式化
+python -m pytest                # 跑全部测试
+python -m pytest tests/test_xxx.py  # 单个测试文件
+uvicorn web.app:app --reload --host 0.0.0.0 --port 8000  # 开发服务器
+python bot_listener.py          # Telegram 机器人
 
-## 前端约定
+# 前端 (cd frontend)
+npm run dev                     # 开发服务器 :3000 (含 sync server chunks)
+npm run build                   # 生产构建
+npm run typecheck               # tsc --noEmit
+npm run test:business           # Playwright 业务状态测试 (19 个)
+npm run lint                    # next lint
 
-- 前端位于 `frontend/`，使用 Next.js、React、TypeScript。
-- UI 修改必须关注移动端响应式、文本不重叠、按钮和标签不溢出。
-- 图表、终端、详情面板等工作界面应保持信息密度和可扫描性，避免营销式装饰。
-- 常用验证：
-  - `cd frontend && npm run test:business`
-  - `cd frontend && npm run typecheck`
-  - 必要时启动本地预览并用浏览器检查桌面和移动视口；检查完关闭本地端口。
+# Docker
+docker compose down && docker compose up -d --build
+```
 
-## 后端和数据约定
+## 重要约定
 
-- Python 代码主要位于 `src/`、`web/`、`tests/`。
-- 观测数据刷新应以数据源原生频率为准，避免 Web、collector、Telegram 同时强刷同一外部源。
-- Telegram 默认只读最新缓存/DB；除非完全没有缓存，才允许兜底刷新。
-- 对外部源调用要考虑 singleflight、冷却、缓存和失败降级，避免 502/408 或 Supabase/磁盘 IO 压力。
-- 常用验证：
-  - `python -m ruff check .`
-  - `python -m pytest`
+- **提交信息只用中文**，不要以 `@` 开头
+- 依赖管理: `npm` (前端), pip + `requirements.lock` (Python, 通过 uv 生成)
+- Python 3.11, ruff 仅启用 E/F 规则 (忽略 E501)
+- TypeScript strict 模式, 路径别名 `@/` → `frontend/`
+- CSS 变量 `var(--color-*)`，禁止 `!important`（Leaflet 地图覆写除外）
+- SQLite WAL 模式 + `busy_timeout=5000`（`db_manager.py`）
+- 本地开发设置 `POLYWEATHER_EVENT_STORE=sqlite` 避免依赖 Redis
 
-## CI、提交和部署
+## 架构要点
 
-- `main` push 会触发 `.github/workflows/ci.yml`：
-  - `python-quality`
-  - `frontend-quality`
-  - `build-and-push`
-  - `deploy`
-- 提交前至少运行和改动相关的验证；推送前确认 `git status --short`。
-- 推送后检查 GitHub Actions 最新 run；如果失败，先定位失败 job 和 step，再修改。
-- 线上 smoke check 优先检查：
-  - `https://api.polyweather.top/healthz`
-  - `https://polyweather.top/`
-  - 相关页面或 API 路径
+- Docker Compose 多服务: `web` (FastAPI :8000), `frontend` (Next.js :3000), `bot` (Telegram), `collector` (观测采集), `warmer` (缓存预热), `training_settlement` (训练结算), `weathernext2_worker` (GCP WeatherNext2)
+- 前端 → Nginx (反代) → Cloudflare
+- SSE 实时事件: 生产用 Redis Stream, 本地可切 SQLite
+- 付费墙: middleware.ts (服务端) + `ProductAccessRequired` (客户端)
+- `config/` + `web/schemas/` + `web/services/` 存放共享配置和载荷构建
 
-## 产品方向备忘
+## 测试注意
 
-- PolyWeather 当前重点不是售卖 API。
-- 核心差异化是结算源优先、实时观测源、跑道/城市细粒度温度、SSE patch、Telegram 缓存读取和面向交易/预测市场的解释能力。
-- 公开包装、教育内容、图表变量完整度和付费分层可以加强，但不要把产品定位改成通用天气 API。
+- `python -m pytest` 跑全部（确保 requirements-dev.lock 已装）
+- 前端测试仅 `npm run test:business`（非 Jest/Vitest）
+- 配置文件参考 `docs/CONFIGURATION_ZH.md` 和 `.env.example`
 
-## Memory 说明
+## CI/CD
 
-- `AGENTS.md` 是项目内显式规则，跟随仓库和 Project。
-- Memory 是用户账号级偏好设置，agent 不能代替用户开启。
-- 建议在 Codex / ChatGPT 设置中开启 Memory，并保存长期偏好，例如：
-  - PolyWeather 项目默认中文回复。
-  - 每个任务开独立 Thread。
-  - 修改后优先验证、提交、推送并检查部署状态。
-  - 不要主动把 PolyWeather 包装成 API 售卖产品。
+`main` push 触发: `python-quality` → `frontend-quality` → `build-and-push` (GHCR) → `deploy` (VPS via SSH)
+推送后检查 GitHub Actions 状态 + smoke test: `api.polyweather.top/healthz` + `polyweather.top/`

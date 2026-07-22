@@ -222,3 +222,46 @@ def test_ops_amsc_health_rejects_empty_success_response(monkeypatch):
     assert result["ok"] is False
     assert result["status"] == 200
     assert result["error"] == "empty_or_unauthorized_response"
+
+
+def test_ops_amsc_health_reports_invalid_session_code(monkeypatch):
+    class FakeResponse:
+        ok = True
+        status_code = 200
+        content = b"{}"
+
+        def json(self):
+            return {"errCode": -12005, "errMsg": "无效sessionId"}
+
+    monkeypatch.setenv("AMSC_AWOS_BASE_URL", "https://example.test/getWindPlate")
+    monkeypatch.setenv("POLYWEATHER_AMSC_SESSION_ID", "session")
+    monkeypatch.setattr(ops_api._requests, "get", lambda *args, **kwargs: FakeResponse())
+
+    result = ops_api._check_amsc_awos_health(timeout=1)
+
+    assert result["ok"] is False
+    assert result["status"] == 200
+    assert result["error"] == "invalid_session_id"
+    assert result["upstream_err_code"] == -12005
+    assert result["upstream_err_msg"] == "无效sessionId"
+
+
+def test_ops_amsc_health_reports_permission_denied(monkeypatch):
+    class FakeResponse:
+        ok = True
+        status_code = 200
+        content = b"{}"
+
+        def json(self):
+            return {"errCode": -12010, "errMsg": "无权访问此接口"}
+
+    monkeypatch.setenv("AMSC_AWOS_BASE_URL", "https://example.test/getWindPlate")
+    monkeypatch.setenv("POLYWEATHER_AMSC_SESSION_ID", "session")
+    monkeypatch.setattr(ops_api._requests, "get", lambda *args, **kwargs: FakeResponse())
+
+    result = ops_api._check_amsc_awos_health(timeout=1)
+
+    assert result["ok"] is False
+    assert result["status"] == 200
+    assert result["error"] == "permission_denied"
+    assert result["upstream_err_code"] == -12010
