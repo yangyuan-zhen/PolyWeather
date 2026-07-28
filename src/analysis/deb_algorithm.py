@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import os
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 import requests
 from src.analysis.settlement_rounding import apply_city_settlement
+from src.data_collection.city_time import get_city_utc_offset_seconds
 from loguru import logger
 from src.database.runtime_state import (
     DailyRecordRepository,
@@ -1155,7 +1156,8 @@ def calculate_dynamic_weight_components(
 
     city_data = data[city_name]
     sorted_dates = sorted(city_data.keys(), reverse=True)
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    utc_offset = get_city_utc_offset_seconds(city_name)
+    today_str = (datetime.now(timezone.utc) + timedelta(seconds=utc_offset)).strftime("%Y-%m-%d")
     available_days = sum(
         1
         for d in sorted_dates
