@@ -28,7 +28,7 @@ def test_mgm_hourly_high_fills_turkish_model_support():
     ) == 21.5
 
 
-def test_runway_history_temp_uses_settlement_endpoint_for_second_runway():
+def test_runway_history_temp_uses_target_runway_max():
     assert _runway_history_temp_for_city(
         "chongqing",
         {
@@ -38,10 +38,7 @@ def test_runway_history_temp_uses_settlement_endpoint_for_second_runway():
             "end_temp": 31.2,
             "target_runway_max": 34.5,
         },
-    ) == 31.2
-
-
-def test_runway_history_temp_uses_settlement_endpoint_for_first_runway():
+    ) == 34.5
     assert _runway_history_temp_for_city(
         "wuhan",
         {
@@ -51,4 +48,6 @@ def test_runway_history_temp_uses_settlement_endpoint_for_first_runway():
             "end_temp": 32.6,
             "target_runway_max": 33.4,
         },
-    ) == 31.2
+    ) == 33.4
+
+

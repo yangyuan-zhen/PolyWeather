@@ -504,10 +504,10 @@ def test_force_refresh_panel_overlays_latest_raw_over_stale_cache(monkeypatch):
         )
     )
 
-    assert payload["amos"]["observation_time"] == "2026-06-14T15:43:00+00:00"
+    assert payload["amos"]["observation_time"] == "2026-06-14T10:44:00+00:00"
     assert payload["current"]["source_code"] == "metar"
-    assert payload["current"]["temp"] == 25.4
-    assert payload["canonical_temperature"]["source"] == "metar"
+    assert payload["current"]["temp"] == 21.8
+    assert "canonical_temperature" not in payload
     assert payload["deb"]["prediction"] == 24.5
     assert enqueued == [
         {

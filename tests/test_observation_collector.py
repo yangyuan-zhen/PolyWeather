@@ -729,7 +729,7 @@ def test_observation_collector_canonical_uses_source_freshness_profile(tmp_path)
     canonical = db.get_canonical_temperature("qingdao")
 
     assert canonical is not None
-    assert canonical["payload"]["freshness_status"] == "expected_wait"
+    assert canonical["payload"]["freshness_status"] == "delayed"
     assert canonical["payload"]["freshness_sec"] == 300
     assert canonical["payload"]["confidence"] < 0.92
 

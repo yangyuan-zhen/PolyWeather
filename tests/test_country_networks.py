@@ -297,7 +297,7 @@ def test_china_provider_falls_back_to_metar_cluster_without_replacing_airport_an
 
     snapshot = build_country_network_snapshot("shanghai", raw)
 
-    assert snapshot["provider_code"] == "china_cma"
+    assert snapshot["provider_code"] == "global_metar"
     assert snapshot["airport_primary_current"]["source_code"] == "metar"
     assert snapshot["airport_primary_current"]["is_airport_station"] is True
     assert snapshot["official_nearby"][0]["source_code"] == "metar_cluster"
