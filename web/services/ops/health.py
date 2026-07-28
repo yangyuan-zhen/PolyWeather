@@ -6,7 +6,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import Request
-import requests as _requests
 
 from web.services.observation_freshness import (
     build_observation_freshness,

@@ -326,7 +326,6 @@ def build_city_query_report(
     open_meteo = weather_data.get("open-meteo", {}) or {}
     metar = weather_data.get("metar", {}) or {}
     mgm = weather_data.get("mgm") or {}
-    amos = weather_data.get("amos") or {}
     settlement_current = weather_data.get("settlement_current") or {}
     if not isinstance(settlement_current, dict):
         settlement_current = {}

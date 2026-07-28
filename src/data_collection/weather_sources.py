@@ -1232,9 +1232,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             except Exception:
                 logger.exception("airport_obs_log append failed for aeroweb city={}", city_lower)
 
-    def _attach_japan_official_nearby(
-        self, results: Dict, city_lower: str, use_fahrenheit: bool
-    ) -> None:
 
     def _attach_japan_official_nearby(
         self, results: Dict, city_lower: str, use_fahrenheit: bool

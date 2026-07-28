@@ -1,4 +1,3 @@
-from web.services import ops_api
 from src.database.db_manager import DBManager
 
 
