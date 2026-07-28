@@ -93,7 +93,6 @@ def test_observation_collector_profiles_match_source_cadence():
     assert profiles["knmi"].interval_sec == 600
     assert profiles["ims"].interval_sec == 600
     assert profiles["aeroweb"].interval_sec == 900
-    assert profiles["cwa"].interval_sec == 600
     assert profiles["metar"].interval_sec == 1800
     assert {"seoul", "busan"}.issubset(set(profiles["amos"].cities))
     assert "new york" in profiles["madis_hfmetar"].cities
@@ -102,7 +101,6 @@ def test_observation_collector_profiles_match_source_cadence():
     assert {"ankara", "istanbul"}.issubset(set(profiles["mgm"].cities))
     assert profiles["jma_amedas"].cities == ("tokyo",)
     assert profiles["aeroweb"].cities == ("paris",)
-    assert profiles["cwa"].cities == ("taipei",)
     assert {"madrid", "milan", "tokyo", "paris"}.issubset(set(profiles["metar"].cities))
     assert SOURCE_CADENCE_SECONDS["mgm"] == 300
     assert SOURCE_CADENCE_SECONDS["jma_amedas"] == 600

@@ -486,30 +486,6 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
     except Exception as e:
         results["singapore_mss"] = {"ok": False, "error": str(e)[:100]}
 
-    # CWA (Taiwan Central Weather Administration)
-    cwa_key = str(
-        _os.getenv("CWA_API_KEY")
-        or _os.getenv("CWA_OPEN_DATA_AUTH")
-        or _os.getenv("CWA_OPEN_DATA_API_KEY")
-        or ""
-    ).strip()
-    if cwa_key:
-        try:
-            t0 = _time.perf_counter()
-            r = _r.get(
-                f"https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0003-001?Authorization={cwa_key}&limit=1",
-                timeout=timeout,
-            )
-            results["cwa"] = {
-                "ok": r.ok,
-                "status": r.status_code,
-                "latency_ms": round((_time.perf_counter() - t0) * 1000),
-            }
-        except Exception as e:
-            results["cwa"] = {"ok": False, "error": str(e)[:100]}
-    else:
-        results["cwa"] = {"ok": False, "error": "not configured"}
-
     # AMOS (Korea runway sensors)
     try:
         t0 = _time.perf_counter()

@@ -114,38 +114,6 @@ def test_source_adapter_collects_jma_official_nearby_rows():
     assert result.records[0].station_code == "44166"
 
 
-def test_source_adapter_collects_cwa_direct_settlement_payload():
-    from web.services.observation_source_adapters import collect_observation_source
-
-    calls = []
-
-    class FakeWeather:
-        def fetch_cwa_taipei_settlement_current(self):
-            calls.append("fetch_cwa")
-            return {
-                "source": "cwa",
-                "source_label": "CWA",
-                "station_code": "466920",
-                "station_name": "Taipei",
-                "observation_time": "2026-06-16T06:00:00+08:00",
-                "current": {"temp": 29.2},
-            }
-
-    result = collect_observation_source(
-        FakeWeather(),
-        "cwa",
-        "taipei",
-        use_fahrenheit=False,
-    )
-
-    assert calls == ["fetch_cwa"]
-    assert result.status == "ok"
-    assert result.records[0].source == "cwa"
-    assert result.records[0].value == 29.2
-    assert result.records[0].observed_at == "2026-06-16T06:00:00+08:00"
-    assert result.records[0].station_code == "466920"
-
-
 def test_source_adapter_collects_metar_for_low_frequency_cities():
     from web.services.observation_source_adapters import collect_observation_source
 

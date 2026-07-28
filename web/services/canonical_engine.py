@@ -13,7 +13,7 @@ from web.realtime_patch_schema import normalize_observation_patch
 
 _SETTLEMENT_SOURCE_ADAPTERS = {
     "hko": {"hko_obs", "cowin_obs"},
-    "cwa": {"cwa"},
+    
     "mgm": {"mgm"},
     "noaa": {"madis_hfmetar", "metar", "noaa"},
     "wunderground": {"amos", "madis_hfmetar", "metar", "wunderground"},

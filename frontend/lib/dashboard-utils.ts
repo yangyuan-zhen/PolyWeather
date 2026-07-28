@@ -1888,7 +1888,6 @@ export function getCityProfileStats(detail: CityDetail, locale: Locale = "zh-CN"
   const sourceCode = getObservationSourceCode(detail);
   const isOfficialSource =
     sourceCode === "hko" ||
-    sourceCode === "cwa" ||
     sourceCode === "noaa";
 
   const sourceDisplay = (() => {
@@ -1896,11 +1895,6 @@ export function getCityProfileStats(detail: CityDetail, locale: Locale = "zh-CN"
       return isEnglish(locale)
         ? "Hong Kong Observatory (HKO)"
         : "香港天文台 (HKO)";
-    }
-    if (sourceCode === "cwa") {
-      return isEnglish(locale)
-        ? "Central Weather Administration (CWA)"
-        : "交通部中央气象署 (CWA)";
     }
     if (sourceCode === "noaa") {
       const noaaCode = getNoaaStationCode(detail);
@@ -2049,7 +2043,6 @@ export function getSettlementRiskNarrative(
   const sourceCode = getObservationSourceCode(detail);
   const stationTerm =
     sourceCode === "hko" ||
-    sourceCode === "cwa" ||
     sourceCode === "noaa"
     ? isEnglish(locale)
       ? "settlement reference station"

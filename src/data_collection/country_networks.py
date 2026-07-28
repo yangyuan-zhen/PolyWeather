@@ -193,8 +193,6 @@ def _provider_code_for_city(city: str) -> str:
         return "fr_aeroweb"
     if settlement_source == "hko":
         return "hongkong_hko"
-    if settlement_source == "cwa":
-        return "taiwan_cwa"
     if normalized in _japan_jma_cities():
         return "japan_jma"
     return "global_metar"
@@ -822,7 +820,7 @@ def _settlement_station_metadata(city: str) -> Dict[str, Any]:
         or None
     )
     airport_code = str(meta.get("icao") or "").strip()
-    is_explicit_official_anchor = settlement_source in {"hko", "cwa"}
+    is_explicit_official_anchor = settlement_source in {"hko"}
     return {
         "provider_code": _provider_code_for_city(city),
         "settlement_source": settlement_source,
@@ -1131,15 +1129,6 @@ class HongKongHkoNetworkProvider(CountryNetworkProvider):
         return [anchor] if anchor else []
 
 
-class TaiwanCwaNetworkProvider(CountryNetworkProvider):
-    def __init__(self) -> None:
-        super().__init__("taiwan_cwa", "CWA")
-
-    def official_nearby_current(self, city: str, raw: Dict[str, Any]) -> List[Dict[str, Any]]:
-        anchor = _settlement_anchor_row(city, raw)
-        return [anchor] if anchor else []
-
-
 def get_country_network_provider(city: str) -> CountryNetworkProvider:
     provider_code = _provider_code_for_city(city)
     if provider_code == "turkey_mgm":
@@ -1156,8 +1145,6 @@ def get_country_network_provider(city: str) -> CountryNetworkProvider:
         return AerowebNetworkProvider()
     if provider_code == "hongkong_hko":
         return HongKongHkoNetworkProvider()
-    if provider_code == "taiwan_cwa":
-        return TaiwanCwaNetworkProvider()
     return GlobalMetarNetworkProvider()
 
 

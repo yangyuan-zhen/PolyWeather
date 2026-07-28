@@ -66,7 +66,6 @@ CITIES: Dict[str, Dict[str, Any]] = {
 SETTLEMENT_SOURCE_LABELS: Dict[str, str] = {
     "metar": "METAR",
     "hko": "HKO",
-    "cwa": "CWA",
     "noaa": "NOAA",
     "mgm": "MGM",
     "wunderground": "Wunderground",

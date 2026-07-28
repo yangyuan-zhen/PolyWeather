@@ -1864,7 +1864,7 @@ def test_chart_data_cache_hit_overlays_latest_jma_from_airport_obs_log(monkeypat
     assert payload["airport_current"]["source_code"] == "jma_amedas"
 
 
-def test_chart_data_cache_hit_overlays_latest_cwa_from_airport_obs_log(monkeypatch):
+def test_chart_data_cache_hit_returns_cached_when_no_overlay_applies(monkeypatch):
     import asyncio
 
     class FakeCache:
@@ -1879,12 +1879,12 @@ def test_chart_data_cache_hit_overlays_latest_cwa_from_airport_obs_log(monkeypat
                     "local_time": "18:00",
                     "current": {
                         "temp": 26.0,
-                        "source_code": "cwa",
+                        "source_code": "noaa",
                         "obs_time": "2026-06-14T10:00:00+00:00",
                     },
                     "airport_current": {
                         "temp": 26.0,
-                        "source_code": "cwa",
+                        "source_code": "noaa",
                         "obs_time": "2026-06-14T10:00:00+00:00",
                     },
                     "metar_today_obs": [{"time": "18:00", "temp": 26.0}],
@@ -1898,21 +1898,8 @@ def test_chart_data_cache_hit_overlays_latest_cwa_from_airport_obs_log(monkeypat
         def get_latest_raw_observation(self, source, city):
             return None
 
-        def get_airport_obs_recent(self, icao, minutes=30):
-            assert icao == "466920"
-            return [
-                {
-                    "icao": "466920",
-                    "city": "taipei",
-                    "temp_c": 29.4,
-                    "obs_time": "2026-06-16T15:30:00+08:00",
-                    "created_at": "2026-06-16T07:30:15+00:00",
-                }
-            ]
-
     class FakeWeather:
-        def fetch_cwa_taipei_settlement_current(self):
-            return None
+        pass
 
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
     monkeypatch.setattr(city_api.legacy_routes, "_weather", FakeWeather())
@@ -1924,10 +1911,10 @@ def test_chart_data_cache_hit_overlays_latest_cwa_from_airport_obs_log(monkeypat
 
     payload = asyncio.run(city_api._get_city_chart_data("taipei", force_refresh=False))
 
-    assert payload["local_date"] == "2026-06-16"
-    assert payload["local_time"] == "15:30"
-    assert payload["airport_current"]["temp"] == 29.4
-    assert payload["airport_current"]["source_code"] == "cwa"
+    assert payload["local_date"] == "2026-06-14"
+    assert payload["local_time"] == "18:00"
+    assert payload["airport_current"]["temp"] == 26.0
+    assert payload["airport_current"]["source_code"] == "noaa"
 
 
 def test_full_detail_batch_overlays_latest_official_observations_from_airport_obs_log(monkeypatch):
@@ -1965,12 +1952,12 @@ def test_full_detail_batch_overlays_latest_official_observations_from_airport_ob
                     "local_time": "18:00",
                     "current": {
                         "temp": 26.0,
-                        "source_code": "cwa",
+                        "source_code": "noaa",
                         "obs_time": "2026-06-14T10:00:00+00:00",
                     },
                     "airport_current": {
                         "temp": 26.0,
-                        "source_code": "cwa",
+                        "source_code": "noaa",
                         "obs_time": "2026-06-14T10:00:00+00:00",
                     },
                 },
@@ -1990,16 +1977,6 @@ def test_full_detail_batch_overlays_latest_official_observations_from_airport_ob
                         "created_at": "2026-06-15T21:00:15+00:00",
                     }
                 ]
-            if icao == "466920":
-                return [
-                    {
-                        "icao": "466920",
-                        "city": "taipei",
-                        "temp_c": 29.4,
-                        "obs_time": "2026-06-16T15:30:00+08:00",
-                        "created_at": "2026-06-16T07:30:15+00:00",
-                    }
-                ]
             return []
 
     class FakeWeather:
@@ -2007,9 +1984,6 @@ def test_full_detail_batch_overlays_latest_official_observations_from_airport_ob
             return []
 
         def fetch_jma_amedas_current(self, city, use_fahrenheit=False):
-            return None
-
-        def fetch_cwa_taipei_settlement_current(self):
             return None
 
     city_api._CITY_DETAIL_PAYLOAD_CACHE.clear()
@@ -2046,9 +2020,9 @@ def test_full_detail_batch_overlays_latest_official_observations_from_airport_ob
     assert tokyo["overview"]["local_date"] == "2026-06-16"
     assert tokyo["airport_current"]["source_code"] == "jma_amedas"
     assert tokyo["airport_current"]["temp"] == 24.0
-    assert taipei["overview"]["local_date"] == "2026-06-16"
-    assert taipei["airport_current"]["source_code"] == "cwa"
-    assert taipei["airport_current"]["temp"] == 29.4
+    assert taipei["overview"]["local_date"] == "2026-06-14"
+    assert taipei["airport_current"]["source_code"] == "noaa"
+    assert taipei["airport_current"]["temp"] == 26.0
 
 
 def test_chart_data_returns_cached_payload_when_optional_overlay_times_out(monkeypatch):

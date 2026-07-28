@@ -62,7 +62,7 @@ def test_v1_patch_payload_is_accepted_and_normalized():
         {
             "type": "city_observation_patch.v1",
             "city": "Taipei",
-            "source": "cwa",
+            "source": "noaa",
             "obs_time": "2026-05-26T07:01:00Z",
             "payload": {
                 "temp": 29.4,
@@ -79,7 +79,7 @@ def test_v1_patch_payload_is_accepted_and_normalized():
     )
 
     assert event["city"] == "taipei"
-    assert event["source"] == "cwa"
+    assert event["source"] == "noaa"
     assert event["payload"]["temp"] == 29.4
     assert event["payload"]["max_so_far"] == 30.1
     assert event["payload"]["signed_gap"] == 0.6

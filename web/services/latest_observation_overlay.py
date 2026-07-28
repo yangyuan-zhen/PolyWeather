@@ -6,7 +6,6 @@ from typing import Any, Optional
 
 from loguru import logger
 
-from src.database.runtime_state import OfficialIntradayObservationRepository
 from web.services.canonical_temperature import build_canonical_temperature
 
 _TAIPEI_TZ = timezone(timedelta(hours=8))
@@ -547,78 +546,9 @@ def _merge_observation_block(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# CWA (Central Weather Administration — Taipei)
-# ═══════════════════════════════════════════════════════════════════════════════
 
 
-def _latest_cwa_data_from_airport_obs_log(db: Any, city: str, use_fahrenheit: bool) -> Optional[dict[str, Any]]:
-    row = _latest_airport_obs_log_row(
-        db,
-        station_code="466920",
-        city=city,
-        source_code="cwa",
-        source_label="CWA",
-        station_label="\u81fa\u5317",
-        use_fahrenheit=use_fahrenheit,
-    )
-    if not row:
-        return None
-    return {
-        "source": "cwa",
-        "source_label": "CWA",
-        "station_code": row.get("icao") or "466920",
-        "station_name": row.get("station_label") or "\u81fa\u5317",
-        "observation_time": row.get("obs_time"),
-        "current": {
-            "temp": row.get("temp"),
-        },
-        "unit": "fahrenheit" if use_fahrenheit else "celsius",
-    }
-
-
-def _latest_cwa_data_from_official_intraday_history(use_fahrenheit: bool) -> Optional[dict[str, Any]]:
-    try:
-        local_now = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=8)))
-        target_date = local_now.strftime("%Y-%m-%d")
-        points = OfficialIntradayObservationRepository().load_points(
-            source_code="cwa",
-            station_code="466920",
-            target_date=target_date,
-        )
-    except Exception as exc:
-        logger.debug("latest CWA official intraday history read failed: {}", exc)
-        return None
-
-    latest: Optional[dict[str, Any]] = None
-    latest_epoch: Optional[int] = None
-    for point in points if isinstance(points, list) else []:
-        if not isinstance(point, dict):
-            continue
-        time_text = str(point.get("time") or "").strip()
-        temp = _to_float(point.get("temp"))
-        if len(time_text) != 5 or ":" not in time_text or temp is None:
-            continue
-        obs_time = f"{target_date}T{time_text}:00+08:00"
-        epoch = parse_observation_epoch(obs_time)
-        if epoch is None:
-            continue
-        if latest_epoch is None or epoch > latest_epoch:
-            latest_epoch = epoch
-            latest = {
-                "source": "cwa",
-                "source_label": "CWA",
-                "station_code": "466920",
-                "station_name": "\u81fa\u5317",
-                "observation_time": obs_time,
-                "current": {
-                    "temp": round(float(temp) * 9 / 5 + 32, 1) if use_fahrenheit else round(float(temp), 1),
-                },
-                "unit": "fahrenheit" if use_fahrenheit else "celsius",
-            }
-    return latest
-
-
-def _newer_cwa_payload(left: Optional[dict[str, Any]], right: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+def _newer_observation_payload(left: Optional[dict[str, Any]], right: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
     if not isinstance(left, dict):
         return right if isinstance(right, dict) else None
     if not isinstance(right, dict):
@@ -679,7 +609,7 @@ def _latest_taipei_metar_from_airport_obs_log(
             },
             "unit": "fahrenheit" if use_fahrenheit else "celsius",
         }
-        latest = _newer_cwa_payload(latest, candidate)
+        latest = _newer_observation_payload(latest, candidate)
     return latest
 
 
@@ -749,7 +679,7 @@ def _latest_taipei_metar_fallback(
         use_fahrenheit,
         target_date=target_date,
     )
-    latest = _newer_cwa_payload(
+    latest = _newer_observation_payload(
         latest,
         _latest_taipei_metar_from_fetcher(weather, use_fahrenheit, target_date=target_date),
     )
@@ -810,168 +740,6 @@ def _normalized_today_points(
     return points
 
 
-def overlay_latest_cwa_observation(weather, city, payload, db=None):
-    normalized_city = str(city or payload.get("name") or payload.get("city") or "").strip().lower()
-    if normalized_city != "taipei" or not isinstance(payload, dict) or not payload:
-        return payload
-
-    use_fahrenheit = "F" in str(payload.get("temp_symbol") or "").upper()
-    target_date = _taipei_local_today()
-    cwa_data = _latest_cwa_data_from_airport_obs_log(db, normalized_city, use_fahrenheit)
-    cwa_data = _newer_cwa_payload(cwa_data, _latest_cwa_data_from_official_intraday_history(use_fahrenheit))
-
-    fetcher = getattr(weather, "fetch_cwa_taipei_settlement_current", None)
-    if not callable(fetcher) and not cwa_data:
-        return payload
-    if callable(fetcher):
-        try:
-            cwa_data = _newer_cwa_payload(cwa_data, fetcher())
-        except Exception as exc:
-            logger.debug("latest CWA overlay fetch failed: {}", exc)
-    if isinstance(cwa_data, dict) and not _is_taipei_today_observation(
-        cwa_data.get("observation_time"),
-        target_date,
-    ):
-        cwa_epoch = parse_observation_epoch(cwa_data.get("observation_time"))
-        existing_epochs = [
-            epoch
-            for epoch in (
-                _block_epoch(payload.get("current")),
-                _block_epoch(payload.get("airport_primary")),
-                _block_epoch(payload.get("airport_current")),
-            )
-            if epoch is not None
-        ]
-        latest_existing_epoch = max(existing_epochs) if existing_epochs else None
-        if cwa_epoch is None or (latest_existing_epoch is not None and cwa_epoch <= latest_existing_epoch):
-            cwa_data = None
-    if not isinstance(cwa_data, dict):
-        cwa_data = _latest_taipei_metar_fallback(
-            weather,
-            db,
-            use_fahrenheit,
-            target_date=target_date,
-        )
-    if not isinstance(cwa_data, dict):
-        return payload
-
-    temp = _to_float((cwa_data.get("current") or {}).get("temp"))
-    obs_time = str(cwa_data.get("observation_time") or "").strip()
-    if temp is None or not obs_time:
-        return payload
-
-    raw_epoch = parse_observation_epoch(obs_time)
-    local_dt = _taipei_local_datetime(obs_time)
-    if raw_epoch is None or local_dt is None:
-        return payload
-    existing_epochs = [
-        epoch
-        for epoch in (
-            _block_epoch(payload.get("current")),
-            _block_epoch(payload.get("airport_primary")),
-            _block_epoch(payload.get("airport_current")),
-        )
-        if epoch is not None
-    ]
-    if existing_epochs and max(existing_epochs) > raw_epoch:
-        return payload
-
-    source_code = str(cwa_data.get("source") or "cwa").strip().lower() or "cwa"
-    source_label = str(cwa_data.get("source_label") or ("METAR" if source_code == "metar" else "CWA")).strip()
-    source_label = source_label or ("METAR" if source_code == "metar" else "CWA")
-    current = cwa_data.get("current") if isinstance(cwa_data.get("current"), dict) else {}
-    max_so_far = _to_float(current.get("max_temp_so_far") if current else None)
-    update = {
-        "temp": round(float(temp), 1),
-        "source_code": source_code,
-        "source_label": source_label,
-        "settlement_source": source_code,
-        "settlement_source_label": source_label,
-        "station_code": str(cwa_data.get("station_code") or ("RCSS" if source_code == "metar" else "466920")).strip(),
-        "station_name": str(cwa_data.get("station_name") or ("Taipei Songshan METAR" if source_code == "metar" else "\u81fa\u5317")).strip(),
-        "observed_at": obs_time,
-        "observation_time": obs_time,
-        "obs_time": obs_time,
-        "observation_status": "live",
-        "city": normalized_city,
-    }
-    if max_so_far is not None:
-        update["max_so_far"] = round(float(max_so_far), 1)
-        update["max_temp_so_far"] = round(float(max_so_far), 1)
-
-    next_payload = deepcopy(payload)
-    changed = False
-
-    for key in ("current", "airport_primary", "airport_current"):
-        changed = _merge_observation_block(next_payload, key, update, raw_epoch) or changed
-
-    canonical = next_payload.get("canonical_temperature")
-    canonical_epoch = _block_epoch(canonical)
-    if canonical_epoch is None or raw_epoch > canonical_epoch:
-        canonical_payload = build_canonical_temperature(
-            normalized_city,
-            {
-                "name": normalized_city,
-                "temp_symbol": next_payload.get("temp_symbol") or "\u00b0C",
-                "updated_at": obs_time,
-                "current": update,
-            },
-            fetched_at=obs_time,
-        )
-        if canonical_payload:
-            next_payload["canonical_temperature"] = canonical_payload
-            changed = True
-
-    local_date = local_dt.date().isoformat()
-    local_time = local_dt.strftime("%H:%M")
-    previous_local_date = str(next_payload.get("local_date") or "")
-    if next_payload.get("local_date") != local_date:
-        next_payload["local_date"] = local_date
-        changed = True
-    if next_payload.get("local_time") != local_time:
-        next_payload["local_time"] = local_time
-        changed = True
-
-    overview = next_payload.get("overview")
-    if not isinstance(overview, dict):
-        overview = {}
-    next_overview = dict(overview)
-    overview_updates = {
-        "local_date": local_date,
-        "local_time": local_time,
-        "current_temp": round(float(temp), 1),
-        "airport_primary": update,
-        "settlement_source": source_code,
-        "settlement_source_label": source_label,
-    }
-    for key, value in overview_updates.items():
-        if next_overview.get(key) != value:
-            next_overview[key] = value
-            changed = True
-    next_payload["overview"] = next_overview
-
-    replace_today_series = bool(previous_local_date and previous_local_date != local_date)
-    latest_point = _observation_today_point(
-        local_time,
-        obs_time,
-        temp,
-        source_code=source_code,
-        source_label=source_label,
-    )
-    today_points = _normalized_today_points(
-        cwa_data.get("today_obs"),
-        latest_point,
-        source_code=source_code,
-        source_label=source_label,
-    )
-    _sync_today_series_points(
-        next_payload,
-        today_points,
-        replace_all=replace_today_series,
-    )
-    changed = True
-
-    return next_payload if changed else payload
 # ═══════════════════════════════════════════════════════════════════════════════
 
 

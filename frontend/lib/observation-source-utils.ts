@@ -38,7 +38,6 @@ export function getObservationSourceTag(detail: CityDetail): string {
   if (label) return label;
   const code = getObservationSourceCode(detail);
   if (code === "hko") return "HKO";
-  if (code === "cwa") return "CWA";
   if (code === "noaa") return "NOAA";
   if (code === "wunderground") {
     const icao = String(detail.risk?.icao || detail.current?.station_code || "")

@@ -35,7 +35,6 @@ def _resolve_settlement_source(city_meta: Dict[str, Any]) -> Tuple[str, str]:
     source_label_map = {
         "metar": "METAR",
         "hko": "HKO",
-        "cwa": "CWA",
         "noaa": "NOAA",
         "mgm": "MGM",
         "wunderground": "Wunderground",
@@ -334,7 +333,7 @@ def build_city_query_report(
         sc_current = {}
     city_meta = CITY_REGISTRY.get(city_name.lower(), {})
     settlement_source, settlement_source_label = _resolve_settlement_source(city_meta)
-    use_settlement_current = settlement_source in {"hko", "cwa", "noaa"} and bool(sc_current)
+    use_settlement_current = settlement_source in {"hko", "noaa"} and bool(sc_current)
     fallback_utc_offset = int(city_meta.get("tz_offset", 0))
     nws_periods = ((weather_data.get("nws") or {}).get("forecast_periods") or [])
     if nws_periods:
@@ -523,7 +522,7 @@ def build_city_query_report(
 
 
     if use_settlement_current:
-        # HKO/CWA detailed observations
+        # HKO detailed observations
         wind = primary_current.get("wind_speed_kt")
         wind_dir = primary_current.get("wind_dir")
         humidity = primary_current.get("humidity")

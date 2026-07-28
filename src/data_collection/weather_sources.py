@@ -45,7 +45,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
     - AMOS (Korean runway-level airport sensors — RKSI, RKPK)
     - NWS (US National Weather Service)
     - MGM (Turkish Meteorological Service)
-    - JMA / HKO / CWA (country official networks)
+    - JMA / HKO (country official networks)
     - Weather derivative markets
     """
 
@@ -269,11 +269,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         self.cowin_obs_cache_ttl_sec = min(self.cowin_obs_cache_ttl_sec, OBSERVATION_REFRESH_SEC)
         self._cowin_obs_cache: Dict[str, Dict] = {}
         self._cowin_obs_cache_lock = threading.Lock()
-        self.cwa_open_data_auth = (
-            os.getenv("CWA_OPEN_DATA_AUTH")
-            or os.getenv("CWA_OPEN_DATA_API_KEY")
-            or ""
-        ).strip()
 
         # 磁盘持久化缓存：重启后即可加载上次的预报数据，避免冷启动请求爆发
         self._disk_cache_path = os.getenv(
@@ -1001,12 +996,12 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     or normalized
                 )
                 self._settlement_cache.pop(f"noaa:{station_code.lower()}", None)
-            elif settlement_source == "cwa":
+            elif settlement_source == "hko":
                 station_code = (
                     str(city_meta.get("settlement_station_code") or "").strip()
                     or normalized
                 )
-                self._settlement_cache.pop(f"cwa:{station_code.lower()}", None)
+                self._settlement_cache.pop(f"hko:{station_code.lower()}", None)
         location_id = self._wunderground_location_id(normalized)
         if location_id:
             prefix = f"wu:{location_id}:"
@@ -1063,10 +1058,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             hko_forecast = self.fetch_hko_forecast()
             if hko_forecast:
                 results["hko_forecast"] = hko_forecast
-        elif settlement_source == "cwa":
-            cwa_forecast = self.fetch_cwa_taipei_forecast()
-            if cwa_forecast is not None:
-                results["cwa_forecast"] = cwa_forecast
 
     def _attach_turkish_mgm_data(
         self,
@@ -1128,7 +1119,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         if (
             city_lower not in self.CITY_METAR_CLUSTERS
             or "mgm_nearby" in results
-            or settlement_source in {"hko", "cwa", "ims", "ncm", "aeroweb"}
+            or settlement_source in {"hko", "ims", "ncm", "aeroweb"}
         ):
             return
         cluster_icaos = self.CITY_METAR_CLUSTERS[city_lower]
@@ -1409,44 +1400,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             )
         except Exception:
             logger.exception("airport_obs_log append/update failed for cowin_obs city={}", city_lower)
-
-    def _attach_cwa_settlement_nearby(
-        self, results: Dict, city_lower: str, use_fahrenheit: bool
-    ) -> None:
-        if city_lower != "taipei":
-            return
-        sc = results.get("settlement_current") or {}
-        if not sc:
-            return
-        current = sc.get("current") or {}
-        temp = current.get("temp")
-        if temp is None:
-            return
-        row = {
-            "station_code": sc.get("station_code") or "466920",
-            "station_label": sc.get("station_name") or "Taipei CWA",
-            "temp": temp,
-            "obs_time": sc.get("observation_time") or "",
-            "source_code": "cwa",
-            "source_label": "CWA",
-            "icao": "RCSS",
-            "is_official": True,
-            "is_airport_station": True,
-            "is_settlement_anchor": False,
-            "max_so_far": current.get("max_temp_so_far"),
-            "max_temp_time": current.get("max_temp_time"),
-            "humidity": current.get("humidity"),
-            "wind_speed_kt": current.get("wind_speed_kt"),
-            "wind_dir": current.get("wind_dir"),
-        }
-        results["mgm_nearby"] = [row]
-        results["nearby_source"] = "cwa"
-        self._emit_temperature_patch_if_changed(
-            city_lower,
-            temp,
-            sc.get("observation_time"),
-            source="cwa",
-        )
 
     def _attach_korean_amos_data(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
@@ -1775,7 +1728,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     self._attach_knmi_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_cowin_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_hko_obs_official_nearby(results, city_lower, use_fahrenheit)
-                    self._attach_cwa_settlement_nearby(results, city_lower, use_fahrenheit)
                     if city_lower == "warsaw":
                         self._attach_warsaw_official_nearby(results, use_fahrenheit)
                     self._attach_global_nearby_cluster(
@@ -1833,7 +1785,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     self._attach_knmi_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_cowin_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_hko_obs_official_nearby(results, city_lower, use_fahrenheit)
-                    self._attach_cwa_settlement_nearby(results, city_lower, use_fahrenheit)
                     if city_lower == "warsaw":
                         self._attach_warsaw_official_nearby(results, use_fahrenheit)
                     self._attach_global_nearby_cluster(

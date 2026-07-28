@@ -174,7 +174,7 @@ def collect_observation_source(
     normalized_source = _normalize_source(source)
     normalized_city = _normalize_city(city)
     method_name = _ATTACH_METHODS.get(normalized_source)
-    if not method_name and normalized_source not in {"cwa", "metar"}:
+    if not method_name and normalized_source not in {"metar"}:
         return ObservationSourceResult(
             source=normalized_source,
             city=normalized_city,
@@ -201,19 +201,6 @@ def collect_observation_source(
             include_nearby=True,
         )
         _enrich_mgm_results(results, normalized_city)
-    elif normalized_source == "cwa":
-        fetch_cwa = getattr(weather, "fetch_cwa_taipei_settlement_current", None)
-        if not callable(fetch_cwa) or normalized_city != "taipei":
-            return ObservationSourceResult(
-                source=normalized_source,
-                city=normalized_city,
-                status="unsupported",
-                error="weather collector missing fetch_cwa_taipei_settlement_current",
-                records=(),
-            )
-        cwa_payload = fetch_cwa()
-        if cwa_payload:
-            results["cwa"] = cwa_payload
     elif normalized_source == "metar":
         fetch_metar = getattr(weather, "fetch_metar", None)
         if not callable(fetch_metar):

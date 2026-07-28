@@ -9,7 +9,6 @@ const OBSERVATION_LABEL_EN: Record<string, string> = {
   "机场气象站 (10分钟)": "Airport Weather Station (10m)",
   "航站楼温度": "Terminal Temperature",
   "官方机场观测 (15分钟)": "Official Airport Obs (15m)",
-  "CWA (10分钟)": "CWA (10m)",
   "气象站实测": "Weather Station Live",
   "跑道实测 (1分钟)": "Runway Live (1m)",
   "跑道实测 (3分钟)": "Runway Live (3m)",

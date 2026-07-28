@@ -207,7 +207,6 @@ export function getTemperatureChartData(
   const observationCode = getObservationSourceCode(detail);
   const settlementSource =
     observationCode === "hko" ||
-    observationCode === "cwa" ||
     observationCode === "noaa" ||
     observationCode === "wunderground";
   const useSettlementObservationSource = settlementSource;

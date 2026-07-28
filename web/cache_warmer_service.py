@@ -58,7 +58,6 @@ US_CORE_CITIES = (
 DEFAULT_HOT_CITIES = ASIA_CORE_CITIES + EUROPE_CORE_CITIES + US_CORE_CITIES
 SOURCE_PRIORITY_WEIGHT = {
     "hko": 10,
-    "cwa": 9,
     "noaa": 8,
     "mgm": 8,
     "metar": 6,

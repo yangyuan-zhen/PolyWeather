@@ -25,7 +25,6 @@ from src.data_collection.multi_model_freshness import multi_model_forecasts_for_
 SETTLEMENT_SOURCE_LABELS = {
     "metar": "METAR",
     "hko": "HKO",
-    "cwa": "CWA",
     "noaa": "NOAA",
     "mgm": "MGM",
     "wunderground": "Wunderground",
@@ -505,8 +504,6 @@ def analyze_weather_trend(
         
     if weather_data.get("hko_forecast") is not None:
         current_forecasts["HKO(港天文)"] = _sf(weather_data.get("hko_forecast"))
-    if weather_data.get("cwa_forecast") is not None:
-        current_forecasts["CWA(台气象)"] = _sf(weather_data.get("cwa_forecast"))
 
     forecast_highs = [h for h in current_forecasts.values() if h is not None]
     forecast_high = max(forecast_highs) if forecast_highs else None

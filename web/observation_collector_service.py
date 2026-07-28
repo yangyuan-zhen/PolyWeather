@@ -590,11 +590,6 @@ def build_observation_source_profiles() -> List[ObservationSourceProfile]:
             interval_sec=max(600, _env_int("POLYWEATHER_OBSERVATION_COLLECTOR_AEROWEB_SEC", 900)),
         ),
         ObservationSourceProfile(
-            source="cwa",
-            cities=("taipei",),
-            interval_sec=max(300, _env_int("POLYWEATHER_OBSERVATION_COLLECTOR_CWA_SEC", 600)),
-        ),
-        ObservationSourceProfile(
             source="metar",
             cities=_normalized_cities(metar_cities),
             interval_sec=max(600, _env_int("POLYWEATHER_OBSERVATION_COLLECTOR_METAR_SEC", 1800)),

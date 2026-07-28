@@ -24,7 +24,7 @@ from web.analysis_service import _runway_history_temp_for_city
 from web.services.canonical_temperature import build_city_weather_from_canonical
 from web.services.latest_observation_overlay import (
     overlay_latest_amos_observation,
-    overlay_latest_cwa_observation,
+
     overlay_latest_hko_observation,
     overlay_latest_jma_amedas_observation,
     overlay_latest_mgm_observation,
@@ -172,13 +172,7 @@ async def _overlay_latest_observation_sources(city: str, payload: Dict[str, Any]
         fn=overlay_latest_hko_observation,
         args=(legacy_routes._CACHE_DB, city, latest_payload),
     )
-    return await _run_latest_observation_city_chart_overlay(
-        city=city,
-        overlay_name="cwa_taipei",
-        payload=latest_payload,
-        fn=overlay_latest_cwa_observation,
-        args=(legacy_routes._weather, city, latest_payload, legacy_routes._CACHE_DB),
-    )
+    return latest_payload
 
 
 async def _get_cached_city_payload(city: str, kind: str) -> Dict[str, Any]:

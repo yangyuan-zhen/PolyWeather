@@ -2299,7 +2299,6 @@ function getLiveObservationLabels(
   const isTokyo = normalizedKey === "tokyo";
   const isSingapore = normalizedKey === "singapore";
   const isParis = normalizedKey === "paris";
-  const isTaipei = normalizedKey === "taipei";
   const sourceTokens = [
     (hourly?.airportPrimary as any)?.source,
     hourly?.airportPrimary?.source_code,
@@ -2322,7 +2321,7 @@ function getLiveObservationLabels(
     /\b(mgm|turkey_mgm|jma_amedas|fmi|knmi|cowin_obs|ims|ncm|aeroweb|madis_hfmetar|singapore_mss)\b/.test(sourceTokens);
   const isRunwaySensorCity = runwaySensorCities.has(normalizedKey);
   const isWeatherStation = !runwaySensorCities.has(normalizedKey)
-    && !isHKO && !isShenzhen && !isTokyo && !isSingapore && !isParis && !isTaipei
+    && !isHKO && !isShenzhen && !isTokyo && !isSingapore && !isParis
     && hasRealStationNetwork;
 
   const runwayHeaderLabel = isShenzhen ? "天文台实测 (10分钟)"
@@ -2330,7 +2329,6 @@ function getLiveObservationLabels(
     : isTokyo ? "机场气象站 (10分钟)"
     : isSingapore ? "航站楼温度"
     : isParis ? "官方机场观测 (15分钟)"
-    : isTaipei ? "CWA (10分钟)"
     : isWeatherStation ? "气象站实测"
     : isRunwaySensorCity ? "跑道实测 (1分钟)"
     : "机场报文";
@@ -2343,7 +2341,6 @@ function getLiveObservationLabels(
     : isTokyo ? "机场气象站"
     : isSingapore ? "航站楼"
     : isParis ? "官方机场观测"
-    : isTaipei ? "CWA"
     : isWeatherStation ? "气象站"
     : isRunwaySensorCity ? "跑道实测"
     : "机场报文";
@@ -2356,7 +2353,6 @@ function getLiveObservationLabels(
     isHKO,
     isParis,
     isShenzhen,
-    isTaipei,
     isWeatherStation,
     metarHeaderLabel,
     metarHighLabel,

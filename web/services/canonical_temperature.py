@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 
 
 _SETTLEMENT_PROXY_SOURCES = {"amos", "runway", "awos"}
-_SETTLEMENT_OFFICIAL_SOURCES = {"hko", "cwa", "noaa", "wunderground", "mgm", "knmi", "ims"}
+_SETTLEMENT_OFFICIAL_SOURCES = {"hko", "noaa", "wunderground", "mgm", "knmi", "ims"}
 _AIRPORT_OFFICIAL_SOURCES = {"metar", "madis_hfmetar", "aeroweb"}
 
 
@@ -48,7 +48,7 @@ def _source_role(source: str) -> str:
         normalized in _SETTLEMENT_OFFICIAL_SOURCES
         or "hko" in normalized
         or "cowin" in normalized
-        or "cwa" in normalized
+        # old CWA data might still appear in DB
     ):
         return "settlement_official"
     if normalized in _AIRPORT_OFFICIAL_SOURCES or "metar" in normalized or "madis" in normalized:

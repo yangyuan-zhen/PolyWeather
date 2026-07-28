@@ -42,7 +42,7 @@ def _is_supported_training_city(city_meta: Mapping[str, Any]) -> bool:
     return bool(
         str(city_meta.get("icao") or "").strip()
         or str(city_meta.get("settlement_station_code") or "").strip()
-        or source in {"hko", "cwa", "ims", "ncm", "aeroweb"}
+        or source in {"hko", "ims", "ncm", "aeroweb"}
     )
 
 

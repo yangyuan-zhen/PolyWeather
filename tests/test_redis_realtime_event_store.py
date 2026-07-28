@@ -80,7 +80,7 @@ class FakeRedis:
         return rows
 
 
-def _event(city: str, temp: float, source: str = "cwa"):
+def _event(city: str, temp: float, source: str = "noaa"):
     return normalize_observation_patch(
         {
             "city": city,

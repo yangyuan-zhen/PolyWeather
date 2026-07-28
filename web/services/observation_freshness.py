@@ -46,13 +46,6 @@ _OBSERVATION_SOURCE_PROFILES: Dict[str, Dict[str, Any]] = {
         "expected_grace_sec": 600,
         "stale_after_sec": 2700,
     },
-    "cwa": {
-        "label": "CWA",
-        "native_update_interval_sec": 600,
-        "fresh_window_sec": 900,
-        "expected_grace_sec": 600,
-        "stale_after_sec": 2700,
-    },
     "mgm": {
         "label": "MGM",
         "native_update_interval_sec": 900,
@@ -141,8 +134,6 @@ def canonical_observation_source_code(value: Any) -> str:
         return "knmi"
     if "hko" in raw:
         return "hko"
-    if "cwa" in raw:
-        return "cwa"
     if "mgm" in raw:
         return "mgm"
     if "ims" in raw:

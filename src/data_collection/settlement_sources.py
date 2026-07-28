@@ -307,91 +307,6 @@ class SettlementSourceMixin:
             logger.warning(f"HKO settlement fetch failed station={normalized_station_code}: {exc}")
             return None
 
-    def fetch_cwa_taipei_settlement_current(self) -> Optional[Dict[str, Any]]:
-        cache_key = "cwa:466920"
-        cached = self._get_settlement_cache(cache_key)
-        if cached:
-            return cached
-
-        try:
-            url = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0003-001"
-            response = self._http_get(
-                url,
-                params={"Authorization": self.cwa_open_data_auth, "format": "JSON", "StationId": "466920"},
-                timeout=self.timeout,
-            )
-            response.raise_for_status()
-            data = response.json() if response.content else {}
-            stations = (data.get("records") or {}).get("Station") or []
-            if isinstance(stations, dict):
-                station = stations
-            elif isinstance(stations, list) and stations:
-                station = stations[0]
-            else:
-                station = None
-            if not isinstance(station, dict):
-                return None
-
-            wx = station.get("WeatherElement") or {}
-            if not isinstance(wx, dict):
-                wx = {}
-            daily_extreme = wx.get("DailyExtreme") or {}
-            high_info = (((daily_extreme.get("DailyHigh") or {}).get("TemperatureInfo") or {}))
-            low_info = (((daily_extreme.get("DailyLow") or {}).get("TemperatureInfo") or {}))
-            high_time_raw = (((high_info.get("Occurred_at") or {}).get("DateTime")))
-            high_hhmm = None
-            if high_time_raw and "T" in str(high_time_raw):
-                try:
-                    high_hhmm = datetime.fromisoformat(str(high_time_raw)).strftime("%H:%M")
-                except Exception:
-                    high_hhmm = str(high_time_raw).split("T")[1][:5]
-
-            obs_time_raw = (station.get("ObsTime") or {}).get("DateTime")
-            wind_speed_ms = self._safe_float(wx.get("WindSpeed"))
-            payload: Dict[str, Any] = {
-                "source": "cwa",
-                "source_label": "CWA",
-                "station_code": str(station.get("StationId") or "466920"),
-                "station_name": str(station.get("StationName") or "臺北"),
-                "observation_time": str(obs_time_raw or "").strip() or None,
-                "current": {
-                    "temp": self._safe_float(wx.get("AirTemperature")),
-                    "max_temp_so_far": self._safe_float(high_info.get("AirTemperature")),
-                    "max_temp_time": high_hhmm,
-                    "today_low": self._safe_float(low_info.get("AirTemperature")),
-                    "humidity": self._safe_float(wx.get("RelativeHumidity")),
-                    "wind_speed_kt": round(float(wind_speed_ms) * 1.943844, 1) if wind_speed_ms is not None else None,
-                    "wind_dir": self._safe_float(wx.get("WindDirection")),
-                },
-                "unit": "celsius",
-            }
-            today_obs = self._update_official_today_obs(
-                source_code="cwa",
-                station_code=payload["station_code"],
-                obs_iso=payload.get("observation_time"),
-                current_temp=payload["current"]["temp"],
-                utc_offset_seconds=28800,
-            )
-            if today_obs:
-                payload["today_obs"] = today_obs
-            self._set_settlement_cache(cache_key, payload)
-            # Write to airport obs log for high-freq monitoring
-            try:
-                from src.database.db_manager import DBManager
-                DBManager().append_airport_obs(
-                    icao="466920",
-                    city="taipei",
-                    temp_c=payload["current"]["temp"],
-                    wind_kt=payload["current"].get("wind_speed_kt"),
-                    obs_time=str(obs_time_raw or "").strip() or datetime.now().isoformat(),
-                )
-            except Exception:
-                logger.exception("airport_obs_log append failed for cwa")
-            return payload
-        except Exception as exc:
-            logger.warning(f"CWA settlement fetch failed: {exc}")
-            return None
-
     def fetch_hko_forecast(self) -> Optional[float]:
         try:
             url = "https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=fnd&lang=tc"
@@ -399,28 +314,6 @@ class SettlementSourceMixin:
             return float(res["weatherForecast"][0]["forecastMaxtemp"]["value"])
         except Exception as exc:
             logger.warning(f"HKO Forecast request failed: {exc}")
-            return None
-
-    def fetch_cwa_taipei_forecast(self) -> Optional[float]:
-        try:
-            if not self.cwa_open_data_auth:
-                return None
-            url = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-061"
-            res = self._http_get_json(
-                url,
-                params={"Authorization": self.cwa_open_data_auth, "format": "JSON", "elementName": "MaxT"},
-                timeout=self.timeout,
-            )
-            locs = res.get("records", {}).get("Locations", [])[0].get("Location", [])
-            if not locs:
-                return None
-            loc = locs[0]
-            for weather_element in loc.get("WeatherElement", []):
-                if weather_element.get("ElementName") == "MaxT":
-                    return float(weather_element["Time"][0]["ElementValue"][0]["Temperature"])
-            return None
-        except Exception as exc:
-            logger.warning(f"CWA Forecast request failed: {exc}")
             return None
 
     def fetch_noaa_station_settlement_current(
@@ -660,8 +553,6 @@ class SettlementSourceMixin:
                     station_name=station_name,
                     station_candidates=station_candidates,
                 )
-            if settlement_source == "cwa":
-                return self.fetch_cwa_taipei_settlement_current()
             if settlement_source == "noaa":
                 station_code = (
                     str(city_meta.get("settlement_station_code") or "").strip()
@@ -678,6 +569,4 @@ class SettlementSourceMixin:
                 )
         except Exception as exc:
             logger.warning(f"Settlement source dispatch failed city={city}: {exc}")
-        if normalized == "taipei":
-            return self.fetch_cwa_taipei_settlement_current()
         return None

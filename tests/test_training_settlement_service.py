@@ -63,7 +63,7 @@ def test_training_settlement_cycle_skips_reconcile_for_non_reconcile_sources():
 
     result = run_training_settlement_cycle(
         city_registry={
-            "taipei": {"icao": "RCSS", "settlement_source": "cwa"},
+            "taipei": {"icao": "RCSS", "settlement_source": "madis_hfmetar"},
         },
         analysis_runner=lambda city: calls["analysis"].append(city) or {"city": city},
         actual_reconciler=lambda city, *, lookback_days: calls["reconcile"].append(city)

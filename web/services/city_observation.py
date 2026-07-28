@@ -16,7 +16,6 @@ _SOURCE_LABELS = {
     "hko_obs": "HKO",
     "mgm": "MGM",
     "jma_amedas": "JMA",
-    "cwa": "CWA",
     "metar": "METAR",
     "madis_hfmetar": "NOAA MADIS",
 }
@@ -26,7 +25,6 @@ _PREFERRED_SOURCES = (
     "hko_obs",
     "mgm",
     "jma_amedas",
-    "cwa",
     "madis_hfmetar",
     "metar",
 )

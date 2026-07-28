@@ -553,7 +553,7 @@ def _analyze(
     if amos_data:
         logger.info("AMOS _analyze: found amos data for city={} temp_c={} source={}",
                     city, amos_data.get("temp_c"), amos_data.get("source"))
-    use_settlement_current = settlement_source in {"hko", "cwa", "noaa", "wunderground"} and bool(sc_cur)
+    use_settlement_current = settlement_source in {"hko", "noaa", "wunderground"} and bool(sc_cur)
     live_mc = mc if metar_current_is_today else {}
     primary_current = sc_cur if use_settlement_current else live_mc
     current_source = settlement_source
@@ -576,7 +576,7 @@ def _analyze(
         cur_temp = _sf(live_mc.get("temp"))
         if cur_temp is not None and not _is_plausible_city_temp(city, cur_temp, sym):
             cur_temp = None
-    # Official settlement station: e.g. CWA for Taipei, HKO for Hong Kong
+    # Official settlement station: e.g. HKO for Hong Kong
     if cur_temp is None:
         cur_temp = _sf((settlement_current.get("current") or {}).get("temp"))
         if cur_temp is not None:
@@ -1735,7 +1735,7 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     mc = metar.get("current") or {}
     live_mc = mc if metar_current_is_today else {}
     mg_cur = mgm.get("current") or {}
-    use_settlement_current = settlement_source in {"hko", "cwa", "noaa", "wunderground"} and bool(sc_cur)
+    use_settlement_current = settlement_source in {"hko", "noaa", "wunderground"} and bool(sc_cur)
     primary_current = sc_cur if use_settlement_current else live_mc
 
     current_source = settlement_source
