@@ -13,7 +13,7 @@ from src.data_collection.city_registry import CITY_REGISTRY
 AnalysisRunner = Callable[[str], Mapping[str, Any]]
 ActualReconciler = Callable[..., Mapping[str, Any]]
 
-UNSUPPORTED_SETTLEMENT_SOURCES = {"wunderground"}
+UNSUPPORTED_SETTLEMENT_SOURCES = set()
 RECONCILE_SETTLEMENT_SOURCES = {"metar", "hko", "noaa"}
 
 

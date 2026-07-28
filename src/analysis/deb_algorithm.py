@@ -781,16 +781,6 @@ def _reconcile_recent_noaa_actual_highs(city_name: str, lookback_days: int = 14)
         return {"ok": False, "reason": str(e), "updated": 0}
 
 
-def _reconcile_recent_wunderground_actual_highs(city_name: str, lookback_days: int = 14):
-    return {
-        "ok": True,
-        "reason": "wunderground_crawler_removed",
-        "updated": 0,
-        "scanned_dates": 0,
-        "source": "wunderground",
-    }
-
-
 def reconcile_recent_actual_highs(city_name: str, lookback_days: int = 7):
     """
     Reconcile recent `actual_high` values using the city's official settlement source.
@@ -804,8 +794,6 @@ def reconcile_recent_actual_highs(city_name: str, lookback_days: int = 7):
         return _reconcile_recent_hko_actual_highs(city_key, lookback_days=lookback_days)
     if settlement_source == "noaa":
         return _reconcile_recent_noaa_actual_highs(city_key, lookback_days=lookback_days)
-    if settlement_source == "wunderground":
-        return _reconcile_recent_wunderground_actual_highs(city_key, lookback_days=lookback_days)
     return _reconcile_recent_metar_actual_highs(city_key, lookback_days=lookback_days)
 
 
@@ -1493,7 +1481,7 @@ def get_deb_accuracy(city_name):
     """
     计算 DEB 融合预测的历史准确率
     返回: (hit_rate, mae, total_days, details_str) 或 None
-    - hit_rate: WU 结算命中率 (DEB 四舍五入 == 实测四舍五入)
+    - hit_rate: 预测命中率 (round(DEB) == round(实测))
     - mae: 平均绝对误差
     - total_days: 有效天数
     - details_str: 格式化的展示字符串
@@ -1516,7 +1504,7 @@ def get_deb_accuracy(city_name):
 
     for date_str in sorted(city_data.keys()):
         if date_str == today_str:
-            continue  # 跳过今天，还没结算
+            continue
         record = city_data[date_str]
         deb_pred = record.get("deb_prediction")
         actual = record.get("actual_high")
@@ -1544,7 +1532,7 @@ def get_deb_accuracy(city_name):
     mae = sum(errors) / len(errors)
 
     details_str = (
-        f"过去{total}天 WU命中 {hits}/{total} ({hit_rate:.0f}%) | MAE: {mae:.1f}°"
+        f"过去{total}天 命中 {hits}/{total} ({hit_rate:.0f}%) | MAE: {mae:.1f}°"
     )
 
     return hit_rate, mae, total, details_str
@@ -1556,9 +1544,8 @@ def get_mu_accuracy(city_name):
     返回: (mu_mae, mu_hit_rate, brier_score, total_days, details_str) 或 None
 
     - mu_mae: μ 与实际最高温的平均绝对误差
-    - mu_hit_rate: round(μ) 命中 WU 结算值的比率
+    - mu_hit_rate: round(μ) 命中实测四舍五入值的比率
     - brier_score: 概率分布的 Brier Score (越低越好)
-      对于每天，取概率最高的预测值，计算 (p - outcome)² 的平均值
     - total_days: 有效统计天数
     """
     project_root = os.path.dirname(
@@ -1599,14 +1586,13 @@ def get_mu_accuracy(city_name):
         if apply_city_settlement(city_name, mu_val) == apply_city_settlement(city_name, actual):
             mu_hits += 1
 
-        # Brier Score from probability snapshot
         prob_snap = record.get("prob_snapshot", [])
         if prob_snap:
-            actual_wu = apply_city_settlement(city_name, actual)
+            actual_bucket = apply_city_settlement(city_name, actual)
             bs = 0.0
             for entry in prob_snap:
                 predicted_p = entry.get("p", 0)
-                outcome = 1.0 if entry.get("v") == actual_wu else 0.0
+                outcome = 1.0 if entry.get("v") == actual_bucket else 0.0
                 bs += (predicted_p - outcome) ** 2
             brier_scores.append(bs)
 
@@ -1619,7 +1605,7 @@ def get_mu_accuracy(city_name):
 
     details_parts = [
         f"μ准确率: 过去{total}天",
-        f"WU命中 {mu_hits}/{total} ({mu_hr:.0f}%)",
+        f"命中 {mu_hits}/{total} ({mu_hr:.0f}%)",
         f"MAE: {mu_mae:.1f}°",
     ]
     if avg_brier is not None:

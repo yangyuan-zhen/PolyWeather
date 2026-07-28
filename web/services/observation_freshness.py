@@ -102,13 +102,6 @@ _OBSERVATION_SOURCE_PROFILES: Dict[str, Dict[str, Any]] = {
         "expected_grace_sec": 900,
         "stale_after_sec": 3600,
     },
-    "wunderground": {
-        "label": "METAR",
-        "native_update_interval_sec": 900,
-        "fresh_window_sec": 600,
-        "expected_grace_sec": 900,
-        "stale_after_sec": 3600,
-    },
 }
 
 
@@ -148,8 +141,6 @@ def canonical_observation_source_code(value: Any) -> str:
         return "singapore_mss"
     if "noaa" in raw:
         return "noaa"
-    if "wunderground" in raw or raw == "wu":
-        return "wunderground"
     return raw
 
 

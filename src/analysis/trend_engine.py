@@ -17,7 +17,7 @@ from src.analysis.deb_algorithm import (
     _is_excluded_model_name,
 )
 from src.analysis.deb_hourly_consensus import build_deb_hourly_consensus_path
-from src.analysis.settlement_rounding import apply_city_settlement, is_exact_settlement_city
+from src.analysis.settlement_rounding import apply_city_settlement
 from src.data_collection.city_registry import CITY_REGISTRY
 from src.data_collection.city_risk_profiles import get_city_risk_profile
 from src.data_collection.multi_model_freshness import multi_model_forecasts_for_local_date
@@ -27,7 +27,6 @@ SETTLEMENT_SOURCE_LABELS = {
     "hko": "HKO",
     "noaa": "NOAA",
     "mgm": "MGM",
-    "wunderground": "Wunderground",
 }
 
 _CLOUD_RANK_LABELS = {
@@ -1029,40 +1028,23 @@ def analyze_weather_trend(
     # === Settlement boundary ===
     if max_so_far is not None:
         settled = apply_city_settlement(city_name, max_so_far)
-        from src.analysis.settlement_rounding import is_exact_settlement_city
-        is_floor = is_exact_settlement_city(str(city_name).lower())
-        
         fractional = max_so_far - int(max_so_far)
-        
-        if is_floor:
-            # For flooring cities like HK, boundary is at 1.0 (approaching next integer)
-            dist_to_next = 1.0 - fractional
-            if dist_to_next <= 0.3:
+        dist_to_boundary = abs(fractional - 0.5)
+        if dist_to_boundary <= 0.3:
+            if fractional < 0.5:
                 msg = (
                     f"⚖️ <b>结算边界</b>：当前最高 {max_so_far}{temp_symbol} → {settlement_source_label} 结算 "
-                    f"<b>{settled}{temp_symbol}</b>，但只差 <b>{dist_to_next:.1f}°</b> "
+                    f"<b>{settled}{temp_symbol}</b>，但只差 {0.5 - fractional:.1f}° "
                     f"就会进位到 {settled + 1}{temp_symbol}！"
                 )
-                insights.append(msg)
-                ai_features.append(msg)
-        else:
-            # Standard rounding boundary at 0.5
-            dist_to_boundary = abs(fractional - 0.5)
-            if dist_to_boundary <= 0.3:
-                if fractional < 0.5:
-                    msg = (
-                        f"⚖️ <b>结算边界</b>：当前最高 {max_so_far}{temp_symbol} → {settlement_source_label} 结算 "
-                        f"<b>{settled}{temp_symbol}</b>，但只差 {0.5 - fractional:.1f}° "
-                        f"就会进位到 {settled + 1}{temp_symbol}！"
-                    )
-                else:
-                    msg = (
-                        f"⚖️ <b>结算边界</b>：当前最高 {max_so_far}{temp_symbol} → {settlement_source_label} 结算 "
-                        f"<b>{settled}{temp_symbol}</b>，刚刚越过进位线，再降 "
-                        f"<b>{fractional - 0.5:.1f}°</b> 就会回落到 {settled - 1}{temp_symbol}。"
-                    )
-                insights.append(msg)
-                ai_features.append(msg)
+            else:
+                msg = (
+                    f"⚖️ <b>结算边界</b>：当前最高 {max_so_far}{temp_symbol} → {settlement_source_label} 结算 "
+                    f"<b>{settled}{temp_symbol}</b>，刚刚越过进位线，再降 "
+                    f"<b>{fractional - 0.5:.1f}°</b> 就会回落到 {settled - 1}{temp_symbol}。"
+                )
+            insights.append(msg)
+            ai_features.append(msg)
 
     # === Peak window AI hints ===
     if peak_hours:
@@ -1215,7 +1197,7 @@ def analyze_weather_trend(
         "forecast_miss_deg": forecast_miss_deg,
         "max_so_far": max_so_far,
         "cur_temp": cur_temp,
-        "wu_settle": apply_city_settlement(city_name, max_so_far) if max_so_far is not None else None,
+        "settlement": apply_city_settlement(city_name, max_so_far) if max_so_far is not None else None,
         "dynamic_commentary": {
             "summary": dynamic_summary,
             "notes": dynamic_notes,
@@ -1238,26 +1220,16 @@ def calculate_prob_distribution(
         # 0.5 * (1 + erf( (x-m)/(s*sqrt(2)) ))
         return 0.5 * (1 + math.erf((x - m) / (s * math.sqrt(2))))
 
-    min_possible_wu = apply_city_settlement(city_name, max_so_far) if max_so_far is not None else -999
+    min_possible = apply_city_settlement(city_name, max_so_far) if max_so_far is not None else -999
     probs = {}
     
-    # Range: mu +/- 3 sigma or at least +/- 2 degrees
     search_range = max(2, int(sigma * 2.5))
-    is_exact = is_exact_settlement_city(city_name)
     target_mu = apply_city_settlement(city_name, mu)
-    if is_exact:
-        target_mu = int(math.floor(mu))
     
     for n in range(target_mu - search_range, target_mu + search_range + 1):
-        if n < min_possible_wu:
+        if n < min_possible:
             continue
-        if is_exact:
-            # 向下取整的概率区间为 [n, n + 1)
-            p = _norm_cdf(n + 1.0, mu, sigma) - _norm_cdf(n, mu, sigma)
-        else:
-            # 常规四舍五入的概率区间为 [n - 0.5, n + 0.5)
-            p = _norm_cdf(n + 0.5, mu, sigma) - _norm_cdf(n - 0.5, mu, sigma)
-            
+        p = _norm_cdf(n + 0.5, mu, sigma) - _norm_cdf(n - 0.5, mu, sigma)
         if p > 0.01:
             probs[n] = p
 
@@ -1270,7 +1242,7 @@ def calculate_prob_distribution(
         norm_probs = {k: v / total_p for k, v in probs.items()}
         sorted_probs = sorted(norm_probs.items(), key=lambda x: x[1], reverse=True)
         for t, p in sorted_probs:
-            rng_str = f"[{t}.0~{t+1}.0)" if is_exact else f"[{t-0.5}~{t+0.5})"
+            rng_str = f"[{t-0.5}~{t+0.5})"
             probabilities_all.append({
                 "value": int(t),
                 "range": rng_str,

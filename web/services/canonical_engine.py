@@ -16,7 +16,7 @@ _SETTLEMENT_SOURCE_ADAPTERS = {
     
     "mgm": {"mgm"},
     "noaa": {"madis_hfmetar", "metar", "noaa"},
-    "wunderground": {"amos", "madis_hfmetar", "metar", "wunderground"},
+
 }
 
 _SOURCE_WEIGHTS = {

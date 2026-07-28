@@ -61,7 +61,7 @@ SOURCE_PRIORITY_WEIGHT = {
     "noaa": 8,
     "mgm": 8,
     "metar": 6,
-    "wunderground": 4,
+
 }
 _CACHE_WARMER_DB = DBManager()
 

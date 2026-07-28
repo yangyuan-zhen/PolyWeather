@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import time
-from copy import deepcopy
 from datetime import datetime
 from typing import Optional
 
@@ -305,7 +304,7 @@ def _cached_city_payload(kind: str, city: str) -> dict:
     payload = entry.get("payload")
     if not isinstance(payload, dict):
         return {}
-    return _strip_wunderground_current(payload)
+    return payload
 
 
 def _canonical_city_payload(city: str, *, detail_depth: str) -> dict:
@@ -437,25 +436,6 @@ def _refresh_city_market_cache(city: str, force_refresh: bool = False) -> dict:
 def _refresh_city_full_cache(city: str, force_refresh: bool = False) -> dict:
     return _queued_city_cache_payload(city, "full", force_refresh=force_refresh)
 
-
-def _strip_wunderground_current(payload: dict) -> dict:
-    if not isinstance(payload, dict):
-        return payload
-    next_payload = deepcopy(payload)
-    next_payload.pop("wunderground_current", None)
-    official = next_payload.get("official")
-    if isinstance(official, dict):
-        official.pop("wunderground_current", None)
-    timeseries = next_payload.get("timeseries")
-    if isinstance(timeseries, dict):
-        timeseries.pop("wunderground_today_obs", None)
-    return next_payload
-
-
-def _overlay_latest_wunderground_current(city: str, payload: dict) -> dict:
-    if not isinstance(payload, dict):
-        return payload
-    return _strip_wunderground_current(payload)
 
 def _normalize_city_or_404(name: str) -> str:
     city = name.lower().strip().replace("-", " ")

@@ -16,7 +16,7 @@ def test_training_settlement_cycle_runs_analysis_and_reconciles_supported_cities
     result = run_training_settlement_cycle(
         city_registry={
             "shanghai": {"icao": "ZSSS", "settlement_source": "metar"},
-            "legacy": {"settlement_source": "wunderground"},
+            "legacy": {"settlement_source": "noaa"},
         },
         analysis_runner=analysis_runner,
         actual_reconciler=actual_reconciler,

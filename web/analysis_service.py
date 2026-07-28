@@ -473,7 +473,6 @@ def _analyze(
     taf = raw.get("taf", {})
     mgm = raw.get("mgm") or {}
     settlement_current = raw.get("settlement_current") or {}
-    wunderground_current = raw.get("wunderground_current") or {}
     ens_raw = raw.get("ensemble", {})
     mm = raw.get("multi_model", {})
     if not isinstance(om, dict):
@@ -484,8 +483,6 @@ def _analyze(
         mgm = {}
     if not isinstance(settlement_current, dict):
         settlement_current = {}
-    if not isinstance(wunderground_current, dict):
-        wunderground_current = {}
     if not isinstance(ens_raw, dict):
         ens_raw = {}
     if not isinstance(mm, dict):
@@ -553,7 +550,7 @@ def _analyze(
     if amos_data:
         logger.info("AMOS _analyze: found amos data for city={} temp_c={} source={}",
                     city, amos_data.get("temp_c"), amos_data.get("source"))
-    use_settlement_current = settlement_source in {"hko", "noaa", "wunderground"} and bool(sc_cur)
+    use_settlement_current = settlement_source in {"hko", "noaa"} and bool(sc_cur)
     live_mc = mc if metar_current_is_today else {}
     primary_current = sc_cur if use_settlement_current else live_mc
     current_source = settlement_source
@@ -624,8 +621,8 @@ def _analyze(
         max_temp_time = None
 
     raw_settlement_max = max_so_far
-    wu_settle = apply_city_settlement(city.lower(), raw_settlement_max) if raw_settlement_max is not None else None
-    display_settlement_max = wu_settle if settlement_source == "wunderground" and wu_settle is not None else raw_settlement_max
+    settle = apply_city_settlement(city.lower(), raw_settlement_max) if raw_settlement_max is not None else None
+    display_settlement_max = settle if settle is not None else raw_settlement_max
 
     # Observation time → local
     obs_time_str = ""
@@ -1475,7 +1472,7 @@ def _analyze(
             "max_so_far": display_settlement_max,
             "max_temp_time": max_temp_time,
             "raw_max_so_far": raw_settlement_max,
-            "wu_settlement": wu_settle,
+            "settlement": settle,
             "source_code": current_source,
             "settlement_source": current_source,
             "settlement_source_label": current_source_label,
@@ -1525,7 +1522,6 @@ def _analyze(
             "last_observation_local_date": metar.get("observation_local_date") if metar else None,
             "current_local_date": local_date_str,
         },
-        "wunderground_current": wunderground_current,
         "settlement_station": network_snapshot.get("settlement_station") or {},
         "airport_primary": airport_primary_current,
         "airport_primary_today_obs": network_snapshot.get("airport_primary_today_obs") or [],
@@ -1702,11 +1698,8 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             fetched[key] = future.result()
 
     settlement_current = fetched.get("settlement_current") or {}
-    wunderground_current = fetched.get("wunderground_current") or {}
     open_meteo = fetched.get("open_meteo") or {}
     mm = fetched.get("multi_model") or {}
-    if not isinstance(wunderground_current, dict):
-        wunderground_current = {}
     utc_offset = open_meteo.get("utc_offset")
     if utc_offset is None:
         utc_offset = default_utc_offset
@@ -1735,7 +1728,7 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     mc = metar.get("current") or {}
     live_mc = mc if metar_current_is_today else {}
     mg_cur = mgm.get("current") or {}
-    use_settlement_current = settlement_source in {"hko", "noaa", "wunderground"} and bool(sc_cur)
+    use_settlement_current = settlement_source in {"hko", "noaa"} and bool(sc_cur)
     primary_current = sc_cur if use_settlement_current else live_mc
 
     current_source = settlement_source
@@ -1789,16 +1782,12 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             max_temp_time = mgm_time.split(" ")[1][:5]
 
     raw_settlement_max = max_so_far
-    wu_settle = (
+    settle = (
         apply_city_settlement(city.lower(), raw_settlement_max)
         if raw_settlement_max is not None
         else None
     )
-    display_settlement_max = (
-        wu_settle
-        if settlement_source == "wunderground" and wu_settle is not None
-        else raw_settlement_max
-    )
+    display_settlement_max = settle if settle is not None else raw_settlement_max
 
     obs_time_str = ""
     obs_age_min = None
@@ -1974,7 +1963,7 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             "temp": _sf(cur_temp),
             "max_so_far": _sf(display_settlement_max),
             "max_temp_time": max_temp_time,
-            "wu_settlement": _sf(wu_settle),
+            "settlement": _sf(settle),
             "source_code": current_source,
             "settlement_source": current_source,
             "settlement_source_label": current_source_label,
@@ -1984,7 +1973,6 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             "obs_age_min": obs_age_min,
             "observation_status": "live" if cur_temp is not None else "missing",
         },
-        "wunderground_current": wunderground_current,
         "deb": {
             "prediction": _sf(deb_val),
             "raw_prediction": _sf(deb_raw_val),

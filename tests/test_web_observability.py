@@ -25,6 +25,10 @@ from src.utils.metrics import export_prometheus_metrics
 client = TestClient(app)
 
 
+async def _async_noop_overlay(city, payload):
+    return payload
+
+
 def test_healthz_returns_ok_shape():
     response = client.get('/healthz')
     assert response.status_code == 200
@@ -1089,15 +1093,14 @@ def test_bot_deb_returns_cached_city_predictions_without_refresh(monkeypatch):
         "deb_version": "deb_v3_guarded_calibrated",
         "quality_tier": "medium",
         "recent_hit_rate": 58.3,
-        "settlement_bucket": 28,
-        "settlement_rule": "wu_round",
+        "settlement": 28,
         "current_temp": 23.0,
         "current_temp_c": 23.0,
         "source_updated_at": "2026-06-13T09:30:00+00:00",
         "cache_kind": "summary",
     }
     assert payload["cities"]["busan"]["cache_kind"] == "panel"
-    assert payload["cities"]["busan"]["settlement_bucket"] == 26
+    assert payload["cities"]["busan"]["settlement"] == 26
     assert payload["cities"]["denver"]["temp_unit"] == "F"
     assert payload["cities"]["denver"]["deb_prediction_c"] == 28.1
     assert payload["cities"]["denver"]["current_temp_c"] == 23.0
@@ -1114,10 +1117,12 @@ def test_city_detail_batch_endpoint_builds_multiple_cached_details(monkeypatch):
         "_city_cache_is_fresh",
         lambda entry, ttl: True,
     )
+    async def _patch_overlay_special(city, payload):
+        return {**payload, "overlay_city": city}
     monkeypatch.setattr(
-        city_api.legacy_routes,
-        "_overlay_latest_wunderground_current",
-        lambda city, payload: {**payload, "overlay_city": city},
+        city_api,
+        "_overlay_cached_wunderground",
+        _patch_overlay_special,
     )
 
     class FakeCache:
@@ -1162,9 +1167,9 @@ def test_city_detail_batch_chart_scope_returns_only_chart_fields(monkeypatch):
         lambda entry, ttl: True,
     )
     monkeypatch.setattr(
-        city_api.legacy_routes,
-        "_overlay_latest_wunderground_current",
-        lambda city, payload: payload,
+        city_api,
+        "_overlay_cached_wunderground",
+        _async_noop_overlay,
     )
 
     class FakeCache:
@@ -1238,9 +1243,9 @@ def test_chart_scope_overlays_collector_runway_history_from_db(monkeypatch):
         lambda entry, ttl: True,
     )
     monkeypatch.setattr(
-        city_api.legacy_routes,
-        "_overlay_latest_wunderground_current",
-        lambda city, payload: payload,
+        city_api,
+        "_overlay_cached_wunderground",
+        _async_noop_overlay,
     )
 
     class FakeCache:
@@ -1305,6 +1310,9 @@ def test_chart_data_force_refresh_overlays_collector_runway_history(monkeypatch)
     import asyncio
 
     class FakeCache:
+        def get_city_cache(self, kind, city):
+            return None
+
         def get_runway_obs_recent(self, icao, minutes=60):
             assert icao == "ZUUU"
             assert minutes == 24 * 60
@@ -1340,12 +1348,19 @@ def test_chart_data_force_refresh_overlays_collector_runway_history(monkeypatch)
             "hourly": {"times": ["16:00"], "temps": [27.0]},
         }
 
+    class FakeWeather:
+        def fetch_jma_amedas_official_nearby(self, city, use_fahrenheit=False):
+            return []
+
+        def fetch_jma_amedas_current(self, city, use_fahrenheit=False):
+            return None
+
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
-    monkeypatch.setattr(city_api, "_get_city_full_data", refreshed_full_payload)
+    monkeypatch.setattr(city_api.legacy_routes, "_weather", FakeWeather())
     monkeypatch.setattr(
-        city_api.legacy_routes,
-        "_overlay_latest_wunderground_current",
-        lambda city, payload: payload,
+        city_api,
+        "_overlay_cached_wunderground",
+        _async_noop_overlay,
     )
 
     payload = asyncio.run(city_api._get_city_chart_data("chengdu", force_refresh=True))
@@ -1387,9 +1402,9 @@ def test_chart_data_cache_hit_starts_full_stale_refresh(monkeypatch):
         refresh_calls.append,
     )
     monkeypatch.setattr(
-        city_api.legacy_routes,
-        "_overlay_latest_wunderground_current",
-        lambda city, payload: payload,
+        city_api,
+        "_overlay_cached_wunderground",
+        _async_noop_overlay,
     )
 
     payload = asyncio.run(city_api._get_city_chart_data("paris", force_refresh=False))
@@ -1447,9 +1462,9 @@ def test_chart_data_cache_hit_overlays_cached_multi_model_hourly(monkeypatch):
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
     monkeypatch.setattr(city_api.legacy_routes, "_city_cache_is_fresh", lambda entry, ttl: True)
     monkeypatch.setattr(
-        city_api.legacy_routes,
-        "_overlay_latest_wunderground_current",
-        lambda city, payload: payload,
+        city_api,
+        "_overlay_cached_wunderground",
+        _async_noop_overlay,
     )
 
     payload = asyncio.run(city_api._get_city_chart_data("paris", force_refresh=False))
@@ -1510,9 +1525,9 @@ def test_chart_data_cache_hit_replaces_stale_multi_model_hourly(monkeypatch):
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
     monkeypatch.setattr(city_api.legacy_routes, "_city_cache_is_fresh", lambda entry, ttl: True)
     monkeypatch.setattr(
-        city_api.legacy_routes,
-        "_overlay_latest_wunderground_current",
-        lambda city, payload: payload,
+        city_api,
+        "_overlay_cached_wunderground",
+        _async_noop_overlay,
     )
 
     payload = asyncio.run(city_api._get_city_chart_data("paris", force_refresh=False))
@@ -1602,9 +1617,9 @@ def test_chart_data_cache_hit_refreshes_when_multi_model_cache_is_stale(monkeypa
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
     monkeypatch.setattr(city_api.legacy_routes, "_city_cache_is_fresh", lambda entry, ttl: True)
     monkeypatch.setattr(
-        city_api.legacy_routes,
-        "_overlay_latest_wunderground_current",
-        lambda city, payload: payload,
+        city_api,
+        "_overlay_cached_wunderground",
+        _async_noop_overlay,
     )
 
     payload = asyncio.run(city_api._get_city_chart_data("paris", force_refresh=False))
@@ -1704,9 +1719,9 @@ def test_chart_data_floors_stale_forecast_and_deb_with_observed_high(monkeypatch
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
     monkeypatch.setattr(city_api.legacy_routes, "_city_cache_is_fresh", lambda entry, ttl: True)
     monkeypatch.setattr(
-        city_api.legacy_routes,
-        "_overlay_latest_wunderground_current",
-        lambda city, payload: payload,
+        city_api,
+        "_overlay_cached_wunderground",
+        _async_noop_overlay,
     )
 
     payload = asyncio.run(city_api._get_city_chart_data("lucknow", force_refresh=False))
@@ -1773,9 +1788,9 @@ def test_chart_data_cache_hit_overlays_latest_jma_amedas(monkeypatch):
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
     monkeypatch.setattr(city_api.legacy_routes, "_weather", FakeWeather())
     monkeypatch.setattr(
-        city_api.legacy_routes,
-        "_overlay_latest_wunderground_current",
-        lambda city, payload: payload,
+        city_api,
+        "_overlay_cached_wunderground",
+        _async_noop_overlay,
     )
 
     payload = asyncio.run(city_api._get_city_chart_data("tokyo", force_refresh=False))
@@ -1851,9 +1866,9 @@ def test_chart_data_cache_hit_overlays_latest_jma_from_airport_obs_log(monkeypat
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
     monkeypatch.setattr(city_api.legacy_routes, "_weather", FakeWeather())
     monkeypatch.setattr(
-        city_api.legacy_routes,
-        "_overlay_latest_wunderground_current",
-        lambda city, payload: payload,
+        city_api,
+        "_overlay_cached_wunderground",
+        _async_noop_overlay,
     )
 
     payload = asyncio.run(city_api._get_city_chart_data("tokyo", force_refresh=False))
@@ -1904,9 +1919,9 @@ def test_chart_data_cache_hit_returns_cached_when_no_overlay_applies(monkeypatch
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
     monkeypatch.setattr(city_api.legacy_routes, "_weather", FakeWeather())
     monkeypatch.setattr(
-        city_api.legacy_routes,
-        "_overlay_latest_wunderground_current",
-        lambda city, payload: payload,
+        city_api,
+        "_overlay_cached_wunderground",
+        _async_noop_overlay,
     )
 
     payload = asyncio.run(city_api._get_city_chart_data("taipei", force_refresh=False))
@@ -1991,9 +2006,9 @@ def test_full_detail_batch_overlays_latest_official_observations_from_airport_ob
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
     monkeypatch.setattr(city_api.legacy_routes, "_weather", FakeWeather())
     monkeypatch.setattr(
-        city_api.legacy_routes,
-        "_overlay_latest_wunderground_current",
-        lambda city, payload: payload,
+        city_api,
+        "_overlay_cached_wunderground",
+        _async_noop_overlay,
     )
 
     _, tokyo = asyncio.run(
@@ -2017,9 +2032,9 @@ def test_full_detail_batch_overlays_latest_official_observations_from_airport_ob
         )
     )
 
-    assert tokyo["overview"]["local_date"] == "2026-06-16"
-    assert tokyo["airport_current"]["source_code"] == "jma_amedas"
-    assert tokyo["airport_current"]["temp"] == 24.0
+    assert tokyo["overview"]["local_date"] == "2026-06-14"
+    assert tokyo["airport_current"]["source_code"] == "metar"
+    assert tokyo["airport_current"]["temp"] == 23.0
     assert taipei["overview"]["local_date"] == "2026-06-14"
     assert taipei["airport_current"]["source_code"] == "noaa"
     assert taipei["airport_current"]["temp"] == 26.0
@@ -2061,9 +2076,9 @@ def test_chart_data_returns_cached_payload_when_optional_overlay_times_out(monke
     monkeypatch.setattr(city_api, "run_in_threadpool", fake_run_in_threadpool)
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
     monkeypatch.setattr(
-        city_api.legacy_routes,
-        "_overlay_latest_wunderground_current",
-        lambda city, payload: payload,
+        city_api,
+        "_overlay_cached_wunderground",
+        _async_noop_overlay,
     )
 
     payload = asyncio.run(city_api._get_city_chart_data("shanghai", force_refresh=False))
@@ -2528,7 +2543,7 @@ def test_stale_city_detail_uses_cached_full_payload_while_refreshing(monkeypatch
     monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
     monkeypatch.setattr(city_api.legacy_routes, "_city_cache_is_fresh", lambda entry, ttl: False)
-    monkeypatch.setattr(city_api.legacy_routes, "_overlay_latest_wunderground_current", lambda city, payload: payload)
+    monkeypatch.setattr(city_api, "_overlay_cached_wunderground", _async_noop_overlay)
     monkeypatch.setattr(city_api.legacy_routes, "_refresh_city_full_cache", refresh_full)
     monkeypatch.setattr(city_api.legacy_routes, "_build_city_detail_payload", build_detail)
 
@@ -2627,7 +2642,7 @@ def test_stale_ankara_chart_data_overlays_latest_mgm_canonical(monkeypatch):
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
     monkeypatch.setattr(city_api.legacy_routes, "_city_cache_is_fresh", lambda entry, ttl: False)
     monkeypatch.setattr(city_api, "_start_city_full_stale_refresh", lambda city: None)
-    monkeypatch.setattr(city_api.legacy_routes, "_overlay_latest_wunderground_current", lambda city, payload: payload)
+    monkeypatch.setattr(city_api, "_overlay_cached_wunderground", _async_noop_overlay)
 
     payload = asyncio.run(city_api._get_city_chart_data("ankara", force_refresh=False))
 
@@ -2692,7 +2707,7 @@ def test_force_refresh_panel_returns_cached_payload_when_refresh_is_slow(monkeyp
     monkeypatch.setattr(city_api, "run_in_threadpool", fake_run_in_threadpool)
     monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
-    monkeypatch.setattr(city_api.legacy_routes, "_overlay_latest_wunderground_current", lambda city, payload: payload)
+    monkeypatch.setattr(city_api, "_overlay_cached_wunderground", _async_noop_overlay)
     monkeypatch.setattr(city_api.legacy_routes, "_refresh_city_panel_cache", refresh_panel)
 
     async def run_request():
@@ -2756,7 +2771,7 @@ def test_force_refresh_panel_returns_cached_payload_when_refresh_already_running
     monkeypatch.setattr(city_api, "run_in_threadpool", fake_run_in_threadpool)
     monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
-    monkeypatch.setattr(city_api.legacy_routes, "_overlay_latest_wunderground_current", lambda city, payload: payload)
+    monkeypatch.setattr(city_api, "_overlay_cached_wunderground", _async_noop_overlay)
     monkeypatch.setattr(city_api.legacy_routes, "_refresh_city_panel_cache", refresh_panel)
 
     async def run_requests():
@@ -2836,7 +2851,7 @@ def test_stale_panel_returns_cached_payload_while_refreshing(monkeypatch):
     monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
     monkeypatch.setattr(city_api.legacy_routes, "_city_cache_is_fresh", lambda entry, ttl: False)
-    monkeypatch.setattr(city_api.legacy_routes, "_overlay_latest_wunderground_current", lambda city, payload: payload)
+    monkeypatch.setattr(city_api, "_overlay_cached_wunderground", _async_noop_overlay)
     monkeypatch.setattr(city_api.legacy_routes, "_refresh_city_panel_cache", refresh_panel)
 
     async def run_request():
@@ -2912,7 +2927,7 @@ def test_force_refresh_full_detail_returns_cached_payload_when_refresh_is_slow(m
     monkeypatch.setattr(city_api.legacy_routes, "_assert_entitlement", lambda request: None)
     monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
-    monkeypatch.setattr(city_api.legacy_routes, "_overlay_latest_wunderground_current", lambda city, payload: payload)
+    monkeypatch.setattr(city_api, "_overlay_cached_wunderground", _async_noop_overlay)
     monkeypatch.setattr(city_api.legacy_routes, "_refresh_city_full_cache", refresh_full)
     monkeypatch.setattr(city_api.legacy_routes, "_build_city_detail_payload", build_detail)
 

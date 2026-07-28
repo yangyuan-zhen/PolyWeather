@@ -618,7 +618,7 @@ def _build_terminal_row(
         "temp_symbol": data.get("temp_symbol"),
         "current_temp": current.get("temp"),
         "current_max_so_far": current.get("max_so_far"),
-        "wunderground_current": data.get("wunderground_current") or {},
+        
         "metar_context": metar_context,
         "metar_today_obs": metar_context.get("today_obs") or [],
         "metar_recent_obs": metar_context.get("recent_obs") or [],
@@ -768,7 +768,7 @@ def _build_quick_row(
         "risk_level": risk.get("level"),
         "current_temp": curr.get("temp"),
         "current_max_so_far": curr.get("max_so_far"),
-        "wunderground_current": data.get("wunderground_current") or {},
+        
         "icao": str(risk.get("icao") or airport_primary.get("station_code") or ""),
         "station_source_code": airport_primary.get("source_code") or data.get("official_network_source"),
         "station_source_label": airport_primary.get("source_label") or official_status.get("provider_label"),

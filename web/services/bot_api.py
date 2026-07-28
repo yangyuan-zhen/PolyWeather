@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from fastapi import HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 
-from src.analysis.settlement_rounding import apply_city_settlement, is_exact_settlement_city
+from src.analysis.settlement_rounding import apply_city_settlement
 from src.auth.supabase_entitlement import extract_bearer_token
 import web.routes as legacy_routes
 
@@ -155,8 +155,7 @@ def _cached_bot_deb_row(city: str) -> Optional[Dict[str, Any]]:
             "deb_version": deb.get("version"),
             "quality_tier": deb.get("quality_tier"),
             "recent_hit_rate": _round_one(_safe_float(deb.get("recent_hit_rate"))),
-            "settlement_bucket": apply_city_settlement(city, deb_prediction),
-            "settlement_rule": "floor" if is_exact_settlement_city(city) else "wu_round",
+            "settlement": apply_city_settlement(city, deb_prediction),
             "current_temp": current_temp,
             "current_temp_c": _display_to_celsius(current_temp, unit),
             "source_updated_at": _cache_updated_at(entry, payload),

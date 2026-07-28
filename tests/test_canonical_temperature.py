@@ -488,12 +488,8 @@ def test_force_refresh_panel_overlays_latest_raw_over_stale_cache(monkeypatch):
             enqueued.append(kwargs)
             return True
 
-    async def identity_overlay(_city, payload):
-        return payload
-
     monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeDB())
-    monkeypatch.setattr(city_api, "_overlay_cached_wunderground", identity_overlay)
 
     payload = asyncio.run(
         city_api.get_city_detail_payload(

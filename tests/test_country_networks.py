@@ -37,11 +37,11 @@ class _DummyMetarSource(MetarSourceMixin):
 
 
 def test_new_city_registry_entries_are_wired():
-    assert CITY_REGISTRY["manila"]["settlement_source"] == "wunderground"
+    assert CITY_REGISTRY["manila"]["settlement_source"] == "noaa"
     assert CITY_REGISTRY["manila"]["settlement_station_code"] == "RPLL"
-    assert CITY_REGISTRY["karachi"]["settlement_source"] == "wunderground"
+    assert CITY_REGISTRY["karachi"]["settlement_source"] == "noaa"
     assert CITY_REGISTRY["karachi"]["settlement_station_code"] == "OPKC"
-    assert CITY_REGISTRY["qingdao"]["settlement_source"] == "wunderground"
+    assert CITY_REGISTRY["qingdao"]["settlement_source"] == "noaa"
     assert CITY_REGISTRY["qingdao"]["settlement_station_code"] == "ZSQD"
     assert ALIASES["rpll"] == "manila"
     assert ALIASES["opkc"] == "karachi"
@@ -74,9 +74,6 @@ def test_paris_registry_uses_le_bourget_anchor():
     assert paris["icao"] == "LFPB"
     assert paris["settlement_source"] == "aeroweb"
     assert paris["settlement_station_code"] == "LFPB"
-    settlement_url = paris.get("settlement_url")
-    assert isinstance(settlement_url, str)
-    assert "bonneuil-en-france/LFPB" in settlement_url
     assert CITIES["paris"]["lat"] == paris["lat"]
     assert CITIES["paris"]["settlement_source"] == "aeroweb"
     assert _DummyMetarSource.CITY_TO_ICAO["paris"] == "LFPB"

@@ -354,11 +354,7 @@ def _start_city_cache_stale_refresh(
 async def _overlay_cached_wunderground(city: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     latest_payload = await _overlay_cached_canonical_observation(city, payload)
     latest_payload = await _overlay_latest_observation_sources(city, latest_payload)
-    return await run_in_threadpool(
-        legacy_routes._overlay_latest_wunderground_current,
-        city,
-        latest_payload,
-    )
+    return latest_payload
 
 
 def _observation_block_epoch(block: Any) -> Optional[int]:
@@ -407,7 +403,7 @@ _SOURCE_BOUND_OBSERVATION_FIELDS = {
     "visibility_mi",
     "wind_dir",
     "wind_speed_kt",
-    "wu_settlement",
+    "settlement",
     "wx_desc",
 }
 
@@ -710,13 +706,6 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
             args=(city, payload),
         )
         payload = await _overlay_latest_observation_sources(city, payload)
-        payload = await _run_optional_city_chart_overlay(
-            city=city,
-            overlay_name="wunderground_current",
-            payload=payload,
-            fn=legacy_routes._overlay_latest_wunderground_current,
-            args=(city, payload),
-        )
         return _floor_chart_forecast_with_observed_high(payload)
 
     cached_entry = await run_in_threadpool(legacy_routes._CACHE_DB.get_city_cache, "full", city)
@@ -741,13 +730,6 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
                 args=(city, payload),
             )
             payload = await _overlay_latest_observation_sources(city, payload)
-            payload = await _run_optional_city_chart_overlay(
-                city=city,
-                overlay_name="wunderground_current",
-                payload=payload,
-                fn=legacy_routes._overlay_latest_wunderground_current,
-                args=(city, payload),
-            )
             return _floor_chart_forecast_with_observed_high(payload)
 
     return {
@@ -1715,7 +1697,7 @@ def _chart_scoped_city_detail(detail: Dict[str, Any]) -> Dict[str, Any]:
         "airport_primary": detail.get("airport_primary") or overview.get("airport_primary") or {},
         "airport_primary_today_obs": airport_primary_today_obs,
         "official": {"airport_primary_today_obs": airport_primary_today_obs},
-        "wunderground_current": detail.get("wunderground_current") or {},
+
         "settlement_station": detail.get("settlement_station") or overview.get("settlement_station") or {},
     }
     return scoped

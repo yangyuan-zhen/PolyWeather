@@ -94,7 +94,7 @@ def _integration_summary(config: dict) -> Dict[str, Any]:
         ),
         "weather_sources": {
             "openweather": bool(weather_cfg.get("openweather_api_key")),
-            "wunderground": bool(weather_cfg.get("wunderground_api_key")),
+
             "visualcrossing": bool(weather_cfg.get("visualcrossing_api_key")),
         },
     }

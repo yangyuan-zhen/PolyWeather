@@ -68,10 +68,12 @@ def test_city_detail_batch_response_includes_backend_server_timing(monkeypatch):
         lambda name: name.strip().lower(),
     )
     monkeypatch.setattr(city_api.legacy_routes, "_city_cache_is_fresh", lambda entry, ttl: True)
+    async def _noop_overlay(city, payload):
+        return payload
     monkeypatch.setattr(
-        city_api.legacy_routes,
-        "_overlay_latest_wunderground_current",
-        lambda city, payload: payload,
+        city_api,
+        "_overlay_cached_wunderground",
+        _noop_overlay,
     )
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
     monkeypatch.setattr(city_api.legacy_routes, "_build_city_detail_payload", build_detail)
@@ -106,10 +108,12 @@ def test_city_detail_response_includes_backend_server_timing(monkeypatch):
         lambda name: name.strip().lower(),
     )
     monkeypatch.setattr(city_api.legacy_routes, "_city_cache_is_fresh", lambda entry, ttl: True)
+    async def _noop_overlay(city, payload):
+        return payload
     monkeypatch.setattr(
-        city_api.legacy_routes,
-        "_overlay_latest_wunderground_current",
-        lambda city, payload: payload,
+        city_api,
+        "_overlay_cached_wunderground",
+        _noop_overlay,
     )
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
     monkeypatch.setattr(city_api.legacy_routes, "_build_city_detail_payload", build_detail)

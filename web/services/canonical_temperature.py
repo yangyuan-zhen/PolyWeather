@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 
 
 _SETTLEMENT_PROXY_SOURCES = {"amos", "runway", "awos"}
-_SETTLEMENT_OFFICIAL_SOURCES = {"hko", "noaa", "wunderground", "mgm", "knmi", "ims"}
+_SETTLEMENT_OFFICIAL_SOURCES = {"hko", "noaa", "mgm", "knmi", "ims"}
 _AIRPORT_OFFICIAL_SOURCES = {"metar", "madis_hfmetar", "aeroweb"}
 
 

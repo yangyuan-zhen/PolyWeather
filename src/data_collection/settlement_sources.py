@@ -526,9 +526,6 @@ class SettlementSourceMixin:
 
             city_meta = CITY_REGISTRY.get(normalized) or {}
             settlement_source = str(city_meta.get("settlement_source") or "").strip().lower()
-            if settlement_source == "wunderground":
-                logger.info("Settlement current skipped city={} source=wunderground reason=crawler_removed", city)
-                return None
             if settlement_source == "hko":
                 raw_candidates = city_meta.get("settlement_station_candidates") or []
                 if isinstance(raw_candidates, str):
