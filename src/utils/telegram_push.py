@@ -29,7 +29,6 @@ from src.utils.telegram_i18n import (
     telegram_push_language as _resolve_telegram_push_language,
 )
 from web.services.canonical_temperature import build_city_weather_from_canonical
-from web.services.latest_observation_overlay import overlay_latest_amsc_observation
 
 # Forum topic routing: maps city_key -> message_thread_id for the push forum group.
 # Created by scripts/create_forum_topics.py, stored in the runtime data dir.
@@ -723,45 +722,22 @@ HIGH_FREQ_AIRPORT_ICAO = {
 # Settlement runway mapping — matches settlement anchor stations.
 # Format: (low_number, high_number) order-independent; stored sorted for lookup.
 SETTLEMENT_RUNWAY_PAIRS: Dict[str, Set[Tuple[str, str]]] = {
-    "shanghai": {("17L", "35R")},
-    "beijing": {("01", "19")},
-    "guangzhou": {("02L", "20R")},
-    "chengdu": {("02L", "20R")},
-    "chongqing": {("02L", "20R")},
-    "wuhan": {("04", "22")},
-    "qingdao": {("16", "34")},
     "seoul": {("15R", "33L")},
 }
 
 SETTLEMENT_RUNWAY_TARGETS: Dict[str, str] = {
-    "shanghai": "35R",
-    "chengdu": "02L",
-    "chongqing": "02L",
-    "guangzhou": "02L",
-    "wuhan": "04",
-    "beijing": "01",
-    "qingdao": "34",
 }
 
-# All cities with active runway observation data (AMSC AWOS / AMOS).
+# All cities with active runway observation data.
 RUNWAY_OBSERVATION_CITIES = {
-    "shanghai", "beijing", "guangzhou",
-    "chengdu", "chongqing", "wuhan", "qingdao",
     "seoul", "busan",
 }
 
 # Wind regime sectors per airport (approximate, based on runway orientation + coastline).
 # Values: {sea_breeze: (from_deg, to_deg), warm_advection: (from_deg, to_deg)}
 WIND_REGIME: Dict[str, Dict[str, Tuple[int, int]]] = {
-    "shanghai": {"sea_breeze": (45, 140), "warm_advection": (180, 260)},
     "seoul": {"sea_breeze": (270, 350), "warm_advection": (150, 230)},
     "busan": {"sea_breeze": (120, 200), "warm_advection": (250, 340)},
-    "qingdao": {"sea_breeze": (90, 180), "warm_advection": (200, 300)},
-    "beijing": {"sea_breeze": (120, 200), "warm_advection": (220, 320)},
-    "guangzhou": {"sea_breeze": (120, 200), "warm_advection": (200, 300)},
-    "chengdu": {"sea_breeze": (0, 0), "warm_advection": (0, 0)},
-    "chongqing": {"sea_breeze": (0, 0), "warm_advection": (0, 0)},
-    "wuhan": {"sea_breeze": (0, 0), "warm_advection": (0, 0)},
 }
 
 # Legacy alias for backward compat with existing _select_focus_runway_obs / _focus_runway_pairs_for_city
@@ -1235,7 +1211,7 @@ def _build_airport_status_message(
     runway_pairs = runway_data.get("runway_pairs") or []
     runway_temps = runway_data.get("temperatures") or []
     point_temps = runway_data.get("point_temperatures") or []
-    is_amsc = amos.get("source") in ("amsc_awos", "amos")
+    is_runway_source = amos.get("source") == "amos"
     has_runway = bool(runway_pairs and (runway_temps or point_temps))
     amos_icao = amos.get("icao") or HIGH_FREQ_AIRPORT_ICAO.get(city, "")
     settlement_pair = _settlement_runway_for_city(city)
@@ -1267,10 +1243,10 @@ def _build_airport_status_message(
         display_temp = station_temp
 
     # ── Heat model ──
-    wind_dir = amos.get("wind_dir") if is_amsc else None
-    slope_15m = _compute_slope_15m(amos_icao, display_temp, city) if is_amsc and display_temp is not None else None
-    heat_signal = _runway_heat_signal(display_temp or 0, slope_15m, wind_dir, city, language) if is_amsc else ""
-    wind_label = _wind_regime_label(city, wind_dir, language) if is_amsc and wind_dir is not None else None
+    wind_dir = amos.get("wind_dir") if is_runway_source else None
+    slope_15m = _compute_slope_15m(amos_icao, display_temp, city) if is_runway_source and display_temp is not None else None
+    heat_signal = _runway_heat_signal(display_temp or 0, slope_15m, wind_dir, city, language) if is_runway_source else ""
+    wind_label = _wind_regime_label(city, wind_dir, language) if is_runway_source and wind_dir is not None else None
 
     max_so_far, max_temp_time = _get_airport_daily_high(city_weather)
     # ── Build message ──
@@ -1370,8 +1346,8 @@ def _build_airport_status_message(
         if wind_label:
             wind_str += f"  {wind_label}"
         lines.append(wind_str)
-    # --- AMSC METAR temp + time for Chinese cities (Beijing time) ---
-    if is_amsc:
+    # --- AMOS runway METAR detail ---
+    if is_runway_source:
         raw_metar = amos.get("raw_metar") or ""
         if raw_metar:
             parts = raw_metar.split()
@@ -1687,11 +1663,7 @@ def _attach_latest_raw_observation_payload(
     city: str,
     payload: Dict[str, Any],
 ) -> Dict[str, Any]:
-    try:
-        return overlay_latest_amsc_observation(db, city, payload)
-    except Exception as exc:
-        logger.debug("airport push latest observation overlay failed city={}: {}", city, exc)
-        return payload
+    return payload
 
 
 def _read_canonical_airport_city_weather(city: str, db: Optional[Any] = None) -> Optional[Dict[str, Any]]:

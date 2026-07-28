@@ -27,7 +27,6 @@ DERIVED_SCAN_NUMBER_FIELDS = (
 )
 SOURCE_CADENCE_SECONDS = {
     "amos": 60,
-    "amsc_awos": 180,
     "cowin_obs": 60,
     "hko_obs": 600,
     "singapore_mss": 60,

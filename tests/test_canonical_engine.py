@@ -51,7 +51,7 @@ def test_canonical_engine_ignores_failed_latest_rows():
         "qingdao",
         [
             {
-                "source": "amsc_awos",
+                "source": "metar",
                 "city": "qingdao",
                 "station_code": "ZSQD",
                 "value": None,

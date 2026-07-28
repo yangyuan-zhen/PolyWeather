@@ -16,11 +16,10 @@ _SETTLEMENT_SOURCE_ADAPTERS = {
     "cwa": {"cwa"},
     "mgm": {"mgm"},
     "noaa": {"madis_hfmetar", "metar", "noaa"},
-    "wunderground": {"amsc_awos", "amos", "madis_hfmetar", "metar", "wunderground"},
+    "wunderground": {"amos", "madis_hfmetar", "metar", "wunderground"},
 }
 
 _SOURCE_WEIGHTS = {
-    "amsc_awos": 720,
     "amos": 700,
     "hko_obs": 680,
     "cowin_obs": 660,

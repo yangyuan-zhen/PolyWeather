@@ -34,14 +34,14 @@ def test_db_manager_stores_canonical_temperature_latest(tmp_path):
     canonical = {
         "city": "shanghai",
         "value": 31.2,
-        "source": "amsc_awos",
+        "source": "metar",
         "source_role": "settlement_proxy",
         "observed_at": "2026-06-14T01:01:00+00:00",
         "fetched_at": "2026-06-14T01:02:03+00:00",
         "freshness_sec": 63,
         "freshness_status": "fresh",
         "confidence": 0.92,
-        "explanation": "AMSC AWOS runway-point air temperature updated 63s ago.",
+        "explanation": "METAR runway-point air temperature updated 63s ago.",
     }
 
     db.set_canonical_temperature("Shanghai", canonical)
@@ -50,7 +50,7 @@ def test_db_manager_stores_canonical_temperature_latest(tmp_path):
     assert row is not None
     assert row["city"] == "shanghai"
     assert row["value"] == 31.2
-    assert row["source"] == "amsc_awos"
+    assert row["source"] == "metar"
     assert row["source_role"] == "settlement_proxy"
     assert row["freshness_status"] == "fresh"
     assert row["payload"]["observed_at"] == "2026-06-14T01:01:00+00:00"
@@ -74,8 +74,8 @@ def test_refresh_city_panel_cache_reads_canonical_without_sync_fetch(monkeypatch
                     "city": "shanghai",
                     "value": 31.2,
                     "temp_symbol": "°C",
-                    "source": "amsc_awos",
-                    "source_label": "AMSC AWOS runway-point air temperature",
+                    "source": "metar",
+                    "source_label": "METAR runway-point air temperature",
                     "source_role": "settlement_proxy",
                     "observed_at": "2026-06-14T01:01:00+00:00",
                     "observed_at_local": "09:01",
@@ -83,7 +83,7 @@ def test_refresh_city_panel_cache_reads_canonical_without_sync_fetch(monkeypatch
                     "freshness_status": "fresh",
                     "fetched_at": "2026-06-14T01:02:03+00:00",
                     "confidence": 0.92,
-                    "explanation": "AMSC AWOS runway-point air temperature updated 63s ago.",
+                    "explanation": "METAR runway-point air temperature updated 63s ago.",
                 }
             }
 
@@ -101,7 +101,7 @@ def test_refresh_city_panel_cache_reads_canonical_without_sync_fetch(monkeypatch
     payload = city_runtime._refresh_city_panel_cache("shanghai")
 
     assert payload["canonical_temperature"]["value"] == 31.2
-    assert payload["canonical_temperature"]["source"] == "amsc_awos"
+    assert payload["canonical_temperature"]["source"] == "metar"
     assert payload["canonical_temperature"]["freshness_sec"] == 63
     assert payload["canonical_temperature"]["source_role"] == "settlement_proxy"
     assert enqueued == [
@@ -186,8 +186,8 @@ def test_city_panel_cold_cache_returns_canonical_latest_without_sync_refresh(mon
                     "city": "shanghai",
                     "value": 31.2,
                     "temp_symbol": "°C",
-                    "source": "amsc_awos",
-                    "source_label": "AMSC AWOS runway-point air temperature",
+                    "source": "metar",
+                    "source_label": "METAR runway-point air temperature",
                     "source_role": "settlement_proxy",
                     "observed_at": "2026-06-14T01:01:00+00:00",
                     "observed_at_local": "09:01",
@@ -219,7 +219,7 @@ def test_city_panel_cold_cache_returns_canonical_latest_without_sync_refresh(mon
     )
 
     assert payload["current"]["temp"] == 31.2
-    assert payload["canonical_temperature"]["source"] == "amsc_awos"
+    assert payload["canonical_temperature"]["source"] == "metar"
     assert payload["detail_depth"] == "panel"
     assert enqueued == [
         {
@@ -249,8 +249,8 @@ def test_city_full_cold_cache_returns_canonical_latest_without_sync_refresh(monk
                     "city": "shanghai",
                     "value": 31.2,
                     "temp_symbol": "°C",
-                    "source": "amsc_awos",
-                    "source_label": "AMSC AWOS runway-point air temperature",
+                    "source": "metar",
+                    "source_label": "METAR runway-point air temperature",
                     "source_role": "settlement_proxy",
                     "observed_at": "2026-06-14T01:01:00+00:00",
                     "observed_at_local": "09:01",
@@ -274,7 +274,7 @@ def test_city_full_cold_cache_returns_canonical_latest_without_sync_refresh(monk
     payload = asyncio.run(city_api._get_city_full_data("shanghai", force_refresh=False))
 
     assert payload["current"]["temp"] == 31.2
-    assert payload["canonical_temperature"]["source"] == "amsc_awos"
+    assert payload["canonical_temperature"]["source"] == "metar"
     assert payload["detail_depth"] == "full"
     assert enqueued == [
         {
@@ -304,8 +304,8 @@ def test_city_nearby_and_market_cold_cache_return_canonical_latest_without_sync_
                     "city": "shanghai",
                     "value": 31.2,
                     "temp_symbol": "°C",
-                    "source": "amsc_awos",
-                    "source_label": "AMSC AWOS runway-point air temperature",
+                    "source": "metar",
+                    "source_label": "METAR runway-point air temperature",
                     "source_role": "settlement_proxy",
                     "observed_at": "2026-06-14T01:01:00+00:00",
                     "observed_at_local": "09:01",
@@ -373,8 +373,8 @@ def test_force_refresh_panel_returns_canonical_latest_without_waiting_for_sync_r
                     "city": "shanghai",
                     "value": 31.2,
                     "temp_symbol": "°C",
-                    "source": "amsc_awos",
-                    "source_label": "AMSC AWOS runway-point air temperature",
+                    "source": "metar",
+                    "source_label": "METAR runway-point air temperature",
                     "source_role": "settlement_proxy",
                     "observed_at": "2026-06-14T01:01:00+00:00",
                     "observed_at_local": "09:01",
@@ -402,11 +402,11 @@ def test_force_refresh_panel_returns_canonical_latest_without_waiting_for_sync_r
     )
 
     assert payload["current"]["temp"] == 31.2
-    assert payload["canonical_temperature"]["source"] == "amsc_awos"
+    assert payload["canonical_temperature"]["source"] == "metar"
     assert payload["detail_depth"] == "panel"
 
 
-def test_force_refresh_panel_overlays_latest_amsc_raw_over_stale_cache(monkeypatch):
+def test_force_refresh_panel_overlays_latest_raw_over_stale_cache(monkeypatch):
     import web.services.city_api as city_api
 
     enqueued = []
@@ -430,7 +430,7 @@ def test_force_refresh_panel_overlays_latest_amsc_raw_over_stale_cache(monkeypat
                         "obs_time": "2026-06-14T10:30:00+00:00",
                     },
                     "amos": {
-                        "source": "amsc_awos",
+                        "source": "metar",
                         "temp_c": 22.2,
                         "observation_time": "2026-06-14T10:44:00+00:00",
                     },
@@ -457,13 +457,13 @@ def test_force_refresh_panel_overlays_latest_amsc_raw_over_stale_cache(monkeypat
             }
 
         def get_latest_raw_observation(self, source, city):
-            assert (source, city) == ("amsc_awos", "shanghai")
+            assert (source, city) == ("metar", "shanghai")
             return {
                 "observed_at": "2026-06-14T15:43:00+00:00",
                 "fetched_at": "2026-06-14T15:43:30+00:00",
                 "payload": {
-                    "source": "amsc_awos",
-                    "source_label": "AMSC AWOS Shanghai Pudong (ZSPD)",
+                    "source": "metar",
+                    "source_label": "METAR Shanghai Pudong (ZSPD)",
                     "icao": "ZSPD",
                     "temp_c": 25.4,
                     "observation_time": "2026-06-14T15:43:00+00:00",
@@ -505,9 +505,9 @@ def test_force_refresh_panel_overlays_latest_amsc_raw_over_stale_cache(monkeypat
     )
 
     assert payload["amos"]["observation_time"] == "2026-06-14T15:43:00+00:00"
-    assert payload["current"]["source_code"] == "amsc_awos"
+    assert payload["current"]["source_code"] == "metar"
     assert payload["current"]["temp"] == 25.4
-    assert payload["canonical_temperature"]["source"] == "amsc_awos"
+    assert payload["canonical_temperature"]["source"] == "metar"
     assert payload["deb"]["prediction"] == 24.5
     assert enqueued == [
         {
@@ -537,8 +537,8 @@ def test_city_panel_canonical_fallback_enqueues_collector_refresh_when_queue_exi
                     "city": "shanghai",
                     "value": 31.2,
                     "temp_symbol": "°C",
-                    "source": "amsc_awos",
-                    "source_label": "AMSC AWOS runway-point air temperature",
+                    "source": "metar",
+                    "source_label": "METAR runway-point air temperature",
                     "source_role": "settlement_proxy",
                     "observed_at": "2026-06-14T01:01:00+00:00",
                     "observed_at_local": "09:01",

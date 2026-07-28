@@ -305,7 +305,6 @@ export const DOCS_PAGES: DocsPage[] = [
                 type: "bullets",
                 items: [
                   "AMOS 60s：首尔、釜山等韩国跑道传感器。",
-                  "AMSC 180s：中国内地跑道端点观测城市。",
                   "MADIS 300s：美国高频机场观测城市。",
                   "CoWIN 60s：香港 6087 参考站。",
                   "HKO 600s：香港天文台官方 10 分钟层。",
@@ -354,7 +353,6 @@ export const DOCS_PAGES: DocsPage[] = [
                 type: "bullets",
                 items: [
                   "AMOS 60s: Korean runway sensors such as Seoul and Busan.",
-                  "AMSC 180s: mainland China runway endpoint observations.",
                   "MADIS 300s: US high-frequency airport observations.",
                   "CoWIN 60s: Hong Kong 6087 reference station.",
                   "HKO 600s: Hong Kong Observatory official 10-minute layer.",

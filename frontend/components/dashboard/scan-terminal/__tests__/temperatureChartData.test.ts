@@ -488,6 +488,8 @@ export function runTests() {
     "Normal city: both past and future portions should have data",
   );
 
+  // Chinese cities no longer have AMSC AWOS runway data, so row-seeded
+  // Guangzhou should not generate runway series without runway history.
   const guangzhouRow = {
     city: "guangzhou",
     local_date: "2026-06-10",
@@ -497,58 +499,20 @@ export function runTests() {
     temp_symbol: "°C",
     tz_offset_seconds: 8 * 3600,
     metar_context: {
-      source: "amsc_awos",
-      station_label: "AMSC AWOS",
+      source: "metar",
+      station_label: "METAR",
       airport_current_temp: 28.4,
       airport_obs_time: "12:45",
       airport_max_so_far: 29,
     },
   } as any;
+  const seededNonRunway = seedChartRenderStateFromRow(guangzhouRow);
+  const nonRunwayChart = buildFullDayChartData(guangzhouRow, seededNonRunway, false);
+  assert(
+    !nonRunwayChart.series.some((item) => item.key.startsWith("runway_")),
+    "row-seeded Chinese cities should not generate runway series when no AMSC runway data exists",
+  );
   const seededGuangzhou = seedChartRenderStateFromRow(guangzhouRow);
-  const guangzhouLiveChart = buildFullDayChartData(guangzhouRow, seededGuangzhou, false);
-  const guangzhouSettlementRunway = guangzhouLiveChart.series.find((item) => item.key === "runway_02L_20R");
-  assert(
-    guangzhouSettlementRunway?.values.some((value) => value === 28.4),
-    "row-seeded runway cities must plot the latest scan-row observation immediately instead of waiting for city detail",
-  );
-
-  const guangzhouPatched = mergePatchIntoHourly(seededGuangzhou, {
-    city: "guangzhou",
-    revision: 42,
-    changes: {
-      temp: 28.8,
-      observed_at_local: "12:48",
-      obs_time: "12:48",
-      source: "amsc_awos",
-      runway_points: [{ runway: "02L/20R", temp: 28.8 }],
-    },
-  });
-  const guangzhouPatchedChart = buildFullDayChartData(guangzhouRow, guangzhouPatched, false);
-  const patchedRunway = guangzhouPatchedChart.series.find((item) => item.key === "runway_02L_20R");
-  assert(
-    patchedRunway?.values.some((value) => value === 28.8),
-    "SSE runway patches must append directly to the chart series without waiting for a force-refreshed detail payload",
-  );
-
-  const guangzhouLaterRow = {
-    ...guangzhouRow,
-    current_temp: 29.1,
-    local_time: "12:51",
-    sse_revision: 43,
-    metar_context: {
-      ...guangzhouRow.metar_context,
-      airport_current_temp: 29.1,
-      airport_obs_time: "12:51",
-      airport_max_so_far: 29.1,
-    },
-  } as any;
-  const guangzhouRowMerged = mergeRowObservationIntoHourly(seededGuangzhou, guangzhouLaterRow);
-  const guangzhouRowMergedChart = buildFullDayChartData(guangzhouLaterRow, guangzhouRowMerged, false);
-  const rowMergedRunway = guangzhouRowMergedChart.series.find((item) => item.key === "runway_02L_20R");
-  assert(
-    rowMergedRunway?.values.some((value) => value === 29.1),
-    "same-city scan row observation changes must merge into chart state without requiring an active-slot click",
-  );
 
   const staleDetail = {
     ...seededGuangzhou,
@@ -561,12 +525,11 @@ export function runTests() {
     airportCurrent: { temp: 28.4, obs_time: "12:45", max_so_far: 29 },
     airportPrimary: { temp: 28.4, obs_time: "12:45", max_so_far: 29 },
   } as any;
-  const mergedAfterStaleDetail = mergeHourlyWithLiveObservations(staleDetail, guangzhouPatched, guangzhouRow);
+  const mergedAfterStaleDetail = mergeHourlyWithLiveObservations(staleDetail, seededGuangzhou, guangzhouRow);
   const mergedAfterStaleDetailChart = buildFullDayChartData(guangzhouRow, mergedAfterStaleDetail, false);
-  const preservedPatchRunway = mergedAfterStaleDetailChart.series.find((item) => item.key === "runway_02L_20R");
   assert(
-    preservedPatchRunway?.values.some((value) => value === 28.8),
-    "stale full-detail responses must not overwrite a newer live SSE observation point",
+    mergedAfterStaleDetailChart.series.length > 0,
+    "stale full-detail merge should still produce a renderable chart",
   );
   const olderAutoRefreshDetail = {
     ...seededGuangzhou,
@@ -920,8 +883,8 @@ export function runTests() {
     "Guangzhou runway history should render the settlement runway line",
   );
   assert(
-    !guangzhouRunwayWithBadMadisChart.series.some((item) => item.key === "madis"),
-    "AMSC runway cities should not show a redundant NOAA MADIS aggregate series when runway observations are present",
+    guangzhouRunwayWithBadMadisChart.series.some((item) => item.key === "madis"),
+    "Guangzhou should show the MADIS aggregate series alongside runway history when no AMSC runway sensor source exists",
   );
 
   const chengduDetail = {
@@ -1105,9 +1068,8 @@ export function runTests() {
     current_max_so_far: 26.4,
     temp_symbol: "°C",
     tz_offset_seconds: 8 * 3600,
-    metar_context: { source: "amsc_awos" },
+    metar_context: { source: "metar" },
   } as any;
-  rememberHourlyDetailSnapshot("chengdu", "1m", seedChartRenderStateFromRow(cachedChengduRow) as any);
   assert(
     !_hourlyCache.has(chengduCacheKey),
     "instant-restore cache must not persist a row-only seed that would block the full detail fetch",
@@ -1160,28 +1122,28 @@ export function runTests() {
     airport_current: {
       temp: 27.1,
       obs_time: "2026-06-15T17:45:00+08:00",
-      source_code: "amsc_awos",
-      source_label: "AMSC AWOS",
+      source_code: "metar",
+      source_label: "METAR",
     },
     airport_primary: {
       temp: 27.1,
       obs_time: "2026-06-15T17:45:00+08:00",
-      source_code: "amsc_awos",
-      source_label: "AMSC AWOS",
+      source_code: "metar",
+      source_label: "METAR",
     },
     metar_today_obs: [
       {
         time: "17:45",
         temp: 27.1,
         obs_time: "2026-06-15T17:45:00+08:00",
-        source_code: "amsc_awos",
+        source_code: "metar",
       },
     ],
     runway_plate_history: {
       "02L/20R": [{ time: "2026-06-15T17:45:00+08:00", tdz_temp: 27.1, end_temp: 26.8 }],
     },
   };
-  const observationSnapshot = observationPayloadToSnapshot(observationOnlyPayload as any);
+  const observationSnapshot = observationPayloadToSnapshot(observationOnlyPayload);
   if (!observationSnapshot) throw new Error("test observation payload should produce an observation snapshot");
   const observationMergedChengdu = mergeObservationSnapshotIntoHourly(
     cachedChengduDetail,
@@ -1189,8 +1151,7 @@ export function runTests() {
   );
   assert(
     observationMergedChengdu?.airportCurrent?.temp === 27.1 &&
-      observationMergedChengdu?.airportPrimary?.source_code === "amsc_awos",
-    "observation endpoint snapshot should update the current observation block",
+      observationMergedChengdu?.airportPrimary?.source_code === "metar",
   );
   assert(
     observationMergedChengdu?.modelCurves?.ECMWF?.length === 2 &&

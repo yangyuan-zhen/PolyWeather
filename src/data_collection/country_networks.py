@@ -8,15 +8,6 @@ from src.data_collection.city_registry import CITY_REGISTRY
 from src.data_collection.city_time import get_city_utc_offset_seconds
 
 
-CHINA_CMA_CITIES = {
-    "beijing",
-    "chengdu",
-    "chongqing",
-    "guangzhou",
-    "qingdao",
-    "shanghai",
-    "wuhan",
-}
 
 
 def _japan_jma_cities() -> set[str]:
@@ -206,8 +197,6 @@ def _provider_code_for_city(city: str) -> str:
         return "taiwan_cwa"
     if normalized in _japan_jma_cities():
         return "japan_jma"
-    if normalized in CHINA_CMA_CITIES:
-        return "china_cma"
     return "global_metar"
 
 
@@ -296,14 +285,13 @@ def _airport_primary_from_raw(city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
 
     amos = raw.get("amos") or {}
     if amos.get("temp_c") is not None:
-        is_amsc = amos.get("source") == "amsc_awos"
         return _normalize_station_row(
             station_code=amos.get("icao") or meta.get("icao"),
             station_label=amos.get("station_label") or meta.get("airport_name") or meta.get("icao"),
             temp=amos["temp_c"],
             obs_time=amos.get("obs_time") or amos.get("observation_time") or metar.get("observation_time"),
-            source_code="amsc_awos" if is_amsc else "amos",
-            source_label="AMSC AWOS" if is_amsc else "AMOS",
+            source_code="amos",
+            source_label="AMOS",
             is_official=True,
             is_airport_station=True,
             is_settlement_anchor=False,
@@ -955,22 +943,6 @@ class TurkeyMgmNetworkProvider(CountryNetworkProvider):
         return _mgm_rows(raw, city)
 
 
-class ChinaCmaNetworkProvider(CountryNetworkProvider):
-    def __init__(self) -> None:
-        super().__init__("china_cma", "CMA")
-
-    def official_nearby_current(self, city: str, raw: Dict[str, Any]) -> List[Dict[str, Any]]:
-        return _metar_cluster_rows(raw)
-
-    def official_network_status(self, city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
-        rows = self.official_nearby_current(city, raw)
-        return {
-            "provider_code": self.provider_code,
-            "provider_label": self.provider_label,
-            "row_count": len(rows),
-        }
-
-
 class JapanJmaNetworkProvider(CountryNetworkProvider):
     def __init__(self) -> None:
         super().__init__("japan_jma", "JMA")
@@ -1176,8 +1148,6 @@ def get_country_network_provider(city: str) -> CountryNetworkProvider:
         return KoreaKmaNetworkProvider()
     if provider_code == "japan_jma":
         return JapanJmaNetworkProvider()
-    if provider_code == "china_cma":
-        return ChinaCmaNetworkProvider()
     if provider_code == "israel_ims":
         return IsraelImsNetworkProvider()
     if provider_code == "saudi_ncm":

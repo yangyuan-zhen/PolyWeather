@@ -252,11 +252,10 @@ export function ConfigPageClient() {
           )}
           {sensitiveHealth && (
             <div className={`mt-3 rounded-lg border px-3 py-2 text-xs ${sensitiveHealth.ok ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200" : "border-amber-400/20 bg-amber-400/10 text-amber-200"}`}>
-              AMSC 健康检查：{sensitiveHealth.ok ? "通过" : "失败"}
+              健康检查：{sensitiveHealth.ok ? "通过" : "失败"}
               {sensitiveCheckedAt ? ` · 最近检查 ${sensitiveCheckedAt}` : ""}
-              {typeof sensitiveHealth.points === "number" ? ` · 跑道点 ${sensitiveHealth.points}` : ""}
+              {typeof sensitiveHealth.points === "number" ? ` · 检查点 ${sensitiveHealth.points}` : ""}
               {sensitiveHealth.observation_time_local ? ` · 观测 ${sensitiveHealth.observation_time_local}` : ""}
-              {sensitiveHealth.error ? ` · ${sensitiveHealth.error}` : ""}
             </div>
           )}
           <p className="mt-4 text-xs text-slate-500">

@@ -13,8 +13,8 @@ def test_realtime_stream_reads_canonical_latest_without_analysis(monkeypatch):
                 "payload": {
                     "city": "shanghai",
                     "value": 30.5,
-                    "source": "amsc_awos",
-                    "source_label": "AMSC AWOS runway-point air temperature",
+                    "source": "metar",
+                    "source_label": "METAR runway-point air temperature",
                     "observed_at": "2026-06-14T04:00:00+00:00",
                     "freshness_status": "fresh",
                 },
@@ -46,6 +46,6 @@ def test_realtime_stream_reads_canonical_latest_without_analysis(monkeypatch):
     assert payload["points"][-1] == {
         "timestamp": "2026-06-14T04:00:00+00:00",
         "temp": 30.5,
-        "source": "amsc_awos",
+        "source": "metar",
     }
     assert [row["threshold_c"] for row in payload["thresholds"]] == [30.0, 32.0]

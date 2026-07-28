@@ -18,7 +18,6 @@ def test_ops_health_check_uses_lightweight_head_for_madis(monkeypatch):
     head_calls = []
 
     monkeypatch.setattr(ops_api, "_require_ops", lambda request: {})
-    monkeypatch.setattr(ops_api, "_check_amsc_awos_health", lambda timeout=8: {"ok": True})
     monkeypatch.setattr(requests, "get", lambda *args, **kwargs: _Response())
     monkeypatch.setattr(
         requests,

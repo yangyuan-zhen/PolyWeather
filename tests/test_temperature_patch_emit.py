@@ -43,7 +43,7 @@ def test_collector_patch_post_retries_internal_server_errors(monkeypatch):
     sent = collector._post_temperature_patch_payload(
         {"city": "shanghai", "changes": {"temp": 22.4}},
         city_value="shanghai",
-        source_value="amsc_awos",
+        source_value="amos",
     )
 
     assert sent is True

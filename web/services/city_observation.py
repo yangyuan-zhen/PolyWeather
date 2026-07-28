@@ -12,7 +12,6 @@ from src.database.db_manager import DBManager
 _CACHE_DB = DBManager()
 
 _SOURCE_LABELS = {
-    "amsc_awos": "AMSC AWOS",
     "amos": "AMOS",
     "hko_obs": "HKO",
     "mgm": "MGM",
@@ -23,7 +22,6 @@ _SOURCE_LABELS = {
 }
 
 _PREFERRED_SOURCES = (
-    "amsc_awos",
     "amos",
     "hko_obs",
     "mgm",

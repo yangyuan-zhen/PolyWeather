@@ -41,7 +41,6 @@ const LABELS: Record<string, string> = {
   singapore_mss: "Singapore MSS",
   cwa: "CWA (台湾)",
   amos: "AMOS (韩国跑道)",
-  amsc_awos: "AMSC AWOS (中国)",
   noaa_wrh: "NOAA WRH (美国结算)",
 };
 

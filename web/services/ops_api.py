@@ -20,7 +20,6 @@ from src.database.runtime_state import ObservationCollectorStatusRepository  # n
 
 # Backward-compat: internal helpers referenced by tests
 from web.services.ops.config import _lookup_supabase_user_id_by_email  # noqa: F401
-from web.services.ops.health import _check_amsc_awos_health  # noqa: F401
 from web.services.ops.payments import _list_active_subscriptions_with_windows  # noqa: F401
 
 

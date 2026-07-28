@@ -34,10 +34,6 @@ _EDITABLE_CONFIG_KEYS: dict[str, str] = {
 }
 
 _SENSITIVE_CONFIG_KEYS: dict[str, dict[str, str]] = {
-    "POLYWEATHER_AMSC_SESSION_ID": {
-        "label": "AMSC AWOS sessionId",
-        "description": "中国跑道观测接口 sessionId，用于上海/北京/广州等 AMSC AWOS 数据源。",
-    },
 }
 
 
@@ -254,14 +250,7 @@ def update_ops_sensitive_config(
             "source": str(config.get("source") or "runtime_store"),
         }
     )
-    # Lazy import to avoid circular dependency with ops_api
-    from web.services.ops_api import _check_amsc_awos_health
-    health = (
-        _check_amsc_awos_health(timeout=8)
-        if normalized_key == "POLYWEATHER_AMSC_SESSION_ID"
-        else None
-    )
-    return {"ok": True, "config": response_config, "health": health}
+    return {"ok": True, "config": response_config, "health": None}
 
 
 # ── Subscriptions ───────────────────────────────────────────────────

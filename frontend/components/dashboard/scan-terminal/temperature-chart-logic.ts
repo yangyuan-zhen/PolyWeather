@@ -18,10 +18,6 @@ const ROLLING_WINDOW_BEFORE_MS = 12 * 60 * 60 * 1000;
 const ROLLING_WINDOW_AFTER_LIVE_MS = 2 * 60 * 60 * 1000;
 const ROLLING_WINDOW_AFTER_FORECAST_MS = 8 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
-const AMSC_RUNWAY_CITIES = new Set([
-  "beijing", "shanghai", "guangzhou", "qingdao",
-  "chengdu", "chongqing", "wuhan",
-]);
 
 const SETTLEMENT_RUNWAY_PAIRS: Record<string, Array<[string, string]>> = {
   shanghai: [["17L", "35R"]],
@@ -91,7 +87,7 @@ function runwaySeriesLabel(rwy: string, isSettlement: boolean, isEn: boolean) {
 
 function isTemperatureSeriesVisibleByDefault(city: string, seriesKey: string) {
   if (seriesKey.startsWith("model_curve_")) {
-    return normalizeCityKey(city) === "paris" && seriesKey === "model_curve_AROME HD";
+    return true;
   }
   if (seriesKey === "metar") {
     const cityKey = normalizeCityKey(city);
@@ -1559,8 +1555,6 @@ function rowLooksLikeRunwaySensor(row: ScanOpportunityRow | null) {
     .map((value) => String(value || "").toLowerCase())
     .join(" ");
   return (
-    AMSC_RUNWAY_CITIES.has(cityKey) ||
-    sourceText.includes("amsc") ||
     sourceText.includes("awos") ||
     sourceText.includes("runway")
   );
@@ -2327,9 +2321,6 @@ function getLiveObservationLabels(
     weatherStationCities.has(normalizedKey) ||
     /\b(mgm|turkey_mgm|jma_amedas|fmi|knmi|cowin_obs|ims|ncm|aeroweb|madis_hfmetar|singapore_mss)\b/.test(sourceTokens);
   const isRunwaySensorCity = runwaySensorCities.has(normalizedKey);
-  const isAmscRunwayCity =
-    AMSC_RUNWAY_CITIES.has(normalizedKey) ||
-    /\bamsc(?:_awos)?\b|\bawos\b/.test(sourceTokens);
   const isWeatherStation = !runwaySensorCities.has(normalizedKey)
     && !isHKO && !isShenzhen && !isTokyo && !isSingapore && !isParis && !isTaipei
     && hasRealStationNetwork;
@@ -2341,7 +2332,7 @@ function getLiveObservationLabels(
     : isParis ? "官方机场观测 (15分钟)"
     : isTaipei ? "CWA (10分钟)"
     : isWeatherStation ? "气象站实测"
-    : isRunwaySensorCity ? `跑道实测 (${isAmscRunwayCity ? "3分钟" : "1分钟"})`
+    : isRunwaySensorCity ? "跑道实测 (1分钟)"
     : "机场报文";
 
   const metarHeaderLabel = (isShenzhen || isHKO) ? "天文台实测 (10分钟)"
@@ -3035,14 +3026,6 @@ function buildFullDayChartData(
   const isHKOCity = settlementCityKey === 'hongkong' || settlementCityKey === 'laufaushan'
     || settlementCityKey === 'shenzhen' || (row?.city || '').toLowerCase().includes('hong kong')
     || (row?.city || '').toLowerCase().includes('lau fau shan');
-  const airportPrimarySourceText = [
-    (hourly?.airportPrimary as any)?.source,
-    hourly?.airportPrimary?.source_code,
-    hourly?.airportPrimary?.source_label,
-  ].map((value) => String(value || "").toLowerCase()).join(" ");
-  const isAmscSource =
-    airportPrimarySourceText.includes("amsc") ||
-    (AMSC_RUNWAY_CITIES.has(settlementCityKey) && runwayHistorySeries.length > 0);
   const isKoreanAmosSource =
     (settlementCityKey === "seoul" || settlementCityKey === "busan") &&
     (
@@ -3055,7 +3038,7 @@ function buildFullDayChartData(
       ).toLowerCase().includes("amos") ||
       Boolean(hourly?.amos?.runway_obs)
     );
-  const isRunwaySensorAggregateSource = isAmscSource || isKoreanAmosSource;
+  const isRunwaySensorAggregateSource = isKoreanAmosSource;
   const isRedundantMetarFallback =
     finalMadisObs.length > 0 &&
     airportPrimaryUsesMetarFallback(hourly, isHKO, row) &&
@@ -3159,9 +3142,9 @@ function buildFullDayChartData(
     }
   }
 
-  // ── Airport Primary (MADIS / AMSC AWOS) ──
-  // Skip this series for AMSC AWOS cities — their data is redundant with
-  // runway sensor data and adds a confusing "AMSC AWOS" label to the chart.
+  // ── Airport Primary (MADIS) ──
+  // Skip this series for Korean AMOS cities — their data is redundant with
+  // runway sensor data.
   if (finalMadisObs.length && !isRunwaySensorAggregateSource) {
     const madisVals = valuesAtTimeline(n, indexByTs, finalMadisObs);
     if (madisVals.some((v) => v !== null)) {

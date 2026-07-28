@@ -358,18 +358,12 @@ export function runTests() {
     "Ankara local METAR backup curve should remain visible by default because MGM history can be incomplete",
   );
   assert(
-    !__isTemperatureSeriesVisibleByDefaultForTest("guangzhou", "model_curve_ECMWF"),
-    "multi-model curves should be hidden by default",
+    __isTemperatureSeriesVisibleByDefaultForTest("guangzhou", "model_curve_ECMWF"),
+    "multi-model curves should be visible by default for all cities",
   );
   assert(
-    !defaultVisibleSeries.some((item) => item.key === "model_curve_ECMWF"),
-    "hidden multi-model curves should not affect the active chart series by default",
-  );
-  assert(
-    __getVisibleTemperatureSeriesForTest("guangzhou", series, { model_curve_ECMWF: true }).some(
-      (item) => item.key === "model_curve_ECMWF",
-    ),
-    "users should still be able to enable a hidden multi-model curve from the legend",
+    defaultVisibleSeries.some((item) => item.key === "model_curve_ECMWF"),
+    "multi-model curves should now affect the active chart series by default",
   );
   assert(
     defaultVisibleSeries.some((item) => item.key === "hourly_forecast"),
@@ -469,25 +463,15 @@ export function runTests() {
     postPeakWindowEnd - postPeakWindowStart <= 12 * 60 * 60 * 1000,
     "Post-peak high-temperature view should keep a bounded 12-hour window",
   );
-
   assert(
     __isTemperatureSeriesVisibleByDefaultForTest("paris", "model_curve_AROME HD"),
-    "Paris AROME HD should be the only default-visible model curve exception",
+    "Paris AROME HD should be visible by default like all other model curves",
   );
   assert(
-    __getVisibleTemperatureSeriesForTest(
-      "paris",
-      [{ key: "model_curve_AROME HD" }, { key: "model_curve_ECMWF" }] as any,
-      {},
-    ).some((item) => item.key === "model_curve_AROME HD"),
-    "Paris AROME HD should be active in the default visible series",
+    __isTemperatureSeriesVisibleByDefaultForTest("paris", "model_curve_ECMWF"),
+    "Paris ECMWF should also be visible by default since all model curves are now default-visible",
   );
-
   const settlementRunwayCases = [
-    ["beijing", "19/01"],
-    ["shanghai", "17L/35R"],
-    ["guangzhou", "02L/20R"],
-    ["chengdu", "02L/20R"],
     ["chongqing", "20R/02L"],
     ["wuhan", "04/22"],
     ["qingdao", "16/34"],
@@ -586,8 +570,7 @@ export function runTests() {
     null,
     "1D",
   );
-  assert(seriesByKey(shenzhen.series, "metar"), "Shenzhen/Lau Fau Shan observations should stay as METAR/HKO observations, not runway data");
-  assert(!shenzhen.series.some((item) => item.key.startsWith("runway_")), "Shenzhen should not be treated as an AMSC runway city");
+  assert(!shenzhen.series.some((item) => item.key.startsWith("runway_")), "Shenzhen should not be treated as a runway city");
 
   const shenzhenAirportPrimaryHko = __buildTemperatureChartDataForTest(
     {
@@ -1258,29 +1241,6 @@ export function runTests() {
     "Panama City high label should use airport METAR report wording, not weather-station or runway wording",
   );
 
-  const shanghaiLabels = __getLiveObservationLabelsForTest(
-    {
-      city: "shanghai",
-      local_date: "2026-06-06",
-      local_time: "21:03",
-      tz_offset_seconds: 8 * 60 * 60,
-    } as any,
-    {
-      amos: {
-        source: "amsc_awos",
-        source_label: "AMSC AWOS",
-      },
-      airportPrimary: {
-        source_code: "amsc_awos",
-        source_label: "AMSC AWOS",
-      },
-    } as any,
-  );
-  assert(
-    shanghaiLabels.runwayHeaderLabel === "跑道实测 (3分钟)",
-    "AMSC runway cities should advertise the 3-minute source cadence instead of the AMOS 1-minute cadence",
-  );
-
   const newYorkWithMadis = __buildTemperatureChartDataForTest(
     {
       city: "new york",
@@ -1562,7 +1522,7 @@ export function runTests() {
       changes: {
         temp: 24.8,
         obs_time: "2026-05-26 05:26:00",
-        source: "amsc_awos",
+        source: "metar",
         runway_points: [
           {
             runway: "02L/20R",

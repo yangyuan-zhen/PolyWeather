@@ -35,7 +35,6 @@ function isRunwayObservationSource(
     .toLowerCase();
   return (
     sourceText.includes("amos") ||
-    sourceText.includes("amsc") ||
     sourceText.includes("awos") ||
     sourceText.includes("runway") ||
     sourceText.includes("跑道")

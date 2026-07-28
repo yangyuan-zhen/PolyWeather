@@ -24,7 +24,6 @@ from web.analysis_service import _runway_history_temp_for_city
 from web.services.canonical_temperature import build_city_weather_from_canonical
 from web.services.latest_observation_overlay import (
     overlay_latest_amos_observation,
-    overlay_latest_amsc_observation,
     overlay_latest_cwa_observation,
     overlay_latest_hko_observation,
     overlay_latest_jma_amedas_observation,
@@ -147,13 +146,6 @@ async def _overlay_latest_observation_sources(city: str, payload: Dict[str, Any]
     latest_payload = payload
     latest_payload = await _run_latest_observation_city_chart_overlay(
         city=city,
-        overlay_name="amsc_latest_raw",
-        payload=latest_payload,
-        fn=overlay_latest_amsc_observation,
-        args=(legacy_routes._CACHE_DB, city, latest_payload),
-    )
-    latest_payload = await _run_latest_observation_city_chart_overlay(
-        city=city,
         overlay_name="jma_amedas_latest",
         payload=latest_payload,
         fn=overlay_latest_jma_amedas_observation,
@@ -231,12 +223,7 @@ async def _get_canonical_city_payload(city: str, *, detail_depth: str = "panel")
             "probabilities": {"mu": None, "distribution": []},
         }
     )
-    return await run_in_threadpool(
-        overlay_latest_amsc_observation,
-        legacy_routes._CACHE_DB,
-        city,
-        payload,
-    )
+    return payload
 
 
 def _enqueue_collector_refresh_request(
@@ -346,13 +333,7 @@ async def _refresh_city_payload_with_stale_timeout(
         city,
         kind,
     )
-    latest_payload = await run_in_threadpool(
-        overlay_latest_amsc_observation,
-        legacy_routes._CACHE_DB,
-        city,
-        cached_before_refresh,
-    )
-    return await _overlay_cached_wunderground(city, latest_payload)
+    return await _overlay_cached_wunderground(city, cached_before_refresh)
 
 
 async def _refresh_city_cache_with_stale_timeout(

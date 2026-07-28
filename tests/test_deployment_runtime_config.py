@@ -180,7 +180,6 @@ def test_docker_compose_isolates_collector_from_web_and_bot_services():
     )
     assert "command: python -m web.observation_collector_worker" in collector_block
     assert "command: python -m web.cache_warmer_worker" in warmer_block
-    assert "POLYWEATHER_OBSERVATION_COLLECTOR_AMSC_SEC: ${POLYWEATHER_OBSERVATION_COLLECTOR_AMSC_SEC:-60}" in collector_block
     assert "POLYWEATHER_OBSERVATION_COLLECTOR_CACHE_REFRESH_WORKERS: ${POLYWEATHER_OBSERVATION_COLLECTOR_CACHE_REFRESH_WORKERS:-2}" in collector_block
     assert "POLYWEATHER_WARMER_ENABLED: ${POLYWEATHER_WARMER_ENABLED:-true}" in warmer_block
     assert "POLYWEATHER_WARMER_TICK_SEC: ${POLYWEATHER_WARMER_TICK_SEC:-30}" in warmer_block

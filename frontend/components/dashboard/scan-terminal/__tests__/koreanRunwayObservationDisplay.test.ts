@@ -82,13 +82,13 @@ export function runTests() {
     airport_primary: {
       temp: 35,
       obs_time: "12:00",
-      source_label: "AMSC AWOS",
+      source_label: "AMOS",
       station_code: "RKPK",
     },
   });
   assert(
     getDisplayAirportPrimary(busan) == null,
-    "Busan AMSC/AWOS runway observation must not be exposed for display",
+    "Busan AMOS runway observation must not be exposed for display",
   );
 
   const tokyo = baseDetail({

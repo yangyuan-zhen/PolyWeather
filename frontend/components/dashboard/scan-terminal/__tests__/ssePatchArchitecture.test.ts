@@ -137,7 +137,7 @@ export function runTests() {
     __applySsePatchForTest({
       type: "city_observation_patch.v1",
       city: "Latency City",
-      source: "amsc_awos",
+      source: "metar",
       obs_time: "2026-06-10T04:50:00Z",
       observed_at_utc: "2026-06-10T04:50:00Z",
       revision: 987001,

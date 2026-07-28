@@ -33,7 +33,6 @@ class ObservationSourceResult:
 
 
 _ATTACH_METHODS: dict[str, str] = {
-    "amsc_awos": "_attach_china_amsc_awos_data",
     "amos": "_attach_korean_amos_data",
     "madis_hfmetar": "_attach_madis_hfmetar_data",
     "hko_obs": "_attach_hko_obs_official_nearby",

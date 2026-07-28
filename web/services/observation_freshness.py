@@ -18,13 +18,6 @@ _OBSERVATION_SOURCE_PROFILES: Dict[str, Dict[str, Any]] = {
         "expected_grace_sec": 180,
         "stale_after_sec": 900,
     },
-    "amsc_awos": {
-        "label": "AMSC AWOS",
-        "native_update_interval_sec": 180,
-        "fresh_window_sec": 180,
-        "expected_grace_sec": 180,
-        "stale_after_sec": 900,
-    },
     "jma": {
         "label": "JMA",
         "native_update_interval_sec": 600,
@@ -138,8 +131,6 @@ def canonical_observation_source_code(value: Any) -> str:
     raw = str(value or "").strip().lower()
     if not raw:
         return "metar"
-    if "amsc" in raw:
-        return "amsc_awos"
     if "amos" in raw:
         return "amos"
     if "jma" in raw:

@@ -12,7 +12,6 @@ from typing import Any, Callable, Iterable, List, Optional, Sequence, Tuple
 from loguru import logger
 
 from src.data_collection.amos_station_sources import AMOS_AIRPORT_CODES
-from src.data_collection.amsc_awos_sources import AMSC_AWOS_AIRPORTS
 from src.data_collection.city_registry import CITY_REGISTRY
 from src.data_collection.hko_obs_sources import HKO_STATIONS
 from src.database.db_manager import DBManager
@@ -406,12 +405,6 @@ class ObservationCollector:
     @staticmethod
     def _raw_payload_for_record(record: ObservationRecord) -> dict[str, Any]:
         payload = dict(record.payload)
-        source = str(record.source or payload.get("source") or "").strip().lower()
-        if source == "amsc_awos":
-            if record.observed_at:
-                payload["observation_time"] = record.observed_at
-            if record.observed_at_local:
-                payload["observation_time_local"] = record.observed_at_local
         return payload
 
     @staticmethod
@@ -432,61 +425,6 @@ class ObservationCollector:
         except (TypeError, ValueError):
             return None
 
-    def _store_amsc_runway_observations(
-        self,
-        record: ObservationRecord,
-        payload: dict[str, Any],
-    ) -> None:
-        source = str(record.source or payload.get("source") or "").strip().lower()
-        if source != "amsc_awos":
-            return
-        appender = getattr(self.observation_store, "append_runway_obs", None)
-        if not callable(appender):
-            return
-        runway_obs = payload.get("runway_obs")
-        if not isinstance(runway_obs, dict):
-            return
-        point_temperatures = runway_obs.get("point_temperatures")
-        if not isinstance(point_temperatures, list) or not point_temperatures:
-            return
-        icao = str(payload.get("icao") or record.station_code or "").strip().upper()
-        obs_time = str(
-            payload.get("observation_time")
-            or payload.get("observed_at")
-            or record.observed_at
-            or ""
-        ).strip()
-        if not icao or not obs_time:
-            return
-        for point in point_temperatures:
-            if not isinstance(point, dict):
-                continue
-            runway = str(point.get("runway") or "").strip().upper()
-            if not runway:
-                continue
-            try:
-                appender(
-                    icao=icao,
-                    city=record.city,
-                    runway=runway,
-                    tdz_temp=self._float_or_none(point.get("tdz_temp")),
-                    mid_temp=self._float_or_none(point.get("mid_temp")),
-                    end_temp=self._float_or_none(point.get("end_temp")),
-                    target_runway_max=self._float_or_none(point.get("target_runway_max")),
-                    wind_dir=self._int_or_none(point.get("wind_dir")),
-                    wind_speed=self._float_or_none(point.get("wind_speed")),
-                    rvr=self._int_or_none(point.get("rvr")),
-                    mor=self._float_or_none(point.get("mor")),
-                    humidity=self._float_or_none(point.get("humidity")),
-                    otime_utc=obs_time,
-                )
-            except Exception as exc:
-                logger.debug(
-                    "AMSC runway observation write skipped city={} runway={}: {}",
-                    record.city,
-                    runway,
-                    exc,
-                )
 
     def _store_raw_observations(self, records: Sequence[ObservationRecord]) -> int:
         store = self.observation_store
@@ -512,7 +450,6 @@ class ObservationCollector:
                     status="ok",
                     payload=payload,
                 )
-                self._store_amsc_runway_observations(record, payload)
                 written_records.append(record)
                 wrote += 1
             except Exception as exc:
@@ -601,11 +538,6 @@ def build_observation_source_profiles() -> List[ObservationSourceProfile]:
             source="amos",
             cities=_normalized_cities(AMOS_AIRPORT_CODES.keys()),
             interval_sec=max(30, _env_int("POLYWEATHER_OBSERVATION_COLLECTOR_AMOS_SEC", 60)),
-        ),
-        ObservationSourceProfile(
-            source="amsc_awos",
-            cities=_normalized_cities(AMSC_AWOS_AIRPORTS.keys()),
-            interval_sec=max(60, _env_int("POLYWEATHER_OBSERVATION_COLLECTOR_AMSC_SEC", 180)),
         ),
         ObservationSourceProfile(
             source="madis_hfmetar",

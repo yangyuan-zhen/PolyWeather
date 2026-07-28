@@ -30,7 +30,6 @@ from web.analysis_service import (
 from web.services.canonical_temperature import (
     build_city_weather_from_canonical,
 )
-from web.services.latest_observation_overlay import overlay_latest_amsc_observation
 from web.scan_terminal_service import build_scan_terminal_payload  # noqa: F401 - compatibility export for tests and transitional routers
 from web.core import (
     CITIES,
@@ -306,7 +305,6 @@ def _cached_city_payload(kind: str, city: str) -> dict:
     payload = entry.get("payload")
     if not isinstance(payload, dict):
         return {}
-    payload = overlay_latest_amsc_observation(_CACHE_DB, city, payload)
     return _strip_wunderground_current(payload)
 
 
@@ -347,7 +345,7 @@ def _canonical_city_payload(city: str, *, detail_depth: str) -> dict:
             "probabilities": payload.get("probabilities") or {"mu": None, "distribution": []},
         }
     )
-    return overlay_latest_amsc_observation(_CACHE_DB, city, payload)
+    return payload
 
 
 def _initializing_city_payload(city: str, *, detail_depth: str) -> dict:

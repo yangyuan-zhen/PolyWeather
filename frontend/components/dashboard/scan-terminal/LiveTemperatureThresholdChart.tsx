@@ -292,7 +292,6 @@ function formatCompactNumber(value: number, decimals = 1) {
 function fallbackCadenceSeconds(sourceText: string) {
   const value = sourceText.toLowerCase();
   if (value.includes("amos")) return 60;
-  if (value.includes("amsc")) return 180;
   if (value.includes("madis") || value.includes("hfmetar")) return 300;
   if (value.includes("cowin")) return 60;
   if (value.includes("hko")) return 600;

@@ -522,24 +522,6 @@ def build_city_query_report(
         f"\n✈️ <b>实测 ({main_source}): {cur_temp}{temp_symbol}</b>{max_str} |{wx_display} | {obs_t_str}{age_tag}"
     )
 
-    # --- AMSC AWOS runway & METAR detail for Chinese cities ---
-    amos_raw_metar = str(amos.get("raw_metar") or "").strip()
-    if amos_raw_metar:
-        amos_temp = amos.get("temp_c")
-        amos_label = amos.get("source_label") or "AMSC AWOS"
-        amos_otime = amos.get("observation_time_local") or ""
-        parts = [f"🛰️ <b>{amos_label}</b>"]
-        if amos_temp is not None:
-            parts.append(f"跑道气温: {amos_temp:.1f}{temp_symbol}")
-        if amos_otime:
-            parts.append(f"观测时间: {amos_otime}")
-        if amos_raw_metar:
-            # Shorten: keep only the METAR body, strip the leading METAR prefix
-            metar_body = amos_raw_metar
-            if metar_body.upper().startswith("METAR "):
-                metar_body = metar_body[6:]
-            parts.append(f"报文: {metar_body}")
-        msg_lines.append(" | ".join(parts))
 
     if use_settlement_current:
         # HKO/CWA detailed observations

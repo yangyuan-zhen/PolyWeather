@@ -19,12 +19,12 @@ def test_city_observation_endpoint_is_no_store_and_uses_live_observation_service
             "local_time": "17:45",
             "current": {
                 "temp": 22.2,
-                "source_code": "amsc_awos",
+                "source_code": "metar",
                 "obs_time": "2026-06-16T17:45:00+08:00",
             },
             "airport_current": {
                 "temp": 22.2,
-                "source_code": "amsc_awos",
+                "source_code": "metar",
                 "obs_time": "2026-06-16T17:45:00+08:00",
             },
             "runway_plate_history": {
@@ -41,7 +41,7 @@ def test_city_observation_endpoint_is_no_store_and_uses_live_observation_service
                     "time": "17:45",
                     "temp": 22.2,
                     "obs_time": "2026-06-16T17:45:00+08:00",
-                    "source_code": "amsc_awos",
+                    "source_code": "metar",
                 }
             ],
         }
@@ -55,7 +55,7 @@ def test_city_observation_endpoint_is_no_store_and_uses_live_observation_service
     assert response.headers["Cloudflare-CDN-Cache-Control"] == "no-store, max-age=0"
     assert calls == ["chengdu"]
     payload = response.json()
-    assert payload["airport_current"]["source_code"] == "amsc_awos"
+    assert payload["airport_current"]["source_code"] == "metar"
     assert payload["runway_plate_history"]["02L/20R"][0]["tdz_temp"] == 22.2
 
 
@@ -67,17 +67,17 @@ def test_city_observation_payload_prefers_raw_latest_over_stale_city_cache(monke
             raise AssertionError("observation endpoint must not read city_full_cache")
 
         def get_latest_raw_observation(self, source, city):
-            if (source, city) != ("amsc_awos", "chengdu"):
+            if (source, city) != ("metar", "chengdu"):
                 return None
             return {
-                "source": "amsc_awos",
+                "source": "metar",
                 "city": "chengdu",
                 "station_code": "ZUUU",
                 "station_name": "Chengdu Shuangliu",
                 "observed_at": "2026-06-16T17:45:00+08:00",
                 "payload": {
-                    "source": "amsc_awos",
-                    "source_label": "AMSC AWOS Chengdu Shuangliu",
+                    "source": "metar",
+                    "source_label": "METAR Chengdu Shuangliu",
                     "icao": "ZUUU",
                     "temp_c": 22.2,
                     "observation_time": "2026-06-16T17:45:00+08:00",
@@ -94,7 +94,7 @@ def test_city_observation_payload_prefers_raw_latest_over_stale_city_cache(monke
             }
 
         def list_latest_raw_observations_for_city(self, city, *, limit=100):
-            return [self.get_latest_raw_observation("amsc_awos", city)]
+            return [self.get_latest_raw_observation("metar", city)]
 
         def get_airport_obs_recent(self, icao, minutes=180):
             return []
@@ -108,7 +108,7 @@ def test_city_observation_payload_prefers_raw_latest_over_stale_city_cache(monke
 
     assert payload["city"] == "chengdu"
     assert payload["airport_current"]["temp"] == 22.2
-    assert payload["airport_current"]["source_code"] == "amsc_awos"
+    assert payload["airport_current"]["source_code"] == "metar"
     assert payload["airport_current"]["obs_time"] == "2026-06-16T17:45:00+08:00"
     assert payload["runway_plate_history"]["02L/20R"][0]["tdz_temp"] == 22.2
-    assert payload["metar_today_obs"][-1]["source_code"] == "amsc_awos"
+    assert payload["metar_today_obs"][-1]["source_code"] == "metar"
