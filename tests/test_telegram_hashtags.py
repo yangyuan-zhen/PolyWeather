@@ -256,7 +256,6 @@ def test_runway_high_does_not_fall_back_to_future_airport_high_when_history_miss
 
 
 def test_telegram_slope_uses_settlement_endpoint_not_runway_max(monkeypatch):
-    import src.utils.telegram_push as telegram_push
 
     class FakeDB:
         def get_runway_obs_recent(self, icao, minutes=20):
@@ -277,7 +276,7 @@ def test_telegram_slope_uses_settlement_endpoint_not_runway_max(monkeypatch):
                 },
             ]
 
-    monkeypatch.setattr(telegram_push, "DBManager", lambda: FakeDB())
+    monkeypatch.setattr("src.database.db_manager.DBManager", lambda: FakeDB())
 
     assert _compute_slope_15m("ZUCK", 31.2, "chongqing") == -2.9
 
@@ -361,7 +360,7 @@ def test_high_freq_airport_push_prefers_fresh_city_cache(monkeypatch):
 
     bot = Bot()
     monkeypatch.setattr(telegram_push, "HIGH_FREQ_AIRPORT_CITIES", {"qingdao"})
-    monkeypatch.setattr(telegram_push, "DBManager", lambda: FakeDB())
+    monkeypatch.setattr("src.database.db_manager.DBManager", lambda: FakeDB())
     monkeypatch.setattr(
         telegram_push,
         "_rate_limited_send",
@@ -408,7 +407,7 @@ def test_airport_push_prefers_cache_with_newest_observation(monkeypatch):
                 },
             }
 
-    monkeypatch.setattr(telegram_push, "DBManager", lambda: FakeDB())
+    monkeypatch.setattr("src.database.db_manager.DBManager", lambda: FakeDB())
 
     city_weather = telegram_push._read_cached_airport_city_weather("shanghai")
 
@@ -444,7 +443,7 @@ def test_airport_push_without_cache_uses_canonical_latest_not_analysis(monkeypat
     def fail_analyze(*_args, **_kwargs):
         raise AssertionError("Telegram push must not call _analyze when canonical latest exists")
 
-    monkeypatch.setattr(telegram_push, "DBManager", lambda: FakeDB())
+    monkeypatch.setattr("src.database.db_manager.DBManager", lambda: FakeDB())
     monkeypatch.setattr(web_app, "_analyze", fail_analyze)
 
     city_weather = telegram_push._load_airport_city_weather_for_push("qingdao")
@@ -468,7 +467,7 @@ def test_airport_push_without_cache_or_canonical_skips_analysis(monkeypatch):
     def fail_analyze(*_args, **_kwargs):
         raise AssertionError("Telegram push must not call _analyze on cold cache")
 
-    monkeypatch.setattr(telegram_push, "DBManager", lambda: FakeDB())
+    monkeypatch.setattr("src.database.db_manager.DBManager", lambda: FakeDB())
     monkeypatch.setattr(web_app, "_analyze", fail_analyze)
 
     with pytest.raises(RuntimeError, match="no cached city weather"):
@@ -499,7 +498,7 @@ def test_airport_push_uses_stale_cache_before_fallback_analysis(monkeypatch):
                 },
             }
 
-    monkeypatch.setattr(telegram_push, "DBManager", lambda: FakeDB())
+    monkeypatch.setattr("src.database.db_manager.DBManager", lambda: FakeDB())
     monkeypatch.setattr(web_app, "_analyze", fail_analyze)
 
     city_weather = telegram_push._load_airport_city_weather_for_push("qingdao")
@@ -563,12 +562,12 @@ def test_airport_push_rejects_observation_older_than_last_push(monkeypatch):
 
 
 def test_airport_push_does_not_retry_general_when_forum_thread_is_missing(monkeypatch):
-    import src.utils.telegram_push as telegram_push
+    import src.utils.telegram._airport_push as _airport_push
 
     calls = []
 
     monkeypatch.setattr(
-        telegram_push,
+        _airport_push,
         "_load_airport_city_weather_for_push",
         lambda _city: {
             "local_time": "15:22",
@@ -580,16 +579,16 @@ def test_airport_push_does_not_retry_general_when_forum_thread_is_missing(monkey
             },
         },
     )
-    monkeypatch.setattr(telegram_push, "_resolve_thread_id", lambda _chat, _city: 99)
+    monkeypatch.setattr(_airport_push, "_resolve_thread_id", lambda _chat, _city: 99)
 
     def fake_send(_bot, chat_id, _message, **kwargs):
         calls.append((chat_id, kwargs))
         if kwargs.get("message_thread_id"):
             raise RuntimeError("Bad Request: message thread not found")
 
-    monkeypatch.setattr(telegram_push, "_rate_limited_send", fake_send)
+    monkeypatch.setattr(_airport_push, "_rate_limited_send", fake_send)
 
-    result = telegram_push._process_airport_city(
+    result = _airport_push._process_airport_city(
         "hong kong",
         now_ts=1781164400,
         last_city={},
@@ -602,12 +601,12 @@ def test_airport_push_does_not_retry_general_when_forum_thread_is_missing(monkey
 
 
 def test_airport_push_does_not_fall_back_to_general_when_forum_mapping_is_missing(monkeypatch):
-    import src.utils.telegram_push as telegram_push
+    import src.utils.telegram._airport_push as _airport_push
 
     calls = []
 
     monkeypatch.setattr(
-        telegram_push,
+        _airport_push,
         "_load_airport_city_weather_for_push",
         lambda _city: {
             "local_time": "15:22",
@@ -619,15 +618,15 @@ def test_airport_push_does_not_fall_back_to_general_when_forum_mapping_is_missin
             },
         },
     )
-    monkeypatch.setattr(telegram_push, "_resolve_thread_id", lambda _chat, _city: 0)
-    monkeypatch.setattr(telegram_push, "_is_forum_chat_id", lambda _chat: True)
+    monkeypatch.setattr(_airport_push, "_resolve_thread_id", lambda _chat, _city: 0)
+    monkeypatch.setattr(_airport_push, "_is_forum_chat_id", lambda _chat: True)
     monkeypatch.setattr(
-        telegram_push,
+        _airport_push,
         "_rate_limited_send",
         lambda _bot, chat_id, _message, **kwargs: calls.append((chat_id, kwargs)),
     )
 
-    result = telegram_push._process_airport_city(
+    result = _airport_push._process_airport_city(
         "chengdu",
         now_ts=1781164400,
         last_city={},
@@ -640,7 +639,8 @@ def test_airport_push_does_not_fall_back_to_general_when_forum_mapping_is_missin
 
 
 def test_high_freq_airport_push_workers_default_to_one_for_shared_cpu(monkeypatch):
-    source = Path("src/utils/telegram_push.py").read_text(encoding="utf-8")
+    source = Path("src/utils/telegram/_airport_push.py").read_text(encoding="utf-8")
+    helpers_source = Path("src/utils/telegram/_helpers.py").read_text(encoding="utf-8")
     assert 'TELEGRAM_AIRPORT_PUSH_MAX_WORKERS", 1' in source
     assert "max(1, min(4" in source
-    assert "ThreadPoolExecutor(max_workers=max_workers)" in source
+    assert "ThreadPoolExecutor(max_workers=max_workers)" in helpers_source
