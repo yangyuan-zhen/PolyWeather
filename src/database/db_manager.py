@@ -1,8 +1,6 @@
 import sqlite3
 import os
-import hashlib
 import json
-import secrets
 import threading
 import time
 from collections import Counter
@@ -15,6 +13,12 @@ from loguru import logger
 from src.database.sqlite_connection import connect_sqlite
 from src.auth.supabase_admin_client import get_supabase_admin_client
 from src.database.schema import init_db as _schema_init_db
+from src.database.repos.user_repo import UserRepo
+from src.database.repos.payment_repo import PaymentRepo
+from src.database.repos.observation_repo import ObservationRepo
+from src.database.repos.cache_repo import CacheRepo
+from src.database.repos.binding_repo import BindingRepo
+from src.database.repos.admin_repo import AdminRepo
 
 
 class DBManager:
@@ -28,6 +32,54 @@ class DBManager:
     def __init__(self, db_path: Optional[str] = None):
         self.db_path = self._resolve_db_path(db_path)
         self._ensure_initialized()
+
+    @property
+    def _user_repo(self) -> UserRepo:
+        try:
+            return self.__user_repo
+        except AttributeError:
+            self.__user_repo = UserRepo(self._get_connection)
+            return self.__user_repo
+
+    @property
+    def _payment_repo(self) -> PaymentRepo:
+        try:
+            return self.__payment_repo
+        except AttributeError:
+            self.__payment_repo = PaymentRepo(self._get_connection)
+            return self.__payment_repo
+
+    @property
+    def _observation_repo(self) -> ObservationRepo:
+        try:
+            return self.__observation_repo
+        except AttributeError:
+            self.__observation_repo = ObservationRepo(self._get_connection)
+            return self.__observation_repo
+
+    @property
+    def _cache_repo(self) -> CacheRepo:
+        try:
+            return self.__cache_repo
+        except AttributeError:
+            self.__cache_repo = CacheRepo(self._get_connection)
+            return self.__cache_repo
+
+    @property
+    def _binding_repo(self) -> BindingRepo:
+        try:
+            return self.__binding_repo
+        except AttributeError:
+            self.__binding_repo = BindingRepo(self._get_connection)
+            return self.__binding_repo
+
+    @property
+    def _admin_repo(self) -> AdminRepo:
+        try:
+            return self.__admin_repo
+        except AttributeError:
+            self.__admin_repo = AdminRepo(self._get_connection)
+            return self.__admin_repo
 
     def _resolve_db_path(self, db_path: Optional[str]) -> str:
         raw = (db_path or os.getenv("POLYWEATHER_DB_PATH") or "").strip()
@@ -368,37 +420,7 @@ class DBManager:
         return None
 
     def get_city_cache(self, kind: str, city: str) -> Optional[Dict[str, Any]]:
-        table = self._cache_table_name(kind)
-        normalized_city = str(city or "").strip().lower()
-        if not table or not normalized_city:
-            return None
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                f"""
-                SELECT city, payload_json, updated_at, updated_at_ts, version, source_fingerprint
-                FROM {table}
-                WHERE city = ?
-                LIMIT 1
-                """,
-                (normalized_city,),
-            ).fetchone()
-        if not row:
-            return None
-        try:
-            payload = json.loads(str(row["payload_json"] or "{}"))
-        except Exception:
-            return None
-        if not isinstance(payload, dict):
-            return None
-        return {
-            "city": str(row["city"] or normalized_city),
-            "payload": payload,
-            "updated_at": str(row["updated_at"] or ""),
-            "updated_at_ts": float(row["updated_at_ts"] or 0.0),
-            "version": str(row["version"] or ""),
-            "source_fingerprint": str(row["source_fingerprint"] or ""),
-        }
+        return self._cache_repo.get_city_cache(kind, city)
 
     def set_city_cache(
         self,
@@ -409,139 +431,13 @@ class DBManager:
         version: str = "v1",
         source_fingerprint: Optional[str] = None,
     ) -> None:
-        table = self._cache_table_name(kind)
-        normalized_city = str(city or "").strip().lower()
-        if not table or not normalized_city or not isinstance(payload, dict):
-            return
-        now = datetime.now().isoformat()
-        now_ts = datetime.now().timestamp()
-        with self._get_connection() as conn:
-            conn.execute(
-                f"""
-                INSERT INTO {table} (
-                    city,
-                    payload_json,
-                    updated_at,
-                    updated_at_ts,
-                    version,
-                    source_fingerprint
-                )
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(city) DO UPDATE SET
-                    payload_json = excluded.payload_json,
-                    updated_at = excluded.updated_at,
-                    updated_at_ts = excluded.updated_at_ts,
-                    version = excluded.version,
-                    source_fingerprint = excluded.source_fingerprint
-                """,
-                (
-                    normalized_city,
-                    json.dumps(payload, ensure_ascii=False),
-                    now,
-                    now_ts,
-                    str(version or "v1"),
-                    str(source_fingerprint or ""),
-                ),
-            )
-            conn.commit()
+        return self._cache_repo.set_city_cache(kind, city, payload, version=version, source_fingerprint=source_fingerprint)
 
     def get_canonical_temperature(self, city: str) -> Optional[Dict[str, Any]]:
-        normalized_city = str(city or "").strip().lower()
-        if not normalized_city:
-            return None
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                """
-                SELECT city, payload_json, value, source, source_role, observed_at,
-                       fetched_at, freshness_sec, freshness_status, confidence,
-                       explanation, updated_at, updated_at_ts
-                FROM canonical_temperature_latest
-                WHERE city = ?
-                LIMIT 1
-                """,
-                (normalized_city,),
-            ).fetchone()
-        if not row:
-            return None
-        try:
-            payload = json.loads(str(row["payload_json"] or "{}"))
-        except Exception:
-            return None
-        if not isinstance(payload, dict):
-            return None
-        return {
-            "city": str(row["city"] or normalized_city),
-            "payload": payload,
-            "value": self._float_or_none(row["value"]),
-            "source": str(row["source"] or ""),
-            "source_role": str(row["source_role"] or ""),
-            "observed_at": str(row["observed_at"] or ""),
-            "fetched_at": str(row["fetched_at"] or ""),
-            "freshness_sec": self._int_or_none(row["freshness_sec"]),
-            "freshness_status": str(row["freshness_status"] or ""),
-            "confidence": self._float_or_none(row["confidence"]),
-            "explanation": str(row["explanation"] or ""),
-            "updated_at": str(row["updated_at"] or ""),
-            "updated_at_ts": float(row["updated_at_ts"] or 0.0),
-        }
+        return self._observation_repo.get_canonical_temperature(city)
 
     def set_canonical_temperature(self, city: str, payload: Dict[str, Any]) -> None:
-        normalized_city = str(city or "").strip().lower()
-        if not normalized_city or not isinstance(payload, dict):
-            return
-        value = self._float_or_none(payload.get("value"))
-        source = str(payload.get("source") or "").strip().lower()
-        source_role = str(payload.get("source_role") or "").strip().lower()
-        observed_at = str(payload.get("observed_at") or "").strip()
-        fetched_at = str(payload.get("fetched_at") or "").strip()
-        freshness_sec = self._int_or_none(payload.get("freshness_sec"))
-        freshness_status = str(payload.get("freshness_status") or "").strip().lower()
-        confidence = self._float_or_none(payload.get("confidence"))
-        explanation = str(payload.get("explanation") or "").strip()
-        now_dt = datetime.now()
-        now = now_dt.isoformat()
-        now_ts = now_dt.timestamp()
-        with self._get_connection() as conn:
-            conn.execute(
-                """
-                INSERT INTO canonical_temperature_latest (
-                    city, payload_json, value, source, source_role, observed_at,
-                    fetched_at, freshness_sec, freshness_status, confidence,
-                    explanation, updated_at, updated_at_ts
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(city) DO UPDATE SET
-                    payload_json = excluded.payload_json,
-                    value = excluded.value,
-                    source = excluded.source,
-                    source_role = excluded.source_role,
-                    observed_at = excluded.observed_at,
-                    fetched_at = excluded.fetched_at,
-                    freshness_sec = excluded.freshness_sec,
-                    freshness_status = excluded.freshness_status,
-                    confidence = excluded.confidence,
-                    explanation = excluded.explanation,
-                    updated_at = excluded.updated_at,
-                    updated_at_ts = excluded.updated_at_ts
-                """,
-                (
-                    normalized_city,
-                    json.dumps({**payload, "city": normalized_city}, ensure_ascii=False),
-                    value,
-                    source,
-                    source_role,
-                    observed_at,
-                    fetched_at,
-                    freshness_sec,
-                    freshness_status,
-                    confidence,
-                    explanation,
-                    now,
-                    now_ts,
-                ),
-            )
-            conn.commit()
+        return self._observation_repo.set_canonical_temperature(city, payload)
 
     def append_raw_observation(
         self,
@@ -561,115 +457,7 @@ class DBManager:
         last_success_at: str = "",
         payload: Optional[Dict[str, Any]] = None,
     ) -> None:
-        normalized_source = str(source or "").strip().lower()
-        normalized_city = str(city or "").strip().lower()
-        if not normalized_source or not normalized_city:
-            return
-        safe_station_code = str(station_code or "").strip().upper()
-        safe_station_name = str(station_name or "").strip()
-        safe_runway = str(runway or "").strip().upper()
-        safe_observed_at = str(observed_at or "").strip()
-        now_dt = datetime.now()
-        safe_fetched_at = str(fetched_at or now_dt.isoformat()).strip()
-        safe_status = str(status or "ok").strip().lower() or "ok"
-        value_float = self._float_or_none(value)
-        latency_float = self._float_or_none(source_latency_sec)
-        if latency_float is None:
-            latency_float = self._source_latency_or_none(safe_observed_at, safe_fetched_at)
-        payload_json = json.dumps(payload or {}, ensure_ascii=False)
-        created_at_ts = now_dt.timestamp()
-        with self._get_connection() as conn:
-            previous_latest = conn.execute(
-                """
-                SELECT status, error_count, last_success_at, fetched_at
-                FROM raw_observation_latest
-                WHERE source = ? AND city = ?
-                ORDER BY updated_at_ts DESC
-                LIMIT 1
-                """,
-                (normalized_source, normalized_city),
-            ).fetchone()
-            previous_error_count = int(previous_latest[1] or 0) if previous_latest else 0
-            previous_last_success = str(previous_latest[2] or "").strip() if previous_latest else ""
-            previous_status = str(previous_latest[0] or "").strip().lower() if previous_latest else ""
-            previous_fetched_at = str(previous_latest[3] or "").strip() if previous_latest else ""
-            if safe_status == "ok":
-                safe_error_count = 0
-                success_at = str(last_success_at or safe_fetched_at).strip()
-            else:
-                safe_error_count = max(1, int(error_count or 0), previous_error_count + 1)
-                success_at = str(
-                    last_success_at
-                    or previous_last_success
-                    or (previous_fetched_at if previous_status == "ok" else "")
-                ).strip()
-            conn.execute(
-                """
-                INSERT INTO raw_observation_store (
-                    source, city, station_code, station_name, runway, value,
-                    value_unit, observed_at, fetched_at, source_latency_sec,
-                    status, error_count, last_success_at, payload_json, created_at_ts
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    normalized_source,
-                    normalized_city,
-                    safe_station_code,
-                    safe_station_name,
-                    safe_runway,
-                    value_float,
-                    str(value_unit or "").strip(),
-                    safe_observed_at,
-                    safe_fetched_at,
-                    latency_float,
-                    safe_status,
-                    safe_error_count,
-                    success_at,
-                    payload_json,
-                    created_at_ts,
-                ),
-            )
-            conn.execute(
-                """
-                INSERT INTO raw_observation_latest (
-                    source, city, station_code, station_name, runway, value,
-                    value_unit, observed_at, fetched_at, source_latency_sec,
-                    status, error_count, last_success_at, payload_json, updated_at_ts
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(source, city, station_code, runway) DO UPDATE SET
-                    station_name = excluded.station_name,
-                    value = excluded.value,
-                    value_unit = excluded.value_unit,
-                    observed_at = excluded.observed_at,
-                    fetched_at = excluded.fetched_at,
-                    source_latency_sec = excluded.source_latency_sec,
-                    status = excluded.status,
-                    error_count = excluded.error_count,
-                    last_success_at = excluded.last_success_at,
-                    payload_json = excluded.payload_json,
-                    updated_at_ts = excluded.updated_at_ts
-                """,
-                (
-                    normalized_source,
-                    normalized_city,
-                    safe_station_code,
-                    safe_station_name,
-                    safe_runway,
-                    value_float,
-                    str(value_unit or "").strip(),
-                    safe_observed_at,
-                    safe_fetched_at,
-                    latency_float,
-                    safe_status,
-                    safe_error_count,
-                    success_at,
-                    payload_json,
-                    created_at_ts,
-                ),
-            )
-            conn.commit()
+        return self._observation_repo.append_raw_observation(source=source, city=city, value=value, observed_at=observed_at, fetched_at=fetched_at, station_code=station_code, station_name=station_name, runway=runway, value_unit=value_unit, source_latency_sec=source_latency_sec, status=status, error_count=error_count, last_success_at=last_success_at, payload=payload)
 
     def get_latest_raw_observation(
         self,
@@ -679,101 +467,10 @@ class DBManager:
         station_code: str = "",
         runway: str = "",
     ) -> Optional[Dict[str, Any]]:
-        normalized_source = str(source or "").strip().lower()
-        normalized_city = str(city or "").strip().lower()
-        if not normalized_source or not normalized_city:
-            return None
-        filters = ["source = ?", "city = ?"]
-        params: List[Any] = [normalized_source, normalized_city]
-        if station_code:
-            filters.append("station_code = ?")
-            params.append(str(station_code or "").strip().upper())
-        if runway:
-            filters.append("runway = ?")
-            params.append(str(runway or "").strip().upper())
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                f"""
-                SELECT *
-                FROM raw_observation_latest
-                WHERE {' AND '.join(filters)}
-                ORDER BY updated_at_ts DESC
-                LIMIT 1
-                """,
-                params,
-            ).fetchone()
-        if not row:
-            return None
-        try:
-            payload = json.loads(str(row["payload_json"] or "{}"))
-        except Exception:
-            payload = {}
-        if not isinstance(payload, dict):
-            payload = {}
-        return {
-            "source": str(row["source"] or ""),
-            "city": str(row["city"] or ""),
-            "station_code": str(row["station_code"] or ""),
-            "station_name": str(row["station_name"] or ""),
-            "runway": str(row["runway"] or ""),
-            "value": self._float_or_none(row["value"]),
-            "value_unit": str(row["value_unit"] or ""),
-            "observed_at": str(row["observed_at"] or ""),
-            "fetched_at": str(row["fetched_at"] or ""),
-            "source_latency_sec": self._float_or_none(row["source_latency_sec"]),
-            "status": str(row["status"] or ""),
-            "error_count": int(row["error_count"] or 0),
-            "last_success_at": str(row["last_success_at"] or ""),
-            "payload": payload,
-            "updated_at_ts": float(row["updated_at_ts"] or 0.0),
-        }
+        return self._observation_repo.get_latest_raw_observation(source, city, station_code=station_code, runway=runway)
 
     def list_latest_raw_observations_for_city(self, city: str, *, limit: int = 100) -> List[Dict[str, Any]]:
-        normalized_city = str(city or "").strip().lower()
-        if not normalized_city:
-            return []
-        safe_limit = max(1, min(int(limit or 100), 500))
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """
-                SELECT *
-                FROM raw_observation_latest
-                WHERE city = ?
-                ORDER BY updated_at_ts DESC
-                LIMIT ?
-                """,
-                (normalized_city, safe_limit),
-            ).fetchall()
-        out: List[Dict[str, Any]] = []
-        for row in rows:
-            try:
-                payload = json.loads(str(row["payload_json"] or "{}"))
-            except Exception:
-                payload = {}
-            if not isinstance(payload, dict):
-                payload = {}
-            out.append(
-                {
-                    "source": str(row["source"] or ""),
-                    "city": str(row["city"] or ""),
-                    "station_code": str(row["station_code"] or ""),
-                    "station_name": str(row["station_name"] or ""),
-                    "runway": str(row["runway"] or ""),
-                    "value": self._float_or_none(row["value"]),
-                    "value_unit": str(row["value_unit"] or ""),
-                    "observed_at": str(row["observed_at"] or ""),
-                    "fetched_at": str(row["fetched_at"] or ""),
-                    "source_latency_sec": self._float_or_none(row["source_latency_sec"]),
-                    "status": str(row["status"] or ""),
-                    "error_count": int(row["error_count"] or 0),
-                    "last_success_at": str(row["last_success_at"] or ""),
-                    "payload": payload,
-                    "updated_at_ts": float(row["updated_at_ts"] or 0.0),
-                }
-            )
-        return out
+        return self._observation_repo.list_latest_raw_observations_for_city(city, limit=limit)
 
     def list_raw_observation_history(
         self,
@@ -783,60 +480,7 @@ class DBManager:
         minutes: int = 60,
         limit: int = 1000,
     ) -> List[Dict[str, Any]]:
-        normalized_source = str(source or "").strip().lower()
-        normalized_city = str(city or "").strip().lower()
-        if not normalized_source or not normalized_city:
-            return []
-        safe_limit = max(1, min(int(limit or 1000), 5000))
-        safe_minutes = max(1, min(int(minutes or 60), 7 * 24 * 60))
-        cutoff_dt = datetime.now(timezone.utc) - timedelta(minutes=safe_minutes)
-        cutoff_observed_at = cutoff_dt.replace(microsecond=0).isoformat()
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """
-                SELECT *
-                FROM (
-                    SELECT *
-                    FROM raw_observation_store
-                    WHERE source = ?
-                      AND city = ?
-                      AND observed_at >= ?
-                    ORDER BY observed_at DESC, fetched_at DESC, created_at_ts DESC
-                    LIMIT ?
-                )
-                ORDER BY observed_at ASC, fetched_at ASC, created_at_ts ASC
-                """,
-                (normalized_source, normalized_city, cutoff_observed_at, safe_limit),
-            ).fetchall()
-        out: List[Dict[str, Any]] = []
-        for row in rows:
-            try:
-                payload = json.loads(str(row["payload_json"] or "{}"))
-            except Exception:
-                payload = {}
-            if not isinstance(payload, dict):
-                payload = {}
-            out.append(
-                {
-                    "source": str(row["source"] or ""),
-                    "city": str(row["city"] or ""),
-                    "station_code": str(row["station_code"] or ""),
-                    "station_name": str(row["station_name"] or ""),
-                    "runway": str(row["runway"] or ""),
-                    "value": self._float_or_none(row["value"]),
-                    "value_unit": str(row["value_unit"] or ""),
-                    "observed_at": str(row["observed_at"] or ""),
-                    "fetched_at": str(row["fetched_at"] or ""),
-                    "source_latency_sec": self._float_or_none(row["source_latency_sec"]),
-                    "status": str(row["status"] or ""),
-                    "error_count": int(row["error_count"] or 0),
-                    "last_success_at": str(row["last_success_at"] or ""),
-                    "payload": payload,
-                    "created_at_ts": float(row["created_at_ts"] or 0.0),
-                }
-            )
-        return out
+        return self._observation_repo.list_raw_observation_history(source, city, minutes=minutes, limit=limit)
 
     def enqueue_observation_refresh_request(
         self,
@@ -847,69 +491,7 @@ class DBManager:
         priority: str = "normal",
         reason: str = "",
     ) -> bool:
-        normalized_city = str(city or "").strip().lower()
-        normalized_kind = str(kind or "").strip().lower()
-        normalized_source = str(source or "").strip().lower()
-        normalized_priority = str(priority or "normal").strip().lower()
-        if normalized_priority not in {"high", "normal", "low"}:
-            normalized_priority = "normal"
-        if not normalized_city:
-            return False
-        priority_rank = {"low": 0, "normal": 1, "high": 2}
-        now_dt = datetime.now()
-        now = now_dt.isoformat()
-        now_ts = now_dt.timestamp()
-        with self._get_connection() as conn:
-            existing = conn.execute(
-                """
-                SELECT id, priority
-                FROM observation_refresh_requests
-                WHERE city = ? AND source = ? AND status IN ('pending', 'claimed')
-                ORDER BY requested_at_ts DESC
-                LIMIT 1
-                """,
-                (normalized_city, normalized_source),
-            ).fetchone()
-            if existing:
-                existing_priority = str(existing[1] or "normal").strip().lower()
-                if priority_rank.get(existing_priority, 1) > priority_rank[normalized_priority]:
-                    normalized_priority = existing_priority
-                conn.execute(
-                    """
-                    UPDATE observation_refresh_requests
-                    SET kind = ?, priority = ?, reason = ?, requested_at = ?, requested_at_ts = ?
-                    WHERE id = ?
-                    """,
-                    (
-                        normalized_kind,
-                        normalized_priority,
-                        str(reason or "").strip(),
-                        now,
-                        now_ts,
-                        int(existing[0]),
-                    ),
-                )
-            else:
-                conn.execute(
-                    """
-                    INSERT INTO observation_refresh_requests (
-                        city, kind, source, priority, reason, status,
-                        requested_at, requested_at_ts
-                    )
-                    VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
-                    """,
-                    (
-                        normalized_city,
-                        normalized_kind,
-                        normalized_source,
-                        normalized_priority,
-                        str(reason or "").strip(),
-                        now,
-                        now_ts,
-                    ),
-                )
-            conn.commit()
-        return True
+        return self._observation_repo.enqueue_observation_refresh_request(city=city, kind=kind, source=source, priority=priority, reason=reason)
 
     def claim_observation_refresh_requests(
         self,
@@ -918,56 +500,7 @@ class DBManager:
         owner: str = "",
         now_ts: Optional[float] = None,
     ) -> List[Dict[str, Any]]:
-        safe_limit = max(1, min(int(limit or 20), 200))
-        safe_owner = str(owner or "").strip() or secrets.token_hex(6)
-        claim_ts = float(now_ts if now_ts is not None else datetime.now().timestamp())
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """
-                SELECT *
-                FROM observation_refresh_requests
-                WHERE status = 'pending'
-                ORDER BY
-                    CASE priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END,
-                    requested_at_ts ASC
-                LIMIT ?
-                """,
-                (safe_limit,),
-            ).fetchall()
-            ids = [int(row["id"]) for row in rows]
-            if ids:
-                placeholders = ",".join("?" for _ in ids)
-                conn.execute(
-                    f"""
-                    UPDATE observation_refresh_requests
-                    SET status = 'claimed',
-                        owner = ?,
-                        attempts = attempts + 1,
-                        claimed_at_ts = ?
-                    WHERE id IN ({placeholders})
-                    """,
-                    [safe_owner, claim_ts, *ids],
-                )
-                conn.commit()
-        return [
-            {
-                "id": int(row["id"]),
-                "city": str(row["city"] or ""),
-                "kind": str(row["kind"] or ""),
-                "source": str(row["source"] or ""),
-                "priority": str(row["priority"] or ""),
-                "reason": str(row["reason"] or ""),
-                "status": "claimed",
-                "attempts": int(row["attempts"] or 0) + 1,
-                "owner": safe_owner,
-                "requested_at": str(row["requested_at"] or ""),
-                "requested_at_ts": float(row["requested_at_ts"] or 0.0),
-                "claimed_at_ts": claim_ts,
-                "last_error": str(row["last_error"] or ""),
-            }
-            for row in rows
-        ]
+        return self._observation_repo.claim_observation_refresh_requests(limit=limit, owner=owner, now_ts=now_ts)
 
     def mark_observation_refresh_request_done(
         self,
@@ -976,26 +509,7 @@ class DBManager:
         status: str = "done",
         error: str = "",
     ) -> None:
-        safe_status = str(status or "done").strip().lower()
-        if safe_status not in {"done", "failed"}:
-            safe_status = "done"
-        with self._get_connection() as conn:
-            conn.execute(
-                """
-                UPDATE observation_refresh_requests
-                SET status = ?,
-                    completed_at_ts = ?,
-                    last_error = ?
-                WHERE id = ?
-                """,
-                (
-                    safe_status,
-                    datetime.now().timestamp(),
-                    str(error or "").strip(),
-                    int(request_id),
-                ),
-            )
-            conn.commit()
+        return self._observation_repo.mark_observation_refresh_request_done(request_id, status=status, error=error)
 
     def acquire_cache_refresh_lock(
         self,
@@ -1004,92 +518,16 @@ class DBManager:
         ttl_sec: int = 120,
         owner: Optional[str] = None,
     ) -> Optional[str]:
-        normalized_key = str(cache_key or "").strip().lower()
-        if not normalized_key:
-            return None
-        lock_owner = str(owner or "").strip() or hashlib.sha1(
-            f"{normalized_key}:{datetime.now().timestamp()}".encode("utf-8")
-        ).hexdigest()[:12]
-        now_ts = datetime.now().timestamp()
-        locked_until_ts = now_ts + max(15, int(ttl_sec or 120))
-        updated_at = datetime.now().isoformat()
-        with self._get_connection() as conn:
-            cursor = conn.execute(
-                """
-                INSERT INTO cache_refresh_locks (cache_key, locked_until_ts, owner, updated_at)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(cache_key) DO UPDATE SET
-                    locked_until_ts = excluded.locked_until_ts,
-                    owner = excluded.owner,
-                    updated_at = excluded.updated_at
-                WHERE cache_refresh_locks.locked_until_ts < ?
-                """,
-                (
-                    normalized_key,
-                    locked_until_ts,
-                    lock_owner,
-                    updated_at,
-                    now_ts,
-                ),
-            )
-            conn.commit()
-        return lock_owner if int(cursor.rowcount or 0) > 0 else None
+        return self._cache_repo.acquire_cache_refresh_lock(cache_key, ttl_sec=ttl_sec, owner=owner)
 
     def release_cache_refresh_lock(self, cache_key: str, owner: str) -> None:
-        normalized_key = str(cache_key or "").strip().lower()
-        normalized_owner = str(owner or "").strip()
-        if not normalized_key or not normalized_owner:
-            return
-        with self._get_connection() as conn:
-            conn.execute(
-                """
-                DELETE FROM cache_refresh_locks
-                WHERE cache_key = ? AND owner = ?
-                """,
-                (normalized_key, normalized_owner),
-            )
-            conn.commit()
+        return self._cache_repo.release_cache_refresh_lock(cache_key, owner)
 
     def get_payment_runtime_state(self, state_key: str) -> Optional[Dict[str, Any]]:
-        key = str(state_key or "").strip()
-        if not key:
-            return None
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                """
-                SELECT payload_json
-                FROM payment_runtime_state
-                WHERE state_key = ?
-                LIMIT 1
-                """,
-                (key,),
-            ).fetchone()
-            if not row:
-                return None
-            try:
-                payload = json.loads(str(row["payload_json"] or "{}"))
-            except Exception:
-                return None
-            return payload if isinstance(payload, dict) else None
+        return self._payment_repo.get_payment_runtime_state(state_key)
 
     def set_payment_runtime_state(self, state_key: str, payload: Dict[str, Any]) -> None:
-        key = str(state_key or "").strip()
-        if not key:
-            return
-        body = payload if isinstance(payload, dict) else {}
-        with self._get_connection() as conn:
-            conn.execute(
-                """
-                INSERT INTO payment_runtime_state (state_key, payload_json, updated_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(state_key) DO UPDATE SET
-                    payload_json = excluded.payload_json,
-                    updated_at = excluded.updated_at
-                """,
-                (key, json.dumps(body, ensure_ascii=False), datetime.now().isoformat()),
-            )
-            conn.commit()
+        return self._payment_repo.set_payment_runtime_state(state_key, payload)
 
     @staticmethod
     def _mask_secret_value(value: str) -> str:
@@ -1101,66 +539,10 @@ class DBManager:
         return f"{text[:4]}...{text[-4:]}"
 
     def get_runtime_secret(self, key: str) -> Optional[str]:
-        normalized_key = str(key or "").strip()
-        if not normalized_key:
-            return None
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                """
-                SELECT value
-                FROM runtime_secrets
-                WHERE key = ?
-                LIMIT 1
-                """,
-                (normalized_key,),
-            ).fetchone()
-        if not row:
-            return None
-        value = str(row["value"] or "")
-        return value if value else None
+        return self._admin_repo.get_runtime_secret(key)
 
     def get_runtime_secret_metadata(self, key: str) -> Dict[str, Any]:
-        normalized_key = str(key or "").strip()
-        if not normalized_key:
-            return {
-                "key": "",
-                "configured": False,
-                "masked": "",
-                "updated_at": "",
-                "updated_by": "",
-                "source": "runtime_store",
-            }
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                """
-                SELECT key, value, updated_at, updated_by
-                FROM runtime_secrets
-                WHERE key = ?
-                LIMIT 1
-                """,
-                (normalized_key,),
-            ).fetchone()
-        if not row:
-            return {
-                "key": normalized_key,
-                "configured": False,
-                "masked": "",
-                "updated_at": "",
-                "updated_by": "",
-                "source": "runtime_store",
-            }
-        value = str(row["value"] or "")
-        return {
-            "key": normalized_key,
-            "configured": bool(value),
-            "masked": self._mask_secret_value(value),
-            "length": len(value),
-            "updated_at": str(row["updated_at"] or ""),
-            "updated_by": str(row["updated_by"] or ""),
-            "source": "runtime_store",
-        }
+        return self._admin_repo.get_runtime_secret_metadata(key)
 
     def set_runtime_secret(
         self,
@@ -1169,43 +551,10 @@ class DBManager:
         *,
         updated_by: Optional[str] = None,
     ) -> Dict[str, Any]:
-        normalized_key = str(key or "").strip()
-        secret_value = str(value or "").strip()
-        if not normalized_key:
-            raise ValueError("runtime secret key is required")
-        if not secret_value:
-            raise ValueError("runtime secret value is required")
-        now = datetime.now().isoformat()
-        operator = str(updated_by or "").strip()
-        with self._get_connection() as conn:
-            conn.execute(
-                """
-                INSERT INTO runtime_secrets (key, value, updated_at, updated_by)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(key) DO UPDATE SET
-                    value = excluded.value,
-                    updated_at = excluded.updated_at,
-                    updated_by = excluded.updated_by
-                """,
-                (normalized_key, secret_value, now, operator),
-            )
-            conn.commit()
-        return self.get_runtime_secret_metadata(normalized_key)
+        return self._admin_repo.set_runtime_secret(key, value, updated_by=updated_by)
 
     def append_payment_audit_event(self, event_type: str, payload: Dict[str, Any]) -> None:
-        kind = str(event_type or "").strip().lower()
-        if not kind:
-            return
-        body = payload if isinstance(payload, dict) else {}
-        with self._get_connection() as conn:
-            conn.execute(
-                """
-                INSERT INTO payment_audit_events (event_type, payload_json, created_at)
-                VALUES (?, ?, ?)
-                """,
-                (kind, json.dumps(body, ensure_ascii=False), datetime.now().isoformat()),
-            )
-            conn.commit()
+        return self._payment_repo.append_payment_audit_event(event_type, payload)
 
     def append_ops_audit_event(
         self,
@@ -1387,21 +736,7 @@ class DBManager:
         reference_id: str = "",
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
-        with self._get_connection() as conn:
-            self._append_points_ledger_entry_conn(
-                conn,
-                telegram_id=telegram_id,
-                supabase_user_id=supabase_user_id,
-                supabase_email=supabase_email,
-                source=source,
-                delta_points=delta_points,
-                balance_after=balance_after,
-                actor_email=actor_email,
-                reference_type=reference_type,
-                reference_id=reference_id,
-                metadata=metadata,
-            )
-            conn.commit()
+        return self._user_repo.append_points_ledger_entry(telegram_id=telegram_id, supabase_user_id=supabase_user_id, supabase_email=supabase_email, source=source, delta_points=delta_points, balance_after=balance_after, actor_email=actor_email, reference_type=reference_type, reference_id=reference_id, metadata=metadata)
 
     def list_points_ledger_entries(
         self,
@@ -1410,58 +745,7 @@ class DBManager:
         supabase_user_id: str = "",
         supabase_email: str = "",
     ) -> List[Dict[str, Any]]:
-        safe_limit = max(1, min(int(limit or 20), 200))
-        normalized_user_id = str(supabase_user_id or "").strip().lower()
-        normalized_email = str(supabase_email or "").strip().lower()
-        if not normalized_user_id and not normalized_email:
-            return []
-        clauses: List[str] = []
-        params: List[Any] = []
-        if normalized_user_id:
-            clauses.append("supabase_user_id = ?")
-            params.append(normalized_user_id)
-        if normalized_email:
-            clauses.append("supabase_email = ?")
-            params.append(normalized_email)
-        where_sql = f"WHERE {' OR '.join(clauses)}" if clauses else ""
-        params.append(safe_limit)
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                f"""
-                SELECT id, telegram_id, supabase_user_id, supabase_email, source,
-                       delta_points, balance_after, actor_email, reference_type,
-                       reference_id, metadata_json, created_at
-                FROM points_ledger
-                {where_sql}
-                ORDER BY id DESC
-                LIMIT ?
-                """,
-                tuple(params),
-            ).fetchall()
-        out: List[Dict[str, Any]] = []
-        for row in rows:
-            try:
-                metadata = json.loads(str(row["metadata_json"] or "{}"))
-            except Exception:
-                metadata = {}
-            out.append(
-                {
-                    "id": int(row["id"]),
-                    "telegram_id": row["telegram_id"],
-                    "supabase_user_id": str(row["supabase_user_id"] or ""),
-                    "supabase_email": str(row["supabase_email"] or ""),
-                    "source": str(row["source"] or ""),
-                    "delta_points": int(row["delta_points"] or 0),
-                    "balance_after": int(row["balance_after"] or 0),
-                    "actor_email": str(row["actor_email"] or ""),
-                    "reference_type": str(row["reference_type"] or ""),
-                    "reference_id": str(row["reference_id"] or ""),
-                    "metadata": metadata if isinstance(metadata, dict) else {},
-                    "created_at": row["created_at"],
-                }
-            )
-        return out
+        return self._user_repo.list_points_ledger_entries(limit=limit, supabase_user_id=supabase_user_id, supabase_email=supabase_email)
 
     def get_points_ledger_summary(
         self,
@@ -1470,27 +754,7 @@ class DBManager:
         supabase_email: str = "",
         limit: int = 20,
     ) -> Dict[str, Any]:
-        recent = self.list_points_ledger_entries(
-            limit=limit,
-            supabase_user_id=supabase_user_id,
-            supabase_email=supabase_email,
-        )
-        by_source: Dict[str, Dict[str, int]] = {}
-        for row in recent:
-            source = str(row.get("source") or "unknown")
-            bucket = by_source.setdefault(source, {"points": 0, "count": 0})
-            bucket["points"] += int(row.get("delta_points") or 0)
-            bucket["count"] += 1
-        balance = int(recent[0]["balance_after"]) if recent else (
-            self.get_points_by_supabase_user_id(supabase_user_id)
-            if supabase_user_id
-            else self.get_points_by_supabase_email(supabase_email)
-        )
-        return {
-            "balance": max(0, balance),
-            "recent": recent,
-            "by_source": by_source,
-        }
+        return self._user_repo.get_points_ledger_summary(supabase_user_id=supabase_user_id, supabase_email=supabase_email, limit=limit)
 
     @staticmethod
     def _refund_case_row_to_dict(row: sqlite3.Row) -> Dict[str, Any]:
@@ -1524,64 +788,7 @@ class DBManager:
         created_by: str = "",
         note: str = "",
     ) -> Dict[str, Any]:
-        normalized_reason = str(reason or "").strip().lower()
-        if not normalized_reason:
-            return {"ok": False, "reason": "invalid_refund_reason"}
-        now = datetime.now().isoformat()
-        notes = []
-        note_text = str(note or "").strip()
-        if note_text:
-            notes.append(
-                {
-                    "note": note_text,
-                    "by": str(created_by or "").strip().lower(),
-                    "at": now,
-                }
-            )
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute(
-                """
-                INSERT INTO payment_refund_cases (
-                    status,
-                    reason,
-                    intent_id,
-                    tx_hash,
-                    user_id,
-                    amount_usdc,
-                    created_by,
-                    handled_by,
-                    notes_json,
-                    created_at,
-                    updated_at
-                )
-                VALUES ('open', ?, ?, ?, ?, ?, ?, '', ?, ?, ?)
-                """,
-                (
-                    normalized_reason,
-                    str(intent_id or "").strip(),
-                    str(tx_hash or "").strip().lower(),
-                    str(user_id or "").strip().lower(),
-                    str(amount_usdc or "").strip(),
-                    str(created_by or "").strip().lower(),
-                    json.dumps(notes, ensure_ascii=False, default=str),
-                    now,
-                    now,
-                ),
-            )
-            case_id = int(cursor.lastrowid)
-            row = conn.execute(
-                """
-                SELECT id, status, reason, intent_id, tx_hash, user_id,
-                       amount_usdc, created_by, handled_by, notes_json,
-                       created_at, updated_at
-                FROM payment_refund_cases
-                WHERE id = ?
-                """,
-                (case_id,),
-            ).fetchone()
-            conn.commit()
-        return self._refund_case_row_to_dict(row)
+        return self._payment_repo.create_refund_case(reason=reason, intent_id=intent_id, tx_hash=tx_hash, user_id=user_id, amount_usdc=amount_usdc, created_by=created_by, note=note)
 
     def update_refund_case(
         self,
@@ -1591,64 +798,7 @@ class DBManager:
         handled_by: str = "",
         note: str = "",
     ) -> Optional[Dict[str, Any]]:
-        safe_id = int(case_id or 0)
-        normalized_status = str(status or "").strip().lower()
-        allowed = {"open", "processing", "refunded", "rejected", "closed"}
-        if safe_id <= 0 or normalized_status not in allowed:
-            return None
-        now = datetime.now().isoformat()
-        actor = str(handled_by or "").strip().lower()
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                """
-                SELECT notes_json
-                FROM payment_refund_cases
-                WHERE id = ?
-                LIMIT 1
-                """,
-                (safe_id,),
-            ).fetchone()
-            if not row:
-                return None
-            try:
-                notes = json.loads(str(row["notes_json"] or "[]"))
-            except Exception:
-                notes = []
-            if not isinstance(notes, list):
-                notes = []
-            note_text = str(note or "").strip()
-            if note_text:
-                notes.append({"note": note_text, "by": actor, "at": now})
-            conn.execute(
-                """
-                UPDATE payment_refund_cases
-                SET status = ?,
-                    handled_by = ?,
-                    notes_json = ?,
-                    updated_at = ?
-                WHERE id = ?
-                """,
-                (
-                    normalized_status,
-                    actor,
-                    json.dumps(notes, ensure_ascii=False, default=str),
-                    now,
-                    safe_id,
-                ),
-            )
-            updated = conn.execute(
-                """
-                SELECT id, status, reason, intent_id, tx_hash, user_id,
-                       amount_usdc, created_by, handled_by, notes_json,
-                       created_at, updated_at
-                FROM payment_refund_cases
-                WHERE id = ?
-                """,
-                (safe_id,),
-            ).fetchone()
-            conn.commit()
-        return self._refund_case_row_to_dict(updated)
+        return self._payment_repo.update_refund_case(case_id, status=status, handled_by=handled_by, note=note)
 
     def list_refund_cases(
         self,
@@ -1656,29 +806,7 @@ class DBManager:
         limit: int = 50,
         status: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        safe_limit = max(1, min(int(limit or 50), 200))
-        normalized_status = str(status or "").strip().lower()
-        params: List[Any] = []
-        where_sql = ""
-        if normalized_status:
-            where_sql = "WHERE status = ?"
-            params.append(normalized_status)
-        params.append(safe_limit)
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                f"""
-                SELECT id, status, reason, intent_id, tx_hash, user_id,
-                       amount_usdc, created_by, handled_by, notes_json,
-                       created_at, updated_at
-                FROM payment_refund_cases
-                {where_sql}
-                ORDER BY id DESC
-                LIMIT ?
-                """,
-                tuple(params),
-            ).fetchall()
-        return [self._refund_case_row_to_dict(row) for row in rows]
+        return self._payment_repo.list_refund_cases(limit=limit, status=status)
 
     def append_app_analytics_event(
         self,
@@ -2323,92 +1451,14 @@ class DBManager:
         limit: int = 50,
         event_type: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        safe_limit = max(1, min(int(limit or 50), 500))
-        kind = str(event_type or "").strip().lower()
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            if kind:
-                rows = conn.execute(
-                    """
-                    SELECT id, event_type, payload_json, created_at
-                    FROM payment_audit_events
-                    WHERE event_type = ?
-                    ORDER BY id DESC
-                    LIMIT ?
-                    """,
-                    (kind, safe_limit),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    """
-                    SELECT id, event_type, payload_json, created_at
-                    FROM payment_audit_events
-                    ORDER BY id DESC
-                    LIMIT ?
-                    """,
-                    (safe_limit,),
-                ).fetchall()
-            out = []
-            for row in rows:
-                try:
-                    payload = json.loads(str(row["payload_json"] or "{}"))
-                except Exception:
-                    payload = {}
-                out.append(
-                    {
-                        "id": int(row["id"]),
-                        "event_type": str(row["event_type"] or ""),
-                        "payload": payload if isinstance(payload, dict) else {},
-                        "created_at": row["created_at"],
-                    }
-                )
-            return out
+        return self._payment_repo.list_payment_audit_events(limit, event_type)
 
     def mark_payment_audit_event_resolved(
         self,
         event_id: int,
         resolved_by: str,
     ) -> Optional[Dict[str, Any]]:
-        safe_id = int(event_id or 0)
-        actor = str(resolved_by or "").strip().lower()
-        if safe_id <= 0 or not actor:
-            return None
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                """
-                SELECT id, event_type, payload_json, created_at
-                FROM payment_audit_events
-                WHERE id = ?
-                LIMIT 1
-                """,
-                (safe_id,),
-            ).fetchone()
-            if not row:
-                return None
-            try:
-                payload = json.loads(str(row["payload_json"] or "{}"))
-            except Exception:
-                payload = {}
-            if not isinstance(payload, dict):
-                payload = {}
-            payload["resolved_at"] = datetime.now().isoformat()
-            payload["resolved_by"] = actor
-            conn.execute(
-                """
-                UPDATE payment_audit_events
-                SET payload_json = ?
-                WHERE id = ?
-                """,
-                (json.dumps(payload, ensure_ascii=False), safe_id),
-            )
-            conn.commit()
-            return {
-                "id": int(row["id"]),
-                "event_type": str(row["event_type"] or ""),
-                "payload": payload,
-                "created_at": row["created_at"],
-            }
+        return self._payment_repo.mark_payment_audit_event_resolved(event_id, resolved_by)
 
     @staticmethod
     def _payment_audit_resolution_key(
@@ -2445,88 +1495,7 @@ class DBManager:
         event_id: int,
         resolved_by: str,
     ) -> List[Dict[str, Any]]:
-        safe_id = int(event_id or 0)
-        actor = str(resolved_by or "").strip().lower()
-        if safe_id <= 0 or not actor:
-            return []
-
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            target = conn.execute(
-                """
-                SELECT id, event_type, payload_json, created_at
-                FROM payment_audit_events
-                WHERE id = ?
-                LIMIT 1
-                """,
-                (safe_id,),
-            ).fetchone()
-            if not target:
-                return []
-
-            try:
-                target_payload = json.loads(str(target["payload_json"] or "{}"))
-            except Exception:
-                target_payload = {}
-            if not isinstance(target_payload, dict):
-                target_payload = {}
-
-            target_key = self._payment_audit_resolution_key(
-                str(target["event_type"] or ""),
-                target_payload,
-            )
-            if not (target_key[3] or target_key[4]):
-                single = self.mark_payment_audit_event_resolved(safe_id, actor)
-                return [single] if single else []
-
-            rows = conn.execute(
-                """
-                SELECT id, event_type, payload_json, created_at
-                FROM payment_audit_events
-                WHERE event_type = ?
-                ORDER BY id DESC
-                """,
-                (str(target["event_type"] or ""),),
-            ).fetchall()
-
-            resolved_at = datetime.now().isoformat()
-            resolved_rows: List[Dict[str, Any]] = []
-            for row in rows:
-                try:
-                    payload = json.loads(str(row["payload_json"] or "{}"))
-                except Exception:
-                    payload = {}
-                if not isinstance(payload, dict):
-                    payload = {}
-                if str(payload.get("resolved_at") or "").strip():
-                    continue
-                if self._payment_audit_resolution_key(
-                    str(row["event_type"] or ""),
-                    payload,
-                ) != target_key:
-                    continue
-
-                payload["resolved_at"] = resolved_at
-                payload["resolved_by"] = actor
-                conn.execute(
-                    """
-                    UPDATE payment_audit_events
-                    SET payload_json = ?
-                    WHERE id = ?
-                    """,
-                    (json.dumps(payload, ensure_ascii=False), int(row["id"])),
-                )
-                resolved_rows.append(
-                    {
-                        "id": int(row["id"]),
-                        "event_type": str(row["event_type"] or ""),
-                        "payload": payload,
-                        "created_at": row["created_at"],
-                    }
-                )
-
-            conn.commit()
-            return resolved_rows
+        return self._payment_repo.mark_related_payment_audit_events_resolved(event_id, resolved_by)
 
     @staticmethod
     def _safe_week_key(value: str) -> str:
@@ -2617,213 +1586,29 @@ class DBManager:
             return None
 
     def get_user(self, telegram_id: int) -> Optional[Dict[str, Any]]:
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
-            row = cursor.fetchone()
-            if row:
-                user = dict(row)
-                now = datetime.now()
-                if user['web_expiry']:
-                    expiry = datetime.fromisoformat(user['web_expiry'])
-                    if expiry < now:
-                        user['is_web_premium'] = False
-                if user['group_expiry']:
-                    expiry = datetime.fromisoformat(user['group_expiry'])
-                    if expiry < now:
-                        user['is_group_premium'] = False
-                return user
-        return None
+        return self._user_repo.get_user(telegram_id)
 
     def get_user_by_supabase_user_id(self, supabase_user_id: str) -> Optional[Dict[str, Any]]:
-        key = str(supabase_user_id or "").strip().lower()
-        if not key:
-            return None
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            telegram_id = self._find_telegram_id_by_supabase_user_id(conn, key)
-            if telegram_id is None:
-                return None
-            row = conn.execute(
-                """
-                SELECT *
-                FROM users
-                WHERE telegram_id = ?
-                LIMIT 1
-                """,
-                (int(telegram_id),),
-            ).fetchone()
-            if row:
-                return dict(row)
-        return None
+        return self._user_repo.get_user_by_supabase_user_id(supabase_user_id)
 
     def list_supabase_user_ids_for_telegram(self, telegram_id: int) -> List[str]:
         """Return all Supabase accounts currently bound to a Telegram user."""
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """
-                SELECT supabase_user_id
-                FROM supabase_bindings
-                WHERE telegram_id = ?
-                ORDER BY updated_at DESC, supabase_user_id ASC
-                """,
-                (int(telegram_id),),
-            ).fetchall()
-            ids = {
-                str(row["supabase_user_id"] or "").strip().lower()
-                for row in rows
-                if str(row["supabase_user_id"] or "").strip()
-            }
-            legacy = conn.execute(
-                """
-                SELECT supabase_user_id
-                FROM users
-                WHERE telegram_id = ?
-                LIMIT 1
-                """,
-                (int(telegram_id),),
-            ).fetchone()
-            legacy_id = str((legacy["supabase_user_id"] if legacy else "") or "").strip().lower()
-            if legacy_id:
-                ids.add(legacy_id)
-            return sorted(ids)
+        return self._user_repo.list_supabase_user_ids_for_telegram(telegram_id)
 
     def search_users(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
-        text = str(query or "").strip()
-        safe_limit = max(1, min(int(limit or 20), 100))
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            if not text:
-                rows = conn.execute(
-                    """
-                    SELECT
-                        telegram_id,
-                        username,
-                        points,
-                        daily_points,
-                        daily_points_date,
-                        weekly_points,
-                        weekly_points_week,
-                        message_count,
-                        supabase_user_id,
-                        supabase_email,
-                        created_at,
-                        last_message_at
-                    FROM users
-                    ORDER BY points DESC, message_count DESC, telegram_id ASC
-                    LIMIT ?
-                    """,
-                    (safe_limit,),
-                ).fetchall()
-                return [dict(row) for row in rows]
-
-            rows = conn.execute(
-                """
-                SELECT
-                    telegram_id,
-                    username,
-                    points,
-                    daily_points,
-                    daily_points_date,
-                    weekly_points,
-                    weekly_points_week,
-                    message_count,
-                    supabase_user_id,
-                    supabase_email,
-                    created_at,
-                    last_message_at
-                FROM users
-                WHERE
-                    CAST(telegram_id AS TEXT) = ?
-                    OR lower(trim(COALESCE(username, ''))) LIKE ?
-                    OR lower(trim(COALESCE(supabase_email, ''))) LIKE ?
-                ORDER BY points DESC, message_count DESC, telegram_id ASC
-                LIMIT ?
-                """,
-                (
-                    text,
-                    f"%{text.lower()}%",
-                    f"%{text.lower()}%",
-                    safe_limit,
-                ),
-            ).fetchall()
-            return [dict(row) for row in rows]
+        return self._user_repo.search_users(query, limit)
 
     def get_users_by_supabase_user_ids(
         self,
         supabase_user_ids: List[str],
     ) -> Dict[str, Dict[str, Any]]:
-        keys = [
-            str(item or "").strip().lower()
-            for item in (supabase_user_ids or [])
-            if str(item or "").strip()
-        ]
-        if not keys:
-            return {}
-        placeholders = ",".join("?" for _ in keys)
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                f"""
-                SELECT
-                    lower(trim(COALESCE(supabase_user_id, ''))) AS supabase_user_id,
-                    telegram_id,
-                    username,
-                    supabase_email,
-                    created_at,
-                    points,
-                    weekly_points,
-                    message_count
-                FROM users
-                WHERE lower(trim(COALESCE(supabase_user_id, ''))) IN ({placeholders})
-                """,
-                tuple(keys),
-            ).fetchall()
-            return {
-                str(row["supabase_user_id"] or "").strip().lower(): dict(row)
-                for row in rows
-                if str(row["supabase_user_id"] or "").strip()
-            }
+        return self._user_repo.get_users_by_supabase_user_ids(supabase_user_ids)
 
     def get_points_by_supabase_user_id(self, supabase_user_id: str) -> int:
-        user = self.get_user_by_supabase_user_id(supabase_user_id)
-        if not user:
-            return 0
-        try:
-            return max(0, int(user.get("points") or 0))
-        except Exception:
-            return 0
+        return self._user_repo.get_points_by_supabase_user_id(supabase_user_id)
 
     def get_points_by_supabase_email(self, supabase_email: str) -> int:
-        email = str(supabase_email or "").strip().lower()
-        if not email:
-            return 0
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                """
-                SELECT points
-                FROM users
-                WHERE lower(trim(COALESCE(supabase_email, ''))) = ?
-                LIMIT 1
-                """,
-                (email,),
-            ).fetchone()
-            if not row:
-                row = conn.execute(
-                    """
-                    SELECT u.points
-                    FROM users u
-                    JOIN supabase_bindings b ON b.telegram_id = u.telegram_id
-                    WHERE lower(trim(COALESCE(b.supabase_email, ''))) = ?
-                    LIMIT 1
-                    """,
-                    (email,),
-                ).fetchone()
-            if row:
-                return max(0, int(row["points"] or 0))
-        return 0
+        return self._user_repo.get_points_by_supabase_email(supabase_email)
 
     def grant_points_by_supabase_email(
         self,
@@ -2836,62 +1621,7 @@ class DBManager:
         reference_id: str = "",
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        email = str(supabase_email or "").strip().lower()
-        points = int(amount or 0)
-        if not email:
-            return {"ok": False, "reason": "invalid_supabase_email"}
-        if points <= 0:
-            return {"ok": False, "reason": "invalid_amount"}
-
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                """
-                SELECT telegram_id, username, points, supabase_email, supabase_user_id
-                FROM users
-                WHERE lower(trim(COALESCE(supabase_email, ''))) = ?
-                LIMIT 1
-                """,
-                (email,),
-            ).fetchone()
-            if not row:
-                return {"ok": False, "reason": "user_not_found", "supabase_email": email}
-
-            telegram_id = int(row["telegram_id"] or 0)
-            before = int(row["points"] or 0)
-            after = before + points
-            conn.execute(
-                """
-                UPDATE users
-                SET points = ?
-                WHERE telegram_id = ?
-                """,
-                (after, telegram_id),
-            )
-            self._append_points_ledger_entry_conn(
-                conn,
-                telegram_id=telegram_id,
-                supabase_user_id=str(row["supabase_user_id"] or "").strip().lower(),
-                supabase_email=str(row["supabase_email"] or email),
-                source=source,
-                delta_points=points,
-                balance_after=after,
-                actor_email=actor_email,
-                reference_type=reference_type,
-                reference_id=reference_id,
-                metadata=metadata,
-            )
-            conn.commit()
-            self._sync_points_to_supabase_user_metadata(telegram_id, force=True)
-            return {
-                "ok": True,
-                "telegram_id": telegram_id,
-                "username": str(row["username"] or ""),
-                "supabase_email": str(row["supabase_email"] or email),
-                "points_before": before,
-                "points_added": points,
-                "points_after": after,
-            }
+        return self._user_repo.grant_points_by_supabase_email(supabase_email, amount, source=source, actor_email=actor_email, reference_type=reference_type, reference_id=reference_id, metadata=metadata)
 
     def grant_points_by_supabase_user_id(
         self,
@@ -2904,66 +1634,7 @@ class DBManager:
         reference_id: str = "",
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        key = str(supabase_user_id or "").strip().lower()
-        points = int(amount or 0)
-        if not key:
-            return {"ok": False, "reason": "invalid_supabase_user_id"}
-        if points <= 0:
-            return {"ok": False, "reason": "invalid_amount"}
-
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            telegram_id = self._find_telegram_id_by_supabase_user_id(conn, key)
-            if telegram_id is None:
-                return {"ok": False, "reason": "user_not_found", "supabase_user_id": key}
-            row = conn.execute(
-                """
-                SELECT telegram_id, username, points, supabase_email
-                FROM users
-                WHERE telegram_id = ?
-                LIMIT 1
-                """,
-                (int(telegram_id),),
-            ).fetchone()
-            if not row:
-                return {"ok": False, "reason": "user_not_found", "supabase_user_id": key}
-
-            telegram_id = int(row["telegram_id"] or 0)
-            before = int(row["points"] or 0)
-            after = before + points
-            conn.execute(
-                """
-                UPDATE users
-                SET points = ?
-                WHERE telegram_id = ?
-                """,
-                (after, telegram_id),
-            )
-            self._append_points_ledger_entry_conn(
-                conn,
-                telegram_id=telegram_id,
-                supabase_user_id=key,
-                supabase_email=str(row["supabase_email"] or ""),
-                source=source,
-                delta_points=points,
-                balance_after=after,
-                actor_email=actor_email,
-                reference_type=reference_type,
-                reference_id=reference_id,
-                metadata=metadata,
-            )
-            conn.commit()
-            self._sync_points_to_supabase_user_metadata(telegram_id, force=True)
-            return {
-                "ok": True,
-                "telegram_id": telegram_id,
-                "username": str(row["username"] or ""),
-                "supabase_user_id": key,
-                "supabase_email": str(row["supabase_email"] or ""),
-                "points_before": before,
-                "points_added": points,
-                "points_after": after,
-            }
+        return self._user_repo.grant_points_by_supabase_user_id(supabase_user_id, amount, source=source, actor_email=actor_email, reference_type=reference_type, reference_id=reference_id, metadata=metadata)
 
     def deduct_points_by_supabase_email(
         self,
@@ -2976,65 +1647,7 @@ class DBManager:
         reference_id: str = "",
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        email = str(supabase_email or "").strip().lower()
-        points = int(amount or 0)
-        if not email:
-            return {"ok": False, "reason": "invalid_supabase_email"}
-        if points <= 0:
-            return {"ok": False, "reason": "invalid_amount"}
-
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                """
-                SELECT telegram_id, username, points, supabase_email, supabase_user_id
-                FROM users
-                WHERE lower(trim(COALESCE(supabase_email, ''))) = ?
-                LIMIT 1
-                """,
-                (email,),
-            ).fetchone()
-            if not row:
-                return {"ok": False, "reason": "user_not_found", "supabase_email": email}
-
-            telegram_id = int(row["telegram_id"] or 0)
-            before = int(row["points"] or 0)
-            if before < points:
-                return {
-                    "ok": False,
-                    "reason": "insufficient_points",
-                    "points_available": before,
-                    "points_needed": points,
-                }
-            after = before - points
-            conn.execute(
-                "UPDATE users SET points = ? WHERE telegram_id = ?",
-                (after, telegram_id),
-            )
-            self._append_points_ledger_entry_conn(
-                conn,
-                telegram_id=telegram_id,
-                supabase_user_id=str(row["supabase_user_id"] or "").strip().lower(),
-                supabase_email=str(row["supabase_email"] or email),
-                source=source,
-                delta_points=-points,
-                balance_after=after,
-                actor_email=actor_email,
-                reference_type=reference_type,
-                reference_id=reference_id,
-                metadata=metadata,
-            )
-            conn.commit()
-            self._sync_points_to_supabase_user_metadata(telegram_id, force=True)
-            return {
-                "ok": True,
-                "telegram_id": telegram_id,
-                "username": str(row["username"] or ""),
-                "supabase_email": str(row["supabase_email"] or email),
-                "points_before": before,
-                "points_deducted": points,
-                "points_after": after,
-            }
+        return self._user_repo.deduct_points_by_supabase_email(supabase_email, amount, source=source, actor_email=actor_email, reference_type=reference_type, reference_id=reference_id, metadata=metadata)
 
     def transfer_points_by_email(
         self,
@@ -3043,34 +1656,10 @@ class DBManager:
         amount: int,
     ) -> Dict[str, Any]:
         """Transfer points from one user to another within a single transaction."""
-        r_from = self.deduct_points_by_supabase_email(from_email, amount)
-        if not r_from.get("ok"):
-            return {"ok": False, "reason": f"deduct_failed: {r_from.get('reason')}", "from": r_from}
-        r_to = self.grant_points_by_supabase_email(to_email, amount)
-        if not r_to.get("ok"):
-            # Rollback: grant back to source
-            self.grant_points_by_supabase_email(from_email, amount)
-            return {"ok": False, "reason": f"grant_failed: {r_to.get('reason')}", "to": r_to}
-        return {
-            "ok": True,
-            "from": r_from,
-            "to": r_to,
-            "amount": amount,
-        }
+        return self._user_repo.transfer_points_by_email(from_email, to_email, amount)
 
     def upsert_user(self, telegram_id: int, username: str):
-        with self._get_connection() as conn:
-            conn.execute("""
-                INSERT INTO users (telegram_id, username)
-                VALUES (?, ?)
-                ON CONFLICT(telegram_id) DO UPDATE SET
-                username = excluded.username
-            """, (telegram_id, username))
-            conn.commit()
-        self._sync_bound_supabase_profiles_for_telegram(
-            telegram_id=int(telegram_id),
-            telegram_username=username,
-        )
+        return self._user_repo.upsert_user(telegram_id, username)
 
     def bind_supabase_identity(
         self,
@@ -3078,266 +1667,19 @@ class DBManager:
         supabase_user_id: str,
         supabase_email: str = "",
     ) -> Dict[str, Any]:
-        """
-        Bind Supabase account to Telegram account.
-
-        Rules:
-        - One supabase_user_id can only belong to one telegram_id.
-        - One telegram_id can bind multiple supabase_user_id (shared points/profile).
-        """
-        normalized_uid = str(supabase_user_id or "").strip().lower()
-        normalized_email = str(supabase_email or "").strip()
-        if not normalized_uid:
-            return {"ok": False, "reason": "invalid_supabase_user_id"}
-
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-
-            # Ensure current telegram user row exists.
-            conn.execute(
-                """
-                INSERT INTO users (telegram_id, username)
-                VALUES (?, COALESCE((SELECT username FROM users WHERE telegram_id = ?), ''))
-                ON CONFLICT(telegram_id) DO NOTHING
-                """,
-                (telegram_id, telegram_id),
-            )
-
-            current_row = conn.execute(
-                """
-                SELECT telegram_id, supabase_user_id, supabase_email
-                FROM users
-                WHERE telegram_id = ?
-                LIMIT 1
-                """,
-                (telegram_id,),
-            ).fetchone()
-            current_uid = str(
-                (current_row["supabase_user_id"] if current_row else "") or ""
-            ).strip().lower()
-
-            owner_row = conn.execute(
-                """
-                SELECT telegram_id
-                FROM supabase_bindings
-                WHERE lower(trim(COALESCE(supabase_user_id, ''))) = ?
-                LIMIT 1
-                """,
-                (normalized_uid,),
-            ).fetchone()
-            owner_telegram_id = int(owner_row["telegram_id"]) if owner_row else None
-
-            if owner_telegram_id is not None and owner_telegram_id != int(telegram_id):
-                return {
-                    "ok": False,
-                    "reason": "supabase_already_bound_other",
-                    "owner_telegram_id": owner_telegram_id,
-                }
-
-            conn.execute(
-                """
-                INSERT INTO supabase_bindings (supabase_user_id, telegram_id, supabase_email, updated_at)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(supabase_user_id) DO UPDATE SET
-                    telegram_id = excluded.telegram_id,
-                    supabase_email = excluded.supabase_email,
-                    updated_at = excluded.updated_at
-                """,
-                (normalized_uid, int(telegram_id), normalized_email, datetime.now().isoformat()),
-            )
-
-            if current_uid == normalized_uid:
-                # Keep idempotent bind behavior while allowing email refresh.
-                conn.execute(
-                    """
-                    UPDATE users
-                    SET supabase_email = ?
-                    WHERE telegram_id = ?
-                    """,
-                    (normalized_email, telegram_id),
-                )
-                user_row = conn.execute(
-                    """
-                    SELECT username
-                    FROM users
-                    WHERE telegram_id = ?
-                    LIMIT 1
-                    """,
-                    (telegram_id,),
-                ).fetchone()
-                conn.commit()
-                self._sync_supabase_profile_telegram_fields(
-                    supabase_user_id=normalized_uid,
-                    telegram_id=int(telegram_id),
-                    telegram_username=str((user_row["username"] if user_row else "") or "").strip(),
-                    force=True,
-                )
-                return {"ok": True, "reason": "already_bound_same"}
-
-            conn.execute(
-                """
-                UPDATE users
-                SET supabase_user_id = ?, supabase_email = ?
-                WHERE telegram_id = ?
-                """,
-                (normalized_uid, normalized_email, telegram_id),
-            )
-            user_row = conn.execute(
-                """
-                SELECT username
-                FROM users
-                WHERE telegram_id = ?
-                LIMIT 1
-                """,
-                (telegram_id,),
-            ).fetchone()
-            conn.commit()
-            self._sync_supabase_profile_telegram_fields(
-                supabase_user_id=normalized_uid,
-                telegram_id=int(telegram_id),
-                telegram_username=str((user_row["username"] if user_row else "") or "").strip(),
-                force=True,
-            )
-            return {"ok": True, "reason": "bound"}
+        return self._binding_repo.bind_supabase_identity(telegram_id, supabase_user_id, supabase_email)
 
     def unbind_supabase_identity(self, telegram_id: int) -> Dict[str, Any]:
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            current = conn.execute(
-                """
-                SELECT supabase_user_id
-                FROM users
-                WHERE telegram_id = ?
-                LIMIT 1
-                """,
-                (telegram_id,),
-            ).fetchone()
-            current_uid = str((current["supabase_user_id"] if current else "") or "").strip()
-            links = conn.execute(
-                """
-                SELECT supabase_user_id
-                FROM supabase_bindings
-                WHERE telegram_id = ?
-                """,
-                (int(telegram_id),),
-            ).fetchall()
-            linked_user_ids = {
-                str((row["supabase_user_id"] if row else "") or "").strip().lower()
-                for row in links
-            }
-            if current_uid:
-                linked_user_ids.add(current_uid.lower())
-            linked_user_ids = {item for item in linked_user_ids if item}
-            if not current_uid and not linked_user_ids:
-                return {"ok": True, "reason": "not_bound"}
-
-            conn.execute(
-                """
-                DELETE FROM supabase_bindings
-                WHERE telegram_id = ?
-                """,
-                (int(telegram_id),),
-            )
-            conn.execute(
-                """
-                UPDATE users
-                SET supabase_user_id = '', supabase_email = ''
-                WHERE telegram_id = ?
-                """,
-                (telegram_id,),
-            )
-            conn.commit()
-            for user_id in linked_user_ids:
-                self._sync_supabase_profile_telegram_fields(
-                    supabase_user_id=user_id,
-                    telegram_id=None,
-                    telegram_username=None,
-                    force=True,
-                )
-            return {"ok": True, "reason": "unbound", "previous_supabase_user_id": current_uid}
+        return self._binding_repo.unbind_supabase_identity(telegram_id)
 
     def create_bind_token(self, telegram_id: int, ttl_minutes: int = 10) -> str:
-        token = secrets.token_urlsafe(16)
-        now = datetime.now()
-        expires_at = now + timedelta(minutes=max(1, int(ttl_minutes)))
-        with self._get_connection() as conn:
-            conn.execute(
-                """
-                DELETE FROM telegram_bind_tokens
-                WHERE telegram_id = ? OR expires_at < ?
-                """,
-                (int(telegram_id), now.isoformat()),
-            )
-            conn.execute(
-                """
-                INSERT INTO telegram_bind_tokens (token, telegram_id, expires_at)
-                VALUES (?, ?, ?)
-                """,
-                (token, int(telegram_id), expires_at.isoformat()),
-            )
-            conn.commit()
-        return token
+        return self._binding_repo.create_bind_token(telegram_id, ttl_minutes)
 
     def consume_bind_token(self, token: str) -> Optional[int]:
-        token = str(token or "").strip()
-        if not token:
-            return None
-        now = datetime.now()
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                """
-                SELECT telegram_id, expires_at
-                FROM telegram_bind_tokens
-                WHERE token = ?
-                LIMIT 1
-                """,
-                (token,),
-            ).fetchone()
-            if not row:
-                return None
-            try:
-                expires_at = datetime.fromisoformat(row["expires_at"])
-            except Exception:
-                expires_at = now
-            if now > expires_at:
-                conn.execute("DELETE FROM telegram_bind_tokens WHERE token = ?", (token,))
-                conn.commit()
-                return None
-            conn.execute("DELETE FROM telegram_bind_tokens WHERE token = ?", (token,))
-            conn.commit()
-            return int(row["telegram_id"])
+        return self._binding_repo.consume_bind_token(token)
 
     def peek_web_bind_token(self, token: str) -> Optional[Dict[str, str]]:
-        token = str(token or "").strip()
-        if not token:
-            return None
-        now = datetime.now()
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                """
-                SELECT supabase_user_id, supabase_email, expires_at
-                FROM web_telegram_bind_tokens
-                WHERE token = ?
-                LIMIT 1
-                """,
-                (token,),
-            ).fetchone()
-            if not row:
-                return None
-            try:
-                expires_at = datetime.fromisoformat(row["expires_at"])
-            except Exception:
-                expires_at = now
-            if now > expires_at:
-                conn.execute("DELETE FROM web_telegram_bind_tokens WHERE token = ?", (token,))
-                conn.commit()
-                return None
-            return {
-                "supabase_user_id": str(row["supabase_user_id"] or "").strip().lower(),
-                "supabase_email": str(row["supabase_email"] or "").strip(),
-            }
+        return self._binding_repo.peek_web_bind_token(token)
 
     def create_web_bind_token(
         self,
@@ -3345,62 +1687,10 @@ class DBManager:
         supabase_email: str = "",
         ttl_minutes: int = 10,
     ) -> str:
-        normalized_uid = str(supabase_user_id or "").strip().lower()
-        if not normalized_uid:
-            raise ValueError("supabase_user_id is required")
-        token = secrets.token_urlsafe(16)
-        now = datetime.now()
-        expires_at = now + timedelta(minutes=max(1, int(ttl_minutes)))
-        with self._get_connection() as conn:
-            conn.execute(
-                """
-                DELETE FROM web_telegram_bind_tokens
-                WHERE supabase_user_id = ? OR expires_at < ?
-                """,
-                (normalized_uid, now.isoformat()),
-            )
-            conn.execute(
-                """
-                INSERT INTO web_telegram_bind_tokens (
-                    token, supabase_user_id, supabase_email, expires_at
-                )
-                VALUES (?, ?, ?, ?)
-                """,
-                (token, normalized_uid, str(supabase_email or "").strip(), expires_at.isoformat()),
-            )
-            conn.commit()
-        return token
+        return self._binding_repo.create_web_bind_token(supabase_user_id, supabase_email, ttl_minutes)
 
     def consume_web_bind_token(self, token: str) -> Optional[Dict[str, str]]:
-        token = str(token or "").strip()
-        if not token:
-            return None
-        now = datetime.now()
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                """
-                SELECT supabase_user_id, supabase_email, expires_at
-                FROM web_telegram_bind_tokens
-                WHERE token = ?
-                LIMIT 1
-                """,
-                (token,),
-            ).fetchone()
-            if not row:
-                return None
-            try:
-                expires_at = datetime.fromisoformat(row["expires_at"])
-            except Exception:
-                expires_at = now
-            conn.execute("DELETE FROM web_telegram_bind_tokens WHERE token = ?", (token,))
-            conn.commit()
-            if now > expires_at:
-                return None
-            return {
-                "supabase_user_id": str(row["supabase_user_id"] or "").strip().lower(),
-                "supabase_email": str(row["supabase_email"] or "").strip(),
-            }
+        return self._binding_repo.consume_web_bind_token(token)
 
     def add_message_activity(
         self,
@@ -3411,499 +1701,40 @@ class DBManager:
         daily_cap: int = 20,
         min_text_length: int = 4,
     ) -> Dict[str, Any]:
-        """Award points for valid group activity with cooldown and daily cap."""
-        now = datetime.now()
-        normalized = "".join((text or "").split()).lower()
-        if len(normalized) < min_text_length:
-            return {"awarded": False, "reason": "too_short"}
-        fingerprint = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
-
-        today_str = now.strftime("%Y-%m-%d")
-        iso_year, iso_week, _ = now.isocalendar()
-        week_key = f"{iso_year}-W{iso_week:02d}"
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            # Keep dedupe table bounded.
-            stale_day = (now - timedelta(days=14)).strftime("%Y-%m-%d")
-            conn.execute(
-                "DELETE FROM activity_fingerprints WHERE activity_date < ?",
-                (stale_day,),
-            )
-            cursor = conn.execute(
-                """
-                SELECT points, daily_points, daily_points_date, weekly_points, weekly_points_week, last_message_at,
-                       message_count, welcome_bonus_claimed
-                FROM users WHERE telegram_id = ?
-                """,
-                (telegram_id,),
-            )
-            row = cursor.fetchone()
-            if not row:
-                return {"awarded": False, "reason": "user_missing"}
-
-            duplicated = conn.execute(
-                """
-                SELECT 1
-                FROM activity_fingerprints
-                WHERE telegram_id = ? AND activity_date = ? AND fingerprint = ?
-                LIMIT 1
-                """,
-                (telegram_id, today_str, fingerprint),
-            ).fetchone()
-            if duplicated:
-                return {"awarded": False, "reason": "duplicate_content"}
-
-            last_message_at = row["last_message_at"]
-            if last_message_at:
-                last_at = datetime.fromisoformat(last_message_at)
-                if (now - last_at).total_seconds() < cooldown_sec:
-                    return {"awarded": False, "reason": "cooldown"}
-
-            daily_points = int(row["daily_points"] or 0)
-            daily_points_date = row["daily_points_date"] or ""
-            if daily_points_date != today_str:
-                daily_points = 0
-            # Guard against historical overflow values (legacy bug).
-            if daily_points > daily_cap:
-                daily_points = daily_cap
-
-            weekly_points = int(row["weekly_points"] or 0)
-            weekly_points_week = row["weekly_points_week"] or ""
-            if weekly_points_week != week_key:
-                if weekly_points_week and weekly_points > 0:
-                    self._upsert_weekly_archive(
-                        conn,
-                        telegram_id=telegram_id,
-                        week_key=weekly_points_week,
-                        points=weekly_points,
-                    )
-                weekly_points = 0
-
-            if daily_points >= daily_cap:
-                conn.execute(
-                    """
-                    UPDATE users
-                    SET last_message_at = ?, daily_points = ?, daily_points_date = ?,
-                        weekly_points = ?, weekly_points_week = ?
-                    WHERE telegram_id = ?
-                    """,
-                    (
-                        now.isoformat(),
-                        daily_points,
-                        today_str,
-                        weekly_points,
-                        week_key,
-                        telegram_id,
-                    ),
-                )
-                self._upsert_weekly_archive(
-                    conn,
-                    telegram_id=telegram_id,
-                    week_key=week_key,
-                    points=weekly_points,
-                )
-                conn.commit()
-                return {
-                    "awarded": False,
-                    "reason": "daily_cap",
-                    "daily_points": daily_points,
-                    "weekly_points": weekly_points,
-                }
-
-            remaining = max(0, daily_cap - daily_points)
-            points_added = min(max(0, points_to_add), remaining)
-            if points_added <= 0:
-                conn.commit()
-                return {
-                    "awarded": False,
-                    "reason": "daily_cap",
-                    "daily_points": daily_points,
-                    "weekly_points": weekly_points,
-                }
-
-            welcome_bonus = 0
-            first_message_bonus = 0
-
-            is_first_message_of_day = daily_points == 0
-            is_new_user = int(row["message_count"] or 0) == 0 and not int(row["welcome_bonus_claimed"] or 0)
-
-            if is_new_user:
-                welcome_bonus = self._read_bonus_config("POLYWEATHER_BOT_WELCOME_BONUS", 20)
-            if is_first_message_of_day:
-                first_message_bonus = self._read_bonus_config("POLYWEATHER_BOT_FIRST_MESSAGE_BONUS", 2)
-
-            total_added = points_added + welcome_bonus + first_message_bonus
-
-            conn.execute("""
-                UPDATE users
-                SET message_count = message_count + 1,
-                    points = points + ?,
-                    daily_points = ?,
-                    daily_points_date = ?,
-                    weekly_points = ?,
-                    weekly_points_week = ?,
-                    last_message_at = ?,
-                    welcome_bonus_claimed = MAX(welcome_bonus_claimed, ?)
-                WHERE telegram_id = ?
-            """, (
-                total_added,
-                daily_points + total_added,
-                today_str,
-                weekly_points + total_added,
-                week_key,
-                now.isoformat(),
-                1 if welcome_bonus > 0 else 0,
-                telegram_id,
-            ))
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO activity_fingerprints
-                (telegram_id, activity_date, fingerprint)
-                VALUES (?, ?, ?)
-                """,
-                (telegram_id, today_str, fingerprint),
-            )
-            self._upsert_weekly_archive(
-                conn,
-                telegram_id=telegram_id,
-                week_key=week_key,
-                points=weekly_points + total_added,
-            )
-            conn.commit()
-            self._sync_points_to_supabase_user_metadata(telegram_id)
-            return {
-                "awarded": True,
-                "reason": "ok",
-                "points_added": points_added,
-                "welcome_bonus": welcome_bonus,
-                "first_message_bonus": first_message_bonus,
-                "total_added": total_added,
-                "daily_points": daily_points + total_added,
-                "weekly_points": weekly_points + total_added,
-                "weekly_week": week_key,
-            }
+        return self._user_repo.add_message_activity(telegram_id, text, points_to_add, cooldown_sec, daily_cap, min_text_length)
 
     def track_query_usage(self, telegram_id: int, query_type: str) -> Dict[str, Any]:
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        column = "daily_city_queries" if query_type == "city" else "daily_deb_queries"
-        limit = (
-            self._read_bonus_config("POLYWEATHER_BOT_CITY_DAILY_FREE_LIMIT", 10)
-            if query_type == "city"
-            else self._read_bonus_config("POLYWEATHER_BOT_DEB_DAILY_FREE_LIMIT", 10)
-        )
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                f"SELECT {column}, daily_queries_date FROM users WHERE telegram_id = ?",
-                (telegram_id,),
-            ).fetchone()
-            if not row:
-                return {"allowed": False, "reason": "user_missing", "used": 0, "limit": limit}
-
-            date = row["daily_queries_date"] or ""
-            used = int(row[column] or 0) if date == today_str else 0
-
-            if used >= limit:
-                return {"allowed": False, "reason": "daily_limit", "used": used, "limit": limit}
-
-            new_used = used + 1
-            conn.execute(
-                f"""
-                UPDATE users
-                SET {column} = ?, daily_queries_date = ?
-                WHERE telegram_id = ?
-                """,
-                (new_used, today_str, telegram_id),
-            )
-            conn.commit()
-            return {"allowed": True, "used": new_used, "limit": limit}
+        return self._user_repo.track_query_usage(telegram_id, query_type)
 
     def spend_points(self, telegram_id: int, amount: int) -> Dict[str, Any]:
-        if amount <= 0:
-            user = self.get_user(telegram_id)
-            return {"ok": True, "balance": int((user or {}).get("points") or 0)}
-
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                "SELECT points FROM users WHERE telegram_id = ?",
-                (telegram_id,),
-            ).fetchone()
-            if not row:
-                return {"ok": False, "reason": "user_missing", "balance": 0, "required": amount}
-
-            balance = int(row["points"] or 0)
-            if balance < amount:
-                return {"ok": False, "reason": "insufficient_points", "balance": balance, "required": amount}
-
-            new_balance = balance - amount
-            conn.execute(
-                "UPDATE users SET points = ? WHERE telegram_id = ?",
-                (new_balance, telegram_id),
-            )
-            conn.commit()
-            self._sync_points_to_supabase_user_metadata(telegram_id, force=True)
-            return {"ok": True, "balance": new_balance, "spent": amount}
+        return self._user_repo.spend_points(telegram_id, amount)
 
     def spend_points_by_supabase_user_id(self, supabase_user_id: str, amount: int) -> Dict[str, Any]:
-        key = str(supabase_user_id or "").strip().lower()
-        if not key:
-            return {"ok": False, "reason": "invalid_supabase_user_id", "balance": 0, "required": amount}
-        if amount <= 0:
-            return {"ok": True, "balance": self.get_points_by_supabase_user_id(key)}
-
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            telegram_id = self._find_telegram_id_by_supabase_user_id(conn, key)
-            if telegram_id is None:
-                return {"ok": False, "reason": "user_missing", "balance": 0, "required": amount}
-            row = conn.execute(
-                """
-                SELECT telegram_id, points
-                FROM users
-                WHERE telegram_id = ?
-                LIMIT 1
-                """,
-                (int(telegram_id),),
-            ).fetchone()
-            if not row:
-                return {"ok": False, "reason": "user_missing", "balance": 0, "required": amount}
-
-            telegram_id = int(row["telegram_id"])
-            balance = int(row["points"] or 0)
-            if balance < amount:
-                return {"ok": False, "reason": "insufficient_points", "balance": balance, "required": amount}
-
-            new_balance = balance - amount
-            conn.execute(
-                "UPDATE users SET points = ? WHERE telegram_id = ?",
-                (new_balance, telegram_id),
-            )
-            conn.commit()
-            self._sync_points_to_supabase_user_metadata(telegram_id, force=True)
-            return {"ok": True, "balance": new_balance, "spent": amount}
+        return self._user_repo.spend_points_by_supabase_user_id(supabase_user_id, amount)
 
     def set_premium(self, telegram_id: int, plan: str, months: int = 1):
-        expiry = datetime.now() + timedelta(days=30 * months)
-        col_is = f"is_{plan}_premium"
-        col_expiry = f"{plan}_expiry"
-        with self._get_connection() as conn:
-            conn.execute(f"""
-                UPDATE users 
-                SET {col_is} = 1, {col_expiry} = ?
-                WHERE telegram_id = ?
-            """, (expiry.isoformat(), telegram_id))
-            conn.commit()
-            logger.info(f"User {telegram_id} upgraded to {plan} premium until {expiry}")
+        self._user_repo.set_premium(telegram_id, plan, months)
 
     def get_leaderboard(self, limit: int = 10):
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute("""
-                SELECT username, points, message_count 
-                FROM users 
-                ORDER BY points DESC 
-                LIMIT ?
-            """, (limit,))
-            return [dict(row) for row in cursor.fetchall()]
+        return self._user_repo.get_leaderboard(limit)
 
     def get_weekly_leaderboard(self, limit: int = 10):
-        now = datetime.now()
-        iso_year, iso_week, _ = now.isocalendar()
-        week_key = f"{iso_year}-W{iso_week:02d}"
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute(
-                """
-                SELECT *
-                FROM (
-                    SELECT
-                        username,
-                        u.points AS points,
-                        u.message_count AS message_count,
-                        u.telegram_id AS telegram_id,
-                        COALESCE(a.points,
-                            CASE
-                                WHEN u.weekly_points_week = ? THEN COALESCE(u.weekly_points, 0)
-                                ELSE 0
-                            END
-                        ) AS weekly_points
-                    FROM users u
-                    LEFT JOIN weekly_points_archive a
-                        ON a.telegram_id = u.telegram_id
-                        AND a.week_key = ?
-                ) ranked
-                WHERE weekly_points > 0
-                ORDER BY weekly_points DESC, points DESC, message_count DESC, telegram_id ASC
-                LIMIT ?
-                """,
-                (week_key, week_key, limit),
-            )
-            return [dict(row) for row in cursor.fetchall()]
+        return self._user_repo.get_weekly_leaderboard(limit)
 
     def get_weekly_profile(self, telegram_id: int) -> Dict[str, Any]:
-        now = datetime.now()
-        iso_year, iso_week, _ = now.isocalendar()
-        week_key = f"{iso_year}-W{iso_week:02d}"
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """
-                SELECT
-                    u.telegram_id,
-                    COALESCE(u.points, 0) AS points,
-                    COALESCE(u.message_count, 0) AS message_count,
-                    COALESCE(a.points,
-                        CASE
-                            WHEN u.weekly_points_week = ? THEN COALESCE(u.weekly_points, 0)
-                            ELSE 0
-                        END
-                    ) AS weekly_points
-                FROM users u
-                LEFT JOIN weekly_points_archive a
-                    ON a.telegram_id = u.telegram_id
-                    AND a.week_key = ?
-                ORDER BY weekly_points DESC, points DESC, message_count DESC, u.telegram_id ASC
-                """,
-                (week_key, week_key),
-            ).fetchall()
-
-        weekly_rank: Optional[int] = None
-        weekly_points = 0
-        total_ranked = 0
-        for idx, row in enumerate(rows, start=1):
-            row_weekly_points = int(row["weekly_points"] or 0)
-            if row_weekly_points > 0:
-                total_ranked += 1
-            if int(row["telegram_id"] or 0) == int(telegram_id):
-                weekly_rank = idx if row_weekly_points > 0 else None
-                weekly_points = row_weekly_points
-        return {
-            "week_key": week_key,
-            "weekly_points": max(0, int(weekly_points or 0)),
-            "weekly_rank": weekly_rank,
-            "total_ranked": total_ranked,
-        }
+        return self._user_repo.get_weekly_profile(telegram_id)
 
     def get_weekly_profile_by_supabase_user_id(self, supabase_user_id: str) -> Dict[str, Any]:
-        key = str(supabase_user_id or "").strip().lower()
-        if not key:
-            return {"weekly_points": 0, "weekly_rank": None, "total_ranked": 0}
-
-        now = datetime.now()
-        iso_year, iso_week, _ = now.isocalendar()
-        week_key = f"{iso_year}-W{iso_week:02d}"
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            target_telegram_id = self._find_telegram_id_by_supabase_user_id(conn, key)
-            if target_telegram_id is None:
-                return {"weekly_points": 0, "weekly_rank": None, "total_ranked": 0}
-            rows = conn.execute(
-                """
-                SELECT
-                    telegram_id,
-                    COALESCE(points, 0) AS points,
-                    COALESCE(message_count, 0) AS message_count,
-                    CASE
-                        WHEN weekly_points_week = ? THEN COALESCE(weekly_points, 0)
-                        ELSE 0
-                    END AS weekly_points
-                FROM users
-                ORDER BY weekly_points DESC, points DESC, message_count DESC, telegram_id ASC
-                """,
-                (week_key,),
-            ).fetchall()
-
-        weekly_rank: Optional[int] = None
-        weekly_points = 0
-        for idx, row in enumerate(rows, start=1):
-            if int(row["telegram_id"] or 0) == int(target_telegram_id):
-                weekly_rank = idx
-                weekly_points = int(row["weekly_points"] or 0)
-                break
-        return {
-            "weekly_points": max(0, int(weekly_points or 0)),
-            "weekly_rank": weekly_rank,
-            "total_ranked": len(rows),
-        }
+        return self._user_repo.get_weekly_profile_by_supabase_user_id(supabase_user_id)
 
     def get_weekly_reward_candidates(self, week_key: str, limit: int = 10):
-        wk = self._safe_week_key(week_key)
-        if not wk:
-            return []
-        top_n = max(1, int(limit or 10))
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """
-                SELECT *
-                FROM (
-                    SELECT
-                        u.telegram_id,
-                        u.username,
-                        lower(trim(COALESCE(u.supabase_user_id, ''))) AS supabase_user_id,
-                        COALESCE(u.supabase_email, '') AS supabase_email,
-                        COALESCE(u.points, 0) AS points,
-                        COALESCE(u.message_count, 0) AS message_count,
-                        COALESCE(a.points,
-                            CASE
-                                WHEN u.weekly_points_week = ? THEN COALESCE(u.weekly_points, 0)
-                                ELSE 0
-                            END
-                        ) AS weekly_points
-                    FROM users u
-                    LEFT JOIN weekly_points_archive a
-                        ON a.telegram_id = u.telegram_id
-                        AND a.week_key = ?
-                ) ranked
-                WHERE weekly_points > 0
-                ORDER BY weekly_points DESC, points DESC, message_count DESC, telegram_id ASC
-                LIMIT ?
-                """,
-                (wk, wk, top_n),
-            ).fetchall()
-            return [dict(row) for row in rows]
+        return self._user_repo.get_weekly_reward_candidates(week_key, limit)
 
     def get_weekly_participation_candidates(self, week_key: str, exclude_ids: set):
-        wk = self._safe_week_key(week_key)
-        if not wk:
-            return []
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """
-                SELECT *
-                FROM (
-                    SELECT
-                        u.telegram_id,
-                        u.username,
-                        COALESCE(a.points,
-                            CASE
-                                WHEN u.weekly_points_week = ? THEN COALESCE(u.weekly_points, 0)
-                                ELSE 0
-                            END
-                        ) AS weekly_points
-                    FROM users u
-                    LEFT JOIN weekly_points_archive a
-                        ON a.telegram_id = u.telegram_id
-                        AND a.week_key = ?
-                ) ranked
-                WHERE weekly_points > 0
-                """,
-                (wk, wk),
-            ).fetchall()
-            return [dict(row) for row in rows if int(row["telegram_id"] or 0) not in exclude_ids]
+        return self._user_repo.get_weekly_participation_candidates(week_key, exclude_ids)
 
     def is_weekly_reward_settled(self, week_key: str) -> bool:
-        wk = self._safe_week_key(week_key)
-        if not wk:
-            return False
-        with self._get_connection() as conn:
-            row = conn.execute(
-                "SELECT 1 FROM weekly_reward_runs WHERE week_key = ? LIMIT 1",
-                (wk,),
-            ).fetchone()
-            return bool(row)
+        return self._user_repo.is_weekly_reward_settled(week_key)
 
     def mark_weekly_reward_settled(
         self,
@@ -3911,33 +1742,7 @@ class DBManager:
         winners_count: int,
         summary: Optional[Dict[str, Any]] = None,
     ) -> None:
-        wk = self._safe_week_key(week_key)
-        if not wk:
-            return
-        summary_json = None
-        if isinstance(summary, dict):
-            try:
-                summary_json = json.dumps(summary, ensure_ascii=False)
-            except Exception:
-                summary_json = None
-        with self._get_connection() as conn:
-            conn.execute(
-                """
-                INSERT INTO weekly_reward_runs (week_key, settled_at, winners_count, summary_json)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(week_key) DO UPDATE SET
-                    settled_at = excluded.settled_at,
-                    winners_count = excluded.winners_count,
-                    summary_json = excluded.summary_json
-                """,
-                (
-                    wk,
-                    datetime.now().isoformat(),
-                    max(0, int(winners_count or 0)),
-                    summary_json,
-                ),
-            )
-            conn.commit()
+        self._user_repo.mark_weekly_reward_settled(week_key, winners_count, summary)
 
     def apply_weekly_reward_payout(
         self,
@@ -3951,56 +1756,7 @@ class DBManager:
         pro_granted: bool = False,
         pro_error: str = "",
     ) -> bool:
-        wk = self._safe_week_key(week_key)
-        if not wk:
-            return False
-        bonus = max(0, int(points_bonus or 0))
-        with self._get_connection() as conn:
-            exists = conn.execute(
-                """
-                SELECT 1
-                FROM weekly_reward_payouts
-                WHERE week_key = ? AND telegram_id = ?
-                LIMIT 1
-                """,
-                (wk, int(telegram_id)),
-            ).fetchone()
-            if exists:
-                return False
-
-            if bonus > 0:
-                conn.execute(
-                    "UPDATE users SET points = COALESCE(points, 0) + ? WHERE telegram_id = ?",
-                    (bonus, int(telegram_id)),
-                )
-            conn.execute(
-                """
-                INSERT INTO weekly_reward_payouts (
-                    week_key, telegram_id, rank, username, points_bonus, pro_days,
-                    supabase_user_id, pro_granted, pro_error, created_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    wk,
-                    int(telegram_id),
-                    int(rank or 0),
-                    str(username or ""),
-                    bonus,
-                    max(0, int(pro_days or 0)),
-                    str(supabase_user_id or "").strip().lower(),
-                    1 if pro_granted else 0,
-                    str(pro_error or ""),
-                    datetime.now().isoformat(),
-                ),
-            )
-            conn.commit()
-            if bonus > 0:
-                self._sync_points_to_supabase_user_metadata(
-                    int(telegram_id),
-                    force=True,
-                )
-            return True
+        return self._user_repo.apply_weekly_reward_payout(week_key, telegram_id, rank, username, points_bonus, pro_days, supabase_user_id, pro_granted, pro_error)
 
     def record_user_growth_snapshot(
         self,
@@ -4011,81 +1767,19 @@ class DBManager:
         ever_signed_in: int,
         source: str = "supabase_auth_admin",
     ) -> None:
-        with self._get_connection() as conn:
-            conn.execute(
-                """
-                INSERT INTO user_growth_snapshots (
-                    snapshot_date, total_registered, verified_users,
-                    ever_signed_in, source, recorded_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(snapshot_date) DO UPDATE SET
-                    total_registered = excluded.total_registered,
-                    verified_users = excluded.verified_users,
-                    ever_signed_in = excluded.ever_signed_in,
-                    source = excluded.source,
-                    recorded_at = excluded.recorded_at
-                """,
-                (
-                    str(snapshot_date or "").strip(),
-                    max(0, int(total_registered or 0)),
-                    max(0, int(verified_users or 0)),
-                    max(0, int(ever_signed_in or 0)),
-                    str(source or "supabase_auth_admin"),
-                    datetime.now().isoformat(),
-                ),
-            )
-            conn.commit()
+        return self._user_repo.record_user_growth_snapshot(snapshot_date=snapshot_date, total_registered=total_registered, verified_users=verified_users, ever_signed_in=ever_signed_in, source=source)
 
     def list_user_growth_snapshots(self, limit: int = 90) -> List[Dict[str, Any]]:
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """
-                SELECT snapshot_date, total_registered, verified_users,
-                       ever_signed_in, source, recorded_at
-                FROM user_growth_snapshots
-                ORDER BY snapshot_date DESC
-                LIMIT ?
-                """,
-                (max(1, min(int(limit or 90), 1000)),),
-            ).fetchall()
-            return [dict(row) for row in rows]
+        return self._user_repo.list_user_growth_snapshots(limit)
 
     def is_growth_milestone_settled(self, milestone: int) -> bool:
-        with self._get_connection() as conn:
-            row = conn.execute(
-                "SELECT 1 FROM growth_milestone_runs WHERE milestone = ? LIMIT 1",
-                (int(milestone),),
-            ).fetchone()
-            return bool(row)
+        return self._user_repo.is_growth_milestone_settled(milestone)
 
     def has_growth_milestone_payout(self, milestone: int, supabase_user_id: str) -> bool:
-        with self._get_connection() as conn:
-            row = conn.execute(
-                """
-                SELECT 1 FROM growth_milestone_payouts
-                WHERE milestone = ? AND supabase_user_id = ? AND status = 'granted'
-                LIMIT 1
-                """,
-                (int(milestone), str(supabase_user_id or "").strip().lower()),
-            ).fetchone()
-            return bool(row)
+        return self._user_repo.has_growth_milestone_payout(milestone, supabase_user_id)
 
     def list_growth_milestone_payouts(self, milestone: int) -> List[Dict[str, Any]]:
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """
-                SELECT milestone, supabase_user_id, reward_days, status,
-                       error, expires_at, updated_at
-                FROM growth_milestone_payouts
-                WHERE milestone = ?
-                ORDER BY supabase_user_id ASC
-                """,
-                (int(milestone),),
-            ).fetchall()
-            return [dict(row) for row in rows]
+        return self._user_repo.list_growth_milestone_payouts(milestone)
 
     def record_growth_milestone_payout(
         self,
@@ -4097,46 +1791,7 @@ class DBManager:
         *,
         expires_at: str = "",
     ) -> bool:
-        user_id = str(supabase_user_id or "").strip().lower()
-        if not user_id:
-            return False
-        with self._get_connection() as conn:
-            existing = conn.execute(
-                """
-                SELECT status FROM growth_milestone_payouts
-                WHERE milestone = ? AND supabase_user_id = ?
-                LIMIT 1
-                """,
-                (int(milestone), user_id),
-            ).fetchone()
-            if existing and str(existing[0] or "").strip().lower() == "granted":
-                return False
-            conn.execute(
-                """
-                INSERT INTO growth_milestone_payouts (
-                    milestone, supabase_user_id, reward_days, status,
-                    error, expires_at, updated_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(milestone, supabase_user_id) DO UPDATE SET
-                    reward_days = excluded.reward_days,
-                    status = excluded.status,
-                    error = excluded.error,
-                    expires_at = excluded.expires_at,
-                    updated_at = excluded.updated_at
-                """,
-                (
-                    int(milestone),
-                    user_id,
-                    max(0, int(reward_days or 0)),
-                    str(status or ""),
-                    str(error or ""),
-                    str(expires_at or ""),
-                    datetime.now().isoformat(),
-                ),
-            )
-            conn.commit()
-            return True
+        return self._user_repo.record_growth_milestone_payout(milestone, supabase_user_id, reward_days, status, error, expires_at=expires_at)
 
     def mark_growth_milestone_settled(
         self,
@@ -4147,28 +1802,7 @@ class DBManager:
         failed_count: int,
         summary: Optional[Dict[str, Any]] = None,
     ) -> None:
-        summary_json = json.dumps(summary or {}, ensure_ascii=False)
-        with self._get_connection() as conn:
-            conn.execute(
-                """
-                INSERT INTO growth_milestone_runs (
-                    milestone, verified_users, reward_days, rewarded_count,
-                    failed_count, summary_json, settled_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(milestone) DO NOTHING
-                """,
-                (
-                    int(milestone),
-                    max(0, int(verified_users or 0)),
-                    max(0, int(reward_days or 0)),
-                    max(0, int(rewarded_count or 0)),
-                    max(0, int(failed_count or 0)),
-                    summary_json,
-                    datetime.now().isoformat(),
-                ),
-            )
-            conn.commit()
+        return self._user_repo.mark_growth_milestone_settled(milestone, verified_users, reward_days, rewarded_count, failed_count, summary)
 
     def append_airport_obs(
         self,
