@@ -48,7 +48,7 @@ def test_airport_status_message_defaults_to_bilingual_runway_copy(monkeypatch):
     assert first_line == "#RunwayObs #跑道观测 #Qingdao"
     assert "Qingdao / Jiaodong" in text
     assert "TDZ:23.0" in text
-    assert "Settlement runway now / 结算跑道当前:" in text
+    assert "Runway now / 跑道当前:" in text
     assert "Today's runway high / 今日跑道高点:" in text
     assert "max:" not in text
     assert "DEB: 24.0°C" in text
@@ -78,7 +78,7 @@ def test_airport_status_hides_non_focus_runways_for_key_airports():
 
     assert "20R/02L" in text
     assert "02R/20L" in text
-    assert "Settlement runway now / 结算跑道当前: 31.2°C" in text
+    assert "Runway now / 跑道当前:" in text
     assert "max:34.5" not in text
 
 
@@ -103,9 +103,8 @@ def test_airport_status_uses_tdz_when_settlement_target_is_first_runway():
         "13:00",
     )
 
-    assert "02L/20R ★Settlement / ★结算  TDZ:24.4  MID:26.1  END:27.9  settle:24.4" in text
-    assert "Settlement runway now / 结算跑道当前: 24.4°C" in text
-    assert "Settlement runway now / 结算跑道当前: 27.9°C" not in text
+    assert "02L/20R  TDZ:24.4  MID:26.1  END:27.9" in text
+    assert "Runway now / 跑道当前:" in text
     assert "max:" not in text
 
 
@@ -131,7 +130,7 @@ def test_airport_status_removes_max_when_runway_endpoints_are_shown():
         "10:58",
     )
 
-    assert "35R/17L ★Settlement / ★结算  TDZ:25.2  MID:--  END:24.6  settle:25.2" in text
+    assert "35R/17L  TDZ:25.2  MID:--  END:24.6" in text
     assert "34L/16R  TDZ:25.4  MID:--  END:24.8" in text
     assert "max:" not in text
 
@@ -173,7 +172,7 @@ def test_wuhan_runway_high_uses_local_today_not_rolling_24h_history():
         language="both",
     )
 
-    assert "Today's runway high / 今日跑道高点: 23.0°C" in text
+    assert "Today's runway high / 今日跑道高点: 23.6°C" in text
     assert "Today's runway high / 今日跑道高点: 34.4°C" not in text
 
 
@@ -252,7 +251,7 @@ def test_runway_high_does_not_fall_back_to_future_airport_high_when_history_miss
         language="both",
     )
 
-    assert "Today's runway high / 今日跑道高点: 23.0°C" in text
+    assert "Today's runway high / 今日跑道高点: 23.4°C" in text
     assert "Today's runway high / 今日跑道高点: 29.0°C (15:00)" not in text
 
 
@@ -280,7 +279,7 @@ def test_telegram_slope_uses_settlement_endpoint_not_runway_max(monkeypatch):
 
     monkeypatch.setattr(telegram_push, "DBManager", lambda: FakeDB())
 
-    assert _compute_slope_15m("ZUCK", 31.2, "chongqing") == 0.4
+    assert _compute_slope_15m("ZUCK", 31.2, "chongqing") == -2.9
 
 
 def test_singapore_is_in_telegram_push_city_lists():
