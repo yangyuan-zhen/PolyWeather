@@ -13,6 +13,7 @@ from loguru import logger
 from src.analysis.weathernext2_calibration import train_lightgbm_quantile_calibrator
 from src.data_collection.city_registry import CITY_REGISTRY
 from src.data_collection.weathernext2_fetcher import (
+    batch_extract_all_cities_from_grid,
     extract_member_hourly_from_grid_dataset,
     open_weathernext2_zarr_dataset,
 )
@@ -180,6 +181,40 @@ def _flatten_training_records_for_weathernext2(
     return rows
 
 
+def _build_payload_from_extracted(
+    city: str,
+    extracted: Dict[str, Any],
+    target_date: str,
+    source_run: Optional[str],
+    *,
+    use_fahrenheit: bool = False,
+    tz_offset_seconds: int = 0,
+) -> Optional[Mapping[str, Any]]:
+    member_highs = build_city_local_daily_highs_from_hourly(
+        extracted["member_hourly"],
+        extracted["utc_times"],
+        tz_offset_seconds,
+        target_date,
+    )
+    if not member_highs:
+        return None
+    payload = build_weathernext2_city_probability(
+        city=city,
+        member_highs=member_highs,
+        temp_symbol="°F" if use_fahrenheit else "°C",
+        target_date=target_date,
+        source_run=source_run,
+    )
+    payload["fetch_metadata"] = {
+        "backend": "gcs_zarr",
+        "temp_var": extracted.get("temp_var"),
+        "units": extracted.get("units"),
+        "requested_lat": None,
+        "requested_lon": None,
+    }
+    return payload
+
+
 def run_weathernext2_cycle(
     *,
     city_registry: Optional[Mapping[str, Mapping[str, Any]]] = None,
@@ -202,16 +237,44 @@ def run_weathernext2_cycle(
 
     generated_at = datetime.now(timezone.utc).isoformat()
     opened_dataset = dataset
-    if fetcher is None:
-        if opened_dataset is None:
-            if backend != "gcs_zarr":
-                return {"ok": False, "status": "skipped", "reason": "unsupported_backend", "backend": backend}
-            uri = os.getenv("WEATHERNEXT2_GCS_ZARR_URI", WEATHERNEXT2_GCS_ZARR_URI)
-            opened_dataset = open_weathernext2_zarr_dataset(uri)
-        fetcher = _default_city_fetcher(
-            opened_dataset,
-            str(os.getenv("WEATHERNEXT2_TEMP_VAR", "") or "").strip() or None,
-        )
+    temp_var = str(os.getenv("WEATHERNEXT2_TEMP_VAR", "") or "").strip() or None
+    source_run: Optional[str] = None
+    pre_extracted: Optional[Dict[str, Dict[str, Any]]] = None
+
+    if fetcher is not None:
+        pass
+    elif opened_dataset is not None:
+        source_run = _dataset_source_run(opened_dataset)
+        city_configs: list[tuple[str, float, float, bool]] = []
+        for city in selected:
+            meta = registry.get(city) or {}
+            lat = _safe_float(meta.get("lat"))
+            lon = _safe_float(meta.get("lon"))
+            if lat is not None and lon is not None:
+                use_f = bool(meta.get("use_fahrenheit") or meta.get("f"))
+                city_configs.append((city, lat, lon, use_f))
+        if city_configs:
+            pre_extracted = batch_extract_all_cities_from_grid(
+                opened_dataset, city_configs, temp_var=temp_var,
+            )
+    else:
+        if backend != "gcs_zarr":
+            return {"ok": False, "status": "skipped", "reason": "unsupported_backend", "backend": backend}
+        uri = os.getenv("WEATHERNEXT2_GCS_ZARR_URI", WEATHERNEXT2_GCS_ZARR_URI)
+        opened_dataset = open_weathernext2_zarr_dataset(uri)
+        source_run = _dataset_source_run(opened_dataset)
+        city_configs = []
+        for city in selected:
+            meta = registry.get(city) or {}
+            lat = _safe_float(meta.get("lat"))
+            lon = _safe_float(meta.get("lon"))
+            if lat is not None and lon is not None:
+                use_f = bool(meta.get("use_fahrenheit") or meta.get("f"))
+                city_configs.append((city, lat, lon, use_f))
+        if city_configs:
+            pre_extracted = batch_extract_all_cities_from_grid(
+                opened_dataset, city_configs, temp_var=temp_var,
+            )
 
     city_payloads: Dict[str, Dict[str, Any]] = {}
     failed = 0
@@ -220,7 +283,17 @@ def run_weathernext2_cycle(
         meta = registry.get(city) or {}
         target_date = _city_target_date(meta)
         try:
-            payload = fetcher(city, meta, target_date)
+            if pre_extracted is not None and city in pre_extracted:
+                use_f = bool(meta.get("use_fahrenheit") or meta.get("f"))
+                tz_off = int(meta.get("tz_offset") or 0)
+                payload = _build_payload_from_extracted(
+                    city, pre_extracted[city], target_date, source_run,
+                    use_fahrenheit=use_f, tz_offset_seconds=tz_off,
+                )
+            elif fetcher is not None:
+                payload = fetcher(city, meta, target_date)
+            else:
+                payload = None
             if not isinstance(payload, Mapping):
                 items.append({"city": city, "ok": True, "status": "empty", "target_date": target_date})
                 continue

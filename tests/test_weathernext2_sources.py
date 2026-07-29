@@ -255,5 +255,5 @@ def test_weathernext2_zarr_uses_google_default_credentials(monkeypatch):
     monkeypatch.setitem(__import__("sys").modules, "xarray", FakeXarray)
     monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", "/app/secrets/gcp-sa.json")
 
-    assert open_weathernext2_zarr_dataset("gs://weathernext/example") == {"ok": True}
+    assert open_weathernext2_zarr_dataset("gs://weathernext/example/predictions.zarr/") == {"ok": True}
     assert calls[0][1]["storage_options"]["token"] == "google_default"
