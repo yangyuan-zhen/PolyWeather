@@ -12,16 +12,13 @@ SEVERITY_RANK = {
 HIGH_FREQ_AIRPORT_CITIES = {
     "seoul", "singapore", "busan", "tokyo", "ankara", "helsinki", "amsterdam",
     "istanbul", "paris", "hong kong", "taipei",
-    "beijing", "shanghai", "guangzhou", "qingdao", "chengdu", "chongqing", "wuhan",
     "shenzhen",
     "new york", "los angeles", "chicago", "denver", "atlanta",
     "miami", "san francisco", "houston", "dallas", "austin", "seattle",
     "tel aviv",
 }
 
-CHINA_HIGH_FREQ_AIRPORT_CITIES = {
-    "beijing", "shanghai", "guangzhou", "qingdao", "chengdu", "chongqing", "wuhan",
-}
+CHINA_HIGH_FREQ_AIRPORT_CITIES: Set[str] = set()
 
 HIGH_FREQ_AIRPORT_ICAO = {
     "seoul": "RKSI", "singapore": "WSSS", "busan": "RKPK", "tokyo": "44166",
