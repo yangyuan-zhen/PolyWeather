@@ -13,6 +13,10 @@ from src.data_collection.nws_open_meteo_sources import (
     _parse_open_meteo_multi_model_daily,
 )
 from src.data_collection.multi_model_freshness import multi_model_forecasts_for_local_date
+from src.data_collection.weathernext2_sources import (
+    _load_artifact_payload as _load_weathernext2_artifact,
+    _weathernext2_artifact_path,
+)
 from src.database.db_manager import DBManager
 from src.utils.refresh_policy import SCAN_ROWS_REFRESH_SEC
 from web.core import CITIES, _sf as _safe_float, _weather
@@ -394,6 +398,18 @@ def _fetch_today_forecast_panel_payload(
     if not forecasts:
         return None
 
+    weathernext2_payload = _load_weathernext2_artifact(_weathernext2_artifact_path(), city)
+    weathernext2_summary = (
+        weathernext2_payload.get("summary")
+        if isinstance(weathernext2_payload, dict) and isinstance(weathernext2_payload.get("summary"), dict)
+        else None
+    )
+    if weathernext2_summary:
+        wn2_val = _safe_float(weathernext2_summary.get("median")) or _safe_float(weathernext2_summary.get("mean"))
+        if wn2_val is not None:
+            forecasts["WeatherNext 2"] = round(wn2_val, 1)
+    weathernext2_data = weathernext2_payload if isinstance(weathernext2_payload, dict) else None
+
     try:
         deb_result = calculate_deb_prediction(
             city,
@@ -440,6 +456,7 @@ def _fetch_today_forecast_panel_payload(
             }
         },
         "deb": deb_result if deb_result else {"prediction": deb_prediction},
+        "weathernext2": weathernext2_data,
         "probabilities": probabilities,
         "forecast_refreshed": True,
         "forecast_source_local_date": local_date,
