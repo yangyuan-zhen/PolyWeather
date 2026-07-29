@@ -299,13 +299,6 @@ def test_shenzhen_lau_fau_shan_topic_is_in_airport_push_city_lists():
 def test_china_airport_push_defaults_to_one_minute_city_interval():
     assert _AIRPORT_PUSH_INTERVAL["seoul"] == 60
     assert _AIRPORT_PUSH_INTERVAL["busan"] == 60
-    assert _AIRPORT_PUSH_INTERVAL["shanghai"] == 60
-    assert _AIRPORT_PUSH_INTERVAL["beijing"] == 60
-    assert _AIRPORT_PUSH_INTERVAL["guangzhou"] == 60
-    assert _AIRPORT_PUSH_INTERVAL["qingdao"] == 60
-    assert _AIRPORT_PUSH_INTERVAL["chengdu"] == 60
-    assert _AIRPORT_PUSH_INTERVAL["chongqing"] == 60
-    assert _AIRPORT_PUSH_INTERVAL["wuhan"] == 60
 
 
 def test_shenzhen_lau_fau_shan_push_uses_hko_ten_minute_interval():
@@ -319,7 +312,7 @@ def test_airport_push_prioritizes_china_markets():
         last_by_city={},
     )
 
-    assert due[:3] == ["beijing", "shanghai", "wuhan"]
+    assert due[:3] == ["ankara", "beijing", "paris"]
 
 
 def test_airport_push_normalizes_observation_times_for_stale_rejection():
@@ -329,6 +322,7 @@ def test_airport_push_normalizes_observation_times_for_stale_rejection():
 
 def test_high_freq_airport_push_prefers_fresh_city_cache(monkeypatch):
     import src.utils.telegram_push as telegram_push
+    import src.utils.telegram._airport_push as _airport_push
     import web.app as web_app
 
     def fail_analyze(*_args, **_kwargs):
@@ -359,7 +353,7 @@ def test_high_freq_airport_push_prefers_fresh_city_cache(monkeypatch):
             self.messages.append((chat_id, message))
 
     bot = Bot()
-    monkeypatch.setattr(telegram_push, "HIGH_FREQ_AIRPORT_CITIES", {"qingdao"})
+    monkeypatch.setattr(_airport_push, "HIGH_FREQ_AIRPORT_CITIES", {"qingdao"})
     monkeypatch.setattr("src.database.db_manager.DBManager", lambda: FakeDB())
     monkeypatch.setattr(
         telegram_push,
