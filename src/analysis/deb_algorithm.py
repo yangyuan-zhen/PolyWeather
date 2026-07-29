@@ -1191,9 +1191,18 @@ def calculate_dynamic_weight_components(
 
         usable_day = False
         for model in forecasts.keys():
+            matched_val = None
             if model in past_forecasts and past_forecasts[model] is not None:
+                matched_val = past_forecasts[model]
+            else:
+                model_family = _deb_model_family(model)
+                for hist_model, hist_val in past_forecasts.items():
+                    if hist_val is not None and _deb_model_family(hist_model) == model_family:
+                        matched_val = hist_val
+                        break
+            if matched_val is not None:
                 try:
-                    pv = float(past_forecasts[model])
+                    pv = float(matched_val)
                     av = float(actual)
                 except (TypeError, ValueError):
                     continue

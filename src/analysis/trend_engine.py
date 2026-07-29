@@ -9,6 +9,8 @@ import math
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Tuple, Dict, Any
 
+from loguru import logger
+
 from src.analysis.deb_algorithm import (
     calculate_dynamic_weights,
     calculate_deb_prediction,
@@ -1159,8 +1161,8 @@ def analyze_weather_trend(
             probabilities=_prob_list,
             actual_is_final=False,
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("update_daily_record failed city={} date={}: {}", city_name, local_date_str, exc)
 
     # === Build recent list for trend_info ===
     recent_list = []
