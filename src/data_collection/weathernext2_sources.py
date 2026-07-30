@@ -209,18 +209,25 @@ def build_city_local_daily_highs_from_hourly(
     utc_times: Sequence[Any],
     timezone_offset_seconds: int,
     target_local_date: Any,
-) -> Dict[str, float]:
-    """Reduce hourly ensemble member temperatures to local-date daily highs."""
+) -> tuple[Dict[str, float], Dict[str, str]]:
+    """Reduce hourly ensemble member temperatures to local-date daily highs.
+
+    Returns (highs, high_times) where:
+      highs: {member_id: max_temp}
+      high_times: {member_id: "HH:00"} in local time
+    """
     target_date = _parse_date(target_local_date)
     if target_date is None:
-        return {}
+        return {}, {}
 
     parsed_times = [_parse_utc_time(value) for value in utc_times]
     highs: Dict[str, float] = {}
+    high_times: Dict[str, str] = {}
     offset = timedelta(seconds=int(timezone_offset_seconds or 0))
 
     for member_id, values in member_hourly.items():
-        member_values = []
+        best_val: Optional[float] = None
+        best_local_hour: Optional[str] = None
         for idx, utc_time in enumerate(parsed_times):
             if utc_time is None or idx >= len(values):
                 continue
@@ -228,12 +235,15 @@ def build_city_local_daily_highs_from_hourly(
             if local_date != target_date:
                 continue
             parsed = _numeric(values[idx])
-            if parsed is not None:
-                member_values.append(parsed)
-        if member_values:
-            highs[str(member_id)] = _round1(max(member_values))
+            if parsed is not None and (best_val is None or parsed > best_val):
+                best_val = parsed
+                local_dt = utc_time + offset
+                best_local_hour = local_dt.strftime("%H:00")
+        if best_val is not None and best_local_hour is not None:
+            highs[str(member_id)] = _round1(best_val)
+            high_times[str(member_id)] = best_local_hour
 
-    return highs
+    return highs, high_times
 
 
 def build_weathernext2_city_probability(
@@ -244,6 +254,7 @@ def build_weathernext2_city_probability(
     target_date: Optional[str] = None,
     source_run: Optional[str] = None,
     generated_at: Optional[str] = None,
+    member_high_times: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
     """Build a WeatherNext 2 probability payload aligned with tradable market options."""
     buckets = build_market_bucket_probabilities(member_highs, temp_symbol=temp_symbol)
@@ -257,6 +268,12 @@ def build_weathernext2_city_probability(
         if buckets
         else None
     )
+    normalized_high_times: Optional[Dict[str, str]] = None
+    if member_high_times is not None:
+        normalized_high_times = {
+            str(member_id): str(value)
+            for member_id, value in member_high_times.items()
+        }
 
     return {
         "source": WEATHERNEXT2_SOURCE,
@@ -268,6 +285,7 @@ def build_weathernext2_city_probability(
         "temp_symbol": _unit(temp_symbol),
         "members": int(summary["members"] or 0),
         "member_highs": normalized_member_highs,
+        "member_high_times": normalized_high_times,
         "summary": summary,
         "buckets": buckets,
         "top_bucket": top_bucket,
@@ -428,8 +446,9 @@ class WeatherNext2SourceMixin:
         temp_symbol = "°F" if use_fahrenheit else "°C"
         fixture_target_date = str(fixture.get("target_date") or target_date)
         member_highs = fixture.get("member_highs")
+        member_high_times: Optional[Dict[str, str]] = None
         if member_highs is None and isinstance(fixture.get("member_hourly"), dict):
-            member_highs = build_city_local_daily_highs_from_hourly(
+            member_highs, member_high_times = build_city_local_daily_highs_from_hourly(
                 fixture["member_hourly"],
                 fixture.get("utc_times") or fixture.get("times") or [],
                 int(timezone_offset_seconds or fixture.get("timezone_offset_seconds") or 0),
@@ -441,6 +460,7 @@ class WeatherNext2SourceMixin:
         return build_weathernext2_city_probability(
             city=city,
             member_highs=member_highs,
+            member_high_times=member_high_times or fixture.get("member_high_times"),
             temp_symbol=temp_symbol,
             target_date=fixture_target_date,
             source_run=fixture.get("source_run"),
@@ -459,8 +479,9 @@ class WeatherNext2SourceMixin:
         temp_symbol = "°F" if use_fahrenheit else "°C"
         payload_target_date = str(payload.get("target_date") or target_date)
         member_highs = payload.get("member_highs")
+        member_high_times: Optional[Dict[str, str]] = None
         if member_highs is None and isinstance(payload.get("member_hourly"), dict):
-            member_highs = build_city_local_daily_highs_from_hourly(
+            member_highs, member_high_times = build_city_local_daily_highs_from_hourly(
                 payload["member_hourly"],
                 payload.get("utc_times") or payload.get("times") or [],
                 int(timezone_offset_seconds or payload.get("timezone_offset_seconds") or 0),
@@ -483,6 +504,7 @@ class WeatherNext2SourceMixin:
         return build_weathernext2_city_probability(
             city=city,
             member_highs=member_highs,
+            member_high_times=member_high_times or payload.get("member_high_times"),
             temp_symbol=temp_symbol,
             target_date=payload_target_date,
             source_run=payload.get("source_run"),

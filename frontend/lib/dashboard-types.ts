@@ -565,6 +565,7 @@ export interface WeatherNext2CityData {
   temp_symbol: string;
   members: number;
   member_highs: Record<string, number>;
+  member_high_times?: Record<string, string> | null;
   summary: WeatherNext2Summary;
   buckets: WeatherNext2Bucket[];
   top_bucket: WeatherNext2Bucket | null;

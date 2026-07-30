@@ -88,7 +88,7 @@ def test_weathernext2_probability_keeps_celsius_market_option_labels():
 
 
 def test_city_local_daily_highs_from_hourly_uses_target_local_date():
-    highs = build_city_local_daily_highs_from_hourly(
+    highs, high_times = build_city_local_daily_highs_from_hourly(
         member_hourly={
             "member_00": [21.0, 26.0, 28.0, 24.0],
             "member_01": [20.0, 25.0, None, 27.0],
@@ -104,6 +104,7 @@ def test_city_local_daily_highs_from_hourly_uses_target_local_date():
     )
 
     assert highs == {"member_00": 28.0, "member_01": 25.0}
+    assert high_times == {"member_00": "14:00", "member_01": "00:00"}
 
 
 def test_summarize_member_highs_reports_ensemble_shape():

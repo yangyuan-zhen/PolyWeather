@@ -30,7 +30,6 @@ export function runTests() {
       model_cluster_sources: {
         ECMWF: 28.8,
         GFS: 29.4,
-        "WeatherNext 2": 29.8,
       },
     },
     {
@@ -147,7 +146,7 @@ export function runTests() {
       MODEL_SUMMARY_MODEL_COLUMNS.map((column) => column.key).includes("HRRR") &&
       MODEL_SUMMARY_MODEL_COLUMNS.map((column) => column.key).includes("NAM") &&
       MODEL_SUMMARY_MODEL_COLUMNS.map((column) => column.key).includes("WeatherNext 2"),
-    "model summary must expose the fixed model columns including optional short-range and WeatherNext 2 models",
+    "model summary must expose the fixed model columns including optional short-range models",
   );
   assert(summaryRows.length === 5, "model summary should keep one row per city");
   assert(summaryRows[0].cityName === "Beijing", "model summary should sort by resolved region then city name");
@@ -181,7 +180,6 @@ export function runTests() {
     "model summary should aggregate Fahrenheit probabilities into two-degree market option labels",
   );
   assert(parisRow.marketMatches.length === 3, "model summary should keep every Polymarket tradable bucket");
-  assert(beijingRow?.models["WeatherNext 2"] === 29.8, "model summary should preserve WeatherNext 2 model representative");
   assert(
     parisRow.marketMatches[0].label === "32°C" &&
       parisRow.marketMatches[0].modelProbability === null &&

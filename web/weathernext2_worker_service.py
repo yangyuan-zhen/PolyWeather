@@ -190,7 +190,7 @@ def _build_payload_from_extracted(
     use_fahrenheit: bool = False,
     tz_offset_seconds: int = 0,
 ) -> Optional[Mapping[str, Any]]:
-    member_highs = build_city_local_daily_highs_from_hourly(
+    member_highs, member_high_times = build_city_local_daily_highs_from_hourly(
         extracted["member_hourly"],
         extracted["utc_times"],
         tz_offset_seconds,
@@ -201,6 +201,7 @@ def _build_payload_from_extracted(
     payload = build_weathernext2_city_probability(
         city=city,
         member_highs=member_highs,
+        member_high_times=member_high_times,
         temp_symbol="°F" if use_fahrenheit else "°C",
         target_date=target_date,
         source_run=source_run,
