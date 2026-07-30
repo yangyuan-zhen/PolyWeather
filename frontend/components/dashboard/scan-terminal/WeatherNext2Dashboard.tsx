@@ -58,11 +58,11 @@ function TimeDistChart({ highTimes }: { highTimes: Record<string, string> }) {
   const counts: Record<string, number> = { "00:00": 0, "06:00": 0, "12:00": 0, "18:00": 0 };
   let total = 0;
   for (const t of Object.values(highTimes)) {
-    const slot = slots.find((s) => t.startsWith(s[0])) || "12:00";
-    if (t.startsWith("00")) counts["00:00"]++;
-    else if (t.startsWith("06")) counts["06:00"]++;
-    else if (t.startsWith("12")) counts["12:00"]++;
-    else if (t.startsWith("18")) counts["18:00"]++;
+    const h = parseInt(t, 10);
+    if (h >= 0 && h < 6) counts["00:00"]++;
+    else if (h >= 6 && h < 12) counts["06:00"]++;
+    else if (h >= 12 && h < 18) counts["12:00"]++;
+    else counts["18:00"]++;
     total++;
   }
   const maxCount = Math.max(...Object.values(counts), 1);
