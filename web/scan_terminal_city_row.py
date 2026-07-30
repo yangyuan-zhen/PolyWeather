@@ -679,7 +679,6 @@ def _build_terminal_row(
         "runway_plate_history": _compact_runway_plate_history_for_scan(
             data.get("runway_plate_history")
         ),
-        "weathernext2": data.get("weathernext2"),
     }
 
 
@@ -818,6 +817,7 @@ def _build_quick_row(
         "is_primary_signal": True,
         "accepting_orders": False,
         "row_id": row_id,
+        "weathernext2": data.get("weathernext2"),
         "runway_plate_history": _compact_runway_plate_history_for_scan(
             data.get("runway_plate_history")
         ),
