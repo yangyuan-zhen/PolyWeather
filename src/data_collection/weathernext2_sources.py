@@ -384,6 +384,23 @@ def _load_artifact_payload(path: str, city: str) -> Optional[Dict[str, Any]]:
     for candidate, value in payload.items():
         if _city_key(candidate) == key and isinstance(value, dict):
             return dict(value)
+
+    bak_path = path + ".bak"
+    if bak_path != path and os.path.isfile(bak_path):
+        try:
+            with open(bak_path, "r", encoding="utf-8") as fh:
+                bak_payload = json.load(fh)
+        except Exception:
+            bak_payload = None
+        if isinstance(bak_payload, dict):
+            bak_cities: Any = bak_payload.get("cities")
+            if isinstance(bak_cities, dict):
+                if isinstance(bak_cities.get(key), dict):
+                    return dict(bak_cities[key])
+                for candidate, value in bak_cities.items():
+                    if _city_key(candidate) == key and isinstance(value, dict):
+                        return dict(value)
+
     return None
 
 

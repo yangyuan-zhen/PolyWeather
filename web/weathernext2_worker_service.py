@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Sequence
@@ -147,6 +148,8 @@ def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
     tmp_path = path.with_suffix(f"{path.suffix}.tmp")
     tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     os.replace(str(tmp_path), str(path))
+    bak_path = path.with_suffix(path.suffix + ".bak")
+    shutil.copy2(str(path), str(bak_path))
 
 
 def _flatten_training_records_for_weathernext2(
