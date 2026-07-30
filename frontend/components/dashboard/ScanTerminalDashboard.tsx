@@ -811,6 +811,20 @@ function PolyWeatherTerminal({
     onTerminalActivated();
   }, [activeNavKey, onTerminalActivated]);
 
+  const wn2StaleRef = useRef(false);
+  useEffect(() => {
+    if (activeNavKey !== "weathernext2") {
+      wn2StaleRef.current = false;
+      return;
+    }
+    if (wn2StaleRef.current) return;
+    const hasWn2 = rows.some((r) => r.weathernext2?.summary?.median != null);
+    if (!hasWn2 && !refreshing) {
+      wn2StaleRef.current = true;
+      onRefresh();
+    }
+  }, [activeNavKey, rows, onRefresh, refreshing]);
+
   useEffect(() => {
     const fetchOnline = () => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
