@@ -679,6 +679,7 @@ def _build_terminal_row(
         "runway_plate_history": _compact_runway_plate_history_for_scan(
             data.get("runway_plate_history")
         ),
+        "weathernext2": data.get("weathernext2"),
     }
 
 
