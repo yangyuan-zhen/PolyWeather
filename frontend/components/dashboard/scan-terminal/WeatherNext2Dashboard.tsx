@@ -21,7 +21,6 @@ const T = {
   median: { en: "Median", zh: "中位数" },
   spread: { en: "Spread", zh: "离散度" },
   members: { en: "Members", zh: "成员" },
-  range: { en: "Range", zh: "范围" },
   probability: { en: "Probability", zh: "概率" },
   noWn2Data: { en: "No WeatherNext 2 data available for any city.", zh: "暂无 WeatherNext 2 数据。" },
   runInfo: { en: "Run", zh: "预测运行" },
@@ -216,35 +215,13 @@ function Wn2TableRow({
         <td className="px-3 py-2 text-right font-mono text-[11px] font-bold text-red-600">
           {formatTemp(s.p90)}
         </td>
-        <td className="px-3 py-2">
-          {s.p10 != null && s.p90 != null ? (
-            <div className="relative h-2 w-full rounded-full bg-slate-100">
-              <div
-                className="absolute top-0 h-full rounded-full bg-gradient-to-r from-blue-300 via-blue-400 to-red-400"
-                style={{
-                  left: `${((s.p10 - (s.min ?? s.p10)) / ((s.max ?? s.p90) - (s.min ?? s.p10))) * 100}%`,
-                  width: `${((s.p90 - s.p10) / ((s.max ?? s.p90) - (s.min ?? s.p10))) * 100}%`,
-                  minWidth: "4px",
-                }}
-              />
-              <div
-                className="absolute top-0 h-full w-0.5 -translate-x-1/2 rounded bg-blue-700"
-                style={{
-                  left: `${((s.median! - (s.min ?? s.p10)) / ((s.max ?? s.p90) - (s.min ?? s.p10))) * 100}%`,
-                }}
-              />
-            </div>
-          ) : (
-            <span className="text-slate-300">—</span>
-          )}
-        </td>
         <td className="px-3 py-2 text-right font-mono text-[10px] text-slate-500">
           {wn2.members}
         </td>
       </tr>
       {isExpanded && (
         <tr className="border-b border-blue-100 bg-blue-50/35">
-          <td colSpan={9} className="px-3 py-3">
+          <td colSpan={8} className="px-3 py-3">
             <Wn2RowExpanded data={wn2} />
           </td>
         </tr>
@@ -337,8 +314,7 @@ export function WeatherNext2Dashboard({ rows, isEn }: Wn2DashboardProps) {
               <th className="min-w-[80px] px-3 py-2 text-right text-orange-600">p25</th>
               <th className="min-w-[80px] px-3 py-2 text-right text-orange-600">p75</th>
               <th className="min-w-[80px] px-3 py-2 text-right text-red-600">p90</th>
-              <th className="min-w-[140px] px-3 py-2 text-left">{tt("range", isEn)}</th>
-              <th className="min-w-[64px] px-3 py-2 text-right">{tt("members", isEn)}</th>
+               <th className="min-w-[64px] px-3 py-2 text-right">{tt("members", isEn)}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
