@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Cloud,
   Crown,
   GraduationCap,
   Menu,
@@ -50,6 +51,7 @@ import { useRelativeTime } from "@/hooks/useRelativeTime";
 import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { UsageGuideDashboard } from "@/components/dashboard/scan-terminal/UsageGuideDashboard";
 import { ModelSummaryDashboard } from "@/components/dashboard/scan-terminal/ModelSummaryDashboard";
+import { WeatherNext2Dashboard } from "@/components/dashboard/scan-terminal/WeatherNext2Dashboard";
 import {
   LiveTemperatureThresholdChart,
   clearCityDetailCache,
@@ -102,6 +104,7 @@ const ONLINE_USERS_REFRESH_MS = 5 * 60_000;
 const TERMINAL_NAV_ITEMS = [
   { key: "thresholds", Icon: Activity, labelEn: "Decision", labelZh: "天气决策" },
   { key: "modelSummary", Icon: Table2, labelEn: "Model Summary", labelZh: "模型汇总" },
+  { key: "weathernext2", Icon: Cloud, labelEn: "WeatherNext 2", labelZh: "WeatherNext 2" },
   { key: "training", Icon: GraduationCap, labelEn: "Training", labelZh: "训练数据" },
   { key: "guide", Icon: BookOpenCheck, labelEn: "Guide", labelZh: "使用指南" },
 ] as const;
@@ -1161,6 +1164,8 @@ function PolyWeatherTerminal({
               isEn={isEn}
               generatedText={modelSummaryGeneratedText}
             />
+          ) : activeNavKey === "weathernext2" ? (
+            <WeatherNext2Dashboard rows={rows} isEn={isEn} />
           ) : activeNavKey === "guide" ? (
             <UsageGuideDashboard isEn={isEn} />
           ) : (
