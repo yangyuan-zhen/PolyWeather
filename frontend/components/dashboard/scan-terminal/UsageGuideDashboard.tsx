@@ -271,6 +271,41 @@ export function UsageGuideDashboard({ isEn }: { isEn: boolean }) {
             </div>
           </div>
         </div>
+
+        <SectionTitle
+          icon={Sparkles}
+          eyebrow={isEn ? "WeatherNext 2" : "WeatherNext 2"}
+          title={isEn ? "Percentile terms explained" : "百分位数说明"}
+        />
+        <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {[
+            {
+              term: "p10",
+              zh: "10% 的集合成员不高于此温度，代表最冷的极端情况。温度越低，p10 越低。",
+              en: "10% of ensemble members are at or below this temperature — the cold tail.",
+            },
+            {
+              term: "p25",
+              zh: "下四分位，25% 的成员低于此值。p25–p75 覆盖中间 50% 的成员。",
+              en: "Lower quartile — 25% of members are below this value. p25–p75 covers the middle 50% of members.",
+            },
+            {
+              term: "p75",
+              zh: "上四分位，75% 的成员低于此值（即 25% 高于它）。",
+              en: "Upper quartile — 75% of members are below (25% are above).",
+            },
+            {
+              term: "p90",
+              zh: "90% 的集合成员不高于此温度，代表最暖的极端情况。",
+              en: "90% of ensemble members are at or below this temperature — the warm tail.",
+            },
+          ].map(({ term, zh, en }) => (
+            <div key={term} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-2 font-mono text-sm font-black text-blue-700">{term}</div>
+              <p className="text-xs leading-5 text-slate-500">{isEn ? en : zh}</p>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
