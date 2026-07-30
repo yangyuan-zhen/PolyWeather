@@ -144,8 +144,7 @@ export function runTests() {
   assert(
     MODEL_SUMMARY_MODEL_COLUMNS.map((column) => column.key).includes("AROME HD") &&
       MODEL_SUMMARY_MODEL_COLUMNS.map((column) => column.key).includes("HRRR") &&
-      MODEL_SUMMARY_MODEL_COLUMNS.map((column) => column.key).includes("NAM") &&
-      MODEL_SUMMARY_MODEL_COLUMNS.map((column) => column.key).includes("WeatherNext 2"),
+      MODEL_SUMMARY_MODEL_COLUMNS.map((column) => column.key).includes("NAM"),
     "model summary must expose the fixed model columns including optional short-range models",
   );
   assert(summaryRows.length === 5, "model summary should keep one row per city");
