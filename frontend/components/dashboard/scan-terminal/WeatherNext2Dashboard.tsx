@@ -25,7 +25,6 @@ const T = {
   noWn2Data: { en: "No WeatherNext 2 data available for any city.", zh: "暂无 WeatherNext 2 数据。" },
   runInfo: { en: "Run", zh: "预测运行" },
   tempRange: { en: "Temp (°C)", zh: "温度 (°C)" },
-  timeDist: { en: "High time distribution", zh: "高温时间分布" },
   empty: { en: "No cities match the search.", zh: "没有匹配的城市。" },
   total: { en: "cities", zh: "个城市" },
 } as const;
@@ -44,62 +43,8 @@ function pct(p: number): string {
   return `${Math.round(p * 100)}%`;
 }
 
-function timeLabel(hour: string): string {
-  const h = parseInt(hour, 10);
-  if (h < 6) return `${hour} 凌晨`;
-  if (h < 12) return `${hour} 上午`;
-  if (h < 18) return `${hour} 下午`;
-  return `${hour} 晚间`;
-}
-
-function TimeDistChart({ highTimes }: { highTimes: Record<string, string> }) {
-  const slots = ["00:00", "06:00", "12:00", "18:00"];
-  const counts: Record<string, number> = { "00:00": 0, "06:00": 0, "12:00": 0, "18:00": 0 };
-  let total = 0;
-  for (const t of Object.values(highTimes)) {
-    const h = parseInt(t, 10);
-    if (h >= 0 && h < 6) counts["00:00"]++;
-    else if (h >= 6 && h < 12) counts["06:00"]++;
-    else if (h >= 12 && h < 18) counts["12:00"]++;
-    else counts["18:00"]++;
-    total++;
-  }
-  const maxCount = Math.max(...Object.values(counts), 1);
-  const colors = ["#6366f1", "#3b82f6", "#f59e0b", "#ef4444"];
-  return (
-    <div className="space-y-1.5">
-      {slots.map((slot, i) => {
-        const c = counts[slot];
-        const pct = total > 0 ? (c / total) * 100 : 0;
-        return (
-          <div key={slot} className="flex items-center gap-2">
-            <span className="w-16 shrink-0 text-right font-mono text-[10px] font-bold text-slate-500">{slot}</span>
-            <div className="flex h-5 flex-1 items-center rounded bg-slate-100">
-              <div
-                className="h-full rounded transition-all"
-                style={{
-                  width: `${(c / maxCount) * 100}%`,
-                  minWidth: c > 0 ? "4px" : "0",
-                  backgroundColor: colors[i],
-                }}
-              />
-            </div>
-            <span className="w-10 shrink-0 text-right font-mono text-[10px] font-bold tabular-nums text-slate-700">
-              {Math.round(pct)}%
-            </span>
-            <span className="w-6 shrink-0 text-right font-mono text-[9px] text-slate-400">
-              {c}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function Wn2RowExpanded({ data }: { data: WeatherNext2CityData }) {
   const maxProb = Math.max(...data.buckets.map((b) => b.probability), 0.01);
-  const hasHighTimes = data.member_high_times && Object.keys(data.member_high_times).length > 0;
   return (
     <div className="space-y-4">
       {/* Temperature probability */}
@@ -137,17 +82,6 @@ function Wn2RowExpanded({ data }: { data: WeatherNext2CityData }) {
           })}
         </div>
       </div>
-
-      {/* High time distribution */}
-      {hasHighTimes && (
-        <div>
-          <div className="mb-1.5 text-[11px] font-bold text-slate-700">
-            <span className="inline-block w-3 h-3 rounded bg-indigo-400 align-middle mr-1.5" />
-            {tt("timeDist", false)}
-          </div>
-          <TimeDistChart highTimes={data.member_high_times!} />
-        </div>
-      )}
 
       <div className="flex gap-4 text-[10px] font-medium text-slate-400">
         <span>{tt("members", false)}: {data.members}</span>
