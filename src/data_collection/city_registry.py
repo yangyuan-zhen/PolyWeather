@@ -134,8 +134,8 @@ CITY_REGISTRY = {
     },
     "shenzhen": {
         "name": "Shenzhen",
-        "lat": 22.4686,
-        "lon": 113.9970,
+        "lat": 22.4694,
+        "lon": 113.9833,
         "icao": "LFS",
         "settlement_source": "hko",
         "settlement_station_code": "LFS",
