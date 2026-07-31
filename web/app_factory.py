@@ -11,6 +11,7 @@ from fastapi import FastAPI
 
 from web.core import app as core_app
 from web.routers.analytics import router as analytics_router
+from web.routers.arbitrage import router as arbitrage_router
 from web.routers.city import router as city_router
 from web.routers.bot import router as bot_router
 from web.routers.auth import router as auth_router
@@ -55,6 +56,7 @@ def create_app() -> FastAPI:
         core_app.include_router(auth_router)
         core_app.include_router(feedback_router)
         core_app.include_router(analytics_router)
+        core_app.include_router(arbitrage_router)
         core_app.include_router(scan_router)
         core_app.include_router(sse_router)
         core_app.include_router(payments_router)

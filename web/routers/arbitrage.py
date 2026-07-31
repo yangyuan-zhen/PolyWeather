@@ -1,0 +1,41 @@
+"""Arbitrage overview HTTP router.
+
+Exposes ``GET /api/arbitrage/overview?city=<display_name>`` for the terminal
+``套利对比`` tab. Authentication and cache headers mirror ``/api/scan/terminal``.
+"""
+
+from __future__ import annotations
+
+import web.routes as legacy_routes
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
+
+from web.services.arbitrage_service import get_arbitrage_overview
+from web.services.cache_headers import NO_STORE_CACHE_CONTROL
+
+router = APIRouter(tags=["arbitrage"])
+
+
+@router.get("/api/arbitrage/overview")
+async def arbitrage_overview(
+    request: Request,
+    city: str,
+    force_refresh: bool = False,
+) -> JSONResponse:
+    legacy_routes._assert_entitlement(request)
+    payload = get_arbitrage_overview(
+        request,
+        city=city,
+        force_refresh=force_refresh,
+    )
+    response = JSONResponse(
+        content=payload,
+        headers={
+            "Cache-Control": NO_STORE_CACHE_CONTROL,
+            "Cloudflare-CDN-Cache-Control": NO_STORE_CACHE_CONTROL,
+        },
+    )
+    return response
+
+
+__all__ = ["router"]
