@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+import json
+from typing import Any, Dict, List, Optional, Tuple
 
 import pytest
 
@@ -817,3 +818,108 @@ def test_arbitrage_cities_endpoint_returns_no_store_cache(monkeypatch):
     assert body["cities"] == [{"key": "shanghai", "display_name": "Shanghai"}]
     assert response.headers["cache-control"] == "no-store, max-age=0"
     assert response.headers["cloudflare-cdn-cache-control"] == "no-store, max-age=0"
+
+
+class _FakeRedisClient:
+    """Minimal redis.Redis stand-in capturing get/setex traffic."""
+
+    def __init__(self) -> None:
+        self._store: Dict[str, str] = {}
+        self.writes: List[Tuple[str, int, str]] = []
+
+    def get(self, key: str) -> Optional[bytes]:
+        raw = self._store.get(key)
+        return raw.encode("utf-8") if raw is not None else None
+
+    def setex(self, key: str, ttl: int, value: str) -> None:
+        self.writes.append((key, ttl, value))
+        self._store[key] = value
+
+
+def test_list_arbitrage_cities_reads_redis_cache_when_memory_cold(monkeypatch):
+    monkeypatch.setattr(legacy_routes, "CITY_REGISTRY", _CITIES_REGISTRY_3)
+    fake = _FakeRedisClient()
+    cached_payload = {
+        "cities": [{"key": "paris", "display_name": "Paris"}],
+        "fallback": False,
+        "generated_at": "2026-08-01T00:00:00+00:00",
+    }
+    fake._store[arbitrage_service._arbitrage_redis_entry_key()] = json.dumps(
+        cached_payload, ensure_ascii=False, separators=(",", ":")
+    )
+    monkeypatch.setattr(arbitrage_service, "_get_arbitrage_redis_client", lambda: fake)
+    arbitrage_service._ARBITRAGE_CITIES_CACHE.clear()
+
+    def _boom() -> List[Dict[str, Any]]:
+        raise AssertionError("public-search must not run on a Redis cache hit")
+
+    monkeypatch.setattr(arbitrage_service, "_fetch_public_search_events", _boom)
+
+    payload = arbitrage_service.list_arbitrage_cities(_FakeRequest())
+
+    assert payload == cached_payload
+
+
+def test_list_arbitrage_cities_writes_redis_cache_after_recompute(monkeypatch):
+    monkeypatch.setattr(legacy_routes, "CITY_REGISTRY", _CITIES_REGISTRY_3)
+    fake = _FakeRedisClient()
+    monkeypatch.setattr(arbitrage_service, "_get_arbitrage_redis_client", lambda: fake)
+    arbitrage_service._ARBITRAGE_CITIES_CACHE.clear()
+    monkeypatch.setattr(
+        arbitrage_service,
+        "_fetch_public_search_events",
+        lambda: [_search_event("Highest temperature in Shanghai on August 1?")],
+    )
+
+    payload = arbitrage_service.list_arbitrage_cities(_FakeRequest())
+
+    assert payload["fallback"] is False
+    assert len(fake.writes) == 1
+    key, ttl, raw = fake.writes[0]
+    assert key == arbitrage_service._arbitrage_redis_entry_key()
+    assert ttl == arbitrage_service._arbitrage_redis_ttl_sec()
+    assert json.loads(raw)["cities"] == [
+        {"key": "shanghai", "display_name": "Shanghai"}
+    ]
+
+
+def test_list_arbitrage_cities_uses_memory_when_redis_unavailable(monkeypatch):
+    monkeypatch.setattr(legacy_routes, "CITY_REGISTRY", _CITIES_REGISTRY_3)
+    monkeypatch.setattr(arbitrage_service, "_get_arbitrage_redis_client", lambda: None)
+    arbitrage_service._ARBITRAGE_CITIES_CACHE.clear()
+    calls: List[int] = []
+
+    def _fetch() -> List[Dict[str, Any]]:
+        calls.append(1)
+        return [_search_event("Highest temperature in Shanghai on August 1?")]
+
+    monkeypatch.setattr(arbitrage_service, "_fetch_public_search_events", _fetch)
+
+    first = arbitrage_service.list_arbitrage_cities(_FakeRequest())
+    second = arbitrage_service.list_arbitrage_cities(_FakeRequest())
+
+    assert len(calls) == 1
+    assert second["cities"] == first["cities"]
+
+
+def test_list_arbitrage_cities_ignores_redis_read_errors(monkeypatch):
+    monkeypatch.setattr(legacy_routes, "CITY_REGISTRY", _CITIES_REGISTRY_3)
+
+    class _BrokenRedis:
+        def get(self, key: str) -> Optional[bytes]:
+            raise RuntimeError("redis down")
+
+    monkeypatch.setattr(
+        arbitrage_service, "_get_arbitrage_redis_client", lambda: _BrokenRedis()
+    )
+    arbitrage_service._ARBITRAGE_CITIES_CACHE.clear()
+    monkeypatch.setattr(
+        arbitrage_service,
+        "_fetch_public_search_events",
+        lambda: [_search_event("Highest temperature in Shanghai on August 1?")],
+    )
+
+    payload = arbitrage_service.list_arbitrage_cities(_FakeRequest())
+
+    assert payload["fallback"] is False
+    assert payload["cities"] == [{"key": "shanghai", "display_name": "Shanghai"}]

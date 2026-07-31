@@ -9,7 +9,9 @@ no new dependencies are added.
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 import re
 import threading
 import time
@@ -43,6 +45,105 @@ _ARBITRAGE_CITIES_CACHE_TTL_SEC = 3600
 _ARBITRAGE_CITIES_CACHE_KEY = "arbitrage_cities"
 _ARBITRAGE_CITIES_LOCK = threading.Lock()
 _ARBITRAGE_CITIES_CACHE: Dict[str, Tuple[float, Optional[Dict[str, Any]]]] = {}
+
+# Shared Redis cache for the same payload (cross-worker / cross-restart),
+# mirroring the scan-terminal cache pattern. Redis is opt-in via env and
+# degrades to the in-memory cache above when unavailable.
+_ARBITRAGE_REDIS_CLIENT_LOCK = threading.Lock()
+_ARBITRAGE_REDIS_CLIENT: Any = None
+_ARBITRAGE_REDIS_UNAVAILABLE = False
+
+
+def _truthy_env(name: str, *, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return str(value).strip().lower() not in ("", "0", "false", "no", "off")
+
+
+def _arbitrage_redis_enabled() -> bool:
+    return _truthy_env(
+        "POLYWEATHER_ARBITRAGE_REDIS_CACHE_ENABLED",
+        default=bool(os.getenv("POLYWEATHER_REDIS_URL")),
+    )
+
+
+def _arbitrage_redis_ttl_sec() -> int:
+    try:
+        value = int(
+            os.getenv(
+                "POLYWEATHER_ARBITRAGE_REDIS_CACHE_TTL_SEC",
+                str(_ARBITRAGE_CITIES_CACHE_TTL_SEC),
+            )
+        )
+    except Exception:
+        value = _ARBITRAGE_CITIES_CACHE_TTL_SEC
+    return max(600, min(value, 86400))
+
+
+def _arbitrage_redis_entry_key() -> str:
+    return f"polyweather:arbitrage:v1:{_ARBITRAGE_CITIES_CACHE_KEY}"
+
+
+def _get_arbitrage_redis_client() -> Any:
+    global _ARBITRAGE_REDIS_CLIENT, _ARBITRAGE_REDIS_UNAVAILABLE
+
+    if not _arbitrage_redis_enabled() or _ARBITRAGE_REDIS_UNAVAILABLE:
+        return None
+
+    with _ARBITRAGE_REDIS_CLIENT_LOCK:
+        if _ARBITRAGE_REDIS_CLIENT is not None:
+            return _ARBITRAGE_REDIS_CLIENT
+        try:
+            import redis  # type: ignore
+
+            url = os.getenv("POLYWEATHER_REDIS_URL") or "redis://127.0.0.1:6379/0"
+            client = redis.Redis.from_url(
+                url,
+                socket_timeout=float(
+                    os.getenv("POLYWEATHER_REDIS_SOCKET_TIMEOUT_SECONDS", "2")
+                ),
+                socket_connect_timeout=float(
+                    os.getenv("POLYWEATHER_REDIS_SOCKET_CONNECT_TIMEOUT_SECONDS", "1")
+                ),
+                health_check_interval=30,
+            )
+            client.ping()
+            _ARBITRAGE_REDIS_CLIENT = client
+            return client
+        except Exception:
+            _ARBITRAGE_REDIS_UNAVAILABLE = True
+            return None
+
+
+def _read_arbitrage_redis_cache() -> Optional[Dict[str, Any]]:
+    client = _get_arbitrage_redis_client()
+    if client is None:
+        return None
+    try:
+        raw = client.get(_arbitrage_redis_entry_key())
+        if not raw:
+            return None
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8")
+        entry = json.loads(str(raw))
+        return dict(entry) if isinstance(entry, dict) else None
+    except Exception:
+        return None
+
+
+def _write_arbitrage_redis_cache(payload: Dict[str, Any]) -> None:
+    client = _get_arbitrage_redis_client()
+    if client is None:
+        return
+    try:
+        client.setex(
+            _arbitrage_redis_entry_key(),
+            _arbitrage_redis_ttl_sec(),
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+        )
+    except Exception:
+        return
 
 # Static city list returned when public-search discovery fails or yields no
 # monitored city. Keys must exist in CITY_REGISTRY.
@@ -536,8 +637,9 @@ def list_arbitrage_cities(request: Request) -> Dict[str, Any]:
 
     Discovers cities from the Polymarket public-search endpoint, intersects
     them with CITY_REGISTRY (preserving registry order), and caches the
-    payload for one hour. When discovery fails or the intersection is empty,
-    a static eight-city list is returned with ``fallback: True``.
+    payload for one hour (in-memory plus optional shared Redis). When
+    discovery fails or the intersection is empty, a static eight-city list is
+    returned with ``fallback: True``.
     """
     # ``request`` is accepted to match the router signature; the payload is
     # request-agnostic and cached process-wide.
@@ -549,6 +651,13 @@ def list_arbitrage_cities(request: Request) -> Dict[str, Any]:
         cached = _ARBITRAGE_CITIES_CACHE.get(_ARBITRAGE_CITIES_CACHE_KEY)
     if cached and cached[1] and now - cached[0] < _ARBITRAGE_CITIES_CACHE_TTL_SEC:
         return dict(cached[1])
+
+    # Redis 命中则回填内存缓存后返回（跨 worker / 跨重启共享）。
+    redis_payload = _read_arbitrage_redis_cache()
+    if redis_payload:
+        with _ARBITRAGE_CITIES_LOCK:
+            _ARBITRAGE_CITIES_CACHE[_ARBITRAGE_CITIES_CACHE_KEY] = (now, redis_payload)
+        return dict(redis_payload)
 
     registry = legacy_routes.CITY_REGISTRY
     discovered: Set[str] = set()
@@ -575,6 +684,7 @@ def list_arbitrage_cities(request: Request) -> Dict[str, Any]:
         "fallback": fallback,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
+    _write_arbitrage_redis_cache(payload)
     with _ARBITRAGE_CITIES_LOCK:
         _ARBITRAGE_CITIES_CACHE[_ARBITRAGE_CITIES_CACHE_KEY] = (now, payload)
     return payload
