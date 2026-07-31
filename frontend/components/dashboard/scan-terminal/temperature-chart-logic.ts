@@ -2262,9 +2262,9 @@ function getLiveObservationLabels(
   hourly: ChartRenderState,
 ) {
   const normalizedKey = normalizeCityKey(row?.city);
+  // AMSC AWOS runway data for Chinese cities was removed; only Korean AMOS
+  // runway sensors (Seoul/Busan) remain, so those keep the runway label.
   const runwaySensorCities = new Set([
-    "beijing", "shanghai", "guangzhou", "qingdao",
-    "chengdu", "chongqing", "wuhan",
     "seoul", "busan",
   ]);
   const weatherStationCities = new Set(["ankara", "istanbul"]);
