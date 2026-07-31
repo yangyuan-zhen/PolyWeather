@@ -174,24 +174,28 @@ function ModelSummaryRowView({
               </div>
               {row.probabilityBuckets.length ? (
                 <div className="flex flex-1 flex-wrap items-center gap-1.5">
-                  {row.probabilityBuckets.map((bucket) => {
-                    const isTopBucket = bucket.key === row.topProbabilityBucketKey;
-                    return (
-                      <span
-                        key={bucket.key}
-                        className={clsx(
-                          "inline-flex items-center gap-1 rounded border px-2 py-1 font-mono text-[10px] font-bold tabular-nums",
-                          isTopBucket
-                            ? "border-violet-300 bg-violet-100 text-violet-800 shadow-sm"
-                            : "border-slate-200 bg-white text-slate-600",
-                        )}
-                        title={bucket.label}
-                      >
-                        <span>{bucket.label}</span>
-                        <span>{formatModelSummaryProbability(bucket.probability)}</span>
-                      </span>
-                    );
-                  })}
+                  {row.probabilityBuckets
+                    .filter((bucket) => bucket.probability > 0)
+                    .sort((a, b) => b.probability - a.probability)
+                    .slice(0, 3)
+                    .map((bucket) => {
+                      const isTopBucket = bucket.key === row.topProbabilityBucketKey;
+                      return (
+                        <span
+                          key={bucket.key}
+                          className={clsx(
+                            "inline-flex items-center gap-1 rounded border px-2 py-1 font-mono text-[10px] font-bold tabular-nums",
+                            isTopBucket
+                              ? "border-violet-300 bg-violet-100 text-violet-800 shadow-sm"
+                              : "border-slate-200 bg-white text-slate-600",
+                          )}
+                          title={bucket.label}
+                        >
+                          <span>{bucket.label}</span>
+                          <span>{formatModelSummaryProbability(bucket.probability)}</span>
+                        </span>
+                      );
+                    })}
                 </div>
               ) : (
                 <span className="text-xs font-bold text-slate-400">

@@ -267,7 +267,8 @@ export function runTests() {
       modelSummarySource.includes("toggleExpandedCity") &&
       modelSummarySource.includes("aria-expanded") &&
       modelSummarySource.includes("ChevronRight") &&
-      modelSummarySource.includes("probabilityBuckets.map") &&
+      modelSummarySource.includes("slice(0, 3)") &&
+      modelSummarySource.includes(".map((bucket)") &&
       !modelSummarySource.includes("Market Option Probability") &&
       !modelSummarySource.includes("市场选项概率") &&
       !modelSummarySource.includes("Detailed Probability") &&
