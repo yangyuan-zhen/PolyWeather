@@ -180,6 +180,25 @@ class RuntimeStateDB:
             )
             conn.execute(
                 """
+                CREATE TABLE IF NOT EXISTS deb_weight_snapshots_store (
+                    city TEXT PRIMARY KEY,
+                    weights_json TEXT NOT NULL,
+                    maes_json TEXT NOT NULL,
+                    biases_json TEXT NOT NULL,
+                    forecast_models_json TEXT NOT NULL,
+                    samples INTEGER NOT NULL,
+                    days_used INTEGER NOT NULL,
+                    lookback_days INTEGER NOT NULL,
+                    decay_factor REAL NOT NULL,
+                    bias_penalty REAL NOT NULL,
+                    divergence_threshold REAL NOT NULL,
+                    weights_info TEXT,
+                    computed_at REAL NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS open_meteo_cache_store (
                     source_kind TEXT NOT NULL,
                     cache_key TEXT NOT NULL,
@@ -260,6 +279,18 @@ class RuntimeStateDB:
             )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_observation_collector_status_source ON observation_collector_status_store(source, updated_at DESC)"
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS deb_normal_residual_stats_store (
+                    stats_key TEXT PRIMARY KEY,
+                    lead_biases_json TEXT NOT NULL,
+                    lead_sigmas_json TEXT NOT NULL,
+                    samples INTEGER NOT NULL,
+                    window_days INTEGER NOT NULL,
+                    computed_at REAL NOT NULL
+                )
+                """
             )
             conn.commit()
 
@@ -1493,3 +1524,185 @@ def get_runtime_data_dir() -> str:
         return raw
     project_root = Path(__file__).resolve().parents[2]
     return str(project_root / "data")
+
+
+class DebWeightSnapshotRepository:
+    """Persist per-city DEB weight snapshots produced by offline training.
+
+    Each snapshot records the computed blend weights plus the hyperparameters
+    and sample counts that produced them, so any prediction day can be traced
+    back to the exact weight state it used.
+    """
+
+    def __init__(self, db: Optional[RuntimeStateDB] = None):
+        self.db = db or RuntimeStateDB.instance()
+
+    def upsert_snapshot(self, city: str, snapshot: Dict[str, Any]) -> None:
+        with self.db.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO deb_weight_snapshots_store (
+                    city, weights_json, maes_json, biases_json, forecast_models_json,
+                    samples, days_used, lookback_days, decay_factor, bias_penalty,
+                    divergence_threshold, weights_info, computed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(city) DO UPDATE SET
+                    weights_json = excluded.weights_json,
+                    maes_json = excluded.maes_json,
+                    biases_json = excluded.biases_json,
+                    forecast_models_json = excluded.forecast_models_json,
+                    samples = excluded.samples,
+                    days_used = excluded.days_used,
+                    lookback_days = excluded.lookback_days,
+                    decay_factor = excluded.decay_factor,
+                    bias_penalty = excluded.bias_penalty,
+                    divergence_threshold = excluded.divergence_threshold,
+                    weights_info = excluded.weights_info,
+                    computed_at = excluded.computed_at
+                """,
+                (
+                    city,
+                    json.dumps(snapshot.get("weights") or {}, ensure_ascii=False),
+                    json.dumps(snapshot.get("maes") or {}, ensure_ascii=False),
+                    json.dumps(snapshot.get("biases") or {}, ensure_ascii=False),
+                    json.dumps(
+                        snapshot.get("forecast_models") or [], ensure_ascii=False
+                    ),
+                    int(snapshot.get("samples") or 0),
+                    int(snapshot.get("days_used") or 0),
+                    int(snapshot.get("lookback_days") or 7),
+                    float(snapshot.get("decay_factor") or 0.85),
+                    float(snapshot.get("bias_penalty") or 0.5),
+                    float(snapshot.get("divergence_threshold") or 3.0),
+                    snapshot.get("weights_info"),
+                    time.time(),
+                ),
+            )
+            conn.commit()
+
+    def load_snapshot(self, city: str) -> Optional[Dict[str, Any]]:
+        with self.db.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT weights_json, maes_json, biases_json, forecast_models_json,
+                       samples, days_used, lookback_days, decay_factor, bias_penalty,
+                       divergence_threshold, weights_info, computed_at
+                FROM deb_weight_snapshots_store
+                WHERE city = ?
+                """,
+                (city,),
+            ).fetchone()
+        if not row:
+            return None
+        return {
+            "weights": json.loads(row["weights_json"] or "{}"),
+            "maes": json.loads(row["maes_json"] or "{}"),
+            "biases": json.loads(row["biases_json"] or "{}"),
+            "forecast_models": json.loads(row["forecast_models_json"] or "[]"),
+            "samples": int(row["samples"] or 0),
+            "days_used": int(row["days_used"] or 0),
+            "lookback_days": int(row["lookback_days"] or 7),
+            "decay_factor": float(row["decay_factor"] or 0.85),
+            "bias_penalty": float(row["bias_penalty"] or 0.5),
+            "divergence_threshold": float(row["divergence_threshold"] or 3.0),
+            "weights_info": row["weights_info"],
+            "computed_at": float(row["computed_at"] or 0),
+        }
+
+    def load_all(self) -> Dict[str, Dict[str, Any]]:
+        out: Dict[str, Dict[str, Any]] = {}
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT city, weights_json, maes_json, biases_json,
+                       forecast_models_json, samples, days_used, lookback_days,
+                       decay_factor, bias_penalty, divergence_threshold,
+                       weights_info, computed_at
+                FROM deb_weight_snapshots_store
+                ORDER BY city
+                """
+            ).fetchall()
+        for row in rows:
+            out[str(row["city"])] = {
+                "weights": json.loads(row["weights_json"] or "{}"),
+                "maes": json.loads(row["maes_json"] or "{}"),
+                "biases": json.loads(row["biases_json"] or "{}"),
+                "forecast_models": json.loads(row["forecast_models_json"] or "[]"),
+                "samples": int(row["samples"] or 0),
+                "days_used": int(row["days_used"] or 0),
+                "lookback_days": int(row["lookback_days"] or 7),
+                "decay_factor": float(row["decay_factor"] or 0.85),
+                "bias_penalty": float(row["bias_penalty"] or 0.5),
+                "divergence_threshold": float(row["divergence_threshold"] or 3.0),
+                "weights_info": row["weights_info"],
+                "computed_at": float(row["computed_at"] or 0),
+            }
+        return out
+
+    def delete_older_than(self, computed_at_cutoff: float) -> int:
+        with self.db.connect() as conn:
+            cur = conn.execute(
+                "DELETE FROM deb_weight_snapshots_store WHERE computed_at < ?",
+                (float(computed_at_cutoff),),
+            )
+            conn.commit()
+            return int(cur.rowcount or 0)
+
+
+class DebNormalResidualStatsRepository:
+    """Persist lead-stratified DEB residual statistics for the normal probability engine.
+
+    Single global row (stats_key='global'): bias(lead) = residual median,
+    sigma(lead) = residual std, pooled across cities per lead stratum.
+    """
+
+    STATS_KEY = "global"
+
+    def __init__(self, db: Optional[RuntimeStateDB] = None):
+        self.db = db or RuntimeStateDB.instance()
+
+    def upsert_stats(self, stats: Dict[str, Any]) -> None:
+        with self.db.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO deb_normal_residual_stats_store (
+                    stats_key, lead_biases_json, lead_sigmas_json,
+                    samples, window_days, computed_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(stats_key) DO UPDATE SET
+                    lead_biases_json = excluded.lead_biases_json,
+                    lead_sigmas_json = excluded.lead_sigmas_json,
+                    samples = excluded.samples,
+                    window_days = excluded.window_days,
+                    computed_at = excluded.computed_at
+                """,
+                (
+                    self.STATS_KEY,
+                    json.dumps(stats.get("lead_biases") or {}, ensure_ascii=False),
+                    json.dumps(stats.get("lead_sigmas") or {}, ensure_ascii=False),
+                    int(stats.get("samples") or 0),
+                    int(stats.get("window_days") or 0),
+                    time.time(),
+                ),
+            )
+            conn.commit()
+
+    def load_stats(self) -> Optional[Dict[str, Any]]:
+        with self.db.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT lead_biases_json, lead_sigmas_json, samples, window_days, computed_at
+                FROM deb_normal_residual_stats_store
+                WHERE stats_key = ?
+                """,
+                (self.STATS_KEY,),
+            ).fetchone()
+        if not row:
+            return None
+        return {
+            "lead_biases": json.loads(row["lead_biases_json"] or "{}"),
+            "lead_sigmas": json.loads(row["lead_sigmas_json"] or "{}"),
+            "samples": int(row["samples"] or 0),
+            "window_days": int(row["window_days"] or 0),
+            "computed_at": float(row["computed_at"] or 0),
+        }

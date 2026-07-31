@@ -7,7 +7,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from src.analysis.deb_algorithm import calculate_deb_prediction, calculate_dynamic_weights
-from src.analysis.trend_engine import calculate_prob_distribution
 from src.data_collection.nws_open_meteo_sources import (
     OPEN_METEO_MULTI_MODEL_ORDER,
     _parse_open_meteo_multi_model_daily,
@@ -164,19 +163,6 @@ def _cached_panel_multi_model_for_local_date(
     ):
         return dict(multi_model)
     return None
-
-
-def _model_spread_sigma(forecasts: Dict[str, float], temp_symbol: str) -> float:
-    values = [
-        value
-        for value in (_safe_float(item) for item in forecasts.values())
-        if value is not None
-    ]
-    scale = 1.8 if "F" in str(temp_symbol or "").upper() else 1.0
-    if len(values) < 2:
-        return 1.2 * scale
-    spread = max(values) - min(values)
-    return max(0.8 * scale, min(4.0 * scale, spread / 2.0))
 
 
 def _multi_model_cache_key(
@@ -421,25 +407,6 @@ def _fetch_today_forecast_panel_payload(
     deb_prediction = _safe_float(deb_result.get("prediction"))
 
     probabilities: Dict[str, Any] = {"mu": None, "distribution": [], "distribution_all": []}
-    if deb_prediction is not None:
-        sigma = _model_spread_sigma(forecasts, temp_symbol)
-        current = payload.get("current") if isinstance(payload.get("current"), dict) else {}
-        max_so_far = _safe_float(current.get("max_so_far"))
-        probs = calculate_prob_distribution(
-            deb_prediction,
-            sigma,
-            max_so_far,
-            temp_symbol,
-            city,
-        )
-        probabilities = {
-            "mu": probs.get("mu", deb_prediction),
-            "sigma": probs.get("sigma", sigma),
-            "distribution": probs.get("probabilities") or [],
-            "distribution_all": probs.get("probabilities_all") or probs.get("probabilities") or [],
-            "engine": "legacy_gaussian_live_multimodel",
-            "calibration_mode": "scan_terminal_live_refresh",
-        }
 
     source_local_date = str(payload.get("local_date") or "").strip()
     return {

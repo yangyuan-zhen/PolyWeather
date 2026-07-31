@@ -13,6 +13,13 @@ from typing import Optional
 
 from loguru import logger
 
+from src.analysis.deb_ml_calibration import train_deb_quantile_calibrator
+from src.analysis.deb_probability import train_deb_lead_stats
+from src.analysis.deb_weight_snapshot import refresh_deb_weight_snapshots
+from src.database.runtime_state import (
+    DailyRecordRepository,
+    DebNormalResidualStatsRepository,
+)
 from web.training_settlement_service import run_training_settlement_cycle
 
 
@@ -63,6 +70,42 @@ def _run_once(*, lookback_days: int, cities: Optional[list[str]]) -> dict:
         cities=cities,
         lookback_days=lookback_days,
     )
+    try:
+        snapshot_result = refresh_deb_weight_snapshots(cities=cities)
+        result["weight_snapshots"] = snapshot_result
+    except Exception as exc:
+        logger.exception("deb weight snapshot refresh failed: {}", exc)
+        result["weight_snapshots"] = {"error": str(exc)}
+    try:
+        daily_records = DailyRecordRepository().load_all()
+        calibration = train_deb_quantile_calibrator(
+            daily_records,
+            model_dir=str(
+                os.getenv(
+                    "POLYWEATHER_DEB_ML_MODEL_DIR",
+                    "/app/data/models/deb_calibrator",
+                )
+                or "/app/data/models/deb_calibrator"
+            ).strip(),
+        )
+        result["deb_ml_calibration"] = calibration
+    except Exception as exc:
+        logger.exception("deb ml calibration training failed: {}", exc)
+        result["deb_ml_calibration"] = {"error": str(exc)}
+    try:
+        daily_records = DailyRecordRepository().load_all()
+        stats = train_deb_lead_stats(daily_records)
+        DebNormalResidualStatsRepository().upsert_stats(stats)
+        result["deb_normal_residual_stats"] = {
+            "trained": bool(stats.get("trained")),
+            "samples": stats.get("samples"),
+            "lead_biases": stats.get("lead_biases"),
+            "lead_sigmas": stats.get("lead_sigmas"),
+            "window_days": stats.get("window_days"),
+        }
+    except Exception as exc:
+        logger.exception("deb normal residual stats training failed: {}", exc)
+        result["deb_normal_residual_stats"] = {"error": str(exc)}
     logger.info("training settlement result={}", json.dumps(result, ensure_ascii=False))
     return result
 

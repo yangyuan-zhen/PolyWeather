@@ -131,35 +131,18 @@ def test_calculate_deb_prediction_keeps_raw_and_adds_versioned_bias_correction(m
 
 
 def test_calculate_deb_prediction_prefers_bucket_calibration_when_enough_samples(monkeypatch):
+    # 10 days of a consistent +0.6 bias: both recent-bias and bucket calibration
+    # reach full trust (shrinkage_samples=10), so the bucket path is selected.
     monkeypatch.setattr(
         "src.analysis.deb_algorithm.load_history",
         lambda _: {
             "ankara": {
-                "2026-04-11": {
-                    "actual_high": 21.0,
-                    "deb_prediction": 20.4,
-                    "forecasts": {"ECMWF": 20.4, "GFS": 20.4},
-                },
-                "2026-04-12": {
-                    "actual_high": 22.0,
-                    "deb_prediction": 21.4,
-                    "forecasts": {"ECMWF": 21.4, "GFS": 21.4},
-                },
-                "2026-04-13": {
-                    "actual_high": 23.0,
-                    "deb_prediction": 22.4,
-                    "forecasts": {"ECMWF": 22.4, "GFS": 22.4},
-                },
-                "2026-04-14": {
-                    "actual_high": 24.0,
-                    "deb_prediction": 23.4,
-                    "forecasts": {"ECMWF": 23.4, "GFS": 23.4},
-                },
-                "2026-04-15": {
-                    "actual_high": 25.0,
-                    "deb_prediction": 24.4,
-                    "forecasts": {"ECMWF": 24.4, "GFS": 24.4},
-                },
+                f"2026-04-{11 + idx:02d}": {
+                    "actual_high": 21.0 + idx,
+                    "deb_prediction": 20.4 + idx,
+                    "forecasts": {"ECMWF": 20.4 + idx, "GFS": 20.4 + idx},
+                }
+                for idx in range(10)
             }
         },
     )
@@ -175,7 +158,7 @@ def test_calculate_deb_prediction_prefers_bucket_calibration_when_enough_samples
     assert result["selected_version"] == "deb_v2_bucket_calibrated"
     assert result["guard_reason"] == "bucket_same_adjustment"
     assert result["bias_adjustment"] == 0.6
-    assert result["bias_samples"] == 5
+    assert result["bias_samples"] == 10
 
 
 def test_calculate_deb_prediction_reports_recent_quality_for_effective_deb(monkeypatch):

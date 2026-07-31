@@ -1008,7 +1008,7 @@ def _analyze(
     # ── 10. Shared analysis (probability, trend, AI) via trend_engine ──
     # This single call replaces the duplicate probability engine, dead market
     # detection, forecast bust grading, and AI context building.
-    from src.analysis.trend_engine import analyze_weather_trend as _trend_analyze, calculate_prob_distribution
+    from src.analysis.trend_engine import analyze_weather_trend as _trend_analyze
 
     probabilities = []
     probabilities_all = []
@@ -1320,8 +1320,6 @@ def _analyze(
     multi_model_daily = {}
     mm_daily_raw = mm.get("daily_forecasts", {})
     for i, d_str in enumerate(dates):
-        d_probs = []
-        d_probs_all = []
         if i == 0:
             day_m = current_forecasts.copy()
             d_val, d_winfo = deb_val, deb_weights
@@ -1351,8 +1349,6 @@ def _analyze(
             d_selected_version, d_guard_reason = None, None
             d_bias_adjustment, d_bias_samples = 0.0, 0
             d_quality = {}
-            d_probs = []
-            d_probs_all = []
             if day_m:
                 try:
                     deb_result = calculate_deb_prediction(city, day_m)
@@ -1374,19 +1370,6 @@ def _analyze(
                             "recent_hits": deb_result.get("recent_hits"),
                             "recent_mae": deb_result.get("recent_mae"),
                         }
-                        
-                        # Calculate future probability based on model divergence
-                        m_vals = [v for v in day_m.values() if v is not None]
-                        if len(m_vals) > 1:
-                            # Use spread as a proxy for sigma. 
-                            # sigma = (max-min)/2 with a floor of 0.6
-                            d_sigma = max(0.6, (max(m_vals) - min(m_vals)) / 2.0)
-                        else:
-                            d_sigma = 1.0
-                        
-                        prob_obj = calculate_prob_distribution(d_val, d_sigma, None, sym)
-                        d_probs = prob_obj.get("probabilities", [])
-                        d_probs_all = prob_obj.get("probabilities_all", d_probs)
                 except Exception:
                     pass
         
@@ -1404,8 +1387,8 @@ def _analyze(
                     "bias_samples": d_bias_samples,
                     **d_quality,
                 },
-                "probabilities": d_probs if i > 0 else probabilities, # Use today's real prob for today
-                "probabilities_all": d_probs_all if i > 0 else probabilities_all,
+                "probabilities": probabilities if i == 0 else [],
+                "probabilities_all": probabilities_all if i == 0 else [],
             }
 
     # ── Assemble result ──
@@ -1579,7 +1562,7 @@ def _analyze(
             "mu": round(mu, 1) if mu is not None else None,
             "distribution": probabilities,
             "distribution_all": probabilities_all or probabilities,
-            "engine": "legacy",
+            "engine": sd.get("probability_engine") if isinstance(sd, dict) else None,
         },
         "trend": trend_info,
         "peak": {

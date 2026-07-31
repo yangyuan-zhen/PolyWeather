@@ -18,7 +18,6 @@ import { TemperatureTooltipContent } from "@/components/dashboard/scan-terminal/
 import {
   getTemperatureSeriesForRunwayDetailsMode,
   type EvidenceSeries,
-  type ProbabilityOverlay,
 } from "@/components/dashboard/scan-terminal/temperature-chart-logic";
 
 type CityThreshold = {
@@ -34,14 +33,11 @@ function isFiniteChartValue(value: unknown) {
 
 function hasDrawableTemperatureChartContent({
   activeSeries,
-  probabilityOverlay,
   zoomedData,
 }: {
   activeSeries: EvidenceSeries[];
-  probabilityOverlay: ProbabilityOverlay | null;
   zoomedData: Array<Record<string, any>>;
 }) {
-  void probabilityOverlay;
   return activeSeries.some((series) =>
     zoomedData.some((point, index) => {
       const value = point?.[series.key] ?? series.values[index];
@@ -56,16 +52,13 @@ function isFallbackReferenceSeries(series: EvidenceSeries) {
 
 function hasDrawablePrimaryTemperatureChartContent({
   activeSeries,
-  probabilityOverlay,
   zoomedData,
 }: {
   activeSeries: EvidenceSeries[];
-  probabilityOverlay: ProbabilityOverlay | null;
   zoomedData: Array<Record<string, any>>;
 }) {
   return hasDrawableTemperatureChartContent({
     activeSeries: activeSeries.filter((series) => !isFallbackReferenceSeries(series)),
-    probabilityOverlay,
     zoomedData,
   });
 }
@@ -74,18 +67,16 @@ function shouldKeepTemperatureChartLoading({
   row,
   isHourlyLoading,
   activeSeries,
-  probabilityOverlay,
   zoomedData,
 }: {
   row: ScanOpportunityRow | null;
   isHourlyLoading: boolean;
   activeSeries: EvidenceSeries[];
-  probabilityOverlay: ProbabilityOverlay | null;
   zoomedData: Array<Record<string, any>>;
 }) {
   if (!row?.city) return false;
   if (!isHourlyLoading) return false;
-  return !hasDrawablePrimaryTemperatureChartContent({ activeSeries, probabilityOverlay, zoomedData });
+  return !hasDrawablePrimaryTemperatureChartContent({ activeSeries, zoomedData });
 }
 
 function TemperatureChartSkeleton({ compact }: { compact: boolean }) {
@@ -124,7 +115,6 @@ function TemperatureChartCanvasComponent({
   cityThresholds,
   chartSeries,
   activeSeries,
-  probabilityOverlay,
   zoomedData,
   chartDomain,
   intDegreeTicks,
@@ -153,7 +143,6 @@ function TemperatureChartCanvasComponent({
   cityThresholds: CityThreshold[];
   chartSeries: EvidenceSeries[];
   activeSeries: EvidenceSeries[];
-  probabilityOverlay: ProbabilityOverlay | null;
   zoomedData: Array<Record<string, any>>;
   chartDomain: [number, number] | ["auto", "auto"];
   intDegreeTicks: number[] | null;
@@ -233,14 +222,12 @@ function TemperatureChartCanvasComponent({
     collapsedRunwaySeries.length < chartSeries.length;
   const hasDrawableChartContent = hasDrawableTemperatureChartContent({
     activeSeries,
-    probabilityOverlay,
     zoomedData,
   });
   const shouldShowChartLoading = shouldKeepTemperatureChartLoading({
     row,
     isHourlyLoading,
     activeSeries,
-    probabilityOverlay,
     zoomedData,
   });
   const shouldRenderChart = canRenderChart && hasDrawableChartContent;
@@ -361,7 +348,6 @@ function TemperatureChartCanvasComponent({
                   payload={props.payload as ReadonlyArray<{ payload?: Record<string, any> }> | undefined}
                   data={zoomedData}
                   series={activeSeries}
-                  probabilityOverlay={probabilityOverlay}
                   tempSymbol={tempSymbol}
                   isEn={isEn}
                 />

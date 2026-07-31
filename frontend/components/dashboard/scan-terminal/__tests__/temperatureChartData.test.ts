@@ -1152,6 +1152,7 @@ export function runTests() {
   assert(
     observationMergedChengdu?.airportCurrent?.temp === 27.1 &&
       observationMergedChengdu?.airportPrimary?.source_code === "metar",
+    "observation snapshot merge should preserve airport current temp and primary source",
   );
   assert(
     observationMergedChengdu?.modelCurves?.ECMWF?.length === 2 &&

@@ -482,7 +482,7 @@ export function buildModelSummaryRows(
       probabilityBuckets,
       probabilityBucketMap,
       gaussianMu: weightedProbabilityMu(probabilityBuckets),
-      probabilityEngine: row.probability_engine || (probabilityBuckets.length ? "legacy" : null),
+      probabilityEngine: row.probability_engine || (probabilityBuckets.length ? "deb_normal" : null),
       topProbabilityBucketKey: topProbabilityBucket?.key || null,
       marketMatches,
       searchText:

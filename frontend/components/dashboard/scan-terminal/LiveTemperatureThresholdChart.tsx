@@ -1169,7 +1169,7 @@ export function LiveTemperatureThresholdChart({
   }, [hourly, currentCityLocalDate, row?.local_date]);
   const chartLocalDate = chartHourly?.localDate || row?.local_date || currentCityLocalDate;
 
-  const { data, series, probabilityOverlay } = useMemo(() => buildFullDayChartData(row, chartHourly, isEn), [row, chartHourly, isEn]);
+  const { data, series } = useMemo(() => buildFullDayChartData(row, chartHourly, isEn), [row, chartHourly, isEn]);
   const peakGlow = useMemo(() => getPeakGlowState(row, data, series), [row, data, series]);
 
   const autoWindowRange = useMemo(
@@ -1340,12 +1340,12 @@ export function LiveTemperatureThresholdChart({
   }, [row, allRows]);
 
   const intDegreeTicks = useMemo(
-    () => buildIntDegreeTicks(activeSeries, zoomedData, probabilityOverlay),
-    [activeSeries, zoomedData, probabilityOverlay],
+    () => buildIntDegreeTicks(activeSeries, zoomedData),
+    [activeSeries, zoomedData],
   );
   const chartDomain = useMemo(
-    () => buildChartDomain(activeSeries, zoomedData, probabilityOverlay),
-    [activeSeries, zoomedData, probabilityOverlay],
+    () => buildChartDomain(activeSeries, zoomedData),
+    [activeSeries, zoomedData],
   );
 
   const subtitle = row ? (isEn ? "Live & Forecast" : "实测与预测") : "";
@@ -1651,7 +1651,6 @@ export function LiveTemperatureThresholdChart({
           cityThresholds={cityThresholds}
           chartSeries={chartSeries}
           activeSeries={activeSeries}
-          probabilityOverlay={probabilityOverlay}
           zoomedData={zoomedData}
           chartDomain={chartDomain}
           intDegreeTicks={intDegreeTicks}

@@ -114,14 +114,14 @@ flowchart LR
 
 #### 2. `probabilities`
 
-概率层基于 legacy 高斯分桶，以 DEB 融合预测 `mu` 和 ensemble spread `sigma` 生成 1°C 粒度概率分布。前端图表将 legacy 高斯展示为水平概率温度带和 `mu` 参考线，不把概率分布渲染成时间序列曲线。
+概率层基于 DEB 正态分布引擎，以 DEB 融合预测 `deb_prediction + bias(lead)` 作为 `mu`、以按预测提前量分层的残差标准差作为 `sigma`，生成 1°C 粒度整度档位概率分布（适配 Polymarket 整度结算市场）。前端图表将概率分布展示为桶概率与 `mu` 参考线，不把概率分布渲染成时间序列曲线。
 
 概率字段：
 
-- `engine`：固定为 `legacy`
-- `mu`：DEB 融合预测中心值
-- `distribution`：当天合约桶概率分布
-- `distribution_all`：包含外围桶的完整分布
+- `engine`：`deb_normal`（当 lead 分层残差统计可用时）；`weathernext2` 或 `dead_market` 为降级/死盘场景
+- `mu`：DEB 融合预测中心值（含偏差校正）
+- `distribution`：当天合约桶概率分布（概率最高的 4 个档位）
+- `distribution_all`：包含外围桶的完整分布（μ±4σ 内所有整度档位）
 
 #### 2.1 `deb.hourly_consensus`
 

@@ -82,7 +82,7 @@ def test_system_status_returns_summary_shape_for_ops_admin(monkeypatch):
     assert 'cache' in payload
     assert 'analysis' in payload['cache']
     assert 'probability' in payload
-    assert payload['probability']['engine_mode'] == 'legacy'
+    assert payload['probability']['engine_mode'] in {'legacy', 'deb_normal'}
     assert 'training_data' in payload
     assert 'station_networks' in payload
     assert 'realtime' in payload

@@ -1707,42 +1707,4 @@ export function runTests() {
   assert(bandPoints.length >= 2, "runway_band tuples should be binned into data slots");
   const firstBand = bandPoints[0].runway_band;
   assert(Array.isArray(firstBand) && firstBand[0] === 24.0 && firstBand[1] === 26.0, "runway_band tuple values should match input limits");
-
-  // ── Legacy Gaussian probability data should be available as compact tooltip context only ──
-  const gaussianOverlayChart = __buildTemperatureChartDataForTest(
-    {
-      city: "toronto",
-      local_date: "2026-05-27",
-      local_time: "14:00",
-      tz_offset_seconds: -4 * 60 * 60,
-      temp_symbol: "°C",
-    } as any,
-    {
-      localDate: "2026-05-27",
-      localTime: "14:00",
-      times: ["10:00", "14:00", "18:00"],
-      temps: [24, 27, 23],
-      probabilities: {
-        mu: 27.4,
-        engine: "legacy",
-        distribution_all: [
-          { value: 26, probability: 0.18, range: "[25.5~26.5)" },
-          { value: 27, probability: 0.42, range: "[26.5~27.5)" },
-          { value: 28, probability: 0.31, range: "[27.5~28.5)" },
-        ],
-      },
-    } as any,
-    "1D",
-  ) as any;
-
-  const gaussianOverlay = gaussianOverlayChart.probabilityOverlay;
-  assert(
-    gaussianOverlay?.muLine?.label === "Gaussian μ 27.4°C" &&
-      gaussianOverlay.bands.length === 3,
-    "legacy Gaussian probabilities should remain available for compact tooltip context",
-  );
-  assert(
-    !gaussianOverlayChart.series.some((series: any) => String(series.key || "").includes("probability")),
-    "legacy Gaussian probability distribution should not be rendered as a time-series line on the main chart",
-  );
 }

@@ -58,7 +58,7 @@ export function runTests() {
         { value: 33, model_probability: 0.56, range: "[32.5~33.5)" },
         { value: 34, model_probability: 0.03, range: "[33.5~34.5)" },
       ],
-      probability_engine: "legacy",
+      probability_engine: "deb_normal",
       all_buckets: [
         {
           label: "32°C",
@@ -162,8 +162,8 @@ export function runTests() {
   assert(parisRow.models.HRRR === null, "missing models should be normalized to null");
   assert(parisRow.modelMedian === 32.1, "model median should use available model values only");
   assert(parisRow.modelSpread === 2.5, "model spread should use available model min/max only");
-  assert(parisRow.gaussianMu === 32.6, "model summary should compute Gaussian mu from probability buckets");
-  assert(parisRow.probabilityEngine === "legacy", "model summary should preserve probability engine metadata");
+  assert(parisRow.gaussianMu === 32.6, "model summary should compute distribution mu from probability buckets");
+  assert(parisRow.probabilityEngine === "deb_normal", "model summary should preserve probability engine metadata");
   assert(parisRow.probabilityBuckets.length === 3, "model summary should keep every market-option probability bucket");
   assert(
     parisRow.probabilityBucketMap["32°C"]?.probability === 0.41 &&
@@ -258,13 +258,11 @@ export function runTests() {
     "terminal model summary view must use direct scan terminal rows without city fallback rows",
   );
   assert(
-    modelSummarySource.includes("MODEL_SUMMARY_MODEL_COLUMNS") &&
+      modelSummarySource.includes("MODEL_SUMMARY_MODEL_COLUMNS") &&
       modelSummarySource.includes("lastGoodSummaryRowsRef") &&
       modelSummarySource.includes("hasModelSummaryForecastData") &&
-      modelSummarySource.includes("Gaussian μ") &&
-      modelSummarySource.includes("高斯 μ") &&
-      modelSummarySource.includes("Gaussian Distribution Probability") &&
-      modelSummarySource.includes("高斯分布概率") &&
+      modelSummarySource.includes("DEB μ") &&
+      modelSummarySource.includes("DEB 分布概率") &&
       modelSummarySource.includes("expandedCityKeys") &&
       modelSummarySource.includes("toggleExpandedCity") &&
       modelSummarySource.includes("aria-expanded") &&

@@ -89,3 +89,4 @@ tmp_rctp.html
 .codex-backend-*.log
 frontend-next-*.log
 *.stackdump
+.omo/

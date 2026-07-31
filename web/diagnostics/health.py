@@ -101,6 +101,16 @@ def _integration_summary(config: dict) -> Dict[str, Any]:
 
 
 def _probability_summary() -> Dict[str, Any]:
+    from src.analysis.deb_probability import _load_deb_normal_stats
+
+    stats = _load_deb_normal_stats()
+    if stats:
+        return {
+            "engine_mode": "deb_normal",
+            "samples": stats.get("samples"),
+            "lead_biases": stats.get("lead_biases"),
+            "computed_at": stats.get("computed_at"),
+        }
     return {
         "engine_mode": "legacy",
     }

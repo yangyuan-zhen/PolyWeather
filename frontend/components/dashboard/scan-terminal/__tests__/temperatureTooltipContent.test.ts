@@ -1,9 +1,4 @@
 import {
-  readFileSync,
-} from "node:fs";
-import path from "node:path";
-import {
-  __buildTemperatureTooltipProbabilityRowsForTest,
   __buildTemperatureTooltipRowsForTest,
 } from "@/components/dashboard/scan-terminal/TemperatureTooltipContent";
 
@@ -54,66 +49,5 @@ export function runTests() {
   assert(
     rows.some((row) => row.key === "gfs" && row.value === 24.2),
     "non-runway sparse series should keep nearest-value fallback",
-  );
-
-  const probabilityRows = __buildTemperatureTooltipProbabilityRowsForTest(
-    {
-      engine: "legacy",
-      muLine: { value: 27.4, label: "Gaussian μ 27.4°C" },
-      bands: [
-        {
-          key: "legacy_probability_26_0",
-          value: 26,
-          lower: 25.5,
-          upper: 26.5,
-          probability: 0.18,
-          label: "26°C 18%",
-          opacity: 0.08,
-        },
-        {
-          key: "legacy_probability_27_0",
-          value: 27,
-          lower: 26.5,
-          upper: 27.5,
-          probability: 0.42,
-          label: "27°C 42%",
-          opacity: 0.13,
-        },
-        {
-          key: "legacy_probability_28_0",
-          value: 28,
-          lower: 27.5,
-          upper: 28.5,
-          probability: 0.31,
-          label: "28°C 31%",
-          opacity: 0.11,
-        },
-      ],
-    },
-    "°C",
-    true,
-  );
-
-  assert(
-    probabilityRows.length === 4,
-    "temperature tooltip should show Gaussian μ and every available probability bucket as compact context",
-  );
-  assert(
-    probabilityRows.some((row) => row.key === "legacy_probability_mu" && row.value === "27.4°C") &&
-      probabilityRows.some((row) => row.key === "legacy_probability_26_0" && row.label === "25.5-26.5°C" && row.value === "18%") &&
-      probabilityRows.some((row) => row.key === "legacy_probability_27_0" && row.label === "26.5-27.5°C" && row.value === "42%") &&
-      probabilityRows.some((row) => row.key === "legacy_probability_28_0" && row.label === "27.5-28.5°C" && row.value === "31%"),
-    "temperature tooltip should format the full Gaussian probability distribution by temperature range without drawing it on the main chart",
-  );
-
-  const projectRoot = process.cwd();
-  const chartCanvasSource = readFileSync(
-    path.join(projectRoot, "components", "dashboard", "scan-terminal", "TemperatureChartCanvas.tsx"),
-    "utf8",
-  );
-  assert(
-    chartCanvasSource.includes("probabilityOverlay={probabilityOverlay}") &&
-      !chartCanvasSource.includes("probabilityOverlay={null}"),
-    "temperature chart canvas must pass probability overlay data into the tooltip instead of hiding Gaussian μ",
   );
 }

@@ -109,4 +109,5 @@ export function runTests() {
     },
   });
   assert.equal(getObservationFreshness(amosDetail)?.source_code, "amos");
+}
 

@@ -14,6 +14,7 @@ DEB_RAW_VERSION = "deb_v1_raw"
 DEB_RECENT_BIAS_CORRECTED_VERSION = "deb_v1_recent_bias_corrected"
 DEB_BUCKET_CALIBRATED_VERSION = "deb_v2_bucket_calibrated"
 DEB_GUARDED_CALIBRATED_VERSION = "deb_v3_guarded_calibrated"
+DEB_ML_CALIBRATED_VERSION = "deb_v4_lightgbm_calibrated"
 DEB_BACKTEST_SCHEMA_VERSION = "deb_backtest_report.v1"
 
 
@@ -174,7 +175,15 @@ def build_bucket_calibrated_corrector(
     min_samples: int = 5,
     max_adjustment: float = 3.0,
     step: float = 0.1,
+    shrinkage_samples: int = 10,
 ) -> RecentBiasCorrector:
+    """
+    Grid-search the best per-city settlement-bucket adjustment.
+
+    The winning adjustment is shrunk toward zero by `samples / shrinkage_samples`
+    so small-sample wins (which mostly chase noise) are damped; a city needs
+    `shrinkage_samples` recent rows to trust the full grid-search result.
+    """
     by_city: dict[str, list[dict[str, Any]]] = {}
     for record in history:
         row = _normalise_record(record)
@@ -224,7 +233,12 @@ def build_bucket_calibrated_corrector(
                 best = score
 
         if best is not None:
-            adjustment_by_city[city] = (best[3], len(recent))
+            samples = len(recent)
+            shrink = min(1.0, samples / max(float(shrinkage_samples or 1.0), 1.0))
+            adjusted = round(best[3] * shrink, 1)
+            if abs(adjusted) < 0.05:
+                adjusted = 0.0
+            adjustment_by_city[city] = (adjusted, samples)
 
     return RecentBiasCorrector(
         adjustment_by_city,
@@ -323,7 +337,7 @@ def choose_guarded_deb_correction(
     lookback_days: int = 30,
     min_samples: int = 3,
     bucket_min_samples: int = 5,
-    validation_samples: int = 3,
+    validation_samples: int = 7,
 ) -> dict[str, Any]:
     history_rows = [row for record in history if (row := _normalise_record(record))]
     city_key = str(city or "").strip().lower()
@@ -688,3 +702,212 @@ def write_backtest_report(
                     ),
                 }
             )
+
+
+DEB_WEIGHT_BACKTEST_SCHEMA_VERSION = "deb_weight_backtest.v1"
+
+
+def _equal_weight_prediction(forecasts: dict[str, Any]) -> float | None:
+    values = [v for v in forecasts.values() if v is not None]
+    if not values:
+        return None
+    return sum(values) / len(values)
+
+
+DEFAULT_WEIGHT_CONFIGS: list[dict[str, Any]] = [
+    {"name": "baseline_equal_weight", "mode": "equal"},
+    {
+        "name": "prod_decay0.85_bias0.5_lb7",
+        "mode": "deb",
+        "decay_factor": 0.85,
+        "bias_penalty": 0.5,
+        "lookback_days": 7,
+    },
+    {
+        "name": "decay0.7_bias0.5_lb7",
+        "mode": "deb",
+        "decay_factor": 0.7,
+        "bias_penalty": 0.5,
+        "lookback_days": 7,
+    },
+    {
+        "name": "decay0.95_bias0.5_lb7",
+        "mode": "deb",
+        "decay_factor": 0.95,
+        "bias_penalty": 0.5,
+        "lookback_days": 7,
+    },
+    {
+        "name": "decay0.85_bias0.0_lb7",
+        "mode": "deb",
+        "decay_factor": 0.85,
+        "bias_penalty": 0.0,
+        "lookback_days": 7,
+    },
+    {
+        "name": "decay0.85_bias1.0_lb7",
+        "mode": "deb",
+        "decay_factor": 0.85,
+        "bias_penalty": 1.0,
+        "lookback_days": 7,
+    },
+    {
+        "name": "decay0.85_bias0.5_lb14",
+        "mode": "deb",
+        "decay_factor": 0.85,
+        "bias_penalty": 0.5,
+        "lookback_days": 14,
+    },
+    {
+        "name": "decay0.85_bias0.5_lb30",
+        "mode": "deb",
+        "decay_factor": 0.85,
+        "bias_penalty": 0.5,
+        "lookback_days": 30,
+    },
+]
+
+
+def backtest_deb_weight_configs(
+    daily_records: dict[str, dict[str, dict[str, Any]]],
+    *,
+    configs: list[dict[str, Any]] | None = None,
+    min_history_days: int = 2,
+) -> dict[str, Any]:
+    """Walk-forward backtest of DEB weight hyperparameters.
+
+    For every settled daily record, recompute the raw DEB blend using only
+    history strictly before that date, then compare against the actual high.
+    Each config varies decay_factor / bias_penalty / lookback_days so their
+    contribution to MAE / bucket hit rate can be compared head-to-head.
+    """
+    from src.analysis.deb_algorithm import calculate_dynamic_weight_components
+
+    chosen = configs or DEFAULT_WEIGHT_CONFIGS
+    config_names = [
+        str(cfg.get("name") or f"cfg{i}") for i, cfg in enumerate(chosen)
+    ]
+
+    report_rows: list[dict[str, Any]] = []
+    eval_by_config: dict[str, list[dict[str, Any]]] = {
+        name: [] for name in config_names
+    }
+    equal_weight_counts: dict[str, int] = {name: 0 for name in config_names}
+    total_counts: dict[str, int] = {name: 0 for name in config_names}
+
+    for city, by_date in (daily_records or {}).items():
+        if not isinstance(by_date, dict):
+            continue
+        sorted_dates = sorted(by_date.keys())
+        history: dict[str, dict[str, Any]] = {}
+        for target_date in sorted_dates:
+            record = by_date[target_date]
+            if not isinstance(record, dict):
+                continue
+            forecasts = record.get("forecasts")
+            actual = _sf(record.get("actual_high"))
+            if not isinstance(forecasts, dict) or actual is None:
+                history[target_date] = record
+                continue
+
+            prediction_by_cfg: dict[str, Any] = {}
+            error_by_cfg: dict[str, Any] = {}
+            for name, cfg in zip(config_names, chosen):
+                total_counts[name] += 1
+                used_equal = True
+                if cfg.get("mode") == "equal":
+                    pred = _equal_weight_prediction(forecasts)
+                else:
+                    components = calculate_dynamic_weight_components(
+                        city,
+                        forecasts,
+                        lookback_days=int(cfg.get("lookback_days") or 7),
+                        decay_factor=float(cfg.get("decay_factor") or 0.85),
+                        bias_penalty=float(cfg.get("bias_penalty") or 0.5),
+                        history_data={city: history},
+                    )
+                    pred = components.get("prediction")
+                    used_equal = int(components.get("days_used") or 0) < min_history_days
+                if pred is None:
+                    prediction_by_cfg[name] = None
+                    error_by_cfg[name] = None
+                    continue
+                if used_equal:
+                    equal_weight_counts[name] += 1
+                pred_rounded = round(float(pred), 1)
+                prediction_by_cfg[name] = pred_rounded
+                error_by_cfg[name] = round(pred_rounded - actual, 3)
+                eval_by_config[name].append(
+                    {
+                        "city": city,
+                        "target_date": target_date,
+                        "prediction": pred_rounded,
+                        "actual": actual,
+                    }
+                )
+
+            if any(v is not None for v in prediction_by_cfg.values()):
+                report_rows.append(
+                    {
+                        "city": city,
+                        "target_date": target_date,
+                        "actual": actual,
+                        "predictions": prediction_by_cfg,
+                        "errors": error_by_cfg,
+                    }
+                )
+            history[target_date] = record
+
+    summaries: list[dict[str, Any]] = []
+    for name in config_names:
+        summary = evaluate_prediction_records(eval_by_config[name], version=name)
+        total = total_counts[name]
+        summary["equal_weight_share"] = (
+            _round3(equal_weight_counts[name] / total) if total else None
+        )
+        summaries.append(summary)
+
+    return {
+        "schema_version": DEB_WEIGHT_BACKTEST_SCHEMA_VERSION,
+        "configs": summaries,
+        "rows": report_rows,
+    }
+
+
+def write_weight_config_report(
+    report: dict[str, Any],
+    *,
+    json_path: str | Path,
+    csv_path: str | Path | None = None,
+) -> None:
+    json_target = Path(json_path)
+    json_target.parent.mkdir(parents=True, exist_ok=True)
+    json_target.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    if csv_path is None:
+        return
+
+    csv_target = Path(csv_path)
+    csv_target.parent.mkdir(parents=True, exist_ok=True)
+    config_names = [str(cfg["version"]) for cfg in report.get("configs") or []]
+    fieldnames = ["city", "target_date", "actual"]
+    for name in config_names:
+        fieldnames.append(f"{name}_prediction")
+        fieldnames.append(f"{name}_error")
+    with csv_target.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in report.get("rows") or []:
+            predictions = row.get("predictions") or {}
+            errors = row.get("errors") or {}
+            out: dict[str, Any] = {
+                "city": row.get("city"),
+                "target_date": row.get("target_date"),
+                "actual": row.get("actual"),
+            }
+            for name in config_names:
+                out[f"{name}_prediction"] = predictions.get(name)
+                out[f"{name}_error"] = errors.get(name)
+            writer.writerow(out)

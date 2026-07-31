@@ -216,7 +216,6 @@ export function runTests() {
       row: { city: "Moscow" } as any,
       isHourlyLoading: true,
       activeSeries: [],
-      probabilityOverlay: null,
       zoomedData: [
         { label: "00:00", ts: 1 },
         { label: "05:00", ts: 2 },
@@ -235,7 +234,6 @@ export function runTests() {
       row: { city: "Moscow" } as any,
       isHourlyLoading: false,
       activeSeries: [],
-      probabilityOverlay: null,
       zoomedData: [
         { label: "00:00", ts: 1 },
         { label: "05:00", ts: 2 },
@@ -256,7 +254,6 @@ export function runTests() {
           values: [13, 13],
         },
       ] as any,
-      probabilityOverlay: null,
       zoomedData: [
         { label: "00:00", ts: 1, current: 13 },
         { label: "05:00", ts: 2, current: 13 },
@@ -277,7 +274,6 @@ export function runTests() {
           values: [13, 13],
         },
       ] as any,
-      probabilityOverlay: null,
       zoomedData: [
         { label: "00:00", ts: 1, current: 13 },
         { label: "05:00", ts: 2, current: 13 },

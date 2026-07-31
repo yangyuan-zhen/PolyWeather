@@ -66,9 +66,40 @@ def test_bucket_calibrated_corrector_optimizes_settlement_bucket_hits():
 
     assert corrected["version"] == DEB_BUCKET_CALIBRATED_VERSION
     assert corrected["raw_prediction"] == 25.4
-    assert corrected["corrected_prediction"] == 26.0
-    assert corrected["bias_adjustment"] == 0.6
+    # Grid search finds +0.6 (all 5 rows hit the bucket), but 5 samples only
+    # earn 50% trust (shrinkage_samples=10), so the adjustment is halved.
+    assert corrected["corrected_prediction"] == 25.7
+    assert corrected["bias_adjustment"] == 0.3
     assert corrected["samples"] == 5
+
+
+def test_bucket_calibrated_corrector_shrinks_small_sample_adjustments_to_zero():
+    # 3 rows: grid search finds +0.6 (all hit), but 3/10 trust → 0.18 → rounds to 0.2
+    history = [
+        {"city": "ankara", "target_date": "2026-05-20", "deb_prediction": 20.4, "actual_high": 21.0},
+        {"city": "ankara", "target_date": "2026-05-21", "deb_prediction": 21.4, "actual_high": 22.0},
+        {"city": "ankara", "target_date": "2026-05-22", "deb_prediction": 22.4, "actual_high": 23.0},
+    ]
+
+    corrector = build_bucket_calibrated_corrector(history, lookback_days=30, min_samples=3)
+    corrected = corrector.apply("ankara", raw_prediction=23.4)
+
+    assert corrected["bias_adjustment"] == 0.2
+    assert corrected["corrected_prediction"] == 23.6
+
+
+def test_bucket_calibrated_corrector_full_trust_at_shrinkage_samples():
+    # 10 rows with a consistent +0.6 bias: full trust, adjustment stays 0.6
+    history = [
+        {"city": "ankara", "target_date": f"2026-05-{20 + idx:02d}", "deb_prediction": 20.4 + idx, "actual_high": 21.0 + idx}
+        for idx in range(10)
+    ]
+
+    corrector = build_bucket_calibrated_corrector(history, lookback_days=30, min_samples=5)
+    corrected = corrector.apply("ankara", raw_prediction=30.4)
+
+    assert corrected["bias_adjustment"] == 0.6
+    assert corrected["corrected_prediction"] == 31.0
 
 
 def test_guarded_deb_correction_rejects_bucket_when_recent_holdout_gets_worse():
@@ -121,6 +152,50 @@ def test_guarded_deb_correction_accepts_bucket_when_holdout_improves():
     assert corrected["selected_version"] == DEB_BUCKET_CALIBRATED_VERSION
     assert corrected["corrected_prediction"] == 20.6
     assert corrected["guard_reason"] == "bucket_selected_holdout"
+
+
+def test_guarded_deb_correction_defaults_to_seven_day_holdout():
+    # 12 recent rows (5 train + 7 validation) all miss the bucket by +0.02.
+    # With the default validation_samples=7 the holdout path must be taken and
+    # the +0.1 bucket adjustment wins on the 7-day validation split.
+    history = [
+        {"city": "ankara", "target_date": f"2026-05-{20 + idx:02d}", "deb_prediction": 20.49, "actual_high": 20.51}
+        for idx in range(12)
+    ]
+
+    corrected = choose_guarded_deb_correction(
+        history,
+        "ankara",
+        raw_prediction=20.49,
+        min_samples=3,
+    )
+
+    assert corrected["version"] == DEB_GUARDED_CALIBRATED_VERSION
+    assert corrected["selected_version"] == DEB_BUCKET_CALIBRATED_VERSION
+    assert corrected["corrected_prediction"] == 20.6
+    assert corrected["guard_reason"] == "bucket_selected_holdout"
+
+
+def test_guarded_deb_correction_requires_seven_plus_five_rows_for_holdout():
+    # 11 rows (5 train + 6 validation): not enough for the default 7-day
+    # holdout split, so the guard falls back to in-sample comparison and
+    # reports a "recent" decision instead of a holdout one.
+    history = [
+        {"city": "ankara", "target_date": f"2026-05-{20 + idx:02d}", "deb_prediction": 20.49, "actual_high": 20.51}
+        for idx in range(11)
+    ]
+
+    corrected = choose_guarded_deb_correction(
+        history,
+        "ankara",
+        raw_prediction=20.49,
+        min_samples=3,
+    )
+
+    assert corrected["version"] == DEB_GUARDED_CALIBRATED_VERSION
+    assert corrected["selected_version"] == DEB_BUCKET_CALIBRATED_VERSION
+    assert corrected["corrected_prediction"] == 20.6
+    assert corrected["guard_reason"] == "bucket_selected_recent"
 
 
 def test_backtest_deb_versions_compares_raw_and_bias_corrected_versions():

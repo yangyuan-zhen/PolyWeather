@@ -1079,7 +1079,15 @@ def update_daily_record(
         save_history(history_file, data)
 
 
-def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7, decay_factor=0.85):
+def calculate_dynamic_weights(
+    city_name,
+    current_forecasts,
+    lookback_days=7,
+    decay_factor=0.85,
+    bias_penalty=0.5,
+    divergence_threshold=3.0,
+    history_data=None,
+):
     """
     计算动态权重融合 (Dynamic Ensemble Blending, DEB)
 
@@ -1094,6 +1102,9 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7, dec
         current_forecasts,
         lookback_days=lookback_days,
         decay_factor=decay_factor,
+        bias_penalty=bias_penalty,
+        divergence_threshold=divergence_threshold,
+        history_data=history_data,
     )
     forecasts = components.get("forecasts") or {}
     weights = components.get("weights") or {}
@@ -1108,13 +1119,19 @@ def calculate_dynamic_weight_components(
     current_forecasts,
     lookback_days=7,
     decay_factor=0.85,
+    bias_penalty=0.5,
+    divergence_threshold=3.0,
+    history_data=None,
 ):
     """Return DEB forecast representatives and model weights for reuse by hourly paths."""
-    project_root = os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    )
-    history_file = os.path.join(project_root, "data", "daily_records.json")
-    data = load_history(history_file)
+    if history_data is not None:
+        data = history_data
+    else:
+        project_root = os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
+        history_file = os.path.join(project_root, "data", "daily_records.json")
+        data = load_history(history_file)
 
     raw_forecast_count = len(
         [
@@ -1249,7 +1266,7 @@ def calculate_dynamic_weight_components(
 
     # ── 改进1: 偏差惩罚进逆误差 ──
     inverse_errors = {
-        m: 1.0 / (mae + abs(model_biases[m]) * 0.5 + 0.1)
+        m: 1.0 / (mae + abs(model_biases[m]) * bias_penalty + 0.1)
         for m, mae in maes.items()
         if forecasts.get(m) is not None
     }
@@ -1272,8 +1289,8 @@ def calculate_dynamic_weight_components(
     forecast_values = [v for v in forecasts.values() if v is not None]
     if len(forecast_values) >= 2:
         spread = max(forecast_values) - min(forecast_values)
-        if spread > 3.0:
-            trust_factor = 3.0 / spread  # 分歧>3°F时才回退
+        if spread > divergence_threshold:
+            trust_factor = divergence_threshold / spread  # 分歧>阈值时才回退
             n = len(weights)
             weights = {
                 m: w * trust_factor + (1.0 - trust_factor) / n
@@ -1299,6 +1316,7 @@ def calculate_dynamic_weight_components(
         "weights": weights,
         "forecasts": forecasts,
         "maes": maes,
+        "biases": model_biases,
         "weights_info": " | ".join(weight_str_parts),
         "days_used": days_used,
         "dedup_note": dedup_note,
@@ -1378,6 +1396,29 @@ def _append_deb_quality_note(weights_info, quality):
     return note
 
 
+def _apply_ml_calibration_if_available(
+    city_name,
+    raw_prediction,
+    current_forecasts,
+):
+    """Apply the LightGBM residual calibrator when trained and enabled.
+
+    Returns None when the calibrator should not participate, so the legacy
+    guarded path runs unchanged. Import is deferred to avoid a module cycle
+    (deb_ml_calibration imports this module for walk-forward training).
+    """
+    try:
+        from src.analysis.deb_ml_calibration import apply_deb_ml_calibration
+
+        return apply_deb_ml_calibration(
+            city_name,
+            raw_prediction,
+            current_forecasts,
+        )
+    except Exception:
+        return None
+
+
 def calculate_deb_prediction(
     city_name,
     current_forecasts,
@@ -1398,6 +1439,7 @@ def calculate_deb_prediction(
     from src.analysis.deb_evaluation import (
         DEB_BUCKET_CALIBRATED_VERSION,
         DEB_GUARDED_CALIBRATED_VERSION,
+        DEB_ML_CALIBRATED_VERSION,
         DEB_RAW_VERSION,
         DEB_RECENT_BIAS_CORRECTED_VERSION,
         choose_guarded_deb_correction,
@@ -1432,6 +1474,37 @@ def calculate_deb_prediction(
 
     data = load_history(_get_history_file_path())
     history_rows = flatten_daily_records(data)
+    quality = _assess_recent_deb_quality(
+        city_name,
+        history_rows,
+        adjustment=0.0,
+        lookback_days=bias_lookback_days,
+    )
+
+    ml_corrected = _apply_ml_calibration_if_available(
+        city_name,
+        raw_prediction,
+        current_forecasts,
+    )
+    if ml_corrected is not None:
+        next_weights_info = (
+            f"{weights_info or 'DEB'} | "
+            f"lightgbm_calib({ml_corrected['adjustment']:+.1f},n={ml_corrected['samples']})"
+        )
+        next_weights_info = _append_deb_quality_note(next_weights_info, quality)
+        return {
+            "prediction": ml_corrected["prediction"],
+            "raw_prediction": ml_corrected["raw_prediction"],
+            "version": DEB_ML_CALIBRATED_VERSION,
+            "weights_info": next_weights_info,
+            "bias_adjustment": ml_corrected["adjustment"],
+            "bias_samples": ml_corrected["samples"],
+            "selected_version": DEB_ML_CALIBRATED_VERSION,
+            "guard_reason": "lightgbm_calibrated",
+            "ml_calibration": ml_corrected,
+            **quality,
+        }
+
     corrected = choose_guarded_deb_correction(
         history_rows,
         city_name,
