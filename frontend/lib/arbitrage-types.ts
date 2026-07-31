@@ -26,6 +26,18 @@ export interface ArbitrageOverview {
   error: string | null;
 }
 
+// 套利可用城市列表（GET /api/arbitrage/cities）wire 格式。
+export interface ArbitrageCity {
+  key: string; // 城市 key（如 "shanghai"）
+  display_name: string; // 后端展示名（如 "Shanghai"）
+}
+
+export interface ArbitrageCitiesResponse {
+  cities: ArbitrageCity[];
+  fallback: boolean; // 后端是否回退到静态列表
+  generated_at: string; // ISO-8601
+}
+
 export interface ArbitrageWindow {
   startIndex: number;
   endIndex: number; // buckets 下标（inclusive）

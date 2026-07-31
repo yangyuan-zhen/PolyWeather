@@ -1,17 +1,22 @@
 """Arbitrage overview service.
 
 Builds the DEB probability distribution vs Polymarket Yes/No price view used
-by the ``套利对比`` (arbitrage comparison) terminal tab. Reuses the
+by the ``套利对比`` (arbitrage comparison) terminal tab, plus the dynamic
+city enumeration backed by the Polymarket public-search endpoint. Reuses the
 Polymarket scanner and DEB normal-distribution helpers from existing modules;
-no new external requests are introduced and no new dependencies are added.
+no new dependencies are added.
 """
 
 from __future__ import annotations
 
 import logging
+import re
+import threading
+import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Set, Tuple
 
+import requests
 from fastapi import HTTPException, Request
 
 from web.services.ops.market_opportunities import (
@@ -22,6 +27,7 @@ from web.services.ops.market_opportunities import (
     _market_hint_prices,
     _market_tokens,
     _market_url,
+    _normalize_key,
     parse_market_option_from_question,
 )
 
@@ -31,6 +37,35 @@ logger = logging.getLogger(__name__)
 # the full ops scan; the arbitrage view is single-city, so 8s is enough to
 # cover the ~N buckets without saturating the request thread.
 _ARBITRAGE_QUOTE_BUDGET_SEC = 8.0
+
+# Process-wide cache for the arbitrage city enumeration (one entry).
+_ARBITRAGE_CITIES_CACHE_TTL_SEC = 3600
+_ARBITRAGE_CITIES_CACHE_KEY = "arbitrage_cities"
+_ARBITRAGE_CITIES_LOCK = threading.Lock()
+_ARBITRAGE_CITIES_CACHE: Dict[str, Tuple[float, Optional[Dict[str, Any]]]] = {}
+
+# Static city list returned when public-search discovery fails or yields no
+# monitored city. Keys must exist in CITY_REGISTRY.
+_ARBITRAGE_CITY_FALLBACK_KEYS: Tuple[str, ...] = (
+    "shanghai",
+    "tokyo",
+    "seoul",
+    "london",
+    "paris",
+    "new york",
+    "miami",
+    "chicago",
+)
+
+# Title display names that neither exact nor containment matching resolves
+# (e.g. Polymarket uses "NYC" where CITY_REGISTRY uses "New York").
+_SEARCH_CITY_ALIASES: Dict[str, str] = {
+    "nyc": "new york",
+    "new york city": "new york",
+}
+
+# Event titles look like "Highest temperature in Shanghai on July 31?".
+_EVENT_TITLE_CITY_RE = re.compile(r"Highest temperature in (.+?) on ", re.IGNORECASE)
 
 
 def _sf(value: Any) -> Optional[float]:
@@ -427,8 +462,127 @@ def get_arbitrage_overview(
     }
 
 
+# ---------------------------------------------------------------------------
+# Dynamic city enumeration (public-search discovery)
+# ---------------------------------------------------------------------------
+
+
+def _fetch_public_search_events() -> List[Dict[str, Any]]:
+    """Fetch active events from the Polymarket public-search endpoint.
+
+    Returns the raw ``events`` list; any network/parse failure yields an
+    empty list so callers can fall back to the static city set.
+    """
+    try:
+        response = requests.get(
+            f"{GAMMA_API_BASE}/public-search",
+            params={"q": "highest temperature", "limit_per_type": 100},
+            timeout=12,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:  # pragma: no cover - network error path
+        logger.warning("arbitrage public-search failed: %s", exc)
+        return []
+    events = payload.get("events") if isinstance(payload, Mapping) else None
+    if not isinstance(events, list):
+        return []
+    return [event for event in events if isinstance(event, dict)]
+
+
+def _registry_display_name(key: str, row: Any) -> str:
+    name = row.get("name") if isinstance(row, Mapping) else None
+    return str(name or key)
+
+
+def _match_registry_key(candidate: str, registry: Mapping[str, Any]) -> Optional[str]:
+    """Resolve an event-title city name to a CITY_REGISTRY key.
+
+    Exact match on the normalised registry name/key first (after applying the
+    title alias map); then a containment match (e.g. ``Seoul (Incheon)`` →
+    ``seoul``) which is only accepted when it hits exactly one registry entry,
+    to avoid ambiguous resolutions.
+    """
+    raw = _normalize_key(candidate)
+    candidate_norm = _SEARCH_CITY_ALIASES.get(raw, raw)
+    if not candidate_norm:
+        return None
+    for key, row in registry.items():
+        if candidate_norm in {
+            _normalize_key(_registry_display_name(key, row)),
+            _normalize_key(key),
+        }:
+            return key
+    hits = [
+        key
+        for key, row in registry.items()
+        if candidate_norm in _normalize_key(_registry_display_name(key, row))
+        or _normalize_key(_registry_display_name(key, row)) in candidate_norm
+    ]
+    return hits[0] if len(hits) == 1 else None
+
+
+def _fallback_cities(registry: Mapping[str, Any]) -> List[Dict[str, str]]:
+    cities: List[Dict[str, str]] = []
+    for key in _ARBITRAGE_CITY_FALLBACK_KEYS:
+        row = registry.get(key)
+        name = row.get("name") if isinstance(row, Mapping) else None
+        cities.append({"key": key, "display_name": str(name or key.title())})
+    return cities
+
+
+def list_arbitrage_cities(request: Request) -> Dict[str, Any]:
+    """List monitored cities that currently have active temperature events.
+
+    Discovers cities from the Polymarket public-search endpoint, intersects
+    them with CITY_REGISTRY (preserving registry order), and caches the
+    payload for one hour. When discovery fails or the intersection is empty,
+    a static eight-city list is returned with ``fallback: True``.
+    """
+    # ``request`` is accepted to match the router signature; the payload is
+    # request-agnostic and cached process-wide.
+    _ = request
+    import web.routes as legacy_routes
+
+    now = time.time()
+    with _ARBITRAGE_CITIES_LOCK:
+        cached = _ARBITRAGE_CITIES_CACHE.get(_ARBITRAGE_CITIES_CACHE_KEY)
+    if cached and cached[1] and now - cached[0] < _ARBITRAGE_CITIES_CACHE_TTL_SEC:
+        return dict(cached[1])
+
+    registry = legacy_routes.CITY_REGISTRY
+    discovered: Set[str] = set()
+    for event in _fetch_public_search_events():
+        match = _EVENT_TITLE_CITY_RE.search(str(event.get("title") or ""))
+        if not match:
+            continue
+        city_key = _match_registry_key(match.group(1), registry)
+        if city_key:
+            discovered.add(city_key)
+
+    fallback = not discovered
+    if fallback:
+        cities: List[Dict[str, str]] = _fallback_cities(registry)
+    else:
+        cities = [
+            {"key": key, "display_name": _registry_display_name(key, row)}
+            for key, row in registry.items()
+            if key in discovered
+        ]
+
+    payload: Dict[str, Any] = {
+        "cities": cities,
+        "fallback": fallback,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    with _ARBITRAGE_CITIES_LOCK:
+        _ARBITRAGE_CITIES_CACHE[_ARBITRAGE_CITIES_CACHE_KEY] = (now, payload)
+    return payload
+
+
 __all__ = [
     "get_arbitrage_overview",
+    "list_arbitrage_cities",
     "GAMMA_API_BASE",
     "CLOB_API_BASE",
     "PolymarketQuoteScanner",

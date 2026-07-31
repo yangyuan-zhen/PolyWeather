@@ -5,11 +5,18 @@ import {
   fetchBackendApi,
   hasDirectBackendApiBaseUrl,
 } from "@/lib/backend-api";
-import type { ArbitrageOverview } from "@/lib/arbitrage-types";
+import type {
+  ArbitrageCitiesResponse,
+  ArbitrageOverview,
+} from "@/lib/arbitrage-types";
 
 export type FetchArbitrageOverviewOptions = {
   city: string;
   forceRefresh?: boolean;
+  signal?: AbortSignal;
+};
+
+export type FetchArbitrageCitiesOptions = {
   signal?: AbortSignal;
 };
 
@@ -58,6 +65,20 @@ async function fetchOverview({
   );
 }
 
+// 加载套利可用城市列表；后端接口不可用时由调用方静默回退到静态列表。
+async function fetchCities({ signal }: FetchArbitrageCitiesOptions = {}) {
+  const directBackend = hasDirectBackendApiBaseUrl();
+  const headers = directBackend
+    ? await buildBrowserBackendHeaders({ Accept: "application/json" })
+    : new Headers({ Accept: "application/json" });
+  return readJsonOrThrow<ArbitrageCitiesResponse>("/api/arbitrage/cities", {
+    cache: "no-store",
+    headers,
+    signal,
+  });
+}
+
 export const arbitrageClient = {
   fetchOverview,
+  fetchCities,
 };

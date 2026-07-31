@@ -2,16 +2,22 @@
 
 import clsx from "clsx";
 import { CircleAlert, RefreshCw, Scale, ScanSearch } from "lucide-react";
-import { useMemo, useState } from "react";
-import type { ArbitrageBucket, ArbitrageWindow } from "@/lib/arbitrage-types";
+import { useEffect, useMemo, useState } from "react";
+import type {
+  ArbitrageBucket,
+  ArbitrageCity,
+  ArbitrageWindow,
+} from "@/lib/arbitrage-types";
+import { arbitrageClient } from "@/lib/arbitrage-client";
 import { useArbitrageQuery } from "@/components/dashboard/scan-terminal/use-arbitrage-query";
 
 type ArbitrageDashboardProps = {
   isEn: boolean;
 };
 
-// 市场活跃城市（硬编码；value 为传给后端的 display name）。
-const ARBITRAGE_CITIES = [
+// 静态回退城市列表（value 为传给后端的 display name）；
+// 后端 /api/arbitrage/cities 加载成功后被动态列表替换，失败时保持此列表。
+const FALLBACK_ARBITRAGE_CITIES = [
   { value: "Shanghai", labelEn: "Shanghai", labelZh: "上海" },
   { value: "Tokyo", labelEn: "Tokyo", labelZh: "东京" },
   { value: "Seoul", labelEn: "Seoul", labelZh: "首尔" },
@@ -21,6 +27,13 @@ const ARBITRAGE_CITIES = [
   { value: "Miami", labelEn: "Miami", labelZh: "迈阿密" },
   { value: "Chicago", labelEn: "Chicago", labelZh: "芝加哥" },
 ] as const;
+
+// 静态城市 display_name → 双语 label；动态新增城市无中文名，回退显示 display_name。
+const STATIC_CITY_LABELS: ReadonlyMap<string, { en: string; zh: string }> = new Map(
+  FALLBACK_ARBITRAGE_CITIES.map(
+    (item) => [item.value, { en: item.labelEn, zh: item.labelZh }] as const,
+  ),
+);
 
 const WINDOW_SIZES = [2, 3, 4, 5] as const;
 const DEFAULT_WINDOW_SIZE = 3;
@@ -162,10 +175,45 @@ function WindowSummaryStat({
 }
 
 export function ArbitrageDashboard({ isEn }: ArbitrageDashboardProps) {
-  const [city, setCity] = useState<string>(ARBITRAGE_CITIES[0].value);
+  const [city, setCity] = useState<string>(FALLBACK_ARBITRAGE_CITIES[0].value);
+  // 可选城市：初始为静态 8 城，挂载后尝试从后端加载动态列表，失败静默保留静态。
+  const [availableCities, setAvailableCities] = useState<ArbitrageCity[]>(() =>
+    FALLBACK_ARBITRAGE_CITIES.map((item) => ({
+      key: item.value,
+      display_name: item.value,
+    })),
+  );
+  const [citiesLoading, setCitiesLoading] = useState(true);
   const [windowSize, setWindowSize] = useState<number>(DEFAULT_WINDOW_SIZE);
   const [scanVisible, setScanVisible] = useState(false);
   const { data, error, loading, refreshManually } = useArbitrageQuery({ city });
+
+  // 挂载时加载一次动态城市列表；空列表或失败都保持静态回退。
+  useEffect(() => {
+    const controller = new AbortController();
+    arbitrageClient
+      .fetchCities({ signal: controller.signal })
+      .then((payload) => {
+        if (Array.isArray(payload.cities) && payload.cities.length > 0) {
+          setAvailableCities(payload.cities);
+        }
+      })
+      .catch(() => {
+        // 静默回退：availableCities 已是静态 8 城。
+      })
+      .finally(() => setCitiesLoading(false));
+    return () => controller.abort();
+  }, []);
+
+  // 动态列表不含当前选中城市时（如该城市已无市场），自动切到列表第一项。
+  useEffect(() => {
+    if (availableCities.length === 0) return;
+    setCity((current) =>
+      availableCities.some((item) => item.display_name === current)
+        ? current
+        : availableCities[0].display_name,
+    );
+  }, [availableCities]);
 
   const buckets = useMemo(
     () => (Array.isArray(data?.buckets) ? data.buckets : []),
@@ -456,13 +504,21 @@ export function ArbitrageDashboard({ isEn }: ArbitrageDashboardProps) {
             <select
               value={city}
               onChange={(event) => setCity(event.target.value)}
+              aria-busy={citiesLoading}
               className="h-8 rounded border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
             >
-              {ARBITRAGE_CITIES.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {isEn ? item.labelEn : item.labelZh}
-                </option>
-              ))}
+              {availableCities.map((item) => {
+                const staticLabel = STATIC_CITY_LABELS.get(item.display_name);
+                return (
+                  <option key={item.key} value={item.display_name}>
+                    {staticLabel
+                      ? isEn
+                        ? staticLabel.en
+                        : staticLabel.zh
+                      : item.display_name}
+                  </option>
+                );
+              })}
             </select>
           </label>
           <button

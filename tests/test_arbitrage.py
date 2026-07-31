@@ -127,6 +127,7 @@ def _reset_quote_caches(monkeypatch):
     monkeypatch.setattr(
         market_opportunities, "_CACHE_LOCK", market_opportunities._CACHE_LOCK
     )
+    monkeypatch.setattr(arbitrage_service, "_ARBITRAGE_CITIES_CACHE", {})
 
 
 # ---------------------------------------------------------------------------
@@ -649,5 +650,170 @@ def test_arbitrage_overview_endpoint_returns_no_store_cache(monkeypatch):
     assert body["city"] == "shanghai"
     assert body["market_available"] is True
     assert body["engine"] == "deb_normal"
+    assert response.headers["cache-control"] == "no-store, max-age=0"
+    assert response.headers["cloudflare-cdn-cache-control"] == "no-store, max-age=0"
+
+
+# ---------------------------------------------------------------------------
+# Dynamic city enumeration (list_arbitrage_cities + /api/arbitrage/cities)
+# ---------------------------------------------------------------------------
+
+
+_CITIES_REGISTRY_3 = {
+    "shanghai": {"name": "Shanghai"},
+    "london": {"name": "London"},
+    "paris": {"name": "Paris"},
+}
+
+_FALLBACK_CITY_KEYS = [
+    "shanghai",
+    "tokyo",
+    "seoul",
+    "london",
+    "paris",
+    "new york",
+    "miami",
+    "chicago",
+]
+
+
+def _search_event(title: str) -> Dict[str, Any]:
+    return {"title": title, "slug": "evt-slug"}
+
+
+def test_list_arbitrage_cities_returns_discovered_cities_in_registry_order(
+    monkeypatch,
+):
+    monkeypatch.setattr(legacy_routes, "CITY_REGISTRY", _CITIES_REGISTRY_3)
+    monkeypatch.setattr(
+        arbitrage_service,
+        "_fetch_public_search_events",
+        lambda: [
+            _search_event("Highest temperature in Shanghai on August 1?"),
+            _search_event("Highest temperature in London on August 1?"),
+        ],
+    )
+
+    payload = arbitrage_service.list_arbitrage_cities(_FakeRequest())
+
+    assert payload["fallback"] is False
+    # Paris has no active event, so only Shanghai/London survive, in the
+    # CITY_REGISTRY iteration order (not sorted alphabetically).
+    assert payload["cities"] == [
+        {"key": "shanghai", "display_name": "Shanghai"},
+        {"key": "london", "display_name": "London"},
+    ]
+    assert payload["generated_at"]
+
+
+def test_list_arbitrage_cities_resolves_nyc_alias_to_new_york(monkeypatch):
+    monkeypatch.setattr(
+        legacy_routes, "CITY_REGISTRY", {"new york": {"name": "New York"}}
+    )
+    monkeypatch.setattr(
+        arbitrage_service,
+        "_fetch_public_search_events",
+        lambda: [_search_event("Highest temperature in NYC on August 1?")],
+    )
+
+    payload = arbitrage_service.list_arbitrage_cities(_FakeRequest())
+
+    assert payload["fallback"] is False
+    assert payload["cities"] == [{"key": "new york", "display_name": "New York"}]
+
+
+def test_list_arbitrage_cities_loose_match_seoul_incheon(monkeypatch):
+    monkeypatch.setattr(
+        legacy_routes,
+        "CITY_REGISTRY",
+        {"seoul": {"name": "Seoul"}, "busan": {"name": "Busan"}},
+    )
+    monkeypatch.setattr(
+        arbitrage_service,
+        "_fetch_public_search_events",
+        lambda: [_search_event("Highest temperature in Seoul (Incheon) on August 1?")],
+    )
+
+    payload = arbitrage_service.list_arbitrage_cities(_FakeRequest())
+
+    assert payload["fallback"] is False
+    assert payload["cities"] == [{"key": "seoul", "display_name": "Seoul"}]
+
+
+def test_list_arbitrage_cities_falls_back_when_request_fails(monkeypatch):
+    monkeypatch.setattr(legacy_routes, "CITY_REGISTRY", _CITIES_REGISTRY_3)
+    monkeypatch.setattr(arbitrage_service, "_fetch_public_search_events", lambda: [])
+
+    payload = arbitrage_service.list_arbitrage_cities(_FakeRequest())
+
+    assert payload["fallback"] is True
+    assert [c["key"] for c in payload["cities"]] == _FALLBACK_CITY_KEYS
+
+
+def test_list_arbitrage_cities_falls_back_when_no_monitored_city_matches(monkeypatch):
+    monkeypatch.setattr(legacy_routes, "CITY_REGISTRY", _CITIES_REGISTRY_3)
+    monkeypatch.setattr(
+        arbitrage_service,
+        "_fetch_public_search_events",
+        lambda: [
+            _search_event("Highest temperature in Zhengzhou on August 1?"),
+            _search_event("Some unrelated market title"),
+        ],
+    )
+
+    payload = arbitrage_service.list_arbitrage_cities(_FakeRequest())
+
+    assert payload["fallback"] is True
+    assert [c["key"] for c in payload["cities"]] == _FALLBACK_CITY_KEYS
+
+
+def test_list_arbitrage_cities_caches_payload_for_one_hour(monkeypatch):
+    monkeypatch.setattr(legacy_routes, "CITY_REGISTRY", _CITIES_REGISTRY_3)
+    calls: List[int] = []
+
+    def _fetch() -> List[Dict[str, Any]]:
+        calls.append(1)
+        return [_search_event("Highest temperature in Shanghai on August 1?")]
+
+    monkeypatch.setattr(arbitrage_service, "_fetch_public_search_events", _fetch)
+
+    first = arbitrage_service.list_arbitrage_cities(_FakeRequest())
+    second = arbitrage_service.list_arbitrage_cities(_FakeRequest())
+
+    assert len(calls) == 1
+    assert second["fallback"] is False
+    assert second["cities"] == first["cities"]
+
+
+def test_arbitrage_router_registers_cities_route():
+    paths = {
+        getattr(route, "path", None): tuple(
+            sorted(getattr(route, "methods", set()) or [])
+        )
+        for route in arbitrage_router.routes
+    }
+    assert "/api/arbitrage/cities" in paths
+    assert "GET" in paths["/api/arbitrage/cities"]
+
+
+def test_arbitrage_cities_endpoint_returns_no_store_cache(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from web.app import app
+
+    monkeypatch.setattr(legacy_routes, "CITY_REGISTRY", _CITIES_REGISTRY_3)
+    monkeypatch.setattr(
+        arbitrage_service,
+        "_fetch_public_search_events",
+        lambda: [_search_event("Highest temperature in Shanghai on August 1?")],
+    )
+
+    client = TestClient(app)
+    response = client.get("/api/arbitrage/cities")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["fallback"] is False
+    assert body["cities"] == [{"key": "shanghai", "display_name": "Shanghai"}]
     assert response.headers["cache-control"] == "no-store, max-age=0"
     assert response.headers["cloudflare-cdn-cache-control"] == "no-store, max-age=0"
