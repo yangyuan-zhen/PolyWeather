@@ -6,6 +6,7 @@ import {
   hasDirectBackendApiBaseUrl,
 } from "@/lib/backend-api";
 import type {
+  ArbitrageBatchOverviewResponse,
   ArbitrageCitiesResponse,
   ArbitrageOverview,
 } from "@/lib/arbitrage-types";
@@ -17,6 +18,12 @@ export type FetchArbitrageOverviewOptions = {
 };
 
 export type FetchArbitrageCitiesOptions = {
+  signal?: AbortSignal;
+};
+
+export type FetchArbitrageBatchOptions = {
+  cities: string[];
+  forceRefresh?: boolean;
   signal?: AbortSignal;
 };
 
@@ -78,7 +85,36 @@ async function fetchCities({ signal }: FetchArbitrageCitiesOptions = {}) {
   });
 }
 
+// 批量拉取多城市套利概览；慢城由后端 partial 降级进 missing/errors。
+async function fetchOverviewBatch({
+  cities,
+  forceRefresh = false,
+  signal,
+}: FetchArbitrageBatchOptions) {
+  const params = new URLSearchParams({
+    cities: cities.join(","),
+    force_refresh: String(forceRefresh),
+    limit: String(cities.length),
+  });
+  if (forceRefresh) {
+    params.set("_ts", String(Date.now()));
+  }
+  const directBackend = hasDirectBackendApiBaseUrl();
+  const headers = directBackend
+    ? await buildBrowserBackendHeaders({ Accept: "application/json" })
+    : new Headers({ Accept: "application/json" });
+  return readJsonOrThrow<ArbitrageBatchOverviewResponse>(
+    `/api/arbitrage/overview-batch?${params.toString()}`,
+    {
+      cache: forceRefresh || directBackend ? "no-store" : "default",
+      headers,
+      signal,
+    },
+  );
+}
+
 export const arbitrageClient = {
   fetchOverview,
   fetchCities,
+  fetchOverviewBatch,
 };

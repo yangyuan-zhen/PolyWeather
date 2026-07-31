@@ -923,3 +923,154 @@ def test_list_arbitrage_cities_ignores_redis_read_errors(monkeypatch):
 
     assert payload["fallback"] is False
     assert payload["cities"] == [{"key": "shanghai", "display_name": "Shanghai"}]
+
+
+# ---------------------------------------------------------------------------
+# Batch overview (get_arbitrage_overview_batch + /api/arbitrage/overview-batch)
+# ---------------------------------------------------------------------------
+
+
+def _clear_batch_state() -> None:
+    arbitrage_service._ARBITRAGE_BATCH_CACHE.clear()
+    arbitrage_service._ARBITRAGE_BATCH_INFLIGHT.clear()
+
+
+def _batch_overview_payload(city: str) -> Dict[str, Any]:
+    return {
+        "city": city,
+        "market_available": True,
+        "engine": "deb_normal",
+        "buckets": [],
+        "windows": [],
+        "generated_at": "2026-08-01T00:00:00Z",
+    }
+
+
+def test_get_arbitrage_overview_batch_returns_details_for_all_cities(monkeypatch):
+    import asyncio
+
+    _clear_batch_state()
+    monkeypatch.setattr(
+        arbitrage_service,
+        "get_arbitrage_overview",
+        lambda request, city, force_refresh=False: _batch_overview_payload(city),
+    )
+
+    payload = asyncio.run(
+        arbitrage_service.get_arbitrage_overview_batch(
+            _FakeRequest(), cities="Shanghai,London,Paris"
+        )
+    )
+
+    assert payload["cities"] == ["Shanghai", "London", "Paris"]
+    assert set(payload["details"].keys()) == {"Shanghai", "London", "Paris"}
+    assert payload["details"]["London"]["city"] == "London"
+    assert payload["errors"] == {}
+    assert payload["missing"] == []
+    assert payload["partial"] is False
+    assert payload["_meta"]["response_source"] == "fresh_build"
+    assert "Shanghai" in payload["_meta"]["city_durations_ms"]
+
+
+def test_get_arbitrage_overview_batch_surfaces_city_errors(monkeypatch):
+    import asyncio
+
+    _clear_batch_state()
+
+    def _flaky(request, city, force_refresh=False):
+        if city == "Paris":
+            raise RuntimeError("gamma down")
+        return _batch_overview_payload(city)
+
+    monkeypatch.setattr(arbitrage_service, "get_arbitrage_overview", _flaky)
+
+    payload = asyncio.run(
+        arbitrage_service.get_arbitrage_overview_batch(
+            _FakeRequest(), cities="Shanghai,Paris"
+        )
+    )
+
+    assert set(payload["details"].keys()) == {"Shanghai"}
+    assert "Paris" in payload["errors"]
+    assert "gamma down" in payload["errors"]["Paris"]
+    assert payload["partial"] is True
+
+
+def test_get_arbitrage_overview_batch_caches_non_partial_payload(monkeypatch):
+    import asyncio
+
+    _clear_batch_state()
+    calls = []
+
+    def _tracked(request, city, force_refresh=False):
+        calls.append(city)
+        return _batch_overview_payload(city)
+
+    monkeypatch.setattr(arbitrage_service, "get_arbitrage_overview", _tracked)
+
+    asyncio.run(
+        arbitrage_service.get_arbitrage_overview_batch(
+            _FakeRequest(), cities="Shanghai,London"
+        )
+    )
+    first_call_count = len(calls)
+    payload = asyncio.run(
+        arbitrage_service.get_arbitrage_overview_batch(
+            _FakeRequest(), cities="London,Shanghai"
+        )
+    )
+
+    # Second call hits the response cache: no additional per-city builds.
+    assert len(calls) == first_call_count
+    assert len(calls) == 2
+    assert set(payload["details"].keys()) == {"Shanghai", "London"}
+
+
+def test_get_arbitrage_overview_batch_ignores_empty_cities():
+    import asyncio
+
+    _clear_batch_state()
+    payload = asyncio.run(
+        arbitrage_service.get_arbitrage_overview_batch(_FakeRequest(), cities=" , ")
+    )
+
+    assert payload["cities"] == []
+    assert payload["details"] == {}
+    assert payload["partial"] is False
+
+
+def test_arbitrage_router_registers_batch_route():
+    paths = {
+        getattr(route, "path", None): tuple(
+            sorted(getattr(route, "methods", set()) or [])
+        )
+        for route in arbitrage_router.routes
+    }
+    assert "/api/arbitrage/overview-batch" in paths
+    assert "GET" in paths["/api/arbitrage/overview-batch"]
+
+
+def test_arbitrage_overview_batch_endpoint_returns_no_store_cache(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from web.app import app
+
+    _clear_batch_state()
+    monkeypatch.setattr(
+        arbitrage_service,
+        "get_arbitrage_overview",
+        lambda request, city, force_refresh=False: _batch_overview_payload(city),
+    )
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/arbitrage/overview-batch?cities=Shanghai,London"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["cities"] == ["Shanghai", "London"]
+    assert set(body["details"].keys()) == {"Shanghai", "London"}
+    assert body["partial"] is False
+    assert response.headers["cache-control"] == "no-store, max-age=0"
+    assert response.headers["cloudflare-cdn-cache-control"] == "no-store, max-age=0"

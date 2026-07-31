@@ -38,6 +38,26 @@ export interface ArbitrageCitiesResponse {
   generated_at: string; // ISO-8601
 }
 
+// 多城市批量概览（GET /api/arbitrage/overview-batch）wire 格式。
+// details 按城市 key 映射到单城市 ArbitrageOverview；慢城/失败城落入
+// errors 或 missing，此时 partial=true（前端应展示已有卡片并提示部分加载）。
+export interface ArbitrageBatchOverviewResponse {
+  cities: string[]; // 请求的城市列表（原始顺序，去重后）
+  details: Record<string, ArbitrageOverview>;
+  errors: Record<string, string>;
+  missing: string[];
+  partial: boolean;
+  timeout?: boolean; // Next proxy 15s 超时降级标记
+  _meta?: {
+    response_source: string;
+    city_durations_ms?: Record<string, number>;
+    requested_count?: number;
+    completed_count?: number;
+    missing_count?: number;
+    error_count?: number;
+  };
+}
+
 export interface ArbitrageWindow {
   startIndex: number;
   endIndex: number; // buckets 下标（inclusive）

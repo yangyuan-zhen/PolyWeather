@@ -1,15 +1,16 @@
 "use client";
 
 import clsx from "clsx";
-import { CircleAlert, RefreshCw, Scale, ScanSearch } from "lucide-react";
+import { CircleAlert, RefreshCw, Scale } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type {
   ArbitrageBucket,
   ArbitrageCity,
+  ArbitrageOverview,
   ArbitrageWindow,
 } from "@/lib/arbitrage-types";
 import { arbitrageClient } from "@/lib/arbitrage-client";
-import { useArbitrageQuery } from "@/components/dashboard/scan-terminal/use-arbitrage-query";
+import { useMultiCityArbitrageQuery } from "@/components/dashboard/scan-terminal/use-multi-city-arbitrage";
 
 type ArbitrageDashboardProps = {
   isEn: boolean;
@@ -44,12 +45,9 @@ const ARBITRAGE_TEXT = {
     en: "DEB bucket probabilities vs Polymarket Yes prices.",
     zh: "DEB 温度档位概率 vs Polymarket 市场 Yes 价格。",
   },
-  city: { en: "City", zh: "城市" },
+  windowSize: { en: "Window", zh: "窗口" },
   refresh: { en: "Refresh", zh: "刷新" },
   refreshing: { en: "Refreshing…", zh: "刷新中…" },
-  windowSize: { en: "Window", zh: "窗口" },
-  scanAll: { en: "Scan all windows", zh: "扫描全部连续窗口" },
-  hideScan: { en: "Hide scan", zh: "收起扫描" },
   marketTotal: { en: "Market ΣYes", zh: "市场 Yes 总和" },
   strictArb: {
     en: "Market ΣYes < 100¢: strict arbitrage space exists (buy every Yes).",
@@ -59,21 +57,28 @@ const ARBITRAGE_TEXT = {
   debSum: { en: "DEB ΣP", zh: "DEB ΣP" },
   marketSum: { en: "Market ΣYes", zh: "市场 ΣYes" },
   edge: { en: "Edge", zh: "差值" },
-  windowCol: { en: "Window", zh: "窗口" },
-  sizeCol: { en: "Size", zh: "档数" },
   noMarketTitle: { en: "No market data", zh: "暂无市场数据" },
   noMarketBody: {
-    en: "This city has no active temperature market right now. Try another city.",
-    zh: "该城市暂无市场数据，请切换其他城市。",
+    en: "No active temperature market for this city right now.",
+    zh: "该城市当前暂无市场数据。",
   },
   loading: { en: "Loading arbitrage overview…", zh: "正在加载套利对比数据…" },
+  loadingCity: { en: "Loading…", zh: "加载中…" },
+  partialBanner: {
+    en: "Some cities are still loading. The rest will be filled on the next refresh.",
+    zh: "部分城市仍在加载，其余将在下一轮刷新中补齐。",
+  },
   retry: { en: "Retry", zh: "重试" },
   generated: { en: "Generated", zh: "生成" },
-  emptyScan: { en: "No contiguous windows available.", zh: "暂无可计算的连续窗口。" },
 } as const;
 
 function copy(key: keyof typeof ARBITRAGE_TEXT, isEn: boolean) {
   return ARBITRAGE_TEXT[key][isEn ? "en" : "zh"];
+}
+
+function cityDisplayLabel(cityName: string, isEn: boolean) {
+  const staticLabel = STATIC_CITY_LABELS.get(cityName);
+  return staticLabel ? (isEn ? staticLabel.en : staticLabel.zh) : cityName;
 }
 
 function formatProb(value: number | null | undefined) {
@@ -163,20 +168,177 @@ function WindowSummaryStat({
   toneClass: string;
 }) {
   return (
-    <div className="flex min-w-[120px] flex-1 flex-col gap-0.5 rounded border border-slate-200 bg-slate-50 px-3 py-2">
+    <div className="flex min-w-[104px] flex-1 flex-col gap-0.5 rounded border border-slate-200 bg-slate-50 px-2.5 py-1.5">
       <span className="text-[10px] font-black uppercase tracking-wide text-slate-500">
         {label}
       </span>
-      <span className={clsx("font-mono text-base font-black tabular-nums", toneClass)}>
+      <span className={clsx("font-mono text-sm font-black tabular-nums", toneClass)}>
         {value}
       </span>
     </div>
   );
 }
 
+// ---------------------------------------------------------------------------
+// 单城市卡片
+// ---------------------------------------------------------------------------
+
+type CityCardStatus = "ok" | "no-market" | "loading" | "error";
+
+function CityArbitrageCard({
+  cityName,
+  isEn,
+  overview,
+  errorMessage,
+  status,
+  windowSize,
+}: {
+  cityName: string;
+  isEn: boolean;
+  overview?: ArbitrageOverview;
+  errorMessage?: string;
+  status: CityCardStatus;
+  windowSize: number;
+}) {
+  const buckets = useMemo(
+    () => (Array.isArray(overview?.buckets) ? overview.buckets : []),
+    [overview],
+  );
+
+  const activeWindow = useMemo(() => {
+    if (status !== "ok") return null;
+    const best = pickMaxWindow(
+      computeContiguousWindows(buckets, windowSize),
+      "debSum",
+    );
+    return best ? { ...best, isTop3: true } : null;
+  }, [buckets, status, windowSize]);
+
+  const suggestionWindow = useMemo(() => {
+    if (status !== "ok") return null;
+    return pickMaxWindow(computeContiguousWindows(buckets, windowSize), "edge");
+  }, [buckets, status, windowSize]);
+
+  const totalMarketYesSum =
+    overview?.total_market_yes_sum != null &&
+    Number.isFinite(Number(overview.total_market_yes_sum))
+      ? Number(overview.total_market_yes_sum)
+      : null;
+  const strictArbitrage = totalMarketYesSum != null && totalMarketYesSum < 100;
+
+  return (
+    <div className="flex min-w-0 flex-col gap-2 rounded border border-slate-200 bg-white p-3">
+      <div className="flex flex-wrap items-center justify-between gap-1.5">
+        <h3 className="truncate text-sm font-black text-slate-900">
+          {cityDisplayLabel(cityName, isEn)}
+        </h3>
+        {strictArbitrage ? (
+          <span className="rounded border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 font-mono text-[10px] font-black tabular-nums text-emerald-700">
+            ΣYes {totalMarketYesSum?.toFixed(1)}¢
+          </span>
+        ) : null}
+      </div>
+
+      {status === "loading" ? (
+        <div className="flex h-20 items-center justify-center rounded border border-dashed border-slate-200 text-xs font-bold text-slate-400">
+          {copy("loadingCity", isEn)}
+        </div>
+      ) : null}
+
+      {status === "error" ? (
+        <div className="flex h-20 flex-col items-center justify-center gap-1 rounded border border-dashed border-rose-200 text-slate-500">
+          <CircleAlert size={14} className="text-rose-500" />
+          <span className="max-w-full truncate px-2 text-[11px] font-semibold">
+            {errorMessage || "Error"}
+          </span>
+        </div>
+      ) : null}
+
+      {status === "no-market" ? (
+        <div className="flex h-20 flex-col items-center justify-center gap-1 rounded border border-dashed border-slate-200 text-slate-400">
+          <Scale size={14} />
+          <span className="text-[11px] font-black">{copy("noMarketTitle", isEn)}</span>
+          <span className="px-2 text-center text-[10px] font-semibold">
+            {overview?.error || copy("noMarketBody", isEn)}
+          </span>
+        </div>
+      ) : null}
+
+      {status === "ok" ? (
+        <div className="flex min-w-0 flex-col gap-2">
+          {suggestionWindow && suggestionWindow.edge > 0 ? (
+            <div className="rounded border border-blue-200 bg-blue-50 px-2 py-1.5 text-[11px] font-semibold text-blue-800">
+              <span className="font-black">{copy("suggestionTitle", isEn)}: </span>
+              {isEn
+                ? `Window ${windowRangeLabel(suggestionWindow)} — DEB ${formatProb(
+                    suggestionWindow.debSum,
+                  )} vs market ${formatCents(suggestionWindow.marketSum)} (edge ${formatEdge(
+                    suggestionWindow.edge,
+                  )})`
+                : `窗口 ${windowRangeLabel(suggestionWindow)}：DEB ${formatProb(
+                    suggestionWindow.debSum,
+                  )}，市场仅 ${formatCents(
+                    suggestionWindow.marketSum,
+                  )}（差值 ${formatEdge(suggestionWindow.edge)}）`}
+            </div>
+          ) : null}
+
+          {activeWindow ? (
+            <div className="flex min-w-0 flex-col gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-1">
+                {buckets
+                  .slice(activeWindow.startIndex, activeWindow.endIndex + 1)
+                  .map((bucket) => (
+                    <span
+                      key={`${bucket.label}-${bucket.value}`}
+                      className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono text-[10px] font-bold tabular-nums text-slate-600"
+                      title={bucket.market_url || bucket.label}
+                    >
+                      <span className="text-slate-800">{bucket.label}</span>
+                      <span className="text-violet-700">
+                        {formatProb(bucket.deb_probability)}
+                      </span>
+                      <span className="text-blue-700">
+                        {formatCents(bucket.market_yes_cents)}
+                      </span>
+                    </span>
+                  ))}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                <WindowSummaryStat
+                  label={copy("debSum", isEn)}
+                  value={formatProb(activeWindow.debSum)}
+                  toneClass="text-violet-700"
+                />
+                <WindowSummaryStat
+                  label={copy("marketSum", isEn)}
+                  value={formatCents(activeWindow.marketSum)}
+                  toneClass="text-blue-700"
+                />
+                <WindowSummaryStat
+                  label={copy("edge", isEn)}
+                  value={formatEdge(activeWindow.edge)}
+                  toneClass={edgeToneClass(activeWindow.edge)}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="flex h-14 items-center justify-center rounded border border-dashed border-slate-200 text-[11px] font-bold text-slate-400">
+              {copy("noMarketTitle", isEn)}
+            </div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 主组件：全城市卡片网格
+// ---------------------------------------------------------------------------
+
 export function ArbitrageDashboard({ isEn }: ArbitrageDashboardProps) {
-  const [city, setCity] = useState<string>(FALLBACK_ARBITRAGE_CITIES[0].value);
-  // 可选城市：初始为静态 8 城，挂载后尝试从后端加载动态列表，失败静默保留静态。
+  // 全部城市：初始为静态 8 城，挂载后尝试从后端加载动态列表，失败静默保留静态。
   const [availableCities, setAvailableCities] = useState<ArbitrageCity[]>(() =>
     FALLBACK_ARBITRAGE_CITIES.map((item) => ({
       key: item.value,
@@ -185,8 +347,6 @@ export function ArbitrageDashboard({ isEn }: ArbitrageDashboardProps) {
   );
   const [citiesLoading, setCitiesLoading] = useState(true);
   const [windowSize, setWindowSize] = useState<number>(DEFAULT_WINDOW_SIZE);
-  const [scanVisible, setScanVisible] = useState(false);
-  const { data, error, loading, refreshManually } = useArbitrageQuery({ city });
 
   // 挂载时加载一次动态城市列表；空列表或失败都保持静态回退。
   useEffect(() => {
@@ -205,64 +365,37 @@ export function ArbitrageDashboard({ isEn }: ArbitrageDashboardProps) {
     return () => controller.abort();
   }, []);
 
-  // 动态列表不含当前选中城市时（如该城市已无市场），自动切到列表第一项。
-  useEffect(() => {
-    if (availableCities.length === 0) return;
-    setCity((current) =>
-      availableCities.some((item) => item.display_name === current)
-        ? current
-        : availableCities[0].display_name,
-    );
-  }, [availableCities]);
-
-  const buckets = useMemo(
-    () => (Array.isArray(data?.buckets) ? data.buckets : []),
-    [data],
-  );
-  const marketAvailable = Boolean(data?.market_available) && buckets.length > 0;
-
-  // 当前窗口大小下 debSum 最大的相邻窗口（默认高亮视图）。
-  const activeWindow = useMemo(() => {
-    const best = pickMaxWindow(computeContiguousWindows(buckets, windowSize), "debSum");
-    return best ? { ...best, isTop3: true } : null;
-  }, [buckets, windowSize]);
-
-  // 当前窗口大小下 edge 最大的窗口（建议动作提示）。
-  const suggestionWindow = useMemo(
-    () => pickMaxWindow(computeContiguousWindows(buckets, windowSize), "edge"),
-    [buckets, windowSize],
+  const cityNames = useMemo(
+    () => availableCities.map((item) => item.display_name),
+    [availableCities],
   );
 
-  // 全部连续窗口（size 2-5），按 edge 降序。
-  const scanWindows = useMemo(() => {
-    if (!scanVisible) return [] as ArbitrageWindow[];
-    const all: ArbitrageWindow[] = [];
-    for (const size of WINDOW_SIZES) {
-      all.push(...computeContiguousWindows(buckets, size));
+  const { details, error, loading, missing, errors, partial, refreshManually } =
+    useMultiCityArbitrageQuery({ cities: cityNames });
+
+  // 用第一个可用城市的 generated_at 作为全局生成时间。
+  const generatedText = useMemo(() => {
+    for (const name of cityNames) {
+      const item = details[name];
+      if (item?.generated_at) return formatGeneratedAt(item.generated_at);
     }
-    all.sort((a, b) => b.edge - a.edge);
-    return all.map((windowItem, index) => ({
-      ...windowItem,
-      isTop3: index === 0,
-    }));
-  }, [buckets, scanVisible]);
+    return "";
+  }, [cityNames, details]);
 
-  const totalMarketYesSum =
-    data?.total_market_yes_sum != null && Number.isFinite(Number(data.total_market_yes_sum))
-      ? Number(data.total_market_yes_sum)
-      : null;
-  const strictArbitrage = totalMarketYesSum != null && totalMarketYesSum < 100;
-  const generatedText = formatGeneratedAt(data?.generated_at);
+  const hasAnyData = useMemo(
+    () => cityNames.some((name) => details[name]),
+    [cityNames, details],
+  );
 
   const renderBody = () => {
-    if (!data && loading) {
+    if (!hasAnyData && loading) {
       return (
         <div className="flex h-40 items-center justify-center text-xs font-bold text-slate-400">
           {copy("loading", isEn)}
         </div>
       );
     }
-    if (!data && error) {
+    if (!hasAnyData && error) {
       return (
         <div className="flex h-40 flex-col items-center justify-center gap-2 text-xs font-bold text-rose-600">
           <CircleAlert size={16} />
@@ -277,198 +410,43 @@ export function ArbitrageDashboard({ isEn }: ArbitrageDashboardProps) {
         </div>
       );
     }
-    if (!marketAvailable) {
-      return (
-        <div className="flex h-40 flex-col items-center justify-center gap-1.5 text-slate-400">
-          <Scale size={16} />
-          <span className="text-xs font-black">{copy("noMarketTitle", isEn)}</span>
-          <span className="text-[11px] font-semibold">
-            {data?.error || copy("noMarketBody", isEn)}
-          </span>
-        </div>
-      );
-    }
+
+    const missingSet = new Set(missing);
+    const errorEntries = Object.entries(errors);
 
     return (
       <div className="flex flex-col gap-3 p-3">
-        {/* 工具行：窗口大小 + 扫描 + 市场 Yes 总和 */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[10px] font-black uppercase tracking-wide text-slate-500">
-            {copy("windowSize", isEn)}
-          </span>
-          <div className="inline-flex overflow-hidden rounded border border-slate-300">
-            {WINDOW_SIZES.map((size) => (
-              <button
-                key={size}
-                type="button"
-                aria-pressed={windowSize === size}
-                onClick={() => setWindowSize(size)}
-                className={clsx(
-                  "h-7 w-8 border-r border-slate-200 font-mono text-[11px] font-bold tabular-nums last:border-r-0",
-                  windowSize === size
-                    ? "bg-blue-600 text-white"
-                    : "bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900",
-                )}
-              >
-                {size}
-              </button>
-            ))}
+        {partial ? (
+          <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-bold text-amber-800">
+            {copy("partialBanner", isEn)}
           </div>
-          <button
-            type="button"
-            aria-pressed={scanVisible}
-            onClick={() => setScanVisible((current) => !current)}
-            className={clsx(
-              "inline-flex h-7 items-center gap-1.5 rounded border px-2.5 text-[11px] font-bold transition-colors",
-              scanVisible
-                ? "border-blue-300 bg-blue-50 text-blue-700"
-                : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900",
-            )}
-          >
-            <ScanSearch size={13} />
-            {scanVisible ? copy("hideScan", isEn) : copy("scanAll", isEn)}
-          </button>
-          {totalMarketYesSum != null ? (
-            <span
-              className={clsx(
-                "inline-flex items-center gap-1 rounded border px-2 py-1 font-mono text-[10px] font-bold tabular-nums",
-                strictArbitrage
-                  ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                  : "border-slate-200 bg-slate-50 text-slate-600",
-              )}
-            >
-              {copy("marketTotal", isEn)} {totalMarketYesSum.toFixed(1)}¢
-            </span>
-          ) : null}
+        ) : null}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {availableCities.map((item) => {
+            const name = item.display_name;
+            const overview = details[name];
+            const hasMarket =
+              Boolean(overview?.market_available) &&
+              Array.isArray(overview?.buckets) &&
+              overview.buckets.length > 0;
+            let status: CityCardStatus = "loading";
+            if (overview && !hasMarket) status = "no-market";
+            else if (hasMarket) status = "ok";
+            else if (errorEntries.some(([city]) => city === name)) status = "error";
+            else if (missingSet.has(name)) status = "loading";
+            return (
+              <CityArbitrageCard
+                key={item.key}
+                cityName={name}
+                isEn={isEn}
+                overview={overview}
+                errorMessage={errors[name]}
+                status={status}
+                windowSize={windowSize}
+              />
+            );
+          })}
         </div>
-
-        {/* 严格套利提示 */}
-        {strictArbitrage ? (
-          <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-bold text-emerald-800">
-            {copy("strictArb", isEn)}
-          </div>
-        ) : null}
-
-        {/* 建议动作提示：当前窗口大小下 edge 最大且为正 */}
-        {suggestionWindow && suggestionWindow.edge > 0 ? (
-          <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] font-semibold text-blue-800">
-            <span className="font-black">{copy("suggestionTitle", isEn)}: </span>
-            {isEn
-              ? `Window ${windowRangeLabel(suggestionWindow)} — DEB ${formatProb(suggestionWindow.debSum)} vs market ${formatCents(suggestionWindow.marketSum)} (edge ${formatEdge(suggestionWindow.edge)}), worth a look.`
-              : `窗口 ${windowRangeLabel(suggestionWindow)}：DEB ${formatProb(suggestionWindow.debSum)}，市场仅 ${formatCents(suggestionWindow.marketSum)}（差值 ${formatEdge(suggestionWindow.edge)}），可关注。`}
-          </div>
-        ) : null}
-
-        {/* 默认视图：当前窗口大小下 debSum 最大的相邻档位 */}
-        {activeWindow ? (
-          <div className="flex flex-col gap-2 rounded border border-slate-200 bg-white p-3">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {buckets
-                .slice(activeWindow.startIndex, activeWindow.endIndex + 1)
-                .map((bucket) => (
-                  <span
-                    key={`${bucket.label}-${bucket.value}`}
-                    className="inline-flex items-center gap-1.5 rounded border border-slate-200 bg-white px-2 py-1 font-mono text-[10px] font-bold tabular-nums text-slate-600"
-                    title={bucket.market_url || bucket.label}
-                  >
-                    <span className="text-slate-800">{bucket.label}</span>
-                    <span className="text-violet-700">
-                      {formatProb(bucket.deb_probability)}
-                    </span>
-                    <span className="text-blue-700">
-                      {formatCents(bucket.market_yes_cents)}
-                    </span>
-                  </span>
-                ))}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <WindowSummaryStat
-                label={copy("debSum", isEn)}
-                value={formatProb(activeWindow.debSum)}
-                toneClass="text-violet-700"
-              />
-              <WindowSummaryStat
-                label={copy("marketSum", isEn)}
-                value={formatCents(activeWindow.marketSum)}
-                toneClass="text-blue-700"
-              />
-              <WindowSummaryStat
-                label={copy("edge", isEn)}
-                value={formatEdge(activeWindow.edge)}
-                toneClass={edgeToneClass(activeWindow.edge)}
-              />
-            </div>
-          </div>
-        ) : null}
-
-        {/* 全连续窗口扫描结果 */}
-        {scanVisible ? (
-          <div className="overflow-auto rounded border border-slate-200">
-            <table className="w-full border-collapse text-xs">
-              <thead className="sticky top-0 z-10 bg-slate-50 text-[10px] font-black uppercase tracking-wide text-slate-500 shadow-[0_1px_0_0_#e2e8f0]">
-                <tr>
-                  <th className="px-3 py-2 text-left">{copy("windowCol", isEn)}</th>
-                  <th className="min-w-[56px] px-3 py-2 text-right">
-                    {copy("sizeCol", isEn)}
-                  </th>
-                  <th className="min-w-[88px] px-3 py-2 text-right text-violet-700">
-                    {copy("debSum", isEn)}
-                  </th>
-                  <th className="min-w-[88px] px-3 py-2 text-right text-blue-700">
-                    {copy("marketSum", isEn)}
-                  </th>
-                  <th className="min-w-[80px] px-3 py-2 text-right">
-                    {copy("edge", isEn)}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {scanWindows.map((windowItem) => (
-                  <tr
-                    key={`${windowItem.labels.length}-${windowItem.startIndex}`}
-                    className={clsx(
-                      "hover:bg-blue-50/40",
-                      windowItem.edge > 0 && "bg-emerald-50/40",
-                    )}
-                  >
-                    <td className="px-3 py-1.5">
-                      <span
-                        className={clsx(
-                          "font-mono text-[11px] font-bold tabular-nums",
-                          windowItem.isTop3 ? "text-emerald-700" : "text-slate-700",
-                        )}
-                      >
-                        {windowRangeLabel(windowItem)}
-                      </span>
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-[11px] font-bold tabular-nums text-slate-600">
-                      {windowItem.labels.length}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-[11px] font-bold tabular-nums text-violet-700">
-                      {formatProb(windowItem.debSum)}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono text-[11px] font-bold tabular-nums text-blue-700">
-                      {formatCents(windowItem.marketSum)}
-                    </td>
-                    <td
-                      className={clsx(
-                        "px-3 py-1.5 text-right font-mono text-[11px] font-black tabular-nums",
-                        edgeToneClass(windowItem.edge),
-                      )}
-                    >
-                      {formatEdge(windowItem.edge)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {!scanWindows.length ? (
-              <div className="flex h-24 items-center justify-center border-t border-slate-100 text-xs font-bold text-slate-400">
-                {copy("emptyScan", isEn)}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
       </div>
     );
   };
@@ -482,11 +460,14 @@ export function ArbitrageDashboard({ isEn }: ArbitrageDashboardProps) {
             <h2 className="truncate text-sm font-black text-slate-900">
               {copy("title", isEn)}
             </h2>
-            {loading && data ? (
+            {loading && hasAnyData ? (
               <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">
                 {copy("refreshing", isEn)}
               </span>
             ) : null}
+            <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">
+              {availableCities.length} {isEn ? "cities" : "城"}
+            </span>
           </div>
           <p className="mt-1 text-xs font-medium text-slate-500">
             {copy("subtitle", isEn)}
@@ -499,32 +480,32 @@ export function ArbitrageDashboard({ isEn }: ArbitrageDashboardProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-600">
-            <span>{copy("city", isEn)}</span>
-            <select
-              value={city}
-              onChange={(event) => setCity(event.target.value)}
-              aria-busy={citiesLoading}
-              className="h-8 rounded border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-            >
-              {availableCities.map((item) => {
-                const staticLabel = STATIC_CITY_LABELS.get(item.display_name);
-                return (
-                  <option key={item.key} value={item.display_name}>
-                    {staticLabel
-                      ? isEn
-                        ? staticLabel.en
-                        : staticLabel.zh
-                      : item.display_name}
-                  </option>
-                );
-              })}
-            </select>
-          </label>
+          <span className="text-[10px] font-black uppercase tracking-wide text-slate-500">
+            {copy("windowSize", isEn)}
+          </span>
+          <div className="inline-flex overflow-hidden rounded border border-slate-300">
+            {WINDOW_SIZES.map((size) => (
+              <button
+                key={size}
+                type="button"
+                aria-pressed={windowSize === size}
+                onClick={() => setWindowSize(size)}
+                className={clsx(
+                  "h-8 w-8 border-r border-slate-200 font-mono text-[11px] font-bold tabular-nums last:border-r-0",
+                  windowSize === size
+                    ? "bg-blue-600 text-white"
+                    : "bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+                )}
+              >
+                {size}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             onClick={refreshManually}
             disabled={loading}
+            aria-busy={citiesLoading}
             className={clsx(
               "inline-flex h-8 items-center gap-1.5 rounded border border-slate-300 bg-white px-2.5 text-[11px] font-bold text-slate-600 transition-colors",
               loading ? "opacity-60" : "hover:bg-slate-50 hover:text-slate-900",

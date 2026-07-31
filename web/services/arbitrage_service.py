@@ -9,6 +9,7 @@ no new dependencies are added.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -20,6 +21,7 @@ from typing import Any, Dict, List, Mapping, Optional, Set, Tuple
 
 import requests
 from fastapi import HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 
 from web.services.ops.market_opportunities import (
     GAMMA_API_BASE,
@@ -564,6 +566,186 @@ def get_arbitrage_overview(
 
 
 # ---------------------------------------------------------------------------
+# Batch overview (all-city view)
+# ---------------------------------------------------------------------------
+
+_ARBITRAGE_BATCH_CACHE: Dict[Tuple[Tuple[str, ...], bool], Tuple[float, Dict[str, Any]]] = {}
+_ARBITRAGE_BATCH_INFLIGHT: Dict[Tuple[Tuple[str, ...], bool], "asyncio.Task[Dict[str, Any]]"] = {}
+_ARBITRAGE_BATCH_LOCK = asyncio.Lock()
+
+
+def _parse_arbitrage_batch_cities(raw_cities: str, *, limit: int) -> List[str]:
+    seen = set()
+    out: List[str] = []
+    for item in str(raw_cities or "").split(","):
+        city = item.strip()
+        if not city or city in seen:
+            continue
+        seen.add(city)
+        out.append(city)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _arbitrage_batch_concurrency() -> int:
+    try:
+        value = int(os.getenv("POLYWEATHER_ARBITRAGE_BATCH_CONCURRENCY", "4") or "4")
+    except ValueError:
+        value = 4
+    return max(1, min(8, value))
+
+
+def _arbitrage_batch_cache_ttl() -> float:
+    try:
+        value = int(os.getenv("POLYWEATHER_ARBITRAGE_BATCH_CACHE_TTL_SEC", "12") or "12")
+    except ValueError:
+        value = 12
+    return max(0.0, float(value))
+
+
+def _arbitrage_batch_partial_timeout() -> Optional[float]:
+    try:
+        ms = int(
+            os.getenv("POLYWEATHER_ARBITRAGE_BATCH_PARTIAL_TIMEOUT_MS", "15000")
+            or "15000"
+        )
+    except ValueError:
+        ms = 15000
+    if ms <= 0:
+        return None
+    return ms / 1000.0
+
+
+def _arbitrage_batch_cache_key(
+    city_names: List[str], force_refresh: bool
+) -> Tuple[Tuple[str, ...], bool]:
+    return (tuple(sorted(city_names)), force_refresh)
+
+
+async def get_arbitrage_overview_batch(
+    request: Request,
+    cities: str,
+    force_refresh: bool = False,
+    limit: int = 50,
+) -> Dict[str, Any]:
+    """Build arbitrage overviews for many cities in one request.
+
+    Mirrors the ``/api/cities/detail-batch`` pattern: bounded per-request
+    concurrency, a short response cache (inflight-shared), and a partial
+    timeout that returns completed cities while the slowest ones land in
+    ``missing``. Each city's payload is built by ``get_arbitrage_overview``,
+    so per-city failures degrade to ``market_available: false`` instead of
+    raising.
+    """
+    city_names = _parse_arbitrage_batch_cities(
+        cities, limit=max(1, min(50, int(limit or 50)))
+    )
+    if not city_names:
+        return {
+            "cities": [],
+            "details": {},
+            "errors": {},
+            "missing": [],
+            "partial": False,
+        }
+
+    async def _build_uncached_payload() -> Dict[str, Any]:
+        semaphore = asyncio.Semaphore(_arbitrage_batch_concurrency())
+        city_durations_ms: Dict[str, float] = {}
+
+        async def _build_with_limit(city: str) -> Tuple[str, Dict[str, Any]]:
+            async with semaphore:
+                started = time.perf_counter()
+                try:
+                    payload = await run_in_threadpool(
+                        get_arbitrage_overview,
+                        request,
+                        city,
+                        force_refresh,
+                    )
+                    return city, payload
+                finally:
+                    city_durations_ms[city] = round(
+                        (time.perf_counter() - started) * 1000.0, 1
+                    )
+
+        task_by_city = {
+            city: asyncio.create_task(_build_with_limit(city)) for city in city_names
+        }
+        task_city_lookup = {task: city for city, task in task_by_city.items()}
+        done, pending = await asyncio.wait(
+            task_by_city.values(),
+            timeout=_arbitrage_batch_partial_timeout(),
+        )
+        details: Dict[str, Any] = {}
+        errors: Dict[str, str] = {}
+        for task in done:
+            city = task_city_lookup[task]
+            try:
+                result_city, payload = task.result()
+            except Exception as exc:
+                errors[city] = str(exc)
+                continue
+            details[result_city] = payload
+
+        missing = [task_city_lookup[task] for task in pending]
+        for task in pending:
+            task.cancel()
+        missing_set = set(missing)
+        missing = [city for city in city_names if city in missing_set]
+
+        return {
+            "cities": city_names,
+            "details": details,
+            "errors": errors,
+            "missing": missing,
+            "partial": bool(missing or errors),
+            "_meta": {
+                "city_durations_ms": city_durations_ms,
+                "response_source": "fresh_build",
+            },
+        }
+
+    cache_ttl = _arbitrage_batch_cache_ttl()
+    cache_key = _arbitrage_batch_cache_key(city_names, force_refresh)
+    if cache_ttl > 0 and not force_refresh:
+        now_ts = time.time()
+        async with _ARBITRAGE_BATCH_LOCK:
+            cached = _ARBITRAGE_BATCH_CACHE.get(cache_key)
+            if cached is not None and now_ts - cached[0] < cache_ttl:
+                return cached[1]
+            task = _ARBITRAGE_BATCH_INFLIGHT.get(cache_key)
+            owner = False
+            if task is None:
+                owner = True
+                task = asyncio.create_task(_build_uncached_payload())
+                _ARBITRAGE_BATCH_INFLIGHT[cache_key] = task
+
+        try:
+            payload = await task
+        finally:
+            if owner:
+                async with _ARBITRAGE_BATCH_LOCK:
+                    if _ARBITRAGE_BATCH_INFLIGHT.get(cache_key) is task:
+                        _ARBITRAGE_BATCH_INFLIGHT.pop(cache_key, None)
+
+        if owner and not payload.get("partial"):
+            async with _ARBITRAGE_BATCH_LOCK:
+                _ARBITRAGE_BATCH_CACHE[cache_key] = (time.time(), payload)
+                if len(_ARBITRAGE_BATCH_CACHE) > 64:
+                    oldest_keys = sorted(
+                        _ARBITRAGE_BATCH_CACHE,
+                        key=lambda item: _ARBITRAGE_BATCH_CACHE[item][0],
+                    )[:16]
+                    for old_key in oldest_keys:
+                        _ARBITRAGE_BATCH_CACHE.pop(old_key, None)
+        return payload
+
+    return await _build_uncached_payload()
+
+
+# ---------------------------------------------------------------------------
 # Dynamic city enumeration (public-search discovery)
 # ---------------------------------------------------------------------------
 
@@ -692,6 +874,7 @@ def list_arbitrage_cities(request: Request) -> Dict[str, Any]:
 
 __all__ = [
     "get_arbitrage_overview",
+    "get_arbitrage_overview_batch",
     "list_arbitrage_cities",
     "GAMMA_API_BASE",
     "CLOB_API_BASE",
