@@ -15,10 +15,35 @@ from src.analysis.deb_probability import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _empty_snapshot_source(monkeypatch):
+    """Isolate training from the local runtime DB.
+
+    `_walk_forward_deb_residuals` derives lead from the earliest probability
+    snapshot timestamp; against a populated local DB the test dates collide with
+    real snapshots and lead strata become nondeterministic. Patching the
+    repository to return no snapshots forces the lead=1 fallback everywhere.
+    """
+
+    class _FakeRepo:
+        def __init__(self, *a, **k):
+            pass
+
+        def load_all_rows(self):
+            return []
+
+    monkeypatch.setattr(
+        "src.database.runtime_state.ProbabilitySnapshotRepository",
+        _FakeRepo,
+    )
+
+
 def _sample_stats():
     return {
         "lead_biases": {"0": 0.7, "1": 1.1, "2": 1.3},
         "lead_sigmas": {"0": 1.8, "1": 2.4, "2": 2.8},
+        "city_biases": {},
+        "temp_biases": {},
         "samples": 726,
         "window_days": 84,
         "computed_at": 1785529783.0,
@@ -98,6 +123,43 @@ def test_payload_lead_strata_select_different_biases():
     assert p1["mu"] == pytest.approx(31.1, abs=0.01)
 
 
+def test_payload_applies_city_bias_adjustment():
+    stats = _sample_stats()
+    stats["city_biases"] = {"1": {"seoul": 1.4}}
+    p = _build_deb_normal_probability_payload(
+        30.0, lead=1, temp_symbol="°C", stats=stats, city="Seoul"
+    )
+    # mu = deb(30) + lead bias(1.1) + seoul adj(1.4) = 32.5
+    assert p["mu"] == pytest.approx(32.5, abs=0.01)
+    # Unknown city gets no adjustment.
+    p2 = _build_deb_normal_probability_payload(
+        30.0, lead=1, temp_symbol="°C", stats=stats, city="atlantis"
+    )
+    assert p2["mu"] == pytest.approx(31.1, abs=0.01)
+
+
+def test_payload_applies_temp_bucket_bias_adjustment():
+    stats = _sample_stats()
+    stats["temp_biases"] = {"1": {"33-36": 0.6}}
+    # deb=35.0 falls in the 33-36 bucket -> +0.6 applied.
+    p = _build_deb_normal_probability_payload(35.0, lead=1, temp_symbol="°C", stats=stats)
+    assert p["mu"] == pytest.approx(36.7, abs=0.01)
+    # deb=28.0 falls in the <=32 bucket -> no adjustment.
+    p2 = _build_deb_normal_probability_payload(28.0, lead=1, temp_symbol="°C", stats=stats)
+    assert p2["mu"] == pytest.approx(29.1, abs=0.01)
+
+
+def test_payload_combines_city_and_temp_adjustments():
+    stats = _sample_stats()
+    stats["city_biases"] = {"1": {"seoul": 1.4}}
+    stats["temp_biases"] = {"1": {"33-36": 0.6}}
+    p = _build_deb_normal_probability_payload(
+        35.0, lead=1, temp_symbol="°C", stats=stats, city="seoul"
+    )
+    # 35.0 + 1.1 + 1.4 + 0.6 = 38.1
+    assert p["mu"] == pytest.approx(38.1, abs=0.01)
+
+
 def test_payload_fahrenheit_conversion():
     stats = _sample_stats()
     payload = _build_deb_normal_probability_payload(
@@ -142,13 +204,16 @@ def test_load_stats_from_empty_db_returns_none():
 # ---- training (walk-forward, no leakage) ----
 
 
-def _make_record(city, date, actual, forecasts, snap_ts=None):
-    return {
+def _make_record(city, date, actual, forecasts, snap_ts=None, deb_prediction=None):
+    rec = {
         "city": city,
         "target_date": date,
         "actual_high": actual,
         "forecasts": forecasts,
     }
+    if deb_prediction is not None:
+        rec["deb_prediction"] = deb_prediction
+    return rec
 
 
 def test_train_deb_lead_stats_insufficient_samples():
@@ -183,6 +248,130 @@ def test_train_deb_lead_stats_synthetic_pool():
     assert abs(result["lead_biases"]["1"] - 1.0) < 1.0
     assert result["lead_sigmas"]["1"] > 0.5
     assert result["samples"] >= 10
+
+
+def test_train_deb_lead_stats_emits_city_and_temp_biases():
+    # Two cities with opposite residual biases at a hot forecast stratum:
+    # seoul residuals +3.0 (warm), tokyo residuals -1.0, raw forecasts in 33-36.
+    # 34 days each -> 32 usable walk-forward rows per city, above
+    # MIN_ADJUST_SAMPLES=30 so both adjustments are emitted.
+    daily_records = {}
+    for i in range(34):
+        date = f"2026-05-{i + 1:02d}"
+        raw = 34.0
+        daily_records.setdefault("seoul", {})[date] = _make_record(
+            "seoul", date, raw + 3.0 + 0.2, {"Open-Meteo": raw, "ECMWF": raw + 0.1}
+        )
+        daily_records.setdefault("tokyo", {})[date] = _make_record(
+            "tokyo", date, raw - 1.0 + 0.2, {"Open-Meteo": raw, "ECMWF": raw + 0.1}
+        )
+    result = train_deb_lead_stats(daily_records, min_samples=10)
+    assert result["trained"] is True
+    # City adjustments are shrunk deviations from the lead-global bias.
+    city_map = result.get("city_biases", {}).get("1", {})
+    assert "seoul" in city_map
+    assert city_map["seoul"] > 1.0
+    assert "tokyo" in city_map
+    assert city_map["tokyo"] < 0.0
+
+
+def test_train_deb_lead_stats_emits_temp_bucket_biases():
+    # 40 cool days (unbiased) + 32 hot days (+1.9 warm): the hot stratum is a
+    # minority deviating from the global median, so it receives a positive
+    # adjustment while the cool majority defines the global bias. Hot group
+    # (33-36) has 32 usable rows >= MIN_ADJUST_SAMPLES=30.
+    daily_records = {}
+    for i in range(72):
+        date = f"2026-05-{i + 1:02d}"
+        if i < 40:
+            raw = 28.0
+            actual = raw + 0.2
+        else:
+            raw = 34.5
+            actual = raw + 1.9
+        daily_records.setdefault("singapore", {})[date] = _make_record(
+            "singapore", date, actual, {"Open-Meteo": raw, "ECMWF": raw + 0.1}
+        )
+    result = train_deb_lead_stats(daily_records, min_samples=5)
+    assert result["trained"] is True
+    temp_map = result.get("temp_biases", {}).get("1", {})
+    assert temp_map.get("33-36", 0.0) > 0.5
+
+
+def test_train_deb_lead_stats_small_city_group_shrinks_to_zero():
+    # 6 days for seoul (4 usable rows < MIN_ADJUST_SAMPLES=30) mixed with other
+    # cities: seoul's adjustment shrinks to zero and is not emitted.
+    daily_records = {}
+    for i in range(30):  # 6 days x 5 cities
+        date = f"2026-06-{i + 1:02d}"
+        raw = 20.0
+        actual = raw + (3.0 if i < 6 else 1.0)
+        city = "seoul" if i < 6 else f"city{i // 6}"
+        daily_records.setdefault(city, {})[date] = _make_record(
+            city, date, actual, {"Open-Meteo": raw, "ECMWF": raw}
+        )
+    result = train_deb_lead_stats(daily_records, min_samples=5)
+    assert result["trained"] is True
+    city_map = result.get("city_biases", {}).get("1", {})
+    assert "seoul" not in city_map
+
+
+def test_train_deb_lead_stats_uses_robust_sigma():
+    # Outlier residuals inflate pstdev but not the MAD-based scale.
+    daily_records = {}
+    for i in range(15):
+        date = f"2026-07-{i + 1:02d}"
+        raw = 25.0
+        # 14 normal residuals of 0, 1 outlier of +20.
+        actual = raw + (20.0 if i == 14 else 0.0)
+        daily_records.setdefault("singapore", {})[date] = _make_record(
+            "singapore", date, actual, {"Open-Meteo": raw, "ECMWF": raw}
+        )
+    result = train_deb_lead_stats(daily_records, min_samples=5)
+    assert result["trained"] is True
+    sigma = result["lead_sigmas"]["1"]
+    # MAD-based scale stays near the inlier spread (~0), floored at MIN_SIGMA.
+    assert sigma <= 1.0
+    assert sigma >= 0.5
+
+
+def test_train_deb_lead_stats_uses_stored_deb_prediction_as_residual_basis():
+    # The core calibration fix: training residuals must be computed against the
+    # STORED deb_prediction (what inference actually consumes), not a
+    # walk-forward recomputation. Here the stored value (32.0) deliberately
+    # differs from the raw blend (28.0), so a bias trained on the stored basis
+    # (residual = 33.0 - 32.0 = +1.0) is distinguishable from the walk-forward
+    # basis (residual = 33.0 - 28.0 = +5.0).
+    daily_records = {}
+    for i in range(25):
+        date = f"2026-05-{i + 1:02d}"
+        raw = 28.0
+        daily_records.setdefault("singapore", {})[date] = _make_record(
+            "singapore",
+            date,
+            33.0,
+            {"Open-Meteo": raw, "ECMWF": raw + 0.1},
+            deb_prediction=32.0,
+        )
+    result = train_deb_lead_stats(daily_records, min_samples=10)
+    assert result["trained"] is True
+    # Stored basis dominates: bias ≈ +1.0, never the walk-forward +5.0.
+    assert abs(result["lead_biases"]["1"] - 1.0) < 0.3
+
+
+def test_train_deb_lead_stats_falls_back_to_walkforward_without_stored():
+    # Without a stored deb_prediction the training falls back to a walk-forward
+    # recomputation (no leakage): raw blend ~28.0, actual 33.0 -> +5.0 bias.
+    daily_records = {}
+    for i in range(25):
+        date = f"2026-05-{i + 1:02d}"
+        raw = 28.0
+        daily_records.setdefault("singapore", {})[date] = _make_record(
+            "singapore", date, 33.0, {"Open-Meteo": raw, "ECMWF": raw + 0.1}
+        )
+    result = train_deb_lead_stats(daily_records, min_samples=10)
+    assert result["trained"] is True
+    assert abs(result["lead_biases"]["1"] - 5.0) < 1.0
 
 
 # ---- trend_engine integration (branch priority + fallback) ----

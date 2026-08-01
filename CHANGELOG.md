@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.9.0 - 2026-08-01（待发布）
+
+> 自 1.8.1（2026-05-28）以来共 393 个提交；`VERSION` 文件仍为 `1.8.1`，发布时同步。
+
+### 新增能力
+- **WeatherNext2 接入**：新增 `weathernext2_worker` 服务，从 GCS Zarr 读取 Google WeatherNext2 集合预报（`WEATHERNEXT2_BACKEND=gcs_zarr`），6 小时周期生成 `weathernext2_city_highs.json` 高温度数文件（带 `.bak` 兜底），并通过 `src/analysis/weathernext2_calibration.py` 的 LightGBM 校准器输出 q10 / q50 / q90 分位。
+- **套利对比上线**：新增 Polymarket 套利对比模块（侧边栏第 5 项），提供 `/api/arbitrage/overview`、`/api/arbitrage/overview-batch`（全城市批量概览）与 `/api/arbitrage/cities`（动态城市列表，基于 Polymarket public-search 结果）；支持 Redis 共享缓存（默认 TTL 3600s）、批量并发（默认 4）与部分超时（默认 15s）。
+- **DEB 正态概率引擎**：新增 `src/analysis/deb_probability.py`，以正态分布计算整度温度概率 `P(T==τ)=Φ((τ+0.5-μ)/σ)-Φ((τ-0.5-μ)/σ)`，取代 legacy 高斯分桶成为主概率路径；引擎优先级为 `dead_market > deb_normal > weathernext2`，legacy 高斯保留为 `trend_engine.py` 回退分支（`engine_mode` 展示 `deb_normal` / `legacy`）。
+- **训练结算服务**：新增 `training_settlement` 服务（初始延迟 60s、周期 6h、回看 10 天），配合领域仓库重构（`src/database/repos/` 9 个领域仓库）与 SQLite 主路径收口。
+- **Ops 能力扩展**：新增 `/api/ops/leaderboard/weekly`、`/api/ops/memberships`、`/api/ops/feedback`、`/api/ops/users/grant-points`；后端 ops 逻辑收口为 `web/services/ops/` 子包（config / health / market_opportunities / payments / users）；`web/services/ops/health.py` 支持探测 14 个外部服务。
+- **Ethereum 主网 USDC 直转**：支付新增 `usdc_ethereum` token 配置（`supports_contract_checkout=false`、`supports_direct_transfer=true`），支持用户钱包默认网络付款后按 `intent.chain_id` 确认。
+- **支付/同步循环参数化**：支付 Event Loop 与 Confirm Loop 支持完整环境变量配置（间隔、回看块数、步长、批大小、空闲降频）；Supabase 资料/积分同步增加最小间隔节流（3600s / 60s）。
+- **观测采集节奏参数化**：`collector` 各来源轮询间隔可配置（AMOS 60s / CoWIN 60s / HKO 600s / MADIS 300s），新增观测来源门控与 DB 锁开关（`POLYWEATHER_OBSERVATION_SOURCE_GATE_ENABLED`、`POLYWEATHER_OBSERVATION_SOURCE_DB_LOCK_ENABLED`）。
+
+### 数据源清理与结算口径
+- **移除 Wunderground**：全部 WU 抓取与配置删除。
+- **移除台北 CWA**：CWA 源在观测数据中零匹配，抓取逻辑删除。
+- **移除 AMSC AWOS（中国跑道）**：空实现文件删除，跑道实测仅保留韩国 AMOS（首尔 RKSI / 釜山 RKPK），前端 `runwaySensorCities` 收敛为 `{"seoul","busan"}`。
+- **移除 NMC/CMA（中国内地）**：中国城市高频增强层下线，`CHINA_HIGH_FREQ_AIRPORT_CITIES` 为空集。
+- **深圳结算源切换**：深圳改挂流浮山 HKO（lat 22.4694 / lon 113.9833，`settlement_source=hko`，站点 LFS），并关闭其 AviationWeather 走线。
+- **结算源收敛**：结算观测统一为 NOAA Synoptic（11 城）+ HKO（2 城）+ IMGW 华沙（可选）；TAF 唯一来源为 NOAA AviationWeather（`TAF_CACHE_TTL_SEC` 默认 900）。
+
+### 配置治理
+- `.env.example` 收口为 8 段 246 行；新增 `WEATHERNEXT2_*`、`POLYWEATHER_ARBITRAGE_*`、`POLYWEATHER_PAYMENT_EVENT_LOOP_*`、`POLYWEATHER_PAYMENT_CONFIRM_LOOP_*`、`POLYWEATHER_SUPABASE_*_SYNC_MIN_INTERVAL_SEC`、`POLYWEATHER_TRAINING_SETTLEMENT_*`、`POLYWEATHER_OBSERVATION_COLLECTOR_*` 等变量。
+- 删除死变量：`TELEGRAM_ALERT_PUSH_*`、`TELEGRAM_MARKET_FOCUS_DIGEST_*`、`POLYWEATHER_PROMETHEUS_PORT`、`POLYWEATHER_ALERTMANAGER_PORT`、`POLYWEATHER_ALERT_RELAY_PORT`、`POLYWEATHER_GRAFANA_*`（代码中均已无消费者；`POLYWEATHER_MONITORING_ALERT_CHAT_IDS` 仅作为 `.env.example` 占位保留，代码同样无消费者）。
+- `POLYWEATHER_STATE_STORAGE_MODE=dual` 弃用，SQLite 为唯一主路径。
+
+### 架构调整
+- Docker Compose 收敛为 8 个服务：`redis`、`polyweather`（Bot）、`frontend`、`web`、`collector`、`warmer`、`training_settlement`、`weathernext2_worker`；移除监控 profile（Prometheus / Alertmanager / Alert Relay / Grafana）。
+- 监控收敛为轻量链路：`/healthz`、`/api/system/status`、`/api/system/cache-status`、`/api/system/priority-warm`、`/metrics`（ops 鉴权）+ `scripts/check_ops_health.py`。
+
+### 修复与优化
+- **DEB 正态引擎校准改进**：残差训练基准改为存储的 `deb_prediction`（与推理一致，消除 14% 记录因基准错位导致的调整错配）；σ 改为 MAD 稳健估计（退化池返回下限，避免单个离群值撑大，并按重尾残差加 1.05 膨胀）；城市/温度段偏差组样本门槛从 10 提到 30（剔除 >=37C 等小样本组的有害调整）。重跑校准对比：整体 PIT chi2 624→57、std 0.218→0.294（近理想 0.289）、cov90 0.925→0.824，33-36C 段 chi2 130→44、cov90 0.978→0.897。
+- 套利对比由单城市切为全城市同时展示（新增批量概览接口，HEAD `4a136d5ca`）。
+- 前端侧边栏扩展为 6 项（概览、日内分析、WeatherNext2、多日预报、套利对比、训练数据）。
+
 ## 1.8.1 - 2026-05-28
 
 ### 文档与发布

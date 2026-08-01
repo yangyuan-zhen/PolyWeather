@@ -893,6 +893,7 @@ def analyze_weather_trend(
                 temp_symbol,
                 _load_deb_normal_stats(),
                 is_fahrenheit_city=is_f_city,
+                city=city_name,
             )
         except Exception:
             deb_normal_payload = None

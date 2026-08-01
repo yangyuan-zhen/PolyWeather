@@ -1154,6 +1154,14 @@ def calculate_dynamic_weight_components(
             "dedup_note": dedup_note,
         }
 
+    # Heat-day weighting: historical days with actual_high >= 35C (95F for
+    # Fahrenheit cities) get their sample weight multiplied so MAE-based weights
+    # track hot-day performance, where the blend historically loses to single
+    # models (>=37C stratum: blend ranked 3/6 vs ECMWF 2.05C MAE).
+    _, city_meta = _resolve_city_history_context(city_name)
+    heat_threshold = 95.0 if bool((city_meta or {}).get("use_fahrenheit")) else 35.0
+    hot_days_used = 0
+
     def _equal_weight_result(note: str, days_used: int):
         weights = {model: 1.0 / len(forecasts) for model in forecasts}
         weights_info = f"{note} | {dedup_note}" if dedup_note else note
@@ -1236,10 +1244,14 @@ def calculate_dynamic_weight_components(
                 )
                 blended_error = _blend_mae(daily_error, h_err)
                 decay_weight = decay_factor ** days_used
+                if av >= heat_threshold:
+                    decay_weight *= 2.0
                 errors[model].append((blended_error, decay_weight))
 
         if not usable_day:
             continue
+        if av >= heat_threshold:
+            hot_days_used += 1
         days_used += 1
         if days_used >= effective_lookback:
             break
@@ -1308,6 +1320,8 @@ def calculate_dynamic_weight_components(
         if abs(model_biases.get(m, 0.0)) >= 0.3:
             parts.append(f"bias:{model_biases[m]:+.1f}")
         weight_str_parts.append(",".join(parts) + ")")
+    if hot_days_used:
+        weight_str_parts.append(f"高温日加权x2({hot_days_used}天)")
     if dedup_note:
         weight_str_parts.append(dedup_note)
 
@@ -1319,6 +1333,7 @@ def calculate_dynamic_weight_components(
         "biases": model_biases,
         "weights_info": " | ".join(weight_str_parts),
         "days_used": days_used,
+        "hot_days_used": hot_days_used,
         "dedup_note": dedup_note,
     }
 

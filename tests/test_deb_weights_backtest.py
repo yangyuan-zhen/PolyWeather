@@ -180,6 +180,45 @@ def test_calculate_dynamic_weights_passes_hyperparameters_through():
     assert "权重" in info or "MAE" in info or "bias" in info
 
 
+def _build_hot_cool_history() -> dict[str, dict[str, dict[str, float]]]:
+    """3 cool days (ecmwf drifts +4, gfs perfect) + 3 hot days (ecmwf perfect,
+    gfs drifts +4, actual >= 35C). Without hot-day x2 weighting both models have
+    identical MAE; with it the hot-accurate ecmwf wins."""
+    records: dict[str, dict[str, dict[str, float]]] = {}
+    for i in range(6):
+        if i < 3:  # cool days
+            actual, ecmwf, gfs = 20.0, 24.0, 20.0
+        else:  # hot days (>= 35C for ankara)
+            actual, ecmwf, gfs = 38.0, 38.0, 42.0
+        date_str = f"2026-07-{11 + i:02d}"  # fixed past dates, never "today"
+        records["ankara"] = {
+            **records.get("ankara", {}),
+            date_str: {
+                "actual_high": actual,
+                "forecasts": {"ecmwf": ecmwf, "gfs": gfs},
+            },
+        }
+    return records
+
+
+def test_hot_day_weighting_doubles_weight_and_counts_hot_days():
+    history = _build_hot_cool_history()["ankara"]
+    components = calculate_dynamic_weight_components(
+        "ankara",
+        {"ecmwf": 38.0, "gfs": 42.0},
+        bias_penalty=0.0,
+        divergence_threshold=10.0,  # isolate hot weighting: no spread fallback
+        history_data={"ankara": history},
+    )
+
+    assert components["hot_days_used"] == 3
+    assert "高温日加权x2(3天)" in components["weights_info"]
+    # Hot days get decay_weight * 2: the hot-accurate ecmwf edges out gfs even
+    # though both models carry identical total error (without x2 they tie 0.5).
+    assert components["weights"]["ecmwf"] > 0.5
+    assert components["weights"]["gfs"] < 0.5
+
+
 def test_write_weight_config_report_persists_json_and_csv(tmp_path):
     daily_records = _build_history(6)
     report = backtest_deb_weight_configs(daily_records, configs=DEFAULT_WEIGHT_CONFIGS[:2])
