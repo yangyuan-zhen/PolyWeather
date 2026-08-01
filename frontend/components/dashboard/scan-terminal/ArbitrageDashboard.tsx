@@ -1,8 +1,8 @@
 "use client";
 
 import clsx from "clsx";
-import { CircleAlert, RefreshCw, Scale } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { CircleAlert, Plus, RefreshCw, Scale } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ArbitrageBucket,
   ArbitrageCity,
@@ -72,6 +72,16 @@ const ARBITRAGE_TEXT = {
     en: "Model = our DEB forecast. Market = Polymarket Yes price. Positive edge means the market is underpricing that range.",
     zh: "模型 = 我们的 DEB 预测概率；市场 = Polymarket Yes 价格；价差为正说明市场低估了这个区间。",
   },
+  addCity: { en: "Add City", zh: "添加城市" },
+  searchPlaceholder: { en: "Search city…", zh: "搜索城市…" },
+  noMatch: { en: "No matching cities", zh: "无匹配城市" },
+  alreadyAdded: { en: "Added", zh: "已添加" },
+  emptyTitle: { en: "No cities selected yet", zh: "还没有选择城市" },
+  emptyBody: {
+    en: "Add cities to compare model probability vs market price.",
+    zh: "添加你想对比的城市，查看模型概率与市场价格的对比。",
+  },
+  remove: { en: "Remove", zh: "移除" },
 } as const;
 
 function copy(key: keyof typeof ARBITRAGE_TEXT, isEn: boolean) {
@@ -154,12 +164,14 @@ function CityArbitrageCard({
   overview,
   errorMessage,
   status,
+  onRemove,
 }: {
   cityName: string;
   isEn: boolean;
   overview?: ArbitrageOverview;
   errorMessage?: string;
   status: CityCardStatus;
+  onRemove: () => void;
 }) {
   const bestWindow = useMemo(() => {
     if (status !== "ok") return null;
@@ -179,12 +191,28 @@ function CityArbitrageCard({
   return (
     <div
       className={clsx(
-        "flex min-w-0 flex-col gap-1.5 rounded border p-3 transition-colors",
+        "group relative flex min-w-0 flex-col gap-1.5 rounded border p-3 transition-colors",
         hasEdge
           ? "border-emerald-200 bg-emerald-50/50"
           : "border-slate-200 bg-white",
       )}
     >
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={copy("remove", isEn)}
+        title={copy("remove", isEn)}
+        className="absolute right-1.5 top-1.5 z-10 inline-flex h-5 w-5 items-center justify-center rounded-full text-slate-300 opacity-0 transition-opacity hover:bg-slate-100 hover:text-rose-500 group-hover:opacity-100"
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+          <path
+            d="M1 1l8 8M9 1l-8 8"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+          />
+        </svg>
+      </button>
       <div className="flex flex-wrap items-center justify-between gap-1.5">
         <h3 className="truncate text-sm font-black text-slate-900">
           {cityDisplayLabel(cityName, isEn)}
@@ -292,11 +320,152 @@ function CityArbitrageCard({
 }
 
 // ---------------------------------------------------------------------------
-// 主组件：全城市卡片网格
+// 城市选择器：搜索 + 多选添加
 // ---------------------------------------------------------------------------
 
+function CityAddDropdown({
+  isEn,
+  options,
+  selectedKeys,
+  onToggle,
+  onClose,
+}: {
+  isEn: boolean;
+  options: ArbitrageCity[];
+  selectedKeys: Set<string>;
+  onToggle: (city: ArbitrageCity) => void;
+  onClose: () => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [query, setQuery] = useState("");
+
+  // 自动聚焦输入框
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  // 点击外部 / Escape 关闭
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((item) => {
+      const haystack = [item.display_name, item.key]
+        .filter(Boolean)
+        .map((s) => s!.toLowerCase());
+      return haystack.some((s) => s.includes(q));
+    });
+  }, [options, query]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="absolute z-30 mt-1 flex max-h-80 w-64 flex-col overflow-hidden rounded border border-slate-300 bg-white text-xs text-slate-800 shadow-2xl"
+    >
+      <div className="border-b border-slate-100 p-2">
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={copy("searchPlaceholder", isEn)}
+          className="w-full rounded border border-slate-200 px-2.5 py-1.5 text-xs outline-none focus:border-blue-500"
+        />
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto divide-y divide-slate-100">
+        {filtered.length === 0 ? (
+          <div className="p-4 text-center font-medium text-slate-400">
+            {copy("noMatch", isEn)}
+          </div>
+        ) : (
+          filtered.map((item) => {
+            const added = selectedKeys.has(item.key);
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => onToggle(item)}
+                className={clsx(
+                  "flex w-full items-center justify-between gap-2 px-3 py-2 text-left transition-colors",
+                  added ? "bg-blue-50/60 hover:bg-blue-50" : "hover:bg-slate-100",
+                )}
+              >
+                <span className="min-w-0 truncate font-semibold">
+                  {cityDisplayLabel(item.display_name, isEn)}
+                </span>
+                {added ? (
+                  <span className="shrink-0 rounded bg-blue-600 px-1.5 py-0.5 text-[9px] font-black text-white">
+                    {copy("alreadyAdded", isEn)}
+                  </span>
+                ) : (
+                  <span className="shrink-0 text-[9px] font-black text-slate-300">+</span>
+                )}
+              </button>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 主组件：用户自选城市卡片网格
+// ---------------------------------------------------------------------------
+
+// localStorage 持久化 key：用户自选城市（存 display_name 列表）。
+const SELECTED_CITIES_STORAGE_KEY = "polyweather.arbitrage.selectedCities.v1";
+
+function loadSelectedCityNames(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(SELECTED_CITIES_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((item) => (typeof item === "string" ? item.trim() : ""))
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function persistSelectedCityNames(names: string[]) {
+  if (typeof window === "undefined") return;
+  try {
+    if (names.length === 0) {
+      window.localStorage.removeItem(SELECTED_CITIES_STORAGE_KEY);
+    } else {
+      window.localStorage.setItem(
+        SELECTED_CITIES_STORAGE_KEY,
+        JSON.stringify(names),
+      );
+    }
+  } catch {
+    // localStorage 不可用（隐私模式等）时静默降级为仅本次会话。
+  }
+}
+
 export function ArbitrageDashboard({ isEn }: ArbitrageDashboardProps) {
-  // 全部城市：初始为静态 8 城，挂载后尝试从后端加载动态列表，失败静默保留静态。
+  // 全部可用城市：初始为静态 8 城，挂载后尝试从后端加载动态列表，失败静默保留静态。
   const [availableCities, setAvailableCities] = useState<ArbitrageCity[]>(() =>
     FALLBACK_ARBITRAGE_CITIES.map((item) => ({
       key: item.value,
@@ -304,6 +473,12 @@ export function ArbitrageDashboard({ isEn }: ArbitrageDashboardProps) {
     })),
   );
   const [citiesLoading, setCitiesLoading] = useState(true);
+
+  // 用户自选城市（display_name 列表），localStorage 持久化。
+  const [selectedCityNames, setSelectedCityNames] = useState<string[]>(() =>
+    loadSelectedCityNames(),
+  );
+  const [addOpen, setAddOpen] = useState(false);
 
   // 挂载时加载一次动态城市列表；空列表或失败都保持静态回退。
   useEffect(() => {
@@ -322,29 +497,86 @@ export function ArbitrageDashboard({ isEn }: ArbitrageDashboardProps) {
     return () => controller.abort();
   }, []);
 
-  const cityNames = useMemo(
-    () => availableCities.map((item) => item.display_name),
-    [availableCities],
+  const selectedSet = useMemo(
+    () => new Set(selectedCityNames.map((name) => name.toLowerCase())),
+    [selectedCityNames],
   );
 
+  const toggleCity = useCallback((city: ArbitrageCity) => {
+    const name = city.display_name;
+    setSelectedCityNames((prev) => {
+      const exists = prev.some(
+        (item) => item.toLowerCase() === name.toLowerCase(),
+      );
+      const next = exists
+        ? prev.filter((item) => item.toLowerCase() !== name.toLowerCase())
+        : [...prev, name];
+      persistSelectedCityNames(next);
+      return next;
+    });
+  }, []);
+
+  const removeCity = useCallback((name: string) => {
+    setSelectedCityNames((prev) => {
+      const next = prev.filter(
+        (item) => item.toLowerCase() !== name.toLowerCase(),
+      );
+      persistSelectedCityNames(next);
+      return next;
+    });
+  }, []);
+
   const { details, error, loading, missing, errors, partial, refreshManually } =
-    useMultiCityArbitrageQuery({ cities: cityNames });
+    useMultiCityArbitrageQuery({ cities: selectedCityNames });
 
   // 用第一个可用城市的 generated_at 作为全局生成时间。
   const generatedText = useMemo(() => {
-    for (const name of cityNames) {
+    for (const name of selectedCityNames) {
       const item = details[name];
       if (item?.generated_at) return formatGeneratedAt(item.generated_at);
     }
     return "";
-  }, [cityNames, details]);
+  }, [selectedCityNames, details]);
 
   const hasAnyData = useMemo(
-    () => cityNames.some((name) => details[name]),
-    [cityNames, details],
+    () => selectedCityNames.some((name) => details[name]),
+    [selectedCityNames, details],
   );
 
   const renderBody = () => {
+    if (selectedCityNames.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
+          <Scale size={28} className="text-slate-300" />
+          <div>
+            <p className="text-sm font-black text-slate-700">
+              {copy("emptyTitle", isEn)}
+            </p>
+            <p className="mt-1 text-xs font-medium text-slate-400">
+              {copy("emptyBody", isEn)}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAddOpen((open) => !open)}
+            className="relative inline-flex h-8 items-center gap-1.5 rounded border border-blue-300 bg-white px-3 text-[11px] font-bold text-blue-700 transition-colors hover:bg-blue-50"
+          >
+            <Plus size={13} />
+            {copy("addCity", isEn)}
+            {addOpen ? (
+              <CityAddDropdown
+                isEn={isEn}
+                options={availableCities}
+                selectedKeys={selectedSet}
+                onToggle={toggleCity}
+                onClose={() => setAddOpen(false)}
+              />
+            ) : null}
+          </button>
+        </div>
+      );
+    }
+
     if (!hasAnyData && loading) {
       return (
         <div className="flex h-40 items-center justify-center text-xs font-bold text-slate-400">
@@ -382,8 +614,7 @@ export function ArbitrageDashboard({ isEn }: ArbitrageDashboardProps) {
           {copy("legend", isEn)}
         </p>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {availableCities.map((item) => {
-            const name = item.display_name;
+          {selectedCityNames.map((name) => {
             const overview = details[name];
             const hasMarket =
               Boolean(overview?.market_available) &&
@@ -396,12 +627,13 @@ export function ArbitrageDashboard({ isEn }: ArbitrageDashboardProps) {
             else if (missingSet.has(name)) status = "loading";
             return (
               <CityArbitrageCard
-                key={item.key}
+                key={name.toLowerCase()}
                 cityName={name}
                 isEn={isEn}
                 overview={overview}
                 errorMessage={errors[name]}
                 status={status}
+                onRemove={() => removeCity(name)}
               />
             );
           })}
@@ -425,7 +657,7 @@ export function ArbitrageDashboard({ isEn }: ArbitrageDashboardProps) {
               </span>
             ) : null}
             <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">
-              {availableCities.length} {isEn ? "cities" : "城"}
+              {selectedCityNames.length} {isEn ? "cities" : "城"}
             </span>
           </div>
           <p className="mt-1 text-xs font-medium text-slate-500">
@@ -439,14 +671,35 @@ export function ArbitrageDashboard({ isEn }: ArbitrageDashboardProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setAddOpen((open) => !open)}
+              className="inline-flex h-8 items-center gap-1.5 rounded border border-blue-300 bg-white px-2.5 text-[11px] font-bold text-blue-700 transition-colors hover:bg-blue-50"
+            >
+              <Plus size={13} />
+              {copy("addCity", isEn)}
+            </button>
+            {addOpen ? (
+              <CityAddDropdown
+                isEn={isEn}
+                options={availableCities}
+                selectedKeys={selectedSet}
+                onToggle={toggleCity}
+                onClose={() => setAddOpen(false)}
+              />
+            ) : null}
+          </div>
           <button
             type="button"
             onClick={refreshManually}
-            disabled={loading}
+            disabled={loading || selectedCityNames.length === 0}
             aria-busy={citiesLoading}
             className={clsx(
               "inline-flex h-8 items-center gap-1.5 rounded border border-slate-300 bg-white px-2.5 text-[11px] font-bold text-slate-600 transition-colors",
-              loading ? "opacity-60" : "hover:bg-slate-50 hover:text-slate-900",
+              loading || selectedCityNames.length === 0
+                ? "opacity-60"
+                : "hover:bg-slate-50 hover:text-slate-900",
             )}
           >
             <RefreshCw size={13} className={clsx(loading && "animate-spin")} />
