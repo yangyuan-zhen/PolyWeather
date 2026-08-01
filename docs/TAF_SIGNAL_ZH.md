@@ -125,7 +125,8 @@
 
 前端主要在：
 
-- [frontend/components/dashboard/FutureForecastModal.tsx](/E:/web/PolyWeather/frontend/components/dashboard/FutureForecastModal.tsx)
+- [frontend/lib/chart-utils.ts](/E:/web/PolyWeather/frontend/lib/chart-utils.ts)
+- [frontend/lib/taf-utils.ts](/E:/web/PolyWeather/frontend/lib/taf-utils.ts)
 - [frontend/lib/dashboard-utils.ts](/E:/web/PolyWeather/frontend/lib/dashboard-utils.ts)
 
 当前会通过三种方式展示 TAF：

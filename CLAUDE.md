@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PolyWeather Pro — a paid institutional weather-intelligence terminal. 50 monitored cities with real-time METAR/AMOS/MADIS observations, DEB multi-model temperature blending, Mu probability calibration, and intraday bias correction. Pure meteorological decision workspace; no market/price layer. Next.js 15 + React 19 frontend (Docker / VPS, behind Cloudflare + Nginx), FastAPI backend (VPS), Telegram bot.
+PolyWeather Pro — a paid institutional weather-intelligence terminal. 51 monitored cities with real-time METAR/AMOS/MADIS observations, DEB multi-model temperature blending, DEB normal-distribution probability calibration (deb_normal, legacy Gaussian fallback), and intraday bias correction. Weather-decision workspace plus a model-vs-market comparison layer (Polymarket arbitrage overview, no trading advice). Next.js 15 + React 19 frontend (Docker / VPS, behind Cloudflare + Nginx), FastAPI backend (VPS), Telegram bot.
 
 **Business model**: Paid-only, 29.9 USDC/month or 79.9 USDC/quarter, referral first month 20 USDC. New users get a one-time 3-day trial. Landing page is public; `/terminal` requires login + active subscription.
 
@@ -48,11 +48,13 @@ docker compose down && docker compose up -d --build
 
 ```
 Users → Cloudflare → Nginx → Docker Compose (VPS)
-                                 ├── Next.js frontend → FastAPI :8000
-                                 │     /terminal (paid gate)    Weather Collector
-                                 │     / (landing page)         Analysis (DEB + Mu)
-                                 │                               Payment Layer (USDC on Polygon)
-                                 └── Redis (SSE event store)
+                                  ├── Next.js frontend → FastAPI :8000
+                                  │     /terminal (paid gate)    Weather Collector
+                                  │     / (landing page)         Analysis (DEB + deb_normal)
+                                  │                             WeatherNext2 (GCS Zarr worker)
+                                  │                             Arbitrage Overview (Polymarket)
+                                  │                             Payment Layer (USDC on Polygon + Ethereum direct)
+                                  └── Redis (SSE event store)
          Telegram Bot → bot_listener.py
 ```
 
@@ -79,6 +81,8 @@ Users → Cloudflare → Nginx → Docker Compose (VPS)
 - `LiveTemperatureThresholdChart` — multi-source overlay: obs + DEB + model curves + thresholds
 - `RealtimeScrollChart` — lightweight realtime scrolling temperature + threshold bars
 - `TrainingDashboard` — DEB + Mu accuracy charts (sidebar "训练数据" tab)
+- `WeatherNext2Dashboard` — WeatherNext2 q10/q50/q90 percentile curves (sidebar "WeatherNext 2" tab)
+- `ArbitrageDashboard` — model probability vs market-implied probability comparison (sidebar "套利对比" tab)
 - `continent-grouping.ts` — 7 trading regions (`TRADING_REGIONS`), city-to-region fallback (`CITY_REGION_FALLBACK`), timezone detection (`detectLocalRegion`)
 
 ### Account Module
@@ -97,11 +101,13 @@ Users → Cloudflare → Nginx → Docker Compose (VPS)
 | `web/routers/scan.py` | Scan terminal aggregation |
 | `web/services/city_payloads.py` | City detail and summary payload builders |
 | `web/scan_terminal_city_row.py` | Builds terminal rows from analysis data |
-| `src/data_collection/city_registry.py` | 50-city registry with tz_offset |
+| `src/data_collection/city_registry.py` | 51-city registry with tz_offset |
 | `src/analysis/deb_algorithm.py` | DEB prediction + Mu calibration + accuracy |
 | `web/services/analysis_utils.py` | Clock helpers, bucket labeling, time parsing |
 | `web/services/observation_freshness.py` | Source profiles and freshness computation |
 | `web/services/scan_ai_config.py` | Scan terminal and AI configuration constants |
+| `web/routers/arbitrage.py` + `web/services/arbitrage_service.py` | Arbitrage overview endpoints (`/api/arbitrage/overview`, `/overview-batch`) |
+| `web/weathernext2_worker.py` + `web/weathernext2_worker_service.py` | WeatherNext2 GCS Zarr 6h worker + LightGBM calibration |
 
 ## Auth Gating
 
@@ -113,20 +119,20 @@ Client-side gate (`ProductAccessRequired`): `/terminal` checks auth + subscripti
 
 Local dev bypass: set `NEXT_PUBLIC_POLYWEATHER_LOCAL_FULL_ACCESS=false` to test auth locally.
 
-## Polymarket Integration
+## Arbitrage Comparison (Polymarket)
 
-**Removed.** No Polymarket price fetching, no market scan, no WS cache. Terminal operates on weather data only (Live observations + DEB predictions + model probabilities). All `polymarket_readonly.py`, `polymarket_ws_cache.py`, and market-scan API routes have been deleted.
+Live. `web/routers/arbitrage.py` + `web/services/arbitrage_service.py` expose `/api/arbitrage/overview` and `/api/arbitrage/overview-batch` (multi-city batch). They compare calibrated model probability against Polymarket market-implied probability per city (difference = model minus market; positive means weather probability priced above the market). No position/execution layer. Legacy `polymarket_readonly.py` / `polymarket_ws_cache.py` market-scan routes were deleted and are not used by this module.
 
 ## Trading Regions
 
-7 regions: east_asia, southeast_asia, central_asia, west_asia, europe_africa, south_america, north_america. Mappings in `continent-grouping.ts` (`CITY_REGION_FALLBACK` — all 50 cities hardcoded) and `scan_terminal_filters.py` (`market_region_from_tz_offset`). Default region auto-detected from browser timezone.
+7 regions: east_asia, southeast_asia, central_asia, west_asia, europe_africa, south_america, north_america. Mappings in `continent-grouping.ts` (`CITY_REGION_FALLBACK` — all 51 cities hardcoded) and `scan_terminal_filters.py` (`market_region_from_tz_offset`). Default region auto-detected from browser timezone.
 
 ## Scan Terminal Performance
 
 - **Region lazy-loading**: `region=east_asia` filters cities server-side before scanning (see `_market_region_from_tz_offset`)
-- **Weather-only**: Terminal returns 1 row per city with Live/DEB/probability data; no market contract matching
+- **Weather-only rows**: Terminal returns 1 row per city with Live/DEB/probability data; market comparison is a separate arbitrage tab, not part of the scan row
 - **DB**: SQLite WAL mode + `busy_timeout=5000` enabled in `db_manager.py` (fixes "database is locked" with parallel workers)
-- **VPS env**: `POLYWEATHER_SCAN_TERMINAL_MAX_WORKERS=2`, `POLYWEATHER_SCAN_TERMINAL_BUILD_TIMEOUT_SEC=180`
+- **VPS env**: `POLYWEATHER_SCAN_TERMINAL_MAX_WORKERS=1`, `POLYWEATHER_SCAN_TERMINAL_BUILD_TIMEOUT_SEC=45`, `POLYWEATHER_SCAN_TERMINAL_PAYLOAD_TTL_SEC=600`
 - **Caching**: `_cache` is `LRUDict(256)` with `_CACHE_LOCK`; `_SUMMARY_CACHE` is `LRUDict(128)`; weather caches trimmed every 200 writes
 
 ## Intraday Bias Correction

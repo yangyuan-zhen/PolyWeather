@@ -14,8 +14,11 @@
 
 ![PolyWeather Telegram 跑道推送](frontend/public/static/tel.png)
 
-## 当前产品状态（2026-06-07）
+## 当前产品状态（2026-08-01）
 
+- 已上线 WeatherNext2：6 小时 GCS Zarr worker 生成城市高温分位（q10 / q50 / q90，LightGBM 校准），终端侧边栏第 3 项。
+- 已上线套利对比：Polymarket 概览接口（`/api/arbitrage/overview`、`/overview-batch`）跨全城市对比模型概率与市场隐含概率（侧边栏第 5 项）。
+- 已上线 DEB 正态概率引擎：整度概率桶改由 `deb_normal` 正态引擎输出，legacy 高斯保留为回退分支。
 - 已上线订阅制：`Pro 月付 29.9 USDC / 30 天`，`Pro 季度 79.9 USDC / 90 天`。
 - 积分获取已切换为邀请制度：被邀请人完成首次 Pro 付款后，邀请人获得 `3500` 积分；Telegram 群发言不再获得积分。
 - 积分可用于支付抵扣（`500 分 = 1 USDC`，月付最多抵 `3 USDC`，季度最多抵 `8 USDC`）。真实、有上下文、有价值的用户反馈也可通过运营后台人工奖励积分。
@@ -25,24 +28,23 @@
 - 已上线支付运行态与审计接口：`/api/payments/runtime`。
 - 已上线轻量运营后台：`/ops`（会员、用户反馈处理、积分、补分、支付异常单）。
 - 已上线轻量可观测性：`/healthz`、`/api/system/status`、`/metrics`。
-- 已补最小外部监控栈：Prometheus + Alertmanager + Grafana + Telegram 告警 relay。
+- 轻量可观测性：`/healthz`、`/api/system/status`、`/api/system/cache-status`、`/api/system/priority-warm`、`/metrics`（ops 鉴权）+ `scripts/check_ops_health.py` 巡检（14 个外部服务探测）。
 - 实时终端已切换到可重放事件流：可见城市图表通过 `/api/events?cities=...&since_revision=...` 订阅 `city_observation_patch.v1`，生产环境使用 Redis Stream 做短窗口 replay，本地/单进程可回退 SQLite event log。
 - 图表刷新由实测事件驱动：SSE patch 直接合并到当前曲线，不弹 loading 遮罩；只有可见图表启用 60 秒无 patch 兜底，浏览器后台返回前台时会主动补齐最新 detail。
 - 城市图表默认展示“全天”，可选“高温”窗口由 DEB hourly path 推导；所有图表横轴都按城市当地时间展示，不按用户浏览器时区。
 - 核心图表组件已拆分为逻辑、状态与 canvas 渲染模块；Recharts 使用 `ResizeObserver` 后的明确宽高，规避 0x0 渲染和长时间挂页后曲线消失。
 - DEB hourly consensus（`deb_hourly_consensus.v1`）已作为峰值窗口和图表 DEB 曲线的优先小时路径；DEB 仍然是预测曲线，不作为实测来源。
-- legacy 高斯概率不再占用默认温度图主视图；hover tooltip 会展示 `Gaussian μ` 和完整温度区间概率分布。
-- AMSC/AMOS 城市的结算跑道曲线默认展示并高亮，辅助跑道作为弱化曲线保留；釜山单跑道只展示 `SR/SL` 结算跑道，不再重复显示 AMOS 聚合线。
+- 概率主引擎已切换为 DEB 正态引擎（`deb_normal`，整度概率 `P(T==τ)=Φ((τ+0.5-μ)/σ)-Φ((τ-0.5-μ)/σ)`）；legacy 高斯概率不再占用默认温度图主视图，保留为回退分支，hover tooltip 展示 `Gaussian μ` 和完整温度区间概率分布。
+- AMOS 城市（首尔/釜山）的结算跑道曲线默认展示并高亮，辅助跑道作为弱化曲线保留；釜山单跑道只展示 `SR/SL` 结算跑道，不再重复显示 AMOS 聚合线。
 - 香港默认展示 CoWIN `6087`（保良局陈守仁小学）1 分钟参考站曲线，HKO 10 分钟实测保留为官方气象层。
 - Telegram 机场/跑道推送默认中英文双语，并统一使用结算端点跑道温度计算当前值、15 分钟趋势和文案。
 - 运行态状态、缓存与核心离线训练/回填链路已完成 SQLite 主路径收口；legacy JSON/JSONL 仅保留给迁移、导出与显式回退输入。
 - 官方增强站网已统一接入：
   - `MGM`（土耳其）
-  - `CMA/NMC`（中国内地）
   - `JMA AMeDAS`（日本）
   - `AMOS`（韩国，跑道级传感器，首尔/釜山）
   - `HKO`（香港）
-  - `CWA`（台湾）
+- 数据源已清理：Wunderground、台北 `CWA`、中国跑道 `AMSC AWOS`、中国内地 `NMC/CMA` 均已移除；深圳结算源切换为流浮山 `HKO`（LFS）。
 - 东京现已接入羽田 `JMA AMeDAS` 10 分钟温度作为官方增强层。
 - 已支持 Dashboard 定向预热 worker / cron 路径，运行态在 `/api/system/status` 与 `/ops` 可见。
 - `/ops` 现已展示缓存桶数量、summary cache hit/miss 与运行态 heartbeat。
@@ -52,7 +54,7 @@
 - 终端数据同时使用页面内存缓存、浏览器 `localStorage`、后端短 TTL 缓存、SSE patch replay 和前台恢复刷新；从其他选项卡切回时会优先恢复最新可见图表状态。
 - 市场温度桶匹配已改为完整 `all_buckets` 映射，按 exact / range / or higher / or lower 方向严格匹配，避免把天气中枢错配到不合理尾部桶。
 - 市场信号中的“模型-市场差”口径为 `模型概率 - 市场隐含概率`，正值表示天气概率高于市场报价，负值表示市场已经更充分计价。
-- 概率区已改为“校准模型概率”；默认展示 legacy 高斯概率引擎输出，模型共识作为辅助参考。
+- 概率区已改为“校准模型概率”；默认展示 DEB 正态概率引擎（`deb_normal`）输出，legacy 高斯作为回退分支，模型共识作为辅助参考。
 - 今日日内结构解读以规则与结构化信号为主，AI 文案只作为可降级辅助层，不替代实测、DEB、TAF 或结算逻辑。
 - 前端设计系统全面重构：统一 CSS token 体系、消除 !important 滥用（134→49）、合并断点（18→10）、数百处硬编码颜色迁移至 CSS 变量、添加 ARIA 无障碍属性和键盘导航。完整审查记录见 `docs/frontend-ui-design-review.md`。
 
@@ -71,7 +73,7 @@
 - 聚合 51 个监控城市的实测与预报数据。
 - DEB（Dynamic Error Balancing）融合多模型最高温。
 - 构建 DEB 加权小时共识曲线，用于峰值窗口判断和图表默认 DEB 展示。
-- 输出结算导向校准概率分布（`mu` + 温度桶），通过 legacy 高斯校准路径。
+- 输出结算导向校准概率分布（`mu` + 温度桶），主路径为 DEB 正态引擎（`deb_normal`），legacy 高斯校准保留为回退。
 - 天气决策台把结构化实况、DEB 高温路径、完整市场温度桶和模型-市场差放进图表/详情工作流。
 - 图表 tooltip 展示校准高斯上下文：`mu` 加完整温度区间概率分布，不把概率温度带重新放回主图。
 - Web 仪表盘与 Telegram Bot 复用同一分析内核。
@@ -94,8 +96,10 @@ flowchart LR
     WX --> JMA["JMA AMeDAS（日本）"]
     WX --> AMOS["AMOS 跑道传感器（韩国）"]
     WX --> OM["Open-Meteo"]
-    WX --> HKO["HKO / CWA / NOAA 等官方结算源"]
+    WX --> SETTLE["NOAA Synoptic / HKO / IMGW（结算源）"]
 
+    API --> WX2["WeatherNext2（GCS Zarr，6h worker）"]
+    API --> ARB["Polymarket 套利对比"]
     API --> ANA["DEB + 小时共识 + 概率 + 市场扫描"]
     API --> SSE["SSE /api/events"]
     WX --> SSE
@@ -129,6 +133,10 @@ npm run dev
 
 ## 近期更新
 
+- WeatherNext2 已接入：6 小时 GCS Zarr worker + LightGBM 校准（q10/q50/q90），终端侧边栏第 3 项展示城市高温分位。
+- 套利对比已上线：跨全城市批量概览接口，对比模型概率与市场隐含概率，终端侧边栏第 5 项。
+- 概率主引擎切换为 DEB 正态引擎（`deb_normal`），legacy 高斯保留为回退分支。
+- 数据源清理：Wunderground、台北 CWA、AMSC AWOS（中国跑道）、NMC/CMA（中国内地）已移除；深圳结算源切换为流浮山 HKO（LFS）。
 - 高斯概率 tooltip 已改为展示完整温度区间概率分布，不再只显示最高概率的单个区间；主图继续聚焦实测和预测曲线。
 - 用户反馈已形成产品闭环：终端提交会自动附带图表上下文，用户可在站内查看处理状态，运营侧可为真实、有建设性的反馈发放积分奖励。
 
@@ -158,7 +166,7 @@ curl http://127.0.0.1:8000/api/system/status
 curl http://127.0.0.1:8000/metrics
 ```
 
-### 外部监控栈
+### 前端缓存验证
 
 ```bash
 ./scripts/validate_frontend_cache.sh "https://polyweather.top"
@@ -170,17 +178,7 @@ curl http://127.0.0.1:8000/metrics
 docker compose logs -f polyweather | egrep "payment event loop started|payment confirm loop started|payment auto-confirmed"
 ```
 
-### 外部监控栈
-
-```bash
-docker compose --profile monitoring up -d polyweather_prometheus polyweather_alertmanager polyweather_alert_relay polyweather_grafana
-```
-
-- Prometheus：`http://127.0.0.1:${POLYWEATHER_PROMETHEUS_PORT:-9090}`
-- Alertmanager：`http://127.0.0.1:${POLYWEATHER_ALERTMANAGER_PORT:-9093}`
-- Grafana：`http://127.0.0.1:${POLYWEATHER_GRAFANA_PORT:-3001}`
-
-手动巡检：
+### 手动巡检
 
 ```bash
 python scripts/check_ops_health.py --base-url http://127.0.0.1:8000
@@ -235,5 +233,5 @@ POLYWEATHER_OPS_ADMIN_EMAILS=yhrsc30@gmail.com
 
 ## 当前版本
 
-- 版本：`v1.8.1`
-- 文档最后更新：`2026-06-07`
+- 版本：`v1.8.1`（版本源文件；文档已为即将发布的 `v1.9.0` 刷新）
+- 文档最后更新：`2026-08-01`

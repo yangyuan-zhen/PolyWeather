@@ -1,6 +1,6 @@
 # 外部服务依赖总览
 
-最后更新：`2026-05-29`
+最后更新：`2026-08-01`
 
 项目调用外部天气、鉴权、支付和实时事件服务。原则是：核心链路必须有明确健康检查；可选数据源不可拖垮已可用城市；实时事件层可从 Redis Stream 降级到 SQLite event log。
 
@@ -22,18 +22,17 @@
 | --- | --- | --- |
 | JMA AMeDAS | Tokyo | ✅ |
 | AMOS (韩国) | Seoul, Busan 跑道传感器 | ✅ |
-| AMSC AWOS (中国) | 北京、上海、广州、成都、重庆、武汉、青岛跑道端点气温 | ✅ |
 | MGM (土耳其) | Ankara, Istanbul | ✅ |
 | FMI (芬兰) | Helsinki | ✅ |
 | KNMI (荷兰) | Amsterdam | ✅（需 key） |
 | CoWIN 6087 (香港) | Hong Kong 1 分钟参考站 | ✅ |
 | HKO (香港) | Hong Kong / Shenzhen / Lau Fau Shan 10 分钟官方气象层 | ✅ |
-| CWA (台湾) | Taipei | ✅ |
 | Singapore MSS | Singapore | ✅ |
 | IMS Lod (以色列) | Tel Aviv | ✅ |
 | AEROWEB / AROME HD | Paris | ✅ |
-| NMC (中国) | 国内城市 fallback | ✅ |
-| IMGW (波兰) | Warsaw | ⚠️ 未配 key |
+| NCM (沙特) | Jeddah 机场观测 | ✅ |
+| SynopticData (NOAA 结算) | 结算观测（11 城） | ✅（需 key） |
+| IMGW (波兰) | Warsaw 结算（可选） | ⚠️ 未配 key |
 
 ## 可选 / 已禁用
 
@@ -41,10 +40,13 @@
 | --- | --- | --- |
 | OpenWeatherMap | 天气 fallback | ⚠️ 未配 key |
 | VisualCrossing | 历史天气 | ⚠️ 未配 key |
-| SynopticData | 美国站点观测 | ⚠️ 未配 key |
 | Meteoblue | 天气预报 | ❌ 已移除 |
 | Russia pogodaiklimat | Moscow 历史源 | ❌ 已移除 |
 | Groq | AI commentary | ❌ 已移除 |
+| Wunderground | 站点观测 | ❌ 已移除 |
+| CWA (台湾) | Taipei 站点观测 | ❌ 已移除（零匹配） |
+| AMSC AWOS (中国) | 中国跑道端点气温 | ❌ 已移除 |
+| NMC/CMA (中国) | 国内城市 fallback | ❌ 已移除 |
 
 ## AI / 支付 / 前端
 
@@ -52,6 +54,8 @@
 | --- | --- | --- |
 | MiMo (xiaomimimo) | 城市分析 AI 评论 | ✅ 当前使用 |
 | DeepSeek | AI fallback | 备用 |
+| Google Cloud Storage | WeatherNext2 GCS Zarr 集合预报（6h worker） | ✅ |
+| Polymarket public-search | 套利对比动态城市列表 | ✅ |
 | Polygon RPC | checkout 合约支付、Polygon USDC / USDC.e 自动确认 | ✅ |
 | Ethereum RPC | Ethereum 主网 USDC 直转确认 | ✅（启用多链支付时必须） |
 | WalletConnect | 前端钱包连接 | ⚠️ 未配 key 时钱包入口降级 |
@@ -63,3 +67,4 @@
 - Redis 只负责短窗口 replay 与多 worker fanout，不是长期天气历史库。
 - DEB hourly consensus 依赖 Open-Meteo 多模型小时曲线；若上游限流，图表应保留已有 snapshot 和实测 patch，不把缺失模型误报为实测缺失。
 - 支付多链确认依赖 `POLYWEATHER_PAYMENT_RPC_URLS_BY_CHAIN_JSON`；如果启用 Ethereum 主网 USDC，必须配置 `chain_id=1` 的 RPC，否则用户提交 Ethereum tx hash 后无法自动确认。
+- WeatherNext2 worker 依赖 `GOOGLE_APPLICATION_CREDENTIALS` 访问 GCS Zarr；产物 `weathernext2_city_highs.json` 带 `.bak` 兜底，读取失败时回退旧文件。

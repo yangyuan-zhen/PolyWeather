@@ -1,6 +1,6 @@
-# Supabase + 登录 + 支付接入说明（v1.8.1）
+# Supabase + 登录 + 支付接入说明（v1.9.0）
 
-最后更新：`2026-05-29`
+最后更新：`2026-08-01`
 
 ## 1. 目标
 
@@ -74,6 +74,10 @@ SUPABASE_URL=
 SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 SUPABASE_HTTP_TIMEOUT_SEC=8
+
+# 增量同步节流（默认值即代码默认，可按需调小）
+POLYWEATHER_SUPABASE_PROFILE_SYNC_MIN_INTERVAL_SEC=3600
+POLYWEATHER_SUPABASE_POINTS_SYNC_MIN_INTERVAL_SEC=60
 
 POLYWEATHER_PAYMENT_ENABLED=true
 # 默认链仍是 Polygon，因为当前 checkout 合约部署在 Polygon。

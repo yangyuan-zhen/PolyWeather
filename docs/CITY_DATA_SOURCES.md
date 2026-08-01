@@ -1,6 +1,6 @@
 # 城市实时数据源总览
 
-> 最后更新: 2026-05-28 | 51 城市
+> 最后更新: 2026-08-01 | 51 城市
 
 ## 数据源分级
 
@@ -13,13 +13,8 @@
 | hong kong | CoWIN 6087 | ~1 min | cowin.hku.hk, 保良局陳守仁小學，前端图表默认展示 |
 | hong kong | HKO 官方 CSV | ~10 min | data.weather.gov.hk（文件名虽含 1min，实际 10min 一报） |
 | singapore | MSS 官方 API | ~1 min | api.data.gov.sg, 站号 S24 |
-| beijing | AMSC AWOS (ZBAA) | 3 min | 中国 |
-| shanghai | AMSC AWOS (ZSPD) | 3 min | 中国 |
-| guangzhou | AMSC AWOS (ZGGG) | 3 min | 中国 |
-| chengdu | AMSC AWOS (ZUUU) | 3 min | 中国 |
-| chongqing | AMSC AWOS (ZUCK) | 3 min | 中国 |
-| wuhan | AMSC AWOS (ZHHH) | 3 min | 中国 |
-| qingdao | AMSC AWOS (ZSQD) | 3 min | 中国 |
+
+> 注：AMSC AWOS（中国跑道）已于 2026-06 移除，中国内地城市不再有 3 分钟跑道高频源。
 
 ### Tier 2 — 5 分钟高频 (MADIS)
 
@@ -47,9 +42,10 @@
 | helsinki | FMI 开放数据 | 10 min | 芬兰 |
 | amsterdam | KNMI 数据平台 | 10 min | 荷兰 |
 | shenzhen | HKO 官方 CSV (LFS) | ~10 min | 香港天文台流浮山自动站 |
-| taipei | CWA 开放数据 (466920) | ~10 min | 台湾 |
 | tel aviv | IMS Lod (225) | 实时 | 以色列 |
 | paris | AEROWEB 实况 / AROME HD | 实时/15min | 法国 (AROME是15分钟临近预报) |
+
+> 注：台北 CWA 已于 2026-06 移除（观测零匹配）；台北改走 NOAA Synoptic 结算源。
 
 ### Tier 4 — 仅 METAR（10 分钟缓存）
 
@@ -78,13 +74,14 @@
 
 ## 高频推送覆盖
 
-31 个城市在 `HIGH_FREQ_AIRPORT_CITIES`（Telegram 推送循环）:
-所有 Tier 1-3 城市 + shenzhen
+24 个城市在 `HIGH_FREQ_AIRPORT_CITIES`（Telegram 推送循环）:
+seoul, singapore, busan, tokyo, ankara, helsinki, amsterdam, istanbul,
+paris, hong kong, taipei, shenzhen,
+new york, los angeles, chicago, denver, atlanta, miami, san francisco,
+houston, dallas, austin, seattle, tel aviv
 
-19 个城市在 `HIGH_FREQ_AIRPORT_ANALYSIS_CITIES`（日内分析）:
-seoul, busan, hong kong, lau fau shan, singapore, beijing, shanghai,
-guangzhou, chengdu, chongqing, wuhan, qingdao, shenzhen, tokyo,
-ankara, istanbul, helsinki, amsterdam, paris
+- `CHINA_HIGH_FREQ_AIRPORT_CITIES` 已为空集（AMSC 下线后中国内地城市不再有高频推送）。
+- `HIGH_FREQ_AIRPORT_ANALYSIS_CITIES`（日内分析独立城市集合）已下线，不再单独维护。
 
 ## 温度观测优先级链
 
@@ -124,9 +121,8 @@ ankara, istanbul, helsinki, amsterdam, paris
 频率取决于源头：
 
 - AMOS / CoWIN / MSS：源头约 1 分钟，图表按 1 分钟粒度追加。
-- AMSC：中国跑道观测城市按 3 分钟采集，不再强制 60 秒刷新。
 - MADIS：源头约 5 分钟。
-- HKO / CWA / JMA / FMI / KNMI：源头约 10 分钟。
+- HKO / JMA / FMI / KNMI：源头约 10 分钟。
 - METAR-only 城市：按 METAR 可用频率和缓存 TTL，不伪装成 1 分钟实测。
 
 所有图表横轴和 tooltip 时间均按城市当地时间展示，不按用户浏览器时区。
@@ -135,21 +131,14 @@ ankara, istanbul, helsinki, amsterdam, paris
 
 ### 1. 实测数据（默认全开，突出核心）
 
-- **跑道全量展示**：北京、上海、广州、成都、重庆、武汉、青岛、首尔、釜山等城市的跑道实测数据，默认全量开启，无需手动勾选。
+- **跑道全量展示**：首尔、釜山等有跑道实测的城市默认全量开启，无需手动勾选。
 - **结算跑道高亮**：系统内置了各大机场的官方结算跑道映射。命中的跑道将被**重点强调**（加粗的青色实线 #009688，线宽 2.8），并标记为“[跑道号] 结算跑道”。具体的跑道映射如下：
-  - 北京：19/01
-  - 上海：17L/35R
-  - 广州：02L/20R
-  - 成都：02L/20R
-  - 重庆：20R/02L
-  - 武汉：04/22
-  - 青岛：16/34
   - 首尔：15R/33L
   - 釜山：SR/SL
 - **辅助跑道弱化**：同一机场下的其他非结算跑道，也会同时展示，但采用较细的虚线（线宽 1.2）以作陪衬区分。
 - **单跑道机场去重**：釜山只有 `SR/SL` 跑道曲线时，不再额外展示 AMOS 聚合线，避免两条线语义重复。
 - **香港参考曲线**：Hong Kong 默认展示 CoWIN `6087`（保良局陈守仁小学）1 分钟参考站曲线；HKO 10 分钟实测作为官方气象层保留。
-- **其他实测展示**：所有城市的 METAR 报文曲线、官方气象站实测（如 Shenzhen / Lau Fau Shan 的 HKO 自动站、Taipei 的 CWA）均默认展示。
+- **其他实测展示**：所有城市的 METAR 报文曲线、官方气象站实测（如 Shenzhen / Lau Fau Shan 的 HKO 自动站）均默认展示。
 
 ### 2. 核心预测数据（默认展示）
 
@@ -164,5 +153,5 @@ ankara, istanbul, helsinki, amsterdam, paris
 
 ### 4. 高斯概率图层
 
-- legacy 高斯概率不会作为时间序列曲线展示。
+- 概率主引擎为 DEB 正态引擎（`deb_normal`）；legacy 高斯概率保留为回退分支，不会作为时间序列曲线展示。
 - 图表上只渲染概率温度带和 `mu` 参考线，帮助用户判断当前实测距概率中心和高概率区域的关系。

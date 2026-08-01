@@ -1,6 +1,6 @@
-# PolyWeather API 文档（v1.8.1）
+# PolyWeather API 文档（v1.9.0）
 
-最后更新：`2026-05-28`
+最后更新：`2026-08-01`
 
 本文档描述当前对外可用 API 口径（`web/app.py` + `web/routes.py` + `frontend/app/api/*`）。
 
@@ -34,6 +34,8 @@ flowchart LR
 | `/api/city/{name}/detail` | GET | 聚合详情（含 market_scan） |
 | `/api/history/{name}` | GET | 历史对账 |
 | `/api/events` | GET | SSE 实时观测事件流 |
+| `/api/arbitrage/overview` | GET | Polymarket 套利对比总览（模型概率 vs 市场隐含概率） |
+| `/api/arbitrage/overview-batch` | GET | 套利对比批量视图 |
 | `/api/internal/collector-patch` | POST | 采集器内部写入实时观测 patch |
 
 ### `GET /api/events`
@@ -205,8 +207,7 @@ DEB hourly consensus 是当前图表与峰值窗口的优先小时路径。
 #### 7. 结算锚点口径
 
 - 多数机场市场以 `METAR` / 机场主站实况为结算锚点。
-- `Wunderground` 是历史页面或参考入口，不应在产品文案里被描述成“站”。
-- `MGM / NMC / JMA / AMOS / HKO / CWA` 等官方站网属于增强层或明确官方站点层；只有合约规则明确指定时，才作为最终结算站点。
+- `MGM / JMA AMeDAS / AMOS / HKO` 等官方站网属于增强层或明确官方站点层；只有合约规则明确指定时，才作为最终结算站点。
 
 ## 4. 鉴权与账户接口
 

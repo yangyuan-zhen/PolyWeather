@@ -2,7 +2,7 @@
 
 本文档记录 PolyWeather 当前开放模型接入、区域覆盖差异，以及 DEB 在新增模型后的计权规则。
 
-最后更新：`2026-05-28`
+最后更新：`2026-08-01`
 
 ## 1. 接入方式
 
@@ -45,6 +45,16 @@ Web API 会把这部分元数据挂到：
 | RDPS | `gem_regional` | ECCC | regional_north_america | 北美区域模式 |
 | HRDPS | `gem_hrdps_continental` | ECCC | short_range_north_america | 北美短时高分辨率 |
 | JMA | `jma_seamless` | JMA | global | 日本气象厅全球参考 |
+
+### 2.1 WeatherNext2（GCS Zarr 集合预报）
+
+WeatherNext2 不走 Open-Meteo model API，由独立 worker 从 Google Cloud Storage Zarr 读取：
+
+- 入口：`src/data_collection/weathernext2_fetcher.py`、`src/data_collection/weathernext2_sources.py`
+- 产物：`weathernext2_city_highs.json`（带 `.bak` 兜底），`WEATHERNEXT2_WORKER_INTERVAL_SEC=21600`（6 小时）周期刷新
+- 校准：`src/analysis/weathernext2_calibration.py` 以 LightGBM 输出 q10 / q50 / q90 城市高温分位
+- 展示：终端侧边栏第 3 项（WeatherNext2 面板）
+- 相关环境变量：`WEATHERNEXT2_ENABLED`、`WEATHERNEXT2_BACKEND=gcs_zarr`、`WEATHERNEXT2_GCS_ZARR_URI`、`WEATHERNEXT2_MEAN_GCS_ZARR_URI`、`WEATHERNEXT2_DATA_ROOT`、`WEATHERNEXT2_CITY_HIGHS_PATH`、`WEATHERNEXT2_FIXTURE_PATH`、`WEATHERNEXT2_CACHE_TTL_SEC=21600`、`WEATHERNEXT2_MODEL_DIR`、`WEATHERNEXT2_WORKER_INITIAL_DELAY_SEC=90`、`GOOGLE_APPLICATION_CREDENTIALS`
 
 ## 3. 区域覆盖差异
 
@@ -99,7 +109,7 @@ Web API 会把这部分元数据挂到：
 - RDPS
 - HRDPS
 
-亚洲城市更依赖本地观测增强层，例如 JMA、AMOS（首尔/釜山）、NMC、HKO、CWA、METAR、TAF。
+亚洲城市更依赖本地观测增强层，例如 JMA、AMOS（首尔/釜山）、HKO、METAR、TAF。
 
 ## 4. DEB 家族去重
 
@@ -232,6 +242,31 @@ python scripts/backtest_deb_versions.py \
 
 该结果只证明当前历史样本上的离线表现改善；后续仍需要持续用版本化回测追踪不同城市、季节与结算源下的漂移。
 
+### 5.3 概率引擎与回退优先级
+
+概率桶输出已切换为 DEB 正态引擎：
+
+- 入口：`src/analysis/deb_probability.py`（新）、`src/analysis/deb_ml_calibration.py`（LightGBM 校准，输出 q10 / q50 / q90）
+- 正态整度概率：`P(T==τ)=Φ((τ+0.5-μ)/σ)-Φ((τ-0.5-μ)/σ)`
+- `probabilities.engine` 取值：`deb_normal`（默认）或 `legacy`（回退）
+
+引擎优先级：
+
+```text
+dead_market > deb_normal > weathernext2
+```
+
+- `dead_market`：市场无有效报价时的兜底口径。
+- `deb_normal`：默认主概率引擎，基于 DEB 融合 μ 与正态分布分桶。
+- `weathernext2`：WeatherNext2 集合预报分位（q50）作为更低优先级参考。
+- legacy 高斯分桶不再作为主路径，保留在 `trend_engine.py` 回退分支（`engine_mode` 展示 `deb_normal` / `legacy`）。
+
+相关辅助模块：
+
+- `src/analysis/deb_weight_snapshot.py`：DEB 权重快照
+- `src/analysis/deb_hourly_consensus.py`：小时共识（见 5.1）
+- `src/analysis/deb_hourly_correction.py`：小时级校正
+
 ## 6. 前端展示
 
 网页的模型展示读取：
@@ -265,7 +300,7 @@ python scripts/backtest_deb_versions.py \
 - 展示“全天”视图，按城市当地日 00:00-23:59 和真实观测时间绘制。
 - 可选“高温”视图，窗口由 `deb_hourly_consensus.v1` 的峰值区域推导。
 - DEB Forecast 使用橙色预测曲线；实测/跑道/官方站点曲线独立展示，不把 DEB 当成实测。
-- legacy 高斯概率显示为水平温度带和 `mu` 参考线，不参与时间序列曲线。
+- 概率面板默认展示 DEB 正态引擎（`deb_normal`）输出；legacy 高斯概率显示为水平温度带和 `mu` 参考线，不参与时间序列曲线。
 
 ### 6.1 “来源 Open-Meteo”是什么意思
 
@@ -290,7 +325,7 @@ python scripts/backtest_deb_versions.py \
 - `模型区间与分歧`：解释不同模型当前给出的最高温范围和分歧，不直接等于命中概率。
 - `市场参考`：只展示市场价格和错价背景，不再作为主判断，也不默认输出 BUY YES / BUY NO。
 
-模型票数只用于解释“哪些模型支持某个档位”，不等于最终概率。最终概率应优先读取 `probabilities.engine` 对应的校准分布。
+模型票数只用于解释“哪些模型支持某个档位”，不等于最终概率。最终概率应优先读取 `probabilities.engine` 对应的校准分布（`deb_normal` 为默认主引擎，`legacy` 为回退分支）。
 
 ## 7. 测试覆盖
 

@@ -89,7 +89,7 @@ Google 官方说明中 WeatherNext 2 GCS Zarr 路径为 `gs://weathernext/weathe
 Google 官方 WeatherNext 2 数据源包括 GCS Zarr、BigQuery、Earth Engine 和 Vertex AI。当前第一版已经按独立离线 job 落地：
 
 - 每 6 小时拉取最近一次 WeatherNext 2 run。
-- 对 50 个城市插值到机场/结算点。
+- 对 51 个城市插值到机场/结算点。
 - 切城市当地日期今日最高温。
 - 写入 `/app/data/weathernext2_city_highs.json` 或数据库表。
 - Web/API 只读本地结果，避免实时请求 Google 数据集影响响应时间。

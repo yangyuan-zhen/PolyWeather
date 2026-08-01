@@ -1,6 +1,6 @@
 # 前端部署配置（Docker / VPS）
 
-最后更新：`2026-06-14`
+最后更新：`2026-08-01`
 
 本文只覆盖 `frontend` 目录对应的 Next.js 前端部署。前端当前不再使用 Vercel，统一与后端一起以 Docker Compose 形式部署在同一台 VPS 上，前面挂 Cloudflare + Nginx。
 
@@ -57,7 +57,7 @@
 2. `git fetch origin main && git reset --hard origin/main` 同步仓库（含 `docker-compose.yml`）
 3. 同步 `data/city_thread_ids.json` 到运行态目录
 4. `docker compose pull` 拉取新镜像（带重试）
-5. 按顺序滚动更新：`redis` → `web` + `bot` → `collector` → `warmer` → `frontend`
+5. 按顺序滚动更新：`redis` → `web` + `bot` → `collector` → `warmer` → `training_settlement` → `weathernext2_worker` → `frontend`
 6. 每步后做本地健康检查；前端额外等待 `/terminal` 和 `/api/scan/terminal` 就绪
 7. 公网 smoke check：`https://api.polyweather.top/healthz`、`https://polyweather.top/api/cities`、`https://www.polyweather.top/`
 8. 任意一步失败自动回滚到上一个镜像 tag（记录在 `/var/lib/polyweather/.current_tag`）
