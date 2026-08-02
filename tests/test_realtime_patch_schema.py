@@ -6,7 +6,7 @@ from web.realtime_patch_schema import (
 )
 
 
-def test_legacy_temperature_patch_normalizes_to_v1_with_runway_points():
+def test_legacy_temperature_patch_normalizes_to_v1():
     event = normalize_observation_patch(
         {
             "city": " Seoul ",
@@ -14,22 +14,9 @@ def test_legacy_temperature_patch_normalizes_to_v1_with_runway_points():
                 "temp": "31.25",
                 "max_so_far": 32.1,
                 "obs_time": "2026-05-26T08:15:00Z",
-                "source": "amos",
-                "amos": {
-                    "icao": "RKSS",
-                    "station_label": "Gimpo Airport",
-                    "runway_obs": {
-                        "point_temperatures": [
-                            {
-                                "runway": "14L/32R",
-                                "tdz_temp": 31.2,
-                                "mid_temp": 31.6,
-                                "end_temp": 31.8,
-                                "target_runway_max": 31.8,
-                            }
-                        ]
-                    },
-                },
+                "source": "metar",
+                "station_code": "RKSS",
+                "station_label": "Gimpo Airport",
             },
         }
     )
@@ -38,23 +25,13 @@ def test_legacy_temperature_patch_normalizes_to_v1_with_runway_points():
     assert event["schema_type"] == "city_observation_patch"
     assert event["schema_version"] == 1
     assert event["city"] == "seoul"
-    assert event["source"] == "amos"
+    assert event["source"] == "metar"
     assert event["obs_time"] == "2026-05-26T08:15:00Z"
     assert event["payload"]["temp"] == 31.25
     assert event["payload"]["max_so_far"] == 32.1
     assert event["payload"]["station_code"] == "RKSS"
     assert event["payload"]["station_label"] == "Gimpo Airport"
     assert event["payload"]["unit"] == "celsius"
-    assert event["payload"]["runway_points"] == [
-        {
-            "runway": "14L/32R",
-            "temp": 31.8,
-            "tdz_temp": 31.2,
-            "mid_temp": 31.6,
-            "end_temp": 31.8,
-            "target_runway_max": 31.8,
-        }
-    ]
 
 
 def test_v1_patch_payload_is_accepted_and_normalized():
@@ -73,7 +50,6 @@ def test_v1_patch_payload_is_accepted_and_normalized():
                 "edge": 0.04,
                 "edge_percent": 4.0,
                 "station_code": "46692",
-                "runway_points": [{"runway": "05/23", "temp": 30.2}],
             },
         }
     )
@@ -87,7 +63,6 @@ def test_v1_patch_payload_is_accepted_and_normalized():
     assert event["payload"]["touch_distance"] == 0
     assert event["payload"]["edge"] == 0.04
     assert event["payload"]["edge_percent"] == 4.0
-    assert event["payload"]["runway_points"][0]["temp"] == 30.2
 
 
 def test_patch_adds_city_local_time_contract_from_observation_time():
@@ -115,7 +90,7 @@ def test_patch_adds_city_local_time_contract_from_observation_time():
     assert event["payload"]["observed_at_local"] == "2026-05-27T19:16:00-04:00"
 
 
-def test_patch_records_received_time_and_latency_for_late_runway_points(monkeypatch):
+def test_patch_records_received_time_and_latency_for_late_observation(monkeypatch):
     monkeypatch.setattr("web.realtime_patch_schema.time.time", lambda: 1780750864.062)
 
     event = normalize_observation_patch(
@@ -124,12 +99,8 @@ def test_patch_records_received_time_and_latency_for_late_runway_points(monkeypa
             "changes": {
                 "temp": 23.0,
                 "obs_time": "2026-06-06T12:59:00Z",
-                "source": "amos",
-                "amos": {
-                    "runway_obs": {
-                        "point_temperatures": [{"runway": "SR/SL", "temp": 22.7}]
-                    }
-                },
+                "source": "metar",
+                "station_code": "RKPK",
             },
         }
     )

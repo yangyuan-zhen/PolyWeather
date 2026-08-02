@@ -2,7 +2,6 @@
 
 from src.utils.telegram._config import *  # noqa: F401, F403
 from src.utils.telegram._helpers import *  # noqa: F401, F403
-from src.utils.telegram._runway import *  # noqa: F401, F403
 from src.utils.telegram._airport_push import *  # noqa: F401, F403
 
 # Explicit re-exports for private names used by tests and external code
@@ -19,9 +18,6 @@ from src.utils.telegram._helpers import (  # noqa: F401
     _rate_limited_send,
     _resolve_thread_id,
     _telegram_push_language,
-)
-from src.utils.telegram._runway import (  # noqa: F401
-    _compute_slope_15m,
 )
 from src.utils.telegram._airport_push import (  # noqa: F401
     _build_airport_status_message,

@@ -66,13 +66,13 @@ function formatUsdcAmount(value: number) {
 const FEATURES = {
   "zh-CN": [
     "Terminal：市场温度与城市机会扫描",
-    "机场 / 跑道实测：METAR + 结算源优先",
+    "机场实测：METAR + 结算源优先",
     "DEB 路径与高温时段复核",
     "Telegram 提醒与账户权益同步",
   ],
   "en-US": [
     "Terminal: market temperature and city signal scanning",
-    "Airport / runway observations: METAR + settlement-source-first",
+    "Airport observations: METAR + settlement-source-first",
     "DEB paths and peak-temperature window review",
     "Telegram alerts and entitlement sync",
   ],

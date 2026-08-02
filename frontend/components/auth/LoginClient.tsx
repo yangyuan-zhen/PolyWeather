@@ -153,18 +153,18 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
   const googleSubmittingLabel = copy.googleSubmitting;
   const formSubtitle = isLogin ? copy.loginSubtitle : copy.signupSubtitle;
   const accessHighlights = isEn
-    ? ["Live temperature charts", "DEB forecast path", "Runway and settlement alerts"]
-    : ["实时温度图表", "DEB 预测路径", "跑道与结算提醒"];
+    ? ["Live temperature charts", "DEB forecast path", "Settlement and official-station alerts"]
+    : ["实时温度图表", "DEB 预测路径", "结算与官方站提醒"];
   const sideStats = isEn
     ? [
         { label: "Trial", value: "3 days" },
         { label: "Access", value: "Terminal" },
-        { label: "Signals", value: "Runway" },
+        { label: "Signals", value: "Settlement" },
       ]
     : [
         { label: "试用", value: "3 天" },
         { label: "入口", value: "终端" },
-        { label: "提醒", value: "跑道" },
+        { label: "提醒", value: "结算" },
       ];
   const loadingSpinner = (
     <span
@@ -400,7 +400,7 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
         <div className="relative z-10 mt-auto flex items-center justify-between border-t border-white/10 pt-5 text-[11px] text-slate-400">
           <span>{isEn ? "Live charts" : "实时图表"}</span>
           <span>{isEn ? "DEB path" : "DEB 路径"}</span>
-          <span>{isEn ? "Runway alerts" : "跑道提醒"}</span>
+          <span>{isEn ? "Settlement alerts" : "结算提醒"}</span>
         </div>
       </section>
 

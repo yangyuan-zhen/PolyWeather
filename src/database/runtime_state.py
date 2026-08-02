@@ -231,13 +231,54 @@ class RuntimeStateDB:
                     observation_time TEXT NOT NULL,
                     value REAL NOT NULL,
                     payload_json TEXT,
-                    PRIMARY KEY (source_code, station_code, observation_time)
+                    PRIMARY KEY (source_code, station_code, target_date, observation_time)
                 )
                 """
             )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_official_intraday_obs_station_date ON official_intraday_observations_store(source_code, station_code, target_date, observation_time)"
             )
+            # Idempotent migration: older official_intraday_observations_store
+            # tables keyed (source_code, station_code, observation_time) without
+            # target_date let same-instant observations across days overwrite
+            # each other, so intraday history never accumulates. Rebuild with
+            # target_date in the primary key, preserving existing rows.
+            _intraday_legacy = conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='official_intraday_observations_store'"
+            ).fetchone()
+            if _intraday_legacy:
+                _intraday_sql = str(_intraday_legacy["sql"] or "")
+                _pk_pos = _intraday_sql.find("PRIMARY KEY")
+                if _pk_pos != -1 and "target_date" not in _intraday_sql[_pk_pos : _pk_pos + 160]:
+                    conn.execute(
+                        "ALTER TABLE official_intraday_observations_store RENAME TO official_intraday_observations_store_legacy"
+                    )
+                    conn.execute(
+                        """
+                        CREATE TABLE official_intraday_observations_store (
+                            source_code TEXT NOT NULL,
+                            station_code TEXT NOT NULL,
+                            target_date TEXT NOT NULL,
+                            observation_time TEXT NOT NULL,
+                            value REAL NOT NULL,
+                            payload_json TEXT,
+                            PRIMARY KEY (source_code, station_code, target_date, observation_time)
+                        )
+                        """
+                    )
+                    conn.execute(
+                        """
+                        INSERT INTO official_intraday_observations_store (
+                            source_code, station_code, target_date, observation_time, value, payload_json
+                        )
+                        SELECT source_code, station_code, target_date, observation_time, value, payload_json
+                        FROM official_intraday_observations_store_legacy
+                        """
+                    )
+                    conn.execute("DROP TABLE official_intraday_observations_store_legacy")
+                    conn.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_official_intraday_obs_station_date ON official_intraday_observations_store(source_code, station_code, target_date, observation_time)"
+                    )
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS intraday_path_snapshots_store (
@@ -1372,8 +1413,7 @@ class OfficialIntradayObservationRepository:
                 INSERT INTO official_intraday_observations_store (
                     source_code, station_code, target_date, observation_time, value, payload_json
                 ) VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(source_code, station_code, observation_time) DO UPDATE SET
-                    target_date = excluded.target_date,
+                ON CONFLICT(source_code, station_code, target_date, observation_time) DO UPDATE SET
                     value = excluded.value,
                     payload_json = excluded.payload_json
                 """,

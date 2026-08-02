@@ -486,21 +486,6 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
     except Exception as e:
         results["singapore_mss"] = {"ok": False, "error": str(e)[:100]}
 
-    # AMOS (Korea runway sensors)
-    try:
-        t0 = _time.perf_counter()
-        r = _r.get(
-            "https://global.amo.go.kr/amosobsnew/AmosRealTimeImage.do", timeout=timeout
-        )
-        results["amos"] = {
-            "ok": r.ok,
-            "status": r.status_code,
-            "latency_ms": round((_time.perf_counter() - t0) * 1000),
-        }
-    except Exception as e:
-        results["amos"] = {"ok": False, "error": str(e)[:100]}
-
-
     # NOAA WRH (US settlement verification)
     try:
         t0 = _time.perf_counter()

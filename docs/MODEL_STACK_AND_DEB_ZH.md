@@ -109,7 +109,7 @@ WeatherNext2 不走 Open-Meteo model API，由独立 worker 从 Google Cloud Sto
 - RDPS
 - HRDPS
 
-亚洲城市更依赖本地观测增强层，例如 JMA、AMOS（首尔/釜山）、HKO、METAR、TAF。
+亚洲城市更依赖本地观测增强层，例如 JMA、HKO、METAR、TAF。
 
 ## 4. DEB 家族去重
 

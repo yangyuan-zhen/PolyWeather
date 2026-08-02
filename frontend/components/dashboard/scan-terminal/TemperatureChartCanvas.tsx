@@ -3,7 +3,6 @@
 import clsx from "clsx";
 import { memo, useEffect, useRef, useState } from "react";
 import {
-  Area,
   CartesianGrid,
   ComposedChart as ReComposedChart,
   Line,
@@ -15,10 +14,7 @@ import {
 } from "recharts";
 import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 import { TemperatureTooltipContent } from "@/components/dashboard/scan-terminal/TemperatureTooltipContent";
-import {
-  getTemperatureSeriesForRunwayDetailsMode,
-  type EvidenceSeries,
-} from "@/components/dashboard/scan-terminal/temperature-chart-logic";
+import type { EvidenceSeries } from "@/components/dashboard/scan-terminal/temperature-chart-logic";
 
 type CityThreshold = {
   threshold: number;
@@ -118,8 +114,6 @@ function TemperatureChartCanvasComponent({
   zoomedData,
   chartDomain,
   intDegreeTicks,
-  hasRunwayData,
-  showRunwayDetails,
   isHourlyLoading,
   detailError,
   detailStatus,
@@ -133,7 +127,6 @@ function TemperatureChartCanvasComponent({
   onZoomReset,
   isSeriesVisible,
   onSeriesToggle,
-  onShowRunwayDetailsChange,
   onRetryDetail,
 }: {
   isEn: boolean;
@@ -146,8 +139,6 @@ function TemperatureChartCanvasComponent({
   zoomedData: Array<Record<string, any>>;
   chartDomain: [number, number] | ["auto", "auto"];
   intDegreeTicks: number[] | null;
-  hasRunwayData: boolean;
-  showRunwayDetails: boolean;
   isHourlyLoading: boolean;
   detailError?: string | null;
   detailStatus?: string | null;
@@ -161,7 +152,6 @@ function TemperatureChartCanvasComponent({
   onZoomReset: () => void;
   isSeriesVisible: (seriesKey: string) => boolean;
   onSeriesToggle: (seriesKey: string) => void;
-  onShowRunwayDetailsChange: (value: boolean) => void;
   onRetryDetail?: () => void;
 }) {
   const chartHostRef = useRef<HTMLDivElement | null>(null);
@@ -208,18 +198,6 @@ function TemperatureChartCanvasComponent({
   const chartWidth = Math.max(1, chartSize.width);
   const minChartHeight = compact ? 120 : 220;
   const chartHeight = Math.max(minChartHeight, chartSize.height);
-  const individualRunwaySeriesCount = chartSeries.filter(
-    (series) => series.key.startsWith("runway_") && series.key !== "runway_max",
-  ).length;
-  const collapsedRunwaySeries = getTemperatureSeriesForRunwayDetailsMode(
-    row?.city || "",
-    chartSeries,
-    false,
-  );
-  const canToggleRunwayDetails =
-    hasRunwayData &&
-    individualRunwaySeriesCount > 1 &&
-    collapsedRunwaySeries.length < chartSeries.length;
   const hasDrawableChartContent = hasDrawableTemperatureChartContent({
     activeSeries,
     zoomedData,
@@ -246,11 +224,7 @@ function TemperatureChartCanvasComponent({
     <div className={clsx("relative flex flex-1 flex-col p-2", compact ? "min-h-[120px]" : "min-h-[240px]")}>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-1.5 text-[11px] border-b border-[#e2e8f0] bg-white">
         {chartSeries.length > 1 &&
-          getTemperatureSeriesForRunwayDetailsMode(
-            row?.city || "",
-            chartSeries,
-            showRunwayDetails,
-          )
+          chartSeries
             .map((s) => (
               <button
                 key={s.key}
@@ -265,19 +239,6 @@ function TemperatureChartCanvasComponent({
                 <span className="text-slate-700 font-bold">{s.label}</span>
               </button>
             ))}
-
-        {canToggleRunwayDetails && (
-          <label className="inline-flex items-center gap-1.5 ml-auto cursor-pointer text-slate-600 hover:text-slate-800 font-semibold select-none">
-            <input
-              type="checkbox"
-              checked={showRunwayDetails}
-              onChange={(e) => onShowRunwayDetailsChange(e.target.checked)}
-              className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-3.5 w-3.5 cursor-pointer"
-            />
-            <span>{isEn ? "Show Runway Details" : "显示跑道明细"}</span>
-          </label>
-        )}
-
       </div>
       <div ref={chartHostRef} className={clsx("relative flex-1", compact ? "min-h-[120px]" : "min-h-[220px]")}>
         {!shouldRenderChart && <TemperatureChartSkeleton compact={compact} />}
@@ -363,17 +324,6 @@ function TemperatureChartCanvasComponent({
                 return Number.isFinite(num) ? `${num.toFixed(2)}${tempSymbol}` : String(value);
               }}
             />
-            {hasRunwayData && (
-              <Area
-                dataKey="runway_band"
-                name={isEn ? "Runway Range" : "跑道区间"}
-                stroke="none"
-                fill="#009688"
-                fillOpacity={showRunwayDetails ? 0.08 : 0.18}
-                connectNulls={true}
-                isAnimationActive={false}
-              />
-            )}
             {refAreaLeft !== null && refAreaRight !== null && zoomedData[refAreaLeft] && zoomedData[refAreaRight] && (
               <ReferenceArea
                 x1={zoomedData[refAreaLeft].label}

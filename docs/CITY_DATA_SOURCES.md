@@ -8,8 +8,6 @@
 
 | 城市 | 来源 | 频率 | 备注 |
 |------|------|------|------|
-| seoul | AMOS 跑道传感器 (RKSI) | ~1 min | global.amo.go.kr, 站号 113 |
-| busan | AMOS 跑道传感器 (RKPK) | ~1 min | global.amo.go.kr, 站号 153 |
 | hong kong | CoWIN 6087 | ~1 min | cowin.hku.hk, 保良局陳守仁小學，前端图表默认展示 |
 | hong kong | HKO 官方 CSV | ~10 min | data.weather.gov.hk（文件名虽含 1min，实际 10min 一报） |
 | singapore | MSS 官方 API | ~1 min | api.data.gov.sg, 站号 S24 |
@@ -88,17 +86,16 @@ houston, dallas, austin, seattle, tel aviv
 `country_networks.py:_airport_primary_from_raw()` 按以下顺序解析:
 
 1. MADIS HFMETAR（美国 11 城）
-2. AMOS 跑道传感器（首尔/釜山）
-3. MGM current（安卡拉/伊斯坦布尔）
-4. JMA AMeDAS current（东京）
-5. FMI current（赫尔辛基）
-6. KNMI current（阿姆斯特丹）
-7. CoWIN 6087（香港 1min 参考站）
-8. AEROWEB current（巴黎）
-9. IMS current（特拉维夫）
-10. NCM current（吉达）
-11. Singapore MSS current（新加坡）
-12. 纯 METAR（默认兜底）
+2. MGM current（安卡拉/伊斯坦布尔）
+3. JMA AMeDAS current（东京）
+4. FMI current（赫尔辛基）
+5. KNMI current（阿姆斯特丹）
+6. CoWIN 6087（香港 1min 参考站）
+7. AEROWEB current（巴黎）
+8. IMS current（特拉维夫）
+9. NCM current（吉达）
+10. Singapore MSS current（新加坡）
+11. 纯 METAR（默认兜底）
 
 ## 对日内偏差修正的影响
 
@@ -120,7 +117,7 @@ houston, dallas, austin, seattle, tel aviv
 
 频率取决于源头：
 
-- AMOS / CoWIN / MSS：源头约 1 分钟，图表按 1 分钟粒度追加。
+- CoWIN / MSS：源头约 1 分钟，图表按 1 分钟粒度追加。
 - MADIS：源头约 5 分钟。
 - HKO / JMA / FMI / KNMI：源头约 10 分钟。
 - METAR-only 城市：按 METAR 可用频率和缓存 TTL，不伪装成 1 分钟实测。
@@ -131,12 +128,6 @@ houston, dallas, austin, seattle, tel aviv
 
 ### 1. 实测数据（默认全开，突出核心）
 
-- **跑道全量展示**：首尔、釜山等有跑道实测的城市默认全量开启，无需手动勾选。
-- **结算跑道高亮**：系统内置了各大机场的官方结算跑道映射。命中的跑道将被**重点强调**（加粗的青色实线 #009688，线宽 2.8），并标记为“[跑道号] 结算跑道”。具体的跑道映射如下：
-  - 首尔：15R/33L
-  - 釜山：SR/SL
-- **辅助跑道弱化**：同一机场下的其他非结算跑道，也会同时展示，但采用较细的虚线（线宽 1.2）以作陪衬区分。
-- **单跑道机场去重**：釜山只有 `SR/SL` 跑道曲线时，不再额外展示 AMOS 聚合线，避免两条线语义重复。
 - **香港参考曲线**：Hong Kong 默认展示 CoWIN `6087`（保良局陈守仁小学）1 分钟参考站曲线；HKO 10 分钟实测作为官方气象层保留。
 - **其他实测展示**：所有城市的 METAR 报文曲线、官方气象站实测（如 Shenzhen / Lau Fau Shan 的 HKO 自动站）均默认展示。
 

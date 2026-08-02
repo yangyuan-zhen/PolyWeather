@@ -20,11 +20,8 @@ from src.data_collection.forecast_source_bundle import (
 )
 from src.data_collection.multi_model_freshness import multi_model_forecasts_for_local_date
 import web.routes as legacy_routes
-from web.analysis_service import _runway_history_temp_for_city
 from web.services.canonical_temperature import build_city_weather_from_canonical
 from web.services.latest_observation_overlay import (
-    overlay_latest_amos_observation,
-
     overlay_latest_hko_observation,
     overlay_latest_jma_amedas_observation,
     overlay_latest_mgm_observation,
@@ -150,13 +147,6 @@ async def _overlay_latest_observation_sources(city: str, payload: Dict[str, Any]
         payload=latest_payload,
         fn=overlay_latest_jma_amedas_observation,
         args=(legacy_routes._weather, city, latest_payload, legacy_routes._CACHE_DB),
-    )
-    latest_payload = await _run_latest_observation_city_chart_overlay(
-        city=city,
-        overlay_name="amos_latest_raw",
-        payload=latest_payload,
-        fn=overlay_latest_amos_observation,
-        args=(legacy_routes._CACHE_DB, city, latest_payload),
     )
     latest_payload = await _run_latest_observation_city_chart_overlay(
         city=city,
@@ -595,65 +585,6 @@ async def _overlay_cached_canonical_observation(city: str, payload: Dict[str, An
     return _merge_latest_observation_payload(city, payload, canonical_payload)
 
 
-def _overlay_cached_runway_history_from_db(city: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-    if not isinstance(payload, dict) or not payload:
-        return payload
-    normalized_city = str(city or payload.get("name") or payload.get("city") or "").strip().lower()
-    if not normalized_city:
-        return payload
-
-    risk = payload.get("risk") if isinstance(payload.get("risk"), dict) else {}
-    city_risk = legacy_routes.CITY_RISK_PROFILES.get(normalized_city, {}) or {}
-    city_meta = legacy_routes.CITY_REGISTRY.get(normalized_city, {}) or {}
-    icao = str(
-        risk.get("icao")
-        or city_risk.get("icao")
-        or city_meta.get("icao")
-        or ""
-    ).strip().upper()
-    if not icao:
-        return payload
-
-    try:
-        rows = legacy_routes._CACHE_DB.get_runway_obs_recent(icao, minutes=24 * 60)
-    except Exception as exc:
-        logger.debug("chart runway DB overlay skipped city={} icao={}: {}", normalized_city, icao, exc)
-        return payload
-    if not rows:
-        return payload
-
-    use_fahrenheit = (
-        "F" in str(payload.get("temp_symbol") or "").upper()
-        or bool((legacy_routes.CITIES.get(normalized_city, {}) or {}).get("f"))
-    )
-    runway_history: Dict[str, List[Dict[str, Any]]] = {}
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        runway = str(row.get("runway") or "").strip().upper()
-        time_val = row.get("otime_utc") or row.get("created_at")
-        if not runway or not time_val:
-            continue
-        temp_val = _runway_history_temp_for_city(normalized_city, row)
-        if temp_val is None:
-            continue
-        if use_fahrenheit:
-            temp_val = temp_val * 9.0 / 5.0 + 32.0
-        runway_history.setdefault(runway, []).append(
-            {
-                "time": str(time_val),
-                "temp": round(float(temp_val), 1),
-            }
-        )
-
-    if not runway_history:
-        return payload
-
-    next_payload = deepcopy(payload)
-    next_payload["runway_plate_history"] = runway_history
-    return next_payload
-
-
 def _start_city_full_stale_refresh(city: str) -> None:
     normalized = str(city or "").strip().lower()
     if not normalized:
@@ -693,13 +624,6 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
         payload = await _overlay_cached_canonical_observation(city, payload)
         payload = await _run_optional_city_chart_overlay(
             city=city,
-            overlay_name="runway_history",
-            payload=payload,
-            fn=_overlay_cached_runway_history_from_db,
-            args=(city, payload),
-        )
-        payload = await _run_optional_city_chart_overlay(
-            city=city,
             overlay_name="multi_model_hourly",
             payload=payload,
             fn=_overlay_cached_multi_model_hourly,
@@ -715,13 +639,6 @@ async def _get_city_chart_data(city: str, *, force_refresh: bool) -> Dict[str, A
             if not legacy_routes._city_cache_is_fresh(cached_entry, legacy_routes.CITY_FULL_CACHE_TTL_SEC):
                 _start_city_full_stale_refresh(city)
             payload = await _overlay_cached_canonical_observation(city, payload)
-            payload = await _run_optional_city_chart_overlay(
-                city=city,
-                overlay_name="runway_history",
-                payload=payload,
-                fn=_overlay_cached_runway_history_from_db,
-                args=(city, payload),
-            )
             payload = await _run_optional_city_chart_overlay(
                 city=city,
                 overlay_name="multi_model_hourly",
@@ -844,13 +761,6 @@ def _observed_temperature_floor(payload: Dict[str, Any]) -> Optional[float]:
         block = payload.get(key) if isinstance(payload.get(key), dict) else {}
         for value_key in ("max_so_far", "max_temp_so_far", "today_high", "temp", "temp_c"):
             add(block.get(value_key))
-
-    amos = payload.get("amos") if isinstance(payload.get("amos"), dict) else {}
-    for value_key in ("max_so_far", "max_temp_so_far", "today_high", "temp", "temp_c"):
-        add(amos.get(value_key))
-    amos_current = amos.get("current") if isinstance(amos.get("current"), dict) else {}
-    for value_key in ("max_so_far", "max_temp_so_far", "today_high", "temp", "temp_c"):
-        add(amos_current.get(value_key))
 
     for series_key in ("airport_primary_today_obs", "metar_today_obs", "settlement_today_obs"):
         _collect_observed_series_temps(payload.get(series_key), values)
@@ -1690,9 +1600,6 @@ def _chart_scoped_city_detail(detail: Dict[str, Any]) -> Dict[str, Any]:
         },
         "multi_model_daily": detail.get("multi_model_daily") or {},
         "probabilities": detail.get("probabilities") or {"mu": None, "distribution": []},
-        "runway_plate_history": detail.get("runway_plate_history") or {},
-        "runway_band_history": detail.get("runway_band_history") or [],
-        "amos": detail.get("amos") or {},
         "airport_current": detail.get("airport_current") or {},
         "airport_primary": detail.get("airport_primary") or overview.get("airport_primary") or {},
         "airport_primary_today_obs": airport_primary_today_obs,

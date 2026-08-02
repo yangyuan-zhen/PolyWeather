@@ -64,7 +64,7 @@ export function runTests() {
   assert(chartGuideZh.includes("高温 / 全天"), "chart guide should document the current chart view modes");
 
   const realtimeSourcesZh = pageText("realtime-sources", "zh-CN");
-  assert(realtimeSourcesZh.includes("AMOS 60s"), "realtime sources should document the AMOS 60s cadence");
+  assert(realtimeSourcesZh.includes("CoWIN 60s"), "realtime sources should document the CoWIN 60s cadence");
   assert(realtimeSourcesZh.includes("SSE patch"), "realtime sources should document the SSE patch path");
 
   const settlementSourcesZh = pageText("settlement-sources", "zh-CN");

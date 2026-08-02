@@ -11,13 +11,6 @@ from typing import Any, Dict, Optional
 from web.services.analysis_utils import parse_utc_datetime
 
 _OBSERVATION_SOURCE_PROFILES: Dict[str, Dict[str, Any]] = {
-    "amos": {
-        "label": "AMOS",
-        "native_update_interval_sec": 60,
-        "fresh_window_sec": 180,
-        "expected_grace_sec": 180,
-        "stale_after_sec": 900,
-    },
     "jma": {
         "label": "JMA",
         "native_update_interval_sec": 600,
@@ -117,8 +110,6 @@ def canonical_observation_source_code(value: Any) -> str:
     raw = str(value or "").strip().lower()
     if not raw:
         return "metar"
-    if "amos" in raw:
-        return "amos"
     if "jma" in raw:
         return "jma"
     if "fmi" in raw:

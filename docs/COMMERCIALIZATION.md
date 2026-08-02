@@ -8,7 +8,7 @@ PolyWeather 是面向温度结算场景的气象决策层，不是通用天气�
 
 核心价值：
 
-- 观测优先（METAR / 机场主站 / 明确官方站点；MGM、JMA AMeDAS、AMOS、CoWIN、HKO（流浮山 LFS）等作为增强层）
+- 观测优先（METAR / 机场主站 / 明确官方站点；MGM、JMA AMeDAS、CoWIN、HKO（流浮山 LFS）等作为增强层）
 - 结算导向（DEB hourly consensus + 校准概率桶，主引擎 deb_normal 正态概率）
 - 气象判断优先（证据链、失效条件、下一观测点）
 - 市场映射（行情对照 + 错价雷达），但不把交易建议放在第一层产品承诺

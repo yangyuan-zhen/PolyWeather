@@ -49,13 +49,13 @@ export const DOCS_PAGES: DocsPage[] = [
             blocks: [
               {
                 type: "paragraph",
-                text: "PolyWeather 不是通用天气 App，也不是单纯的预报展示页。它把结算跑道、官方站、机场报文、DEB Forecast、市场阈值和源头刷新状态放到同一个工作流里，服务温度市场的日内判断。",
+                text: "PolyWeather 不是通用天气 App，也不是单纯的预报展示页。它把结算站、官方站、机场报文、DEB Forecast、市场阈值和源头刷新状态放到同一个工作流里，服务温度市场的日内判断。",
               },
               {
                 type: "callout",
                 tone: "info",
                 title: "产品定位",
-                text: "先确认结算源和实测更新，再比较 DEB 与市场信号。市场价格是判断层，不替代真实结算站点或跑道观测。",
+                text: "先确认结算源和实测更新，再比较 DEB 与市场信号。市场价格是判断层，不替代真实结算站点观测。",
               },
             ],
           },
@@ -68,7 +68,7 @@ export const DOCS_PAGES: DocsPage[] = [
                 items: [
                   "天气决策 / 训练数据 / 使用指南：左侧导航对应当前主工作台的三个入口。",
                   "1-9 个图表槽位：可用 1x1 到 3x3 布局同时观察多个城市，并在每个槽位切换城市。",
-                  "实测锚点：优先显示结算跑道、官方站或关键机场报文，并展示当前温度、当日已见高点和更新时间。",
+                  "实测锚点：优先显示官方站或关键机场报文，并展示当前温度、当日已见高点和更新时间。",
                   "DEB Forecast：橙色路径用于判断后续升温或降温空间，以及峰值窗口附近是否偏离主路径。",
                   "市场信号：阈值、价格、流动性和优势用于交易判断，但要先由天气证据确认。",
                   "训练数据：用于复盘 DEB 和概率引擎近期表现，帮助判断哪些城市当前更可靠。",
@@ -86,7 +86,7 @@ export const DOCS_PAGES: DocsPage[] = [
                   "先选择区域和城市，把重点城市放进图表槽位。",
                   "先看青绿色实测锚点，确认当前温度、当日最高和数据新鲜度。",
                   "再看 DEB Forecast 与高温 / 全天视图，判断剩余升温空间和峰值窗口。",
-                  "最后打开模型线、跑道明细或市场信号，确认分歧来自天气还是价格。",
+                  "最后打开模型线或市场信号，确认分歧来自天气还是价格。",
                 ],
               },
             ],
@@ -103,13 +103,13 @@ export const DOCS_PAGES: DocsPage[] = [
             blocks: [
               {
                 type: "paragraph",
-                text: "PolyWeather is not a general weather app or a raw forecast page. It puts settlement runways, official stations, airport reports, DEB Forecast, market thresholds, and source freshness into one workflow for intraday temperature-market decisions.",
+                text: "PolyWeather is not a general weather app or a raw forecast page. It puts settlement stations, official stations, airport reports, DEB Forecast, market thresholds, and source freshness into one workflow for intraday temperature-market decisions.",
               },
               {
                 type: "callout",
                 tone: "info",
                 title: "Product focus",
-                text: "Confirm the settlement source and live update state first, then compare DEB with market signals. Market price is a decision layer, not a replacement for the actual settlement station or runway observation.",
+                text: "Confirm the settlement source and live update state first, then compare DEB with market signals. Market price is a decision layer, not a replacement for the actual settlement station observation.",
               },
             ],
           },
@@ -122,7 +122,7 @@ export const DOCS_PAGES: DocsPage[] = [
                 items: [
                   "Weather Decisions / Training / Guide: the three entries in the current left-side terminal navigation.",
                   "1-9 chart slots: use 1x1 through 3x3 layouts to monitor several cities and switch each slot independently.",
-                  "Live anchors: settlement runway, official station, or useful airport report, with current temperature, day high, and freshness.",
+                  "Live anchors: official station or useful airport report, with current temperature, day high, and freshness.",
                   "DEB Forecast: the orange path for remaining upside or downside and for checking the peak window.",
                   "Market signals: thresholds, price, liquidity, and edge support trade decisions after the weather evidence is checked.",
                   "Training data: recent DEB and probability-engine performance for judging which cities are more reliable now.",
@@ -140,7 +140,7 @@ export const DOCS_PAGES: DocsPage[] = [
                   "Pick a region and city, then place the important cities into chart slots.",
                   "Start with the teal live anchor: current temperature, day high, and freshness.",
                   "Compare DEB Forecast in Peak / All Day views to judge remaining move and peak-window risk.",
-                  "Use model lines, runway detail, or market signals last to separate weather disagreement from price disagreement.",
+                  "Use model lines or market signals last to separate weather disagreement from price disagreement.",
                 ],
               },
             ],
@@ -164,7 +164,7 @@ export const DOCS_PAGES: DocsPage[] = [
               {
                 type: "steps",
                 items: [
-                  "先看结算源实测：结算跑道、官方站或当前更可靠的机场报文是不是还在更新。",
+                  "先看结算源实测：官方站或当前更可靠的机场报文是不是还在更新。",
                   "再看 DEB Forecast：它是融合模型和日内修正后的预期路径，不是已经发生的实测。",
                   "切换高温 / 全天：高温视图聚焦峰值窗口，全天视图用于复盘完整日内走势。",
                   "最后看图层和市场信号：只有当实测与 DEB 或价格明显分叉时，才需要打开更多辅助层。",
@@ -183,7 +183,6 @@ export const DOCS_PAGES: DocsPage[] = [
                   "DEB Forecast：橙色预测路径，重点看它和实测线在峰值窗口前后的差距。",
                   "机场报文：METAR / MGM 等作为机场站参考，只在适合的城市默认显示。",
                   "模型线：ECMWF、GFS、ICON、GEM 等提供背景，默认作为辅助判断。",
-                  "跑道明细：打开后可看各跑道传感器；关闭后仍保留结算跑道或主参考站。",
                 ],
               },
             ],
@@ -212,7 +211,7 @@ export const DOCS_PAGES: DocsPage[] = [
                 type: "bullets",
                 items: [
                   "不要把概率温度带当成实测曲线。概率层用于市场判断和后台分析，不代表某一刻真实温度。",
-                  "不要把市场信号当成结算温度。结算仍然看规则指定的站点或跑道。",
+                  "不要把市场信号当成结算温度。结算仍然看规则指定的站点。",
                   "不要要求所有城市固定 1 分钟刷新。图表更新频率取决于源头原生频率和当前可用数据。",
                 ],
               },
@@ -231,7 +230,7 @@ export const DOCS_PAGES: DocsPage[] = [
               {
                 type: "steps",
                 items: [
-                  "Start with the settlement-source observation: settlement runway, official station, or the most useful airport report.",
+                  "Start with the settlement-source observation: official station, or the most useful airport report.",
                   "Read DEB Forecast next. It is the model-and-intraday adjusted path, not an observation that already happened.",
                   "Switch Peak / All Day views: Peak focuses the payoff window, while All Day reviews the full intraday path.",
                   "Use layers and market signals last, mainly when live observations diverge from DEB or price.",
@@ -250,7 +249,6 @@ export const DOCS_PAGES: DocsPage[] = [
                   "DEB Forecast: orange forecast path; focus on its gap versus live observations near the peak window.",
                   "Airport reports: METAR / MGM are airport references and are auto-shown only where useful.",
                   "Model lines: ECMWF, GFS, ICON, GEM, and related layers provide background context.",
-                  "Runway detail: enable it to inspect runway sensors; disabling it still keeps the settlement runway or primary reference.",
                 ],
               },
             ],
@@ -279,7 +277,7 @@ export const DOCS_PAGES: DocsPage[] = [
                 type: "bullets",
                 items: [
                   "Do not read probability bands as observation curves. Probability supports market analysis and background scoring, not timestamped live temperature.",
-                  "Do not treat market signals as settlement temperature. Settlement still comes from the station or runway named by the rule.",
+                  "Do not treat market signals as settlement temperature. Settlement still comes from the station named by the rule.",
                   "Do not expect every city to update every minute. Refresh cadence follows source-native frequency and current data availability.",
                 ],
               },
@@ -304,7 +302,6 @@ export const DOCS_PAGES: DocsPage[] = [
               {
                 type: "bullets",
                 items: [
-                  "AMOS 60s：首尔、釜山等韩国跑道传感器。",
                   "MADIS 300s：美国高频机场观测城市。",
                   "CoWIN 60s：香港 6087 参考站。",
                   "HKO 600s：香港天文台官方 10 分钟层。",
@@ -352,7 +349,6 @@ export const DOCS_PAGES: DocsPage[] = [
               {
                 type: "bullets",
                 items: [
-                  "AMOS 60s: Korean runway sensors such as Seoul and Busan.",
                   "MADIS 300s: US high-frequency airport observations.",
                   "CoWIN 60s: Hong Kong 6087 reference station.",
                   "HKO 600s: Hong Kong Observatory official 10-minute layer.",
@@ -405,7 +401,7 @@ export const DOCS_PAGES: DocsPage[] = [
             blocks: [
               {
                 type: "paragraph",
-                text: "同样是城市最高温，真正结算可能看机场 METAR、机场主站、结算跑道，也可能看明确指定的官方结算站点。城区更热或体感更热，不一定等于合约会结到更高温桶。",
+                text: "同样是城市最高温，真正结算可能看机场 METAR、机场主站，也可能看明确指定的官方结算站点。城区更热或体感更热，不一定等于合约会结到更高温桶。",
               },
             ],
           },
@@ -417,7 +413,6 @@ export const DOCS_PAGES: DocsPage[] = [
                 type: "bullets",
                 items: [
                   "多数机场市场：先看机场 METAR、机场主站或项目标记的机场主参考站。",
-                  "跑道城市：优先看结算跑道或项目标记的主跑道端点，同时保留辅助跑道作为空间背景。",
                   "明确官方站点市场：按规则指定的官方结算站点结算，不能用通用机场逻辑替代。",
                   "本地官方增强层：JMA、KMA、NMC、HKO、CWA、MGM 等用于领先结构和交叉验证，是否能做结算锚点取决于合约规则。",
                   "TAF：用于判断机场未来云雨、雷暴或风向变化，不是结算温度本身。",
@@ -434,7 +429,6 @@ export const DOCS_PAGES: DocsPage[] = [
                 items: [
                   "先看图表里的实测 / 结算线名称和统计条，确认当前主锚点。",
                   "再看更新时间和数据新鲜度，排除停更或滞后源。",
-                  "如果打开跑道明细，先读结算跑道，再用辅助跑道判断空间差异。",
                   "最后才把 DEB、市场信号和概率判断叠上去。",
                 ],
               },
@@ -452,7 +446,7 @@ export const DOCS_PAGES: DocsPage[] = [
             blocks: [
               {
                 type: "paragraph",
-                text: "A city-high market may settle from airport METAR, an airport primary site, a settlement runway, or an explicitly named official settlement station. A hotter downtown feel does not automatically mean the contract settles into a warmer bucket.",
+                text: "A city-high market may settle from airport METAR, an airport primary site, or an explicitly named official settlement station. A hotter downtown feel does not automatically mean the contract settles into a warmer bucket.",
               },
             ],
           },
@@ -464,7 +458,6 @@ export const DOCS_PAGES: DocsPage[] = [
                 type: "bullets",
                 items: [
                   "Most airport-linked markets: start with airport METAR, the airport primary site, or the project's marked airport reference.",
-                  "Runway cities: prioritize the settlement runway or marked primary runway endpoint, while auxiliary runways remain spatial context.",
                   "Explicit official-station markets: settle from the official settlement station named by the rule, not from generic airport logic.",
                   "Local official enhancement layers: JMA, KMA, NMC, HKO, CWA, MGM, and similar sources help with lead/lag and cross-checks; whether they anchor settlement depends on the contract rule.",
                   "TAF: useful for cloud, thunderstorm, or wind-shift risk near the airport, but not the settlement temperature itself.",
@@ -481,7 +474,6 @@ export const DOCS_PAGES: DocsPage[] = [
                 items: [
                   "Read the live / settlement line name and summary stats to identify the current anchor.",
                   "Check timestamp and freshness so stale sources do not drive the decision.",
-                  "When runway detail is enabled, read the settlement runway first and use auxiliary runways for spatial spread.",
                   "Only then add DEB, market signals, and probability context.",
                 ],
               },

@@ -20,7 +20,6 @@ _SETTLEMENT_SOURCE_ADAPTERS = {
 }
 
 _SOURCE_WEIGHTS = {
-    "amos": 700,
     "hko_obs": 680,
     "cowin_obs": 660,
     "mgm": 640,

@@ -24,7 +24,7 @@ def test_sse_format_event_stamps_emit_time_for_latency_diagnostics(monkeypatch):
             "type": "city_observation_patch.v1",
             "revision": 123,
             "city": "busan",
-            "source": "amos",
+            "source": "metar",
             "ts": 1780750864062,
             "payload": {"temp": 23.0},
         }

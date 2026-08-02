@@ -462,31 +462,6 @@ def init_db(conn: Any, db_path: str) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_airport_obs_log_icao_time ON airport_obs_log(icao, created_at DESC)"
     )
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS runway_obs_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            icao TEXT NOT NULL,
-            city TEXT NOT NULL,
-            runway TEXT NOT NULL,
-            tdz_temp REAL,
-            mid_temp REAL,
-            end_temp REAL,
-            target_runway_max REAL,
-            wind_dir INTEGER,
-            wind_speed REAL,
-            rvr INTEGER,
-            mor REAL,
-            humidity REAL,
-            otime_utc TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_runway_obs_log_icao_otime ON runway_obs_log(icao, otime_utc DESC)"
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_runway_obs_log_city_time ON runway_obs_log(city, created_at DESC)"
-    )
 
     # Column migrations (ensure columns exist on legacy tables)
     _ensure_column(conn, "users", "daily_points", "INTEGER DEFAULT 0")

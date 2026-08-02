@@ -24,26 +24,12 @@ from web.scan_terminal_filters import (
     safe_int as _safe_int,
 )
 from web.services.canonical_temperature import build_city_weather_from_canonical
-from web.services.city_payloads import aggregate_runway_history
 
 
-SCAN_ROW_RUNWAY_HISTORY_RESOLUTION = "10m"
-SCAN_ROW_MAX_RUNWAY_POINTS = 144
 SCAN_TERMINAL_MULTI_MODEL_BATCH_SIZE = 20
 _PANEL_CACHE_DB = DBManager()
 _analyze = None  # compatibility hook for tests that assert scan terminal stays cache-only.
 SCAN_PANEL_CACHE_MAX_AGE_SEC = max(300, int(SCAN_ROWS_REFRESH_SEC) * 3)
-
-
-def _compact_runway_plate_history_for_scan(raw_history: Any) -> Dict[str, List[Dict[str, Any]]]:
-    if not isinstance(raw_history, dict) or not raw_history:
-        return {}
-    compacted = aggregate_runway_history(raw_history, SCAN_ROW_RUNWAY_HISTORY_RESOLUTION)
-    return {
-        str(runway): points[-SCAN_ROW_MAX_RUNWAY_POINTS:]
-        for runway, points in compacted.items()
-        if isinstance(points, list) and points
-    }
 
 
 def _enqueue_scan_terminal_refresh(city: str, *, reason: str) -> None:
@@ -640,12 +626,8 @@ def _build_terminal_row(
         "edge_percent": edge_percent,
         "final_score": final_score,
         "volume": volume,
-        "amos": data.get("amos") or None,
         "top_buckets": scan.get("top_buckets") or [],
         "all_buckets": scan.get("all_buckets") or [],
-        "runway_plate_history": _compact_runway_plate_history_for_scan(
-            data.get("runway_plate_history")
-        ),
     }
 
 
@@ -785,9 +767,6 @@ def _build_quick_row(
         "accepting_orders": False,
         "row_id": row_id,
         "weathernext2": data.get("weathernext2"),
-        "runway_plate_history": _compact_runway_plate_history_for_scan(
-            data.get("runway_plate_history")
-        ),
     }
     # Compute a simple edge: model top probability vs neutral
     best_model_prob = max(

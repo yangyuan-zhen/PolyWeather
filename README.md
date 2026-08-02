@@ -13,9 +13,9 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 
 ![PolyWeather realtime terminal](frontend/public/static/web.webp)
 
-### Telegram Runway Alerts
+### Telegram Alerts
 
-![PolyWeather Telegram runway alerts](frontend/public/static/tel.png)
+![PolyWeather Telegram alerts](frontend/public/static/tel.png)
 
 ## Star History
 
@@ -39,9 +39,9 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 - The chart core has been split into focused logic/canvas/state modules; Recharts now receives explicit measured dimensions to avoid 0x0 rendering and disappearing curves.
 - DEB hourly consensus (`deb_hourly_consensus.v1`) is now the preferred hourly forecast path for peak-window detection and chart overlays; DEB remains a forecast curve, never an observation source.
 - Legacy Gaussian probability stays out of the default temperature chart surface; hover tooltips show `Gaussian μ` plus the full bucket distribution by temperature range.
-- Settlement runway curves are visible by default for AMOS cities (Seoul / Busan); the configured settlement runway is highlighted and auxiliary runways are shown as secondary context.
+- Settlement-source-first airport observations are visible by default, with the configured settlement station highlighted and official nearby-network stations shown as secondary context.
 - Hong Kong uses CoWIN station `6087` (Po Leung Kuk Choi Kai Yau School) as the 1-minute reference-station curve, with HKO 10-minute observations kept as the official meteorological layer.
-- Telegram airport/runway pushes are bilingual by default and use settlement-endpoint runway temperatures for slope/current/summary copy.
+- Telegram airport pushes are bilingual by default and use settlement-endpoint temperatures for slope/current/summary copy.
 - Runtime state, cache, and core offline training/backfill flows now use SQLite as the primary path; legacy JSON/JSONL files remain only for migration, export, and explicit fallback input.
 - Intraday analysis is now positioned as a professional meteorology read: headline, confidence, base/upside/downside paths, next observation point, evidence chain, failure modes, and confirmation rules.
 - Intraday modal now blocks stale cached detail during refresh, so users do not briefly trade off old city/date data before full detail arrives.
@@ -54,7 +54,7 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 - Temperature chart now overlays `TAF Timing` markers near the expected peak window.
 - Trade cue now combines upper-air structure, `TAF`, market crowding, and `edge_percent`.
 - Browser extension now uses `DEB` for multi-day forecast and stays positioned as a lightweight lead-in to the main site.
-- Official nearby-network layer now covers `MGM` (Turkey), `JMA AMeDAS` (Japan), `AMOS` (Korea, runway-level, Seoul/Busan), and `HKO` (Hong Kong).
+- Official nearby-network layer now covers `MGM` (Turkey), `JMA AMeDAS` (Japan), and `HKO` (Hong Kong).
 - Tokyo now ingests Haneda `JMA AMeDAS` 10-minute temperature as the official enhancement layer.
 - Frontend design system overhauled: unified CSS token system, eliminated `!important` abuse (134→49 in light theme), consolidated breakpoints (18→10), migrated hardcoded colors to CSS variables, added ARIA attributes and focus-visible keyboard navigation. See `docs/frontend-ui-design-review.md` for the full audit trail.
 
@@ -81,7 +81,7 @@ See: [AGPL-3.0 & Commercial Boundary](docs/OPEN_CORE_POLICY.md)
 - Adds an in-app feedback loop with chart context, user-visible feedback status, ops triage, and manual point rewards for useful reports and suggestions.
 - Adds peak-window-oriented intraday analysis with meteorology headline, path buckets, evidence chain, invalidation rules, and confirmation rules.
 - Adds airport-side `TAF` timing overlays and airport suppression/disruption interpretation for non-Hong Kong airport cities.
-- Adds official nearby-network and runway-level enhancement layers for Japan, Korea (AMOS runway sensors for Seoul/Busan), Hong Kong, and Turkey without replacing airport settlement anchors.
+- Adds official nearby-network enhancement layers for Japan, Hong Kong, and Turkey without replacing airport settlement anchors.
 
 ## Reference Architecture
 
@@ -98,7 +98,6 @@ flowchart LR
     WX --> MGM["MGM (Turkey station network)"]
     WX --> OM["Open-Meteo"]
     WX --> JMA["JMA AMeDAS (Japan)"]
-    WX --> AMOS["AMOS runway sensors (Korea)"]
     WX --> SETTLE["NOAA Synoptic / HKO / IMGW (settlement)"]
 
     API --> WX2["WeatherNext2 (GCS Zarr, 6h worker)"]

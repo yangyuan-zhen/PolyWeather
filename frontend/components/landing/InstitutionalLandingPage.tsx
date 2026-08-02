@@ -15,23 +15,23 @@ import type { CityListItem } from "@/lib/dashboard-types";
 import { STATIC_CITY_LIST } from "@/lib/static-cities";
 
 const COVERAGE_EN = [
-  "AMOS 60s runway sensors",
-  "MADIS 300s airport observations",
   "CoWIN 60s + HKO 600s",
+  "MADIS 300s airport observations",
+  "MGM 300s + JMA AMeDAS 600s",
   "Live chart updates",
   "Short Telegram alerts",
 ];
 
 const COVERAGE_ZH = [
-  "AMOS 60s 跑道传感器",
-  "MADIS 300s 机场观测",
   "CoWIN 60s + HKO 600s",
+  "MADIS 300s 机场观测",
+  "MGM 300s + JMA AMeDAS 600s",
   "网页图表实时更新",
   "Telegram 简短提醒",
 ];
 
 const PRO_FEATURES_EN = [
-  "Settlement-source-first airport, official-station, and runway observations",
+  "Settlement-source-first airport and official-station observations",
   "DEB blend forecast with model-spread context",
   "Model-implied distribution and probability estimates",
   "Intraday windows, deviation metrics, and settlement context",
@@ -40,7 +40,7 @@ const PRO_FEATURES_EN = [
 ];
 
 const PRO_FEATURES_ZH = [
-  "结算源优先的机场、官方站与跑道实测",
+  "结算源优先的机场与官方站实测",
   "DEB 智能融合预报与模型分歧背景",
   "模型隐含分布预测与概率估算",
   "日内观测窗口、偏差度量与结算背景",
@@ -348,8 +348,8 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
               </h1>
               <p className="landing-rise landing-delay-1 mx-auto mt-6 max-w-2xl text-lg leading-8 text-slate-600 sm:text-xl">
                 {isEn
-                  ? "A settlement-source-first terminal for temperature markets: live airport/runway observations, DEB, market buckets, and alerts in one workflow."
-                  : "面向温度市场的结算源优先终端：机场/跑道实测、DEB、市场温度桶和提醒放在同一个工作流里。"}
+                  ? "A settlement-source-first terminal for temperature markets: live airport and official-station observations, DEB, market buckets, and alerts in one workflow."
+                  : "面向温度市场的结算源优先终端：机场与官方站实测、DEB、市场温度桶和提醒放在同一个工作流里。"}
               </p>
               <div className="landing-rise landing-delay-2">
                 <LandingHeroActions locale={locale} />
@@ -437,20 +437,20 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                   </h3>
                   <p className="mt-3 text-sm leading-7 text-slate-600">
                     {isEn
-                      ? "The product is built around the station, runway, and update cadence that affect settlement, then layers DEB, market buckets, and alerting on top."
-                      : "产品围绕真正影响结算的站点、跑道和源头频率构建，再叠加 DEB、市场温度桶和提醒工作流。"}
+                      ? "The product is built around the station, official network, and update cadence that affect settlement, then layers DEB, market buckets, and alerting on top."
+                      : "产品围绕真正影响结算的站点、官方站网和源头频率构建，再叠加 DEB、市场温度桶和提醒工作流。"}
                   </p>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {(isEn
                     ? [
-                        "Runway-level China and Korea observation context",
+                        "Official nearby-network context across Asia, Europe, and the US",
                         "Hong Kong CoWIN + HKO dual-source reading",
                         "Live pages update as new source readings arrive",
                         "Telegram sends concise alerts without noisy refresh loops",
                       ]
                     : [
-                        "中国和韩国跑道级实测上下文",
+                        "覆盖亚洲、欧洲与美国的官方邻近站网实测上下文",
                         "香港 CoWIN + HKO 双源读数",
                         "源头有新读数时，网页自动补上变化",
                         "Telegram 只发简短提醒，避免噪音刷屏",
@@ -477,8 +477,8 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
               </h2>
               <p className="mt-4 text-sm leading-7 text-slate-600">
                 {isEn
-                  ? "See what you will use before subscribing: a browser terminal for live temperature evidence, plus short Telegram alerts when runway or settlement signals change."
-                  : "订阅前先看清你会用到什么：网页上看实时温度证据；跑道或结算源有变化时，在 Telegram 收到简短提醒。"}
+                  ? "See what you will use before subscribing: a browser terminal for live temperature evidence, plus short Telegram alerts when settlement signals change."
+                  : "订阅前先看清你会用到什么：网页上看实时温度证据；结算源有变化时，在 Telegram 收到简短提醒。"}
               </p>
             </div>
 
@@ -507,7 +507,7 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                     src="/static/tel.png"
                     width="420"
                     height="640"
-                    alt={isEn ? "Telegram runway alert screenshot" : "Telegram 跑道提醒截图"}
+                    alt={isEn ? "Telegram alert screenshot" : "Telegram 提醒截图"}
                     className="h-full w-full object-cover object-top transition duration-500 hover:scale-[1.015]"
                     decoding="async"
                     loading="lazy"
@@ -515,7 +515,7 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                   />
                 </div>
                 <figcaption className="px-2 py-3 text-xs font-semibold text-slate-500">
-                  {isEn ? "Telegram alerts: concise runway and settlement-source updates for paid users." : "Telegram 提醒：为付费用户提供简洁的跑道与结算源更新。"}
+                  {isEn ? "Telegram alerts: concise settlement-source updates for paid users." : "Telegram 提醒：为付费用户提供简洁的结算源更新。"}
                 </figcaption>
               </figure>
             </div>

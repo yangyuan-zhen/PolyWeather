@@ -19,7 +19,6 @@ from src.data_collection.mgm_sources import MgmSourceMixin
 from src.data_collection.jma_amedas_sources import JmaAmedasSourceMixin
 from src.data_collection.nws_open_meteo_sources import NwsOpenMeteoSourceMixin
 from src.data_collection.weathernext2_sources import WeatherNext2SourceMixin
-from src.data_collection.amos_station_sources import AmosStationSourceMixin
 from src.data_collection.fmi_sources import FmiSourceMixin
 from src.data_collection.knmi_sources import KnmiSourceMixin
 from src.data_collection.hko_obs_sources import HkoObsSourceMixin
@@ -34,14 +33,13 @@ from src.data_collection.forecast_source_bundle import fetch_open_meteo_forecast
 from src.database.db_manager import DBManager
 
 
-class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, JmaAmedasSourceMixin, NwsOpenMeteoSourceMixin, WeatherNext2SourceMixin, AmosStationSourceMixin, FmiSourceMixin, KnmiSourceMixin, HkoObsSourceMixin, CowinSourceMixin, MadisSourceMixin, SingaporeMssSourceMixin, ImsSourceMixin, NcmSourceMixin, AerowebSourceMixin):
+class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, JmaAmedasSourceMixin, NwsOpenMeteoSourceMixin, WeatherNext2SourceMixin, FmiSourceMixin, KnmiSourceMixin, HkoObsSourceMixin, CowinSourceMixin, MadisSourceMixin, SingaporeMssSourceMixin, ImsSourceMixin, NcmSourceMixin, AerowebSourceMixin):
     """
     Multi-source weather data collector
 
     Supports:
     - Open-Meteo (global forecast + multi-model ensemble)
     - METAR/TAF (aviation weather observations)
-    - AMOS (Korean runway-level airport sensors — RKSI, RKPK)
     - NWS (US National Weather Service)
     - MGM (Turkish Meteorological Service)
     - JMA / HKO (country official networks)
@@ -919,7 +917,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
 
         When *keep_model_caches* is True (used by high-frequency observation
         loops such as airport runway pushes), only observation-level caches
-        (METAR, AMOS, country networks, settlement) are evicted while the
+        (METAR, country networks, settlement) are evicted while the
         longer-lived multi-model / ensemble / single-model forecast caches
         are left intact so the DEB blending does not fall back to the
         current observed temperature during an Open-Meteo rate-limit
@@ -1374,76 +1372,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         except Exception:
             logger.exception("airport_obs_log append/update failed for cowin_obs city={}", city_lower)
 
-    def _attach_korean_amos_data(
-        self, results: Dict, city_lower: str, use_fahrenheit: bool
-    ) -> None:
-        """Fetch AMOS runway-level observations for Seoul and Busan."""
-        if city_lower not in ("seoul", "busan"):
-            return
-        try:
-            logger.info("AMOS: fetching for city={}", city_lower)
-            amos_data = self.fetch_amos_official_current(
-                city_lower, use_fahrenheit=use_fahrenheit
-            )
-            if amos_data:
-                logger.info("AMOS: got data for city={} temp_c={} source={} runway_pairs={}",
-                            city_lower, amos_data.get("temp_c"), amos_data.get("temp_source"),
-                            len(amos_data.get("runway_obs", {}).get("runway_pairs", []) or []))
-                results["amos"] = amos_data
-                self._emit_temperature_patch_if_changed(
-                    city_lower,
-                    amos_data.get("temp_c"),
-                    amos_data.get("observation_time"),
-                    source="amos",
-                    extra={"amos": amos_data},
-                )
-                try:
-                    DBManager().append_airport_obs(
-                        icao=amos_data.get("icao") or "",
-                        city=city_lower,
-                        temp_c=amos_data.get("temp_c"),
-                        wind_kt=amos_data.get("wind_kt"),
-                        pressure_hpa=amos_data.get("pressure_hpa"),
-                        obs_time=amos_data.get("observation_time") or datetime.now().isoformat(),
-                    )
-                    # 也存每条跑道的数据，用 RKSI_RWY_0 / RKSI_RWY_1 做 icao
-                    runway_obs = amos_data.get("runway_obs") or {}
-                    rw_pairs = runway_obs.get("runway_pairs") or []
-                    rw_temps = runway_obs.get("temperatures") or []
-                    point_temps = runway_obs.get("point_temperatures") or []
-                    for i, (pair, (t, _d)) in enumerate(zip(rw_pairs, rw_temps)):
-                        point = point_temps[i] if i < len(point_temps) and isinstance(point_temps[i], dict) else {}
-                        runway_label = str(point.get("runway") or "").strip().upper()
-                        if not runway_label and isinstance(pair, (list, tuple)) and len(pair) >= 2:
-                            runway_label = f"{str(pair[0]).replace(' ', '').upper()}/{str(pair[1]).replace(' ', '').upper()}"
-                        point_temp = point.get("temp") if point else None
-                        if point_temp is None and point:
-                            point_temp = point.get("target_runway_max")
-                        if point_temp is None:
-                            point_temp = t
-                        if point_temp is not None and i < 4:
-                            DBManager().append_airport_obs(
-                                icao=f"{amos_data.get('icao', '')}_RWY_{i}",
-                                city=city_lower,
-                                temp_c=point_temp,
-                                obs_time=amos_data.get("observation_time") or datetime.now().isoformat(),
-                            )
-                        if point_temp is not None and runway_label:
-                            DBManager().append_runway_obs(
-                                icao=amos_data.get("icao") or "",
-                                city=city_lower,
-                                runway=runway_label,
-                                target_runway_max=point_temp,
-                                otime_utc=amos_data.get("observation_time") or datetime.now().isoformat(),
-                            )
-                except Exception:
-                    logger.exception("airport_obs_log append failed for amos city={}", city_lower)
-            else:
-                logger.warning("AMOS: no data returned for city={}", city_lower)
-        except Exception as exc:
-            logger.warning("AMOS attach failed city={}: {}", city_lower, exc)
-
-
     def _attach_madis_hfmetar_data(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
     ) -> None:
@@ -1689,7 +1617,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     include_mgm=include_mgm,
                     include_nearby=include_nearby,
                 )
-                self._attach_korean_amos_data(results, city_lower, use_fahrenheit)
                 self._attach_madis_hfmetar_data(results, city_lower, use_fahrenheit)
                 self._attach_singapore_mss_data(results, city_lower)
                 self._attach_israel_ims_data(results, city_lower)
@@ -1746,7 +1673,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     include_mgm=include_mgm,
                     include_nearby=include_nearby,
                 )
-                self._attach_korean_amos_data(results, city_lower, use_fahrenheit)
                 self._attach_madis_hfmetar_data(results, city_lower, use_fahrenheit)
                 self._attach_singapore_mss_data(results, city_lower)
                 self._attach_israel_ims_data(results, city_lower)

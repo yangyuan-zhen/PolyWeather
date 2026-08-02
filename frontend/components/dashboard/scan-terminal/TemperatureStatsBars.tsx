@@ -10,8 +10,6 @@ const OBSERVATION_LABEL_EN: Record<string, string> = {
   "航站楼温度": "Terminal Temperature",
   "官方机场观测 (15分钟)": "Official Airport Obs (15m)",
   "气象站实测": "Weather Station Live",
-  "跑道实测 (1分钟)": "Runway Live (1m)",
-  "跑道实测 (3分钟)": "Runway Live (3m)",
   "机场报文": "Airport METAR",
   "METAR 结算 (30分钟)": "METAR Settlement (30m)",
 };
@@ -24,7 +22,6 @@ const HIGH_LABEL_EN: Record<string, string> = {
   "航站楼": "Terminal",
   "官方机场观测": "Official Airport Obs",
   "气象站": "Weather Station",
-  "跑道实测": "Runway",
   "机场报文": "Airport METAR",
   "METAR 官方": "Official METAR",
 };

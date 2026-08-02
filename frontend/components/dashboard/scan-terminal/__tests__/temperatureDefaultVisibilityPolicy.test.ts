@@ -12,7 +12,6 @@ import {
   __isTemperatureSeriesVisibleByDefaultForTest,
   __mergePatchIntoHourlyForTest,
   __selectCompactSecondaryTempForTest,
-  __selectDisplayRunwayTempForTest,
 } from "@/components/dashboard/scan-terminal/LiveTemperatureThresholdChart";
 import { __buildTemperatureTooltipRowsForTest } from "@/components/dashboard/scan-terminal/TemperatureTooltipContent";
 
@@ -22,10 +21,6 @@ function assert(condition: unknown, message: string): asserts condition {
 
 function seriesByKey(series: Array<{ key: string }>, key: string) {
   return series.find((item) => item.key === key);
-}
-
-function runwayKey(rwy: string) {
-  return `runway_${rwy.split("/").map((part) => part.trim().toUpperCase()).join("_")}`;
 }
 
 export function runTests() {
@@ -114,18 +109,18 @@ export function runTests() {
   );
   assert(
     __getPeakGlowStateForTest({ temp_symbol: "°C", current_max_so_far: 25.0 } as any, [
-      { ts: Date.UTC(2026, 4, 27, 0, 0), hourly_forecast: 22.0, runway: 25.0 },
-      { ts: Date.UTC(2026, 4, 27, 4, 0), hourly_forecast: 21.6, runway: 24.4 },
-      { ts: Date.UTC(2026, 4, 27, 8, 12), hourly_forecast: 22.1, runway: 25.0 },
-      { ts: Date.UTC(2026, 4, 27, 12, 0), hourly_forecast: 26.8, runway: null },
-      { ts: Date.UTC(2026, 4, 27, 15, 0), hourly_forecast: 28.0, runway: null },
-      { ts: Date.UTC(2026, 4, 27, 18, 0), hourly_forecast: 25.0, runway: null },
+      { ts: Date.UTC(2026, 4, 27, 0, 0), hourly_forecast: 22.0, madis: 25.0 },
+      { ts: Date.UTC(2026, 4, 27, 4, 0), hourly_forecast: 21.6, madis: 24.4 },
+      { ts: Date.UTC(2026, 4, 27, 8, 12), hourly_forecast: 22.1, madis: 25.0 },
+      { ts: Date.UTC(2026, 4, 27, 12, 0), hourly_forecast: 26.8, madis: null },
+      { ts: Date.UTC(2026, 4, 27, 15, 0), hourly_forecast: 28.0, madis: null },
+      { ts: Date.UTC(2026, 4, 27, 18, 0), hourly_forecast: 25.0, madis: null },
     ] as any, [
       {
-        key: "runway_20R_02L",
-        label: "20R/02L",
-        source: "Runway",
-        color: "#009688",
+        key: "madis",
+        label: "METAR",
+        source: "METAR",
+        color: "#0284c7",
         values: [25.0, 24.4, 25.0, null, null, null],
       },
       {
@@ -162,16 +157,6 @@ export function runTests() {
     tz_offset_seconds: 8 * 60 * 60,
     airport: "ZGGG",
     deb_prediction: 31,
-    runway_plate_history: {
-      "02L/20R": [
-        { time: "00:05", temp: 29.1 },
-        { time: "00:35", temp: 29.3 },
-      ],
-      "01L/19R": [
-        { time: "00:05", temp: 28.7 },
-        { time: "00:35", temp: 28.9 },
-      ],
-    },
     settlement_today_obs: [
       { time: "00:05", temp: 29.0 },
       { time: "00:35", temp: 29.2 },
@@ -194,35 +179,11 @@ export function runTests() {
 
   const { series } = __buildTemperatureChartDataForTest(guangzhou, hourly, "1D");
   const defaultVisibleSeries = __getVisibleTemperatureSeriesForTest("guangzhou", series, {});
-  const activeDefaultSeries = __getActiveTemperatureSeriesForTest("guangzhou", series, {}, true);
+  const activeDefaultSeries = __getActiveTemperatureSeriesForTest("guangzhou", series, {});
 
-  const settlementRunway = seriesByKey(series, "runway_02L_20R") as any;
-  assert(settlementRunway, "settlement runway should use a stable runway-pair key");
-  assert(settlementRunway.label.includes("结算跑道"), "settlement runway should be labeled as settlement runway");
-  assert(settlementRunway.color === "#009688", "settlement runway should use the highlight cyan color");
-  assert(settlementRunway.featured === true, "settlement runway should be featured");
-  assert(!settlementRunway.dashed, "settlement runway should be solid");
-
-  const auxiliaryRunway = seriesByKey(series, "runway_01L_19R") as any;
-  assert(auxiliaryRunway, "auxiliary runway should be displayed by default in the chart data");
-  assert(auxiliaryRunway.dashed === true, "auxiliary runway should be dashed");
-  assert(auxiliaryRunway.featured !== true, "auxiliary runway should not be featured");
-
-  assert(seriesByKey(series, "settlement"), "settlement/HKO observation series should still be present when runway data exists");
+  assert(seriesByKey(series, "settlement"), "settlement/HKO observation series should be present");
   assert(seriesByKey(series, "metar"), "METAR observation series should be present by its own key");
 
-  assert(
-    __isTemperatureSeriesVisibleByDefaultForTest("guangzhou", "runway_02L_20R"),
-    "runway series should be visible by default",
-  );
-  assert(
-    activeDefaultSeries.some((item) => item.key === "runway_02L_20R"),
-    "settlement runway should remain in the active chart series by default",
-  );
-  assert(
-    activeDefaultSeries.some((item) => item.key === "runway_01L_19R"),
-    "auxiliary runway should remain in the active chart series by default",
-  );
   assert(
     __isTemperatureSeriesVisibleByDefaultForTest("guangzhou", "settlement"),
     "settlement/HKO observations should be visible by default",
@@ -305,7 +266,6 @@ export function runTests() {
       stationCity,
       stationChart.series as any,
       {},
-      true,
     );
     assert(
       stationDefaultSeries.some((item: any) => item.key === "madis" && item.label === sourceLabel),
@@ -347,7 +307,6 @@ export function runTests() {
     "ankara",
     ankaraMgmWithMetarBackup.series as any,
     {},
-    true,
   );
   assert(
     ankaraDefaultSeries.some((item: any) => item.key === "madis" && item.label === "MGM"),
@@ -421,13 +380,6 @@ export function runTests() {
       local_time: "21:10",
       tz_offset_seconds: 8 * 60 * 60,
       deb_prediction: 35,
-      runway_plate_history: {
-        "19/01": [
-          { time: "2026-05-26T10:00:00+08:00", temp: 29.8 },
-          { time: "2026-05-26T15:00:00+08:00", temp: 34.9 },
-          { time: "2026-05-26T21:00:00+08:00", temp: 28.6 },
-        ],
-      },
     } as any,
     {
       localTime: "21:10",
@@ -471,107 +423,6 @@ export function runTests() {
     __isTemperatureSeriesVisibleByDefaultForTest("paris", "model_curve_ECMWF"),
     "Paris ECMWF should also be visible by default since all model curves are now default-visible",
   );
-  const settlementRunwayCases = [
-    ["chongqing", "20R/02L"],
-    ["wuhan", "04/22"],
-    ["qingdao", "16/34"],
-    ["seoul", "15R/33L"],
-  ] as const;
-  settlementRunwayCases.forEach(([city, settlementRwy]) => {
-    const chart = __buildTemperatureChartDataForTest(
-      {
-        city,
-        local_date: "2026-05-25",
-        local_time: "10:00",
-        tz_offset_seconds: 8 * 60 * 60,
-        runway_plate_history: {
-          [settlementRwy]: [
-            { time: "00:05", temp: 25.1 },
-            { time: "00:35", temp: 25.3 },
-          ],
-          "99/00": [
-            { time: "00:05", temp: 24.1 },
-            { time: "00:35", temp: 24.3 },
-          ],
-        },
-      } as any,
-      { localTime: "10:00", times: ["00:00", "00:30"], temps: [25, 26] } as any,
-      "1D",
-    );
-    const highlighted = seriesByKey(chart.series, runwayKey(settlementRwy)) as any;
-    assert(highlighted, `${city} settlement runway should be present`);
-    assert(highlighted.label.includes("结算跑道"), `${city} settlement runway should be labeled`);
-    assert(highlighted.color === "#009688", `${city} settlement runway should use highlight cyan`);
-    assert(highlighted.featured === true, `${city} settlement runway should be featured`);
-    assert(!highlighted.dashed, `${city} settlement runway should be solid`);
-    const auxiliary = seriesByKey(chart.series, "runway_99_00") as any;
-    assert(auxiliary?.dashed === true, `${city} auxiliary runway should be dashed`);
-
-    const englishChart = __buildTemperatureChartDataForTest(
-      {
-        city,
-        local_date: "2026-05-25",
-        local_time: "10:00",
-        tz_offset_seconds: 8 * 60 * 60,
-        runway_plate_history: {
-          [settlementRwy]: [
-            { time: "00:05", temp: 25.1 },
-            { time: "00:35", temp: 25.3 },
-          ],
-        },
-      } as any,
-      { localTime: "10:00", times: ["00:00", "00:30"], temps: [25, 26] } as any,
-      "1D",
-      true,
-    );
-    const englishSettlement = seriesByKey(englishChart.series, runwayKey(settlementRwy)) as any;
-    assert(
-      englishSettlement?.label.includes("Settlement Runway"),
-      `${city} English settlement runway label should be translated`,
-    );
-    assert(
-      !englishSettlement?.label.includes("结算跑道"),
-      `${city} English settlement runway label should not leak Chinese`,
-    );
-    const englishRunwayPoint = englishChart.data.find(
-      (point: any) => point[runwayKey(settlementRwy)] !== null && point[runwayKey(settlementRwy)] !== undefined,
-    );
-    const tooltipRows = __buildTemperatureTooltipRowsForTest(
-      englishRunwayPoint as any,
-      englishChart.data,
-      englishChart.series,
-    );
-    const tooltipRunway = tooltipRows.find((item) => item.key === runwayKey(settlementRwy));
-    assert(
-      tooltipRunway?.label.includes("Settlement Runway"),
-      `${city} English tooltip runway label should be translated`,
-    );
-    assert(
-      !tooltipRunway?.label.includes("结算跑道"),
-      `${city} English tooltip runway label should not leak Chinese`,
-    );
-  });
-
-  const shenzhen = __buildTemperatureChartDataForTest(
-    {
-      city: "shenzhen",
-      local_date: "2026-05-25",
-      local_time: "10:00",
-      tz_offset_seconds: 8 * 60 * 60,
-      metar_context: {
-        station: "Lau Fau Shan",
-        station_label: "HKO Lau Fau Shan",
-        today_obs: [
-          { time: "00:05", temp: 28.4 },
-          { time: "00:35", temp: 28.5 },
-        ],
-      },
-    } as any,
-    null,
-    "1D",
-  );
-  assert(!shenzhen.series.some((item) => item.key.startsWith("runway_")), "Shenzhen should not be treated as a runway city");
-
   const shenzhenAirportPrimaryHko = __buildTemperatureChartDataForTest(
     {
       city: "shenzhen",
@@ -645,356 +496,6 @@ export function runTests() {
   );
   assert(hongKongHkoSeries?.label === "HKO", "Hong Kong HKO settlement observations should remain visible as the HKO curve");
 
-  const chengduRow = {
-    city: "chengdu",
-    local_date: "2026-05-26",
-    local_time: "05:25",
-    tz_offset_seconds: 8 * 60 * 60,
-    airport: "ZUUU",
-  } as any;
-  const chengduSnapshotHourly = {
-    localTime: "05:25",
-    times: ["00:00", "06:00", "12:00", "18:00"],
-    temps: [24, 28, 31, 27],
-    amos: {
-      observation_time: "2026-05-25T21:25:00+00:00",
-      observation_time_local: "2026-05-26 05:25:00",
-      runway_obs: {
-        runway_pairs: [
-          ["02L", "20R"],
-          ["02R", "20L"],
-        ],
-        temperatures: [
-          [24.4, null],
-          [24.2, null],
-        ],
-        point_temperatures: [
-          { runway: "02L/20R", tdz_temp: 24.4, mid_temp: null, end_temp: 24.8 },
-          { runway: "02R/20L", tdz_temp: 24.2, mid_temp: null, end_temp: 24.6 },
-        ],
-      },
-    },
-  } as any;
-  const chengduFromAmosSnapshot = __buildTemperatureChartDataForTest(
-    chengduRow,
-    chengduSnapshotHourly,
-    "1D",
-  );
-
-  const chengduSettlementRunway = seriesByKey(chengduFromAmosSnapshot.series, "runway_02L_20R") as any;
-  assert(chengduSettlementRunway, "AMOS runway_obs snapshot should still create the settlement runway chart line");
-  assert(chengduSettlementRunway.color === "#009688", "AMOS snapshot settlement runway should use highlight cyan");
-  assert(chengduSettlementRunway.featured === true, "AMOS snapshot settlement runway should be featured");
-  assert(!chengduSettlementRunway.dashed, "AMOS snapshot settlement runway should be solid");
-  const chengduEndpointMetrics = __getObservationDisplayMetricsForTest(
-    chengduRow,
-    chengduSnapshotHourly,
-  );
-  assert(
-    chengduEndpointMetrics.currentRunwayTemp === 24.4,
-    "Chengdu 02L settlement should use TDZ temperature from 02L/20R, not runway max/end temperature",
-  );
-
-  const chengduAuxRunway = seriesByKey(chengduFromAmosSnapshot.series, "runway_02R_20L") as any;
-  assert(chengduAuxRunway, "AMOS runway_obs snapshot should create auxiliary runway chart lines");
-  assert(chengduAuxRunway.dashed === true, "AMOS snapshot auxiliary runway should be dashed");
-
-  const shanghaiWithEmptyRunwayHistory = __buildTemperatureChartDataForTest(
-    {
-      city: "shanghai",
-      local_date: "2026-05-27",
-      local_time: "07:59",
-      tz_offset_seconds: 8 * 60 * 60,
-      temp_symbol: "°C",
-    } as any,
-    {
-      localTime: "07:59",
-      times: ["10:00", "14:00", "18:00"],
-      temps: [25, 28, 24],
-      runwayPlateHistory: {},
-      amos: {
-        observation_time_local: "2026-05-27 07:59:00",
-        runway_obs: {
-          runway_pairs: [
-            ["35R", "17L"],
-            ["34L", "16R"],
-          ],
-          temperatures: [
-            [25.8],
-            [25.4],
-          ],
-          point_temperatures: [
-            { runway: "35R/17L", tdz_temp: 25.8, mid_temp: null, end_temp: 26.2 },
-            { runway: "34L/16R", tdz_temp: 25.4, mid_temp: null, end_temp: 25.7 },
-          ],
-        },
-      },
-    } as any,
-    "1D",
-  );
-  assert(
-    seriesByKey(shanghaiWithEmptyRunwayHistory.series, runwayKey("35R/17L")),
-    "empty runwayPlateHistory should fall back to AMOS runway_obs so runway cities still draw runway curves",
-  );
-
-  const busanWithRunwayHistory = __buildTemperatureChartDataForTest(
-    {
-      city: "busan",
-      local_date: "2026-05-27",
-      local_time: "08:20",
-      tz_offset_seconds: 9 * 60 * 60,
-      temp_symbol: "°C",
-    } as any,
-    {
-      localTime: "08:20",
-      times: ["00:00", "12:00", "18:00", "23:00"],
-      temps: [19.6, 21.1, 20.0, 19.0],
-      airportPrimary: {
-        source_code: "amos",
-        source_label: "AMOS",
-        temp: 21.0,
-        obs_time: "2026-05-26T23:20:00Z",
-      },
-      airportPrimaryTodayObs: [
-        ["2026-05-26T23:19:00Z", 21.0],
-        ["2026-05-26T23:20:00Z", 21.0],
-      ],
-      runwayPlateHistory: {
-        "SR/SL": [
-          { time: "2026-05-26T23:19:00Z", temp: 20.9 },
-          { time: "2026-05-26T23:20:00Z", temp: 21.1 },
-        ],
-      },
-    } as any,
-    "1D",
-  );
-  assert(
-    !seriesByKey(busanWithRunwayHistory.series, "madis"),
-    "Busan should not render the AMOS aggregate airport-primary series when runway sensor data is available",
-  );
-  const busanRunway = seriesByKey(busanWithRunwayHistory.series, runwayKey("SR/SL")) as any;
-  assert(busanRunway, "Busan SR/SL runway history should render as the runway curve");
-  assert(busanRunway.featured === true, "Busan SR/SL should be treated as the settlement runway");
-  assert(busanRunway.label.includes("结算跑道"), "Busan SR/SL should be labeled as the settlement runway");
-
-  const originalGetTimezoneOffset = Date.prototype.getTimezoneOffset;
-  let busanUtcPointLabel: string | null = null;
-  try {
-    Date.prototype.getTimezoneOffset = function () {
-      return -8 * 60;
-    };
-    const busanUtcTimestampChart = __buildTemperatureChartDataForTest(
-      {
-        city: "busan",
-        local_date: "2026-05-27",
-        local_time: "09:58",
-        tz_offset_seconds: 9 * 60 * 60,
-        temp_symbol: "°C",
-      } as any,
-      {
-        localTime: "09:58",
-        times: ["00:00", "12:00", "18:00", "23:00"],
-        temps: [19.6, 21.1, 20.0, 19.0],
-        runwayPlateHistory: {
-          "SR/SL": [
-            { time: "2026-05-27T00:57:00Z", temp: 21.4 },
-            { time: "2026-05-27T00:58:00Z", temp: 21.5 },
-          ],
-        },
-      } as any,
-      "1D",
-    );
-    busanUtcPointLabel =
-      (busanUtcTimestampChart.data.find((point: any) => point[runwayKey("SR/SL")] === 21.5) as any)?.label || null;
-  } finally {
-    Date.prototype.getTimezoneOffset = originalGetTimezoneOffset;
-  }
-  assert(
-    busanUtcPointLabel === "09:58:00",
-    "UTC runway observation timestamps should render at the city-local time regardless of the browser timezone",
-  );
-
-  const busanMergedHourly = __mergePatchIntoHourlyForTest(
-    {
-      localTime: "08:19",
-      times: ["00:00", "12:00", "18:00", "23:00"],
-      temps: [19.6, 21.1, 20.0, 19.0],
-      runwayPlateHistory: {
-        "SR/SL": [{ time: "2026-05-26T23:19:00Z", temp: 20.9 }],
-      },
-    } as any,
-    {
-      type: "city_observation_patch.v1",
-      city: "busan",
-      revision: 21,
-      changes: {
-        temp: 21.1,
-        obs_time: "2026-05-26T23:20:00Z",
-        source: "amos",
-        amos: {
-          source: "amos",
-          icao: "RKPK",
-          runway_obs: {
-            runway_pairs: [["S R", "S L"]],
-            temperatures: [[21.1, 12.4]],
-          },
-        },
-      },
-    } as any,
-  );
-  const busanMergedChart = __buildTemperatureChartDataForTest(
-    {
-      city: "busan",
-      local_date: "2026-05-27",
-      local_time: "08:20",
-      tz_offset_seconds: 9 * 60 * 60,
-      temp_symbol: "°C",
-    } as any,
-    busanMergedHourly as any,
-    "1D",
-  );
-  const busanMergedRunway = seriesByKey(busanMergedChart.series, runwayKey("SR/SL")) as any;
-  assert(busanMergedRunway, "AMOS runway_obs patch should append Busan SR/SL into runway history");
-  assert(
-    busanMergedRunway.values.some((value: number | null) => value === 21.1),
-    "AMOS runway_obs patch should use the runway temperature, not ignore the SR/SL point",
-  );
-
-  const busanSnapshotWithLocalAndUtc = __buildTemperatureChartDataForTest(
-    {
-      city: "busan",
-      local_date: "2026-05-27",
-      local_time: "09:58",
-      tz_offset_seconds: 9 * 60 * 60,
-      temp_symbol: "°C",
-    } as any,
-    {
-      localTime: "09:58",
-      times: ["00:00", "12:00", "18:00", "23:00"],
-      temps: [19.6, 21.1, 20.0, 19.0],
-      amos: {
-        source: "amos",
-        observation_time: "2026-05-27T00:58:00Z",
-        observation_time_local: "2026-05-27 09:58:00",
-        runway_obs: {
-          runway_pairs: [["S R", "S L"]],
-          temperatures: [[21.5, 12.4]],
-        },
-      },
-    } as any,
-    "1D",
-  );
-  const busanSnapshotLabels = busanSnapshotWithLocalAndUtc.data
-    .filter((point: any) => point[runwayKey("SR/SL")] === 21.5)
-    .map((point: any) => point.label);
-  assert(
-    busanSnapshotLabels.includes("09:58:00"),
-    "AMOS snapshot fallback should prefer UTC observation_time over naive observation_time_local for chart positioning",
-  );
-
-  const busanCurrentOnly = __buildTemperatureChartDataForTest(
-    {
-      city: "busan",
-      local_date: "2026-05-27",
-      local_time: "08:20",
-      tz_offset_seconds: 9 * 60 * 60,
-      temp_symbol: "°C",
-    } as any,
-    {
-      localTime: "08:20",
-      times: ["00:00", "12:00", "18:00", "23:00"],
-      temps: [19.6, 21.1, 20.0, 19.0],
-      amos: {
-        source: "amos",
-        observation_time: "2026-05-26T23:20:00Z",
-        runway_obs: {
-          runway_pairs: [["S R", "S L"]],
-          temperatures: [[21.1, 12.4]],
-        },
-      },
-    } as any,
-    "1D",
-  );
-  const busanCurrentRunway = seriesByKey(busanCurrentOnly.series, runwayKey("SR/SL")) as any;
-  const busanCurrentValues = (busanCurrentRunway?.values || []).filter((value: number | null) => value !== null);
-  assert(
-    !busanCurrentValues.includes(12.4),
-    "AMOS temp/dew tuples should not be misread as two runway temperature samples",
-  );
-
-  const seoulRunwayMetrics = __getObservationDisplayMetricsForTest(
-    {
-      city: "seoul",
-      local_date: "2026-05-27",
-      local_time: "11:45",
-      tz_offset_seconds: 9 * 60 * 60,
-      current_temp: 23.0,
-      temp_symbol: "°C",
-    } as any,
-    {
-      localTime: "11:45",
-      times: ["00:00", "12:00", "18:00", "23:00"],
-      temps: [22.6, 22.6, 22.0, 21.4],
-      runwayPlateHistory: {
-        "15R/33L": [
-          { time: "2026-05-27T02:40:00Z", temp: 23.9 },
-          { time: "2026-05-27T02:45:00Z", temp: 24.3 },
-        ],
-        "16L/34R": [
-          { time: "2026-05-27T02:40:00Z", temp: 24.1 },
-          { time: "2026-05-27T02:45:00Z", temp: 24.7 },
-        ],
-      },
-      amos: {
-        source: "amos",
-        temp_c: 23.0,
-      },
-    } as any,
-    { maxTemp: 23.0 },
-  );
-  assert(
-    seoulRunwayMetrics.currentRunwayTemp === 24.3,
-    "runway header should use the latest settlement runway point instead of AMOS/METAR aggregate temp",
-  );
-  assert(
-    seoulRunwayMetrics.observedHighRunway === 24.3,
-    "runway high should follow settlement runway history before AMOS/METAR aggregate temp",
-  );
-  assert(
-    __selectDisplayRunwayTempForTest(23.0, 24.3, true) === 24.3,
-    "live aggregate temp should not override runway-history current temp when runway data is rendered",
-  );
-
-  const wuhanRunwayMetrics = __getObservationDisplayMetricsForTest(
-    {
-      city: "wuhan",
-      local_date: "2026-05-27",
-      local_time: "13:54",
-      tz_offset_seconds: 8 * 60 * 60,
-      current_temp: 25.0,
-      temp_symbol: "°C",
-    } as any,
-    {
-      localTime: "13:54",
-      times: ["00:00", "12:00", "18:00", "23:00"],
-      temps: [22.0, 30.0, 29.0, 25.0],
-      runwayPlateHistory: {
-        "04/22": [
-          { time: "13:52", temp: 28.6 },
-          { time: "13:54", temp: 28.8 },
-        ],
-      },
-    } as any,
-  );
-  assert(
-    wuhanRunwayMetrics.currentRunwayTemp === 28.8,
-    "runway header metrics should use the latest settlement runway history point",
-  );
-  assert(
-    __selectDisplayRunwayTempForTest(25.0, wuhanRunwayMetrics.currentRunwayTemp, false) === 28.8,
-    "runway header should prefer runway-history current temp even when the latest detail payload lacks runway_obs snapshot",
-  );
-
   const hongKongMetrics = __getObservationDisplayMetricsForTest(
     {
       city: "hong kong",
@@ -1024,7 +525,6 @@ export function runTests() {
         { time: "16:48", temp: 28.7 },
       ],
     } as any,
-    null,
   );
   assert(
     hongKongMetrics.currentRunwayTemp === 28.7,
@@ -1084,13 +584,7 @@ export function runTests() {
         max_so_far: 33.0,
         obs_time: "2026-06-16T04:00:00+08:00",
       },
-      runwayPlateHistory: {
-        "04/22": [
-          { time: "04:20", temp: 22.8 },
-        ],
-      },
     } as any,
-    null,
   );
   assert(
     wuhanEarlyMorningMetrics.currentMetarTemp === 23.0,
@@ -1108,64 +602,6 @@ export function runTests() {
       observedHighMetar: wuhanEarlyMorningMetrics.observedHighMetar,
     }) === 23.0,
     "Wuhan compact METAR settlement stat should not show a stale daily high at 04:23",
-  );
-
-  const wuhanRunwayChart = __buildTemperatureChartDataForTest(
-    {
-      city: "wuhan",
-      local_date: "2026-05-27",
-      local_time: "13:54",
-      tz_offset_seconds: 8 * 60 * 60,
-      temp_symbol: "°C",
-    } as any,
-    {
-      localTime: "13:54",
-      times: ["00:00", "12:00", "18:00", "23:00"],
-      temps: [22.0, 30.0, 29.0, 25.0],
-      runwayPlateHistory: {
-        "04/22": [
-          { time: "13:52", temp: 24.0 },
-          { time: "13:54", temp: 24.2 },
-        ],
-        "05L/23R": [
-          { time: "13:52", temp: 25.0 },
-          { time: "13:54", temp: 25.5 },
-        ],
-      },
-      runwayBandHistory: [
-        { time: "2026-05-27T13:52:00+08:00", low_temp: 24.0, high_temp: 25.0, avg_temp: 24.5 },
-        { time: "2026-05-27T13:54:00+08:00", low_temp: 24.2, high_temp: 25.5, avg_temp: 24.9 },
-      ],
-    } as any,
-    "1D",
-  );
-  const wuhanCollapsedRunwaySeries = __getActiveTemperatureSeriesForTest(
-    "wuhan",
-    wuhanRunwayChart.series,
-    {},
-    false,
-  );
-  assert(
-    wuhanCollapsedRunwaySeries.some((item: any) => item.key === runwayKey("04/22")),
-    "collapsed runway view should keep the settlement runway series",
-  );
-  assert(
-    !wuhanCollapsedRunwaySeries.some((item: any) => item.key === runwayKey("05L/23R")),
-    "collapsed runway view should hide auxiliary runway detail series",
-  );
-  assert(
-    !wuhanCollapsedRunwaySeries.some((item: any) => item.key === "runway_max"),
-    "collapsed runway view should not replace the settlement runway with runway max",
-  );
-  const wuhanCollapsedWithSettlementHidden = __getActiveTemperatureSeriesForTest(
-    "wuhan",
-    wuhanRunwayChart.series,
-    { [runwayKey("04/22")]: false },
-    false,
-  );
-  assert(
-    !wuhanCollapsedWithSettlementHidden.some((item: any) => item.key === "runway_max"),
-    "hiding the settlement runway should not reveal runway max in collapsed runway view",
   );
 
   const newYorkMetrics = __getObservationDisplayMetricsForTest(
@@ -1194,7 +630,6 @@ export function runTests() {
         { time: "00:34", temp: 55.0 },
       ],
     } as any,
-    null,
   );
 
   assert(newYorkMetrics.currentRunwayTemp === 73.9, "weather-station header should use detail METAR/current temp before stale row zero");
@@ -1506,53 +941,6 @@ export function runTests() {
   assert(ankaraMgmSeries?.label === "MGM", "Ankara MGM airport-primary series should be labeled MGM even if payload source_label says METAR");
   assert(ankaraMetarSeries?.label === "METAR", "Ankara METAR backup series should keep the METAR label");
 
-  const chengduMergedHourly = __mergePatchIntoHourlyForTest(
-    {
-      localTime: "05:25",
-      times: ["00:00", "06:00", "12:00", "18:00"],
-      temps: [24, 28, 31, 27],
-      runwayPlateHistory: {
-        "02L/20R": [{ time: "05:20", temp: 24.2 }],
-      },
-    } as any,
-    {
-      type: "city_observation_patch.v1",
-      city: "chengdu",
-      revision: 12,
-      changes: {
-        temp: 24.8,
-        obs_time: "2026-05-26 05:26:00",
-        source: "metar",
-        runway_points: [
-          {
-            runway: "02L/20R",
-            temp: 25.1,
-            tdz_temp: 24.7,
-            mid_temp: 24.9,
-            end_temp: 25.1,
-            target_runway_max: 25.1,
-          },
-        ],
-      },
-    } as any,
-  );
-  const chengduMergedChart = __buildTemperatureChartDataForTest(
-    {
-      city: "chengdu",
-      local_date: "2026-05-26",
-      local_time: "05:26",
-      tz_offset_seconds: 8 * 60 * 60,
-    } as any,
-    chengduMergedHourly as any,
-    "1D",
-  );
-  const chengduMergedRunway = seriesByKey(chengduMergedChart.series, "runway_02L_20R") as any;
-  assert(chengduMergedRunway, "v1 runway_points patch should update the runway series");
-  assert(
-    chengduMergedRunway.values.some((value: number | null) => value === 25.1),
-    "v1 runway_points patch should append the latest runway max point to the chart",
-  );
-
   const shanghaiDebFromDetail = __buildTemperatureChartDataForTest(
     {
       city: "shanghai",
@@ -1587,13 +975,6 @@ export function runTests() {
       local_time: "23:30",
       tz_offset_seconds: 8 * 60 * 60,
       deb_prediction: 22,
-      runway_plate_history: {
-        "16/34": [
-          { time: "2026-05-25T23:30:00+08:00", temp: 23.8 },
-          { time: "2026-05-26T00:05:00+08:00", temp: 23.5 },
-          { time: "2026-05-26T12:00:00+08:00", temp: 21.6 },
-        ],
-      },
     } as any,
     {
       localTime: "23:30",
@@ -1621,13 +1002,6 @@ export function runTests() {
       local_time: "11:11",
       tz_offset_seconds: 8 * 60 * 60,
       deb_prediction: 22,
-      runway_plate_history: {
-        "16/34": [
-          { time: "2026-05-26T00:05:00+08:00", temp: 23.5 },
-          { time: "2026-05-26T09:28:00+08:00", temp: 19.8 },
-          { time: "2026-05-26T11:11:00+08:00", temp: 19.8 },
-        ],
-      },
     } as any,
     {
       localDate: "2026-05-26",
@@ -1676,35 +1050,4 @@ export function runTests() {
     Math.max(...chongqingNextDayDebValues) === 30.1,
     "DEB curve should use the next local day's detail debPrediction after local midnight",
   );
-
-  // ── Runway range band and runway_max test ──
-  const shanghaiWithBand = __buildTemperatureChartDataForTest(
-    {
-      city: "shanghai",
-      local_date: "2026-05-26",
-      local_time: "14:00",
-      tz_offset_seconds: 8 * 60 * 60,
-    } as any,
-    {
-      localTime: "14:00",
-      times: ["00:00", "12:00", "18:00"],
-      temps: [24.2, 31.5, 26.5],
-      runwayBandHistory: [
-        { time: "2026-05-26T00:00:00+08:00", high_temp: 26.0, low_temp: 24.0, avg_temp: 25.0 },
-        { time: "2026-05-26T12:00:00+08:00", high_temp: 32.0, low_temp: 29.0, avg_temp: 30.5 },
-      ]
-    } as any,
-    "1D",
-  );
-
-  const runwayMaxSeries = seriesByKey(shanghaiWithBand.series, "runway_max") as any;
-  assert(runwayMaxSeries, "runway_max series should be present when runwayBandHistory is provided");
-  assert(runwayMaxSeries.color === "#009688", "runway_max series should use the primary teal color");
-  assert(runwayMaxSeries.featured === true, "runway_max series should be featured");
-
-  // Verify that runway_band exists on some data rows
-  const bandPoints = shanghaiWithBand.data.filter((d) => d.runway_band !== null);
-  assert(bandPoints.length >= 2, "runway_band tuples should be binned into data slots");
-  const firstBand = bandPoints[0].runway_band;
-  assert(Array.isArray(firstBand) && firstBand[0] === 24.0 && firstBand[1] === 26.0, "runway_band tuple values should match input limits");
 }

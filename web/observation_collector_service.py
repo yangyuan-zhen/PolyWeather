@@ -11,7 +11,6 @@ from typing import Any, Callable, Iterable, List, Optional, Sequence, Tuple
 
 from loguru import logger
 
-from src.data_collection.amos_station_sources import AMOS_AIRPORT_CODES
 from src.data_collection.city_registry import CITY_REGISTRY
 from src.data_collection.hko_obs_sources import HKO_STATIONS
 from src.database.db_manager import DBManager
@@ -534,11 +533,6 @@ def build_observation_source_profiles() -> List[ObservationSourceProfile]:
         if str((meta or {}).get("icao") or "").strip()
     ]
     return [
-        ObservationSourceProfile(
-            source="amos",
-            cities=_normalized_cities(AMOS_AIRPORT_CODES.keys()),
-            interval_sec=max(30, _env_int("POLYWEATHER_OBSERVATION_COLLECTOR_AMOS_SEC", 60)),
-        ),
         ObservationSourceProfile(
             source="madis_hfmetar",
             cities=_normalized_cities(us_madis_cities),

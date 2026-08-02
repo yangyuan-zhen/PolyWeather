@@ -20,7 +20,7 @@ def test_collector_patch_post_retries_transient_failures(monkeypatch):
     sent = collector._post_temperature_patch_payload(
         {"city": "busan", "changes": {"temp": 23.0}},
         city_value="busan",
-        source_value="amos",
+        source_value="metar",
     )
 
     assert sent is True
@@ -43,7 +43,7 @@ def test_collector_patch_post_retries_internal_server_errors(monkeypatch):
     sent = collector._post_temperature_patch_payload(
         {"city": "shanghai", "changes": {"temp": 22.4}},
         city_value="shanghai",
-        source_value="amos",
+        source_value="metar",
     )
 
     assert sent is True
@@ -74,13 +74,13 @@ def test_failed_collector_patch_clears_dedupe_for_next_attempt(monkeypatch):
         "busan",
         23.0,
         "2026-06-06T13:01:00Z",
-        source="amos",
+        source="metar",
     )
     collector._emit_temperature_patch_if_changed(
         "busan",
         23.0,
         "2026-06-06T13:01:00Z",
-        source="amos",
+        source="metar",
     )
 
     assert len(calls) == 2

@@ -3,7 +3,6 @@ import {
   buildObservationFreshness,
   getMonitorFreshnessLevel,
   getMonitorRefreshCadenceMs,
-  getObservationFreshness,
   getObservationSourceProfile,
   shouldRefreshMonitorCity,
 } from "@/lib/source-freshness";
@@ -27,20 +26,20 @@ function detail(extra: Partial<CityDetail>): CityDetail {
 export function runTests() {
   const now = new Date("2026-05-14T12:00:00Z");
 
-  assert.equal(getObservationSourceProfile("amos").nativeUpdateIntervalSec, 60);
+  assert.equal(getObservationSourceProfile("hko").nativeUpdateIntervalSec, 60);
   assert.equal(getObservationSourceProfile("metar").nativeUpdateIntervalSec, 900);
 
-  const amosFresh = buildObservationFreshness({
+  const hkoFresh = buildObservationFreshness({
     now,
     observedAt: "2026-05-14T11:59:10Z",
-    sourceCode: "amos",
-    sourceLabel: "AMOS",
+    sourceCode: "hko",
+    sourceLabel: "HKO",
   });
-  assert.equal(amosFresh.freshness_status, "fresh");
-  assert.equal(getMonitorFreshnessLevel(amosFresh, null), "fresh");
+  assert.equal(hkoFresh.freshness_status, "fresh");
+  assert.equal(getMonitorFreshnessLevel(hkoFresh, null), "fresh");
   assert.equal(
     shouldRefreshMonitorCity({
-      detail: detail({ airport_current: { freshness: amosFresh, obs_time: "11:59", temp: 20 } }),
+      detail: detail({ airport_current: { freshness: hkoFresh, obs_time: "11:59", temp: 20 } }),
       now,
       trigger: "interval",
     }),
@@ -88,26 +87,7 @@ export function runTests() {
     "legacy METAR age under native cadence should not be force-refreshed every minute",
   );
 
-  assert.equal(getMonitorRefreshCadenceMs(["amos", "metar"]), 60_000);
+  assert.equal(getMonitorRefreshCadenceMs(["hko", "metar"]), 60_000);
   assert.equal(getMonitorRefreshCadenceMs(["metar"]), 300_000);
-
-  const amosDetail = detail({
-    airport_current: {
-      obs_age_min: 30,
-      obs_time: "11:30",
-      source_label: "METAR",
-      temp: 26,
-    },
-    amos: {
-      observation_time: "2026-05-14T11:59:00Z",
-      runway_obs: {
-        runway_pairs: [["18L", "36R"]],
-        temperatures: [[25.2, 18.1]],
-      },
-      source: "amos",
-      temp_source: "metar",
-    },
-  });
-  assert.equal(getObservationFreshness(amosDetail)?.source_code, "amos");
 }
 

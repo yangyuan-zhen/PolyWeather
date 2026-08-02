@@ -21,7 +21,6 @@
 | 服务 | 城市 | 状态 |
 | --- | --- | --- |
 | JMA AMeDAS | Tokyo | ✅ |
-| AMOS (韩国) | Seoul, Busan 跑道传感器 | ✅ |
 | MGM (土耳其) | Ankara, Istanbul | ✅ |
 | FMI (芬兰) | Helsinki | ✅ |
 | KNMI (荷兰) | Amsterdam | ✅（需 key） |

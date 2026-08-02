@@ -41,7 +41,7 @@ def test_db_manager_stores_canonical_temperature_latest(tmp_path):
         "freshness_sec": 63,
         "freshness_status": "fresh",
         "confidence": 0.92,
-        "explanation": "METAR runway-point air temperature updated 63s ago.",
+        "explanation": "METAR airport temperature updated 63s ago.",
     }
 
     db.set_canonical_temperature("Shanghai", canonical)
@@ -75,7 +75,7 @@ def test_refresh_city_panel_cache_reads_canonical_without_sync_fetch(monkeypatch
                     "value": 31.2,
                     "temp_symbol": "°C",
                     "source": "metar",
-                    "source_label": "METAR runway-point air temperature",
+                    "source_label": "METAR airport temperature",
                     "source_role": "settlement_proxy",
                     "observed_at": "2026-06-14T01:01:00+00:00",
                     "observed_at_local": "09:01",
@@ -83,7 +83,7 @@ def test_refresh_city_panel_cache_reads_canonical_without_sync_fetch(monkeypatch
                     "freshness_status": "fresh",
                     "fetched_at": "2026-06-14T01:02:03+00:00",
                     "confidence": 0.92,
-                    "explanation": "METAR runway-point air temperature updated 63s ago.",
+                    "explanation": "METAR airport temperature updated 63s ago.",
                 }
             }
 
@@ -187,7 +187,7 @@ def test_city_panel_cold_cache_returns_canonical_latest_without_sync_refresh(mon
                     "value": 31.2,
                     "temp_symbol": "°C",
                     "source": "metar",
-                    "source_label": "METAR runway-point air temperature",
+                    "source_label": "METAR airport temperature",
                     "source_role": "settlement_proxy",
                     "observed_at": "2026-06-14T01:01:00+00:00",
                     "observed_at_local": "09:01",
@@ -250,7 +250,7 @@ def test_city_full_cold_cache_returns_canonical_latest_without_sync_refresh(monk
                     "value": 31.2,
                     "temp_symbol": "°C",
                     "source": "metar",
-                    "source_label": "METAR runway-point air temperature",
+                    "source_label": "METAR airport temperature",
                     "source_role": "settlement_proxy",
                     "observed_at": "2026-06-14T01:01:00+00:00",
                     "observed_at_local": "09:01",
@@ -305,7 +305,7 @@ def test_city_nearby_and_market_cold_cache_return_canonical_latest_without_sync_
                     "value": 31.2,
                     "temp_symbol": "°C",
                     "source": "metar",
-                    "source_label": "METAR runway-point air temperature",
+                    "source_label": "METAR airport temperature",
                     "source_role": "settlement_proxy",
                     "observed_at": "2026-06-14T01:01:00+00:00",
                     "observed_at_local": "09:01",
@@ -374,7 +374,7 @@ def test_force_refresh_panel_returns_canonical_latest_without_waiting_for_sync_r
                     "value": 31.2,
                     "temp_symbol": "°C",
                     "source": "metar",
-                    "source_label": "METAR runway-point air temperature",
+                    "source_label": "METAR airport temperature",
                     "source_role": "settlement_proxy",
                     "observed_at": "2026-06-14T01:01:00+00:00",
                     "observed_at_local": "09:01",
@@ -429,11 +429,6 @@ def test_force_refresh_panel_overlays_latest_raw_over_stale_cache(monkeypatch):
                         "source_code": "metar",
                         "obs_time": "2026-06-14T10:30:00+00:00",
                     },
-                    "amos": {
-                        "source": "metar",
-                        "temp_c": 22.2,
-                        "observation_time": "2026-06-14T10:44:00+00:00",
-                    },
                     "deb": {"prediction": 24.5},
                 },
             }
@@ -468,19 +463,6 @@ def test_force_refresh_panel_overlays_latest_raw_over_stale_cache(monkeypatch):
                     "temp_c": 25.4,
                     "observation_time": "2026-06-14T15:43:00+00:00",
                     "observation_time_local": "2026-06-14 23:43:00",
-                    "runway_obs": {
-                        "runway_pairs": [("17L", "35R")],
-                        "temperatures": [(25.4, None)],
-                        "point_temperatures": [
-                            {
-                                "runway": "17L/35R",
-                                "tdz_temp": 25.0,
-                                "mid_temp": 25.2,
-                                "end_temp": 25.4,
-                                "target_runway_max": 25.4,
-                            }
-                        ],
-                    },
                 },
             }
 
@@ -500,7 +482,6 @@ def test_force_refresh_panel_overlays_latest_raw_over_stale_cache(monkeypatch):
         )
     )
 
-    assert payload["amos"]["observation_time"] == "2026-06-14T10:44:00+00:00"
     assert payload["current"]["source_code"] == "metar"
     assert payload["current"]["temp"] == 21.8
     assert "canonical_temperature" not in payload
@@ -534,7 +515,7 @@ def test_city_panel_canonical_fallback_enqueues_collector_refresh_when_queue_exi
                     "value": 31.2,
                     "temp_symbol": "°C",
                     "source": "metar",
-                    "source_label": "METAR runway-point air temperature",
+                    "source_label": "METAR airport temperature",
                     "source_role": "settlement_proxy",
                     "observed_at": "2026-06-14T01:01:00+00:00",
                     "observed_at_local": "09:01",

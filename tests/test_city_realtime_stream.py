@@ -14,7 +14,7 @@ def test_realtime_stream_reads_canonical_latest_without_analysis(monkeypatch):
                     "city": "shanghai",
                     "value": 30.5,
                     "source": "metar",
-                    "source_label": "METAR runway-point air temperature",
+                    "source_label": "METAR airport temperature",
                     "observed_at": "2026-06-14T04:00:00+00:00",
                     "freshness_status": "fresh",
                 },

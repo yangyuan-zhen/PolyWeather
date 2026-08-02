@@ -6,8 +6,6 @@
 
 | 城市 | 站点 | ICAO/站点 | 数据类型 | 数据源 | 刷新频率 |
 |------|------|-----------|---------|--------|---------|
-| 首尔 | 仁川国际 | RKSI | 跑道对温度（2 对） | AMOS | 1 分钟 |
-| 釜山 | 金海国际 | RKPK | 跑道对温度（1 对） | AMOS | 1 分钟 |
 | 东京 | 羽田 | RJTT | 机场站点实时温度 | JMA AMeDAS | 10 分钟 |
 | 安卡拉 | Esenboğa | 17128 | 机场站点实时温度 | MGM | 不定，约 5-15 分钟 |
 
@@ -68,7 +66,7 @@ CREATE INDEX IF NOT EXISTS idx_airport_obs_log_icao_time
     ON airport_obs_log(icao, created_at DESC);
 ```
 
-**写入**: 在 AMOS/JMA/MGM 成功获取数据后自动调用 `append_airport_obs()` 写入。自动清理 2 小时前的旧数据。
+**写入**: 在 JMA/MGM 成功获取数据后自动调用 `append_airport_obs()` 写入。自动清理 2 小时前的旧数据。
 
 **读取**: `get_airport_obs_recent(icao, minutes=30)` 返回最近 N 分钟观测列表，用于计算温度变化斜率。
 
@@ -110,7 +108,7 @@ DEB 预测最高 26.5°C
 | 优先级 | 文件 | 改动 |
 |--------|------|------|
 | 1 | `src/database/db_manager.py` | 新增 `airport_obs_log` 表、`append_airport_obs()`、`get_airport_obs_recent()` |
-| 2 | `src/data_collection/weather_sources.py` | AMOS/JMA/MGM 成功后调用 `append_airport_obs()` 写日志 |
+| 2 | `src/data_collection/weather_sources.py` | JMA/MGM 成功后调用 `append_airport_obs()` 写日志 |
 | 3 | `src/analysis/market_alert_engine.py` | 新增 `airport_rapid_temp_change` 规则 |
 | 4 | `src/utils/telegram_push.py` | 10 分钟高频子循环、温度急变告警推送、最高温锁定跳过 |
 | 5 | `src/bot/runtime_coordinator.py` | 注册机场高频推送循环 |
@@ -120,7 +118,7 @@ DEB 预测最高 26.5°C
 ## 实施顺序
 
 1. **Phase 1 — DB 层**: `airport_obs_log` 表 + 读写方法
-2. **Phase 2 — 采集层**: AMOS/JMA/MGM 成功后自动写日志，部署观察 1-2 天确认数据积累正常
+2. **Phase 2 — 采集层**: JMA/MGM 成功后自动写日志，部署观察 1-2 天确认数据积累正常
 3. **Phase 3 — 告警引擎**: `airport_rapid_temp_change` 规则 + 单元测试
 4. **Phase 4 — 推送层**: 高频快速通道，直接推送市场监控频道
 5. **Phase 5 — 调参**: 观察 3-7 天调整阈值
@@ -129,7 +127,7 @@ DEB 预测最高 26.5°C
 
 ## 风险与注意事项
 
-- **AMOS/JMA/MGM 站点可用性**: 各数据源可能偶发性不可用，需容错处理
+- **JMA/MGM 站点可用性**: 各数据源可能偶发性不可用，需容错处理
 - **告警频率控制**: 高频循环可能产生过多告警，需要严格的冷却期和去重机制
 - **数据库体积**: `airport_obs_log` 每 1-10 分钟写入 4 条记录，2 小时约 48-480 条，自动清理后体积可控
 - **安卡拉 MGM 刷新频率**: `servis.mgm.gov.tr` 实测更新间隔 5-15 分钟不等，非固定周期

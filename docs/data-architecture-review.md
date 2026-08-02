@@ -13,7 +13,7 @@
 Open-Meteo (预报+多模型) ─┐
 METAR/TAF (航空气象)     ─┤
 NWS (美国) / MGM (土耳其) ─┤
-JMA/AMOS/AMSC/HKO/CWA    ─┤
+JMA/HKO/CWA             ─┤
 CoWIN / MADIS / NOAA     ─┤
                               ├─ WeatherDataCollector            ├─ dashboard-client.ts
                               │   (内存缓存 + SQLite磁盘缓存)      │   (ETag浏览器缓存 + SWR)
@@ -45,7 +45,7 @@ CoWIN / MADIS / NOAA     ─┤
 | NWS | 国家预报 | 美国 | 按请求 |
 | MGM | 国家官方 | 土耳其 | 300s |
 | ECMWF/GFS/ICON/GEM/JMA | 多模型 NWP | 全球 | 300s |
-| HKO/CWA/NOAA/AMOS/AMSC/CoWIN | 结算/参考观测 | 特定国家 | 60s-600s |
+| HKO/CWA/NOAA/AMSC/CoWIN | 结算/参考观测 | 特定国家 | 60s-600s |
 | Redis Stream | 实时事件 replay / 多 worker fanout | 后端内部 | event-driven |
 
 ### 待改进

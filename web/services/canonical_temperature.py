@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 
-_SETTLEMENT_PROXY_SOURCES = {"amos", "runway", "awos"}
+_SETTLEMENT_PROXY_SOURCES = {"awos"}
 _SETTLEMENT_OFFICIAL_SOURCES = {"hko", "noaa", "mgm", "knmi", "ims"}
 _AIRPORT_OFFICIAL_SOURCES = {"metar", "madis_hfmetar", "aeroweb"}
 
@@ -42,7 +42,7 @@ def _now_iso() -> str:
 
 def _source_role(source: str) -> str:
     normalized = str(source or "").strip().lower()
-    if normalized in _SETTLEMENT_PROXY_SOURCES or "runway" in normalized:
+    if normalized in _SETTLEMENT_PROXY_SOURCES:
         return "settlement_proxy"
     if (
         normalized in _SETTLEMENT_OFFICIAL_SOURCES

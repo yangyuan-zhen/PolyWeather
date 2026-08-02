@@ -22,7 +22,7 @@ export const scanTerminalQueryPolicy = {
   autoRefreshMs: null,
   manualForceRefreshCooldownMs: 2 * 60_000,
 } as const;
-const SCAN_TERMINAL_PAYLOAD_VERSION = "runway-slim-v1";
+const SCAN_TERMINAL_PAYLOAD_VERSION = "slim-v1";
 
 type TerminalQueryOptions = {
   forceRefresh?: boolean;

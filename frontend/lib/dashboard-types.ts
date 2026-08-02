@@ -981,48 +981,8 @@ export interface CityDetail {
   source_forecasts?: SourceForecasts;
   market_scan?: MarketScan;
   intraday_meteorology?: IntradayMeteorology;
-  amos?: AmosData | null;
   top_buckets?: MarketTopBucket[] | null;
   all_buckets?: MarketTopBucket[] | null;
-}
-
-export interface AmosData {
-  temp?: number | null;
-  temp_c?: number | null;
-  dew?: number | null;
-  dew_c?: number | null;
-  pressure_hpa?: number | null;
-  wind_kt?: number | null;
-  temp_source?: string | null;
-  runway_temps?: Array<[number | null, number | null]> | null;
-  runway_temp_range?: [number, number] | null;
-  source?: string | null;
-  source_label?: string | null;
-  icao?: string | null;
-  station_label?: string | null;
-  raw_metar?: string | null;
-  raw_taf?: string | null;
-  runway_obs?: {
-    runway_pairs?: Array<[string, string]> | null;
-    temperatures?: Array<[number | null, number | null]> | null;
-    point_temperatures?: Array<{
-      runway?: string | null;
-      temp?: number | null;
-      tdz_temp?: number | null;
-      mid_temp?: number | null;
-      end_temp?: number | null;
-      target_runway_max?: number | null;
-    }> | null;
-    pressures_hpa?: Array<number | null> | null;
-    wind_directions?: Array<[number, number, number] | null> | null;
-    wind_speeds?: Array<[number, number, number] | null> | null;
-    visibility_mor?: Array<number | null> | null;
-    rvr?: Array<number | null> | null;
-  } | null;
-  observation_source?: string | null;
-  observation_source_zh?: string | null;
-  observation_time?: string | null;
-  observation_time_local?: string | null;
 }
 
 

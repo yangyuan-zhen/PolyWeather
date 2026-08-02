@@ -12,7 +12,6 @@ from src.database.db_manager import DBManager
 _CACHE_DB = DBManager()
 
 _SOURCE_LABELS = {
-    "amos": "AMOS",
     "hko_obs": "HKO",
     "mgm": "MGM",
     "jma_amedas": "JMA",
@@ -21,7 +20,6 @@ _SOURCE_LABELS = {
 }
 
 _PREFERRED_SOURCES = (
-    "amos",
     "hko_obs",
     "mgm",
     "jma_amedas",
@@ -257,32 +255,6 @@ def _canonical_candidate(db: Any, city: str) -> Optional[dict[str, Any]]:
     }
 
 
-def _runway_history(row: dict[str, Any], raw_payload: dict[str, Any], obs_time: str) -> dict[str, list[dict[str, Any]]]:
-    history: dict[str, list[dict[str, Any]]] = {}
-    runway_obs = raw_payload.get("runway_obs")
-    points = runway_obs.get("point_temperatures") if isinstance(runway_obs, dict) else None
-    if isinstance(points, list):
-        for point in points:
-            if not isinstance(point, dict):
-                continue
-            runway = str(point.get("runway") or row.get("runway") or "").strip().upper()
-            if not runway:
-                continue
-            entry: dict[str, Any] = {"time": obs_time}
-            for key in ("temp", "tdz_temp", "mid_temp", "end_temp", "target_runway_max"):
-                temp = _to_float(point.get(key))
-                if temp is not None:
-                    entry[key] = round(float(temp), 1)
-            if len(entry) > 1:
-                history.setdefault(runway, []).append(entry)
-
-    runway = str(row.get("runway") or "").strip().upper()
-    value = _to_float(row.get("value"))
-    if runway and value is not None and runway not in history:
-        history[runway] = [{"time": obs_time, "temp": round(float(value), 1)}]
-    return history
-
-
 def _local_context(city: str, obs_time: str) -> tuple[str, str, int]:
     dt = _parse_datetime(obs_time)
     if dt is None:
@@ -349,7 +321,6 @@ def _payload_from_raw(city: str, row: dict[str, Any], raw_payload: dict[str, Any
         obs_time=obs_time,
         observed_at_local=observed_at_local,
     )
-    runway_history = _runway_history(row, raw_payload, obs_time)
     metar_point = {
         "time": local_time,
         "temp": round(float(temp), 1),
@@ -369,19 +340,12 @@ def _payload_from_raw(city: str, row: dict[str, Any], raw_payload: dict[str, Any
         "current": current,
         "airport_current": dict(current),
         "airport_primary": dict(current),
-        "amos": dict(raw_payload),
         "raw_observation": {
             "source": source,
             "station_code": _station_code(row, raw_payload) or None,
             "observed_at": obs_time or None,
             "fetched_at": row.get("fetched_at") or None,
         },
-        "runway_plate_history": runway_history,
-        "runway_points": [
-            {**point, "runway": runway}
-            for runway, points in runway_history.items()
-            for point in points
-        ],
         "metar_today_obs": [metar_point],
         "timeseries": {"metar_today_obs": [metar_point]},
         "observation_status": "live",
@@ -424,8 +388,6 @@ def _payload_from_block(city: str, block: dict[str, Any]) -> dict[str, Any]:
         "current": current,
         "airport_current": dict(current),
         "airport_primary": dict(current),
-        "runway_plate_history": {},
-        "runway_points": [],
         "metar_today_obs": [metar_point],
         "timeseries": {"metar_today_obs": [metar_point]},
         "observation_status": "live",

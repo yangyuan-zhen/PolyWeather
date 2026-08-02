@@ -1,5 +1,4 @@
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
-from datetime import datetime, timedelta, timezone
 import sqlite3
 import threading
 import time
@@ -24,15 +23,15 @@ def test_observation_source_gate_shares_inflight_and_cooldown(monkeypatch):
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         futures = [
-            executor.submit(run_observation_source, "amos", "qingdao", 180, fetcher),
-            executor.submit(run_observation_source, "amos", "qingdao", 180, fetcher),
+            executor.submit(run_observation_source, "hko_obs", "qingdao", 180, fetcher),
+            executor.submit(run_observation_source, "hko_obs", "qingdao", 180, fetcher),
         ]
         results = [future.result(timeout=2) for future in futures]
 
     assert results == [{"temp": 23.4}, {"temp": 23.4}]
     assert calls == 1
 
-    cached = run_observation_source("amos", "qingdao", 180, fetcher)
+    cached = run_observation_source("hko_obs", "qingdao", 180, fetcher)
 
     assert cached == {"temp": 23.4}
     assert calls == 1
@@ -82,7 +81,6 @@ def test_observation_collector_profiles_match_source_cadence():
 
     profiles = {profile.source: profile for profile in build_observation_source_profiles()}
 
-    assert profiles["amos"].interval_sec == 60
     assert profiles["madis_hfmetar"].interval_sec == 300
     assert profiles["cowin_obs"].interval_sec == 60
     assert profiles["hko_obs"].interval_sec == 600
@@ -94,7 +92,6 @@ def test_observation_collector_profiles_match_source_cadence():
     assert profiles["ims"].interval_sec == 600
     assert profiles["aeroweb"].interval_sec == 900
     assert profiles["metar"].interval_sec == 1800
-    assert {"seoul", "busan"}.issubset(set(profiles["amos"].cities))
     assert "new york" in profiles["madis_hfmetar"].cities
     assert "hong kong" in profiles["cowin_obs"].cities
     assert {"hong kong", "shenzhen"}.issubset(set(profiles["hko_obs"].cities))
@@ -119,15 +116,24 @@ def test_observation_collector_run_due_once_collects_without_panel_cache_refresh
         def _uses_fahrenheit(self, city):
             return False
 
-        def _attach_korean_amos_data(self, results, city, use_fahrenheit):
+        def _attach_hko_obs_official_nearby(self, results, city, use_fahrenheit):
             calls.append((city, use_fahrenheit))
-            results["amos"] = {"source": "amos", "temp_c": 24.0}
+            results["hko_obs_nearby"] = [
+                {
+                    "source": "hko_obs",
+                    "source_label": "HKO",
+                    "temperature_c": 24.0,
+                    "observation_time": "2026-06-14T01:00:00+00:00",
+                    "station_code": "LFS",
+                    "station_name": "Lau Fau Shan",
+                }
+            ]
 
     collector = ObservationCollector(
         weather=FakeWeather(),
         profiles=[
             ObservationSourceProfile(
-                source="amos",
+                source="hko_obs",
                 cities=("qingdao",),
                 interval_sec=180,
             )
@@ -170,7 +176,7 @@ def test_raw_observation_store_records_latest_observation(tmp_path):
     db = DBManager(str(tmp_path / "polyweather.db"))
 
     db.append_raw_observation(
-        source="amos",
+        source="hko_obs",
         city="Qingdao",
         value=24.0,
         observed_at="2026-06-14T01:00:00+00:00",
@@ -181,10 +187,10 @@ def test_raw_observation_store_records_latest_observation(tmp_path):
         payload={"temp_c": 24.0},
     )
 
-    latest = db.get_latest_raw_observation("amos", "qingdao")
+    latest = db.get_latest_raw_observation("hko_obs", "qingdao")
 
     assert latest is not None
-    assert latest["source"] == "amos"
+    assert latest["source"] == "hko_obs"
     assert latest["city"] == "qingdao"
     assert latest["value"] == 24.0
     assert latest["observed_at"] == "2026-06-14T01:00:00+00:00"
@@ -203,7 +209,7 @@ def test_raw_observation_store_lists_source_city_history(tmp_path):
     first_observed_at = (datetime.now(timezone.utc) - timedelta(minutes=2)).replace(microsecond=0).isoformat()
     second_observed_at = (datetime.now(timezone.utc) - timedelta(minutes=1)).replace(microsecond=0).isoformat()
     db.append_raw_observation(
-        source="amos",
+        source="hko_obs",
         city="Chengdu",
         value=25.6,
         observed_at=first_observed_at,
@@ -212,7 +218,7 @@ def test_raw_observation_store_lists_source_city_history(tmp_path):
         payload={"temp_c": 25.6},
     )
     db.append_raw_observation(
-        source="amos",
+        source="hko_obs",
         city="chengdu",
         value=25.4,
         observed_at=second_observed_at,
@@ -221,7 +227,7 @@ def test_raw_observation_store_lists_source_city_history(tmp_path):
         payload={"temp_c": 25.4},
     )
 
-    rows = db.list_raw_observation_history("amos", "chengdu", minutes=60, limit=10)
+    rows = db.list_raw_observation_history("hko_obs", "chengdu", minutes=60, limit=10)
 
     assert [row["observed_at"] for row in rows] == [
         first_observed_at,
@@ -230,42 +236,13 @@ def test_raw_observation_store_lists_source_city_history(tmp_path):
     assert rows[-1]["payload"]["temp_c"] == 25.4
 
 
-def test_runway_obs_recent_filters_by_observation_time_not_insert_time(tmp_path):
-    from src.database.db_manager import DBManager
-
-    db = DBManager(str(tmp_path / "polyweather.db"))
-    now = datetime.now(timezone.utc).replace(microsecond=0)
-    stale_observed_at = (now - timedelta(hours=3)).isoformat()
-    fresh_observed_at = now.isoformat()
-
-    db.append_runway_obs(
-        icao="ZUUU",
-        city="chengdu",
-        runway="02L/20R",
-        target_runway_max=24.0,
-        otime_utc=stale_observed_at,
-    )
-    db.append_runway_obs(
-        icao="ZUUU",
-        city="chengdu",
-        runway="02R/20L",
-        target_runway_max=25.0,
-        otime_utc=fresh_observed_at,
-    )
-
-    rows = db.get_runway_obs_recent("ZUUU", minutes=60)
-
-    assert [row["runway"] for row in rows] == ["02R/20L"]
-    assert rows[0]["otime_utc"] == fresh_observed_at
-
-
 def test_raw_observation_failure_preserves_last_success_and_increments_errors(tmp_path):
     from src.database.db_manager import DBManager
 
     db = DBManager(str(tmp_path / "polyweather.db"))
 
     db.append_raw_observation(
-        source="amos",
+        source="hko_obs",
         city="Qingdao",
         value=24.0,
         observed_at="2026-06-14T01:00:00+00:00",
@@ -276,14 +253,14 @@ def test_raw_observation_failure_preserves_last_success_and_increments_errors(tm
         payload={"temp_c": 24.0},
     )
     db.append_raw_observation(
-        source="amos",
+        source="hko_obs",
         city="qingdao",
         fetched_at="2026-06-14T01:02:00+00:00",
         status="timeout",
         payload={"error": "upstream timeout"},
     )
 
-    latest = db.get_latest_raw_observation("amos", "qingdao")
+    latest = db.get_latest_raw_observation("hko_obs", "qingdao")
 
     assert latest is not None
     assert latest["status"] == "timeout"
@@ -299,7 +276,7 @@ def test_raw_observation_store_computes_source_latency_when_times_are_known(tmp_
     db = DBManager(str(tmp_path / "polyweather.db"))
 
     db.append_raw_observation(
-        source="amos",
+        source="hko_obs",
         city="Qingdao",
         value=24.0,
         observed_at="2026-06-14T01:00:00+00:00",
@@ -309,7 +286,7 @@ def test_raw_observation_store_computes_source_latency_when_times_are_known(tmp_
         payload={"temp_c": 24.0},
     )
 
-    latest = db.get_latest_raw_observation("amos", "qingdao")
+    latest = db.get_latest_raw_observation("hko_obs", "qingdao")
 
     assert latest is not None
     assert latest["source_latency_sec"] == 90.0
@@ -416,25 +393,28 @@ def test_observation_collector_writes_raw_observation_store(tmp_path):
         def _uses_fahrenheit(self, city):
             return False
 
-        def _attach_korean_amos_data(self, results, city, use_fahrenheit):
-            results["amos"] = {
-                "source": "amos",
-                "temp_c": 24.0,
-                "observation_time": "2026-06-14T01:00:00+00:00",
-                "icao": "ZSQD",
-                "station_label": "Qingdao Jiaodong",
-            }
+        def _attach_hko_obs_official_nearby(self, results, city, use_fahrenheit):
+            results["hko_obs_nearby"] = [
+                {
+                    "source": "hko_obs",
+                    "source_label": "HKO",
+                    "temperature_c": 24.0,
+                    "observation_time": "2026-06-14T01:00:00+00:00",
+                    "station_code": "ZSQD",
+                    "station_name": "Qingdao Jiaodong",
+                }
+            ]
 
     collector = ObservationCollector(
         weather=FakeWeather(),
-        profiles=[ObservationSourceProfile("amos", ("qingdao",), 180)],
+        profiles=[ObservationSourceProfile("hko_obs", ("qingdao",), 180)],
         observation_store=db,
         async_cache_refresh=False,
     )
 
     assert collector.run_due_once(now_ts=1000.0) == 1
 
-    latest = db.get_latest_raw_observation("amos", "qingdao")
+    latest = db.get_latest_raw_observation("hko_obs", "qingdao")
     assert latest is not None
     assert latest["value"] == 24.0
     assert latest["observed_at"] == "2026-06-14T01:00:00+00:00"
@@ -459,13 +439,13 @@ def test_observation_collector_consumes_source_adapter_records(monkeypatch, tmp_
     def fake_collect_observation_source(weather, source, city, *, use_fahrenheit):
         calls.append((weather.marker, source, city, use_fahrenheit))
         return ObservationSourceResult(
-            source="amos",
+            source="hko_obs",
             city="qingdao",
             status="ok",
             error="",
             records=(
                 ObservationRecord(
-                    source="amos",
+                    source="hko_obs",
                     city="qingdao",
                     value=24.5,
                     observed_at="2026-06-14T01:00:00+00:00",
@@ -474,7 +454,7 @@ def test_observation_collector_consumes_source_adapter_records(monkeypatch, tmp_
                     station_name="Qingdao Jiaodong",
                     runway="17L",
                     value_unit="c",
-                    source_label="AMOS",
+                    source_label="HKO",
                     payload={"temp_c": 24.5},
                 ),
             ),
@@ -494,15 +474,15 @@ def test_observation_collector_consumes_source_adapter_records(monkeypatch, tmp_
 
     collector = ObservationCollector(
         weather=FakeWeather(),
-        profiles=[ObservationSourceProfile("amos", ("qingdao",), 180)],
+        profiles=[ObservationSourceProfile("hko_obs", ("qingdao",), 180)],
         observation_store=db,
         async_cache_refresh=False,
     )
 
     assert collector.run_due_once(now_ts=1000.0) == 1
-    assert calls == [("weather", "amos", "qingdao", False)]
+    assert calls == [("weather", "hko_obs", "qingdao", False)]
 
-    latest = db.get_latest_raw_observation("amos", "qingdao", station_code="ZSQD", runway="17L")
+    latest = db.get_latest_raw_observation("hko_obs", "qingdao", station_code="ZSQD", runway="17L")
     assert latest is not None
     assert latest["value"] == 24.5
     assert latest["payload"]["temp_c"] == 24.5
@@ -633,19 +613,19 @@ def test_observation_collector_records_no_results_source_health(tmp_path):
         def _uses_fahrenheit(self, city):
             return False
 
-        def _attach_korean_amos_data(self, results, city, use_fahrenheit):
+        def _attach_hko_obs_official_nearby(self, results, city, use_fahrenheit):
             return None
 
     collector = ObservationCollector(
         weather=FakeWeather(),
-        profiles=[ObservationSourceProfile("amos", ("qingdao",), 180)],
+        profiles=[ObservationSourceProfile("hko_obs", ("qingdao",), 180)],
         observation_store=db,
         async_cache_refresh=False,
     )
 
     assert collector.run_due_once(now_ts=1000.0) == 0
 
-    latest = db.get_latest_raw_observation("amos", "qingdao")
+    latest = db.get_latest_raw_observation("hko_obs", "qingdao")
     assert latest is not None
     assert latest["status"] == "no_results"
     assert latest["value"] is None
@@ -667,19 +647,21 @@ def test_observation_collector_writes_canonical_latest_from_source(tmp_path):
         def _uses_fahrenheit(self, city):
             return False
 
-        def _attach_korean_amos_data(self, results, city, use_fahrenheit):
-            results["amos"] = {
-                "source": "amos",
-                "source_label": "AMOS",
-                "temp_c": 24.0,
-                "observation_time": "2026-06-14T01:00:00+00:00",
-                "icao": "ZSQD",
-                "station_label": "Qingdao Jiaodong",
-            }
+        def _attach_hko_obs_official_nearby(self, results, city, use_fahrenheit):
+            results["hko_obs_nearby"] = [
+                {
+                    "source": "hko_obs",
+                    "source_label": "HKO",
+                    "temperature_c": 24.0,
+                    "observation_time": "2026-06-14T01:00:00+00:00",
+                    "station_code": "ZSQD",
+                    "station_name": "Qingdao Jiaodong",
+                }
+            ]
 
     collector = ObservationCollector(
         weather=FakeWeather(),
-        profiles=[ObservationSourceProfile("amos", ("qingdao",), 180)],
+        profiles=[ObservationSourceProfile("hko_obs", ("qingdao",), 180)],
         observation_store=db,
         async_cache_refresh=False,
     )
@@ -689,8 +671,8 @@ def test_observation_collector_writes_canonical_latest_from_source(tmp_path):
     canonical = db.get_canonical_temperature("qingdao")
     assert canonical is not None
     assert canonical["payload"]["value"] == 24.0
-    assert canonical["payload"]["source"] == "amos"
-    assert canonical["payload"]["source_role"] == "settlement_proxy"
+    assert canonical["payload"]["source"] == "hko_obs"
+    assert canonical["payload"]["source_role"] == "settlement_official"
     assert canonical["payload"]["observed_at"] == "2026-06-14T01:00:00+00:00"
 
 
@@ -709,16 +691,16 @@ def test_observation_collector_canonical_uses_source_freshness_profile(tmp_path)
 
     collector._store_canonical_temperature_from_observation(
         record=ObservationRecord(
-            source="amos",
+            source="hko_obs",
             city="qingdao",
             value=24.0,
-            observed_at="2026-06-14T01:00:00+00:00",
+            observed_at="2026-06-14T00:35:00+00:00",
             observed_at_local="",
             station_code="ZSQD",
             station_name="",
             runway="",
             value_unit="c",
-            source_label="AMOS",
+            source_label="HKO",
             payload={"temp_c": 24.0},
         ),
         fetched_at="2026-06-14T01:05:00+00:00",
@@ -728,7 +710,7 @@ def test_observation_collector_canonical_uses_source_freshness_profile(tmp_path)
 
     assert canonical is not None
     assert canonical["payload"]["freshness_status"] == "delayed"
-    assert canonical["payload"]["freshness_sec"] == 300
+    assert canonical["payload"]["freshness_sec"] == 1800
     assert canonical["payload"]["confidence"] < 0.92
 
 
@@ -752,18 +734,22 @@ def test_observation_collector_consumes_refresh_request_queue(tmp_path):
         def _uses_fahrenheit(self, city):
             return False
 
-        def _attach_korean_amos_data(self, results, city, use_fahrenheit):
+        def _attach_hko_obs_official_nearby(self, results, city, use_fahrenheit):
             calls.append(city)
-            results["amos"] = {
-                "source": "amos",
-                "temp_c": 24.0,
-                "observation_time": "2026-06-14T01:00:00+00:00",
-                "icao": "ZSQD",
-            }
+            results["hko_obs_nearby"] = [
+                {
+                    "source": "hko_obs",
+                    "source_label": "HKO",
+                    "temperature_c": 24.0,
+                    "observation_time": "2026-06-14T01:00:00+00:00",
+                    "station_code": "ZSQD",
+                    "station_name": "Qingdao Jiaodong",
+                }
+            ]
 
     collector = ObservationCollector(
         weather=FakeWeather(),
-        profiles=[ObservationSourceProfile("amos", ("qingdao",), 180)],
+        profiles=[ObservationSourceProfile("hko_obs", ("qingdao",), 180)],
         observation_store=db,
         async_cache_refresh=False,
     )
@@ -788,9 +774,18 @@ def test_observation_collector_cache_refresh_does_not_block_source_polling():
         def _uses_fahrenheit(self, city):
             return False
 
-        def _attach_korean_amos_data(self, results, city, use_fahrenheit):
+        def _attach_hko_obs_official_nearby(self, results, city, use_fahrenheit):
             calls.append(city)
-            results["amos"] = {"source": "amos", "temp_c": 24.0}
+            results["hko_obs_nearby"] = [
+                {
+                    "source": "hko_obs",
+                    "source_label": "HKO",
+                    "temperature_c": 24.0,
+                    "observation_time": "2026-06-14T01:00:00+00:00",
+                    "station_code": "ZSQD",
+                    "station_name": "Qingdao Jiaodong",
+                }
+            ]
 
     def slow_cache_refresher(city):
         refresh_started.set()
@@ -801,7 +796,7 @@ def test_observation_collector_cache_refresh_does_not_block_source_polling():
         weather=FakeWeather(),
         profiles=[
             ObservationSourceProfile(
-                source="amos",
+                source="hko_obs",
                 cities=("qingdao", "beijing"),
                 interval_sec=180,
             )
@@ -840,14 +835,23 @@ def test_observation_collector_records_source_status_to_runtime_state(tmp_path):
         def _uses_fahrenheit(self, city):
             return False
 
-        def _attach_korean_amos_data(self, results, city, use_fahrenheit):
-            results["amos"] = {"source": "amos", "temp_c": 22.8}
+        def _attach_hko_obs_official_nearby(self, results, city, use_fahrenheit):
+            results["hko_obs_nearby"] = [
+                {
+                    "source": "hko_obs",
+                    "source_label": "HKO",
+                    "temperature_c": 22.8,
+                    "observation_time": "2026-06-14T01:00:00+00:00",
+                    "station_code": "ZBAA",
+                    "station_name": "Beijing Capital",
+                }
+            ]
 
     db = RuntimeStateDB(str(tmp_path / "polyweather.db"))
     status_repo = ObservationCollectorStatusRepository(db)
     collector = ObservationCollector(
         weather=FakeWeather(),
-        profiles=[ObservationSourceProfile("amos", ("beijing",), 180)],
+        profiles=[ObservationSourceProfile("hko_obs", ("beijing",), 180)],
         status_recorder=status_repo,
     )
 
@@ -858,7 +862,7 @@ def test_observation_collector_records_source_status_to_runtime_state(tmp_path):
     assert payload["status_counts"] == {"ok": 1}
 
     entry = payload["entries"][0]
-    assert entry["source"] == "amos"
+    assert entry["source"] == "hko_obs"
     assert entry["city"] == "beijing"
     assert entry["interval_sec"] == 180
     assert entry["failure_count"] == 0
@@ -871,7 +875,7 @@ def test_observation_collector_records_source_status_to_runtime_state(tmp_path):
     assert entry["status"] == "ok"
 
     source = payload["sources"][0]
-    assert source["source"] == "amos"
+    assert source["source"] == "hko_obs"
     assert source["city_count"] == 1
     assert source["failure_count"] == 0
     assert source["avg_latency_ms"] is not None
@@ -889,14 +893,14 @@ def test_observation_collector_records_failure_and_cooldown(tmp_path):
         def _uses_fahrenheit(self, city):
             return False
 
-        def _attach_korean_amos_data(self, results, city, use_fahrenheit):
+        def _attach_hko_obs_official_nearby(self, results, city, use_fahrenheit):
             raise RuntimeError("upstream timeout")
 
     db = RuntimeStateDB(str(tmp_path / "polyweather.db"))
     status_repo = ObservationCollectorStatusRepository(db)
     collector = ObservationCollector(
         weather=FakeWeather(),
-        profiles=[ObservationSourceProfile("amos", ("seoul",), 180)],
+        profiles=[ObservationSourceProfile("hko_obs", ("seoul",), 180)],
         status_recorder=status_repo,
     )
 
@@ -907,7 +911,7 @@ def test_observation_collector_records_failure_and_cooldown(tmp_path):
     assert payload["status_counts"] == {"cooldown": 1}
 
     entry = payload["entries"][0]
-    assert entry["source"] == "amos"
+    assert entry["source"] == "hko_obs"
     assert entry["city"] == "seoul"
     assert entry["failure_count"] == 1
     assert entry["last_success_at"] is None
@@ -1008,13 +1012,6 @@ def test_ephemeral_observation_log_writes_skip_sqlite_lock(monkeypatch, tmp_path
         city="qingdao",
         temp_c=24.0,
         obs_time="2026-06-08T04:00:00Z",
-    )
-    db.append_runway_obs(
-        icao="ZSQD",
-        city="qingdao",
-        runway="17/35",
-        target_runway_max=24.0,
-        otime_utc="2026-06-08T04:00:00Z",
     )
 
 

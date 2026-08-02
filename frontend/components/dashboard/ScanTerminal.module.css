@@ -1554,31 +1554,3 @@
 :global(html.light) .root :global(.scan-terminal.light .scan-retry-button:hover) {
   background: rgba(37, 99, 235, 0.14);
 }
-
-/* ── AMOS runway panel light overrides ── */
-:global(html.light) .root :global(.scan-terminal.light .scan-amos-runway-panel) {
-  background: rgba(37, 99, 235, 0.03);
-  border-color: rgba(37, 99, 235, 0.12);
-}
-
-:global(html.light) .root :global(.scan-terminal.light .scan-amos-runway-card) {
-  background: var(--bg-card);
-  border-color: rgba(37, 99, 235, 0.08);
-}
-
-:global(html.light) .root :global(.scan-terminal.light .scan-amos-runway-label) {
-  color: #2563EB;
-}
-
-:global(html.light) .root :global(.scan-terminal.light .scan-amos-runway-temp) {
-  color: var(--text-primary);
-}
-
-:global(html.light) .root :global(.scan-terminal.light .scan-amos-source-tag) {
-  background: rgba(37, 99, 235, 0.08);
-  color: #2563EB;
-}
-
-:global(html.light) .root :global(.scan-terminal.light .scan-amos-runway-detail) {
-  color: #64748B;
-}

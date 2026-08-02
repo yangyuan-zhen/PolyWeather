@@ -10,9 +10,6 @@ from web.scan_terminal_payloads import (
     build_failed_scan_terminal_payload,
     build_scan_terminal_snapshot_id,
     build_stale_scan_terminal_payload,
-    compact_ranked_scan_rows_for_payload,
-    SCAN_PAYLOAD_DEFERRED_RUNWAY_POINTS,
-    SCAN_PAYLOAD_FULL_RUNWAY_HISTORY_ROWS,
 )
 from web.scan_terminal_ranker import build_ranked_scan_terminal_result
 from web import scan_terminal_city_row
@@ -875,8 +872,8 @@ def test_scan_city_terminal_rows_uses_canonical_without_analyze(monkeypatch):
                     "city": "qingdao",
                     "value": 22.5,
                     "temp_symbol": "°C",
-                    "source": "amos",
-                    "source_label": "AMOS",
+                    "source": "metar",
+                    "source_label": "METAR",
                     "source_role": "settlement_proxy",
                     "observed_at": "2026-06-01T08:00:00Z",
                     "fetched_at": "2026-06-01T08:00:30Z",
@@ -1097,78 +1094,6 @@ def test_scan_terminal_snapshot_id_is_stable_for_same_ranked_inputs():
 
     assert first == second
     assert first.startswith("scan-")
-
-
-def test_scan_terminal_payload_slims_deferred_runway_history_rows():
-    runway_points = [
-        {"time": f"2026-05-31T{hour:02d}:00:00+00:00", "temp": 20 + hour}
-        for hour in range(24)
-    ]
-    rows = [
-        {
-            "id": f"row-{index}",
-            "runway_plate_history": {"35R": list(runway_points)},
-        }
-        for index in range(SCAN_PAYLOAD_FULL_RUNWAY_HISTORY_ROWS + 2)
-    ]
-
-    compacted = compact_ranked_scan_rows_for_payload(rows)
-
-    assert len(compacted[0]["runway_plate_history"]["35R"]) == len(runway_points)
-    assert (
-        len(
-            compacted[SCAN_PAYLOAD_FULL_RUNWAY_HISTORY_ROWS - 1][
-                "runway_plate_history"
-            ]["35R"]
-        )
-        == len(runway_points)
-    )
-    assert (
-        len(
-            compacted[SCAN_PAYLOAD_FULL_RUNWAY_HISTORY_ROWS][
-                "runway_plate_history"
-            ]["35R"]
-        )
-        == SCAN_PAYLOAD_DEFERRED_RUNWAY_POINTS
-    )
-    assert len(rows[SCAN_PAYLOAD_FULL_RUNWAY_HISTORY_ROWS]["runway_plate_history"]["35R"]) == len(
-        runway_points
-    )
-
-
-def test_scan_terminal_quick_row_compacts_runway_history_for_list_payload():
-    raw_history = {
-        "35R": [
-            {"time": "2026-05-31T00:00:00+00:00", "temp": 22.11},
-            {"time": "2026-05-31T00:01:00+00:00", "temp": 22.22},
-            {"time": "2026-05-31T00:02:00+00:00", "temp": 22.33},
-            {"time": "2026-05-31T00:10:00+00:00", "temp": 23.44},
-            {"time": "2026-05-31T00:11:00+00:00", "temp": 23.55},
-        ]
-    }
-
-    row = _build_quick_row(
-        city="shanghai",
-        data={
-            "display_name": "Shanghai",
-            "local_date": "2026-05-31",
-            "local_time": "2026-05-31T08:11:00+08:00",
-            "temp_symbol": "°C",
-            "current": {"temp": 22.3, "max_so_far": 23.0},
-            "risk": {"airport": "Shanghai Pudong", "level": "medium"},
-            "deb": {"prediction": 24.0},
-            "probabilities": {"distribution": []},
-            "multi_model": {},
-            "runway_plate_history": raw_history,
-        },
-    )
-
-    compact_history = row["runway_plate_history"]["35R"]
-
-    assert len(compact_history) == 2
-    assert compact_history[0]["temp"] == 22.3
-    assert compact_history[1]["temp"] == 23.6
-    assert len(str(row["runway_plate_history"])) < len(str(raw_history))
 
 
 def test_scan_terminal_quick_row_exposes_airport_primary_source_metadata():

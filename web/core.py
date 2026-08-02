@@ -103,7 +103,6 @@ _cache: LRUDict = LRUDict(maxsize=_CACHE_MAXSIZE)
 _CACHE_LOCK = threading.Lock()
 CACHE_TTL = 300
 CACHE_TTL_ANKARA = 60
-CACHE_TTL_KOREAN_AMOS = 60
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # ---------------------------------------------------------------------------

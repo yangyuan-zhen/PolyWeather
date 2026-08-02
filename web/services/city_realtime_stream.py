@@ -23,25 +23,11 @@ _analyze = None  # compatibility placeholder for older tests/monkeypatches
 
 
 def _best_temp(data: Dict[str, Any]) -> Optional[float]:
-    """METAR-first, then runway sensor, then settlement current."""
+    """METAR-first, then settlement current."""
     airport = data.get("airport_current") or {}
     t = airport.get("current", {}).get("temp") if isinstance(airport, dict) else None
     if t is not None:
         return float(t)
-    # AMOS / runway sensor
-    amos = data.get("amos") or {}
-    if isinstance(amos, dict):
-        runway_obs = amos.get("runway_obs") or {}
-        temps = runway_obs.get("temperatures") if isinstance(runway_obs, dict) else []
-        if isinstance(temps, list) and temps:
-            for pair in temps:
-                vals = pair if isinstance(pair, list) else []
-                for v in vals:
-                    try:
-                        if v is not None:
-                            return float(v)
-                    except (TypeError, ValueError):
-                        continue
     # Settlement source
     curr = data.get("current") or {}
     if isinstance(curr, dict) and curr.get("temp") is not None:

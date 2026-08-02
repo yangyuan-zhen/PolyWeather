@@ -6,8 +6,6 @@
 
 | 城市 | 机场 | ICAO/站点 | 数据源 | 频率 | 类型 | 费用 |
 |------|------|-----------|--------|------|------|------|
-| 首尔 | 仁川国际 | RKSI | AMOS (`global.amo.go.kr`) | 1 分钟 | 跑道对温度（2对） | 免费 |
-| 釜山 | 金海国际 | RKPK | AMOS (`global.amo.go.kr`) | 1 分钟 | 跑道对温度（1对） | 免费 |
 | 香港 | CoWIN 6087 | 6087 | CoWIN (`cowin.hku.hk`) | 1 分钟 | 参考站温度（保良局陈守仁小学） | 免费 |
 | 香港 | HKO | HKO | HKO 官方 CSV (`data.weather.gov.hk`) | 10 分钟 | 官方气象站温度 | 免费 |
 | 深圳 | 流浮山 | LFS | HKO 官方 CSV (`data.weather.gov.hk`) | 10 分钟 | 官方自动站温度（结算源） | 免费 |
@@ -45,8 +43,8 @@
 > 该源提供约 1 分钟温度序列，作为 PM 最高温市场的高频参考曲线；HKO 10 分钟数据
 > 仍作为官方气象层保留。后端通过 `cowin_sources.py` 拉取并写入 `cowin_obs`。
 
-> **AMSC AWOS（已移除）**: 中国内地跑道城市（北京/上海/广州/成都/重庆/武汉/青岛）的 AMSC
-> `getWindPlate` 跑道端点气温已于 2026-06 下线；跑道实测现仅保留韩国 AMOS（首尔/釜山）。
+> **AMSC AWOS / AMOS（已移除）**: 中国内地跑道城市（北京/上海/广州/成都/重庆/武汉/青岛）的 AMSC
+> `getWindPlate` 跑道端点气温已于 2026-06 下线；韩国 AMOS 跑道传感器（首尔/釜山）已移除。
 
 > **台北 CWA（已移除）**: 台北 CWA 开放数据（466920）已于 2026-06 下线（观测零匹配）；
 > 台北改走 NOAA Synoptic 结算源 + METAR。
@@ -54,15 +52,15 @@
 ## 独立观测采集器
 
 - Web/API 进程启动 `observation-collector` 后台线程，按源频率独立采集，不依赖 Telegram 推送循环
-- 默认频率：AMOS 60s、MADIS HFMETAR 300s、CoWIN 60s、HKO 600s
+- 默认频率：MADIS HFMETAR 300s、CoWIN 60s、HKO 600s、MGM 300s、JMA AMeDAS 600s
 - 每次采集复用 `weather_sources.py` 现有 `_attach_*` 写入逻辑，负责写 `airport_obs_log` / `runway_obs_log` / 今日观测缓存，并通过 `/api/internal/collector-patch` 写 Redis Stream 或 SQLite event log 后广播 SSE
 - 采集成功后刷新对应城市 `panel` cache；前端继续使用 HTTP snapshot + SSE patch，不需要依赖 Telegram 触发更新
-- `observation_source_gate.py` 对 AMOS、MADIS、HKO、CoWIN 做 per-source/per-city singleflight 和 SQLite cooldown，防止 Web 请求、collector 和兜底分析同时打同一个外部源
+- `observation_source_gate.py` 对 MADIS、HKO、CoWIN、MGM、JMA 等做 per-source/per-city singleflight 和 SQLite cooldown，防止 Web 请求、collector 和兜底分析同时打同一个外部源
 
 ## Telegram 推送机制
 
 - 每城按原生频率独立推送，不捆绑
-- 首尔/釜山 60s，其余 600s
+- 香港 CoWIN 60s，其余 600s
 - 循环轮询 60s 以匹配最快频率
 - Telegram 推送优先读取网站侧 `full`/`panel` 城市缓存；缓存缺失时只做非强制 `panel` 分析兜底，不触发 `force_refresh_observations_only`
 - 仅当当前温度距 DEB 预测最高 ≤3°C 时推送
@@ -73,7 +71,7 @@
 为了向用户提供接近行情盘的实况响应并降低服务器负载，系统使用 **HTTP snapshot + Server-Sent Events (SSE) Patch + 可重放事件日志** 架构。生产环境推荐 Redis Stream；本地或单进程可回退 SQLite event log。
 
 ### 1. 数据推送链路 (Data Pipeline)
-1. **Observation Collector 采集端触发**：`web.observation_collector_service` 按源频率调用采集层；在 `weather_sources.py` 中，当高频实况源（如 AMOS, CoWIN, HKO, MADIS 等）采集到温度更新或观测时间变更时，会调用 `_emit_temperature_patch_if_changed` 过滤重复值，并异步向 `/api/internal/collector-patch` 发送 POST 报文。
+1. **Observation Collector 采集端触发**：`web.observation_collector_service` 按源频率调用采集层；在 `weather_sources.py` 中，当高频实况源（如 CoWIN, HKO, MADIS 等）采集到温度更新或观测时间变更时，会调用 `_emit_temperature_patch_if_changed` 过滤重复值，并异步向 `/api/internal/collector-patch` 发送 POST 报文。
 2. **标准化事件**：`realtime_patch_schema.py` 将旧 `city_patch` 或新 payload 统一成 `city_observation_patch.v1`。
 3. **事件存储**：生产环境写入 Redis Stream（`stream:city_observation`）并生成全局递增 `revision`；SQLite `observation_patch_events` 保留为本地/兜底 replay。
 4. **FastAPI SSE 广播**：FastAPI 后端的 `sse_router.py` 根据城市订阅集合向匹配连接推送 patch；断线重连时按 `since_revision` replay。
@@ -94,12 +92,11 @@
 ## 消息模板
 
 ```
-Seoul / Incheon 16:03
+Hong Kong 16:03
 
-15L/33R 14.6°C
-15R/33L 15.2°C
-今日DEB预报最高：18.2°C
-今日实测最高：16.5°C（15:30）
+当前: 14.6°C
+日高: 16.5°C（15:30）
+DEB：18.2°C
 ```
 
 ## 环境变量

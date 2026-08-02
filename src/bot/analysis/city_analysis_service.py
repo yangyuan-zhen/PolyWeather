@@ -118,7 +118,6 @@ def _city_cache_payload_to_weather_data(city_name: str, payload: Dict[str, Any])
             "observation_time": observed_at,
             "current": dict(metar_current),
         },
-        "amos": payload.get("amos") if isinstance(payload.get("amos"), dict) else {},
         "deb": payload.get("deb") if isinstance(payload.get("deb"), dict) else {},
         "multi_model": payload.get("multi_model") if isinstance(payload.get("multi_model"), dict) else {},
     }

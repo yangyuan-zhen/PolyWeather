@@ -37,7 +37,6 @@ export function runTests() {
   const schema = fs.readFileSync(schemaPath, "utf8");
   assert(schema.includes("city_observation_patch.v1"), "patch schema must expose city_observation_patch.v1");
   assert(schema.includes("normalize_observation_patch"), "patch schema must normalize collector payloads");
-  assert(schema.includes("runway_points"), "patch schema must preserve runway point observations");
 
   const storePath = path.join(repoRoot, "web", "realtime_event_store.py");
   assert(fs.existsSync(storePath), "backend must define a realtime event replay store");
@@ -168,17 +167,14 @@ export function runTests() {
   const chart = readFrontendFile("components", "dashboard", "scan-terminal", "LiveTemperatureThresholdChart.tsx");
   const chartCanvasPath = path.join(process.cwd(), "components", "dashboard", "scan-terminal", "TemperatureChartCanvas.tsx");
   const chartStatsPath = path.join(process.cwd(), "components", "dashboard", "scan-terminal", "TemperatureStatsBars.tsx");
-  const chartRunwayPath = path.join(process.cwd(), "components", "dashboard", "scan-terminal", "TemperatureRunwayDetails.tsx");
   const chartTooltipPath = path.join(process.cwd(), "components", "dashboard", "scan-terminal", "TemperatureTooltipContent.tsx");
   const chartSummaryPath = path.join(process.cwd(), "components", "dashboard", "scan-terminal", "ModelCurvesSummary.tsx");
   assert(fs.existsSync(chartCanvasPath), "temperature chart Recharts canvas must live in TemperatureChartCanvas.tsx");
   assert(fs.existsSync(chartStatsPath), "temperature chart stat bars must live in TemperatureStatsBars.tsx");
-  assert(fs.existsSync(chartRunwayPath), "temperature chart runway detail panel must live in TemperatureRunwayDetails.tsx");
   assert(fs.existsSync(chartTooltipPath), "temperature chart tooltip must live in TemperatureTooltipContent.tsx");
   assert(fs.existsSync(chartSummaryPath), "temperature chart model summary must live in ModelCurvesSummary.tsx");
   const chartCanvas = fs.readFileSync(chartCanvasPath, "utf8");
   const chartTooltip = fs.readFileSync(chartTooltipPath, "utf8");
-  const chartRunway = fs.readFileSync(chartRunwayPath, "utf8");
   const chartSummary = fs.readFileSync(chartSummaryPath, "utf8");
   const chartLogicPath = path.join(process.cwd(), "components", "dashboard", "scan-terminal", "temperature-chart-logic.ts");
   assert(fs.existsSync(chartLogicPath), "temperature chart pure data logic must live in temperature-chart-logic.ts");
@@ -190,7 +186,6 @@ export function runTests() {
   assert(chart.includes("useLatestPatch"), "temperature chart must consume useLatestPatch(city)");
   assert(chart.includes("latestPatch"), "temperature chart must react to incoming SSE patches");
   assert(chart.includes("useSseResyncVersion"), "temperature chart must resync live observations when SSE replay is incomplete");
-  assert(chartLogic.includes("runway_points"), "temperature chart must merge v1 runway_points into runway history");
   assert(
     !chart.includes("DASHBOARD_REFRESH_POLICY_MS.metar") &&
       !chart.includes("2 * 60_000"),
@@ -202,14 +197,11 @@ export function runTests() {
   );
   assert(chart.includes("TemperatureChartCanvas"), "temperature chart shell must compose the extracted chart canvas");
   assert(chart.includes("TemperatureStatsBars"), "temperature chart shell must compose the extracted stat bars");
-  assert(chart.includes("TemperatureRunwayDetails"), "temperature chart shell must compose the extracted runway panel");
   assert(chart.includes("tempSymbol={row?.temp_symbol || \"°C\"}"), "temperature chart shell must pass the city temperature unit into stat bars");
-  assert(chart.includes("<TemperatureRunwayDetails") && chart.includes("tempSymbol={row?.temp_symbol || \"°C\"}"), "temperature chart shell must pass the city unit into runway details");
   assert(chart.includes("<ModelCurvesSummary") && chart.includes("tempSymbol={row?.temp_symbol || \"°C\"}"), "temperature chart shell must pass the city unit into model summaries");
   const chartStats = fs.readFileSync(chartStatsPath, "utf8");
   assert(chartStats.includes("tempSymbol"), "temperature stat bars must accept the city temperature unit");
   assert(chartStats.includes("temp(displayRunwayTemp, tempSymbol)"), "temperature stat bars must render live observations with the city unit");
-  assert(chartRunway.includes("tempSymbol") && !chartRunway.includes("}°C`"), "runway detail rows must render values with the city unit");
   assert(chartSummary.includes("tempSymbol") && chartSummary.includes("temp(stats.latest, tempSymbol)"), "model curve summaries must render values with the city unit");
   assert(chartCanvas.includes("const tempSymbol = row?.temp_symbol || \"°C\""), "temperature chart canvas must derive the city unit from the row");
   assert(chartCanvas.includes("tempSymbol={tempSymbol}"), "temperature chart canvas must pass the city unit into tooltips");
@@ -292,10 +284,6 @@ export function runTests() {
     "temperature chart must guard target-resolution state updates to prevent render/update loops",
   );
   assert(
-    chart.includes("prefersHighFrequencyRunwayResolution") && chart.includes('return "1m";'),
-    "runway charts must request 1-minute detail resolution so historical runway lines match live SSE patch cadence",
-  );
-  assert(
     !chart.includes("PROBABILITY_REFRESH_AFTER_PATCH_MS") &&
       !chart.includes("lastProbabilityRefreshAtRef") &&
       !chart.includes("refreshProbabilityOverlayAfterPatch"),
@@ -310,10 +298,6 @@ export function runTests() {
   assert(
     chartCanvas.includes("width={chartWidth}") && chartCanvas.includes("height={chartHeight}"),
     "temperature chart canvas must pass explicit positive width/height to Recharts",
-  );
-  assert(
-    chartCanvas.includes("canToggleRunwayDetails") && chartCanvas.includes("individualRunwaySeriesCount > 1"),
-    "single-runway charts must not show the runway-detail toggle because aggregate and individual views are visually redundant",
   );
   assert(
     chartLogic.includes("HOURLY_DETAIL_REQUEST_TIMEOUT_MS = 16_000") &&

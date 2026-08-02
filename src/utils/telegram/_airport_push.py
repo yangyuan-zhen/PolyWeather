@@ -2,7 +2,6 @@
 
 import json
 import os
-import re
 import threading
 import time
 from concurrent.futures import as_completed
@@ -35,7 +34,6 @@ from ._helpers import (
     _build_telegram_hashtag_line,
     _env_bool,
     _env_int,
-    _fmt,
     _get_airport_executor,
     _get_http_session,
     _is_forum_chat_id,
@@ -44,18 +42,6 @@ from ._helpers import (
     _rate_limited_send,
     _resolve_thread_id,
     _telegram_push_language,
-)
-from ._runway import (
-    _compute_slope_15m,
-    _focused_runway_max,
-    _is_settlement_runway,
-    _runway_heat_signal,
-    _runway_history_daily_max,
-    _select_focus_runway_obs,
-    _settlement_endpoint_for_point,
-    _settlement_endpoint_from_obs,
-    _settlement_runway_for_city,
-    _wind_regime_label,
 )
 
 _AIRPORT_PUSH_STATE_PATH = os.path.join(
@@ -275,47 +261,23 @@ def _build_airport_status_message(
     ap_name = _AIRPORT_EN.get(city, "")
     time_suffix = f" · {local_time}" if local_time else ""
 
-    amos = city_weather.get("amos") or {}
-    runway_data = amos.get("runway_obs") or {}
-    runway_pairs = runway_data.get("runway_pairs") or []
-    runway_temps = runway_data.get("temperatures") or []
-    point_temps = runway_data.get("point_temperatures") or []
-    is_runway_source = amos.get("source") == "amos"
-    has_runway = bool(runway_pairs and (runway_temps or point_temps))
-    amos_icao = amos.get("icao") or HIGH_FREQ_AIRPORT_ICAO.get(city, "")
-    settlement_pair = _settlement_runway_for_city(city)
-    settlement_endpoint = _settlement_endpoint_from_obs(city, runway_pairs, point_temps)
-
-    # ── Display temp: settlement endpoint first, then airport temp ──
+    # ── Display temp: airport station observation ──
     display_temp: Optional[float] = None
-    if settlement_endpoint is not None:
-        display_temp = float(settlement_endpoint["temp"])
-    if display_temp is None:
-        if point_temps:
-            valid_tmax = [float(p.get("target_runway_max")) for p in point_temps if p.get("target_runway_max") is not None]
-            display_temp = max(valid_tmax) if valid_tmax else None
-    if display_temp is None:
-        station_temp = None
-        mgm_nearby = city_weather.get("mgm_nearby") or []
-        airport_icao = HIGH_FREQ_AIRPORT_ICAO.get(city, "")
-        for row in mgm_nearby:
-            if str(row.get("istNo") or "") == airport_icao or str(row.get("icao") or "") == airport_icao:
-                station_temp = row.get("temp")
-                break
-        if station_temp is None and mgm_nearby:
-            logger.warning(
-                "airport message fallback city={}: station {} not found in mgm_nearby, falling back to current.temp",
-                city, airport_icao,
-            )
-        if station_temp is None:
-            station_temp = (city_weather.get("current") or {}).get("temp")
-        display_temp = station_temp
-
-    # ── Heat model ──
-    wind_dir = amos.get("wind_dir") if is_runway_source else None
-    slope_15m = _compute_slope_15m(amos_icao, display_temp, city) if is_runway_source and display_temp is not None else None
-    heat_signal = _runway_heat_signal(display_temp or 0, slope_15m, wind_dir, city, language) if is_runway_source else ""
-    wind_label = _wind_regime_label(city, wind_dir, language) if is_runway_source and wind_dir is not None else None
+    station_temp = None
+    mgm_nearby = city_weather.get("mgm_nearby") or []
+    airport_icao = HIGH_FREQ_AIRPORT_ICAO.get(city, "")
+    for row in mgm_nearby:
+        if str(row.get("istNo") or "") == airport_icao or str(row.get("icao") or "") == airport_icao:
+            station_temp = row.get("temp")
+            break
+    if station_temp is None and mgm_nearby:
+        logger.warning(
+            "airport message fallback city={}: station {} not found in mgm_nearby, falling back to current.temp",
+            city, airport_icao,
+        )
+    if station_temp is None:
+        station_temp = (city_weather.get("current") or {}).get("temp")
+    display_temp = station_temp
 
     max_so_far, max_temp_time = _get_airport_daily_high(city_weather)
     # ── Build message ──
@@ -323,50 +285,15 @@ def _build_airport_status_message(
 
     # Header
     hashtag_line = _build_telegram_hashtag_line(
-        "runway" if has_runway else "airport",
+        "airport",
         city=city,
         language=language,
     )
-    icao_display = f"{amos_icao} · " if amos_icao else ""
-    settlement_pair_label = (
-        str(settlement_endpoint.get("pair"))
-        if settlement_endpoint is not None and settlement_endpoint.get("pair")
-        else (f"{settlement_pair[0]}/{settlement_pair[1]}" if settlement_pair else "")
-    )
-    settlement_str = f" · ★{settlement_pair_label}" if settlement_pair_label else ""
-    header = f"{icao_display}{en_name} / {ap_name}{settlement_str}{time_suffix}" if ap_name else f"{icao_display}{en_name}{settlement_str}{time_suffix}"
+    icao_display = f"{airport_icao} · " if airport_icao else ""
+    header = f"{icao_display}{en_name} / {ap_name}{time_suffix}" if ap_name else f"{icao_display}{en_name}{time_suffix}"
     lines.append(hashtag_line)
     lines.append("")
     lines.append(header)
-
-    # Heat signal
-    if heat_signal:
-        lines.append("")
-        lines.append(heat_signal)
-        if state:
-            lines.append(state)
-
-    # All runway detail block
-    if has_runway:
-        lines.append("")
-        for i, ((r1, r2), (t, _d)) in enumerate(zip(runway_pairs, runway_temps)):
-            if t is None:
-                continue
-            pts = point_temps[i] if i < len(point_temps) else {}
-            tdz = pts.get("tdz_temp")
-            mid = pts.get("mid_temp")
-            end = pts.get("end_temp")
-            is_settlement = _is_settlement_runway(city, r1, r2)
-            marker = f" {_copy(language, '★Settlement', '★结算')}" if is_settlement else ""
-            if tdz is not None or mid is not None or end is not None:
-                line = f"{r1}/{r2}{marker}  TDZ:{_fmt(tdz)}  MID:{_fmt(mid)}  END:{_fmt(end)}"
-                settlement_line_endpoint = _settlement_endpoint_for_point(city, (r1, r2), pts) if is_settlement else None
-                if settlement_line_endpoint is not None:
-                    line += f"  settle:{float(settlement_line_endpoint['temp']):.1f}"
-                lines.append(line)
-            else:
-                temp_symbol = str(city_weather.get("temp_symbol") or "°C").strip()
-                lines.append(f"{r1}/{r2}{marker} {t:.1f}{temp_symbol}")
 
     # Summary stats
     lines.append("")
@@ -379,15 +306,7 @@ def _build_airport_status_message(
         else:
             lines.append(_copy(language, "Current observation: unavailable", "当前实况：暂无"))
     else:
-        if has_runway:
-            current_label = (
-                _copy(language, "Settlement runway now", "结算跑道当前")
-                if settlement_pair
-                else _copy(language, "Runway now", "跑道当前")
-            )
-            lines.append(f"{current_label}: {cur_str}")
-        else:
-            lines.append(f"{_copy(language, 'Current', '当前')}: {cur_str}")
+        lines.append(f"{_copy(language, 'Current', '当前')}: {cur_str}")
 
     if city == "paris":
         if aeroweb_available and max_so_far is not None:
@@ -401,51 +320,8 @@ def _build_airport_status_message(
                 lines.append(f"{_copy(language, 'Latest observation', '最近实况')}: {last_temp:.1f}{temp_symbol}{time_str}")
     elif max_so_far is not None:
         time_str = f" ({max_temp_time})" if max_temp_time and not _is_zh(language) else (f"（{max_temp_time}）" if max_temp_time else "")
-        if has_runway:
-            high_label = _copy(language, "Today's runway high", "今日跑道高点")
-            lines.append(f"{high_label}: {max_so_far:.1f}{temp_symbol}{time_str}")
-        else:
-            high_label = _copy(language, "Today's high", "日高")
-            lines.append(f"{high_label}: {max_so_far:.1f}{temp_symbol}{time_str}")
-    if slope_15m is not None:
-        sign = "+" if slope_15m >= 0 else ""
-        lines.append(f"{_copy(language, '15m trend', '15分钟趋势')}: {sign}{slope_15m:.1f}°")
-    if wind_dir is not None:
-        wind_str = f"{_copy(language, 'Wind dir', '风向')}: {wind_dir}°"
-        if wind_label:
-            wind_str += f"  {wind_label}"
-        lines.append(wind_str)
-    # --- AMOS runway METAR detail ---
-    if is_runway_source:
-        raw_metar = amos.get("raw_metar") or ""
-        if raw_metar:
-            parts = raw_metar.split()
-            # Extract temp/dew: "20/17" → 20
-            metar_temp = None
-            for p in parts:
-                m = re.match(r"^(M?\d{2})/(M?\d{2})$", p)
-                if m:
-                    t = m.group(1)
-                    metar_temp = str(int(t.replace("M", "-")))
-                    break
-            # Extract time: "211930Z" → Beijing time (UTC+8)
-            metar_time = None
-            for p in parts:
-                m = re.match(r"^(\d{2})(\d{2})(\d{2})Z$", p)
-                if m:
-                    _day, hh, mm = int(m.group(1)), int(m.group(2)), m.group(3)
-                    bj_h = hh + 8
-                    if bj_h >= 24:
-                        bj_h -= 24
-                    metar_time = f"{_copy(language, 'Beijing time', '北京时')} {bj_h:02d}:{mm}"
-                    break
-            if metar_temp or metar_time:
-                bits = []
-                if metar_temp:
-                    bits.append(f"{metar_temp}{temp_symbol}")
-                if metar_time:
-                    bits.append(metar_time)
-                lines.append(f"{_copy(language, 'METAR', '报文')}: {'  '.join(bits)}")
+        high_label = _copy(language, "Today's high", "日高")
+        lines.append(f"{high_label}: {max_so_far:.1f}{temp_symbol}{time_str}")
     if deb_pred is not None:
         if city == "paris":
             if aeroweb_available and display_temp is not None:
@@ -517,22 +393,7 @@ def _build_airport_status_message(
 
 
 def _get_airport_daily_high(city_weather: Dict[str, Any]):
-    """Get today's observed high from METAR/AMOS airport history.
-
-    For runway cities, prefers the settlement runway's max from runway_plate_history.
-    Otherwise falls back to airport_current.max_so_far.
-    """
-    amos = city_weather.get("amos") or {}
-    has_runway = bool((amos.get("runway_obs") or {}).get("point_temperatures"))
-    if has_runway:
-        city = city_weather.get("city") or ""
-        runway_max = _runway_history_daily_max(city_weather, city)
-        if runway_max is not None:
-            return runway_max, None
-        current_runway_max = _focused_runway_max(str(city), city_weather)
-        if current_runway_max is not None:
-            return round(float(current_runway_max), 1), None
-
+    """Get today's observed high from the airport observation history."""
     airport = city_weather.get("airport_current") or {}
     max_so_far = airport.get("max_so_far")
     max_time = airport.get("max_temp_time")
@@ -550,13 +411,11 @@ def _airport_push_cache_max_age_sec(city: str) -> int:
 
 
 def _cached_payload_observation_epoch(payload: Dict[str, Any]) -> Optional[int]:
-    amos = payload.get("amos") or {}
     airport_primary = payload.get("airport_primary") or {}
     airport_current = payload.get("airport_current") or {}
     current = payload.get("current") or {}
     candidates = [
         (payload.get("canonical_temperature") or {}).get("observed_at"),
-        amos.get("observation_time"),
         airport_primary.get("obs_time"),
         airport_current.get("obs_time"),
         current.get("observed_at"),
@@ -792,7 +651,6 @@ def _process_airport_city(
         return None
 
     # Extract airport-level temperature
-    amos = city_weather.get("amos") or {}
     mgm_nearby = city_weather.get("mgm_nearby") or []
     airport_icao = HIGH_FREQ_AIRPORT_ICAO.get(city, "")
     airport_row = None
@@ -817,25 +675,6 @@ def _process_airport_city(
                 return None
     station_temp = airport_row.get("temp") if airport_row else None
     current_obs_time = str(airport_row.get("obs_time") or "")
-
-    runway_obs = (amos.get("runway_obs") or {})
-    runway_pairs = runway_obs.get("runway_pairs") or []
-    runway_temps = runway_obs.get("temperatures") or []
-    runway_pairs, runway_temps, point_temps = _select_focus_runway_obs(
-        city, runway_pairs, runway_temps,
-        runway_obs.get("point_temperatures") or [],
-    )
-    if runway_pairs and (runway_temps or point_temps):
-        endpoint = _settlement_endpoint_from_obs(city, runway_pairs, point_temps)
-        if endpoint is not None:
-            station_temp = float(endpoint["temp"])
-        else:
-            valid_temps = [t for (t, _d) in runway_temps if t is not None]
-            if valid_temps:
-                station_temp = max(valid_temps)
-        amos_obs_time = amos.get("observation_time") or ""
-        if amos_obs_time:
-            current_obs_time = amos_obs_time
 
     current_temp = station_temp
     if current_temp is None:
@@ -916,9 +755,7 @@ def _process_airport_city(
         return None
 
     obs_local = (
-        ((city_weather.get("amos") or {}).get("observation_time_local") or "")[11:16]
-        if len(str((city_weather.get("amos") or {}).get("observation_time_local") or "")) >= 16
-        else (city_weather.get("airport_current") or {}).get("obs_time")
+        (city_weather.get("airport_current") or {}).get("obs_time")
         or city_weather.get("local_time")
         or ""
     )

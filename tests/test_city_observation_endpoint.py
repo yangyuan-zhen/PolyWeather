@@ -27,15 +27,6 @@ def test_city_observation_endpoint_is_no_store_and_uses_live_observation_service
                 "source_code": "metar",
                 "obs_time": "2026-06-16T17:45:00+08:00",
             },
-            "runway_plate_history": {
-                "02L/20R": [
-                    {
-                        "time": "2026-06-16T17:45:00+08:00",
-                        "tdz_temp": 22.2,
-                        "end_temp": 22.0,
-                    }
-                ]
-            },
             "metar_today_obs": [
                 {
                     "time": "17:45",
@@ -56,7 +47,6 @@ def test_city_observation_endpoint_is_no_store_and_uses_live_observation_service
     assert calls == ["chengdu"]
     payload = response.json()
     assert payload["airport_current"]["source_code"] == "metar"
-    assert payload["runway_plate_history"]["02L/20R"][0]["tdz_temp"] == 22.2
 
 
 def test_city_observation_payload_prefers_raw_latest_over_stale_city_cache(monkeypatch):
@@ -81,15 +71,6 @@ def test_city_observation_payload_prefers_raw_latest_over_stale_city_cache(monke
                     "icao": "ZUUU",
                     "temp_c": 22.2,
                     "observation_time": "2026-06-16T17:45:00+08:00",
-                    "runway_obs": {
-                        "point_temperatures": [
-                            {
-                                "runway": "02L/20R",
-                                "tdz_temp": 22.2,
-                                "end_temp": 22.0,
-                            }
-                        ]
-                    },
                 },
             }
 
@@ -110,5 +91,4 @@ def test_city_observation_payload_prefers_raw_latest_over_stale_city_cache(monke
     assert payload["airport_current"]["temp"] == 22.2
     assert payload["airport_current"]["source_code"] == "metar"
     assert payload["airport_current"]["obs_time"] == "2026-06-16T17:45:00+08:00"
-    assert payload["runway_plate_history"]["02L/20R"][0]["tdz_temp"] == 22.2
     assert payload["metar_today_obs"][-1]["source_code"] == "metar"

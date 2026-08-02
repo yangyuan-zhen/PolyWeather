@@ -1,6 +1,6 @@
 """Module-level constants for Telegram push."""
 
-from typing import Dict, Set, Tuple
+from typing import Set
 
 SEVERITY_RANK = {
     "none": 0,
@@ -33,38 +33,12 @@ HIGH_FREQ_AIRPORT_ICAO = {
     "tel aviv": "LLBG",
 }
 
-# Settlement runway mapping — matches settlement anchor stations.
-# Format: (low_number, high_number) order-independent; stored sorted for lookup.
-SETTLEMENT_RUNWAY_PAIRS: Dict[str, Set[Tuple[str, str]]] = {
-    "seoul": {("15R", "33L")},
-}
-
-SETTLEMENT_RUNWAY_TARGETS: Dict[str, str] = {
-}
-
-# All cities with active runway observation data.
-RUNWAY_OBSERVATION_CITIES = {
-    "seoul", "busan",
-}
-
-# Wind regime sectors per airport (approximate, based on runway orientation + coastline).
-# Values: {sea_breeze: (from_deg, to_deg), warm_advection: (from_deg, to_deg)}
-WIND_REGIME: Dict[str, Dict[str, Tuple[int, int]]] = {
-    "seoul": {"sea_breeze": (270, 350), "warm_advection": (150, 230)},
-    "busan": {"sea_breeze": (120, 200), "warm_advection": (250, 340)},
-}
-
-# Legacy alias for backward compat with existing _select_focus_runway_obs / _focus_runway_pairs_for_city
-FOCUS_RUNWAY_PAIRS: Dict[str, Set[Tuple[str, str]]] = SETTLEMENT_RUNWAY_PAIRS  # type: ignore[assignment]
-
 _FUNCTION_HASHTAGS_ZH = {
-    "runway": "#跑道观测",
     "airport": "#机场观测",
     "trade": "#交易机会",
 }
 
 _FUNCTION_HASHTAGS_EN = {
-    "runway": "#RunwayObs",
     "airport": "#AirportObs",
     "trade": "#TradeAlert",
 }

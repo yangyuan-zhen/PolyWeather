@@ -8,10 +8,6 @@ import {
 type TooltipSeries = Pick<EvidenceSeries, "key" | "label" | "color">;
 type TooltipRow = TooltipSeries & { value: number };
 
-function isRunwayTooltipSeries(seriesKey: string) {
-  return seriesKey.startsWith("runway_");
-}
-
 function nearestSeriesValue(
   data: Array<Record<string, any>>,
   seriesKey: string,
@@ -92,9 +88,7 @@ function buildTooltipRows(
   return series
     .map((item) => {
       const directValue = validNumber(activePoint[item.key]);
-      const value = directValue ?? (
-        isRunwayTooltipSeries(item.key) ? null : nearestSeriesValue(data, item.key, activeIndex)
-      );
+      const value = directValue ?? nearestSeriesValue(data, item.key, activeIndex);
       return value === null ? null : { ...item, value };
     })
     .filter((item): item is TooltipRow => item !== null);

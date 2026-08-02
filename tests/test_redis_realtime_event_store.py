@@ -97,7 +97,7 @@ def test_redis_event_store_appends_monotonic_revisions_and_replays_by_city():
     store = RedisRealtimeEventStore(redis_client=FakeRedis(), maxlen=10, producer_id="test")
 
     taipei = store.append_event(_event("taipei", 34.2))
-    seoul = store.append_event(_event("seoul", 21.5, source="amos"))
+    seoul = store.append_event(_event("seoul", 21.5, source="metar"))
     taipei_next = store.append_event(_event("taipei", 34.4))
 
     assert taipei["revision"] == 1

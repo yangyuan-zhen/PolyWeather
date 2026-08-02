@@ -488,8 +488,8 @@ export function runTests() {
     "Normal city: both past and future portions should have data",
   );
 
-  // Chinese cities no longer have AMSC AWOS runway data, so row-seeded
-  // Guangzhou should not generate runway series without runway history.
+  // Row-seeded cities should chart from observations and forecasts without
+  // any runway series (AMOS/AMSC runway data has been removed).
   const guangzhouRow = {
     city: "guangzhou",
     local_date: "2026-06-10",
@@ -510,7 +510,7 @@ export function runTests() {
   const nonRunwayChart = buildFullDayChartData(guangzhouRow, seededNonRunway, false);
   assert(
     !nonRunwayChart.series.some((item) => item.key.startsWith("runway_")),
-    "row-seeded Chinese cities should not generate runway series when no AMSC runway data exists",
+    "row-seeded cities should not generate runway series after AMOS/AMSC runway removal",
   );
   const seededGuangzhou = seedChartRenderStateFromRow(guangzhouRow);
 
@@ -518,9 +518,6 @@ export function runTests() {
     ...seededGuangzhou,
     forecastDaily: [{ date: "2026-06-10", max_temp: 31, min_temp: 24 }] as any,
     probabilities: { engine: "legacy", distribution: [{ value: 30, probability: 0.4 }] },
-    runwayPlateHistory: {
-      "02L/20R": [{ timestamp: "12:45", temp_c: 28.4, value: 28.4 }],
-    },
     airportPrimaryTodayObs: [["12:45", 28.4]],
     airportCurrent: { temp: 28.4, obs_time: "12:45", max_so_far: 29 },
     airportPrimary: { temp: 28.4, obs_time: "12:45", max_so_far: 29 },
@@ -538,9 +535,6 @@ export function runTests() {
     times: ["12:00", "12:45"],
     temps: [27.8, 28.4],
     probabilities: { engine: "stale", distribution: [{ value: 28, probability: 0.2 }] },
-    runwayPlateHistory: {
-      "02L/20R": [{ timestamp: "12:45", temp_c: 28.4, value: 28.4 }],
-    },
     airportCurrent: { temp: 28.4, obs_time: "12:45", max_so_far: 28.4 },
     airportPrimary: { temp: 28.4, obs_time: "12:45", max_so_far: 28.4 },
     airportPrimaryTodayObs: [["12:45", 28.4]],
@@ -552,9 +546,6 @@ export function runTests() {
     times: ["12:00", "12:55"],
     temps: [27.8, 29.2],
     probabilities: { engine: "fresh", distribution: [{ value: 29, probability: 0.7 }] },
-    runwayPlateHistory: {
-      "02L/20R": [{ timestamp: "12:55", temp_c: 29.2, value: 29.2 }],
-    },
     airportCurrent: { temp: 29.2, obs_time: "12:55", max_so_far: 29.2 },
     airportPrimary: { temp: 29.2, obs_time: "12:55", max_so_far: 29.2 },
     airportPrimaryTodayObs: [["12:55", 29.2]],
@@ -847,46 +838,6 @@ export function runTests() {
     `Ankara refreshed airport-primary curve should be labelled as LTAC METAR, got ${refreshedAnkaraAirportSeries?.label}`,
   );
 
-  const guangzhouRunwayWithBadMadisChart = buildFullDayChartData(
-    {
-      city: "guangzhou",
-      local_date: "2026-06-10",
-      local_time: "12:55",
-      tz_offset_seconds: 8 * 60 * 60,
-      airport: "ZGGG",
-      temp_symbol: "°C",
-    } as any,
-    {
-      localDate: "2026-06-10",
-      localTime: "12:55",
-      times: ["00:00", "12:00", "18:00"],
-      temps: [25, 31, 28],
-      airportPrimary: {
-        source_code: "madis_hfmetar",
-        source_label: "NOAA MADIS",
-        station_code: "ZGGG",
-        temp: 28.9,
-        obs_time: "2026-06-10T04:55:00Z",
-      },
-      airportPrimaryTodayObs: [["2026-06-10T04:55:00Z", 28.9]],
-      runwayPlateHistory: {
-        "02L/20R": [
-          { timestamp: "12:51", temp_c: 28, value: 28 },
-          { timestamp: "12:55", temp_c: 28.4, value: 28.4 },
-        ],
-      },
-    } as any,
-    false,
-  );
-  assert(
-    guangzhouRunwayWithBadMadisChart.series.some((item) => item.key === "runway_02L_20R"),
-    "Guangzhou runway history should render the settlement runway line",
-  );
-  assert(
-    guangzhouRunwayWithBadMadisChart.series.some((item) => item.key === "madis"),
-    "Guangzhou should show the MADIS aggregate series alongside runway history when no AMSC runway sensor source exists",
-  );
-
   const chengduDetail = {
     forecastTodayHigh: null,
     debPrediction: 31,
@@ -897,15 +848,6 @@ export function runTests() {
     times: [],
     temps: [],
     modelCurves: undefined,
-    runwayPlateHistory: {
-      "02L/20R": [
-        { timestamp: "13:35", temp_c: 29.6, value: 29.6 },
-        { timestamp: "13:39", temp_c: 29.8, value: 29.8 },
-        { timestamp: "13:43", temp_c: 30.4, value: 30.4 },
-      ],
-    },
-    runwayBandHistory: undefined,
-    amos: null,
     current: null,
     airportCurrent: { temp: 28, obs_time: "13:00", max_so_far: 28 },
     airportPrimary: { temp: 28, obs_time: "13:00", max_so_far: 28 },
@@ -922,34 +864,8 @@ export function runTests() {
     current_max_so_far: 25.0,
     temp_symbol: "°C",
     tz_offset_seconds: 8 * 3600,
-    runway_plate_history: {
-      "02L/20R": [
-        { time: "2026-06-07T13:20:00+00:00", temp: 21.2 },
-        { time: "2026-06-07T13:30:00+00:00", temp: 21.4 },
-      ],
-    },
   } as any;
   const chengduMerged = mergeRowObservationIntoHourly(chengduDetail, staleChengduRow);
-  const chengduChart = buildFullDayChartData(
-    {
-      city: "chengdu",
-      local_date: "2026-06-10",
-      local_time: "13:46",
-      temp_symbol: "°C",
-      tz_offset_seconds: 8 * 3600,
-    } as any,
-    chengduMerged,
-    false,
-  );
-  const chengduSettlementRunway = chengduChart.series.find((item) => item.key === "runway_02L_20R");
-  assert(
-    chengduSettlementRunway?.values.some((value) => value === 30.4),
-    "current-date Chengdu detail runway history should remain visible after receiving a stale scan row",
-  );
-  assert(
-    !chengduSettlementRunway?.values.some((value) => value !== null && value <= 22),
-    "stale previous-day Chengdu scan rows must not append a fake latest runway point to current-date detail",
-  );
   assert(
     chengduMerged?.airportCurrent?.temp === 28,
     "stale previous-day scan rows must not replace current-date detail airport conditions",
@@ -1087,9 +1003,6 @@ export function runTests() {
       times: ["08:00", "09:00"],
       temps: [30.1, 30.9],
     },
-    runwayPlateHistory: {
-      "02L/20R": [{ timestamp: "2026-06-15T08:55:00Z", temp_c: 26.2 }],
-    },
   } as any);
   if (!cachedChengduDetail) throw new Error("test fixture should produce a full chart detail");
   const cachedChengduLivePatch = mergePatchIntoHourly(cachedChengduDetail, {
@@ -1098,7 +1011,6 @@ export function runTests() {
     changes: {
       temp: 26.8,
       observed_at_utc: "2026-06-15T09:03:00Z",
-      runway_points: [{ runway: "02L/20R", temp: 26.8 }],
     },
   } as any);
   const cachedChengduPatchedDetail = toFullChartDetail(cachedChengduLivePatch);
@@ -1109,10 +1021,6 @@ export function runTests() {
     restoredChengdu?.modelCurves?.ECMWF?.length === 2 &&
       restoredChengdu?.debHourlyPath?.temps?.includes(30.9),
     "instant-restore cache must keep the full DEB and multi-model detail after live merges",
-  );
-  assert(
-    (restoredChengdu?.runwayPlateHistory?.["02L/20R"] || []).length === 2,
-    "instant-restore cache must include live-merged runway history so returning to terminal shows it immediately",
   );
 
   const observationOnlyPayload = {
@@ -1139,9 +1047,6 @@ export function runTests() {
         source_code: "metar",
       },
     ],
-    runway_plate_history: {
-      "02L/20R": [{ time: "2026-06-15T17:45:00+08:00", tdz_temp: 27.1, end_temp: 26.8 }],
-    },
   };
   const observationSnapshot = observationPayloadToSnapshot(observationOnlyPayload);
   if (!observationSnapshot) throw new Error("test observation payload should produce an observation snapshot");
@@ -1158,10 +1063,6 @@ export function runTests() {
     observationMergedChengdu?.modelCurves?.ECMWF?.length === 2 &&
       observationMergedChengdu?.debHourlyPath?.temps?.includes(30.9),
     "observation endpoint snapshot must not clear DEB or multi-model chart detail",
-  );
-  assert(
-    (observationMergedChengdu?.runwayPlateHistory?.["02L/20R"] || []).length === 2,
-    "observation endpoint snapshot should append fresh runway history onto cached detail history",
   );
 
   _hourlyCache.clear();

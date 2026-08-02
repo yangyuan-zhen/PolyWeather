@@ -16,7 +16,6 @@ from web.core import (
     _CACHE_LOCK,
     CACHE_TTL,
     CACHE_TTL_ANKARA,
-    CACHE_TTL_KOREAN_AMOS,
     CITIES,
     CITY_RISK_PROFILES,
     SETTLEMENT_SOURCE_LABELS,
@@ -118,15 +117,6 @@ def _mgm_hourly_high(mgm: Dict[str, Any]) -> Optional[float]:
             values.append(value)
     return max(values) if values else None
 
-
-
-
-
-def _runway_history_temp_for_city(city: str, row: Dict[str, Any]) -> Optional[float]:
-    target_runway_max = _sf(row.get("target_runway_max"))
-    if target_runway_max is not None:
-        return target_runway_max
-    return _sf(row.get("tdz_temp"))
 
 
 _ANALYSIS_CACHE_STATS_LOCK = threading.Lock()
@@ -266,15 +256,10 @@ def get_analysis_cache_stats() -> Dict[str, Any]:
     return stats
 
 
-KOREAN_AMOS_CITIES = {"seoul", "busan"}
-
-
 def _analysis_ttl_for_city(city: str) -> int:
     city_lower = city.lower()
     if city_lower in TURKISH_MGM_CITIES:
         return CACHE_TTL_ANKARA
-    if city_lower in KOREAN_AMOS_CITIES:
-        return CACHE_TTL_KOREAN_AMOS
     if city_lower in HIGH_FREQ_AIRPORT_ANALYSIS_CITIES:
         return 60
     return CACHE_TTL
@@ -418,7 +403,7 @@ def _analyze(
     """Fetch, analyse, and return structured weather data for one city.
 
     Set *force_refresh_observations_only* to True for high-frequency
-    observation loops that need fresh METAR/AMOS/runway data but should
+    observation loops that need fresh METAR data but should
     keep the longer-lived multi-model forecast caches intact so the DEB
     blending does not fall back to the current observed temperature.
     """
@@ -542,14 +527,10 @@ def _analyze(
         utc_offset=utc_offset,
     )
 
-    # ── 2. Current conditions (settlement > AMOS runway sensors > METAR > MGM > NMC fallback) ──
+    # ── 2. Current conditions (settlement > METAR > MGM > NMC fallback) ──
     mc = metar.get("current", {}) if metar else {}
     mg_cur = mgm.get("current", {}) if mgm else {}
     sc_cur = settlement_current.get("current", {}) if settlement_current else {}
-    amos_data = raw.get("amos") or {}
-    if amos_data:
-        logger.info("AMOS _analyze: found amos data for city={} temp_c={} source={}",
-                    city, amos_data.get("temp_c"), amos_data.get("source"))
     use_settlement_current = settlement_source in {"hko", "noaa"} and bool(sc_cur)
     live_mc = mc if metar_current_is_today else {}
     primary_current = sc_cur if use_settlement_current else live_mc
@@ -560,15 +541,6 @@ def _analyze(
     cur_temp = _sf(primary_current.get("temp"))
     if cur_temp is not None and not _is_plausible_city_temp(city, cur_temp, sym):
         cur_temp = None
-    # AMOS runway sensor: authoritative for Korean airports (RKSI/RKPK)
-    if cur_temp is None:
-        amos_temp = _sf(amos_data.get("temp_c"))
-        if amos_temp is not None and _is_plausible_city_temp(city, amos_temp, sym):
-            cur_temp = amos_temp
-            current_source = "amos"
-            current_source_label = amos_data.get("source_label") or "AMOS"
-            current_station_code = amos_data.get("icao")
-            current_station_name = amos_data.get("station_label")
     if cur_temp is None:
         cur_temp = _sf(live_mc.get("temp"))
         if cur_temp is not None and not _is_plausible_city_temp(city, cur_temp, sym):
@@ -644,10 +616,6 @@ def _analyze(
             )
         except Exception:
             obs_time_str = str(obs_t)[:16]
-    if not obs_time_str and current_source == "amos":
-        amos_obs_time = amos_data.get("observation_time")
-        if amos_obs_time:
-            obs_time_str = _format_observation_time_local(amos_obs_time, utc_offset)
     nmc_fallback = None
     if not obs_time_str and current_source == "nmc":
         nmc_fallback = _fetch_nmc_current_fallback(city, use_fahrenheit=is_f)
@@ -657,9 +625,7 @@ def _analyze(
         )
 
     current_obs_raw = obs_t
-    if current_source == "amos":
-        current_obs_raw = amos_data.get("observation_time")
-    elif current_source == "nmc":
+    if current_source == "nmc":
         current_obs_raw = (
             nmc_fallback.get("publish_time")
             or nmc_fallback.get("timestamp")
@@ -679,15 +645,13 @@ def _analyze(
         now_utc=now_utc,
     )
 
-    airport_source_code = amos_data.get("source") if current_source == "amos" else "metar"
-    airport_source_code = airport_source_code or ("amos" if current_source == "amos" else "metar")
-    airport_source_label = amos_data.get("source_label") if current_source == "amos" else "METAR"
-    airport_source_label = airport_source_label or ("AMOS" if current_source == "amos" else "METAR")
-    airport_obs_raw = amos_data.get("observation_time") if current_source == "amos" else (metar.get("observation_time") if metar else None)
+    airport_source_code = "metar"
+    airport_source_label = "METAR"
+    airport_obs_raw = metar.get("observation_time") if metar else None
     airport_age_min = _observation_age_min(airport_obs_raw, now_utc) if airport_obs_raw else metar_age_min
     if airport_age_min is None:
         airport_age_min = metar_age_min
-    airport_temp = _sf(amos_data.get("temp_c")) if current_source == "amos" else _sf(live_mc.get("temp"))
+    airport_temp = _sf(live_mc.get("temp"))
     if airport_temp is not None and not _is_plausible_city_temp(city, airport_temp, sym):
         airport_temp = None
     airport_freshness = _build_observation_freshness(
@@ -1392,39 +1356,8 @@ def _analyze(
             }
 
     # ── Assemble result ──
-    runway_plate_history = {}
-    icao = risk.get("icao", "")
-    if isinstance(icao, str) and icao:
-        try:
-            from src.database.db_manager import DBManager
-            raw_runway_obs = DBManager().get_runway_obs_recent(icao, minutes=24 * 60)
-            for r in raw_runway_obs:
-                rw = r.get("runway")
-                if not rw:
-                    continue
-                temp_val = _runway_history_temp_for_city(city, r)
-                if temp_val is not None:
-                    if is_f:
-                        temp_val = round(temp_val * 9.0 / 5.0 + 32.0, 1)
-                    else:
-                        temp_val = round(temp_val, 1)
-                
-                time_val = r.get("otime_utc") or r.get("created_at")
-                if not time_val:
-                    continue
-                
-                if rw not in runway_plate_history:
-                    runway_plate_history[rw] = []
-                runway_plate_history[rw].append({
-                    "time": time_val,
-                    "temp": temp_val
-                })
-        except Exception:
-            logger.exception("Failed to fetch runway plate history for icao={}", icao)
-
     city_meta = CITIES.get(city, {}) or {}
     result = {
-        "runway_plate_history": runway_plate_history,
         "detail_depth": (
             "panel"
             if is_panel_mode
@@ -1470,17 +1403,17 @@ def _analyze(
             "report_time": primary_current.get("report_time"),
             "receipt_time": primary_current.get("receipt_time"),
             "obs_time_epoch": primary_current.get("obs_time_epoch"),
-            "wind_speed_kt": _sf(amos_data.get("wind_kt")) if current_source == "amos" else _sf(primary_current.get("wind_speed_kt")),
+            "wind_speed_kt": _sf(primary_current.get("wind_speed_kt")),
             "wind_dir": _sf(primary_current.get("wind_dir")),
             "humidity": _sf(primary_current.get("humidity")),
-            "pressure_hpa": _sf(amos_data.get("pressure_hpa")) if current_source == "amos" else _sf(primary_current.get("pressure_hpa")),
+            "pressure_hpa": _sf(primary_current.get("pressure_hpa")),
             "cloud_desc": cloud_desc,
             "clouds_raw": [
                 {"cover": c.get("cover"), "base": c.get("base")} for c in clouds
             ],
             "visibility_mi": _sf(primary_current.get("visibility_mi")),
             "wx_desc": primary_current.get("wx_desc"),
-            "raw_metar": amos_data.get("raw_metar") if current_source == "amos" else primary_current.get("raw_metar"),
+            "raw_metar": primary_current.get("raw_metar"),
         },
         "airport_current": {
             "temp": airport_temp,
@@ -1491,17 +1424,17 @@ def _analyze(
             "report_time": metar.get("report_time") if metar else None,
             "receipt_time": metar.get("receipt_time") if metar else None,
             "obs_time_epoch": metar.get("obs_time_epoch") if metar else None,
-            "wind_speed_kt": _sf(amos_data.get("wind_kt")) if current_source == "amos" else _sf(live_mc.get("wind_speed_kt")),
+            "wind_speed_kt": _sf(live_mc.get("wind_speed_kt")),
             "wind_dir": _sf(live_mc.get("wind_dir")),
             "humidity": _sf(live_mc.get("humidity")),
             "cloud_desc": metar.get("cloud_desc") if metar else None,
             "visibility_mi": _sf(live_mc.get("visibility_mi")),
             "wx_desc": live_mc.get("wx_desc"),
-            "raw_metar": amos_data.get("raw_metar") if current_source == "amos" else live_mc.get("raw_metar"),
+            "raw_metar": live_mc.get("raw_metar"),
             "source_code": airport_source_code,
             "source_label": airport_source_label,
             "freshness": airport_freshness,
-            "stale_for_today": False if current_source == "amos" else (bool(metar) and not metar_current_is_today),
+            "stale_for_today": bool(metar) and not metar_current_is_today,
             "last_observation_local_date": metar.get("observation_local_date") if metar else None,
             "current_local_date": local_date_str,
         },
@@ -1518,7 +1451,6 @@ def _analyze(
         "mgm": mgm_data,
         "mgm_nearby": raw.get("mgm_nearby", []),
         "nearby_source": raw.get("nearby_source") or ("mgm" if city.lower() in TURKISH_MGM_CITIES else "metar_cluster"),
-        "amos": amos_data if amos_data and amos_data.get("source") else None,
         "forecast": {
             "today_high": om_today,
             "daily": forecast_daily,

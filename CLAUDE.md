@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PolyWeather Pro — a paid institutional weather-intelligence terminal. 51 monitored cities with real-time METAR/AMOS/MADIS observations, DEB multi-model temperature blending, DEB normal-distribution probability calibration (deb_normal, legacy Gaussian fallback), and intraday bias correction. Weather-decision workspace plus a model-vs-market comparison layer (Polymarket arbitrage overview, no trading advice). Next.js 15 + React 19 frontend (Docker / VPS, behind Cloudflare + Nginx), FastAPI backend (VPS), Telegram bot.
+PolyWeather Pro — a paid institutional weather-intelligence terminal. 51 monitored cities with real-time METAR/MADIS/CoWIN/HKO/MGM/JMA AMeDAS observations, DEB multi-model temperature blending, DEB normal-distribution probability calibration (deb_normal, legacy Gaussian fallback), and intraday bias correction. Weather-decision workspace plus a model-vs-market comparison layer (Polymarket arbitrage overview, no trading advice). Next.js 15 + React 19 frontend (Docker / VPS, behind Cloudflare + Nginx), FastAPI backend (VPS), Telegram bot.
 
 **Business model**: Paid-only, 29.9 USDC/month or 79.9 USDC/quarter, referral first month 20 USDC. New users get a one-time 3-day trial. Landing page is public; `/terminal` requires login + active subscription.
 

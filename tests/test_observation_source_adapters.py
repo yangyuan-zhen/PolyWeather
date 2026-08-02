@@ -149,17 +149,17 @@ def test_source_adapter_reports_parse_error_for_unusable_source_rows():
     from web.services.observation_source_adapters import collect_observation_source
 
     class FakeWeather:
-        def _attach_korean_amos_data(self, results, city, use_fahrenheit):
+        def _attach_israel_ims_data(self, results, city):
             results["bad"] = {
-                "source": "amos",
+                "source": "ims",
                 "observation_time": "2026-06-14T01:00:00+00:00",
-                "icao": "RKSS",
+                "station_id": "LLBG",
             }
 
     result = collect_observation_source(
         FakeWeather(),
-        "amos",
-        "seoul",
+        "ims",
+        "tel aviv",
         use_fahrenheit=False,
     )
 

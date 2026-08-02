@@ -56,8 +56,8 @@ export function runTests() {
   assert(backendCadence?.label.includes("Custom Feed"), "source cadence should include the source label");
 
 
-  const amosCadence = buildCadence({}, { airportPrimary: { source_label: "AMOS runway" } }, false);
-  assert(amosCadence?.cadence === "60s", "AMOS should fall back to 60s source cadence");
+  const cowinCadence = buildCadence({}, { airportPrimary: { source_label: "CoWIN 6087" } }, false);
+  assert(cowinCadence?.cadence === "60s", "CoWIN reference station should fall back to 60s source cadence");
 
   const madisCadence = buildCadence({}, { airportPrimary: { source_code: "madis_hfmetar" } }, false);
   assert(madisCadence?.cadence === "300s", "MADIS should fall back to 300s source cadence");
