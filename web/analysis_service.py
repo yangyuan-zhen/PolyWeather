@@ -1929,6 +1929,40 @@ def _build_city_chart_detail_payload(
     data: Dict[str, Any],
     resolution: Optional[str] = "10m",
 ) -> Dict[str, Any]:
+    # The 72h chart view needs multi-model hourly curves. Cached payloads
+    # (scan-terminal batch / panel) can carry daily-only multi_model data, so
+    # top up the hourly curves lazily here instead of letting the chart render
+    # an empty 3D view.
+    mm = data.get("multi_model") if isinstance(data.get("multi_model"), dict) else {}
+    if not (mm.get("hourly_times") or []):
+        try:
+            from src.data_collection.forecast_source_bundle import (
+                ensure_multi_model_hourly_payload,
+            )
+
+            city = str(data.get("name") or data.get("city") or "").strip().lower()
+            lat = _sf(data.get("lat"))
+            lon = _sf(data.get("lon"))
+            if (lat is None or lon is None) and city:
+                meta = CITY_REGISTRY.get(city)
+                if isinstance(meta, dict):
+                    if lat is None:
+                        lat = _sf(meta.get("lat"))
+                    if lon is None:
+                        lon = _sf(meta.get("lon"))
+            if lat is not None and lon is not None:
+                ensured = ensure_multi_model_hourly_payload(
+                    _weather,
+                    mm,
+                    city=city,
+                    lat=lat,
+                    lon=lon,
+                    use_fahrenheit=str(data.get("temp_symbol") or "°C") == "°F",
+                )
+                if isinstance(ensured, dict) and ensured.get("hourly_times"):
+                    data = {**data, "multi_model": ensured}
+        except Exception:
+            pass
     return _city_chart_payload_detail(data, resolution=resolution)
 
 
