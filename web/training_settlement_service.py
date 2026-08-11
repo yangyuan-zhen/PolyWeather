@@ -68,8 +68,14 @@ def run_training_settlement_cycle(
     analysis_runner: Optional[AnalysisRunner] = None,
     actual_reconciler: Optional[ActualReconciler] = None,
     lookback_days: int = 10,
+    skip_analysis: bool = False,
 ) -> Dict[str, Any]:
     registry = city_registry or CITY_REGISTRY
+    # Per-city _analyze refreshes forecasts/deb_prediction in daily_records, but
+    # on a full deployment the web service already maintains those records; the
+    # training cycle only needs settled truth (reconcile) plus the store.  Full
+    # per-city analysis across 51 cities takes 40+ minutes and accumulates the
+    # memory that used to OOM this worker before training even started.
     run_analysis = analysis_runner or _default_analysis_runner
     reconcile_actual = actual_reconciler or _default_actual_reconciler
     safe_lookback = max(1, int(lookback_days or 1))
@@ -94,7 +100,9 @@ def run_training_settlement_cycle(
             continue
 
         try:
-            analysis_payload = run_analysis(city)
+            analysis_payload = None
+            if not skip_analysis:
+                analysis_payload = run_analysis(city)
             if _can_reconcile_actual_history(meta):
                 reconcile_payload = reconcile_actual(city, lookback_days=safe_lookback)
             else:
@@ -114,8 +122,10 @@ def run_training_settlement_cycle(
                     "city": city,
                     "ok": reconcile_ok,
                     "status": "processed" if reconcile_ok else "failed",
-                    "analysis_status": str(
-                        (analysis_payload or {}).get("status") or "ok"
+                    "analysis_status": (
+                        "skipped" if skip_analysis else str(
+                            (analysis_payload or {}).get("status") or "ok"
+                        )
                     ),
                     "reconcile": dict(reconcile_payload or {}),
                 }

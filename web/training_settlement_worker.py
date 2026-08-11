@@ -65,10 +65,23 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = str(os.getenv(name) or "").strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
 def _run_once(*, lookback_days: int, cities: Optional[list[str]]) -> dict:
+    skip_analysis = _env_bool(
+        "POLYWEATHER_TRAINING_SETTLEMENT_SKIP_ANALYSIS", default=False
+    )
     result = run_training_settlement_cycle(
         cities=cities,
         lookback_days=lookback_days,
+        skip_analysis=skip_analysis,
     )
     try:
         snapshot_result = refresh_deb_weight_snapshots(cities=cities)
@@ -77,7 +90,9 @@ def _run_once(*, lookback_days: int, cities: Optional[list[str]]) -> dict:
         logger.exception("deb weight snapshot refresh failed: {}", exc)
         result["weight_snapshots"] = {"error": str(exc)}
     try:
-        daily_records = DailyRecordRepository().load_all()
+        daily_records = DailyRecordRepository().load_all(
+            fields=("forecasts", "actual_high", "deb_prediction", "mu")
+        )
         calibration = train_deb_quantile_calibrator(
             daily_records,
             model_dir=str(
@@ -93,7 +108,9 @@ def _run_once(*, lookback_days: int, cities: Optional[list[str]]) -> dict:
         logger.exception("deb ml calibration training failed: {}", exc)
         result["deb_ml_calibration"] = {"error": str(exc)}
     try:
-        daily_records = DailyRecordRepository().load_all()
+        daily_records = DailyRecordRepository().load_all(
+            fields=("forecasts", "actual_high", "deb_prediction", "mu")
+        )
         stats = train_deb_lead_stats(daily_records)
         DebNormalResidualStatsRepository().upsert_stats(stats)
         result["deb_normal_residual_stats"] = {

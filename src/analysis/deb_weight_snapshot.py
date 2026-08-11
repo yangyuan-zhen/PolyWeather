@@ -87,7 +87,9 @@ def refresh_deb_weight_snapshots(
 ) -> dict[str, Any]:
     """Regenerate and persist DEB weight snapshots for all (or selected) cities."""
     db = db or RuntimeStateDB.instance()
-    daily_records = DailyRecordRepository(db).load_all()
+    daily_records = DailyRecordRepository(db).load_all(
+        fields=("forecasts", "actual_high", "deb_prediction", "mu")
+    )
     repo = DebWeightSnapshotRepository(db)
     updated = 0
     for city, by_date in (daily_records or {}).items():

@@ -8,7 +8,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from loguru import logger
 
@@ -590,7 +590,17 @@ class DailyRecordRepository:
     def __init__(self, db: Optional[RuntimeStateDB] = None):
         self.db = db or RuntimeStateDB.instance()
 
-    def load_all(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
+    def load_all(
+        self, fields: Optional[Iterable[str]] = None
+    ) -> Dict[str, Dict[str, Dict[str, Any]]]:
+        """Load all daily records as {city: {target_date: payload}}.
+
+        ``fields`` optionally restricts each payload to the given top-level keys
+        so memory-heavy training loads (forecasts / actual_high / deb_prediction)
+        do not pull full analysis payloads (which can be tens of KB per row) into
+        RAM.  Defaults to the full payload for backward compatibility.
+        """
+        keep: Optional[set] = set(fields) if fields is not None else None
         out: Dict[str, Dict[str, Dict[str, Any]]] = {}
         with self.db.connect() as conn:
             rows = conn.execute(
@@ -601,6 +611,8 @@ class DailyRecordRepository:
                 payload = json.loads(row["payload_json"])
             except Exception:
                 continue
+            if keep is not None:
+                payload = {k: payload[k] for k in keep if k in payload}
             city = str(row["city"])
             date_str = str(row["target_date"])
             out.setdefault(city, {})[date_str] = payload
