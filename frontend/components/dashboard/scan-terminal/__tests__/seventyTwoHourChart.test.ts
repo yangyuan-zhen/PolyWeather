@@ -54,6 +54,10 @@ export function runTests() {
     data[0].ts === Date.UTC(2026, 7, 11, 0, 0),
     "first row must be local midnight (chart ts convention: local wall time as UTC epoch)",
   );
+  assert(
+    data[0].label === "8/11 00:00" && data[24].label === "8/12 00:00" && data[48].label === "8/13 00:00",
+    "72h rows must carry M/D HH:00 labels so the x axis shows the three day boundaries",
+  );
 
   // Median / min / max aggregation per hour.
   const first = data[0];

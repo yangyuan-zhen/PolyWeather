@@ -2051,6 +2051,13 @@ function shouldRenderModelCurve(
   return latestValidTs !== null && latestValidTs >= currentTs - SHORT_RANGE_MODEL_STALE_GRACE_MS;
 }
 
+function formatDailySlotLabel(timeStr: string): string {
+  // "2026-08-11T00:00" -> "8/11 00:00"
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{1,2}):(\d{2})/.exec(String(timeStr || "").trim());
+  if (!match) return String(timeStr || "");
+  return `${Number(match[2])}/${Number(match[3])} ${match[4]}:${match[5]}`;
+}
+
 function build72hChartData(
   row: ScanOpportunityRow | null,
   hourly: ChartRenderState,
@@ -2066,6 +2073,8 @@ function build72hChartData(
   modelTimes.forEach((timeStr, index) => {
     const ts = getCityLocalUtcTimestamp(timeStr, tzOffset);
     if (ts === null) return;
+    // X-axis label: "M/D HH:00" so the three day boundaries are visible.
+    const label = formatDailySlotLabel(timeStr);
     const values: number[] = [];
     Object.keys(modelCurves).forEach((key) => {
       const arr = modelCurves[key];
@@ -2073,12 +2082,13 @@ function build72hChartData(
       if (value !== null) values.push(value);
     });
     if (values.length === 0) {
-      rows.push({ ts, model_median: null, model_min: null, model_max: null });
+      rows.push({ ts, label, model_median: null, model_min: null, model_max: null });
       return;
     }
     const sorted = [...values].sort((a, b) => a - b);
     rows.push({
       ts,
+      label,
       model_median: sorted[Math.floor(values.length / 2)],
       model_min: sorted[0],
       model_max: sorted[values.length - 1],
