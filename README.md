@@ -23,7 +23,6 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 
 ## Product Status (2026-08-01)
 
-- Arbitrage comparison live: Polymarket overview endpoints (`/api/arbitrage/overview`, `/overview-batch`) compare model probability vs market-implied probability across all cities (sidebar item 5).
 - DEB normal probability engine live: integer-degree probability buckets come from the DEB normal engine (`deb_normal`).
 - WeatherNext2 removed: the Google WeatherNext2 GCS Zarr worker was retired; probability and forecasts rely on the DEB blend over the Open-Meteo model suite.
 - Subscription live: `Pro Monthly 29.9 USDC / 30 days` and `Pro Quarterly 79.9 USDC / 90 days`.
@@ -141,7 +140,6 @@ npm run dev
 - Intraday analysis now separates meteorology conclusion, evidence chain, invalidation rules, confirmation rules, calibrated probability, and market reference.
 - `TAF` is used as an airport-side confirmation layer, not as the main temperature model (sole source: NOAA AviationWeather).
 - Calibrated probability uses the DEB normal-distribution engine by default, with the legacy Gaussian path as fallback; model vote counts remain an explanatory consensus line, not the final probability.
-- Polymarket arbitrage comparison is a terminal sidebar item for Pro users.
 - Browser extension remains a lightweight monitoring + basic-bias product, while the site holds the full analysis experience.
 - Realtime terminal charts use SSE patches plus replayable event storage; full HTTP detail remains the authoritative snapshot.
 - Chart observations are shown in the city's local time, not the browser timezone.

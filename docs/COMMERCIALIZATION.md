@@ -29,7 +29,6 @@ PolyWeather 是面向温度结算场景的气象决策层，不是通用天气�
 | 私有频道推送 | 已上线 | 可拆分业务频道 |
 | 实时终端 | 已上线 | SSE Patch + Redis Stream replay |
 | Telegram 双语推送 | 已上线 | 中英文一起推送，结算跑道端点口径 |
-| 套利对比 | 已上线 | 模型概率 vs 市场隐含概率（`/api/arbitrage/overview`，侧边栏第 5 项） |
 
 ## 3. 权限模型（当前）
 

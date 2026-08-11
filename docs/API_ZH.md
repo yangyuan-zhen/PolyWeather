@@ -34,8 +34,6 @@ flowchart LR
 | `/api/city/{name}/detail` | GET | 聚合详情（含 market_scan） |
 | `/api/history/{name}` | GET | 历史对账 |
 | `/api/events` | GET | SSE 实时观测事件流 |
-| `/api/arbitrage/overview` | GET | Polymarket 套利对比总览（模型概率 vs 市场隐含概率） |
-| `/api/arbitrage/overview-batch` | GET | 套利对比批量视图 |
 | `/api/internal/collector-patch` | POST | 采集器内部写入实时观测 patch |
 
 ### `GET /api/events`

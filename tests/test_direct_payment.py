@@ -23,6 +23,7 @@ def _setup_env(monkeypatch, tmp_path):
     )
     monkeypatch.setenv("POLYWEATHER_DB_PATH", str(tmp_path / "payments.db"))
     monkeypatch.delenv("POLYWEATHER_PAYMENT_DIRECT_RECEIVER_ADDRESS", raising=False)
+    monkeypatch.delenv("POLYWEATHER_PAYMENT_RECEIVER_CONTRACT", raising=False)
 
 
 def _setup_multichain_env(monkeypatch, tmp_path):
@@ -54,6 +55,7 @@ def _setup_multichain_env(monkeypatch, tmp_path):
     )
     monkeypatch.setenv("POLYWEATHER_DB_PATH", str(tmp_path / "payments.db"))
     monkeypatch.delenv("POLYWEATHER_PAYMENT_DIRECT_RECEIVER_ADDRESS", raising=False)
+    monkeypatch.delenv("POLYWEATHER_PAYMENT_RECEIVER_CONTRACT", raising=False)
 
 
 def test_config_payload_exposes_polygon_and_ethereum_payment_routes(

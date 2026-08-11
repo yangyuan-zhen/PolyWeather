@@ -52,7 +52,6 @@ import { useRelativeTime } from "@/hooks/useRelativeTime";
 import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { UsageGuideDashboard } from "@/components/dashboard/scan-terminal/UsageGuideDashboard";
 import { ModelSummaryDashboard } from "@/components/dashboard/scan-terminal/ModelSummaryDashboard";
-import { ArbitrageDashboard } from "@/components/dashboard/scan-terminal/ArbitrageDashboard";
 import { TerminalOnboardingTour } from "@/components/dashboard/scan-terminal/TerminalOnboardingTour";
 import {
   LiveTemperatureThresholdChart,
@@ -107,7 +106,6 @@ const TERMINAL_NAV_ITEMS = [
   { key: "thresholds", Icon: Activity, labelEn: "Decision", labelZh: "天气决策" },
   { key: "modelSummary", Icon: Table2, labelEn: "Model Summary", labelZh: "模型汇总" },
   { key: "training", Icon: GraduationCap, labelEn: "Training", labelZh: "训练数据" },
-  { key: "arbitrage", Icon: Scale, labelEn: "Arbitrage", labelZh: "套利对比" },
   { key: "guide", Icon: BookOpenCheck, labelEn: "Guide", labelZh: "使用指南" },
 ] as const;
 const AUTH_PROFILE_REQUEST_TIMEOUT_MS = 4500;
@@ -1167,8 +1165,6 @@ function PolyWeatherTerminal({
               isEn={isEn}
               generatedText={modelSummaryGeneratedText}
             />
-          ) : activeNavKey === "arbitrage" ? (
-            <ArbitrageDashboard isEn={isEn} />
           ) : activeNavKey === "guide" ? (
             <UsageGuideDashboard isEn={isEn} />
           ) : (

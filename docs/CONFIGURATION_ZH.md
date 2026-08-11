@@ -326,18 +326,11 @@ POLYWEATHER_PAYMENT_ACCEPTED_TOKENS_JSON=[{"code":"usdc_polygon","symbol":"USDC"
 - Ethereum 行如果没有部署 checkout 合约，必须设置 `supports_contract_checkout=false`，前端会显示手动转账并阻止钱包合约支付。
 - 私有 RPC URL 带 API key 时应放入真实 `.env` 或密钥管理，不要提交。
 
-### 6.4 套利对比 / 训练结算配置示例
+### 6.4 训练结算配置示例
 
 以下均为可选模块，不开即可用默认行为：
 
 ```env
-# 套利对比（Polymarket overview）
-POLYWEATHER_ARBITRAGE_REDIS_CACHE_ENABLED=1
-POLYWEATHER_ARBITRAGE_REDIS_CACHE_TTL_SEC=3600
-POLYWEATHER_ARBITRAGE_BATCH_CONCURRENCY=4
-POLYWEATHER_ARBITRAGE_BATCH_CACHE_TTL_SEC=12
-POLYWEATHER_ARBITRAGE_BATCH_PARTIAL_TIMEOUT_MS=15000
-
 # 训练结算服务（初始延迟 60s、周期 6h、回看 10 天）
 POLYWEATHER_TRAINING_SETTLEMENT_INITIAL_DELAY_SEC=60
 POLYWEATHER_TRAINING_SETTLEMENT_INTERVAL_SEC=21600
@@ -354,7 +347,6 @@ POLYWEATHER_OBSERVATION_COLLECTOR_CACHE_REFRESH_WORKERS=2
 
 说明：
 
-- 套利对比接口无 Redis 时会退化为单进程内存缓存（`POLYWEATHER_ARBITRAGE_REDIS_CACHE_ENABLED`）。
 - 观测采集器各来源间隔代码有下限钳制（如 METAR 最低 1800s），参考 `web/observation_collector_service.py`。
 
 ### 6.5 机器人推送建议配置

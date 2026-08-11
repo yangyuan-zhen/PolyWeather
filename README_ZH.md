@@ -16,7 +16,6 @@
 
 ## 当前产品状态（2026-08-01）
 
-- 已上线套利对比：Polymarket 概览接口（`/api/arbitrage/overview`、`/overview-batch`）跨全城市对比模型概率与市场隐含概率（侧边栏第 5 项）。
 - 已上线 DEB 正态概率引擎：整度概率桶由 `deb_normal` 正态引擎输出。
 - 已移除 WeatherNext2：Google WeatherNext2 GCS Zarr worker 下线，概率与预报基于 Open-Meteo 模型套件上的 DEB 融合。
 - 已上线订阅制：`Pro 月付 29.9 USDC / 30 天`，`Pro 季度 79.9 USDC / 90 天`。
@@ -96,7 +95,6 @@ flowchart LR
     WX --> OM["Open-Meteo"]
     WX --> SETTLE["NOAA Synoptic / HKO / IMGW（结算源）"]
 
-    API --> ARB["Polymarket 套利对比"]
     API --> ANA["DEB + 小时共识 + 概率 + 市场扫描"]
     API --> SSE["SSE /api/events"]
     WX --> SSE
@@ -130,7 +128,6 @@ npm run dev
 
 ## 近期更新
 
-- 套利对比已上线：跨全城市批量概览接口，对比模型概率与市场隐含概率，终端侧边栏第 5 项。
 - 概率主引擎为 DEB 正态引擎（`deb_normal`）。
 - WeatherNext2 已移除：Google WeatherNext2 worker 及其侧边栏入口下线，概率与预报基于 Open-Meteo 模型套件上的 DEB 融合。
 - 数据源清理：Wunderground、台北 CWA、AMSC AWOS（中国跑道）、NMC/CMA（中国内地）已移除；深圳结算源切换为流浮山 HKO（LFS）。

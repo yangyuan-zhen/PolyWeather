@@ -53,7 +53,6 @@
 | --- | --- | --- |
 | MiMo (xiaomimimo) | 城市分析 AI 评论 | ✅ 当前使用 |
 | DeepSeek | AI fallback | 备用 |
-| Polymarket public-search | 套利对比动态城市列表 | ✅ |
 | Polygon RPC | checkout 合约支付、Polygon USDC / USDC.e 自动确认 | ✅ |
 | Ethereum RPC | Ethereum 主网 USDC 直转确认 | ✅（启用多链支付时必须） |
 | WalletConnect | 前端钱包连接 | ⚠️ 未配 key 时钱包入口降级 |

@@ -2,6 +2,10 @@
 
 ## 1.9.0 - 2026-08-01（待发布）
 
+### 移除套利对比
+- **Polymarket 套利对比整套下线**：删除 `/api/arbitrage/*` 路由与服务（`web/routers/arbitrage.py`、`web/services/arbitrage_service.py`）、Redis 结果缓存与 warmer 预热、前端 `ArbitrageDashboard` 与侧边栏第 5 项、`arbitrage-client`/`arbitrage-types` 客户端模块。
+- 相关配置（`POLYWEATHER_ARBITRAGE_*`、`POLYWEATHER_WARMER_ARBITRAGE_INTERVAL_SEC`）与文档清理。
+
 ### 移除 WeatherNext2
 - **Google WeatherNext2 整套下线**：删除 `weathernext2_worker` 服务、GCS Zarr 读取（`weathernext2_fetcher.py`）、概率构建（`weathernext2_sources.py`）、LightGBM 分位校准（`weathernext2_calibration.py`）与 worker 入口；`docker-compose.yml`、`deploy.sh`、`.env.example` 对应配置清理。
 - 概率回退链收敛：`deb_normal` 为唯一概率引擎（失败时无概率载荷，`probability_engine=None`），不再有 weathernext2 fallback 分支。
@@ -13,7 +17,6 @@
 
 ### 新增能力
 - **WeatherNext2 接入**：新增 `weathernext2_worker` 服务，从 GCS Zarr 读取 Google WeatherNext2 集合预报（`WEATHERNEXT2_BACKEND=gcs_zarr`），6 小时周期生成 `weathernext2_city_highs.json` 高温度数文件（带 `.bak` 兜底），并通过 `src/analysis/weathernext2_calibration.py` 的 LightGBM 校准器输出 q10 / q50 / q90 分位。
-- **套利对比上线**：新增 Polymarket 套利对比模块（侧边栏第 5 项），提供 `/api/arbitrage/overview`、`/api/arbitrage/overview-batch`（全城市批量概览）与 `/api/arbitrage/cities`（动态城市列表，基于 Polymarket public-search 结果）；支持 Redis 共享缓存（默认 TTL 3600s）、批量并发（默认 4）与部分超时（默认 15s）。
 - **DEB 正态概率引擎**：新增 `src/analysis/deb_probability.py`，以正态分布计算整度温度概率 `P(T==τ)=Φ((τ+0.5-μ)/σ)-Φ((τ-0.5-μ)/σ)`，取代 legacy 高斯分桶成为主概率路径；引擎优先级为 `dead_market > deb_normal > weathernext2`，legacy 高斯保留为 `trend_engine.py` 回退分支（`engine_mode` 展示 `deb_normal` / `legacy`）。
 - **训练结算服务**：新增 `training_settlement` 服务（初始延迟 60s、周期 6h、回看 10 天），配合领域仓库重构（`src/database/repos/` 9 个领域仓库）与 SQLite 主路径收口。
 - **Ops 能力扩展**：新增 `/api/ops/leaderboard/weekly`、`/api/ops/memberships`、`/api/ops/feedback`、`/api/ops/users/grant-points`；后端 ops 逻辑收口为 `web/services/ops/` 子包（config / health / market_opportunities / payments / users）；`web/services/ops/health.py` 支持探测 14 个外部服务。
@@ -40,8 +43,7 @@
 
 ### 修复与优化
 - **DEB 正态引擎校准改进**：残差训练基准改为存储的 `deb_prediction`（与推理一致，消除 14% 记录因基准错位导致的调整错配）；σ 改为 MAD 稳健估计（退化池返回下限，避免单个离群值撑大，并按重尾残差加 1.05 膨胀）；城市/温度段偏差组样本门槛从 10 提到 30（剔除 >=37C 等小样本组的有害调整）。重跑校准对比：整体 PIT chi2 624→57、std 0.218→0.294（近理想 0.289）、cov90 0.925→0.824，33-36C 段 chi2 130→44、cov90 0.978→0.897。
-- 套利对比由单城市切为全城市同时展示（新增批量概览接口，HEAD `4a136d5ca`）。
-- 前端侧边栏扩展为 6 项（概览、日内分析、WeatherNext2、多日预报、套利对比、训练数据）。
+- 前端侧边栏（概览、日内分析、WeatherNext2、多日预报、训练数据）。
 
 ## 1.8.1 - 2026-05-28
 
