@@ -504,7 +504,7 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
               <figure className="landing-hover-lift rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
                 <div className="aspect-[9/16] max-h-[520px] overflow-hidden rounded-md border border-slate-100 bg-slate-100">
                   <img
-                    src="/static/tel.png"
+                    src="/static/tel.webp"
                     width="420"
                     height="640"
                     alt={isEn ? "Telegram alert screenshot" : "Telegram 提醒截图"}

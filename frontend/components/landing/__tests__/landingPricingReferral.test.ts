@@ -83,7 +83,7 @@ export function runTests() {
     "WebP preview must be materially smaller than the PNG LCP image",
   );
   assert(source.includes("/static/web.webp"), "landing page must load the lighter WebP product preview image");
-  assert(source.includes("/static/tel.png"), "landing page must include the Telegram alert screenshot");
+  assert(source.includes("/static/tel.webp"), "landing page must include the Telegram alert screenshot (webp, not the 352KB png)");
   assert(source.includes("#screenshots"), "landing navigation must expose the product screenshot section");
   assert(source.includes("#supported-cities"), "landing navigation must expose the supported cities section");
   assert(source.includes('id="supported-cities"'), "landing page must include a supported cities section");
