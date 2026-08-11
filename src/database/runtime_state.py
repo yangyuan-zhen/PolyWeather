@@ -349,6 +349,7 @@ class RuntimeStateDB:
             for col, ddl in (
                 ("city_biases_json", "TEXT NOT NULL DEFAULT '{}'"),
                 ("temp_biases_json", "TEXT NOT NULL DEFAULT '{}'"),
+                ("temp_sigmas_json", "TEXT NOT NULL DEFAULT '{}'"),
             ):
                 if col not in cols:
                     conn.execute(
@@ -1809,14 +1810,15 @@ class DebNormalResidualStatsRepository:
                 """
                 INSERT INTO deb_normal_residual_stats_store (
                     stats_key, lead_biases_json, lead_sigmas_json,
-                    city_biases_json, temp_biases_json,
+                    city_biases_json, temp_biases_json, temp_sigmas_json,
                     samples, window_days, computed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(stats_key) DO UPDATE SET
                     lead_biases_json = excluded.lead_biases_json,
                     lead_sigmas_json = excluded.lead_sigmas_json,
                     city_biases_json = excluded.city_biases_json,
                     temp_biases_json = excluded.temp_biases_json,
+                    temp_sigmas_json = excluded.temp_sigmas_json,
                     samples = excluded.samples,
                     window_days = excluded.window_days,
                     computed_at = excluded.computed_at
@@ -1827,6 +1829,7 @@ class DebNormalResidualStatsRepository:
                     json.dumps(stats.get("lead_sigmas") or {}, ensure_ascii=False),
                     json.dumps(stats.get("city_biases") or {}, ensure_ascii=False),
                     json.dumps(stats.get("temp_biases") or {}, ensure_ascii=False),
+                    json.dumps(stats.get("temp_sigmas") or {}, ensure_ascii=False),
                     int(stats.get("samples") or 0),
                     int(stats.get("window_days") or 0),
                     time.time(),
@@ -1839,7 +1842,7 @@ class DebNormalResidualStatsRepository:
             row = conn.execute(
                 """
                 SELECT lead_biases_json, lead_sigmas_json,
-                       city_biases_json, temp_biases_json,
+                       city_biases_json, temp_biases_json, temp_sigmas_json,
                        samples, window_days, computed_at
                 FROM deb_normal_residual_stats_store
                 WHERE stats_key = ?
@@ -1853,6 +1856,7 @@ class DebNormalResidualStatsRepository:
             "lead_sigmas": json.loads(row["lead_sigmas_json"] or "{}"),
             "city_biases": json.loads(row["city_biases_json"] or "{}"),
             "temp_biases": json.loads(row["temp_biases_json"] or "{}"),
+            "temp_sigmas": json.loads(row["temp_sigmas_json"] or "{}"),
             "samples": int(row["samples"] or 0),
             "window_days": int(row["window_days"] or 0),
             "computed_at": float(row["computed_at"] or 0),

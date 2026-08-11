@@ -99,9 +99,20 @@ def _bias_for_lead(stats: Optional[Dict[str, Any]], lead_key: int) -> float:
     return value if value is not None else 0.0
 
 
-def _sigma_for_lead(stats: Optional[Dict[str, Any]], lead_key: int) -> float:
+def _sigma_for_lead(
+    stats: Optional[Dict[str, Any]], lead_key: int, temp_key: Optional[str] = None
+) -> float:
     if not stats:
         return 2.5
+    # Temperature-stratum sigma (per lead) wins when available: hot-day
+    # residual pools are much tighter than the pooled lead pool, and using the
+    # pooled sigma made >=37C PIT std collapse to ~0.19 (over-confident).
+    if temp_key:
+        temp_sigmas = stats.get("temp_sigmas") or {}
+        lead_temp = temp_sigmas.get(str(lead_key)) or {}
+        value = _sf(lead_temp.get(temp_key))
+        if value is not None:
+            return max(value, MIN_SIGMA)
     sigmas = stats.get("lead_sigmas") or {}
     value = _sf(sigmas.get(str(lead_key)))
     if value is None:
@@ -215,7 +226,7 @@ def _build_deb_normal_probability_payload(
     bias = _bias_for_lead(stats, lead_key)
     temp_key = _temp_bucket_key(deb_c)
     bias += _bias_adjustment(stats, lead_key, city, temp_key)
-    sigma = _sigma_for_lead(stats, lead_key)
+    sigma = _sigma_for_lead(stats, lead_key, temp_key)
     mu_c = deb_c + bias
 
     # Celsius bucket range covering mu +- 4 sigma.
@@ -420,6 +431,7 @@ def train_deb_lead_stats(
             city_biases.setdefault(str(lead_key), {})[city] = round(adj, 3)
 
     temp_biases: Dict[str, Dict[str, float]] = {}
+    temp_sigmas: Dict[str, Dict[str, float]] = {}
     for (lead_key, temp_key), resid in sorted(by_lead_temp.items()):
         lead_bias = _sf(lead_biases.get(str(lead_key)))
         if lead_bias is None:
@@ -427,6 +439,14 @@ def train_deb_lead_stats(
         adj = _shrunk_adjustment(resid, lead_bias)
         if abs(adj) >= 0.05:
             temp_biases.setdefault(str(lead_key), {})[temp_key] = round(adj, 3)
+        # Per-temperature-stratum sigma: hot-day residual pools are much
+        # tighter than the pooled lead pool (>=37C PIT std ~0.19 with the
+        # pooled sigma). Emit a stratum sigma only when the group is
+        # well-sampled; otherwise inference falls back to the lead sigma.
+        if len(resid) >= MIN_ADJUST_SAMPLES:
+            temp_sigmas.setdefault(str(lead_key), {})[temp_key] = round(
+                _robust_sigma(resid), 3
+            )
 
     dates = [row["target_date"] for row in rows]
     span_days = 0
@@ -447,6 +467,7 @@ def train_deb_lead_stats(
         "lead_sigmas": lead_sigmas,
         "city_biases": city_biases,
         "temp_biases": temp_biases,
+        "temp_sigmas": temp_sigmas,
         "samples": total_samples,
         "window_days": span_days,
         "per_lead_samples": {str(k): len(v) for k, v in by_lead.items()},
