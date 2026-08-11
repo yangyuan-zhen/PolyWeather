@@ -2052,10 +2052,15 @@ function shouldRenderModelCurve(
 }
 
 function formatDailySlotLabel(timeStr: string): string {
-  // "2026-08-11T00:00" -> "8/11 00:00"
+  // "2026-08-11T00:00" -> "8/11" at midnight, "08:00" otherwise: the 3D axis
+  // renders every hour, so date markers land on each local-day boundary.
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{1,2}):(\d{2})/.exec(String(timeStr || "").trim());
   if (!match) return String(timeStr || "");
-  return `${Number(match[2])}/${Number(match[3])} ${match[4]}:${match[5]}`;
+  const hour = Number(match[4]);
+  if (hour === 0 && Number(match[5]) === 0) {
+    return `${Number(match[2])}/${Number(match[3])}`;
+  }
+  return `${match[4]}:${match[5]}`;
 }
 
 function build72hChartData(

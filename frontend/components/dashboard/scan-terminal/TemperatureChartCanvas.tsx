@@ -256,11 +256,22 @@ function TemperatureChartCanvasComponent({
             <CartesianGrid stroke="#dbe6ef" strokeDasharray="2 2" />
             <XAxis
               dataKey="label"
-              tick={{ fontSize: 9, fill: "#64748b" }}
-              tickLine={false}
+              tick={{
+                fontSize: timeframe === "3D" ? 7 : 9,
+                fill: "#64748b",
+                ...(timeframe === "3D"
+                  ? { angle: -45, textAnchor: "end", dy: 4 }
+                  : {}),
+              }}
+              tickLine={timeframe === "3D"}
               axisLine={{ stroke: "#cbd5e1" }}
-              interval={Math.max(0, Math.floor(zoomedData.length / (compact ? 6 : 10)))}
-              minTickGap={compact ? 24 : 32}
+              interval={
+                timeframe === "3D"
+                  ? 0
+                  : Math.max(0, Math.floor(zoomedData.length / (compact ? 6 : 10)))
+              }
+              minTickGap={timeframe === "3D" ? 0 : compact ? 24 : 32}
+              height={timeframe === "3D" ? 34 : undefined}
             />
             <YAxis
               orientation="right"
