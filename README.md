@@ -23,9 +23,9 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 
 ## Product Status (2026-08-01)
 
-- WeatherNext2 live: a 6-hour GCS Zarr worker feeds city high-temperature percentiles (q10 / q50 / q90, LightGBM-calibrated) into the terminal (sidebar item 3).
 - Arbitrage comparison live: Polymarket overview endpoints (`/api/arbitrage/overview`, `/overview-batch`) compare model probability vs market-implied probability across all cities (sidebar item 5).
-- DEB normal probability engine live: integer-degree probability buckets now come from the DEB normal engine (`deb_normal`), with the legacy Gaussian engine kept as a fallback branch.
+- DEB normal probability engine live: integer-degree probability buckets come from the DEB normal engine (`deb_normal`).
+- WeatherNext2 removed: the Google WeatherNext2 GCS Zarr worker was retired; probability and forecasts rely on the DEB blend over the Open-Meteo model suite.
 - Subscription live: `Pro Monthly 29.9 USDC / 30 days` and `Pro Quarterly 79.9 USDC / 90 days`.
 - Referral pricing live: invited users can get the first monthly Pro at `20 USDC`; inviters receive `3500` points after a valid first Pro payment, capped at 10 paid invites per month.
 - Points are redeemable for payment discounts (`500 pts = 1 USDC`, monthly max `3 USDC`, quarterly max `8 USDC`). Useful user feedback can also receive manual point rewards through ops.
@@ -100,7 +100,6 @@ flowchart LR
     WX --> JMA["JMA AMeDAS (Japan)"]
     WX --> SETTLE["NOAA Synoptic / HKO / IMGW (settlement)"]
 
-    API --> WX2["WeatherNext2 (GCS Zarr, 6h worker)"]
     API --> ARB["Polymarket Arbitrage Overview"]
     API --> ANA["DEB + Hourly Consensus + Probability + Market Scan"]
     API --> SSE["SSE /api/events"]
@@ -142,7 +141,7 @@ npm run dev
 - Intraday analysis now separates meteorology conclusion, evidence chain, invalidation rules, confirmation rules, calibrated probability, and market reference.
 - `TAF` is used as an airport-side confirmation layer, not as the main temperature model (sole source: NOAA AviationWeather).
 - Calibrated probability uses the DEB normal-distribution engine by default, with the legacy Gaussian path as fallback; model vote counts remain an explanatory consensus line, not the final probability.
-- WeatherNext2 percentile curves and Polymarket arbitrage comparison are terminal sidebar items (3 and 5) for Pro users.
+- Polymarket arbitrage comparison is a terminal sidebar item for Pro users.
 - Browser extension remains a lightweight monitoring + basic-bias product, while the site holds the full analysis experience.
 - Realtime terminal charts use SSE patches plus replayable event storage; full HTTP detail remains the authoritative snapshot.
 - Chart observations are shown in the city's local time, not the browser timezone.

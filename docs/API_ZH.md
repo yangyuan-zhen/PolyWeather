@@ -120,7 +120,7 @@ flowchart LR
 
 概率字段：
 
-- `engine`：`deb_normal`（当 lead 分层残差统计可用时）；`weathernext2` 或 `dead_market` 为降级/死盘场景
+- `engine`：`deb_normal`（当 lead 分层残差统计可用时）；`dead_market` 为死盘场景
 - `mu`：DEB 融合预测中心值（含偏差校正）
 - `distribution`：当天合约桶概率分布（概率最高的 4 个档位）
 - `distribution_all`：包含外围桶的完整分布（μ±4σ 内所有整度档位）

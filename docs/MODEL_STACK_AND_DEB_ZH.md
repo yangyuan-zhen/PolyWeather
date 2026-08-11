@@ -46,16 +46,6 @@ Web API 会把这部分元数据挂到：
 | HRDPS | `gem_hrdps_continental` | ECCC | short_range_north_america | 北美短时高分辨率 |
 | JMA | `jma_seamless` | JMA | global | 日本气象厅全球参考 |
 
-### 2.1 WeatherNext2（GCS Zarr 集合预报）
-
-WeatherNext2 不走 Open-Meteo model API，由独立 worker 从 Google Cloud Storage Zarr 读取：
-
-- 入口：`src/data_collection/weathernext2_fetcher.py`、`src/data_collection/weathernext2_sources.py`
-- 产物：`weathernext2_city_highs.json`（带 `.bak` 兜底），`WEATHERNEXT2_WORKER_INTERVAL_SEC=21600`（6 小时）周期刷新
-- 校准：`src/analysis/weathernext2_calibration.py` 以 LightGBM 输出 q10 / q50 / q90 城市高温分位
-- 展示：终端侧边栏第 3 项（WeatherNext2 面板）
-- 相关环境变量：`WEATHERNEXT2_ENABLED`、`WEATHERNEXT2_BACKEND=gcs_zarr`、`WEATHERNEXT2_GCS_ZARR_URI`、`WEATHERNEXT2_MEAN_GCS_ZARR_URI`、`WEATHERNEXT2_DATA_ROOT`、`WEATHERNEXT2_CITY_HIGHS_PATH`、`WEATHERNEXT2_FIXTURE_PATH`、`WEATHERNEXT2_CACHE_TTL_SEC=21600`、`WEATHERNEXT2_MODEL_DIR`、`WEATHERNEXT2_WORKER_INITIAL_DELAY_SEC=90`、`GOOGLE_APPLICATION_CREDENTIALS`
-
 ## 3. 区域覆盖差异
 
 同一个多模型请求会带上完整模型清单，但 Open-Meteo 只会返回覆盖当前坐标的模型字段。区域模型不覆盖时不会进入下游。
@@ -248,18 +238,17 @@ python scripts/backtest_deb_versions.py \
 
 - 入口：`src/analysis/deb_probability.py`（新）、`src/analysis/deb_ml_calibration.py`（LightGBM 校准，输出 q10 / q50 / q90）
 - 正态整度概率：`P(T==τ)=Φ((τ+0.5-μ)/σ)-Φ((τ-0.5-μ)/σ)`
-- `probabilities.engine` 取值：`deb_normal`（默认）或 `legacy`（回退）
+- `probabilities.engine` 取值：`deb_normal`（默认）或 `None`（未训练/不可用时无概率载荷）
 
 引擎优先级：
 
 ```text
-dead_market > deb_normal > weathernext2
+dead_market > deb_normal
 ```
 
 - `dead_market`：市场无有效报价时的兜底口径。
-- `deb_normal`：默认主概率引擎，基于 DEB 融合 μ 与正态分布分桶。
-- `weathernext2`：WeatherNext2 集合预报分位（q50）作为更低优先级参考。
-- legacy 高斯分桶不再作为主路径，保留在 `trend_engine.py` 回退分支（`engine_mode` 展示 `deb_normal` / `legacy`）。
+- `deb_normal`：唯一主概率引擎，基于 DEB 融合 μ 与正态分布分桶（stats 未训练或不可用时无概率载荷）。
+- WeatherNext2 引擎已移除。
 
 相关辅助模块：
 

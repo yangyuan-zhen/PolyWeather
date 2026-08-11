@@ -92,7 +92,7 @@ def test_lead_key_stratification():
 # ---- payload building ----
 
 
-def test_payload_shape_matches_weathernext2():
+def test_payload_shape_contract():
     payload = _build_deb_normal_probability_payload(
         30.0, lead=1, temp_symbol="°C", stats=_sample_stats()
     )
@@ -380,18 +380,14 @@ def test_train_deb_lead_stats_falls_back_to_walkforward_without_stored():
 def _fake_weather_data():
     return {
         "target_date": "2026-08-01",
+        "open-meteo": {
+            "daily": {"temperature_2m_max": [36.0], "time": ["2026-08-01"]},
+        },
         "metar": {
             "current": {"temp": 30.0, "max_temp_so_far": 30.0},
             "recent_temps": [("12:00", 29.0), ("13:00", 30.0), ("14:00", 30.5)],
         },
         "forecasts": {"Open-Meteo": 36.0, "ECMWF": 36.5, "GFS": 35.8},
-        "weathernext2": {
-            "buckets": [
-                {"label": "36C", "value": 36, "probability": 0.4},
-                {"label": "37C", "value": 37, "probability": 0.35},
-            ],
-            "summary": {"median": 36.3},
-        },
     }
 
 
@@ -421,15 +417,16 @@ def test_trend_engine_deb_normal_primary(monkeypatch):
     assert probs and probs[0]["value"] == 37
 
 
-def test_trend_engine_wx2_fallback_when_deb_stats_missing(monkeypatch):
+def test_trend_engine_no_probability_engine_when_deb_stats_missing(monkeypatch):
     import src.analysis.trend_engine as te
 
     monkeypatch.setattr(te, "calculate_deb_prediction", lambda *a, **k: {"prediction": 36.5})
-    # payload builder returns None -> falls through to weathernext2
+    # payload builder returns None -> no probability engine (legacy Gaussian
+    # branch was removed together with weathernext2)
     monkeypatch.setattr(te, "_build_deb_normal_probability_payload", lambda *a, **k: None)
 
     _, _, sd = te.analyze_weather_trend(_fake_weather_data(), "°C", "shanghai")
-    assert sd.get("probability_engine") == "weathernext2"
+    assert sd.get("probability_engine") is None
     assert sd.get("mu") is not None
 
 

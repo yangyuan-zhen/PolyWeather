@@ -1,4 +1,4 @@
-"""DEB normal-distribution probability engine (replaces weathernext2 as primary).
+"""DEB normal-distribution probability engine (primary).
 
 Serves Polymarket integer-degree bucket markets (e.g. "highest temperature in
 Shanghai on Aug 1": buckets 31C-or-below / 32 / ... / 41C-or-higher, resolved to
@@ -13,7 +13,7 @@ Distribution model (validated in data/deb_polymarket_buckets_report.json):
 {0, 1, 2} where 2 means "2+ days". bias(lead)/sigma(lead) are pooled across
 cities (53-city residual pool), trained walk-forward without leakage.
 
-The payload shape matches `_weathernext2_probability_payload` so downstream
+The payload shape keeps the legacy probability contract so downstream
 consumers (web/analysis_service.py probabilities block) work unchanged.
 """
 
@@ -203,7 +203,7 @@ def _build_deb_normal_probability_payload(
     33-36C warm-bias correction applies where it was measured.
 
     Returns None when stats are missing or deb_prediction is unusable (caller then
-    falls through to the weathernext2 branch).
+    falls through to the legacy Gaussian branch).
     """
     deb_c = _sf(deb_prediction)
     if deb_c is None:

@@ -18,7 +18,7 @@ export interface ArbitrageBucket {
 export interface ArbitrageOverview {
   city: string;
   generated_at: string; // ISO-8601
-  engine: "deb_normal" | "weathernext2" | "legacy" | string;
+  engine: "deb_normal" | "legacy" | string;
   temp_symbol: string; // "°C" / "°F"
   market_available: boolean;
   total_market_yes_sum: number | null; // 全市场 Yes 价格总和（¢），<100 提示严格套利

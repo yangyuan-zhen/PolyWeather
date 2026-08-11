@@ -137,9 +137,6 @@ services:
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
       SUPABASE_URL: ${SUPABASE_URL}
       UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
-      WEATHERNEXT2_CITY_HIGHS_PATH: ${WEATHERNEXT2_CITY_HIGHS_PATH:-/app/data/weathernext2_city_highs.json}
-      WEATHERNEXT2_ENABLED: ${WEATHERNEXT2_ENABLED:-1}
-      WEATHERNEXT2_MODEL_DIR: ${WEATHERNEXT2_MODEL_DIR:-/app/data/models/weathernext2_calibrator}
     healthcheck:
       interval: 30s
       retries: 3
@@ -297,56 +294,6 @@ services:
     volumes:
     - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/var/lib/polyweather
     - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/app/data
-  polyweather_weathernext2_worker:
-    command: python -m web.weathernext2_worker
-    container_name: polyweather_weathernext2_worker
-    depends_on:
-      polyweather_redis:
-        condition: service_healthy
-      polyweather_web:
-        condition: service_started
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "50m"
-        max-file: "3"
-    cpus: ${POLYWEATHER_WEATHERNEXT2_CPUS:-1.50}
-    env_file: *id001
-    environment:
-      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/app/secrets/gcp-sa.json}
-      POLYWEATHER_EVENT_STORE: ${POLYWEATHER_EVENT_STORE:-redis}
-      POLYWEATHER_OBSERVATION_COLLECTOR_ENABLED: 'false'
-      POLYWEATHER_REDIS_URL: ${POLYWEATHER_REDIS_URL:-redis://polyweather_redis:6379/0}
-      POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED: 'false'
-      POLYWEATHER_SERVICE_ROLE: weathernext2_worker
-      WEATHERNEXT2_BACKEND: ${WEATHERNEXT2_BACKEND:-gcs_zarr}
-      WEATHERNEXT2_CITY_HIGHS_PATH: ${WEATHERNEXT2_CITY_HIGHS_PATH:-/app/data/weathernext2_city_highs.json}
-      WEATHERNEXT2_DATA_ROOT: ${WEATHERNEXT2_DATA_ROOT:-/app/data/weathernext2}
-      WEATHERNEXT2_ENABLED: ${WEATHERNEXT2_ENABLED:-1}
-      WEATHERNEXT2_GCS_ZARR_URI: ${WEATHERNEXT2_GCS_ZARR_URI:-gs://weathernext/weathernext_2_0_0/zarr}
-      WEATHERNEXT2_MODEL_DIR: ${WEATHERNEXT2_MODEL_DIR:-/app/data/models/weathernext2_calibrator}
-      WEATHERNEXT2_WORKER_INITIAL_DELAY_SEC: ${WEATHERNEXT2_WORKER_INITIAL_DELAY_SEC:-90}
-      WEATHERNEXT2_WORKER_INTERVAL_SEC: ${WEATHERNEXT2_WORKER_INTERVAL_SEC:-21600}
-    healthcheck:
-      interval: 60s
-      retries: 3
-      test:
-      - CMD
-      - python
-      - -c
-      - import sqlite3; c=sqlite3.connect('/var/lib/polyweather/polyweather.db');
-        c.execute('SELECT 1'); c.close()
-      timeout: 10s
-    image: ghcr.io/yangyuan-zhen/polyweather-backend:${IMAGE_TAG:-latest}
-    mem_limit: ${POLYWEATHER_WEATHERNEXT2_MEM_LIMIT:-2g}
-    memswap_limit: ${POLYWEATHER_WEATHERNEXT2_MEMSWAP_LIMIT:-3g}
-    pids_limit: 512
-    restart: unless-stopped
-    user: ${UID:-1000}:${GID:-1000}
-    volumes:
-    - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/var/lib/polyweather
-    - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/app/data
-    - ./secrets:/app/secrets:ro
 x-polyweather-base:
   env_file: *id001
   image: ghcr.io/yangyuan-zhen/polyweather-backend:${IMAGE_TAG:-latest}

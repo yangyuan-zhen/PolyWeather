@@ -15,7 +15,7 @@
 
 ## 3. 仓库公开范围
 
-- 天气数据采集与标准化（METAR / TAF / Open-Meteo / MGM / JMA AMeDAS / HKO / NOAA Synoptic / IMGW / WeatherNext2 GCS 读取层）。
+- 天气数据采集与标准化（METAR / TAF / Open-Meteo / MGM / JMA AMeDAS / HKO / NOAA Synoptic / IMGW）。
 - DEB、基础趋势分析、DEB 正态概率引擎（deb_normal）与概率桶、历史对账、前端看板与 Bot 基础能力。
 - 标准支付流程、链上收款合约与公开 API/BFF 结构。
 - 面向用户的天气概率解释、公开市场简报与套利对比视图（模型概率 vs 市场隐含概率，不含交易执行建议）。

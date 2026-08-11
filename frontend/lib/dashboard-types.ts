@@ -531,46 +531,6 @@ export interface ScanTerminalDiff {
   removed_row_ids?: string[];
 }
 
-export interface WeatherNext2Summary {
-  members: number;
-  mean: number | null;
-  median: number | null;
-  p10: number | null;
-  p25: number | null;
-  p75: number | null;
-  p90: number | null;
-  min: number | null;
-  max: number | null;
-  spread: number | null;
-}
-
-export interface WeatherNext2Bucket {
-  key: string;
-  label: string;
-  lower: number;
-  upper: number;
-  value: number;
-  probability: number;
-  member_count: number;
-  total_members: number;
-}
-
-export interface WeatherNext2CityData {
-  source: string;
-  provider: string;
-  city: string;
-  target_date: string | null;
-  source_run: string | null;
-  generated_at: string;
-  temp_symbol: string;
-  members: number;
-  member_highs: Record<string, number>;
-  member_high_times?: Record<string, string> | null;
-  summary: WeatherNext2Summary;
-  buckets: WeatherNext2Bucket[];
-  top_bucket: WeatherNext2Bucket | null;
-}
-
 export interface ScanOpportunityRow {
   id: string;
   rank?: number | null;
@@ -737,7 +697,6 @@ export interface ScanOpportunityRow {
   v4_metar_decision?: "approve" | "veto" | "downgrade" | "watchlist" | string | null;
   v4_metar_reason_zh?: string | null;
   v4_metar_reason_en?: string | null;
-  weathernext2?: WeatherNext2CityData | null;
 }
 
 export interface PrimarySignal extends ScanOpportunityRow {}

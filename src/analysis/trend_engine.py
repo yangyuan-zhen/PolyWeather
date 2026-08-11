@@ -59,49 +59,6 @@ def _sf(v):
         return None
 
 
-def _weathernext2_probability_payload(
-    weather_data: Dict[str, Any],
-) -> Optional[Dict[str, Any]]:
-    source = weather_data.get("weathernext2")
-    if not isinstance(source, dict):
-        return None
-    raw_buckets = source.get("buckets")
-    if not isinstance(raw_buckets, list) or not raw_buckets:
-        return None
-
-    buckets = []
-    for bucket in raw_buckets:
-        if not isinstance(bucket, dict):
-            continue
-        probability = _sf(bucket.get("probability"))
-        if probability is None or probability <= 0:
-            continue
-        copied = dict(bucket)
-        copied["probability"] = round(probability, 3)
-        buckets.append(copied)
-    if not buckets:
-        return None
-
-    summary = source.get("summary") if isinstance(source.get("summary"), dict) else {}
-    mu = _sf(summary.get("median"))
-    if mu is None:
-        mu = _sf(summary.get("mean"))
-    if mu is None:
-        top_bucket = max(buckets, key=lambda item: _sf(item.get("probability")) or 0)
-        mu = _sf(top_bucket.get("value"))
-
-    return {
-        "engine": "weathernext2",
-        "mu": mu,
-        "probabilities": sorted(
-            buckets,
-            key=lambda item: _sf(item.get("probability")) or 0,
-            reverse=True,
-        )[:4],
-        "probabilities_all": buckets,
-    }
-
-
 def _median(values: List[float]) -> Optional[float]:
     if not values:
         return None
@@ -597,18 +554,6 @@ def analyze_weather_trend(
     for m_name, m_val in mm_forecasts.items():
         if m_val is not None and not _is_excluded_model_name(m_name):
             current_forecasts[m_name] = _sf(m_val)
-    weathernext2 = weather_data.get("weathernext2")
-    if isinstance(weathernext2, dict):
-        weathernext2_summary = (
-            weathernext2.get("summary")
-            if isinstance(weathernext2.get("summary"), dict)
-            else {}
-        )
-        weathernext2_median = _sf(weathernext2_summary.get("median"))
-        if weathernext2_median is None:
-            weathernext2_median = _sf(weathernext2_summary.get("mean"))
-        if weathernext2_median is not None:
-            current_forecasts["WeatherNext 2"] = weathernext2_median
     forecast_highs = [h for h in current_forecasts.values() if h is not None]
     forecast_high = max(forecast_highs) if forecast_highs else None
     forecast_median = (
@@ -864,7 +809,6 @@ def analyze_weather_trend(
     probabilities_all: List[Dict[str, Any]] = []
     probability_engine = None
     forecast_miss_deg = 0.0
-    weathernext2_probs = _weathernext2_probability_payload(weather_data)
 
     # DEB normal distribution engine (primary): mu = deb_prediction + bias(lead),
     # sigma from lead-stratified residual pool. Anchors on the DEB blend, not on
@@ -932,28 +876,9 @@ def analyze_weather_trend(
             prob_str = " | ".join(prob_parts)
             insights.append(f"🎲 <b>DEB 正态概率</b> ({mu_label})：{prob_str}")
             ai_features.append(f"🎲 DEB 正态概率分布：{prob_str}")
-    elif weathernext2_probs:
-        # WeatherNext2 retained as fallback / reference.
-        if max_so_far is not None and forecast_median is not None:
-            forecast_miss_deg = round(forecast_median - max_so_far, 1)
-        probability_engine = "weathernext2"
-        mu = weathernext2_probs.get("mu") or mu
-        probabilities = weathernext2_probs.get("probabilities", [])
-        probabilities_all = weathernext2_probs.get("probabilities_all", probabilities)
-        prob_parts = []
-        for bucket in probabilities[:4]:
-            label = str(bucket.get("label") or bucket.get("range") or bucket.get("value") or "").strip()
-            probability = _sf(bucket.get("probability"))
-            if label and probability is not None:
-                prob_parts.append(f"{label} {probability * 100:.0f}%")
-        if prob_parts:
-            mu_label = f"μ={mu:.1f}" if mu is not None else "μ=--"
-            prob_str = " | ".join(prob_parts)
-            insights.append(f"🎲 <b>WeatherNext 2 概率</b> ({mu_label})：{prob_str}")
-            ai_features.append(f"🎲 WeatherNext 2 概率分布：{prob_str}")
 
     # === Settlement center (mu) ===
-    # When a probability engine (weathernext2 / dead_market) already anchored mu,
+    # When a probability engine (deb_normal / dead_market) already anchored mu,
     # keep it. Otherwise blend the deterministic forecast median with the ensemble
     # center and anchor on the observed max once the peak window is past or a bust.
     if forecast_miss_deg == 0.0 and max_so_far is not None and forecast_median is not None:

@@ -16,9 +16,9 @@
 
 ## 当前产品状态（2026-08-01）
 
-- 已上线 WeatherNext2：6 小时 GCS Zarr worker 生成城市高温分位（q10 / q50 / q90，LightGBM 校准），终端侧边栏第 3 项。
 - 已上线套利对比：Polymarket 概览接口（`/api/arbitrage/overview`、`/overview-batch`）跨全城市对比模型概率与市场隐含概率（侧边栏第 5 项）。
-- 已上线 DEB 正态概率引擎：整度概率桶改由 `deb_normal` 正态引擎输出，legacy 高斯保留为回退分支。
+- 已上线 DEB 正态概率引擎：整度概率桶由 `deb_normal` 正态引擎输出。
+- 已移除 WeatherNext2：Google WeatherNext2 GCS Zarr worker 下线，概率与预报基于 Open-Meteo 模型套件上的 DEB 融合。
 - 已上线订阅制：`Pro 月付 29.9 USDC / 30 天`，`Pro 季度 79.9 USDC / 90 天`。
 - 积分获取已切换为邀请制度：被邀请人完成首次 Pro 付款后，邀请人获得 `3500` 积分；Telegram 群发言不再获得积分。
 - 积分可用于支付抵扣（`500 分 = 1 USDC`，月付最多抵 `3 USDC`，季度最多抵 `8 USDC`）。真实、有上下文、有价值的用户反馈也可通过运营后台人工奖励积分。
@@ -96,7 +96,6 @@ flowchart LR
     WX --> OM["Open-Meteo"]
     WX --> SETTLE["NOAA Synoptic / HKO / IMGW（结算源）"]
 
-    API --> WX2["WeatherNext2（GCS Zarr，6h worker）"]
     API --> ARB["Polymarket 套利对比"]
     API --> ANA["DEB + 小时共识 + 概率 + 市场扫描"]
     API --> SSE["SSE /api/events"]
@@ -131,9 +130,9 @@ npm run dev
 
 ## 近期更新
 
-- WeatherNext2 已接入：6 小时 GCS Zarr worker + LightGBM 校准（q10/q50/q90），终端侧边栏第 3 项展示城市高温分位。
 - 套利对比已上线：跨全城市批量概览接口，对比模型概率与市场隐含概率，终端侧边栏第 5 项。
-- 概率主引擎切换为 DEB 正态引擎（`deb_normal`），legacy 高斯保留为回退分支。
+- 概率主引擎为 DEB 正态引擎（`deb_normal`）。
+- WeatherNext2 已移除：Google WeatherNext2 worker 及其侧边栏入口下线，概率与预报基于 Open-Meteo 模型套件上的 DEB 融合。
 - 数据源清理：Wunderground、台北 CWA、AMSC AWOS（中国跑道）、NMC/CMA（中国内地）已移除；深圳结算源切换为流浮山 HKO（LFS）。
 - 高斯概率 tooltip 已改为展示完整温度区间概率分布，不再只显示最高概率的单个区间；主图继续聚焦实测和预测曲线。
 - 用户反馈已形成产品闭环：终端提交会自动附带图表上下文，用户可在站内查看处理状态，运营侧可为真实、有建设性的反馈发放积分奖励。

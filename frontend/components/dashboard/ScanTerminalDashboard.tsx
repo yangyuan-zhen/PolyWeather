@@ -53,7 +53,6 @@ import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { UsageGuideDashboard } from "@/components/dashboard/scan-terminal/UsageGuideDashboard";
 import { ModelSummaryDashboard } from "@/components/dashboard/scan-terminal/ModelSummaryDashboard";
 import { ArbitrageDashboard } from "@/components/dashboard/scan-terminal/ArbitrageDashboard";
-import { WeatherNext2Dashboard } from "@/components/dashboard/scan-terminal/WeatherNext2Dashboard";
 import {
   LiveTemperatureThresholdChart,
   clearCityDetailCache,
@@ -106,7 +105,6 @@ const ONLINE_USERS_REFRESH_MS = 5 * 60_000;
 const TERMINAL_NAV_ITEMS = [
   { key: "thresholds", Icon: Activity, labelEn: "Decision", labelZh: "天气决策" },
   { key: "modelSummary", Icon: Table2, labelEn: "Model Summary", labelZh: "模型汇总" },
-  { key: "weathernext2", Icon: Cloud, labelEn: "WeatherNext 2", labelZh: "WeatherNext 2" },
   { key: "training", Icon: GraduationCap, labelEn: "Training", labelZh: "训练数据" },
   { key: "arbitrage", Icon: Scale, labelEn: "Arbitrage", labelZh: "套利对比" },
   { key: "guide", Icon: BookOpenCheck, labelEn: "Guide", labelZh: "使用指南" },
@@ -814,20 +812,6 @@ function PolyWeatherTerminal({
     onTerminalActivated();
   }, [activeNavKey, onTerminalActivated]);
 
-  const wn2StaleRef = useRef(false);
-  useEffect(() => {
-    if (activeNavKey !== "weathernext2") {
-      wn2StaleRef.current = false;
-      return;
-    }
-    if (wn2StaleRef.current) return;
-    const hasWn2 = rows.some((r) => r.weathernext2?.summary?.median != null);
-    if (!hasWn2 && !refreshing) {
-      wn2StaleRef.current = true;
-      onRefresh();
-    }
-  }, [activeNavKey, rows, onRefresh, refreshing]);
-
   useEffect(() => {
     const fetchOnline = () => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
@@ -1181,8 +1165,6 @@ function PolyWeatherTerminal({
               isEn={isEn}
               generatedText={modelSummaryGeneratedText}
             />
-          ) : activeNavKey === "weathernext2" ? (
-            <WeatherNext2Dashboard rows={rows} isEn={isEn} />
           ) : activeNavKey === "arbitrage" ? (
             <ArbitrageDashboard isEn={isEn} />
           ) : activeNavKey === "guide" ? (

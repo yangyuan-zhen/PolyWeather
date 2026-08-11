@@ -2,6 +2,13 @@
 
 ## 1.9.0 - 2026-08-01（待发布）
 
+### 移除 WeatherNext2
+- **Google WeatherNext2 整套下线**：删除 `weathernext2_worker` 服务、GCS Zarr 读取（`weathernext2_fetcher.py`）、概率构建（`weathernext2_sources.py`）、LightGBM 分位校准（`weathernext2_calibration.py`）与 worker 入口；`docker-compose.yml`、`deploy.sh`、`.env.example` 对应配置清理。
+- 概率回退链收敛：`deb_normal` 为唯一概率引擎（失败时无概率载荷，`probability_engine=None`），不再有 weathernext2 fallback 分支。
+- 前端侧边栏移除 WeatherNext2 项与 `WeatherNext2Dashboard` 组件；`ScanOpportunityRow.weathernext2` 字段与类型删除。
+- NOAA 结算站实时/回填数据源从 SynopticData（需 token）切换为免费 aviationweather.gov METAR 接口，`NOAA_WRH_MESO_TOKEN` 配置移除。
+
+
 > 自 1.8.1（2026-05-28）以来共 393 个提交；`VERSION` 文件仍为 `1.8.1`，发布时同步。
 
 ### 新增能力

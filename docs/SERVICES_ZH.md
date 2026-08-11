@@ -53,7 +53,6 @@
 | --- | --- | --- |
 | MiMo (xiaomimimo) | 城市分析 AI 评论 | ✅ 当前使用 |
 | DeepSeek | AI fallback | 备用 |
-| Google Cloud Storage | WeatherNext2 GCS Zarr 集合预报（6h worker） | ✅ |
 | Polymarket public-search | 套利对比动态城市列表 | ✅ |
 | Polygon RPC | checkout 合约支付、Polygon USDC / USDC.e 自动确认 | ✅ |
 | Ethereum RPC | Ethereum 主网 USDC 直转确认 | ✅（启用多链支付时必须） |
@@ -66,4 +65,3 @@
 - Redis 只负责短窗口 replay 与多 worker fanout，不是长期天气历史库。
 - DEB hourly consensus 依赖 Open-Meteo 多模型小时曲线；若上游限流，图表应保留已有 snapshot 和实测 patch，不把缺失模型误报为实测缺失。
 - 支付多链确认依赖 `POLYWEATHER_PAYMENT_RPC_URLS_BY_CHAIN_JSON`；如果启用 Ethereum 主网 USDC，必须配置 `chain_id=1` 的 RPC，否则用户提交 Ethereum tx hash 后无法自动确认。
-- WeatherNext2 worker 依赖 `GOOGLE_APPLICATION_CREDENTIALS` 访问 GCS Zarr；产物 `weathernext2_city_highs.json` 带 `.bak` 兜底，读取失败时回退旧文件。

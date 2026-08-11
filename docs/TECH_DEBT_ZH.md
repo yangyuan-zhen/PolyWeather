@@ -42,7 +42,6 @@ flowchart TD
 - 账户中心与 Pro 权限展示链路打通。
 - 运行态状态/缓存与核心离线训练、评估、回填链路已完成 SQLite 主路径收口。
 - 轻量可观测性已上线（`/healthz`、`/api/system/status`、`/api/system/cache-status`、`/api/system/priority-warm`、`/metrics` + `scripts/check_ops_health.py`）。
-- **WeatherNext2 接入（2026-08-01）**：GCS Zarr 6h worker + LightGBM 校准 q10/q50/q90 分位，终端侧边栏第 3 项展示。
 - **套利对比上线（2026-08-01）**：`/api/arbitrage/overview` 与 `/overview-batch` 全城市批量概览，终端侧边栏第 5 项展示。
 - **DEB 正态概率引擎（2026-08-01）**：`deb_normal` 取代 legacy 高斯分桶成为主概率路径，legacy 保留为回退分支。
 - **训练结算服务（2026-08-01）**：`training_settlement` 服务（6h 周期、回看 10 天）与领域仓库重构（`src/database/repos/`）。

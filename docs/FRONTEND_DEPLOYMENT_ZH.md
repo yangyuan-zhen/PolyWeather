@@ -57,7 +57,7 @@
 2. `git fetch origin main && git reset --hard origin/main` 同步仓库（含 `docker-compose.yml`）
 3. 同步 `data/city_thread_ids.json` 到运行态目录
 4. `docker compose pull` 拉取新镜像（带重试）
-5. 按顺序滚动更新：`redis` → `web` + `bot` → `collector` → `warmer` → `training_settlement` → `weathernext2_worker` → `frontend`
+5. 按顺序滚动更新：`redis` → `web` + `bot` → `collector` → `warmer` → `training_settlement` → `frontend`
 6. 每步后做本地健康检查；前端额外等待 `/terminal` 和 `/api/scan/terminal` 就绪
 7. 公网 smoke check：`https://api.polyweather.top/healthz`、`https://polyweather.top/api/cities`、`https://www.polyweather.top/`
 8. 任意一步失败自动回滚到上一个镜像 tag（记录在 `/var/lib/polyweather/.current_tag`）

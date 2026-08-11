@@ -546,7 +546,7 @@ def test_get_arbitrage_overview_handles_both_unavailable(monkeypatch):
         "shanghai",
         distribution=[],
         deb_prediction=None,
-        engine="weathernext2",
+        engine="legacy",
     )
     _install_service_mocks(monkeypatch, city_data=city_data, event=None)
 
@@ -556,8 +556,8 @@ def test_get_arbitrage_overview_handles_both_unavailable(monkeypatch):
 
     assert payload["market_available"] is False
     assert payload["buckets"] == []
-    # DEB unavailable => engine falls through to weathernext2 from data.
-    assert payload["engine"] in {"weathernext2", "legacy", "unavailable"}
+    # DEB unavailable => engine falls through to legacy from data.
+    assert payload["engine"] in {"legacy", "unavailable"}
     assert payload["error"] is not None
 
 
@@ -590,18 +590,18 @@ def test_load_city_deb_payload_handles_missing_probabilities_block(monkeypatch):
     assert engine == "legacy"
 
 
-def test_load_city_deb_payload_distinguishes_deb_normal_vs_weathernext2(monkeypatch):
+def test_load_city_deb_payload_distinguishes_deb_normal_vs_legacy(monkeypatch):
     deb_data = _stub_city_data(
         "shanghai",
         distribution=_deb_distribution([32, 33, 34], [0.2, 0.5, 0.3]),
         deb_prediction=33.0,
-        engine="weathernext2",
+        engine="legacy",
     )
     monkeypatch.setattr(analysis_service, "_analyze", lambda *a, **kw: deb_data)
     _distribution, _deb, engine = _load_city_deb_payload(
         _FakeRequest(), "shanghai", force_refresh=False
     )
-    assert engine == "weathernext2"
+    assert engine == "legacy"
 
 
 # ---------------------------------------------------------------------------

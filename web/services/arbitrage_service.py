@@ -236,8 +236,6 @@ def _load_city_deb_payload(
     engine_label = str(probabilities.get("engine") or "")
     if engine_label == "deb_normal":
         engine = "deb_normal"
-    elif engine_label == "weathernext2":
-        engine = "weathernext2"
     elif engine_label:
         engine = "legacy"
     elif deb_prediction is not None:
