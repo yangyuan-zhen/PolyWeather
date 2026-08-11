@@ -90,9 +90,11 @@ export function runTests() {
     obsHighLabel: "机场报文",
     metarHighLabel: "METAR 官方",
   });
+  // Labels stay complete; the redundant secondary block is hidden at the
+  // render layer (TemperatureStatsBars) so plain METAR cities show one temp.
   assert(
-    plainMetar.expandedSecondary === "当日最高" && plainMetar.compactSecondary === "当日最高",
-    "plain METAR cities must collapse the secondary METAR block to the daily high instead of duplicating it",
+    plainMetar.expandedSecondary === "METAR 结算 (30分钟) · 当日最高",
+    "plain METAR cities keep the full secondary label (render layer hides it)",
   );
 
   assert(
