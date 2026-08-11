@@ -90,20 +90,30 @@ def _run_once(*, lookback_days: int, cities: Optional[list[str]]) -> dict:
         logger.exception("deb weight snapshot refresh failed: {}", exc)
         result["weight_snapshots"] = {"error": str(exc)}
     try:
-        daily_records = DailyRecordRepository().load_all(
-            fields=("forecasts", "actual_high", "deb_prediction", "mu")
-        )
-        calibration = train_deb_quantile_calibrator(
-            daily_records,
-            model_dir=str(
-                os.getenv(
-                    "POLYWEATHER_DEB_ML_MODEL_DIR",
-                    "/app/data/models/deb_calibrator",
-                )
-                or "/app/data/models/deb_calibrator"
-            ).strip(),
-        )
-        result["deb_ml_calibration"] = calibration
+        if not _env_bool("POLYWEATHER_DEB_ML_CALIBRATION"):
+            # Inference only applies the LightGBM residual path when this flag
+            # is on (deb_ml_calibration._deb_ml_flag_enabled); training it
+            # unconditionally burns memory/time on production for a model that
+            # is never applied.
+            result["deb_ml_calibration"] = {
+                "skipped": True,
+                "reason": "POLYWEATHER_DEB_ML_CALIBRATION disabled",
+            }
+        else:
+            daily_records = DailyRecordRepository().load_all(
+                fields=("forecasts", "actual_high", "deb_prediction", "mu")
+            )
+            calibration = train_deb_quantile_calibrator(
+                daily_records,
+                model_dir=str(
+                    os.getenv(
+                        "POLYWEATHER_DEB_ML_MODEL_DIR",
+                        "/app/data/models/deb_calibrator",
+                    )
+                    or "/app/data/models/deb_calibrator"
+                ).strip(),
+            )
+            result["deb_ml_calibration"] = calibration
     except Exception as exc:
         logger.exception("deb ml calibration training failed: {}", exc)
         result["deb_ml_calibration"] = {"error": str(exc)}

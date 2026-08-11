@@ -288,8 +288,8 @@ services:
         c.execute('SELECT 1'); c.close()
       timeout: 10s
     image: ghcr.io/yangyuan-zhen/polyweather-backend:${IMAGE_TAG:-latest}
-    mem_limit: ${POLYWEATHER_TRAINING_SETTLEMENT_MEM_LIMIT:-2g}
-    memswap_limit: ${POLYWEATHER_TRAINING_SETTLEMENT_MEMSWAP_LIMIT:-3g}
+    mem_limit: ${POLYWEATHER_TRAINING_SETTLEMENT_MEM_LIMIT:-3g}
+    memswap_limit: ${POLYWEATHER_TRAINING_SETTLEMENT_MEMSWAP_LIMIT:-4g}
     pids_limit: 256
     restart: unless-stopped
     user: ${UID:-1000}:${GID:-1000}
