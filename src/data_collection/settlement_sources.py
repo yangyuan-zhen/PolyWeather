@@ -24,8 +24,6 @@ _official_intraday_repo = OfficialIntradayObservationRepository()
 class SettlementSourceMixin:
     IMGW_METEO_API_BASE = "https://meteo.imgw.pl/api/v1"
     IMGW_METEO_API_TOKEN = os.environ.get("IMGW_METEO_API_TOKEN", "")
-    NOAA_WRH_MESO_TOKEN = os.environ.get("NOAA_WRH_MESO_TOKEN", "")
-    NOAA_WRH_TIMESERIES_REFERER_BASE = "https://www.weather.gov/wrh/timeseries?site="
 
     def _get_settlement_cache(self, key: str) -> Optional[Dict[str, Any]]:
         now_ts = time.time()
@@ -321,6 +319,7 @@ class SettlementSourceMixin:
         *,
         station_code: str = "RCTP",
         station_name: Optional[str] = None,
+        tz_offset_seconds: int = 0,
     ) -> Optional[Dict[str, Any]]:
         normalized_station_code = str(station_code or "RCTP").strip().upper() or "RCTP"
         cache_key = f"noaa:{normalized_station_code.lower()}"
@@ -329,76 +328,59 @@ class SettlementSourceMixin:
             return cached
 
         try:
+            # NOAA aviationweather METAR API: free, no token, global ICAO
+            # coverage. Replaces the SynopticData/MesoWest timeseries endpoint,
+            # which required a token (401 with an empty NOAA_WRH_MESO_TOKEN).
             response = self._http_get(
-                "https://api.synopticdata.com/v2/stations/timeseries",
+                "https://aviationweather.gov/api/data/metar",
                 params={
-                    "STID": normalized_station_code,
-                    "showemptystations": 1,
-                    "recent": 2880,
-                    "complete": 1,
-                    "token": self.NOAA_WRH_MESO_TOKEN,
-                    "obtimezone": "local",
-                },
-                headers={
-                    "Referer": f"{self.NOAA_WRH_TIMESERIES_REFERER_BASE}{normalized_station_code}",
-                    "Origin": "https://www.weather.gov",
-                    "User-Agent": "Mozilla/5.0",
+                    "ids": normalized_station_code,
+                    "format": "json",
+                    "hours": 3,
                 },
                 timeout=self.timeout,
             )
             response.raise_for_status()
-            payload = response.json() if response.content else {}
-            stations = payload.get("STATION") or []
-            station = stations[0] if isinstance(stations, list) and stations else None
-            if not isinstance(station, dict):
+            rows = response.json() if response.content else []
+            if not isinstance(rows, list) or not rows:
                 return None
 
-            obs = station.get("OBSERVATIONS") or {}
-            stamps = obs.get("date_time") or []
-            temps = obs.get("air_temp_set_1") or []
-            humidity_list = obs.get("relative_humidity_set_1") or []
-            wind_speed_list = obs.get("wind_speed_set_1") or []
-            wind_dir_list = obs.get("wind_direction_set_1") or []
-            if not isinstance(stamps, list) or not isinstance(temps, list) or not stamps or not temps:
+            parsed: List[
+                tuple[datetime, int, Optional[float], Optional[float], Optional[float]]
+            ] = []
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                temp = self._safe_float(row.get("temp"))
+                obs_ts = row.get("obsTime")
+                if temp is None or obs_ts is None:
+                    continue
+                try:
+                    dt = datetime.fromtimestamp(int(obs_ts), tz=timezone.utc)
+                except Exception:
+                    continue
+                parsed.append(
+                    (
+                        dt,
+                        int(round(temp)),
+                        self._safe_float(row.get("dewp")),
+                        self._safe_float(row.get("wspd")),
+                        self._safe_float(row.get("wdir")),
+                    )
+                )
+            if not parsed:
                 return None
+            parsed.sort(key=lambda item: item[0])
+
+            tz_delta = timedelta(seconds=int(tz_offset_seconds or 0))
+            latest_dt, latest_temp, latest_dewp, latest_wspd, latest_wdir = parsed[-1]
+            target_date = (latest_dt + tz_delta).date()
 
             today_rows: List[tuple[datetime, int]] = []
-            latest_dt: Optional[datetime] = None
-            latest_temp: Optional[int] = None
-            latest_humidity: Optional[float] = None
-            latest_wind_speed_ms: Optional[float] = None
-            latest_wind_dir: Optional[float] = None
-
-            for idx, stamp in enumerate(stamps):
-                raw_temp = temps[idx] if idx < len(temps) else None
-                rounded_temp = self._js_round(raw_temp)
-                if rounded_temp is None:
-                    continue
-                try:
-                    dt = datetime.strptime(str(stamp), "%Y-%m-%dT%H:%M:%S%z")
-                except Exception:
-                    continue
-                if latest_dt is None or dt >= latest_dt:
-                    latest_dt = dt
-                    latest_temp = rounded_temp
-                    latest_humidity = self._safe_float(humidity_list[idx] if idx < len(humidity_list) else None)
-                    latest_wind_speed_ms = self._safe_float(wind_speed_list[idx] if idx < len(wind_speed_list) else None)
-                    latest_wind_dir = self._safe_float(wind_dir_list[idx] if idx < len(wind_dir_list) else None)
-            if latest_dt is None or latest_temp is None:
-                return None
-
-            target_date = latest_dt.date()
-            for idx, stamp in enumerate(stamps):
-                raw_temp = temps[idx] if idx < len(temps) else None
-                rounded_temp = self._js_round(raw_temp)
-                if rounded_temp is None:
-                    continue
-                try:
-                    dt = datetime.strptime(str(stamp), "%Y-%m-%dT%H:%M:%S%z")
-                except Exception:
-                    continue
-                if dt.date() == target_date:
-                    today_rows.append((dt, rounded_temp))
+            for dt, temp, _dewp, _wspd, _wdir in parsed:
+                local_dt = dt + tz_delta
+                if local_dt.date() == target_date:
+                    today_rows.append((local_dt, temp))
 
             max_so_far = None
             max_temp_time = None
@@ -415,20 +397,34 @@ class SettlementSourceMixin:
                 for dt, temp in today_rows
             ]
 
+            humidity = None
+            if latest_dewp is not None and latest_temp is not None:
+                try:
+                    # Magnus-formula relative humidity from dew point (METAR
+                    # has no direct humidity field).
+                    e_t = math.exp((17.625 * latest_temp) / (243.04 + latest_temp))
+                    e_td = math.exp((17.625 * latest_dewp) / (243.04 + latest_dewp))
+                    humidity = round(min(100.0, max(0.0, 100.0 * e_td / e_t)), 1)
+                except Exception:
+                    humidity = None
+
             result = {
                 "source": "noaa",
                 "source_label": "NOAA",
                 "station_code": normalized_station_code,
-                "station_name": str(station_name or station.get("NAME") or normalized_station_code),
+                "station_name": str(station_name or normalized_station_code),
                 "observation_time": latest_dt.isoformat(),
                 "current": {
                     "temp": latest_temp,
                     "max_temp_so_far": max_so_far,
                     "max_temp_time": max_temp_time,
                     "today_low": today_low,
-                    "humidity": round(latest_humidity, 1) if latest_humidity is not None else None,
-                    "wind_speed_kt": round(float(latest_wind_speed_ms) * 1.943844, 1) if latest_wind_speed_ms is not None else None,
-                    "wind_dir": latest_wind_dir,
+                    "humidity": humidity,
+                    # aviationweather wspd is already knots (METAR standard).
+                    "wind_speed_kt": round(float(latest_wspd), 1)
+                    if latest_wspd is not None
+                    else None,
+                    "wind_dir": latest_wdir,
                 },
                 "today_obs": today_obs,
                 "unit": "celsius",
@@ -563,6 +559,7 @@ class SettlementSourceMixin:
                 return self.fetch_noaa_station_settlement_current(
                     station_code=station_code,
                     station_name=station_name,
+                    tz_offset_seconds=int(city_meta.get("tz_offset") or 0),
                 )
         except Exception as exc:
             logger.warning(f"Settlement source dispatch failed city={city}: {exc}")
