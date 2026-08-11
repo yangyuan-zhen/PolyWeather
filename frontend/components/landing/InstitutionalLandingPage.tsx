@@ -608,6 +608,7 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                 </p>
                 <Link
                   href="/auth/login?next=%2Fterminal&mode=signup"
+                  prefetch={false}
                   className="mt-8 inline-flex h-11 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white text-sm font-bold text-slate-700 shadow-sm hover:border-slate-300 hover:text-slate-950"
                 >
                   {isEn ? "Start trial" : "开始试用"}
@@ -663,6 +664,7 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                 </ul>
                 <Link
                   href="/account?checkout=1"
+                  prefetch={false}
                   className="mt-8 inline-flex h-11 items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-bold text-white hover:bg-slate-800"
                 >
                   {isEn ? "Subscribe monthly" : "订阅月付 Pro"}

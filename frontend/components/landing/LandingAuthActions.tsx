@@ -127,6 +127,7 @@ export function LandingHeaderActions({ locale }: { locale: LandingLocale }) {
           </Link>
           <Link
             href="/account?checkout=1"
+            prefetch={false}
             className="grid h-9 w-9 place-items-center rounded-md border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-slate-300 hover:text-slate-950"
             title={isEn ? "Account" : "账户"}
             aria-label={isEn ? "Account" : "账户"}
@@ -138,6 +139,7 @@ export function LandingHeaderActions({ locale }: { locale: LandingLocale }) {
         <>
           <Link
             href="/auth/login?next=%2Fterminal"
+            prefetch={false}
             onClick={() => trackTerminalAuthStart("landing_header_login", "login")}
             className="hidden h-9 items-center rounded-md px-3 text-sm font-semibold text-slate-600 hover:text-slate-950 sm:inline-flex"
           >
@@ -145,6 +147,7 @@ export function LandingHeaderActions({ locale }: { locale: LandingLocale }) {
           </Link>
           <Link
             href="/auth/login?next=%2Fterminal&mode=signup"
+            prefetch={false}
             onClick={() => trackTerminalAuthStart("landing_header_signup", "signup")}
             className="inline-flex h-9 items-center gap-2 rounded-md bg-slate-950 px-3 text-sm font-semibold text-white hover:bg-slate-800"
           >
