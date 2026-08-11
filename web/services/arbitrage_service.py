@@ -460,6 +460,61 @@ def _serialise_bucket(bucket: Mapping[str, Any]) -> Dict[str, Any]:
     }
 
 
+_ARBITRAGE_OVERVIEW_REDIS_PREFIX = "polyweather:arbitrage:overview:v1:"
+
+
+def _arbitrage_overview_redis_enabled() -> bool:
+    return _arbitrage_redis_enabled()
+
+
+def _arbitrage_overview_ttl_sec() -> int:
+    try:
+        value = int(
+            os.getenv(
+                "POLYWEATHER_ARBITRAGE_OVERVIEW_CACHE_TTL_SEC",
+                "1800",
+            )
+            or "1800"
+        )
+    except ValueError:
+        value = 1800
+    return max(300, min(value, 86400))
+
+
+def _read_arbitrage_overview_cache(city_key: str) -> Optional[Dict[str, Any]]:
+    if not _arbitrage_overview_redis_enabled():
+        return None
+    client = _get_arbitrage_redis_client()
+    if client is None:
+        return None
+    try:
+        raw = client.get(f"{_ARBITRAGE_OVERVIEW_REDIS_PREFIX}{city_key}")
+        if not raw:
+            return None
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8")
+        entry = json.loads(str(raw))
+        return dict(entry) if isinstance(entry, dict) else None
+    except Exception:
+        return None
+
+
+def _write_arbitrage_overview_cache(city_key: str, payload: Dict[str, Any]) -> None:
+    if not _arbitrage_overview_redis_enabled():
+        return
+    client = _get_arbitrage_redis_client()
+    if client is None:
+        return
+    try:
+        client.setex(
+            f"{_ARBITRAGE_OVERVIEW_REDIS_PREFIX}{city_key}",
+            _arbitrage_overview_ttl_sec(),
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+        )
+    except Exception:
+        return
+
+
 def get_arbitrage_overview(
     request: Request,
     city: str,
@@ -469,6 +524,10 @@ def get_arbitrage_overview(
 
     Always returns HTTP 200; failures are surfaced via the ``market_available``
     flag and the ``error`` field, matching the design doc's degradation model.
+
+    Results are cached in Redis per city (TTL ~30min) because the payload is
+    city-scoped and request-agnostic; a cold build runs a full city analysis
+    plus a Polymarket quote fetch (tens of seconds).
     """
     # ``request`` is reserved for future per-request cache hooks; today the
     # service is request-agnostic but we still accept the parameter to match
@@ -495,6 +554,11 @@ def get_arbitrage_overview(
             "buckets": [],
             "error": str(exc.detail) if exc.detail else "unknown_city",
         }
+
+    if not force_refresh:
+        cached_overview = _read_arbitrage_overview_cache(city_key)
+        if cached_overview:
+            return dict(cached_overview)
 
     try:
         data = _analyze_city(city_key, force_refresh=force_refresh)
@@ -547,7 +611,7 @@ def get_arbitrage_overview(
             2,
         )
 
-    return {
+    payload = {
         "city": city_key or display_name.lower().replace(" ", "-"),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "engine": engine,
@@ -561,6 +625,9 @@ def get_arbitrage_overview(
             "quote_status": quote_status,
         },
     }
+    if city_key:
+        _write_arbitrage_overview_cache(city_key, payload)
+    return payload
 
 
 # ---------------------------------------------------------------------------

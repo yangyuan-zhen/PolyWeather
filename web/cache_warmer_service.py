@@ -189,20 +189,25 @@ class CacheWarmer:
         city_provider: Callable[[], Mapping[str, Mapping[str, Any]]],
         scan_warmer: Callable[..., Any],
         city_panel_warmer: Callable[..., Any],
+        arbitrage_warmer: Optional[Callable[[], int]] = None,
         scan_interval_sec: int = 120,
         city_interval_sec: int = 30,
         city_batch_size: int = 16,
+        arbitrage_interval_sec: int = 1800,
         hot_cities: Optional[Iterable[str]] = None,
     ) -> None:
         self.city_provider = city_provider
         self.scan_warmer = scan_warmer
         self.city_panel_warmer = city_panel_warmer
+        self.arbitrage_warmer = arbitrage_warmer
         self.scan_interval_sec = max(60, int(scan_interval_sec or 120))
         self.city_interval_sec = max(30, int(city_interval_sec or 30))
         self.city_batch_size = max(1, min(32, int(city_batch_size or 16)))
+        self.arbitrage_interval_sec = max(600, int(arbitrage_interval_sec or 1800))
         self.hot_cities = tuple(hot_cities or DEFAULT_HOT_CITIES)
         self._last_scan_ts = 0.0
         self._last_city_ts = 0.0
+        self._last_arbitrage_ts = 0.0
         self._city_cursor = 0
 
     def run_due_once(self, *, now_ts: Optional[float] = None) -> int:
@@ -215,6 +220,15 @@ class CacheWarmer:
         if now - self._last_city_ts >= self.city_interval_sec:
             self._last_city_ts = now
             completed += self._warm_city_batch(now_ts=now)
+        if (
+            self.arbitrage_warmer is not None
+            and now - self._last_arbitrage_ts >= self.arbitrage_interval_sec
+        ):
+            self._last_arbitrage_ts = now
+            try:
+                completed += max(0, int(self.arbitrage_warmer() or 0))
+            except Exception as exc:
+                logger.warning("cache warmer arbitrage failed: {}", exc)
         return completed
 
     def _warm_scan(self) -> bool:
@@ -269,19 +283,40 @@ def _queue_city_panel_refresh(city: str, *, force_refresh: bool = False) -> bool
     return True
 
 
+def _warm_arbitrage_overviews(hot_cities: Sequence[str]) -> int:
+    """Pre-build arbitrage overviews for hot cities so the Redis result cache
+    is warm before users open the arbitrage panel (cold builds take ~20s each).
+    """
+    from web.services.arbitrage_service import get_arbitrage_overview
+
+    completed = 0
+    for city in hot_cities:
+        try:
+            get_arbitrage_overview(None, city, force_refresh=False)
+            completed += 1
+        except Exception as exc:
+            logger.warning("cache warmer arbitrage city failed city={}: {}", city, exc)
+    return completed
+
+
 def build_default_cache_warmer() -> CacheWarmer:
     from web.core import CITIES
     from web.scan_terminal_service import build_scan_terminal_payload
 
     hot_cities = _parse_city_list(os.getenv("POLYWEATHER_WARMER_HOT_CITIES"))
+    warm_cities = hot_cities or DEFAULT_HOT_CITIES
     return CacheWarmer(
         city_provider=lambda: CITIES,
         scan_warmer=build_scan_terminal_payload,
         city_panel_warmer=_queue_city_panel_refresh,
+        arbitrage_warmer=lambda: _warm_arbitrage_overviews(warm_cities),
         scan_interval_sec=_env_int("POLYWEATHER_WARMER_SCAN_INTERVAL_SEC", 120),
         city_interval_sec=_env_int("POLYWEATHER_WARMER_CITY_INTERVAL_SEC", 30),
         city_batch_size=_env_int("POLYWEATHER_WARMER_CITY_BATCH_SIZE", 16),
-        hot_cities=hot_cities or DEFAULT_HOT_CITIES,
+        arbitrage_interval_sec=_env_int(
+            "POLYWEATHER_WARMER_ARBITRAGE_INTERVAL_SEC", 1800
+        ),
+        hot_cities=warm_cities,
     )
 
 
