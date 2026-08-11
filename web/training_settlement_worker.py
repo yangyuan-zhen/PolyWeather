@@ -8,6 +8,7 @@ import os
 import signal
 import threading
 import time
+from datetime import datetime, timedelta, timezone
 from types import FrameType
 from typing import Optional
 
@@ -78,8 +79,11 @@ def _run_once(*, lookback_days: int, cities: Optional[list[str]]) -> dict:
     skip_analysis = _env_bool(
         "POLYWEATHER_TRAINING_SETTLEMENT_SKIP_ANALYSIS", default=False
     )
+    # Reconcile is the settled-truth backfill path (METAR/HKO/NOAA per-city,
+    # incremental since the single-city load/upsert rework) and is now cheap;
+    # it keeps daily_records.actual_high fresh for training.
     skip_reconcile = _env_bool(
-        "POLYWEATHER_TRAINING_SETTLEMENT_SKIP_RECONCILE", default=True
+        "POLYWEATHER_TRAINING_SETTLEMENT_SKIP_RECONCILE", default=False
     )
     result = run_training_settlement_cycle(
         cities=cities,
@@ -93,6 +97,20 @@ def _run_once(*, lookback_days: int, cities: Optional[list[str]]) -> dict:
     except Exception as exc:
         logger.exception("deb weight snapshot refresh failed: {}", exc)
         result["weight_snapshots"] = {"error": str(exc)}
+    try:
+        # Retention guard: the probability snapshot archive is only consumed
+        # for lead derivation in training; it must not grow unbounded.
+        retention_days = max(30, int(os.getenv("POLYWEATHER_PROBABILITY_SNAPSHOT_RETENTION_DAYS", "365") or 365))
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(days=retention_days)
+        ).isoformat(timespec="seconds")
+        from src.database.runtime_state import ProbabilitySnapshotRepository
+
+        pruned = ProbabilitySnapshotRepository().prune_before(cutoff)
+        result["snapshot_prune"] = {"retention_days": retention_days, "pruned": pruned}
+    except Exception as exc:
+        logger.exception("probability snapshot prune failed: {}", exc)
+        result["snapshot_prune"] = {"error": str(exc)}
     try:
         if not _env_bool("POLYWEATHER_DEB_ML_CALIBRATION"):
             # Inference only applies the LightGBM residual path when this flag

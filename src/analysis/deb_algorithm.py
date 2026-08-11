@@ -447,9 +447,10 @@ def _reconcile_recent_metar_actual_highs(city_name: str, lookback_days: int = 7)
         tz_offset = int(city_meta.get("tz_offset") or 0)
         use_fahrenheit = bool(city_meta.get("use_fahrenheit"))
 
-        history_file = _get_history_file_path()
-        data = load_history(history_file)
-        city_data = data.get(city_key) or {}
+        # Single-city incremental load/upsert: loading the whole store per city
+        # pass (and rewriting it afterwards) made 51-city reconcile cycles
+        # memory- and IO-heavy on full datasets.
+        city_data = _daily_record_repo.load_city(city_key)
         if not isinstance(city_data, dict) or not city_data:
             return {"ok": True, "reason": "no_city_history", "updated": 0}
 
@@ -530,8 +531,8 @@ def _reconcile_recent_metar_actual_highs(city_name: str, lookback_days: int = 7)
                 updated += 1
 
         if updated > 0:
-            data[city_key] = city_data
-            save_history(history_file, data)
+            for d in [d for d in target_dates if d in city_data]:
+                _daily_record_repo.upsert_record(city_key, d, city_data[d])
 
         return {
             "ok": True,
@@ -561,9 +562,8 @@ def _reconcile_recent_hko_actual_highs(city_name: str, lookback_days: int = 14):
 
         tz_offset = int(city_meta.get("tz_offset") or 0)
         use_fahrenheit = bool(city_meta.get("use_fahrenheit"))
-        history_file = _get_history_file_path()
-        data = load_history(history_file)
-        city_data = data.get(city_key) or {}
+        # Single-city incremental load/upsert (see metar reconcile).
+        city_data = _daily_record_repo.load_city(city_key)
         if not isinstance(city_data, dict) or not city_data:
             return {"ok": True, "reason": "no_city_history", "updated": 0}
 
@@ -636,8 +636,8 @@ def _reconcile_recent_hko_actual_highs(city_name: str, lookback_days: int = 14):
                 updated += 1
 
         if updated > 0:
-            data[city_key] = city_data
-            save_history(history_file, data)
+            for d in [d for d in target_dates if d in city_data]:
+                _daily_record_repo.upsert_record(city_key, d, city_data[d])
 
         return {
             "ok": True,
@@ -667,9 +667,8 @@ def _reconcile_recent_noaa_actual_highs(city_name: str, lookback_days: int = 14)
 
         tz_offset = int(city_meta.get("tz_offset") or 0)
         use_fahrenheit = bool(city_meta.get("use_fahrenheit"))
-        history_file = _get_history_file_path()
-        data = load_history(history_file)
-        city_data = data.get(city_key) or {}
+        # Single-city incremental load/upsert (see metar reconcile).
+        city_data = _daily_record_repo.load_city(city_key)
         if not isinstance(city_data, dict) or not city_data:
             return {"ok": True, "reason": "no_city_history", "updated": 0}
 
@@ -767,8 +766,8 @@ def _reconcile_recent_noaa_actual_highs(city_name: str, lookback_days: int = 14)
                 updated += 1
 
         if updated > 0:
-            data[city_key] = city_data
-            save_history(history_file, data)
+            for d in [d for d in target_dates if d in city_data]:
+                _daily_record_repo.upsert_record(city_key, d, city_data[d])
 
         return {
             "ok": True,
@@ -824,22 +823,23 @@ def bootstrap_recent_daily_history_if_missing(city_name: str, lookback_days: int
         local_now = datetime.utcnow() + timedelta(seconds=tz_offset)
         local_today = local_now.date()
 
-        history_file = _get_history_file_path()
-        data = load_history(history_file)
-        city_rows = data.get(city_key)
+        # Single-city incremental load/upsert (see metar reconcile).
+        city_rows = _daily_record_repo.load_city(city_key)
         if not isinstance(city_rows, dict):
             city_rows = {}
-            data[city_key] = city_rows
 
         seeded = 0
+        seeded_days: list = []
         for offset in range(max(lookback_days, 1), 0, -1):
             day = (local_today - timedelta(days=offset)).strftime("%Y-%m-%d")
             if day not in city_rows:
                 city_rows[day] = {}
+                seeded_days.append(day)
                 seeded += 1
 
-        if seeded > 0:
-            save_history(history_file, data)
+        if seeded_days:
+            for day in seeded_days:
+                _daily_record_repo.upsert_record(city_key, day, city_rows[day])
 
         reconcile_result = reconcile_recent_actual_highs(city_key, lookback_days=lookback_days)
         result = {

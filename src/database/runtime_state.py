@@ -162,6 +162,10 @@ class RuntimeStateDB:
                 """
             )
             conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_probability_snapshots_ts "
+                "ON probability_training_snapshots_store(timestamp)"
+            )
+            conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_probability_snapshot_city_date ON probability_training_snapshots_store(city, target_date, id DESC)"
             )
             conn.execute(
@@ -616,6 +620,28 @@ class DailyRecordRepository:
             city = str(row["city"])
             date_str = str(row["target_date"])
             out.setdefault(city, {})[date_str] = payload
+        return out
+
+    def load_city(self, city: str) -> Dict[str, Dict[str, Any]]:
+        """Load one city's daily records as {target_date: payload}.
+
+        Used by the truth-backfill path so per-city reconcile passes no longer
+        load (and later rewrite) the whole daily_records_store.
+        """
+        out: Dict[str, Dict[str, Any]] = {}
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                "SELECT target_date, payload_json FROM daily_records_store "
+                "WHERE city = ? ORDER BY target_date",
+                (city,),
+            ).fetchall()
+        for row in rows:
+            try:
+                payload = json.loads(row["payload_json"])
+            except Exception:
+                continue
+            if isinstance(payload, dict):
+                out[str(row["target_date"])] = payload
         return out
 
     def load_recent_settled_rows(
@@ -1217,6 +1243,16 @@ class ProbabilitySnapshotRepository:
             if cur is None or lead < cur:
                 out[(city, date_str)] = lead
         return out
+
+    def prune_before(self, timestamp: str) -> int:
+        """Delete snapshots older than an ISO timestamp (lexicographic = chronological for ISO-8601)."""
+        with self.db.connect() as conn:
+            cur = conn.execute(
+                "DELETE FROM probability_training_snapshots_store WHERE timestamp < ?",
+                (timestamp,),
+            )
+            conn.commit()
+            return int(cur.rowcount or 0)
 
     def replace_all(self, rows: List[Dict[str, Any]]) -> int:
         count = 0
