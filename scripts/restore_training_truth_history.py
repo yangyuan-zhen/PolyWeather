@@ -9,7 +9,7 @@ if PROJECT_ROOT not in sys.path:
 
 from src.data_collection.city_registry import CITY_REGISTRY  # noqa: E402
 from src.database.runtime_state import TruthRecordRepository  # noqa: E402
-from scripts.fit_probability_calibration import (  # noqa: E402
+from scripts.training_history_common import (  # noqa: E402
     _default_history_arg,
     _load_history_with_fallback,
     _load_json_if_exists,

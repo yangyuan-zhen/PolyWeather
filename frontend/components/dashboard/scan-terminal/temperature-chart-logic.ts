@@ -67,6 +67,12 @@ function getActiveTemperatureSeries(
 
 type ObsPoint = { time?: string | null; temp?: number | null };
 type RawObsPoint = ObsPoint | [string | number | null, number | null | undefined];
+type LooseObservationCondition = AirportCurrentConditions & {
+  observation_time?: string | number | null;
+  timestamp?: string | number | null;
+  time?: string | number | null;
+  icao?: string | null;
+};
 
 type EvidenceSeries = {
   key: string;
@@ -189,13 +195,14 @@ function isRetainedHourlyCacheEntry(
 }
 
 function isUsableHourlyDetailCacheEntry(entry: HourlyCacheEntry | null | undefined) {
-  return Boolean(toFullChartDetail((entry as any)?.data || null));
+  return Boolean(toFullChartDetail(entry?.data || null));
 }
 
 function normalizeHourlyCacheEntry(entry: unknown): HourlyCacheEntry | null {
   if (!entry || typeof entry !== "object") return null;
-  const ts = Number((entry as any).ts || 0);
-  const data = toFullChartDetail((entry as any).data || null);
+  const cached = entry as Partial<HourlyCacheEntry> | null;
+  const ts = Number(cached?.ts || 0);
+  const data = toFullChartDetail(cached?.data || null);
   if (!Number.isFinite(ts) || ts <= 0 || !data) return null;
   return { ts, data };
 }
@@ -590,10 +597,10 @@ function appendLatestAirportObservation(
   currentSources.forEach((source) => {
     const temp = validNumber(source?.temp);
     const time =
-      (source as any)?.obs_time ??
-      (source as any)?.observation_time ??
-      (source as any)?.timestamp ??
-      (source as any)?.time ??
+      source?.obs_time ??
+      (source as LooseObservationCondition)?.observation_time ??
+      (source as LooseObservationCondition)?.timestamp ??
+      (source as LooseObservationCondition)?.time ??
       null;
     if (temp === null || !time) return;
     const key = `${String(time)}:${temp}`;
@@ -610,7 +617,7 @@ function isMgmAirportPrimary(hourly: ChartRenderState) {
   const sourceTokens = [
     primary?.source_code,
     primary?.source_label,
-    (primary as any)?.source,
+    primary?.source,
   ].map((value) => String(value || "").toLowerCase());
   return sourceTokens.some((value) => value === "mgm" || value.includes("turkey_mgm"));
 }
@@ -619,7 +626,7 @@ function canonicalAirportPrimarySourceLabel(hourly: ChartRenderState) {
   const primary = hourly?.airportPrimary;
   const tokens = [
     primary?.source_code,
-    (primary as any)?.source,
+    primary?.source,
   ].map((value) => String(value || "").trim().toLowerCase());
   if (tokens.some((value) => value === "mgm" || value.includes("turkey_mgm"))) return "MGM";
   if (tokens.some((value) => value.includes("jma"))) return "JMA";
@@ -638,7 +645,7 @@ function airportPrimaryHasMetarSource(hourly: ChartRenderState) {
   const tokens = [
     primary?.source_code,
     primary?.source_label,
-    (primary as any)?.source,
+    primary?.source,
   ].map((value) => String(value || "").trim().toLowerCase());
   return tokens.some((value) => value === "metar" || value.includes(" metar"));
 }
@@ -649,7 +656,7 @@ function airportCodeForSeriesLabel(
 ) {
   const candidates = [
     hourly?.airportPrimary?.station_code,
-    (hourly?.airportPrimary as any)?.icao,
+    (hourly?.airportPrimary as LooseObservationCondition)?.icao,
     hourly?.settlementStationCode,
     row?.metar_context?.station,
     row?.icao,
@@ -801,20 +808,20 @@ function getObservationDisplayMetrics(
   const airportHigh = validNumber(hourly?.airportCurrent?.max_so_far) ?? validNumber(hourly?.airportPrimary?.max_so_far);
   const rowMetarHigh = validNumber(row?.metar_context?.airport_max_so_far ?? row?.metar_context?.max_temp ?? row?.current_max_so_far);
 
-  const currentRunwayTemp =
+  const currentObsTemp =
     latestMadis ??
     latestSettlement ??
     latestMetar ??
     airportCurrentTemp ??
     validNumber(row?.current_temp) ??
     null;
-  const observedHighRunway =
+  const observedHighObs =
     highMadis ??
     highSettlement ??
     airportHigh ??
     highMetar ??
     validNumber(row?.current_max_so_far) ??
-    currentRunwayTemp ??
+    currentObsTemp ??
     null;
 
   const currentMetarTemp =
@@ -824,7 +831,7 @@ function getObservationDisplayMetrics(
     null;
   const observedHighMetar = airportHigh ?? highSettlement ?? highMetar ?? rowMetarHigh ?? null;
 
-  return { currentMetarTemp, currentRunwayTemp, observedHighMetar, observedHighRunway };
+  return { currentMetarTemp, currentObsTemp, observedHighMetar, observedHighObs };
 }
 
 function selectCompactSecondaryTemp({
@@ -932,10 +939,10 @@ function observationTimeRank(
 
 function conditionObservationTime(source: AirportCurrentConditions | null | undefined) {
   return (
-    (source as any)?.obs_time ??
-    (source as any)?.observation_time ??
-    (source as any)?.timestamp ??
-    (source as any)?.time ??
+    source?.obs_time ??
+    (source as LooseObservationCondition)?.observation_time ??
+    (source as LooseObservationCondition)?.timestamp ??
+    (source as LooseObservationCondition)?.time ??
     null
   );
 }
@@ -943,7 +950,7 @@ function conditionObservationTime(source: AirportCurrentConditions | null | unde
 function conditionObservationSourceKey(source: AirportCurrentConditions | null | undefined) {
   const tokens = [
     source?.source_code,
-    (source as any)?.source,
+    source?.source,
     source?.source_label,
   ].map((value) => String(value || "").trim().toLowerCase());
   if (tokens.some((value) => value === "mgm" || value.includes("turkey_mgm"))) return "mgm";
@@ -1000,7 +1007,7 @@ function hasFullHourlyDetailPayload(hourly: ChartRenderState) {
 
 function toFullChartDetail(hourly: ChartRenderState): FullChartDetail | null {
   if (!hourly || !hasFullHourlyDetailPayload(hourly)) return null;
-  if ((hourly as any).__detailKind === "full_chart_detail") return hourly as FullChartDetail;
+  if ((hourly as FullChartDetail)?.__detailKind === "full_chart_detail") return hourly as FullChartDetail;
   return {
     ...hourly,
     __detailKind: "full_chart_detail",
@@ -1116,7 +1123,6 @@ type ChartRenderState = {
   current?: CurrentConditions | null;
   airportCurrent?: AirportCurrentConditions | null;
   airportPrimary?: AirportCurrentConditions | null;
-  wundergroundCurrent?: AirportCurrentConditions | null;
   forecastDaily?: ForecastDay[];
   multiModelDaily?: Record<string, DailyModelForecast>;
   probabilities?: LegacyGaussianProbabilitySource | null;
@@ -1169,7 +1175,6 @@ function seedChartRenderStateFromRow(row: ScanOpportunityRow | null): ChartRende
     current: null,
     airportCurrent,
     airportPrimary,
-    wundergroundCurrent: (row as any)?.wunderground_current || null,
     forecastDaily: [],
     multiModelDaily: {},
     probabilities: {
@@ -1357,7 +1362,7 @@ function normalizeObservationPoint(point: Record<string, any>): ObsPoint | null 
 
 function observationPayloadToSnapshot(payload: CityObservationPayload | null | undefined): ObservationSnapshot | null {
   if (!payload || typeof payload !== "object") return null;
-  if ((payload as any).__observationKind === "observation_snapshot") return payload as ObservationSnapshot;
+  if ((payload as ObservationSnapshot)?.__observationKind === "observation_snapshot") return payload as ObservationSnapshot;
   return {
     ...payload,
     __observationKind: "observation_snapshot",
@@ -1405,12 +1410,23 @@ function observationSnapshotToHourly(snapshot: ObservationSnapshot | null | unde
   };
 }
 
+type LooseCityDetailPayload = {
+  overview?: { deb_prediction?: number | null; local_date?: string | null };
+  timeseries?: {
+    hourly?: { times?: string[]; temps?: Array<number | null> };
+    models_hourly?: { times?: string[]; curves?: Record<string, Array<number | null>> };
+    settlement_today_obs?: Array<{ time?: string; temp?: number | null }>;
+    metar_today_obs?: Array<{ time?: string; temp?: number | null }>;
+  };
+  official?: { airport_primary_today_obs?: Array<{ time?: string; temp?: number | null }> };
+};
+
 function parseFullChartDetailFromCityDetail(json: CityDetail | null): FullChartDetail | null {
-  const hourlySource = (json as any)?.hourly ?? (json as any)?.timeseries?.hourly;
+  const hourlySource = json?.hourly ?? (json as LooseCityDetailPayload)?.timeseries?.hourly;
   if (!json || !hourlySource) return null;
   const parsed: ChartRenderState = {
     forecastTodayHigh: json.forecast?.today_high ?? null,
-    debPrediction: json.deb?.prediction ?? (json as any)?.overview?.deb_prediction ?? null,
+    debPrediction: json.deb?.prediction ?? (json as LooseCityDetailPayload)?.overview?.deb_prediction ?? null,
     debQuality: json.deb ? {
       quality_tier: json.deb.quality_tier,
       recommendation: json.deb.recommendation,
@@ -1421,24 +1437,23 @@ function parseFullChartDetailFromCityDetail(json: CityDetail | null): FullChartD
       ensemble_signal: json.deb.ensemble_signal,
     } : null,
     debHourlyPath: json.deb?.hourly_path || null,
-    localDate: json.local_date || (json as any)?.overview?.local_date || null,
+    localDate: json.local_date || (json as LooseCityDetailPayload)?.overview?.local_date || null,
     localTime: json.local_time || null,
     times: hourlySource.times || [],
     temps: hourlySource.temps || [],
-    modelTimes: (json.models_hourly ?? (json as any)?.timeseries?.models_hourly)?.times || undefined,
-    modelCurves: (json.models_hourly ?? (json as any)?.timeseries?.models_hourly)?.curves || undefined,
+    modelTimes: (json.models_hourly ?? (json as LooseCityDetailPayload)?.timeseries?.models_hourly)?.times || undefined,
+    modelCurves: (json.models_hourly ?? (json as LooseCityDetailPayload)?.timeseries?.models_hourly)?.curves || undefined,
     current: json.current || null,
     airportCurrent: json.airport_current || null,
     airportPrimary: json.airport_primary || null,
-    wundergroundCurrent: (json as any).wunderground_current || (json as any)?.official?.wunderground_current || null,
     forecastDaily: json.forecast?.daily || [],
     multiModelDaily: json.multi_model_daily || {},
     probabilities: json.probabilities || null,
-    settlementTodayObs: (json as any).timeseries?.settlement_today_obs || (json as any)?.settlement_today_obs || undefined,
-    settlementStationCode: (json as any)?.settlement_station?.settlement_station_code || (json as any)?.settlement_station?.airport_code || null,
-    settlementStationLabel: (json as any)?.settlement_station?.settlement_station_label || null,
-    metarTodayObs: (json as any).timeseries?.metar_today_obs || (json as any)?.metar_today_obs || undefined,
-    airportPrimaryTodayObs: (json as any)?.official?.airport_primary_today_obs || (json as any)?.airport_primary_today_obs || undefined,
+    settlementTodayObs: (json as LooseCityDetailPayload).timeseries?.settlement_today_obs || json.settlement_today_obs || undefined,
+    settlementStationCode: json.settlement_station?.settlement_station_code || json.settlement_station?.airport_code || null,
+    settlementStationLabel: json.settlement_station?.settlement_station_label || null,
+    metarTodayObs: (json as LooseCityDetailPayload).timeseries?.metar_today_obs || json.metar_today_obs || undefined,
+    airportPrimaryTodayObs: (json as LooseCityDetailPayload)?.official?.airport_primary_today_obs || json.airport_primary_today_obs || undefined,
   };
   return toFullChartDetail(parsed);
 }
@@ -1514,7 +1529,7 @@ function resolveCityDetailFromBatch(
   for (const [key, detail] of Object.entries(details)) {
     if (!detail) continue;
     if (normalizeCityKey(key) === requestedKey) return detail;
-    const detailCity = (detail as any).city || detail.name || detail.display_name;
+    const detailCity = detail.city || detail.name || detail.display_name;
     if (normalizeCityKey(detailCity) === requestedKey) return detail;
   }
   return undefined;
@@ -1688,15 +1703,15 @@ function getLiveObservationLabels(
   const isSingapore = normalizedKey === "singapore";
   const isParis = normalizedKey === "paris";
   const sourceTokens = [
-    (hourly?.airportPrimary as any)?.source,
+    hourly?.airportPrimary?.source,
     hourly?.airportPrimary?.source_code,
     hourly?.airportPrimary?.source_label,
-    (hourly?.airportCurrent as any)?.source,
-    (hourly?.airportCurrent as any)?.source_code,
-    (hourly?.airportCurrent as any)?.source_label,
-    (row as any)?.station_source_code,
-    (row as any)?.network_provider,
-    (row as any)?.network_provider_label,
+    hourly?.airportCurrent?.source,
+    hourly?.airportCurrent?.source_code,
+    hourly?.airportCurrent?.source_label,
+    row?.station_source_code,
+    row?.network_provider,
+    row?.network_provider_label,
     row?.metar_context?.source,
     row?.metar_context?.station,
     row?.metar_context?.station_label,
@@ -1711,7 +1726,7 @@ function getLiveObservationLabels(
     !isHKO && !isShenzhen && !isTokyo && !isSingapore && !isParis
     && hasRealStationNetwork;
 
-  const runwayHeaderLabel = isShenzhen ? "天文台实测 (10分钟)"
+  const obsHeaderLabel = isShenzhen ? "天文台实测 (10分钟)"
     : isHKO ? "参考站点 (1分钟)"
     : isTokyo ? "机场气象站 (10分钟)"
     : isSingapore ? "航站楼温度"
@@ -1722,7 +1737,7 @@ function getLiveObservationLabels(
   const metarHeaderLabel = (isShenzhen || isHKO) ? "天文台实测 (10分钟)"
     : "METAR 结算 (30分钟)";
 
-  const runwayHighLabel = isShenzhen ? "天文台实测"
+  const obsHighLabel = isShenzhen ? "天文台实测"
     : isHKO ? "参考站点"
     : isTokyo ? "机场气象站"
     : isSingapore ? "航站楼"
@@ -1741,8 +1756,8 @@ function getLiveObservationLabels(
     isWeatherStation,
     metarHeaderLabel,
     metarHighLabel,
-    runwayHeaderLabel,
-    runwayHighLabel,
+    obsHeaderLabel,
+    obsHighLabel,
   };
 }
 
@@ -1775,11 +1790,11 @@ function mergePatchIntoHourly(
     ...explicitHourlyPatch,
   };
 
-  if (typeof (changes as any).local_date === "string") {
-    next.localDate = (changes as any).local_date;
+  if (typeof changes.local_date === "string") {
+    next.localDate = changes.local_date;
   }
-  if (typeof (changes as any).city_local_date === "string") {
-    next.localDate = (changes as any).city_local_date;
+  if (typeof changes.city_local_date === "string") {
+    next.localDate = changes.city_local_date;
   }
 
   if (tempValue !== null) {

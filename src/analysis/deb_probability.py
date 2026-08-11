@@ -195,7 +195,8 @@ def _build_deb_normal_probability_payload(
     """Build the {engine, mu, probabilities, probabilities_all} probability payload.
 
     All internal math is Celsius. For Fahrenheit cities the buckets are converted
-    to whole Fahrenheit degrees before emission (matching Wunderground resolution).
+    to whole Fahrenheit degrees before emission (matching the NOAA METAR
+    whole-degree settlement resolution).
 
     `city` enables lead-stratified city bias adjustments (James-Stein shrunk),
     and the temperature stratum is derived from the *forecast* value so the

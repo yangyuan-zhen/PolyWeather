@@ -264,10 +264,6 @@ function patchObservationTimeForFreshness(patch: { changes?: Record<string, unkn
   ).trim() || null;
 }
 
-function getWundergroundDailyHigh(hourly: ChartRenderState) {
-  return validNumber(hourly?.wundergroundCurrent?.max_so_far) ?? null;
-}
-
 type AdvancedWeatherVariableItem = {
   key: "wind_dir" | "wind_speed" | "dewpoint" | "humidity" | "pressure";
   label: string;
@@ -1232,22 +1228,21 @@ export function LiveTemperatureThresholdChart({
     isShenzhen,
     metarHeaderLabel,
     metarHighLabel,
-    runwayHeaderLabel,
-    runwayHighLabel,
+    obsHeaderLabel,
+    obsHighLabel,
   } = useMemo(() => getLiveObservationLabels(row, chartHourly), [row, chartHourly]);
 
-  const { currentMetarTemp, currentRunwayTemp, observedHighMetar, observedHighRunway } = useMemo(
+  const { currentMetarTemp, currentObsTemp, observedHighMetar, observedHighObs } = useMemo(
     () => getObservationDisplayMetrics(row, chartHourly),
     [row, chartHourly],
   );
-  const displayRunwayTemp = currentRunwayTemp ?? liveTemp;
+  const displayObsTemp = currentObsTemp ?? liveTemp;
   const displayMetarTemp = selectCompactSecondaryTemp({
     isHKO,
     isShenzhen,
     displayMetarTemp: currentMetarTemp,
     observedHighMetar,
   });
-  const wundergroundDailyHigh = getWundergroundDailyHigh(chartHourly);
 
   const localDateStr = chartLocalDate || new Date().toISOString().slice(0, 10);
   const modelSources = (row?.model_cluster_sources && Object.keys(row.model_cluster_sources).length > 0)
@@ -1566,16 +1561,15 @@ export function LiveTemperatureThresholdChart({
           compact={compact}
           timeframe={timeframe}
           tempSymbol={row?.temp_symbol || "°C"}
-          runwayHeaderLabel={runwayHeaderLabel}
+          obsHeaderLabel={obsHeaderLabel}
           metarHeaderLabel={metarHeaderLabel}
-          runwayHighLabel={runwayHighLabel}
+          obsHighLabel={obsHighLabel}
           metarHighLabel={metarHighLabel}
           isShenzhen={isShenzhen}
-          displayRunwayTemp={displayRunwayTemp}
+          displayObsTemp={displayObsTemp}
           displayMetarTemp={displayMetarTemp}
           observedHighMetar={observedHighMetar}
-          observedHighRunway={observedHighRunway}
-          wundergroundDailyHigh={wundergroundDailyHigh}
+          observedHighObs={observedHighObs}
           debVal={debVal}
           debQuality={chartHourly?.debQuality || null}
           modelMin={modelMin}
@@ -1649,7 +1643,6 @@ export const __getDebPeakWindowRangeForTest = getDebPeakWindowRange;
 export const __getLiveObservationLabelsForTest = getLiveObservationLabels;
 export const __getObservationDisplayMetricsForTest = getObservationDisplayMetrics;
 export const __getPeakGlowStateForTest = getPeakGlowState;
-export const __getWundergroundDailyHighForTest = getWundergroundDailyHigh;
 export const __formatCityLocalDateForTest = formatCityLocalDate;
 export const __formatCityLocalDateTimeForTest = formatCityLocalDateTime;
 export const __getInitialDetailLoadDelayMsForTest = getInitialDetailLoadDelayMs;

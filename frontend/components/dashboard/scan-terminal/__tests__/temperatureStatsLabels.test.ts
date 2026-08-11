@@ -15,40 +15,40 @@ export function runTests() {
   const hongKong = __buildTemperatureStatsLabelsForTest({
     isEn: true,
     isShenzhen: false,
-    runwayHeaderLabel: "参考站点 (1分钟)",
+    obsHeaderLabel: "参考站点 (1分钟)",
     metarHeaderLabel: "天文台实测 (10分钟)",
-    runwayHighLabel: "参考站点",
+    obsHighLabel: "参考站点",
     metarHighLabel: "天文台",
   });
 
   assert(hongKong.primary === "Reference Station (1m)", "Hong Kong English primary label should match 参考站点 (1分钟)");
   assert(hongKong.compactSecondary === "HKO Live (10m)", "Hong Kong compact secondary label should match 天文台实测 (10分钟)");
   assert(hongKong.expandedSecondary === "HKO Live (10m) · Daily High", "Hong Kong expanded secondary label should include HKO plus Daily High");
-  assert(hongKong.runwayHigh === "Reference Station", "Hong Kong high summary should translate 参考站点");
+  assert(hongKong.obsHigh === "Reference Station", "Hong Kong high summary should translate 参考站点");
   assert(hongKong.metarHigh === "HKO", "Hong Kong high summary should translate 天文台");
 
   const shenzhen = __buildTemperatureStatsLabelsForTest({
     isEn: true,
     isShenzhen: true,
-    runwayHeaderLabel: "天文台实测 (10分钟)",
+    obsHeaderLabel: "天文台实测 (10分钟)",
     metarHeaderLabel: "天文台实测 (10分钟)",
-    runwayHighLabel: "天文台实测",
+    obsHighLabel: "天文台实测",
     metarHighLabel: "天文台",
   });
 
   assert(shenzhen.primary === "HKO Live (10m)", "Shenzhen English primary label should match 天文台实测 (10分钟)");
   assert(shenzhen.compactSecondary === "Daily High", "Shenzhen compact secondary label should match 当日最高");
   assert(shenzhen.expandedSecondary === "HKO Live (10m) · Daily High", "Shenzhen expanded secondary label should match 天文台实测 + 当日最高");
-  assert(shenzhen.runwayHigh === "HKO Live", "Shenzhen high summary should translate 天文台实测");
+  assert(shenzhen.obsHigh === "HKO Live", "Shenzhen high summary should translate 天文台实测");
   assert(shenzhen.metarHigh === "HKO", "Shenzhen high summary should translate 天文台");
 
 
   const zh = __buildTemperatureStatsLabelsForTest({
     isEn: false,
     isShenzhen: true,
-    runwayHeaderLabel: "天文台实测 (10分钟)",
+    obsHeaderLabel: "天文台实测 (10分钟)",
     metarHeaderLabel: "天文台实测 (10分钟)",
-    runwayHighLabel: "天文台实测",
+    obsHighLabel: "天文台实测",
     metarHighLabel: "天文台",
   });
 

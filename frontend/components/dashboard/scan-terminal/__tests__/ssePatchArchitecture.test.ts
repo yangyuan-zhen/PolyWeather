@@ -201,7 +201,7 @@ export function runTests() {
   assert(chart.includes("<ModelCurvesSummary") && chart.includes("tempSymbol={row?.temp_symbol || \"°C\"}"), "temperature chart shell must pass the city unit into model summaries");
   const chartStats = fs.readFileSync(chartStatsPath, "utf8");
   assert(chartStats.includes("tempSymbol"), "temperature stat bars must accept the city temperature unit");
-  assert(chartStats.includes("temp(displayRunwayTemp, tempSymbol)"), "temperature stat bars must render live observations with the city unit");
+  assert(chartStats.includes("temp(displayObsTemp, tempSymbol)"), "temperature stat bars must render live observations with the city unit");
   assert(chartSummary.includes("tempSymbol") && chartSummary.includes("temp(stats.latest, tempSymbol)"), "model curve summaries must render values with the city unit");
   assert(chartCanvas.includes("const tempSymbol = row?.temp_symbol || \"°C\""), "temperature chart canvas must derive the city unit from the row");
   assert(chartCanvas.includes("tempSymbol={tempSymbol}"), "temperature chart canvas must pass the city unit into tooltips");

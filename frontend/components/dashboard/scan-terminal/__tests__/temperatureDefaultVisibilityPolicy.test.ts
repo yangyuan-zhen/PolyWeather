@@ -5,7 +5,6 @@ import {
   __getLiveObservationLabelsForTest,
   __getObservationDisplayMetricsForTest,
   __getPeakGlowStateForTest,
-  __getWundergroundDailyHighForTest,
   __getVisibleTemperatureSeriesForTest,
   __formatCityLocalDateForTest,
   __formatCityLocalDateTimeForTest,
@@ -132,22 +131,6 @@ export function runTests() {
       },
     ] as any).state === "none",
     "morning observations near the intraday observed high should not trigger peak glow before the forecast hot window",
-  );
-
-  assert(
-    __getWundergroundDailyHighForTest({
-      wundergroundCurrent: { max_so_far: 26 },
-      airportCurrent: { max_so_far: 27 },
-      airportPrimary: { max_so_far: 27 },
-    } as any) === 26,
-    "WU display should use Wunderground historical.json high before airport/METAR highs",
-  );
-  assert(
-    __getWundergroundDailyHighForTest({
-      airportCurrent: { max_so_far: 27 },
-      airportPrimary: { max_so_far: 27 },
-    } as any) === null,
-    "WU display should not fall back to airport/METAR highs when historical.json is missing",
   );
 
   const guangzhou = {
@@ -527,7 +510,7 @@ export function runTests() {
     } as any,
   );
   assert(
-    hongKongMetrics.currentRunwayTemp === 28.7,
+    hongKongMetrics.currentObsTemp === 28.7,
     "Hong Kong primary compact stat should stay on the latest CoWIN reference-station point",
   );
   assert(
@@ -632,9 +615,11 @@ export function runTests() {
     } as any,
   );
 
-  assert(newYorkMetrics.currentRunwayTemp === 73.9, "weather-station header should use detail METAR/current temp before stale row zero");
+  assert(newYorkMetrics.currentObsTemp === 73.9, "weather-station header should use detail METAR/current temp before stale row zero");
   assert(newYorkMetrics.observedHighMetar === 73.9, "METAR high header should use detail METAR high before stale row zero");
 
+  // Legacy "runway" observation naming was removed together with the AMOS/runway data source;
+  // label assertions now use the generalized observation-layer names (obsHeaderLabel/obsHighLabel).
   const istanbulLabels = __getLiveObservationLabelsForTest(
     {
       city: "istanbul",
@@ -647,11 +632,11 @@ export function runTests() {
     null,
   );
   assert(
-    istanbulLabels.runwayHeaderLabel === "气象站实测",
-    "Istanbul/MGM should be labeled as weather-station observations, not runway observations",
+    istanbulLabels.obsHeaderLabel === "气象站实测",
+    "Istanbul/MGM should be labeled as weather-station observations (legacy runway naming removed)",
   );
   assert(
-    istanbulLabels.runwayHighLabel === "气象站",
+    istanbulLabels.obsHighLabel === "气象站",
     "Istanbul/MGM high label should be weather station",
   );
 
@@ -668,12 +653,12 @@ export function runTests() {
     null,
   );
   assert(
-    panamaLabels.runwayHeaderLabel === "机场报文",
-    "Panama City/MPMG should be labeled as an airport METAR report when no station or runway sensor feed exists",
+    panamaLabels.obsHeaderLabel === "机场报文",
+    "Panama City/MPMG should be labeled as an airport METAR report when no station or sensor feed exists",
   );
   assert(
-    panamaLabels.runwayHighLabel === "机场报文",
-    "Panama City high label should use airport METAR report wording, not weather-station or runway wording",
+    panamaLabels.obsHighLabel === "机场报文",
+    "Panama City high label should use airport METAR report wording, not weather-station wording",
   );
 
   const newYorkWithMadis = __buildTemperatureChartDataForTest(
@@ -988,7 +973,7 @@ export function runTests() {
   const qingdaoDayEnd = Date.UTC(2026, 4, 27, 0, 0, 0);
   assert(
     qingdaoFullDay.data.every((point) => point.ts >= qingdaoDayStart && point.ts < qingdaoDayEnd),
-    "Full-day chart should clamp observation history to the selected local_date so DEB does not appear broken after cross-day runway history",
+    "Full-day chart should clamp observation history to the selected local_date so DEB does not appear broken after cross-day history",
   );
   assert(
     qingdaoFullDay.data[0]?.ts === qingdaoDayStart,

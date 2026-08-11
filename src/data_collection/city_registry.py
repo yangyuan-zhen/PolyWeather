@@ -112,7 +112,7 @@ CITY_REGISTRY = {
         "risk_emoji": "🟡",
         "airport_name": "金海国际机场",
         "distance_km": 14.0,
-        "warning": "市场现按 Wunderground 金海国际机场站整度°C口径结算；海风与沿海云量会影响午后峰值。",
+        "warning": "市场现按 NOAA RKPK 金海国际机场站整度°C口径结算；海风与沿海云量会影响午后峰值。",
     },
     "hong kong": {
         "name": "Hong Kong",
@@ -208,7 +208,7 @@ CITY_REGISTRY = {
         "risk_emoji": "🟡",
         "airport_name": "吉隆坡国际机场",
         "distance_km": 45.0,
-        "warning": "市场现按 Wunderground 吉隆坡国际机场站整度°C口径结算；午后对流和热带湿热会让峰值窗口偏短。",
+        "warning": "市场现按 NOAA WMKK 吉隆坡国际机场站整度°C口径结算；午后对流和热带湿热会让峰值窗口偏短。",
     },
     "jakarta": {
         "name": "Jakarta",
@@ -225,7 +225,7 @@ CITY_REGISTRY = {
         "risk_emoji": "🟡",
         "airport_name": "Halim Perdanakusuma Airport",
         "distance_km": 12.0,
-        "warning": "市场现按 Wunderground Halim 机场站整度°C口径结算；热带午后阵雨常在峰值前后快速压制气温。",
+        "warning": "市场现按 NOAA WIHH Halim 机场站整度°C口径结算；热带午后阵雨常在峰值前后快速压制气温。",
     },
     "manila": {
         "name": "Manila",
@@ -242,7 +242,7 @@ CITY_REGISTRY = {
         "risk_emoji": "🟡",
         "airport_name": "尼诺伊·阿基诺国际机场",
         "distance_km": 10.0,
-        "warning": "市场现按 Wunderground 尼诺伊·阿基诺国际机场站整度°C口径结算；海风、湿热与午后对流会压缩日最高温窗口。",
+        "warning": "市场现按 NOAA RPLL 尼诺伊·阿基诺国际机场站整度°C口径结算；海风、湿热与午后对流会压缩日最高温窗口。",
     },
     "karachi": {
         "name": "Karachi",
@@ -260,7 +260,7 @@ CITY_REGISTRY = {
         "airport_name": "真纳国际机场",
         "distance_km": 15.0,
         "min_plausible_metar_temp_c": 5.0,
-        "warning": "市场现按 Wunderground 真纳国际机场站整度°C口径结算；海风锋、干热输送与尘霾会影响峰值兑现时间。",
+        "warning": "市场现按 NOAA OPKC 真纳国际机场站整度°C口径结算；海风锋、干热输送与尘霾会影响峰值兑现时间。",
     },
     "tokyo": {
         "name": "Tokyo",
@@ -591,7 +591,7 @@ CITY_REGISTRY = {
         "risk_emoji": "🟡",
         "airport_name": "赫尔辛基机场",
         "distance_km": 17.0,
-        "warning": "市场现按 Wunderground 赫尔辛基机场站整度°C口径结算；高纬度日照变化快，冷平流会明显影响日峰值。",
+        "warning": "市场现按 NOAA EFHK 赫尔辛基机场站整度°C口径结算；高纬度日照变化快，冷平流会明显影响日峰值。",
     },
     "amsterdam": {
         "name": "Amsterdam",
@@ -608,7 +608,7 @@ CITY_REGISTRY = {
         "risk_emoji": "🟡",
         "airport_name": "阿姆斯特丹史基浦机场",
         "distance_km": 17.0,
-        "warning": "市场现按 Wunderground 史基浦机场站整度°C口径结算；北海海风和平流层云容易限制午后升温。",
+        "warning": "市场现按 NOAA EHAM 史基浦机场站整度°C口径结算；北海海风和平流层云容易限制午后升温。",
     },
     "madrid": {
         "name": "Madrid",
@@ -669,7 +669,7 @@ CITY_REGISTRY = {
         "risk_emoji": "🟡",
         "airport_name": "广州白云国际机场",
         "distance_km": 28.0,
-        "warning": "市场现按 Wunderground 广州白云国际机场站整度°C口径结算；珠三角海陆风与午后对流会让峰值兑现时间出现摇摆。",
+        "warning": "市场现按 NOAA ZGGG 广州白云国际机场站整度°C口径结算；珠三角海陆风与午后对流会让峰值兑现时间出现摇摆。",
     },
     "qingdao": {
         "name": "Qingdao",
@@ -686,7 +686,7 @@ CITY_REGISTRY = {
         "risk_emoji": "🟡",
         "airport_name": "青岛胶东国际机场",
         "distance_km": 39.0,
-        "warning": "市场现按 Wunderground 青岛胶东国际机场站整度°C口径结算；沿海海风、低云和海雾会影响日内升温效率。",
+        "warning": "市场现按 NOAA ZSQD 青岛胶东国际机场站整度°C口径结算；沿海海风、低云和海雾会影响日内升温效率。",
     },
     "beijing": {
         "name": "Beijing",
@@ -731,7 +731,7 @@ CITY_REGISTRY = {
         "risk_emoji": "🟡",
         "airport_name": "Marcos A. Gelabert Airport",
         "distance_km": 6.0,
-        "warning": "市场现按 Wunderground Marcos A. Gelabert 机场站整度°C口径结算；热带对流常让峰值在午后被快速截断。",
+        "warning": "市场现按 NOAA MPMG Marcos A. Gelabert 机场站整度°C口径结算；热带对流常让峰值在午后被快速截断。",
     },
     "cape town": {
         "name": "Cape Town",
@@ -748,7 +748,7 @@ CITY_REGISTRY = {
         "risk_emoji": "🟡",
         "airport_name": "开普敦国际机场",
         "distance_km": 20.0,
-        "warning": "市场现按 Wunderground 开普敦国际机场站整度°C口径结算；海风和平流云会显著影响午后升温节奏。",
+        "warning": "市场现按 NOAA FACT 开普敦国际机场站整度°C口径结算；海风和平流云会显著影响午后升温节奏。",
     },
     "jeddah": {
         "name": "Jeddah",
@@ -765,7 +765,7 @@ CITY_REGISTRY = {
         "risk_emoji": "🟡",
         "airport_name": "阿卜杜勒阿齐兹国王国际机场",
         "distance_km": 18.0,
-        "warning": "市场现按 Wunderground 吉达阿卜杜勒阿齐兹国王国际机场站整度°C口径结算；干热背景下海风与沙尘输送会改变峰值兑现时点。",
+        "warning": "市场现按 NCM OEJN 吉达阿卜杜勒阿齐兹国王国际机场站整度°C口径结算；干热背景下海风与沙尘输送会改变峰值兑现时点。",
     },
 }
 
