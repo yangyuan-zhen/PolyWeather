@@ -306,8 +306,17 @@ export function runTests() {
       chartLogic.includes("controller.abort()"),
     "city detail chart fetches must have a frontend timeout so panels cannot stay on 加载图表 forever",
   );
-  assert(!chart.includes("3D"), "temperature chart UI must not expose a 3D/future-forecast mode");
-  assert(!chart.includes("build3DayChartData"), "temperature chart component must not render future prediction curves");
+  // The 72h view is forecast-only (multi-model hourly consensus + DEB anchors);
+  // it must not interfere with the SSE patch pipeline for live observations.
+  assert(
+    chart.includes('"3D"') && chart.includes('"1D"'),
+    "temperature chart must expose 1D/3D timeframe switching",
+  );
+  assert(
+    chartLogic.includes("build72hChartData") &&
+      !chart.includes("setInterval(poll, 60_000)"),
+    "72h mode must be backed by build72hChartData and must not introduce unconditional polling",
+  );
   assert(
     !chart.includes("setInterval(poll, 60_000)"),
     "temperature chart must not use unconditional 60-second full-detail polling after SSE patch migration",

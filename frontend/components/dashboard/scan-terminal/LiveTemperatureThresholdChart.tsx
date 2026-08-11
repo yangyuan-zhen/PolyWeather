@@ -15,6 +15,7 @@ import { DASHBOARD_REFRESH_POLICY_MS } from "@/lib/refresh-policy";
 import {
   HOURLY_CACHE_TTL_MS,
   buildChartDomain,
+  build72hChartData,
   buildFullDayChartData,
   buildIntDegreeTicks,
   fetchFullChartDetailForCity,
@@ -654,7 +655,7 @@ export function LiveTemperatureThresholdChart({
   const city = String(row?.city || "").toLowerCase().trim();
   const latestPatch = useLatestPatch(city);
   const resyncVersion = useSseResyncVersion();
-  const timeframe = "1D";
+  const [timeframe, setTimeframe] = useState<"1D" | "3D">("1D");
   const [viewMode, setViewMode] = useState<"auto" | "full">("full");
   const [userToggledKeys, setUserToggledKeys] = useState<Record<string, boolean>>({});
   const [liveTemp, setLiveTemp] = useState<number | null>(null);
@@ -1156,7 +1157,13 @@ export function LiveTemperatureThresholdChart({
   }, [hourly, currentCityLocalDate, row?.local_date]);
   const chartLocalDate = chartHourly?.localDate || row?.local_date || currentCityLocalDate;
 
-  const { data, series } = useMemo(() => buildFullDayChartData(row, chartHourly, isEn), [row, chartHourly, isEn]);
+  const { data, series } = useMemo(
+    () =>
+      timeframe === "3D"
+        ? build72hChartData(row, chartHourly)
+        : buildFullDayChartData(row, chartHourly, isEn),
+    [row, chartHourly, isEn, timeframe],
+  );
   const peakGlow = useMemo(() => getPeakGlowState(row, data, series), [row, data, series]);
 
   const autoWindowRange = useMemo(
@@ -1483,6 +1490,23 @@ export function LiveTemperatureThresholdChart({
         </button>
       )}
       <div className="flex items-center gap-1 rounded bg-[#eef2f6] p-0.5 border border-slate-200">
+        {(["1D", "3D"] as const).map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => setTimeframe(mode)}
+            className={clsx(
+              "px-2 py-0.5 text-[9px] font-bold rounded transition-all cursor-pointer",
+              timeframe === mode
+                ? "bg-white text-slate-800 shadow-sm border border-slate-300"
+                : "text-slate-500 hover:text-slate-800"
+            )}
+          >
+            {mode === "1D" ? (isEn ? "1D" : "当日") : isEn ? "3D" : "3天"}
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center gap-1 rounded bg-[#eef2f6] p-0.5 border border-slate-200">
         {(["auto", "full"] as const).map((mode) => (
           <button
             key={mode}
@@ -1626,6 +1650,8 @@ export function LiveTemperatureThresholdChart({
     </Panel>
   );
 }
+
+export const __build72hChartDataForTest = build72hChartData;
 
 export function __buildTemperatureChartDataForTest(
   row: ScanOpportunityRow | null,

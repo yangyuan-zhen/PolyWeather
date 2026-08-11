@@ -2051,6 +2051,130 @@ function shouldRenderModelCurve(
   return latestValidTs !== null && latestValidTs >= currentTs - SHORT_RANGE_MODEL_STALE_GRACE_MS;
 }
 
+function build72hChartData(
+  row: ScanOpportunityRow | null,
+  hourly: ChartRenderState,
+): { data: Array<Record<string, any>>; series: EvidenceSeries[] } {
+  const tzOffset = row?.tz_offset_seconds ?? 0;
+  const modelTimes = Array.isArray(hourly?.modelTimes) ? hourly.modelTimes : [];
+  const modelCurves = (hourly?.modelCurves || {}) as Record<string, Array<number | null>>;
+  if (modelTimes.length === 0 || Object.keys(modelCurves).length === 0) {
+    return { data: [], series: [] };
+  }
+
+  const rows: Array<Record<string, any>> = [];
+  modelTimes.forEach((timeStr, index) => {
+    const ts = getCityLocalUtcTimestamp(timeStr, tzOffset);
+    if (ts === null) return;
+    const values: number[] = [];
+    Object.keys(modelCurves).forEach((key) => {
+      const arr = modelCurves[key];
+      const value = arr && index < arr.length ? validNumber(arr[index]) : null;
+      if (value !== null) values.push(value);
+    });
+    if (values.length === 0) {
+      rows.push({ ts, model_median: null, model_min: null, model_max: null });
+      return;
+    }
+    const sorted = [...values].sort((a, b) => a - b);
+    rows.push({
+      ts,
+      model_median: sorted[Math.floor(values.length / 2)],
+      model_min: sorted[0],
+      model_max: sorted[values.length - 1],
+    });
+  });
+  if (rows.length === 0) return { data: [], series: [] };
+
+  // Live observations for the local day (same fallback chain as the 1D chart).
+  const localDateStr = resolveChartLocalDate(row, hourly);
+  const obsPoints = normObs(
+    hourly?.settlementTodayObs ||
+      row?.settlement_today_obs ||
+      row?.metar_context?.settlement_today_obs ||
+      hourly?.metarTodayObs ||
+      row?.metar_today_obs ||
+      row?.metar_context?.today_obs,
+    tzOffset,
+    undefined,
+    localDateStr || null,
+  );
+  const obsByTs = new Map(obsPoints.map((point) => [point.ts, point.value]));
+  const observationSeries = rows.map((entry) => obsByTs.get(entry.ts) ?? null);
+
+  // DEB anchors: today's hourly path plus daily DEB predictions for the
+  // following days (multiModelDaily), sampled at noon local time.
+  const debByTs = new Map<number, number>();
+  const debPath = hourly?.debHourlyPath;
+  if (
+    debPath &&
+    Array.isArray(debPath.times) &&
+    Array.isArray(debPath.temps)
+  ) {
+    debPath.times.forEach((timeText, index) => {
+      const ts = getCityLocalUtcTimestamp(timeText, tzOffset, localDateStr);
+      const value = validNumber(debPath.temps?.[index]);
+      if (ts !== null && value !== null) debByTs.set(ts, value);
+    });
+  }
+  const multiDaily = (hourly?.multiModelDaily || {}) as Record<
+    string,
+    { deb?: { prediction?: number | null } | null }
+  >;
+  Object.keys(multiDaily).forEach((dateStr) => {
+    const debValue = validNumber(multiDaily[dateStr]?.deb?.prediction);
+    if (debValue === null) return;
+    const ts = getCityLocalUtcTimestamp(`${dateStr}T12:00`, tzOffset);
+    if (ts !== null) debByTs.set(ts, debValue);
+  });
+  const debSeries = rows.map((entry) => debByTs.get(entry.ts) ?? null);
+
+  const series: EvidenceSeries[] = [
+    {
+      key: "observation",
+      label: "Live",
+      source: "Live",
+      color: "#0d9488",
+      featured: true,
+      values: observationSeries,
+    },
+    {
+      key: "model_median",
+      label: "Model Consensus",
+      source: "Multi-model hourly",
+      color: "#f97316",
+      featured: true,
+      values: rows.map((entry) => entry.model_median),
+    },
+    {
+      key: "model_min",
+      label: "Model Min",
+      source: "Multi-model hourly",
+      color: "#3b82f6",
+      dashed: true,
+      values: rows.map((entry) => entry.model_min),
+    },
+    {
+      key: "model_max",
+      label: "Model Max",
+      source: "Multi-model hourly",
+      color: "#ef4444",
+      dashed: true,
+      values: rows.map((entry) => entry.model_max),
+    },
+    {
+      key: "deb_72h",
+      label: "DEB",
+      source: "DEB",
+      color: "#f59e0b",
+      dashed: true,
+      values: debSeries,
+    },
+  ];
+
+  return { data: rows, series };
+}
+
 function buildFullDayChartData(
   row: ScanOpportunityRow | null,
   hourly: ChartRenderState,
@@ -2585,6 +2709,7 @@ export {
   resolveCityDetailFromBatch as __resolveCityDetailFromBatchForTest,
   __resetHourlyDetailRequestQueueForTest,
   __runQueuedHourlyDetailRequestForTest,
+  build72hChartData,
   buildChartDomain,
   buildFullDayChartData,
   getDebPeakWindowRange,
