@@ -53,6 +53,7 @@ import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { UsageGuideDashboard } from "@/components/dashboard/scan-terminal/UsageGuideDashboard";
 import { ModelSummaryDashboard } from "@/components/dashboard/scan-terminal/ModelSummaryDashboard";
 import { ArbitrageDashboard } from "@/components/dashboard/scan-terminal/ArbitrageDashboard";
+import { TerminalOnboardingTour } from "@/components/dashboard/scan-terminal/TerminalOnboardingTour";
 import {
   LiveTemperatureThresholdChart,
   clearCityDetailCache,
@@ -1098,6 +1099,7 @@ function PolyWeatherTerminal({
         onFeedbackClick={openTerminalFeedback}
         onSelectNav={handleSelectNav}
       />
+      <TerminalOnboardingTour isEn={isEn} hasData={rows.length > 0} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-[#d2d9e2] bg-white px-4 text-slate-800">
