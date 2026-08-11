@@ -1181,6 +1181,43 @@ class ProbabilitySnapshotRepository:
                 continue
         return out
 
+    def load_earliest_lead_days(self) -> Dict[tuple[str, str], int]:
+        """Earliest snapshot timestamp per (city, target_date) as lead days.
+
+        Replaces ``load_all_rows`` in training walk-forwards: the full snapshot
+        table can hold hundreds of thousands of rows (payload_json included),
+        which loads gigabytes into RAM just to derive one lead integer per
+        (city, date).  Aggregating in SQL keeps the result to one row per
+        (city, date).
+        """
+        from datetime import datetime
+
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT city, target_date, MIN(timestamp) AS first_ts
+                FROM probability_training_snapshots_store
+                GROUP BY city, target_date
+                """
+            ).fetchall()
+        out: Dict[tuple[str, str], int] = {}
+        for row in rows:
+            city = str(row["city"] or "").strip().lower()
+            date_str = str(row["target_date"] or "")[:10]
+            ts = row["first_ts"]
+            if not city or not date_str or not ts:
+                continue
+            try:
+                ts_dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+                tgt_dt = datetime.strptime(date_str, "%Y-%m-%d")
+            except Exception:
+                continue
+            lead = (tgt_dt.date() - ts_dt.date()).days
+            cur = out.get((city, date_str))
+            if cur is None or lead < cur:
+                out[(city, date_str)] = lead
+        return out
+
     def replace_all(self, rows: List[Dict[str, Any]]) -> int:
         count = 0
         with self.db.connect() as conn:

@@ -291,30 +291,14 @@ def _walk_forward_deb_residuals(
     # Earliest snapshot timestamp per (city, date) for lead computation.
     lead_by_cd: Dict[tuple[str, str], int] = {}
     try:
+        # SQL-side aggregation: the snapshot table grows to hundreds of
+        # thousands of rows (payload_json included); loading all of them just
+        # to derive one lead integer per (city, date) cost multiple GB of RAM
+        # and OOM-killed the training worker on production.
         snap_repo = ProbabilitySnapshotRepository()
-        snap_rows = snap_repo.load_all_rows()
-        from datetime import datetime
-
-        for row in snap_rows:
-            ts = row.get("timestamp")
-            date_str = row.get("target_date") or row.get("date")
-            if not ts or not date_str:
-                continue
-            try:
-                ts_dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
-                tgt_dt = datetime.strptime(str(date_str)[:10], "%Y-%m-%d")
-            except Exception:
-                continue
-            key = (str(row.get("city") or "").strip().lower(), str(date_str)[:10])
-            if key[0] and key[1]:
-                lead = (tgt_dt.date() - ts_dt.date()).days
-                cur = lead_by_cd.get(key)
-                if cur is None or lead < cur:
-                    lead_by_cd[key] = lead
+        lead_by_cd.update(snap_repo.load_earliest_lead_days())
     except Exception:
         pass
-
-    from datetime import datetime
 
     rows: List[Dict[str, Any]] = []
     for city, by_date in (daily_records or {}).items():
