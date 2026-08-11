@@ -78,10 +78,14 @@ def _run_once(*, lookback_days: int, cities: Optional[list[str]]) -> dict:
     skip_analysis = _env_bool(
         "POLYWEATHER_TRAINING_SETTLEMENT_SKIP_ANALYSIS", default=False
     )
+    skip_reconcile = _env_bool(
+        "POLYWEATHER_TRAINING_SETTLEMENT_SKIP_RECONCILE", default=True
+    )
     result = run_training_settlement_cycle(
         cities=cities,
         lookback_days=lookback_days,
         skip_analysis=skip_analysis,
+        skip_reconcile=skip_reconcile,
     )
     try:
         snapshot_result = refresh_deb_weight_snapshots(cities=cities)

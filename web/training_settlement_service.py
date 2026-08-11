@@ -69,6 +69,7 @@ def run_training_settlement_cycle(
     actual_reconciler: Optional[ActualReconciler] = None,
     lookback_days: int = 10,
     skip_analysis: bool = False,
+    skip_reconcile: bool = False,
 ) -> Dict[str, Any]:
     registry = city_registry or CITY_REGISTRY
     # Per-city _analyze refreshes forecasts/deb_prediction in daily_records, but
@@ -103,7 +104,14 @@ def run_training_settlement_cycle(
             analysis_payload = None
             if not skip_analysis:
                 analysis_payload = run_analysis(city)
-            if _can_reconcile_actual_history(meta):
+            if skip_reconcile:
+                reconcile_payload = {
+                    "ok": True,
+                    "updated": 0,
+                    "reason": "skipped_reconcile",
+                    "source": str(meta.get("settlement_source") or "").strip().lower(),
+                }
+            elif _can_reconcile_actual_history(meta):
                 reconcile_payload = reconcile_actual(city, lookback_days=safe_lookback)
             else:
                 reconcile_payload = {
