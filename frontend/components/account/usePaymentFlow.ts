@@ -29,6 +29,7 @@ import {
 import { trackAppEvent } from "@/lib/app-analytics";
 import { buildAuthMePath } from "@/lib/auth-snapshot";
 import {
+  assertExpectedDirectPaymentReceiver,
   assertExpectedPaymentReceiver,
   EXPECTED_PAYMENT_RECEIVER_ADDRESS,
 } from "@/lib/payment-receiver";
@@ -750,7 +751,7 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
       if (!intentId || !direct?.receiver_address || !direct?.amount_usdc) {
         throw new Error(copy.manualPaymentInvalid);
       }
-      assertExpectedPaymentReceiver(direct.receiver_address, "manual payment receiver");
+      assertExpectedDirectPaymentReceiver(direct.receiver_address, "manual payment receiver");
       setLastIntentId(intentId);
       setManualPayment(direct);
       setPaymentMethodTab("manual");
