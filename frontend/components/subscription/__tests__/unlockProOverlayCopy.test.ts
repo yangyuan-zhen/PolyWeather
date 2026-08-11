@@ -30,7 +30,7 @@ export function runTests() {
   for (const expectedPhrase of [
     "确认开通 PolyWeather Pro",
     "结算源优先",
-    "机场 / 跑道实测",
+    "机场实测",
     "DEB 路径",
     "Activate PolyWeather Pro",
     "settlement-source-first",

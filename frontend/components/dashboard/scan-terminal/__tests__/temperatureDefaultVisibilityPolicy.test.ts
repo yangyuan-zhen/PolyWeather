@@ -363,6 +363,7 @@ export function runTests() {
       local_time: "21:10",
       tz_offset_seconds: 8 * 60 * 60,
       deb_prediction: 35,
+      metar_today_obs: [{ time: "21:00", temp: 27.0 }],
     } as any,
     {
       localTime: "21:10",
