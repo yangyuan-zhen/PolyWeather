@@ -165,37 +165,18 @@ export function runTests() {
   const activeDefaultSeries = __getActiveTemperatureSeriesForTest("guangzhou", series, {});
 
   assert(seriesByKey(series, "settlement"), "settlement/HKO observation series should be present");
-  assert(seriesByKey(series, "metar"), "METAR observation series should be present by its own key");
+  assert(
+    !seriesByKey(series, "metar"),
+    "airport METAR curve should be removed from the chart (settlement line already covers plain METAR cities)",
+  );
 
   assert(
     __isTemperatureSeriesVisibleByDefaultForTest("guangzhou", "settlement"),
     "settlement/HKO observations should be visible by default",
   );
   assert(
-    __isTemperatureSeriesVisibleByDefaultForTest("guangzhou", "metar"),
-    "METAR observations should be visible by default outside Hong Kong and Shenzhen",
-  );
-  assert(
-    activeDefaultSeries.some((item) => item.key === "metar"),
-    "non-Hong Kong/Shenzhen airport METAR observations should be part of the active chart series by default",
-  );
-  assert(
-    !__getVisibleTemperatureSeriesForTest("guangzhou", series, { metar: false }).some(
-      (item) => item.key === "metar",
-    ),
-    "users should still be able to hide the airport METAR series from the legend",
-  );
-  assert(
-    !__isTemperatureSeriesVisibleByDefaultForTest("hong kong", "metar"),
-    "Hong Kong airport METAR observations should stay hidden by default because HKO is the primary local station",
-  );
-  assert(
-    !__isTemperatureSeriesVisibleByDefaultForTest("Lau Fau Shan", "metar"),
-    "Lau Fau Shan airport METAR observations should stay hidden by default because HKO is the primary local station",
-  );
-  assert(
-    !__isTemperatureSeriesVisibleByDefaultForTest("shenzhen", "metar"),
-    "Shenzhen airport METAR observations should stay hidden by default because HKO is the primary local station",
+    !activeDefaultSeries.some((item) => item.key === "metar"),
+    "airport METAR series must not be part of the active chart series anymore",
   );
   assert(
     __isTemperatureSeriesVisibleByDefaultForTest("Lau Fau Shan", "madis"),
@@ -296,8 +277,8 @@ export function runTests() {
     "Ankara MGM airport-primary weather-station curve should be visible by default",
   );
   assert(
-    ankaraDefaultSeries.some((item: any) => item.key === "metar"),
-    "Ankara local METAR backup curve should remain visible by default because MGM history can be incomplete",
+    !ankaraDefaultSeries.some((item: any) => item.key === "metar"),
+    "airport METAR curve should be removed even for weather-station cities",
   );
   assert(
     __isTemperatureSeriesVisibleByDefaultForTest("guangzhou", "model_curve_ECMWF"),
@@ -363,7 +344,7 @@ export function runTests() {
       local_time: "21:10",
       tz_offset_seconds: 8 * 60 * 60,
       deb_prediction: 35,
-      metar_today_obs: [{ time: "21:00", temp: 27.0 }],
+      settlement_today_obs: [{ time: "21:00", temp: 27.0 }],
     } as any,
     {
       localTime: "21:10",
@@ -925,7 +906,7 @@ export function runTests() {
   const ankaraMgmSeries = seriesByKey(ankaraMgmWithMetarLabel.series as any, "madis") as any;
   const ankaraMetarSeries = seriesByKey(ankaraMgmWithMetarLabel.series as any, "metar") as any;
   assert(ankaraMgmSeries?.label === "MGM", "Ankara MGM airport-primary series should be labeled MGM even if payload source_label says METAR");
-  assert(ankaraMetarSeries?.label === "METAR", "Ankara METAR backup series should keep the METAR label");
+  assert(ankaraMetarSeries == null, "airport METAR curve should be removed (MGM primary covers Ankara)");
 
   const shanghaiDebFromDetail = __buildTemperatureChartDataForTest(
     {

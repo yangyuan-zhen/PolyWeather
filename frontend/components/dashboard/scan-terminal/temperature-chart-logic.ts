@@ -709,38 +709,6 @@ function airportPrimarySeriesLabel(
   return canonicalLabel || payloadLabel || "NOAA MADIS";
 }
 
-function airportPrimaryUsesMetarFallback(
-  hourly: ChartRenderState,
-  isHKO: boolean,
-  row?: ScanOpportunityRow | null,
-) {
-  if (isHKO) return false;
-  const cityKey = normalizeCityKey(row?.city);
-  if (cityKey === "ankara" || cityKey === "istanbul") return false;
-  const canonicalLabel = canonicalAirportPrimarySourceLabel(hourly);
-  if (canonicalLabel && canonicalLabel !== "NOAA MADIS") return false;
-  const payloadLabel = String(hourly?.airportPrimary?.source_label || "").trim();
-  return !payloadLabel || isGenericAirportPrimaryLabel(payloadLabel);
-}
-
-function metarStationCodeForSeries(row?: ScanOpportunityRow | null, hourly?: ChartRenderState) {
-  const candidates = [
-    row?.metar_context?.station,
-    hourly?.settlementStationCode,
-    row?.station_code,
-    row?.icao,
-  ];
-  return candidates
-    .map((value) => String(value || "").trim().toUpperCase())
-    .find((value) => /^[A-Z0-9]{4}$/.test(value)) || "";
-}
-
-function airportPrimaryMatchesMetarStation(hourly: ChartRenderState, row?: ScanOpportunityRow | null) {
-  const primaryCode = airportCodeForSeriesLabel(hourly, row);
-  const metarCode = metarStationCodeForSeries(row, hourly);
-  return Boolean(primaryCode && metarCode && primaryCode === metarCode);
-}
-
 function airportPrimaryObservationPoints(hourly: ChartRenderState) {
   return appendLatestAirportObservation(
     hourly?.airportPrimaryTodayObs,
@@ -2249,19 +2217,9 @@ function buildFullDayChartData(
   const isHKOCity = settlementCityKey === 'hongkong' || settlementCityKey === 'laufaushan'
     || settlementCityKey === 'shenzhen' || (row?.city || '').toLowerCase().includes('hong kong')
     || (row?.city || '').toLowerCase().includes('lau fau shan');
-  const isRedundantMetarFallback =
-    finalMadisObs.length > 0 &&
-    airportPrimaryUsesMetarFallback(hourly, isHKO, row) &&
-    airportPrimaryMatchesMetarStation(hourly, row);
-  const shouldRenderMetar =
-    metarObs.length > 0 &&
-    !isRedundantMetarFallback &&
-    !observationSetContains(finalMadisObs, metarObs);
-
   const timelineSet = new Set<number>();
   finalSettlementObs.forEach((point) => timelineSet.add(point.ts));
   finalMadisObs.forEach((point) => timelineSet.add(point.ts));
-  if (shouldRenderMetar) metarObs.forEach((point) => timelineSet.add(point.ts));
   addLocalDayAxisSlots(timelineSet, localDayBounds);
 
   const correctedDebPath = hourly?.debHourlyPath;
@@ -2335,21 +2293,9 @@ function buildFullDayChartData(
     }
   }
 
-  if (shouldRenderMetar) {
-    const mvals = valuesAtTimeline(n, indexByTs, metarObs);
-    if (mvals.some((v) => v !== null)) {
-      series.push({
-        key: "metar",
-        label: isHKO ? "VHHH METAR" : (isHKOCity ? "HKO" : (row?.metar_context?.station_label || "METAR")),
-        source: row?.airport || "METAR",
-        color: "#0ea5e9",
-        dashed: true,
-        curve: "stepAfter",
-        showDot: true,
-        values: mvals,
-      });
-    }
-  }
+  // Airport METAR curves were removed: for plain METAR-settled cities the
+  // settlement line already IS the METAR station, so a separate METAR curve
+  // duplicated it; weather-station cities show their official network line.
 
   // ── DEB forecast curve ──
   if (debTimes.length && debTemps.length) {
