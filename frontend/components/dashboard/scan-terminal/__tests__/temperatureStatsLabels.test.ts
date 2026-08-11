@@ -15,6 +15,7 @@ export function runTests() {
   const hongKong = __buildTemperatureStatsLabelsForTest({
     isEn: true,
     isShenzhen: false,
+    metarRedundant: false,
     obsHeaderLabel: "参考站点 (1分钟)",
     metarHeaderLabel: "天文台实测 (10分钟)",
     obsHighLabel: "参考站点",
@@ -30,6 +31,7 @@ export function runTests() {
   const shenzhen = __buildTemperatureStatsLabelsForTest({
     isEn: true,
     isShenzhen: true,
+    metarRedundant: false,
     obsHeaderLabel: "天文台实测 (10分钟)",
     metarHeaderLabel: "天文台实测 (10分钟)",
     obsHighLabel: "天文台实测",
@@ -46,6 +48,7 @@ export function runTests() {
   const zh = __buildTemperatureStatsLabelsForTest({
     isEn: false,
     isShenzhen: true,
+    metarRedundant: false,
     obsHeaderLabel: "天文台实测 (10分钟)",
     metarHeaderLabel: "天文台实测 (10分钟)",
     obsHighLabel: "天文台实测",
@@ -78,6 +81,20 @@ export function runTests() {
     __buildDebEnsembleLabelForTest(supportingSignal, false) === "集+",
     "supporting ensemble signal should render a compact Chinese marker",
   );
+  const plainMetar = __buildTemperatureStatsLabelsForTest({
+    isEn: false,
+    isShenzhen: false,
+    metarRedundant: true,
+    obsHeaderLabel: "机场报文",
+    metarHeaderLabel: "METAR 结算 (30分钟)",
+    obsHighLabel: "机场报文",
+    metarHighLabel: "METAR 官方",
+  });
+  assert(
+    plainMetar.expandedSecondary === "当日最高" && plainMetar.compactSecondary === "当日最高",
+    "plain METAR cities must collapse the secondary METAR block to the daily high instead of duplicating it",
+  );
+
   assert(
     __buildDebEnsembleLabelForTest({ ...supportingSignal, stance: "caution" }, true) === "Ens!",
     "caution ensemble signal should render a compact English marker",

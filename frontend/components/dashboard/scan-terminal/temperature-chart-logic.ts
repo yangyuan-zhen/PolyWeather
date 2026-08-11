@@ -1749,6 +1749,17 @@ function getLiveObservationLabels(
     : isHKO ? "天文台"
     : "METAR 官方";
 
+  // When the primary observation layer IS the airport METAR (plain cities
+  // without a weather-station / official network), the secondary METAR block
+  // duplicates the same value; collapse it to the daily-high label instead.
+  const metarRedundant =
+    !isHKO &&
+    !isShenzhen &&
+    !isTokyo &&
+    !isSingapore &&
+    !isParis &&
+    !isWeatherStation;
+
   return {
     isHKO,
     isParis,
@@ -1758,6 +1769,7 @@ function getLiveObservationLabels(
     metarHighLabel,
     obsHeaderLabel,
     obsHighLabel,
+    metarRedundant,
   };
 }
 

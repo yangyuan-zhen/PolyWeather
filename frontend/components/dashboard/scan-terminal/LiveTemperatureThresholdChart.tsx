@@ -1237,6 +1237,7 @@ export function LiveTemperatureThresholdChart({
     metarHighLabel,
     obsHeaderLabel,
     obsHighLabel,
+    metarRedundant,
   } = useMemo(() => getLiveObservationLabels(row, chartHourly), [row, chartHourly]);
 
   const { currentMetarTemp, currentObsTemp, observedHighMetar, observedHighObs } = useMemo(
@@ -1589,6 +1590,7 @@ export function LiveTemperatureThresholdChart({
           metarHeaderLabel={metarHeaderLabel}
           obsHighLabel={obsHighLabel}
           metarHighLabel={metarHighLabel}
+          metarRedundant={metarRedundant}
           isShenzhen={isShenzhen}
           displayObsTemp={displayObsTemp}
           displayMetarTemp={displayMetarTemp}

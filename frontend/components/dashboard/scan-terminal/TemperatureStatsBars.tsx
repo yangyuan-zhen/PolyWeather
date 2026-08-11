@@ -121,6 +121,7 @@ function DebQualityBadge({ quality, isEn }: { quality?: DebQuality | null; isEn:
 function buildStatsLabels({
   isEn,
   isShenzhen,
+  metarRedundant,
   obsHeaderLabel,
   metarHeaderLabel,
   obsHighLabel,
@@ -128,6 +129,7 @@ function buildStatsLabels({
 }: {
   isEn: boolean;
   isShenzhen: boolean;
+  metarRedundant: boolean;
   obsHeaderLabel: string;
   metarHeaderLabel: string;
   obsHighLabel: string;
@@ -136,10 +138,14 @@ function buildStatsLabels({
   const primary = observationLabel(obsHeaderLabel, isEn);
   const secondaryObservation = observationLabel(metarHeaderLabel, isEn);
   const dailyHigh = isEn ? "Daily High" : "当日最高";
+  // When the observation layer IS the airport METAR (plain cities without a
+  // weather-station / official network), the secondary block shows the daily
+  // high only instead of repeating the same METAR value.
+  const collapsed = metarRedundant;
   return {
     primary,
-    compactSecondary: isShenzhen ? dailyHigh : secondaryObservation,
-    expandedSecondary: `${secondaryObservation} · ${dailyHigh}`,
+    compactSecondary: isShenzhen ? dailyHigh : (collapsed ? dailyHigh : secondaryObservation),
+    expandedSecondary: collapsed ? dailyHigh : `${secondaryObservation} · ${dailyHigh}`,
     dailyPeakTitle: isEn ? "Daily Peak" : "当日最高气温",
     obsHigh: highLabel(obsHighLabel, isEn),
     metarHigh: highLabel(metarHighLabel, isEn),
@@ -155,6 +161,7 @@ export function TemperatureStatsBars({
   metarHeaderLabel,
   obsHighLabel,
   metarHighLabel,
+  metarRedundant,
   isShenzhen,
   displayObsTemp,
   displayMetarTemp,
@@ -177,6 +184,7 @@ export function TemperatureStatsBars({
   metarHeaderLabel: string;
   obsHighLabel: string;
   metarHighLabel: string;
+  metarRedundant: boolean;
   isShenzhen: boolean;
   displayObsTemp: number | null;
   displayMetarTemp: number | null;
@@ -194,6 +202,7 @@ export function TemperatureStatsBars({
   const labels = buildStatsLabels({
     isEn,
     isShenzhen,
+    metarRedundant,
     obsHeaderLabel,
     metarHeaderLabel,
     obsHighLabel,
