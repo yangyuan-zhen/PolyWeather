@@ -651,8 +651,8 @@ export function runTests() {
   );
   const guangzhouNonUsMadisSeries = guangzhouNonUsMadisChart.series.find((item) => item.key === "madis");
   assert(
-    guangzhouNonUsMadisSeries?.label === "ZGGG METAR",
-    "NOAA MADIS label should be reserved for US airports; non-US airport-primary fallback should use METAR wording",
+    guangzhouNonUsMadisSeries == null,
+    "airport-primary METAR/MADIS curve must be removed for plain METAR cities (settlement line covers it)",
   );
 
   const parisImplicitAirportPrimaryChart = buildFullDayChartData(
@@ -679,10 +679,7 @@ export function runTests() {
     false,
   );
   const parisImplicitAirportPrimarySeries = parisImplicitAirportPrimaryChart.series.find((item) => item.key === "madis");
-  assert(
-    parisImplicitAirportPrimarySeries?.label === "LFPB METAR",
-    "non-US airport-primary fallback without explicit source metadata must not default to NOAA MADIS",
-  );
+  assert(parisImplicitAirportPrimarySeries == null, "Paris airport-primary METAR curve must be removed");
 
   const parisAirportDisplayNameChart = buildFullDayChartData(
     {
@@ -720,10 +717,7 @@ export function runTests() {
     false,
   );
   const parisAirportDisplayNameSeries = parisAirportDisplayNameChart.series.find((item) => item.key === "madis");
-  assert(
-    parisAirportDisplayNameSeries?.label === "LFPB METAR",
-    `airport-primary fallback must prefer station code over display name; got ${parisAirportDisplayNameSeries?.label}`,
-  );
+  assert(parisAirportDisplayNameSeries == null, "Paris airport-primary METAR curve must be removed");
   assert(
     !parisAirportDisplayNameChart.series.some((item) => item.key === "metar"),
     "same-station airport-primary observations should suppress the redundant METAR line even when cadences differ",
@@ -830,12 +824,8 @@ export function runTests() {
   );
   const refreshedAnkaraAirportSeries = refreshedAnkaraChart.series.find((item) => item.key === "madis");
   assert(
-    !refreshedAnkaraAirportSeries?.values.some((value) => value === 27.1),
-    "Ankara live observation refresh should discard stale cached MGM airport-primary points when the latest source is METAR",
-  );
-  assert(
-    refreshedAnkaraAirportSeries?.label === "LTAC METAR",
-    `Ankara refreshed airport-primary curve should be labelled as LTAC METAR, got ${refreshedAnkaraAirportSeries?.label}`,
+    refreshedAnkaraAirportSeries == null,
+    "Ankara airport-primary curve must be removed when the latest source is airport METAR (MGM official line only when MGM is primary)",
   );
 
   const chengduDetail = {

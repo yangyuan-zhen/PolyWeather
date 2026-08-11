@@ -670,9 +670,10 @@ export function runTests() {
     "1D",
   );
   const madisSeries = seriesByKey(newYorkWithMadis.series, "madis") as any;
-  assert(madisSeries, "US MADIS airport-primary observations should render as a dedicated chart series");
-  assert(madisSeries.label.includes("MADIS"), "US MADIS series should be labeled as NOAA MADIS instead of plain METAR");
-  assert(madisSeries.values.filter((value: number | null) => value !== null).length >= 2, "MADIS series should keep sub-hourly observations");
+  assert(
+    !madisSeries,
+    "US airport-primary NOAA MADIS is airport-report data and must be removed like METAR curves",
+  );
 
   const torontoWithLatestAirportReport = __buildTemperatureChartDataForTest(
     {
@@ -705,8 +706,9 @@ export function runTests() {
     (point) => point.label === "19:16:00" && point.madis === 26,
   );
   assert(
-    latestAirportPoint,
-    "latest airport/METAR report should be appended to the live chart series even when history stops earlier",
+    !latestAirportPoint &&
+      !torontoWithLatestAirportReport.series.some((item) => item.key === "madis"),
+    "Toronto airport METAR primary must not render a madis curve (airport-report data removed)",
   );
 
   const torontoCanonicalPatchHourly = __mergePatchIntoHourlyForTest(
@@ -751,8 +753,8 @@ export function runTests() {
     "v1 canonical patch should update hourly localDate from city_local_date",
   );
   assert(
-    torontoCanonicalPatchChart.data.some((point) => point.label === "19:16:00" && point.madis === 26),
-    "v1 canonical patch observed_at_utc should render at the city-local chart time",
+    !torontoCanonicalPatchChart.series.some((item) => item.key === "madis"),
+    "v1 canonical METAR patch must not render a madis curve for Toronto (airport-report data removed)",
   );
 
   const newYorkMinuteStream = __buildTemperatureChartDataForTest(

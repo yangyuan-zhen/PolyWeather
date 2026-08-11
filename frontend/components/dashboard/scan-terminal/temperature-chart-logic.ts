@@ -2278,13 +2278,40 @@ function buildFullDayChartData(
     }
   }
 
-  // ── Airport Primary (MADIS) ──
-  if (finalMadisObs.length) {
+  // ── Airport Primary (official weather-station network only) ──
+  // The airport-primary curve is kept ONLY for official networks (MGM/JMA/
+  // FMI/KNMI/IMS/NCM/AeroWeb/MSS/HKO). Airport METAR / NOAA MADIS feeds are
+  // airport-report data: for plain METAR-settled cities the settlement line
+  // already IS the METAR station, so those curves would just duplicate it.
+  const airportPrimaryLabel = airportPrimarySeriesLabel(hourly, isHKO, row);
+  const officialCanonical = canonicalAirportPrimarySourceLabel(hourly);
+  const cityKeyForPrimary = normalizeCityKey(row?.city);
+  const OFFICIAL_NETWORK_CANONICAL = new Set([
+    "MGM",
+    "JMA",
+    "FMI",
+    "KNMI",
+    "IMS",
+    "NCM",
+    "AeroWeb",
+    "MSS",
+    "HKO",
+  ]);
+  // Ankara/Istanbul fall back to the Turkish MGM official network when the
+  // payload has no explicit source metadata; an explicit airport-METAR source
+  // still counts as an airport-report curve and stays removed.
+  const isExplicitMetarPrimary = airportPrimaryHasMetarSource(hourly);
+  const isOfficialNetworkPrimary =
+    OFFICIAL_NETWORK_CANONICAL.has(officialCanonical) ||
+    isHKO ||
+    ((cityKeyForPrimary === "ankara" || cityKeyForPrimary === "istanbul") &&
+      !isExplicitMetarPrimary);
+  if (finalMadisObs.length && isOfficialNetworkPrimary) {
     const madisVals = valuesAtTimeline(n, indexByTs, finalMadisObs);
     if (madisVals.some((v) => v !== null)) {
       series.push({
         key: "madis",
-        label: airportPrimarySeriesLabel(hourly, isHKO, row),
+        label: airportPrimaryLabel,
         source: isHKO ? "HKO" : (airportCodeForSeriesLabel(hourly, row) || row?.airport || "MADIS"),
         color: "#0284c7",
         dashed: isHKO ? true : false,
@@ -2292,10 +2319,6 @@ function buildFullDayChartData(
       });
     }
   }
-
-  // Airport METAR curves were removed: for plain METAR-settled cities the
-  // settlement line already IS the METAR station, so a separate METAR curve
-  // duplicated it; weather-station cities show their official network line.
 
   // ── DEB forecast curve ──
   if (debTimes.length && debTemps.length) {
