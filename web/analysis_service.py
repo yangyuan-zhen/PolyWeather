@@ -791,7 +791,8 @@ def _analyze(
         if sunsets and "T" in str(sunsets[0])
         else ""
     )
-    sunshine_h = round(sunshine[0] / 3600, 1) if sunshine else 0
+    sunshine_first = sunshine[0] if sunshine else None
+    sunshine_h = round(sunshine_first / 3600, 1) if sunshine_first else 0
 
     # ── 5. Multi-model forecasts ──
     current_forecasts: Dict[str, float] = {}
