@@ -1431,7 +1431,7 @@ def calculate_deb_prediction(
     *,
     lookback_days=7,
     decay_factor=0.85,
-    bias_lookback_days=30,
+    bias_lookback_days=21,
     bias_min_samples=3,
     raw_calculator=None,
 ):

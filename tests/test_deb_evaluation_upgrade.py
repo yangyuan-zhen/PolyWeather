@@ -52,6 +52,26 @@ def test_recent_bias_corrector_uses_signed_error_without_rewriting_raw_deb():
     assert corrected["samples"] == 3
 
 
+def test_recent_bias_corrector_allows_large_adjustments_up_to_5c():
+    # China July regime: models over-predict by 4-6C. The correction must not
+    # be clamped at 3C, otherwise the residual bias stays large.
+    history = [
+        {
+            "city": "beijing",
+            "target_date": f"2026-07-{day:02d}",
+            "deb_prediction": 30.0 + (4.5 if day % 2 else 5.5),
+            "actual_high": 25.0,
+        }
+        for day in range(1, 29)
+    ]
+
+    corrector = build_recent_bias_corrector(history, lookback_days=30, min_samples=2)
+    corrected = corrector.apply("beijing", raw_prediction=30.0)
+
+    assert corrected["bias_adjustment"] == -5.0
+    assert corrected["corrected_prediction"] == 25.0
+
+
 def test_bucket_calibrated_corrector_optimizes_settlement_bucket_hits():
     history = [
         {"city": "ankara", "target_date": "2026-05-20", "deb_prediction": 20.4, "actual_high": 21.0},

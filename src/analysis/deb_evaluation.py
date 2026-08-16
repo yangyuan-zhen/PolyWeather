@@ -140,7 +140,7 @@ def build_recent_bias_corrector(
     lookback_days: int = 30,
     min_samples: int = 3,
     shrinkage_samples: int = 5,
-    max_adjustment: float = 3.0,
+    max_adjustment: float = 5.0,
 ) -> RecentBiasCorrector:
     by_city: dict[str, list[dict[str, Any]]] = {}
     for record in history:
@@ -173,7 +173,7 @@ def build_bucket_calibrated_corrector(
     *,
     lookback_days: int = 30,
     min_samples: int = 5,
-    max_adjustment: float = 3.0,
+    max_adjustment: float = 5.0,
     step: float = 0.1,
     shrinkage_samples: int = 10,
 ) -> RecentBiasCorrector:
