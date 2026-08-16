@@ -30,7 +30,6 @@ CITY_TIME_ZONES = {
     "hong kong": "Asia/Hong_Kong",
     "jinan": "Asia/Shanghai",
     "zhengzhou": "Asia/Shanghai",
-    "lau fau shan": "Asia/Hong_Kong",
     "houston": "America/Chicago",
     "istanbul": "Europe/Istanbul",
     "jakarta": "Asia/Jakarta",

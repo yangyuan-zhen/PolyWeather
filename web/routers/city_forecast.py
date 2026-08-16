@@ -54,7 +54,6 @@ DEFAULT_FORECAST_CITIES: List[str] = [
     "cape town",
     "tokyo",
     "hong kong",
-    "lau fau shan",
 ]
 
 _MAX_CITIES = 64
