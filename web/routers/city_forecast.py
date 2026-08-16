@@ -5,11 +5,16 @@ consensus weights, and the multi-model daily forecasts (3 days) for a fixed
 watchlist of cities (10 mainland-China + international monitors).
 
 Authentication: same entitlement token as the other pro endpoints.
+
+IMPORTANT: the per-city analysis runs on a thread pool but the endpoint must
+NEVER block the event loop waiting for results (future.result() in an async
+handler starves /healthz and every other request).  Use asyncio gates.
 """
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+import asyncio
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Request
@@ -45,6 +50,7 @@ DEFAULT_FORECAST_CITIES: List[str] = [
 ]
 
 _MAX_CITIES = 64
+_FORECAST_CONCURRENCY = 2
 
 
 def _build_city_forecast(city: str) -> Optional[Dict[str, Any]]:
@@ -98,20 +104,25 @@ async def city_deb_forecast(
 
     from src.data_collection.city_registry import CITY_REGISTRY
 
-    resolved: List[str] = []
-    for name in selected[: _MAX_CITIES]:
-        if name in CITY_REGISTRY:
-            resolved.append(name)
+    resolved: List[str] = [
+        name for name in selected[: _MAX_CITIES] if name in CITY_REGISTRY
+    ]
+
+    # Bound concurrency so a cold 23-city sweep cannot saturate the process;
+    # await results so the event loop (and /healthz) stays responsive.
+    semaphore = asyncio.Semaphore(_FORECAST_CONCURRENCY)
+    loop = asyncio.get_running_loop()
+
+    async def _run(city: str) -> Optional[Dict[str, Any]]:
+        async with semaphore:
+            return await loop.run_in_executor(None, _build_city_forecast, city)
+
+    payloads = await asyncio.gather(*(_run(city) for city in resolved))
 
     results: Dict[str, Any] = {}
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        futures = {pool.submit(_build_city_forecast, city): city for city in resolved}
-        for future, city in futures.items():
-            payload = future.result()
-            if payload is not None:
-                results[city] = payload
-
-    from datetime import datetime, timezone
+    for city, payload in zip(resolved, payloads):
+        if payload is not None:
+            results[city] = payload
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
