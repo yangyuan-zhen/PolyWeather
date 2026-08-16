@@ -257,7 +257,7 @@ function TemperatureChartCanvasComponent({
             <XAxis
               dataKey="label"
               tick={{
-                fontSize: timeframe === "3D" ? 7 : 9,
+                fontSize: timeframe === "3D" ? 8 : 9,
                 fill: "#64748b",
                 ...(timeframe === "3D"
                   ? { angle: -45, textAnchor: "end", dy: 4 }
@@ -267,10 +267,14 @@ function TemperatureChartCanvasComponent({
               axisLine={{ stroke: "#cbd5e1" }}
               interval={
                 timeframe === "3D"
-                  ? 0
+                  ? // One tick every 6 hours (indices 0/6/12/…): midnight
+                    // (index 0/24/48) stays on the grid so the M/D date
+                    // markers survive, and the 72 labels no longer overlap
+                    // and shift off their data points on narrow cards.
+                    6
                   : Math.max(0, Math.floor(zoomedData.length / (compact ? 6 : 10)))
               }
-              minTickGap={timeframe === "3D" ? 0 : compact ? 24 : 32}
+              minTickGap={timeframe === "3D" ? 12 : compact ? 24 : 32}
               height={timeframe === "3D" ? 34 : undefined}
             />
             <YAxis
