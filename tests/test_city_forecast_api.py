@@ -110,3 +110,41 @@ def test_deb_forecast_unknown_cities_filtered(monkeypatch):
     assert response.status_code == 200
     payload = response.json()
     assert set(payload["cities"]) == {"beijing"}
+
+
+def test_deb_forecast_result_cache_serves_without_recompute(monkeypatch):
+    calls = []
+
+    def _counting_analyze(city, force_refresh=False, detail_mode="panel"):
+        calls.append(city)
+        return _fake_analyze(city, force_refresh, detail_mode)
+
+    monkeypatch.setattr(
+        "web.analysis_service._analyze", _counting_analyze, raising=False
+    )
+    monkeypatch.setattr(
+        "web.routes._assert_entitlement", lambda request: None
+    )
+    monkeypatch.setattr(
+        "web.routers.city_forecast._FORECAST_CACHE_TS", 0.0
+    )
+    monkeypatch.setattr(
+        "web.routers.city_forecast._FORECAST_CACHE", {}
+    )
+
+    first = client.get(
+        "/api/cities/deb-forecast", params={"cities": "beijing,shanghai"}
+    )
+    assert first.status_code == 200
+    assert first.json()["count"] == 2
+    assert sorted(calls) == ["beijing", "shanghai"]
+
+    # Second call inside the TTL window must be served from the result cache:
+    # no city analysis is triggered at all.
+    calls.clear()
+    second = client.get(
+        "/api/cities/deb-forecast", params={"cities": "beijing,shanghai"}
+    )
+    assert second.status_code == 200
+    assert second.json()["count"] == 2
+    assert calls == []
