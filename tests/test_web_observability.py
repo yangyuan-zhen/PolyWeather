@@ -899,7 +899,6 @@ def test_cities_endpoint_includes_new_wunderground_cities():
         "qingdao",
         "panama city",
         "kuala lumpur",
-        "jakarta",
         "helsinki",
         "amsterdam",
     }.issubset(names)

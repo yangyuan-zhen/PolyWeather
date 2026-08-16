@@ -113,10 +113,10 @@ flowchart LR
     ANA --> STATE["SQLite runtime state"]
 ```
 
-## Monitored Cities (52)
+## Monitored Cities (51)
 
 - Europe / Middle East / Africa: Ankara, Istanbul, Moscow, London, Paris, Munich, Milan, Warsaw, Madrid, Tel Aviv, Amsterdam, Helsinki, Lagos, Cape Town, Jeddah
-- APAC: Seoul, Busan, Hong Kong, Taipei, Shanghai, Beijing, Qingdao, Wuhan, Chengdu, Chongqing, Shenzhen (Lau Fau Shan HKO settlement), Guangzhou, Jinan, Zhengzhou, Singapore, Tokyo, Kuala Lumpur, Jakarta, Manila, Wellington
+- APAC: Seoul, Busan, Hong Kong, Taipei, Shanghai, Beijing, Qingdao, Wuhan, Chengdu, Chongqing, Shenzhen (Lau Fau Shan HKO settlement), Guangzhou, Jinan, Zhengzhou, Singapore, Tokyo, Kuala Lumpur, Manila, Wellington
 - Americas: Toronto, New York, Los Angeles, San Francisco, Aurora, Austin, Houston, Chicago, Dallas, Miami, Atlanta, Seattle, Mexico City, Buenos Aires, Sao Paulo, Panama City
 - South Asia: Lucknow, Karachi
 

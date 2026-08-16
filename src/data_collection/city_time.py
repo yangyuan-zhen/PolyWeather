@@ -32,7 +32,6 @@ CITY_TIME_ZONES = {
     "zhengzhou": "Asia/Shanghai",
     "houston": "America/Chicago",
     "istanbul": "Europe/Istanbul",
-    "jakarta": "Asia/Jakarta",
     "jeddah": "Asia/Riyadh",
     "karachi": "Asia/Karachi",
     "kuala lumpur": "Asia/Kuala_Lumpur",

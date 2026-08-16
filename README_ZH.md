@@ -66,7 +66,7 @@
 
 ## 核心能力
 
-- 聚合 52 个监控城市的实测与预报数据。
+- 聚合 51 个监控城市的实测与预报数据。
 - DEB（Dynamic Error Balancing）融合多模型最高温。
 - 构建 DEB 加权小时共识曲线，用于峰值窗口判断和图表默认 DEB 展示。
 - 输出结算导向校准概率分布（`mu` + 温度桶），主路径为 DEB 正态引擎（`deb_normal`），legacy 高斯校准保留为回退。
@@ -104,7 +104,7 @@ flowchart LR
 ## 监控城市（52）
 
 - 欧洲/中东/非洲：Ankara、Istanbul、Moscow、London、Paris、Munich、Milan、Warsaw、Madrid、Tel Aviv、Amsterdam、Helsinki、Lagos、Cape Town、Jeddah
-- 亚太：Seoul、Busan、Hong Kong、Taipei、Shanghai、Beijing、Wuhan、Chengdu、Chongqing、Shenzhen（流浮山 HKO 结算）、Guangzhou、Jinan、Zhengzhou、Singapore、Tokyo、Kuala Lumpur、Jakarta、Manila、Wellington
+- 亚太：Seoul、Busan、Hong Kong、Taipei、Shanghai、Beijing、Wuhan、Chengdu、Chongqing、Shenzhen（流浮山 HKO 结算）、Guangzhou、Jinan、Zhengzhou、Singapore、Tokyo、Kuala Lumpur、Manila、Wellington
 - 美洲：Toronto、New York、Los Angeles、San Francisco、Aurora、Austin、Houston、Chicago、Dallas、Miami、Atlanta、Seattle、Mexico City、Buenos Aires、Sao Paulo、Panama City
 - 南亚：Lucknow、Karachi
 

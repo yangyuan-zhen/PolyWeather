@@ -28,7 +28,6 @@ ASIA_CORE_CITIES = (
     "chengdu",
     "singapore",
     "kuala lumpur",
-    "jakarta",
 )
 EUROPE_CORE_CITIES = (
     "istanbul",

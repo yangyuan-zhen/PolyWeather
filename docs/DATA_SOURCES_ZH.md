@@ -181,7 +181,6 @@ DEB：18.2°C
 | sao paulo | SBGR | |
 | panama city | MPMG | |
 | kuala lumpur | WMKK | |
-| jakarta | WIHH | |
 | manila | RPLL | |
 | karachi | OPKC | |
 | lucknow | VILK | |
