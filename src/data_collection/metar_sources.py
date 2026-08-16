@@ -139,7 +139,9 @@ class MetarSourceMixin:
                             len(data),
                         )
                     break
-                except httpx.HTTPError as exc:
+                except (httpx.HTTPError, ValueError) as exc:
+                    # ValueError covers JSONDecodeError on empty/204 responses
+                    # (some stations, e.g. ZSJN, are absent from the API feed).
                     if first_exc is None:
                         first_exc = exc
                     logger.warning(
@@ -150,6 +152,13 @@ class MetarSourceMixin:
                     )
             else:
                 if first_exc is not None:
+                    if isinstance(first_exc, ValueError):
+                        # Station absent from the feed (204 / non-JSON body):
+                        # not a network outage, degrade gracefully.
+                        logger.warning(
+                            "METAR {} 无数据（空响应/非 JSON），按缺测处理", icao
+                        )
+                        return None
                     raise first_exc
 
             if not data:
