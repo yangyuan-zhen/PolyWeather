@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from web.core import app as core_app
 from web.routers.analytics import router as analytics_router
 from web.routers.city import router as city_router
+from web.routers.city_forecast import router as city_forecast_router
 from web.routers.bot import router as bot_router
 from web.routers.auth import router as auth_router
 from web.routers.feedback import router as feedback_router
@@ -51,6 +52,7 @@ def create_app() -> FastAPI:
     if not bool(getattr(core_app.state, _ROUTES_REGISTERED_FLAG, False)):
         core_app.include_router(system_router)
         core_app.include_router(city_router)
+        core_app.include_router(city_forecast_router)
         core_app.include_router(bot_router)
         core_app.include_router(auth_router)
         core_app.include_router(feedback_router)
