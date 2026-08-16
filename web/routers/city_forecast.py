@@ -151,11 +151,21 @@ async def city_deb_forecast(
     if not selected:
         selected = DEFAULT_FORECAST_CITIES
 
-    from src.data_collection.city_registry import CITY_REGISTRY
+    from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
 
-    resolved: List[str] = [
-        name for name in selected[: _MAX_CITIES] if name in CITY_REGISTRY
-    ]
+    def _resolve(name: str) -> Optional[str]:
+        if name in CITY_REGISTRY:
+            return name
+        alias = ALIASES.get(name)
+        if alias and alias in CITY_REGISTRY:
+            return alias
+        return None
+
+    resolved: List[str] = []
+    for name in selected[: _MAX_CITIES]:
+        canonical = _resolve(name)
+        if canonical is not None:
+            resolved.append(canonical)
 
     cached = _cached_forecasts()
     missing = [city for city in resolved if city not in cached]

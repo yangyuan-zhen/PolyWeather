@@ -96,6 +96,33 @@ def test_deb_forecast_custom_city_list(monkeypatch):
     assert set(payload["cities"]) == {"beijing", "shanghai"}
 
 
+def test_deb_forecast_resolves_aliases(monkeypatch):
+    monkeypatch.setattr(
+        "web.analysis_service._analyze", _fake_analyze, raising=False
+    )
+    monkeypatch.setattr(
+        "web.routes._assert_entitlement", lambda request: None
+    )
+    monkeypatch.setattr(
+        "web.routers.city_forecast._FORECAST_CACHE", {}
+    )
+
+    # telaviv (no space), saopaulo (no space), hko, haneda must resolve to
+    # their canonical registry cities.
+    response = client.get(
+        "/api/cities/deb-forecast",
+        params={"cities": "telaviv,saopaulo,hko,haneda"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert set(payload["cities"]) == {
+        "tel aviv",
+        "sao paulo",
+        "hong kong",
+        "tokyo",
+    }
+
+
 def test_deb_forecast_unknown_cities_filtered(monkeypatch):
     monkeypatch.setattr(
         "web.analysis_service._analyze", _fake_analyze, raising=False

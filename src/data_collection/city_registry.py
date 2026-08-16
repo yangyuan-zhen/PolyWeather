@@ -826,7 +826,8 @@ ALIASES = {
     "jed": "jeddah", "oejn": "jeddah",
     "tlv": "tel aviv", "telaviv": "tel aviv",
     "ba": "buenos aires", "wel": "wellington",
-    "luc": "lucknow", "sp": "sao paulo", "mun": "munich",
+    "luc": "lucknow", "sp": "sao paulo", "saopaulo": "sao paulo", "mun": "munich",
+    "hko": "hong kong", "haneda": "tokyo", "rjtt": "tokyo",
     "mil": "milan", "mxp": "milan", "waw": "warsaw", "war": "warsaw",
     "mad": "madrid", "madrid": "madrid", "lemd": "madrid",
     
