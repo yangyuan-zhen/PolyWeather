@@ -70,17 +70,6 @@
 | wellington | NZWN | |
 | cape town | FACT | |
 
-## 高频推送覆盖
-
-24 个城市在 `HIGH_FREQ_AIRPORT_CITIES`（Telegram 推送循环）:
-seoul, singapore, busan, tokyo, ankara, helsinki, amsterdam, istanbul,
-paris, hong kong, taipei, shenzhen,
-new york, los angeles, chicago, denver, atlanta, miami, san francisco,
-houston, dallas, austin, seattle, tel aviv
-
-- `CHINA_HIGH_FREQ_AIRPORT_CITIES` 已为空集（AMSC 下线后中国内地城市不再有高频推送）。
-- `HIGH_FREQ_AIRPORT_ANALYSIS_CITIES`（日内分析独立城市集合）已下线，不再单独维护。
-
 ## 温度观测优先级链
 
 `country_networks.py:_airport_primary_from_raw()` 按以下顺序解析:

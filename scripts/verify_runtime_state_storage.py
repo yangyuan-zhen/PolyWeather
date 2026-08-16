@@ -12,7 +12,6 @@ from src.database.runtime_state import (  # noqa: E402
     DailyRecordRepository,
     OpenMeteoCacheRepository,
     ProbabilitySnapshotRepository,
-    TelegramAlertStateRepository,
 )
 
 
@@ -54,19 +53,16 @@ def _norm_open_meteo_payload(payload):
 def main():
     parser = argparse.ArgumentParser(description='Verify SQLite runtime state against legacy JSON files.')
     parser.add_argument('--daily-records', default=os.path.join(PROJECT_ROOT, 'data', 'daily_records.json'))
-    parser.add_argument('--telegram-state', default=os.path.join(PROJECT_ROOT, 'data', 'telegram_alert_state.json'))
     parser.add_argument('--snapshots', default=os.path.join(PROJECT_ROOT, 'data', 'probability_training_snapshots.jsonl'))
     parser.add_argument('--open-meteo-cache', default=os.path.join(PROJECT_ROOT, 'data', 'open_meteo_cache.json'))
     parser.add_argument('--open-meteo-max-age', type=int, default=int(os.getenv('OPEN_METEO_DISK_CACHE_MAX_AGE_SEC', '86400')))
     args = parser.parse_args()
 
     file_daily = _load_json(args.daily_records, {})
-    file_telegram = _load_json(args.telegram_state, {'last_by_city': {}, 'by_signature': {}})
     file_snapshots = _load_jsonl(args.snapshots)
     file_cache = _load_json(args.open_meteo_cache, {'forecast': {}, 'ensemble': {}, 'multi_model': {}, 'saved_at': 0})
 
     db_daily = DailyRecordRepository().load_all()
-    db_telegram = TelegramAlertStateRepository().load_state()
     db_snapshots = ProbabilitySnapshotRepository().load_all_rows()
     db_cache = OpenMeteoCacheRepository().load_payload(args.open_meteo_max_age)
 
@@ -75,11 +71,6 @@ def main():
             'file_cities': len(file_daily or {}),
             'db_cities': len(db_daily or {}),
             'equal': _norm_json(file_daily or {}) == _norm_json(db_daily or {}),
-        },
-        'telegram_state': {
-            'equal': _norm_json(file_telegram or {}) == _norm_json(db_telegram or {}),
-            'file_last_by_city': len((file_telegram or {}).get('last_by_city') or {}),
-            'db_last_by_city': len((db_telegram or {}).get('last_by_city') or {}),
         },
         'snapshots': {
             'file_rows': len(file_snapshots),

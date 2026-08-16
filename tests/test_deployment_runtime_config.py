@@ -158,7 +158,6 @@ def test_docker_compose_isolates_collector_from_web_and_bot_services():
     assert "POLYWEATHER_WARMER_CITY_INTERVAL_SEC: ${POLYWEATHER_WARMER_CITY_INTERVAL_SEC:-30}" in warmer_block
     assert "POLYWEATHER_WARMER_CITY_BATCH_SIZE: ${POLYWEATHER_WARMER_CITY_BATCH_SIZE:-16}" in warmer_block
     assert "cpus: ${POLYWEATHER_WARMER_CPUS:-0.75}" in warmer_block
-    assert "TELEGRAM_AIRPORT_PUSH_INTERVAL_SEC: ${POLYWEATHER_BOT_AIRPORT_PUSH_INTERVAL_SEC:-60}" in bot_block
     assert "POLYWEATHER_OBSERVATION_COLLECTOR_MADIS_SEC: ${POLYWEATHER_OBSERVATION_COLLECTOR_MADIS_SEC:-300}" in collector_block
 
 
@@ -260,14 +259,11 @@ def test_deploy_script_exports_backend_supabase_env_from_env_file():
     assert script.index('resolve_env_value "SUPABASE_URL"') < script.index("pull_ok=0")
 
 
-def test_deploy_script_syncs_city_thread_ids_into_runtime_volume():
+def test_deploy_script_no_longer_syncs_city_thread_ids():
     script = (ROOT / "deploy.sh").read_text(encoding="utf-8")
 
-    assert "sync_city_thread_ids()" in script
-    assert 'repo_file="$COMPOSE_DIR/data/city_thread_ids.json"' in script
-    assert 'target_file="$runtime_dir/city_thread_ids.json"' in script
-    assert "merged.update(target_data)" in script
-    assert script.index("sync_city_thread_ids") < script.index("Updating Redis dependency")
+    assert "sync_city_thread_ids" not in script
+    assert "city_thread_ids.json" not in script
 
 
 def test_deploy_script_retries_startup_smoke_checks():

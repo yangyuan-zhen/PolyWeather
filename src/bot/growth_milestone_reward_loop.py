@@ -10,7 +10,6 @@ import requests
 from loguru import logger
 
 from src.database.db_manager import DBManager
-from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -274,27 +273,12 @@ def grant_growth_milestone_days(
         return False, f"subscriptions_error:{exc}", None
 
 
-def _render_announcement(milestone: int, days: int, rewarded_count: int) -> str:
-    return "\n".join(
-        [
-            f"🎉 <b>PolyWeather Growth Reward: {milestone} verified users</b>",
-            f"Active paid members received <b>+{days} Pro day{'s' if days != 1 else ''}</b>. Rewarded members: {rewarded_count}.",
-            "",
-            f"🎉 <b>PolyWeather 增长奖励：已验证用户达到 {milestone}</b>",
-            f"当前有效付费会员已获得 <b>+{days} 天 Pro</b>。本次奖励人数：{rewarded_count}。",
-        ]
-    )
-
-
 def run_growth_milestone_cycle(
     *,
-    bot: Any,
     db: DBManager,
     supabase_url: str,
     service_role_key: str,
     timeout_sec: int,
-    announce: bool,
-    chat_ids: Iterable[int],
 ) -> Dict[str, Any]:
     counts = fetch_auth_user_counts(
         supabase_url=supabase_url,
@@ -374,64 +358,39 @@ def run_growth_milestone_cycle(
                 failed,
                 summary,
             )
-            if announce:
-                message = _render_announcement(milestone, days, rewarded)
-                for chat_id in chat_ids:
-                    try:
-                        bot.send_message(
-                            chat_id,
-                            message,
-                            parse_mode="HTML",
-                            disable_web_page_preview=True,
-                        )
-                    except Exception as exc:
-                        logger.warning(
-                            "growth milestone announcement failed milestone={} chat_id={} error={}",
-                            milestone,
-                            chat_id,
-                            exc,
-                        )
         settlements.append(summary)
     return {"counts": counts, "settlements": settlements}
 
 
-def _runner(bot: Any) -> None:
+def _runner() -> None:
     if not _env_bool("POLYWEATHER_GROWTH_REWARD_ENABLED", False):
         logger.info("growth milestone reward loop disabled")
         return
     interval_sec = _env_int("POLYWEATHER_GROWTH_REWARD_CHECK_INTERVAL_SEC", 21600, 300)
     timeout_sec = _env_int("POLYWEATHER_GROWTH_REWARD_HTTP_TIMEOUT_SEC", 15, 3)
-    announce = _env_bool("POLYWEATHER_GROWTH_REWARD_ANNOUNCE_ENABLED", True)
     supabase_url = str(os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
     service_role_key = str(os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
-    chat_ids = get_telegram_chat_ids_from_env()
     db = DBManager()
     logger.info(
-        "growth milestone reward loop started interval={}s announce={} chat_targets={}",
+        "growth milestone reward loop started interval={}s",
         interval_sec,
-        announce,
-        len(chat_ids),
     )
     while True:
         try:
             run_growth_milestone_cycle(
-                bot=bot,
                 db=db,
                 supabase_url=supabase_url,
                 service_role_key=service_role_key,
                 timeout_sec=timeout_sec,
-                announce=announce,
-                chat_ids=chat_ids,
             )
         except Exception as exc:
             logger.warning(f"growth milestone reward cycle failed: {exc}")
         time.sleep(interval_sec)
 
 
-def start_growth_milestone_reward_loop(bot: Any):
+def start_growth_milestone_reward_loop():
     thread = threading.Thread(
         target=_runner,
-        args=(bot,),
         daemon=True,
         name="growth-milestone-reward-loop",
     )

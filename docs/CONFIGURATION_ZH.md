@@ -129,8 +129,6 @@ PolyWeather 的环境变量很多，但不是所有变量都属于同一层级�
 - 各类 `*_TIMEOUT_SEC`
 - 各类 `*_COOLDOWN_SEC`
 - 各类 `*_INTERVAL_SEC`
-- `TELEGRAM_AIRPORT_PUSH_INTERVAL_SEC`（机场跑道推送循环，默认 60）
-- `TELEGRAM_AIRPORT_PUSH_MAX_WORKERS`（共享 VPS 建议保持 1）
 - `POLYWEATHER_PAYMENT_RPC_URLS`
 - `POLYWEATHER_PAYMENT_RPC_URLS_BY_CHAIN_JSON`
 - `POLYWEATHER_PAYMENT_EVENT_LOOP_INTERVAL_SEC`（默认 20）/ `POLYWEATHER_PAYMENT_EVENT_LOOP_START_LOOKBACK_BLOCKS`（默认 5000）/ `POLYWEATHER_PAYMENT_EVENT_LOOP_STEP_BLOCKS`（默认 2000）/ `POLYWEATHER_PAYMENT_EVENT_LOOP_MAX_EVENTS_PER_CYCLE`（默认 200）
@@ -297,7 +295,6 @@ POLYWEATHER_BACKEND_URL=http://polyweather_web:8000
 - `POLYWEATHER_REDIS_REQUIRED=true` 表示 Redis 不可用时后端启动失败，避免生产环境广播不可 replay 的实时事件；开发环境可设为 `false` 允许回退 SQLite。
 - `POLYWEATHER_PAYMENT_RPC_URLS` 支持默认链的逗号分隔多个 RPC；如果暂时只用单 RPC，也可以继续只配 `POLYWEATHER_PAYMENT_RPC_URL`。
 - `POLYWEATHER_PAYMENT_RPC_URLS_BY_CHAIN_JSON` 用于多链支付，例如同时支持 Polygon 和 Ethereum 主网 USDC。
-- 机器人推送当前以**机场跑道推送**为主（`TELEGRAM_AIRPORT_PUSH_*`）：逐机场按结算端点跑道温度推送双语摘要，默认 60 秒一轮；共享 VPS 建议 `TELEGRAM_AIRPORT_PUSH_MAX_WORKERS=1`。
 - 周榜奖励与群消息积分见 `.env.example` 第 8 段（`POLYWEATHER_WEEKLY_REWARD_*`、`POLYWEATHER_BOT_MESSAGE_POINTS` 等），`POLYWEATHER_GROWTH_REWARD_ENABLED` 默认关闭。
 
 ### 6.3 支付多链配置示例
@@ -348,25 +345,6 @@ POLYWEATHER_OBSERVATION_COLLECTOR_CACHE_REFRESH_WORKERS=2
 说明：
 
 - 观测采集器各来源间隔代码有下限钳制（如 METAR 最低 1800s），参考 `web/observation_collector_service.py`。
-
-### 6.5 机器人推送建议配置
-
-当前机器人的主动推送以**机场推送**为主（替换了早期基于 `TELEGRAM_ALERT_PUSH_*` / `TELEGRAM_MARKET_FOCUS_DIGEST_*` 的市场监控推送，这些变量已删除）：
-
-推荐值：
-
-```env
-TELEGRAM_AIRPORT_PUSH_ENABLED=true
-TELEGRAM_AIRPORT_PUSH_INTERVAL_SEC=60
-TELEGRAM_AIRPORT_PUSH_MAX_WORKERS=1
-TELEGRAM_PUSH_LANGUAGE=both
-```
-
-说明：
-
-- `TELEGRAM_AIRPORT_PUSH_INTERVAL_SEC=60` 表示每 60 秒扫描一次结算端点温度并推送斜率/当前/摘要。
-- `TELEGRAM_AIRPORT_PUSH_MAX_WORKERS=1` 在共享 VPS 上保持单 worker，避免多进程重复推送。
-- 周榜与群积分奖励通过 `POLYWEATHER_WEEKLY_REWARD_*`、`POLYWEATHER_BOT_MESSAGE_POINTS` 等控制，见 `.env.example` 第 8 段。
 
 ## 7. 当前建议的运维规则
 

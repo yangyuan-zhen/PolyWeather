@@ -20,8 +20,6 @@ from src.bot.settings import (
     WEEKLY_PARTICIPATION_BONUS,
 )
 from src.database.db_manager import DBManager
-from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
-from src.utils.telegram_i18n import copy_text, normalize_push_language, telegram_push_language
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -40,14 +38,6 @@ def _env_int(name: str, default: int, min_value: int = 0) -> int:
     except Exception:
         return default
     return max(min_value, value)
-
-
-def _weekly_reward_language() -> str:
-    return telegram_push_language(
-        "POLYWEATHER_WEEKLY_REWARD_LANGUAGE",
-        "TELEGRAM_PUSH_LANGUAGE",
-        "POLYWEATHER_TELEGRAM_PUSH_LANGUAGE",
-    )
 
 
 def _safe_week_key(dt: datetime) -> str:
@@ -180,69 +170,7 @@ def _grant_bonus_subscription_days(
         return False, f"subscriptions_error:{exc}", None
 
 
-def _render_settle_report(
-    week_key: str,
-    winners: List[Dict[str, Any]],
-    skipped: int,
-    participation_count: int = 0,
-    active_count: int = 0,
-    language: Optional[str] = None,
-) -> str:
-    language = normalize_push_language(language or _weekly_reward_language())
-    lines = [
-        copy_text(
-            language,
-            f"🏆 <b>PolyWeather weekly rewards settled ({week_key})</b>",
-            f"🏆 <b>PolyWeather 周榜奖励已结算 ({week_key})</b>",
-        ),
-        "────────────────────",
-    ]
-    if not winners:
-        lines.append(copy_text(language, "No ranked users this week.", "本周无上榜用户。"))
-    else:
-        medals = {1: "🥇", 2: "🥈", 3: "🥉"}
-        for row in winners:
-            rank = int(row.get("rank") or 0)
-            name = str(row.get("username") or "unknown")[:16]
-            points_bonus = int(row.get("points_bonus") or 0)
-            pro_days = int(row.get("pro_days") or 0)
-            pro_text = (
-                copy_text(language, f" + {pro_days}d Pro", f" + {pro_days}天Pro")
-                if pro_days > 0
-                else ""
-            )
-            medal = medals.get(rank, f"{rank}.")
-            points_label = copy_text(language, "points", "积分")
-            lines.append(f"{medal} {name}: +{points_bonus} {points_label}{pro_text}")
-    if skipped > 0:
-        lines.append(
-            copy_text(
-                language,
-                f"Duplicate payout guard skipped {skipped} rows.",
-                f"（重复发放保护已生效，跳过 {skipped} 条）",
-            )
-        )
-    if participation_count > 0 or active_count > 0:
-        lines.append("────────────────────")
-        lines.append(
-            copy_text(
-                language,
-                f"🎁 Participation bonus +{WEEKLY_PARTICIPATION_BONUS} points: {participation_count} users",
-                f"🎁 参与奖 +{WEEKLY_PARTICIPATION_BONUS} 积分: {participation_count} 人",
-            )
-        )
-        if active_count > 0:
-            lines.append(
-                copy_text(
-                    language,
-                    f"🔥 Active bonus +{WEEKLY_ACTIVE_BONUS} points (weekly points >= {WEEKLY_ACTIVE_THRESHOLD}): {active_count} users",
-                    f"🔥 活跃奖 +{WEEKLY_ACTIVE_BONUS} 积分 (周积分≥{WEEKLY_ACTIVE_THRESHOLD}): {active_count} 人",
-                )
-            )
-    return "\n".join(lines)
-
-
-def _runner(bot: Any) -> None:
+def _runner() -> None:
     enabled = _env_bool("POLYWEATHER_WEEKLY_REWARD_ENABLED", False)
     if not enabled:
         logger.info("weekly reward loop disabled")
@@ -266,21 +194,17 @@ def _runner(bot: Any) -> None:
     settle_minute = min(59, _env_int("POLYWEATHER_WEEKLY_REWARD_SETTLE_MINUTE", 5, 0))
     interval_sec = _env_int("POLYWEATHER_WEEKLY_REWARD_CHECK_INTERVAL_SEC", 300, 30)
     timeout_sec = _env_int("POLYWEATHER_WEEKLY_REWARD_HTTP_TIMEOUT_SEC", 10, 3)
-    announce = _env_bool("POLYWEATHER_WEEKLY_REWARD_ANNOUNCE_ENABLED", True)
-    chat_ids = get_telegram_chat_ids_from_env()
     supabase_url = str(os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
     service_role_key = str(os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
 
     db = DBManager()
     logger.info(
-        "weekly reward loop started tz={} settle={} {:02d}:{:02d} interval={}s announce={} chat_targets={}",
+        "weekly reward loop started tz={} settle={} {:02d}:{:02d} interval={}s",
         tz_name,
         settle_weekday,
         settle_hour,
         settle_minute,
         interval_sec,
-        announce,
-        len(chat_ids),
     )
 
     while True:
@@ -399,37 +323,14 @@ def _runner(bot: Any) -> None:
                 len(winners),
                 skipped,
             )
-            if announce and chat_ids:
-                message = _render_settle_report(
-                    week_key=week_key,
-                    winners=winners,
-                    skipped=skipped,
-                    participation_count=participation_count,
-                    active_count=active_count,
-                )
-                for chat_id in chat_ids:
-                    try:
-                        bot.send_message(
-                            chat_id,
-                            message,
-                            parse_mode="HTML",
-                            disable_web_page_preview=True,
-                        )
-                    except Exception as exc:
-                        logger.warning(
-                            "weekly reward announcement failed chat_id={} error={}",
-                            chat_id,
-                            exc,
-                        )
         except Exception as exc:
             logger.warning(f"weekly reward cycle failed: {exc}")
         time.sleep(interval_sec)
 
 
-def start_weekly_reward_loop(bot: Any):
+def start_weekly_reward_loop():
     thread = threading.Thread(
         target=_runner,
-        args=(bot,),
         daemon=True,
         name="weekly-reward-loop",
     )

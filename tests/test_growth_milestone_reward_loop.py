@@ -158,13 +158,10 @@ def test_growth_cycle_retries_frozen_failed_recipient_after_membership_changes(m
     monkeypatch.setattr(growth, "grant_growth_milestone_days", fake_grant)
 
     growth.run_growth_milestone_cycle(
-        bot=object(),
         db=FakeDb(),
         supabase_url="https://example.supabase.co",
         service_role_key="service-role",
         timeout_sec=5,
-        announce=False,
-        chat_ids=[],
     )
 
     assert grants == ["user-frozen"]

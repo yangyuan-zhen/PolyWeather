@@ -123,28 +123,6 @@ class RuntimeStateDB:
             )
             conn.execute(
                 """
-                CREATE TABLE IF NOT EXISTS telegram_alert_last_by_city (
-                    city TEXT PRIMARY KEY,
-                    signature TEXT,
-                    trigger_key TEXT,
-                    severity TEXT,
-                    ts INTEGER,
-                    active INTEGER DEFAULT 0,
-                    cleared_ts INTEGER,
-                    evidence_json TEXT
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS telegram_alert_signature_state (
-                    signature TEXT PRIMARY KEY,
-                    ts INTEGER NOT NULL
-                )
-                """
-            )
-            conn.execute(
-                """
                 CREATE TABLE IF NOT EXISTS probability_training_snapshots_store (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     city TEXT NOT NULL,
@@ -1050,79 +1028,6 @@ class TruthRevisionRepository:
                     pass
             out.append(entry)
         return out
-
-
-class TelegramAlertStateRepository:
-    def __init__(self, db: Optional[RuntimeStateDB] = None):
-        self.db = db or RuntimeStateDB.instance()
-
-    def load_state(self) -> Dict[str, Any]:
-        state = {"last_by_city": {}, "by_signature": {}}
-        with self.db.connect() as conn:
-            city_rows = conn.execute(
-                "SELECT city, signature, trigger_key, severity, ts, active, cleared_ts, evidence_json FROM telegram_alert_last_by_city"
-            ).fetchall()
-            sig_rows = conn.execute(
-                "SELECT signature, ts FROM telegram_alert_signature_state"
-            ).fetchall()
-        for row in city_rows:
-            entry = {
-                "signature": row["signature"],
-                "trigger_key": row["trigger_key"],
-                "severity": row["severity"],
-                "ts": row["ts"],
-                "active": bool(row["active"]),
-            }
-            if row["cleared_ts"] is not None:
-                entry["cleared_ts"] = row["cleared_ts"]
-            if row["evidence_json"]:
-                try:
-                    entry["evidence"] = json.loads(row["evidence_json"])
-                except Exception:
-                    pass
-            state["last_by_city"][str(row["city"])] = entry
-        for row in sig_rows:
-            state["by_signature"][str(row["signature"])] = int(row["ts"] or 0)
-        return state
-
-    def save_state(self, state: Dict[str, Any]) -> None:
-        last_by_city = state.get("last_by_city") or {}
-        by_signature = state.get("by_signature") or {}
-        with self.db.connect() as conn:
-            conn.execute("DELETE FROM telegram_alert_last_by_city")
-            conn.execute("DELETE FROM telegram_alert_signature_state")
-            for city, row in last_by_city.items():
-                if not isinstance(row, dict):
-                    continue
-                conn.execute(
-                    """
-                    INSERT INTO telegram_alert_last_by_city (
-                        city, signature, trigger_key, severity, ts, active, cleared_ts, evidence_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        city,
-                        row.get("signature"),
-                        row.get("trigger_key"),
-                        row.get("severity"),
-                        int(row.get("ts") or 0),
-                        1 if row.get("active") else 0,
-                        row.get("cleared_ts"),
-                        json.dumps(row.get("evidence"), ensure_ascii=False)
-                        if row.get("evidence") is not None
-                        else None,
-                    ),
-                )
-            for signature, ts in by_signature.items():
-                conn.execute(
-                    "INSERT INTO telegram_alert_signature_state (signature, ts) VALUES (?, ?)",
-                    (signature, int(ts or 0)),
-                )
-            conn.commit()
-
-    def replace_from_state(self, state: Dict[str, Any]) -> int:
-        self.save_state(state)
-        return len((state.get("last_by_city") or {})) + len((state.get("by_signature") or {}))
 
 
 class ProbabilitySnapshotRepository:

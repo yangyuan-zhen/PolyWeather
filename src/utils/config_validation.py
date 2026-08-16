@@ -79,7 +79,7 @@ def validate_runtime_env(
             report.errors.append(f"Bot 启动缺少必填变量: {', '.join(missing)}")
         if not (_has("TELEGRAM_CHAT_ID") or _has("TELEGRAM_CHAT_IDS")):
             report.warnings.append(
-                "未配置 TELEGRAM_CHAT_ID / TELEGRAM_CHAT_IDS，机器人推送目标为空"
+                "未配置 TELEGRAM_CHAT_ID / TELEGRAM_CHAT_IDS，群组命令与积分目标为空"
             )
 
     if auth_enabled:

@@ -78,15 +78,6 @@ def _message(text: str):
     )
 
 
-def _topic_message(text: str, *, thread_id: int = 13102):
-    return SimpleNamespace(
-        text=text,
-        from_user=SimpleNamespace(id=1, username="admin", first_name="Admin"),
-        chat=SimpleNamespace(id=-1003927451869, type="supergroup"),
-        message_thread_id=thread_id,
-    )
-
-
 def test_basic_handler_diag_returns_html():
     runtime = RuntimeStatus(
         started_at="2026-03-12 00:00:00 UTC",
@@ -111,78 +102,6 @@ def test_basic_handler_diag_returns_html():
     assert len(bot.replies) == 1
     assert bot.replies[0]["parse_mode"] == "HTML"
     assert "Bot 启动诊断" in bot.replies[0]["text"]
-
-
-def test_bindtopic_records_current_forum_thread(monkeypatch):
-    import src.bot.handlers.basic as basic
-
-    saved = []
-    monkeypatch.setenv("TELEGRAM_CHAT_IDS", "-1003927451869")
-    monkeypatch.setenv("POLYWEATHER_TELEGRAM_GROUP_ID", "-1003927451869")
-    monkeypatch.setattr(
-        basic,
-        "record_city_thread_id",
-        lambda city, thread_id: saved.append((city, thread_id))
-        or {"city": city, "thread_id": thread_id},
-    )
-
-    bot = DummyBot()
-    handler = BasicCommandHandler(
-        bot=bot,
-        io_layer=SimpleNamespace(
-            build_welcome_text=lambda: "WELCOME",
-            build_points_rank_text=lambda _user: "TOP",
-        ),
-        runtime_status_provider=lambda: RuntimeStatus(
-            started_at="2026-03-12 00:00:00 UTC",
-            loops=[],
-            command_access_mode="public",
-            protected_commands=[],
-            required_group_chat_id="-1003927451869",
-        ),
-    )
-
-    result = handler.handle_bindtopic(_topic_message("/bindtopic seoul"))
-
-    assert result == "bound"
-    assert saved == [("seoul", 13102)]
-    assert "seoul" in bot.replies[0]["text"].lower()
-    assert "13102" in bot.replies[0]["text"]
-
-
-def test_bindtopic_rejects_non_admin(monkeypatch):
-    import src.bot.handlers.basic as basic
-
-    saved = []
-    monkeypatch.setenv("TELEGRAM_CHAT_IDS", "-1003927451869")
-    monkeypatch.setattr(
-        basic,
-        "record_city_thread_id",
-        lambda city, thread_id: saved.append((city, thread_id)),
-    )
-
-    bot = DummyBot()
-    bot.chat_member_status = "member"
-    handler = BasicCommandHandler(
-        bot=bot,
-        io_layer=SimpleNamespace(
-            build_welcome_text=lambda: "WELCOME",
-            build_points_rank_text=lambda _user: "TOP",
-        ),
-        runtime_status_provider=lambda: RuntimeStatus(
-            started_at="2026-03-12 00:00:00 UTC",
-            loops=[],
-            command_access_mode="public",
-            protected_commands=[],
-            required_group_chat_id="-1003927451869",
-        ),
-    )
-
-    result = handler.handle_bindtopic(_topic_message("/bindtopic seoul"))
-
-    assert result == "unauthorized"
-    assert saved == []
-    assert "管理员" in bot.replies[0]["text"]
 
 
 def test_start_bind_token_binds_telegram_to_web_account(monkeypatch):

@@ -10,10 +10,6 @@
 
 ![PolyWeather 实时终端](frontend/public/static/web.webp)
 
-### Telegram 跑道推送
-
-![PolyWeather Telegram 跑道推送](frontend/public/static/tel.png)
-
 ## 当前产品状态（2026-08-01）
 
 - 已上线 DEB 正态概率引擎：整度概率桶由 `deb_normal` 正态引擎输出。
@@ -36,7 +32,6 @@
 - 概率主引擎已切换为 DEB 正态引擎（`deb_normal`，整度概率 `P(T==τ)=Φ((τ+0.5-μ)/σ)-Φ((τ-0.5-μ)/σ)`）；legacy 高斯概率不再占用默认温度图主视图，保留为回退分支，hover tooltip 展示 `Gaussian μ` 和完整温度区间概率分布。
 - 结算源优先的机场实测默认展示并高亮，官方邻近站网作为弱化曲线保留；釜山单跑道只展示 `SR/SL` 结算跑道，不再重复显示聚合线。
 - 香港默认展示 CoWIN `6087`（保良局陈守仁小学）1 分钟参考站曲线，HKO 10 分钟实测保留为官方气象层。
-- Telegram 机场推送默认中英文双语，并统一使用结算端点温度计算当前值、15 分钟趋势和文案。
 - 运行态状态、缓存与核心离线训练/回填链路已完成 SQLite 主路径收口；legacy JSON/JSONL 仅保留给迁移、导出与显式回退输入。
 - 官方增强站网已统一接入：
   - `MGM`（土耳其）

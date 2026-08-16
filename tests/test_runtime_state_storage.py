@@ -7,7 +7,6 @@ from src.database.runtime_state import (
     OpenMeteoRateLimitRepository,
     ProbabilitySnapshotRepository,
     RuntimeStateDB,
-    TelegramAlertStateRepository,
     TrainingFeatureRecordRepository,
     TruthRecordRepository,
     TruthRevisionRepository,
@@ -20,27 +19,6 @@ def test_daily_record_repository_roundtrip(tmp_path, monkeypatch):
     repo.upsert_record('ankara', '2026-03-20', {'actual_high': 15.2, 'deb_prediction': 14.8, 'mu': 15.0})
     data = repo.load_all()
     assert data['ankara']['2026-03-20']['actual_high'] == 15.2
-
-
-def test_telegram_alert_state_repository_roundtrip(tmp_path, monkeypatch):
-    monkeypatch.setenv('POLYWEATHER_DB_PATH', str(tmp_path / 'polyweather.db'))
-    repo = TelegramAlertStateRepository(RuntimeStateDB(str(tmp_path / 'polyweather.db')))
-    state = {
-        'last_by_city': {
-            'ankara': {
-                'signature': 'sig-1',
-                'trigger_key': 'mkt:test',
-                'severity': 'medium',
-                'ts': 123,
-                'active': True,
-                'evidence': {'x': 1},
-            }
-        },
-        'by_signature': {'sig-1': 123},
-    }
-    repo.save_state(state)
-    loaded = repo.load_state()
-    assert loaded == state
 
 
 def test_probability_snapshot_repository_recent_rows(tmp_path, monkeypatch):

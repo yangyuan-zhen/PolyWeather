@@ -51,20 +51,11 @@
 
 ## 独立观测采集器
 
-- Web/API 进程启动 `observation-collector` 后台线程，按源频率独立采集，不依赖 Telegram 推送循环
+- Web/API 进程启动 `observation-collector` 后台线程，按源频率独立采集
 - 默认频率：MADIS HFMETAR 300s、CoWIN 60s、HKO 600s、MGM 300s、JMA AMeDAS 600s
 - 每次采集复用 `weather_sources.py` 现有 `_attach_*` 写入逻辑，负责写 `airport_obs_log` / `runway_obs_log` / 今日观测缓存，并通过 `/api/internal/collector-patch` 写 Redis Stream 或 SQLite event log 后广播 SSE
-- 采集成功后刷新对应城市 `panel` cache；前端继续使用 HTTP snapshot + SSE patch，不需要依赖 Telegram 触发更新
+- 采集成功后刷新对应城市 `panel` cache；前端继续使用 HTTP snapshot + SSE patch 更新
 - `observation_source_gate.py` 对 MADIS、HKO、CoWIN、MGM、JMA 等做 per-source/per-city singleflight 和 SQLite cooldown，防止 Web 请求、collector 和兜底分析同时打同一个外部源
-
-## Telegram 推送机制
-
-- 每城按原生频率独立推送，不捆绑
-- 香港 CoWIN 60s，其余 600s
-- 循环轮询 60s 以匹配最快频率
-- Telegram 推送优先读取网站侧 `full`/`panel` 城市缓存；缓存缺失时只做非强制 `panel` 分析兜底，不触发 `force_refresh_observations_only`
-- 仅当当前温度距 DEB 预测最高 ≤3°C 时推送
-- 确认过峰值后自动停止
 
 ## 前端实时同步与 SSE Patch / Redis Stream 机制
 
@@ -103,10 +94,6 @@ DEB：18.2°C
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `TELEGRAM_PUSH_LANGUAGE` | Telegram 自动推送的全局语言，可选 `both`/`en`/`zh` | `both` |
-| `TELEGRAM_AIRPORT_PUSH_ENABLED` | 启用机场推送 | `true` |
-| `TELEGRAM_AIRPORT_PUSH_INTERVAL_SEC` | 循环轮询间隔 | `60` |
-| `TELEGRAM_AIRPORT_PUSH_LANGUAGE` | 机场推送语言覆盖，可选 `both`/`en`/`zh` | `both` |
 | `KNMI_API_KEY` | KNMI API 密钥（阿姆斯特丹必填） | — |
 | `POLYWEATHER_EVENT_STORE` | 实时事件存储，可选 `redis`/`sqlite` | `sqlite` |
 | `POLYWEATHER_REDIS_URL` | Redis Stream 连接地址 | `redis://127.0.0.1:6379/0` |
