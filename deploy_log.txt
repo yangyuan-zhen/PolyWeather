@@ -1,0 +1,301 @@
+﻿2026-08-16T11:38:18.4164616Z Current runner version: '2.336.0'
+2026-08-16T11:38:18.4193684Z ##[group]Runner Image Provisioner
+2026-08-16T11:38:18.4195104Z Hosted Compute Agent
+2026-08-16T11:38:18.4195867Z Version: 20260729.566
+2026-08-16T11:38:18.4196833Z Commit: cf7153fe6e25b664e8693c24944bf2b00355d109
+2026-08-16T11:38:18.4198158Z Build Date: 2026-07-29T19:17:02Z
+2026-08-16T11:38:18.4199186Z Worker ID: {ab5aae36-091c-4a4b-9caf-85ca8f24c177}
+2026-08-16T11:38:18.4200141Z Azure Region: westcentralus
+2026-08-16T11:38:18.4201022Z ##[endgroup]
+2026-08-16T11:38:18.4202868Z ##[group]Operating System
+2026-08-16T11:38:18.4203809Z Ubuntu
+2026-08-16T11:38:18.4204515Z 24.04.4
+2026-08-16T11:38:18.4205259Z LTS
+2026-08-16T11:38:18.4205952Z ##[endgroup]
+2026-08-16T11:38:18.4206736Z ##[group]Runner Image
+2026-08-16T11:38:18.4207562Z Image: ubuntu-24.04
+2026-08-16T11:38:18.4208350Z Version: 20260810.271.1
+2026-08-16T11:38:18.4209963Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260810.271/images/ubuntu/Ubuntu2404-Readme.md
+2026-08-16T11:38:18.4212748Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260810.271
+2026-08-16T11:38:18.4214516Z ##[endgroup]
+2026-08-16T11:38:18.4216567Z ##[group]GITHUB_TOKEN Permissions
+2026-08-16T11:38:18.4219320Z Contents: read
+2026-08-16T11:38:18.4220125Z Metadata: read
+2026-08-16T11:38:18.4221000Z Packages: read
+2026-08-16T11:38:18.4221710Z ##[endgroup]
+2026-08-16T11:38:18.4224348Z Secret source: Actions
+2026-08-16T11:38:18.4225791Z Prepare workflow directory
+2026-08-16T11:38:18.4643674Z Prepare all required actions
+2026-08-16T11:38:18.4697881Z Getting action download info
+2026-08-16T11:38:18.7677972Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-08-16T11:38:19.6185509Z Complete job name: deploy
+2026-08-16T11:38:19.6997021Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-16T11:38:19.7006082Z ##[group]Run actions/checkout@v4
+2026-08-16T11:38:19.7006899Z with:
+2026-08-16T11:38:19.7007469Z   repository: yangyuan-zhen/PolyWeather
+2026-08-16T11:38:19.7011852Z   token: ***
+2026-08-16T11:38:19.7012576Z   ssh-strict: true
+2026-08-16T11:38:19.7013126Z   ssh-user: git
+2026-08-16T11:38:19.7013691Z   persist-credentials: true
+2026-08-16T11:38:19.7014298Z   clean: true
+2026-08-16T11:38:19.7014851Z   sparse-checkout-cone-mode: true
+2026-08-16T11:38:19.7015492Z   fetch-depth: 1
+2026-08-16T11:38:19.7016035Z   fetch-tags: false
+2026-08-16T11:38:19.7016595Z   show-progress: true
+2026-08-16T11:38:19.7017165Z   lfs: false
+2026-08-16T11:38:19.7017754Z   submodules: false
+2026-08-16T11:38:19.7018321Z   set-safe-directory: true
+2026-08-16T11:38:19.7018942Z   allow-unsafe-pr-checkout: false
+2026-08-16T11:38:19.7019779Z ##[endgroup]
+2026-08-16T11:38:19.8071426Z Syncing repository: yangyuan-zhen/PolyWeather
+2026-08-16T11:38:19.8074692Z ##[group]Getting Git version info
+2026-08-16T11:38:19.8076000Z Working directory is '/home/runner/work/PolyWeather/PolyWeather'
+2026-08-16T11:38:19.8077972Z [command]/usr/bin/git version
+2026-08-16T11:38:19.8770352Z git version 2.54.0
+2026-08-16T11:38:19.8791946Z ##[endgroup]
+2026-08-16T11:38:19.8809175Z Temporarily overriding HOME='/home/runner/work/_temp/c2fe0e51-716f-4300-a1e0-e76a84edcdea' before making global git config changes
+2026-08-16T11:38:19.8816141Z Adding repository directory to the temporary git global config as a safe directory
+2026-08-16T11:38:19.8817662Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/PolyWeather/PolyWeather
+2026-08-16T11:38:19.8868136Z Deleting the contents of '/home/runner/work/PolyWeather/PolyWeather'
+2026-08-16T11:38:19.8872157Z ##[group]Initializing the repository
+2026-08-16T11:38:19.8877456Z [command]/usr/bin/git init /home/runner/work/PolyWeather/PolyWeather
+2026-08-16T11:38:19.8960892Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-08-16T11:38:19.8962050Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-08-16T11:38:19.8963763Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-08-16T11:38:19.8965415Z hint: call:
+2026-08-16T11:38:19.8966203Z hint:
+2026-08-16T11:38:19.8967131Z hint: 	git config --global init.defaultBranch <name>
+2026-08-16T11:38:19.8968196Z hint:
+2026-08-16T11:38:19.8969073Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-08-16T11:38:19.8970627Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-08-16T11:38:19.8971478Z hint:
+2026-08-16T11:38:19.8972041Z hint: 	git branch -m <name>
+2026-08-16T11:38:19.8972812Z hint:
+2026-08-16T11:38:19.8973546Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-08-16T11:38:19.8975287Z Initialized empty Git repository in /home/runner/work/PolyWeather/PolyWeather/.git/
+2026-08-16T11:38:19.8978504Z [command]/usr/bin/git remote add origin https://github.com/yangyuan-zhen/PolyWeather
+2026-08-16T11:38:19.9057621Z ##[endgroup]
+2026-08-16T11:38:19.9059056Z ##[group]Disabling automatic garbage collection
+2026-08-16T11:38:19.9061661Z [command]/usr/bin/git config --local gc.auto 0
+2026-08-16T11:38:19.9096192Z ##[endgroup]
+2026-08-16T11:38:19.9097549Z ##[group]Setting up auth
+2026-08-16T11:38:19.9103291Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-08-16T11:38:19.9141337Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-08-16T11:38:19.9465308Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-08-16T11:38:19.9502195Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-08-16T11:38:19.9738663Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-08-16T11:38:19.9776265Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-08-16T11:38:20.0014811Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-08-16T11:38:20.0054934Z ##[endgroup]
+2026-08-16T11:38:20.0056138Z ##[group]Fetching the repository
+2026-08-16T11:38:20.0064679Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +9508ce0a13949a0202cd8cc863f3d0993bf1e9a7:refs/remotes/origin/main
+2026-08-16T11:38:23.7379587Z From https://github.com/yangyuan-zhen/PolyWeather
+2026-08-16T11:38:23.7380915Z  * [new ref]         9508ce0a13949a0202cd8cc863f3d0993bf1e9a7 -> origin/main
+2026-08-16T11:38:23.7411683Z ##[endgroup]
+2026-08-16T11:38:23.7412533Z ##[group]Determining the checkout info
+2026-08-16T11:38:23.7414248Z ##[endgroup]
+2026-08-16T11:38:23.7420266Z [command]/usr/bin/git sparse-checkout disable
+2026-08-16T11:38:23.7469278Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-08-16T11:38:23.7504085Z ##[group]Checking out the ref
+2026-08-16T11:38:23.7508026Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-08-16T11:38:23.9538247Z Switched to a new branch 'main'
+2026-08-16T11:38:23.9544185Z branch 'main' set up to track 'origin/main'.
+2026-08-16T11:38:23.9565573Z ##[endgroup]
+2026-08-16T11:38:23.9612440Z [command]/usr/bin/git log -1 --format=%H
+2026-08-16T11:38:23.9640519Z 9508ce0a13949a0202cd8cc863f3d0993bf1e9a7
+2026-08-16T11:38:23.9898822Z ##[group]Run mkdir -p ~/.ssh
+2026-08-16T11:38:23.9899381Z [36;1mmkdir -p ~/.ssh[0m
+2026-08-16T11:38:23.9900174Z [36;1mecho "***[0m
+2026-08-16T11:38:23.9900742Z [36;1m***[0m
+2026-08-16T11:38:23.9901520Z [36;1m***[0m
+2026-08-16T11:38:23.9902018Z [36;1m***[0m
+2026-08-16T11:38:23.9902770Z [36;1m***[0m
+2026-08-16T11:38:23.9903257Z [36;1m***[0m
+2026-08-16T11:38:23.9903587Z [36;1m***[0m
+2026-08-16T11:38:23.9903994Z [36;1m***" > ~/.ssh/id_rsa[0m
+2026-08-16T11:38:23.9904357Z [36;1mchmod 600 ~/.ssh/id_rsa[0m
+2026-08-16T11:38:23.9904961Z [36;1mscp -o StrictHostKeyChecking=accept-new deploy.sh ***@***:/tmp/deploy.sh[0m
+2026-08-16T11:38:23.9905757Z [36;1mprintf '%s\n' "$GHCR_PAT" | ssh -o StrictHostKeyChecking=accept-new ***@*** "[0m
+2026-08-16T11:38:23.9906418Z [36;1m  bash /tmp/deploy.sh '9508ce0a13949a0202cd8cc863f3d0993bf1e9a7'[0m
+2026-08-16T11:38:23.9906916Z [36;1m"[0m
+2026-08-16T11:38:23.9950981Z shell: /usr/bin/bash -e {0}
+2026-08-16T11:38:23.9951419Z env:
+2026-08-16T11:38:23.9952037Z   GHCR_PAT: ***
+2026-08-16T11:38:23.9952570Z ##[endgroup]
+2026-08-16T11:38:24.3314875Z Warning: Permanently added '***' (ED25519) to the list of known hosts.
+2026-08-16T11:38:27.1076853Z Login Succeeded
+2026-08-16T11:38:28.0568552Z From https://github.com/yangyuan-zhen/PolyWeather
+2026-08-16T11:38:28.0569159Z  * branch              main       -> FETCH_HEAD
+2026-08-16T11:38:28.3175088Z HEAD is now at 9508ce0a 移除积分邀请机制：邀请码、首月折扣、邀请积分奖励整套下线，积分仅保留运营补发与反馈奖励
+2026-08-16T11:38:28.3255991Z Previous tag: a3390a6180d003034e99394aec9dfcb992e3a040
+2026-08-16T11:38:28.3526721Z Stopping existing Telegram bot receivers...
+2026-08-16T11:38:29.3862032Z  Container polyweather_bot  Stopping
+2026-08-16T11:38:39.7190005Z  Container polyweather_bot  Stopped
+2026-08-16T11:38:39.7911403Z No legacy host bot_listener.py process found
+2026-08-16T11:38:40.2663661Z  polyweather Skipped - Image is already being pulled by polyweather_training_settlement 
+2026-08-16T11:38:40.2664451Z  polyweather_web Skipped - Image is already being pulled by polyweather_training_settlement 
+2026-08-16T11:38:40.2665171Z  polyweather_collector Skipped - Image is already being pulled by polyweather_training_settlement 
+2026-08-16T11:38:40.2665873Z  polyweather_warmer Skipped - Image is already being pulled by polyweather_training_settlement 
+2026-08-16T11:38:40.2666385Z  polyweather_frontend Pulling 
+2026-08-16T11:38:40.2666715Z  polyweather_training_settlement Pulling 
+2026-08-16T11:38:40.2667056Z  polyweather_redis Pulling 
+2026-08-16T11:38:40.7641846Z  polyweather_frontend Pulled 
+2026-08-16T11:38:40.7900710Z  polyweather_training_settlement Pulled 
+2026-08-16T11:38:40.9371437Z  polyweather_redis Pulled 
+2026-08-16T11:38:41.1131557Z Updating Redis dependency...
+2026-08-16T11:38:41.7734067Z  Container polyweather_redis  Running
+2026-08-16T11:38:41.7734594Z Updating backend services...
+2026-08-16T11:38:55.0733206Z  Container polyweather_bot  Recreate
+2026-08-16T11:38:55.0733782Z  Container polyweather_web  Recreate
+2026-08-16T11:38:55.0734330Z  Container polyweather_bot  Recreated
+2026-08-16T11:38:55.0734662Z  Container polyweather_web  Recreated
+2026-08-16T11:38:55.0735381Z  Container polyweather_bot  Starting
+2026-08-16T11:38:55.0805560Z  Container polyweather_web  Starting
+2026-08-16T11:38:55.0806049Z  Container polyweather_web  Started
+2026-08-16T11:38:55.0806515Z  Container polyweather_bot  Started
+2026-08-16T11:38:55.0807054Z Waiting for backend...
+2026-08-16T11:38:55.1139358Z curl: (56) Recv failure: Connection reset by peer
+2026-08-16T11:38:55.1189114Z    backend healthz warming 1/30...
+2026-08-16T11:39:00.1585248Z curl: (56) Recv failure: Connection reset by peer
+2026-08-16T11:39:00.1634791Z    backend healthz warming 2/30...
+2026-08-16T11:39:05.1943141Z curl: (56) Recv failure: Connection reset by peer
+2026-08-16T11:39:05.1983443Z    backend healthz warming 3/30...
+2026-08-16T11:39:10.2372672Z curl: (56) Recv failure: Connection reset by peer
+2026-08-16T11:39:10.2394493Z    backend healthz warming 4/30...
+2026-08-16T11:39:15.2735755Z curl: (56) Recv failure: Connection reset by peer
+2026-08-16T11:39:15.2745894Z    backend healthz warming 5/30...
+2026-08-16T11:39:20.2998318Z curl: (56) Recv failure: Connection reset by peer
+2026-08-16T11:39:20.3020536Z    backend healthz warming 6/30...
+2026-08-16T11:39:25.3277197Z curl: (56) Recv failure: Connection reset by peer
+2026-08-16T11:39:25.3308333Z    backend healthz warming 7/30...
+2026-08-16T11:39:30.3630029Z curl: (56) Recv failure: Connection reset by peer
+2026-08-16T11:39:30.3635736Z    backend healthz warming 8/30...
+2026-08-16T11:39:35.3838116Z curl: (56) Recv failure: Connection reset by peer
+2026-08-16T11:39:35.3852495Z    backend healthz warming 9/30...
+2026-08-16T11:39:40.4134553Z curl: (56) Recv failure: Connection reset by peer
+2026-08-16T11:39:40.4163840Z    backend healthz warming 10/30...
+2026-08-16T11:39:45.4423084Z curl: (56) Recv failure: Connection reset by peer
+2026-08-16T11:39:45.4442721Z    backend healthz warming 11/30...
+2026-08-16T11:39:50.4696144Z curl: (56) Recv failure: Connection reset by peer
+2026-08-16T11:39:50.4718206Z    backend healthz warming 12/30...
+2026-08-16T11:39:55.4957337Z curl: (56) Recv failure: Connection reset by peer
+2026-08-16T11:39:55.4997857Z    backend healthz warming 13/30...
+2026-08-16T11:40:00.5303957Z curl: (56) Recv failure: Connection reset by peer
+2026-08-16T11:40:00.5321812Z    backend healthz warming 14/30...
+2026-08-16T11:40:05.5746763Z ✅ backend healthz ready after attempt 15/30
+2026-08-16T11:40:05.5748603Z Updating observation collector...
+2026-08-16T11:40:07.7748763Z  Container polyweather_collector  Recreate
+2026-08-16T11:40:07.7749219Z  Container polyweather_collector  Recreated
+2026-08-16T11:40:07.7749590Z  Container polyweather_collector  Starting
+2026-08-16T11:40:07.7749944Z  Container polyweather_collector  Started
+2026-08-16T11:40:07.7750269Z Updating cache warmer...
+2026-08-16T11:40:19.6832191Z  Container polyweather_warmer  Recreate
+2026-08-16T11:40:19.6832870Z  Container polyweather_warmer  Recreated
+2026-08-16T11:40:19.6833263Z  Container polyweather_warmer  Starting
+2026-08-16T11:40:19.6833599Z  Container polyweather_warmer  Started
+2026-08-16T11:40:19.6833920Z Updating training settlement worker...
+2026-08-16T11:40:31.6104099Z  Container polyweather_training_settlement  Recreate
+2026-08-16T11:40:31.6104790Z  Container polyweather_training_settlement  Recreated
+2026-08-16T11:40:31.6105403Z  Container polyweather_training_settlement  Starting
+2026-08-16T11:40:31.6106002Z  Container polyweather_training_settlement  Started
+2026-08-16T11:40:31.6106518Z Updating frontend...
+2026-08-16T11:40:46.4456590Z  Container polyweather_frontend  Recreate
+2026-08-16T11:40:46.4457159Z  Container polyweather_frontend  Recreated
+2026-08-16T11:40:46.4457642Z  Container polyweather_frontend  Starting
+2026-08-16T11:40:46.4458088Z  Container polyweather_frontend  Started
+2026-08-16T11:40:46.4458508Z Waiting for frontend...
+2026-08-16T11:40:46.4706837Z curl: (56) Recv failure: Connection reset by peer
+2026-08-16T11:40:46.4728313Z    frontend *** warming 1/40...
+2026-08-16T11:40:51.8363375Z ✅ frontend *** ready after attempt 2/40
+2026-08-16T11:40:51.8871216Z ✅ frontend terminal ready after attempt 1/20
+2026-08-16T11:41:26.9212731Z    scan terminal snapshot request failed attempt 1/8 (curl: (28) Operation timed out after 35002 milliseconds with 0 bytes received
+2026-08-16T11:41:26.9213388Z 
+2026-08-16T11:41:26.9213542Z http=000)
+2026-08-16T11:42:06.9671681Z    scan terminal snapshot request failed attempt 2/8 (curl: (28) Operation timed out after 35002 milliseconds with 0 bytes received
+2026-08-16T11:42:06.9673568Z 
+2026-08-16T11:42:06.9675096Z http=000)
+2026-08-16T11:42:46.9937618Z    scan terminal snapshot request failed attempt 3/8 (curl: (28) Operation timed out after 35002 milliseconds with 0 bytes received
+2026-08-16T11:42:46.9938207Z 
+2026-08-16T11:42:46.9938322Z http=000)
+2026-08-16T11:43:27.0263955Z    scan terminal snapshot request failed attempt 4/8 (curl: (28) Operation timed out after 35002 milliseconds with 0 bytes received
+2026-08-16T11:43:27.0265268Z 
+2026-08-16T11:43:27.0265419Z http=000)
+2026-08-16T11:44:07.0663504Z    scan terminal snapshot request failed attempt 5/8 (curl: (28) Operation timed out after 35003 milliseconds with 0 bytes received
+2026-08-16T11:44:07.0667131Z 
+2026-08-16T11:44:07.0667247Z http=000)
+2026-08-16T11:44:47.1044932Z    scan terminal snapshot request failed attempt 6/8 (curl: (28) Operation timed out after 35002 milliseconds with 0 bytes received
+2026-08-16T11:44:47.1045500Z 
+2026-08-16T11:44:47.1045607Z http=000)
+2026-08-16T11:45:27.1557969Z    scan terminal snapshot request failed attempt 7/8 (curl: (28) Operation timed out after 35001 milliseconds with 0 bytes received
+2026-08-16T11:45:27.1558613Z 
+2026-08-16T11:45:27.1558721Z http=000)
+2026-08-16T11:46:07.2066483Z    scan terminal snapshot request failed attempt 8/8 (curl: (28) Operation timed out after 35002 milliseconds with 0 bytes received
+2026-08-16T11:46:07.2067052Z 
+2026-08-16T11:46:07.2067160Z http=000)
+2026-08-16T11:46:07.2067860Z ❌ scan terminal snapshot did not return status=ready/stale or http=401
+2026-08-16T11:46:07.2071277Z ❌ Frontend did not become healthy
+2026-08-16T11:46:07.2071868Z Rolling back to a3390a6180d003034e99394aec9dfcb992e3a040...
+2026-08-16T11:46:07.7236685Z  polyweather_web Skipped - Image is already being pulled by polyweather 
+2026-08-16T11:46:07.7237350Z  polyweather_collector Skipped - Image is already being pulled by polyweather 
+2026-08-16T11:46:07.7237957Z  polyweather_warmer Skipped - Image is already being pulled by polyweather 
+2026-08-16T11:46:07.7238552Z  polyweather_training_settlement Skipped - Image is already being pulled by polyweather 
+2026-08-16T11:46:07.7239045Z  polyweather_frontend Pulling 
+2026-08-16T11:46:07.7239338Z  polyweather Pulling 
+2026-08-16T11:46:07.7239610Z  polyweather_redis Pulling 
+2026-08-16T11:46:08.2111953Z  polyweather Pulled 
+2026-08-16T11:46:08.2167702Z  polyweather_frontend Pulled 
+2026-08-16T11:46:08.4203367Z  polyweather_redis Pulled 
+2026-08-16T11:46:33.5762833Z  Container polyweather_redis  Running
+2026-08-16T11:46:33.5763436Z  Container polyweather_frontend  Recreate
+2026-08-16T11:46:33.5763940Z  Container polyweather_bot  Recreate
+2026-08-16T11:46:33.5764416Z  Container polyweather_web  Recreate
+2026-08-16T11:46:33.5764953Z  Container polyweather_frontend  Recreated
+2026-08-16T11:46:33.5765405Z  Container polyweather_bot  Recreated
+2026-08-16T11:46:33.5765855Z  Container polyweather_web  Recreated
+2026-08-16T11:46:33.5766349Z  Container polyweather_training_settlement  Recreate
+2026-08-16T11:46:33.5766877Z  Container polyweather_warmer  Recreate
+2026-08-16T11:46:33.5767390Z  Container polyweather_collector  Recreate
+2026-08-16T11:46:33.5767911Z  Container polyweather_collector  Recreated
+2026-08-16T11:46:33.5768453Z  Container polyweather_warmer  Recreated
+2026-08-16T11:46:33.5769029Z  Container polyweather_training_settlement  Recreated
+2026-08-16T11:46:33.5769591Z  Container polyweather_frontend  Starting
+2026-08-16T11:46:33.5770056Z  Container polyweather_redis  Waiting
+2026-08-16T11:46:33.5770577Z  Container polyweather_redis  Waiting
+2026-08-16T11:46:33.5771074Z  Container polyweather_redis  Healthy
+2026-08-16T11:46:33.5771525Z  Container polyweather_bot  Starting
+2026-08-16T11:46:33.5771978Z  Container polyweather_redis  Healthy
+2026-08-16T11:46:33.5772566Z  Container polyweather_web  Starting
+2026-08-16T11:46:33.5773025Z  Container polyweather_frontend  Started
+2026-08-16T11:46:33.5773512Z  Container polyweather_bot  Started
+2026-08-16T11:46:33.5773974Z  Container polyweather_web  Started
+2026-08-16T11:46:33.5774429Z  Container polyweather_redis  Waiting
+2026-08-16T11:46:33.5774892Z  Container polyweather_redis  Waiting
+2026-08-16T11:46:33.5775366Z  Container polyweather_redis  Waiting
+2026-08-16T11:46:33.5775993Z  Container polyweather_redis  Healthy
+2026-08-16T11:46:33.5776442Z  Container polyweather_warmer  Starting
+2026-08-16T11:46:33.5776867Z  Container polyweather_redis  Healthy
+2026-08-16T11:46:33.5777181Z  Container polyweather_collector  Starting
+2026-08-16T11:46:33.5777830Z  Container polyweather_redis  Healthy
+2026-08-16T11:46:33.5778190Z  Container polyweather_training_settlement  Starting
+2026-08-16T11:46:33.5778588Z  Container polyweather_warmer  Started
+2026-08-16T11:46:33.5779084Z  Container polyweather_collector  Started
+2026-08-16T11:46:33.5779449Z  Container polyweather_training_settlement  Started
+2026-08-16T11:46:33.5780151Z ✅ Rolled back to a3390a6180d003034e99394aec9dfcb992e3a040
+2026-08-16T11:46:33.5793897Z ##[error]Process completed with exit code 1.
+2026-08-16T11:46:33.5931811Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-16T11:46:33.5933596Z Post job cleanup.
+2026-08-16T11:46:33.6813131Z [command]/usr/bin/git version
+2026-08-16T11:46:33.6857456Z git version 2.54.0
+2026-08-16T11:46:33.6898263Z Temporarily overriding HOME='/home/runner/work/_temp/42f06924-d3f7-407c-811c-731e1a0c7ec2' before making global git config changes
+2026-08-16T11:46:33.6899237Z Adding repository directory to the temporary git global config as a safe directory
+2026-08-16T11:46:33.6904379Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/PolyWeather/PolyWeather
+2026-08-16T11:46:33.6946641Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-08-16T11:46:33.6983472Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-08-16T11:46:33.7257406Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-08-16T11:46:33.7285951Z http.https://github.com/.extraheader
+2026-08-16T11:46:33.7297307Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-08-16T11:46:33.7333979Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-08-16T11:46:33.7614703Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-08-16T11:46:33.7653549Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-08-16T11:46:33.8122175Z Cleaning up orphan processes
+2026-08-16T11:46:33.8485756Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

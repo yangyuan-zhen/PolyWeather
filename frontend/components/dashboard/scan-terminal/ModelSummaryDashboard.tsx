@@ -31,7 +31,6 @@ const SUMMARY_TEXT = {
   city: { en: "City", zh: "城市" },
   region: { en: "Region", zh: "区域" },
   localTime: { en: "Local Time", zh: "当地时间" },
-  gaussianMu: { en: "DEB μ", zh: "DEB μ" },
   detailedProbability: { en: "DEB Distribution Probability", zh: "DEB 分布概率" },
   noProbabilityDistribution: { en: "No probability distribution", zh: "暂无详细概率" },
   median: { en: "Median", zh: "模型中位数" },
@@ -41,7 +40,7 @@ const SUMMARY_TEXT = {
   total: { en: "rows", zh: "行" },
 } as const;
 
-const MODEL_SUMMARY_COLUMN_COUNT = MODEL_SUMMARY_MODEL_COLUMNS.length + 7;
+const MODEL_SUMMARY_COLUMN_COUNT = MODEL_SUMMARY_MODEL_COLUMNS.length + 6;
 
 function copy(key: keyof typeof SUMMARY_TEXT, isEn: boolean) {
   return SUMMARY_TEXT[key][isEn ? "en" : "zh"];
@@ -156,9 +155,6 @@ function ModelSummaryRowView({
         <td className="min-w-[100px] px-3 py-2 text-right">
           <TemperatureCell value={row.modelSpread} symbol={row.tempSymbol} />
         </td>
-        <td className="min-w-[92px] px-3 py-2 text-right">
-          <TemperatureCell value={row.gaussianMu} symbol={row.tempSymbol} emphasis="median" />
-        </td>
       </tr>
       {expanded ? (
         <tr className="border-b border-blue-100 bg-blue-50/35">
@@ -167,9 +163,6 @@ function ModelSummaryRowView({
               <div className="flex w-full shrink-0 items-center gap-2 text-xs md:w-[220px]">
                 <span className="font-black text-slate-800">
                   {copy("detailedProbability", isEn)}
-                </span>
-                <span className="font-mono text-[11px] font-bold text-violet-700">
-                  μ {formatModelSummaryTemp(row.gaussianMu, row.tempSymbol)}
                 </span>
               </div>
               {row.probabilityBuckets.length ? (
@@ -386,9 +379,6 @@ export function ModelSummaryDashboard({
                 {copy("median", isEn)}
               </th>
               <th className="min-w-[100px] px-3 py-2 text-right">{copy("spread", isEn)}</th>
-              <th className="min-w-[92px] px-3 py-2 text-right text-violet-700">
-                {copy("gaussianMu", isEn)}
-              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">

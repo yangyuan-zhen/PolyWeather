@@ -51,7 +51,6 @@ export type ModelSummaryRow = {
   modelSpread: number | null;
   probabilityBuckets: ModelSummaryProbabilityBucket[];
   probabilityBucketMap: Record<string, ModelSummaryProbabilityBucket>;
-  gaussianMu: number | null;
   probabilityEngine: string | null;
   topProbabilityBucketKey: string | null;
   marketMatches: ModelSummaryMarketMatch[];
@@ -297,16 +296,6 @@ function buildProbabilityBuckets(row: ScanOpportunityRow): ModelSummaryProbabili
     .sort((a, b) => a.lower - b.lower || a.upper - b.upper);
 }
 
-function weightedProbabilityMu(buckets: ModelSummaryProbabilityBucket[]) {
-  const totalProbability = buckets.reduce((sum, bucket) => sum + bucket.probability, 0);
-  if (totalProbability <= 0) return null;
-  const weightedValue = buckets.reduce(
-    (sum, bucket) => sum + bucket.value * bucket.probability,
-    0,
-  );
-  return roundToOneDecimal(weightedValue / totalProbability);
-}
-
 function normalizeProbability(value: unknown) {
   const numericValue = finiteNumber(value);
   if (numericValue == null) return null;
@@ -481,7 +470,6 @@ export function buildModelSummaryRows(
       modelSpread: spread(modelValues),
       probabilityBuckets,
       probabilityBucketMap,
-      gaussianMu: weightedProbabilityMu(probabilityBuckets),
       probabilityEngine: row.probability_engine || (probabilityBuckets.length ? "deb_normal" : null),
       topProbabilityBucketKey: topProbabilityBucket?.key || null,
       marketMatches,

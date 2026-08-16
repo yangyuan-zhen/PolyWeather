@@ -162,7 +162,6 @@ export function runTests() {
   assert(parisRow.models.HRRR === null, "missing models should be normalized to null");
   assert(parisRow.modelMedian === 32.1, "model median should use available model values only");
   assert(parisRow.modelSpread === 2.5, "model spread should use available model min/max only");
-  assert(parisRow.gaussianMu === 32.6, "model summary should compute distribution mu from probability buckets");
   assert(parisRow.probabilityEngine === "deb_normal", "model summary should preserve probability engine metadata");
   assert(parisRow.probabilityBuckets.length === 3, "model summary should keep every market-option probability bucket");
   assert(
@@ -261,7 +260,7 @@ export function runTests() {
       modelSummarySource.includes("MODEL_SUMMARY_MODEL_COLUMNS") &&
       modelSummarySource.includes("lastGoodSummaryRowsRef") &&
       modelSummarySource.includes("hasModelSummaryForecastData") &&
-      modelSummarySource.includes("DEB μ") &&
+      !modelSummarySource.includes("DEB μ") &&
       modelSummarySource.includes("DEB 分布概率") &&
       modelSummarySource.includes("expandedCityKeys") &&
       modelSummarySource.includes("toggleExpandedCity") &&

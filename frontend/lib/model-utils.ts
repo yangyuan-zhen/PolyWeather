@@ -7,7 +7,6 @@ export function getProbabilityView(detail: CityDetail, targetDate?: string | nul
       calibrationMode: detail.probabilities?.calibration_mode ?? null,
       calibrationVersion: detail.probabilities?.calibration_version ?? null,
       engine: detail.probabilities?.engine ?? null,
-      mu: detail.probabilities?.mu ?? null,
       probabilities: detail.probabilities?.distribution || [],
       probabilitiesAll:
         detail.probabilities?.distribution_all ||
@@ -26,7 +25,6 @@ export function getProbabilityView(detail: CityDetail, targetDate?: string | nul
     calibrationMode: null,
     calibrationVersion: null,
     engine: null,
-    mu: daily?.deb?.prediction ?? null,
     probabilities: daily?.probabilities || [],
     probabilitiesAll: daily?.probabilities_all || daily?.probabilities || [],
     shadowProbabilities: [],
