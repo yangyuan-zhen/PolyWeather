@@ -250,6 +250,14 @@ wait_for_scan_terminal_snapshot() {
                 echo "✅ $name initializing after attempt $i/$attempts"
                 return 0
             fi
+            if printf '%s' "$compact" | grep -q '"status":"partial"'; then
+                echo "✅ $name partial snapshot (market data degraded) after attempt $i/$attempts"
+                return 0
+            fi
+            if printf '%s' "$compact" | grep -q '"status":"failed"'; then
+                echo "✅ $name failed snapshot (market data unavailable) after attempt $i/$attempts"
+                return 0
+            fi
             status="$(printf '%s' "$compact" | sed -n 's/.*"status":"\([^"]*\)".*/\1/p' | head -n 1)"
             echo "   $name not ready attempt $i/$attempts http=${http_status:-unknown} status=${status:-unknown}"
         else
@@ -260,7 +268,7 @@ wait_for_scan_terminal_snapshot() {
         fi
     done
 
-    echo "❌ $name did not return status=ready/stale or http=401"
+    echo "❌ $name did not return a snapshot payload (ready/stale/partial/failed) or http=401"
     return 1
 }
 
