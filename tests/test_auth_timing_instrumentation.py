@@ -15,7 +15,6 @@ def test_auth_me_backend_records_stage_timing_without_sensitive_identity():
         "ensure_signup_trial",
         "subscription_window",
         "auth_points",
-        "referral_summary",
         "total",
     ]:
         assert stage in source

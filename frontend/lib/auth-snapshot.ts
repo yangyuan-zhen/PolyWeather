@@ -11,7 +11,6 @@ export type AuthSnapshotLike = {
   subscription_queued_days?: number | null;
   subscription_queued_count?: number | null;
   points?: number | null;
-  referral?: unknown;
   degraded_auth_profile?: boolean | null;
   entitlement_snapshot?: boolean | null;
 };
@@ -87,6 +86,5 @@ export function mergeAccountAuthSnapshot<T extends AuthSnapshotLike>(
       Number.isFinite(Number(next.points)) && Number(next.points) > 0
         ? next.points
         : previous.points,
-    referral: next.referral ?? previous.referral,
   };
 }

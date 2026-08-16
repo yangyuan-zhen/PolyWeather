@@ -12,7 +12,6 @@ from fastapi import HTTPException, Request
 from loguru import logger
 
 from src.database.db_manager import DBManager
-from web.core import ReferralApplyRequest
 import web.routes as legacy_routes
 
 
@@ -216,7 +215,6 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
         subscription_total_expires_at = None
         subscription_queued_days = 0
         subscription_queued_count = 0
-        referral = None
 
         if legacy_routes.SUPABASE_ENTITLEMENT.enabled and user_id:
             try:
@@ -344,13 +342,6 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
                     subscription_queued_count = int(
                         subscription_window.get("queued_count") or 0
                     )
-                if not entitlement_scope:
-                    referral = timer.measure(
-                        "referral_summary",
-                        lambda: legacy_routes.SUPABASE_ENTITLEMENT.get_referral_summary(
-                            user_id
-                        ),
-                    )
             except HTTPException:
                 raise
             except Exception:
@@ -366,7 +357,6 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
                 subscription_total_expires_at = None
                 subscription_queued_days = 0
                 subscription_queued_count = 0
-                referral = None
 
         if entitlement_scope:
             points = _state_points(request)
@@ -427,7 +417,6 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
             "subscription_total_expires_at": subscription_total_expires_at,
             "subscription_queued_days": subscription_queued_days,
             "subscription_queued_count": subscription_queued_count,
-            "referral": referral,
         }
         authenticated_for_log = bool(payload["authenticated"])
         subscription_active_for_log = (
@@ -451,14 +440,3 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
             status_code=status_code,
             subscription_active=subscription_active_for_log,
         )
-
-
-def apply_referral_code(request: Request, body: ReferralApplyRequest) -> Dict[str, Any]:
-    identity = _require_auth_identity_without_subscription_gate(request)
-    try:
-        return legacy_routes.SUPABASE_ENTITLEMENT.apply_referral_code(
-            identity["user_id"],
-            body.code,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc

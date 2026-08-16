@@ -314,15 +314,6 @@ export function UnlockProOverlay({
                 </div>
               </div>
             )}
-
-            <div style={{ marginTop: "auto", paddingTop: 16 }}>
-              <span className={s.unavailCta} style={{ cursor: "default" }}>
-                <MessageSquare size={12} />
-                {isEn
-                  ? "Invite paid users to earn points"
-                  : "邀请付费用户即可获得积分"}
-              </span>
-            </div>
           </div>
         )}
       </div>

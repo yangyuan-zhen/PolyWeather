@@ -286,13 +286,11 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
         { label: "Trial", value: "3 days" },
         { label: "Monthly", value: "29.9 USDC" },
         { label: "Quarterly", value: "79.9 USDC" },
-        { label: "Referral", value: "20 USDC" },
       ]
     : [
         { label: "试用", value: "3 天" },
         { label: "月付", value: "29.9 USDC" },
         { label: "季度", value: "79.9 USDC" },
-        { label: "邀请首月", value: "20 USDC" },
       ];
 
   return (
@@ -643,13 +641,8 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                   </div>
                 </div>
                 <p className="mt-2 text-xs font-semibold text-slate-500">
-                  {isEn ? "Referral first month: 20 USDC" : "使用邀请码首月 20 USDC"}
+                  {isEn ? "Monthly + Quarterly plans" : "月付 + 季度套餐"}
                 </p>
-                <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-600">
-                  {isEn
-                    ? "Invite reward: referrer gets +3500 points when invitee subscribes."
-                    : "邀请奖励：被邀请人付费后，邀请人 +3500 积分。"}
-                </div>
                 <ul className="mt-7 space-y-3 border-t border-slate-200 pt-6">
                   {(isEn ? PRO_FEATURES_EN : PRO_FEATURES_ZH).map((feature) => (
                     <li key={feature} className="flex items-start gap-3">

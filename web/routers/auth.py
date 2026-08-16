@@ -2,11 +2,7 @@
 
 from fastapi import APIRouter, Request, Response
 
-from web.core import ReferralApplyRequest
-from web.services.auth_api import (
-    apply_referral_code,
-    get_auth_me_payload,
-)
+from web.services.auth_api import get_auth_me_payload
 
 router = APIRouter(tags=["auth"])
 
@@ -20,8 +16,3 @@ async def auth_me(request: Request, response: Response):
     if server_timing:
         response.headers["Server-Timing"] = server_timing
     return payload
-
-
-@router.post("/api/auth/referral/apply")
-async def auth_referral_apply(request: Request, body: ReferralApplyRequest):
-    return apply_referral_code(request, body)

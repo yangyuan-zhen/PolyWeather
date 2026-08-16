@@ -432,14 +432,13 @@ def get_ops_billing_risk(
     days: int = 30,
     limit: int = 80,
 ) -> Dict[str, Any]:
-    """Summarize trial, payment, referral, and points risk signals for ops."""
+    """Summarize trial, payment, and points risk signals for ops."""
     _require_ops(request)
     db = _get_db()
     now = datetime.now(timezone.utc)
     safe_days = max(1, min(int(days or 30), 120))
     safe_limit = max(10, min(int(limit or 80), 200))
     since_dt = now - timedelta(days=safe_days)
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
     query_errors: List[Dict[str, str]] = []
 
@@ -459,29 +458,6 @@ def get_ops_billing_risk(
             ),
             "order": "updated_at.desc",
             "limit": str(max(safe_limit * 3, 100)),
-        },
-    )
-    referral_attributions = collect(
-        "referral_attributions",
-        {
-            "select": (
-                "id,referrer_user_id,referred_user_id,code,status,"
-                "converted_payment_intent_id,converted_tx_hash,converted_at,"
-                "created_at,updated_at"
-            ),
-            "order": "updated_at.desc",
-            "limit": str(safe_limit),
-        },
-    )
-    referral_rewards = collect(
-        "referral_rewards",
-        {
-            "select": (
-                "id,referral_attribution_id,referrer_user_id,referred_user_id,"
-                "payment_intent_id,tx_hash,reward_days,reward_points,created_at"
-            ),
-            "order": "created_at.desc",
-            "limit": str(safe_limit),
         },
     )
     trial_claims = collect(
@@ -653,64 +629,6 @@ def get_ops_billing_risk(
                     )
                 )
 
-    reward_by_attribution = {
-        str(row.get("referral_attribution_id") or ""): row
-        for row in referral_rewards
-        if row.get("referral_attribution_id") is not None
-    }
-    monthly_cap_hits: List[Dict[str, Any]] = []
-    referral_settlement_issues: List[Dict[str, Any]] = []
-
-    for attribution in referral_attributions:
-        status = str(attribution.get("status") or "").strip().lower()
-        attribution_id = str(attribution.get("id") or "")
-        updated_at = _parse_iso_datetime(
-            attribution.get("updated_at") or attribution.get("converted_at") or attribution.get("created_at")
-        )
-        if status == "capped" and (not updated_at or updated_at >= month_start):
-            row = {
-                "id": attribution_id,
-                "code": attribution.get("code"),
-                "referrer_user_id": attribution.get("referrer_user_id"),
-                "referred_user_id": attribution.get("referred_user_id"),
-                "updated_at": attribution.get("updated_at"),
-            }
-            monthly_cap_hits.append(row)
-            issues.append(
-                _risk_issue(
-                    category="referral",
-                    severity="medium",
-                    title="邀请奖励月度上限命中",
-                    detail=f"邀请码 {attribution.get('code') or ''} 的推荐奖励已被月度上限拦截。",
-                    user_id=attribution.get("referrer_user_id"),
-                    created_at=attribution.get("updated_at") or attribution.get("created_at"),
-                    reference=attribution_id,
-                    payload=row,
-                )
-            )
-        if status == "converted" and attribution_id not in reward_by_attribution:
-            row = {
-                "id": attribution_id,
-                "code": attribution.get("code"),
-                "referrer_user_id": attribution.get("referrer_user_id"),
-                "referred_user_id": attribution.get("referred_user_id"),
-                "converted_payment_intent_id": attribution.get("converted_payment_intent_id"),
-                "converted_at": attribution.get("converted_at"),
-            }
-            referral_settlement_issues.append(row)
-            issues.append(
-                _risk_issue(
-                    category="referral",
-                    severity="high",
-                    title="推荐已转化但没有奖励记录",
-                    detail=f"归因 {attribution_id} 已 converted，但 referral_rewards 未找到对应记录。",
-                    user_id=attribution.get("referrer_user_id"),
-                    created_at=attribution.get("converted_at") or attribution.get("updated_at"),
-                    reference=attribution_id,
-                    payload=row,
-                )
-            )
-
     events = db.list_app_analytics_events(limit=20000, since_iso=since_dt.isoformat())
     signup_rows = [
         row
@@ -869,22 +787,6 @@ def get_ops_billing_risk(
     unresolved_incidents = grouped_payment_incidents["incidents"]
 
     issues.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
-    recent_rewards = [
-        {
-            "id": row.get("id"),
-            "referral_attribution_id": row.get("referral_attribution_id"),
-            "referrer_user_id": row.get("referrer_user_id"),
-            "referred_user_id": row.get("referred_user_id"),
-            "payment_intent_id": row.get("payment_intent_id"),
-            "reward_points": int(row.get("reward_points") or 0),
-            "reward_days": int(row.get("reward_days") or 0),
-            "tx_hash": row.get("tx_hash"),
-            "explorer_url": _payment_explorer_url("polygon", row.get("tx_hash")),
-            "created_at": row.get("created_at"),
-        }
-        for row in referral_rewards[:safe_limit]
-    ]
-
     return {
         "checked_at": _to_utc_iso(now),
         "window_days": safe_days,
@@ -895,9 +797,6 @@ def get_ops_billing_risk(
             "payment_incidents": grouped_payment_incidents["total"],
             "payment_incident_events": grouped_payment_incidents["raw_total"],
             "points_discount_issues": len(points_issues),
-            "referral_settlement_issues": len(referral_settlement_issues),
-            "monthly_cap_hits": len(monthly_cap_hits),
-            "recent_referral_rewards": len(recent_rewards),
             "recent_trial_claims": len(trial_claims),
         },
         "issues": issues[:safe_limit],
@@ -905,9 +804,6 @@ def get_ops_billing_risk(
         "trial_gaps": trial_gaps[:safe_limit],
         "payment_incidents": unresolved_incidents[:safe_limit],
         "points_discount_issues": points_issues[:safe_limit],
-        "referral_settlement_issues": referral_settlement_issues[:safe_limit],
-        "monthly_cap_hits": monthly_cap_hits[:safe_limit],
-        "recent_referral_rewards": recent_rewards,
         "recent_trial_claims": trial_claims,
         "query_errors": query_errors,
     }

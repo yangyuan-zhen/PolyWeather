@@ -8,16 +8,8 @@ from src.auth.entitlement import (  # noqa: F401 — re-exports for backward com
     SIGNUP_TRIAL_DAYS,
     SIGNUP_TRIAL_PLAN_CODE,
     SIGNUP_TRIAL_SOURCE,
-    REFERRAL_DISCOUNT_USDC,
-    REFERRAL_MONTHLY_DAY_LIMIT,
-    REFERRAL_MONTHLY_DISCOUNTED_AMOUNT_USDC,
-    REFERRAL_MONTHLY_POINTS_LIMIT,
-    REFERRAL_MONTHLY_REWARD_LIMIT,
-    REFERRAL_REWARD_DAYS,
-    REFERRAL_REWARD_POINTS,
     AdminMixin,
     IdentityMixin,
-    ReferralMixin,
     SubscriptionMixin,
     SupabaseIdentity,
     TrialMixin,
@@ -28,7 +20,7 @@ from src.auth.entitlement import (  # noqa: F401 — re-exports for backward com
 
 
 class SupabaseEntitlementService(
-    ReferralMixin, SubscriptionMixin, TrialMixin,
+    SubscriptionMixin, TrialMixin,
     AdminMixin, IdentityMixin,
 ):
     """

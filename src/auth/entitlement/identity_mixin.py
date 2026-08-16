@@ -166,8 +166,6 @@ class IdentityMixin:
         if IdentityMixin._is_trial_subscription_row(row):
             return False
         source = str(row.get("source") or "").strip().lower()
-        if "referral_reward" in source:
-            return False
         return "payment" in source or source in {"payment_contract", "payment_manual"}
 
     def _telegram_user_id_for(self, user_id: str) -> Optional[int]:

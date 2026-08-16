@@ -68,7 +68,6 @@ function pointSourceLabel(source?: string, isEn = false) {
   const key = String(source || "").trim().toLowerCase();
   if (key === "feedback_reward") return isEn ? "Feedback reward" : "反馈奖励";
   if (key === "ops_manual_grant") return isEn ? "Ops manual grant" : "后台补发";
-  if (key === "paid_referral") return isEn ? "Paid referral" : "有效付费邀请";
   if (key === "growth_milestone_reward") return isEn ? "Growth reward" : "增长奖励";
   if (key === "points_redemption") return isEn ? "Payment redemption" : "支付抵扣";
   if (key === "ops_subscription_deduction") return isEn ? "Ops deduction" : "后台订阅扣分";
@@ -95,8 +94,6 @@ export function AccountCenter() {
   const [updatedAt, setUpdatedAt] = useState<string>("");
   const [user, setUser] = useState<User | null>(null);
   const [backend, setBackend] = useState<AuthMeResponse | null>(null);
-  const [referralCodeInput, setReferralCodeInput] = useState("");
-  const [referralApplying, setReferralApplying] = useState(false);
   const [paymentTurnstileToken, setPaymentTurnstileToken] = useState("");
   const [paymentTurnstileResetKey, setPaymentTurnstileResetKey] = useState(0);
 
@@ -454,16 +451,6 @@ export function AccountCenter() {
     }),
     [displayExpiryRaw, isEn, trialValueReplay],
   );
-  const referral = backend?.referral;
-  const referralCode = String(referral?.code || "").trim();
-  const appliedReferralCode = String(referral?.applied_code || "").trim();
-  const canApplyReferralCode = Boolean(
-    isAuthenticated &&
-      !isSubscribed &&
-      !appliedReferralCode &&
-      referralCodeInput.trim(),
-  );
-
   const focusPaymentManagement = useCallback(() => {
     trackAppEvent("paywall_viewed", {
       entry: "account_center",
@@ -505,31 +492,6 @@ export function AccountCenter() {
     focusPaymentManagement();
   }, [authUserId, focusPaymentManagement, planCode, trialValueReplay]);
 
-  // ── Referral points display ────────────────────────────
-  const referralRewardPointsRaw = Number(referral?.reward_points ?? 3500);
-  const referralRewardPoints = Number.isFinite(referralRewardPointsRaw)
-    ? Math.max(0, referralRewardPointsRaw)
-    : 3500;
-  const monthlyReferralCountRaw = Number(referral?.monthly_reward_count ?? 0);
-  const monthlyReferralCount = Number.isFinite(monthlyReferralCountRaw)
-    ? Math.max(0, monthlyReferralCountRaw)
-    : 0;
-  const monthlyReferralLimitRaw = Number(referral?.monthly_reward_limit ?? 10);
-  const monthlyReferralLimit = Number.isFinite(monthlyReferralLimitRaw)
-    ? Math.max(0, monthlyReferralLimitRaw)
-    : 10;
-  const monthlyReferralPointsRaw = Number(
-    referral?.monthly_reward_points ?? monthlyReferralCount * referralRewardPoints,
-  );
-  const monthlyReferralPoints = Number.isFinite(monthlyReferralPointsRaw)
-    ? Math.max(0, monthlyReferralPointsRaw)
-    : 0;
-  const monthlyReferralPointsLimitRaw = Number(
-    referral?.monthly_reward_points_limit ?? monthlyReferralLimit * referralRewardPoints,
-  );
-  const monthlyReferralPointsLimit = Number.isFinite(monthlyReferralPointsLimitRaw)
-    ? Math.max(0, monthlyReferralPointsLimitRaw)
-    : monthlyReferralLimit * referralRewardPoints;
   const pointsLedger = backend?.points_ledger;
   const pointSourceRows = Object.entries(pointsLedger?.by_source ?? {});
   const recentPointEvents = pointsLedger?.recent ?? [];
@@ -541,55 +503,6 @@ export function AccountCenter() {
       window.setTimeout(() => setCopied(false), 2000);
     });
   };
-
-  const applyReferralCode = useCallback(async () => {
-    const code = referralCodeInput.trim();
-    if (!code || referralApplying) return;
-    setReferralApplying(true);
-    setPaymentError("");
-    setPaymentInfo("");
-    try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-      if (supabaseReady) {
-        const {
-          data: { session },
-        } = await getSupabaseBrowserClient().auth.getSession();
-        const token = String(session?.access_token || "").trim();
-        if (token) headers.Authorization = `Bearer ${token}`;
-      }
-      const res = await fetch("/api/auth/referral/apply", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ code }),
-      });
-      if (!res.ok) {
-        const raw = (await res.text()).slice(0, 240);
-        throw new Error(raw || copy.referralApplyFailed);
-      }
-      setPaymentInfo(copy.referralApplied);
-      setReferralCodeInput("");
-      await loadSnapshot();
-      await loadPaymentSnapshot();
-    } catch (error) {
-      setPaymentError(
-        error instanceof Error ? error.message : copy.referralApplyFailed,
-      );
-    } finally {
-      setReferralApplying(false);
-    }
-  }, [
-    copy.referralApplied,
-    copy.referralApplyFailed,
-    loadPaymentSnapshot,
-    loadSnapshot,
-    referralApplying,
-    referralCodeInput,
-    setPaymentError,
-    setPaymentInfo,
-    supabaseReady,
-  ]);
 
   // ── Render ────────────────────────────────────────────
 
@@ -808,82 +721,8 @@ export function AccountCenter() {
                 {totalPoints.toLocaleString()}
               </p>
             </div>
-            <div className="min-w-[140px] rounded-xl border border-emerald-200 bg-emerald-50 px-6 py-4 text-center">
-              <p className="mb-1 text-[10px] font-bold uppercase text-emerald-700">
-                {copy.weeklyPoints}
-              </p>
-              <p className="flex items-center justify-center gap-2 text-xl font-bold text-slate-950">
-                <TrendingUp size={16} className="text-emerald-400" />{" "}
-                {monthlyReferralCount.toLocaleString()}
-              </p>
-            </div>
-            <div className="min-w-[140px] rounded-xl border border-blue-200 bg-blue-50 px-6 py-4 text-center">
-              <p className="mb-1 text-[10px] font-bold uppercase text-blue-700">
-                {copy.weeklyRank}
-              </p>
-              <p className="flex items-center justify-center gap-2 text-xl font-bold text-slate-950">
-                <Trophy size={16} className="text-amber-400" />{" "}
-                {monthlyReferralCount}/{monthlyReferralLimit}
-              </p>
-            </div>
           </div>
         </div>
-
-        {/* Referral rewards */}
-        {showSecondarySections ? (
-          <div className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-4">
-            <div>
-              <h3 className="mb-6 flex items-center gap-2 text-lg font-bold text-slate-950">
-                <Sparkles size={20} className="text-amber-500" />{" "}
-                {copy.weeklyRewards}
-              </h3>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <span className="text-sm flex items-center gap-2">
-                    <Coins size={16} className="text-yellow-500" />{" "}
-                    {copy.referralRewardHint}
-                  </span>
-                  <span className="text-xs font-bold text-amber-600">
-                    +{referralRewardPoints.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <span className="text-sm flex items-center gap-2">
-                    <TrendingUp size={16} className="text-emerald-500" />{" "}
-                    {copy.weeklyPoints}
-                  </span>
-                  <span className="text-xs font-bold text-slate-600">
-                    {monthlyReferralCount}/{monthlyReferralLimit}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <span className="text-sm flex items-center gap-2">
-                    <Trophy size={16} className="text-blue-500" />{" "}
-                    {copy.totalPoints}
-                  </span>
-                  <span className="text-xs font-bold text-orange-400">
-                    {monthlyReferralPoints.toLocaleString()}/{monthlyReferralPointsLimit.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="mt-6 flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <Info size={14} className="text-slate-500 mt-0.5 shrink-0" />
-              <p className="text-[10px] text-slate-500 leading-normal italic">
-                {copy.pointsRule}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 lg:col-span-4">
-            <div className="h-6 w-40 animate-pulse rounded bg-slate-200" />
-            <div className="mt-4 space-y-2">
-              <div className="h-12 animate-pulse rounded-xl bg-slate-100" />
-              <div className="h-12 animate-pulse rounded-xl bg-slate-100" />
-              <div className="h-12 animate-pulse rounded-xl bg-slate-100" />
-            </div>
-          </div>
-        )}
 
         <section className="lg:col-span-12 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -1115,75 +954,6 @@ export function AccountCenter() {
                             </button>
                           );
                         })}
-                      </div>
-                      {appliedReferralCode && selectedPlanCode === "pro_monthly" ? (
-                        <p className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-800">
-                          {copy.referralDiscountHint}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                      <div className="mb-3 flex items-center justify-between gap-3">
-                        <p className="text-xs font-bold uppercase text-slate-700">
-                          {copy.referralTitle}
-                        </p>
-                        <span className="text-[10px] text-slate-500">
-                          {copy.referralInviteLimit}
-                        </span>
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                        <div>
-                          <p className="mb-1 text-[10px] uppercase text-slate-500">
-                            {copy.referralMyCode}
-                          </p>
-                          <div className="flex gap-2">
-                            <code className="min-w-0 flex-1 truncate rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-blue-700">
-                              {referralCode || "--"}
-                            </code>
-                            {referralCode ? (
-                              <button
-                                type="button"
-                                onClick={() => handleCopy(referralCode)}
-                                className="rounded-xl border border-blue-700 bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-700"
-                              >
-                                {copied ? <CheckCircle2 size={15} /> : <Copy size={15} />}
-                              </button>
-                            ) : null}
-                          </div>
-                          <p className="mt-2 text-[11px] leading-5 text-slate-500">
-                            {copy.referralRewardHint}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="mb-1 text-[10px] uppercase text-slate-500">
-                            {copy.referralApplyLabel}
-                          </p>
-                          {appliedReferralCode ? (
-                            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
-                              {appliedReferralCode}
-                            </div>
-                          ) : (
-                            <div className="flex gap-2">
-                              <input
-                                value={referralCodeInput}
-                                onChange={(event) => setReferralCodeInput(event.target.value)}
-                                placeholder={copy.referralApplyPlaceholder}
-                                className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => void applyReferralCode()}
-                                disabled={!canApplyReferralCode || referralApplying}
-                                className="rounded-xl border border-slate-900 bg-slate-900 px-3 text-xs font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                {referralApplying ? "..." : copy.referralApplyButton}
-                              </button>
-                            </div>
-                          )}
-                          <p className="mt-2 text-[11px] leading-5 text-slate-500">
-                            {copy.referralDiscountHint}
-                          </p>
-                        </div>
                       </div>
                     </div>
                     <div

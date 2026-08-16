@@ -21,7 +21,7 @@ export function runTests() {
     "terminal auth probe must combine snapshot preference with lightweight entitlement scope",
   );
 
-  const active: AuthSnapshotLike & { referral?: { code?: string } } = {
+  const active: AuthSnapshotLike = {
     authenticated: true,
     user_id: "user-1",
     subscription_active: true,
@@ -30,7 +30,6 @@ export function runTests() {
     subscription_total_expires_at: "2026-07-01T00:00:00Z",
     subscription_queued_days: 0,
     points: 120,
-    referral: { code: "PW-ABC" },
   };
 
   const degraded = mergeAccountAuthSnapshot(active, {
@@ -48,8 +47,7 @@ export function runTests() {
   assert(
     degraded.subscription_active === true &&
       degraded.subscription_plan_code === "pro_monthly" &&
-      degraded.points === 120 &&
-      degraded.referral?.code === "PW-ABC",
+      degraded.points === 120,
     "account snapshot merge must preserve confirmed Pro status when a later auth/me response is degraded",
   );
 

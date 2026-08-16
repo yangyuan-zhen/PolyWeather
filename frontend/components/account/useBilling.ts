@@ -116,27 +116,7 @@ export function useBilling(params: UseBillingParams) {
     const listAmount =
       Number.isFinite(listAmountRaw) && listAmountRaw > 0 ? listAmountRaw : 29.9;
     const selectedPlanCode = String(selectedPlan?.plan_code || "").toLowerCase();
-    const referral = backend?.referral;
-    const referralPending = Boolean(
-      referral?.applied_code ||
-        String(referral?.attribution_status || "").toLowerCase() === "pending",
-    );
-    const referralDiscountRaw = Number(referral?.discount_usdc ?? 0);
-    const referralDiscount = Number.isFinite(referralDiscountRaw)
-      ? Math.max(0, referralDiscountRaw)
-      : 0;
-    const discountedMonthlyRaw = Number(
-      referral?.discounted_monthly_amount_usdc ?? 0,
-    );
-    const referralApplies =
-      selectedPlanCode === "pro_monthly" &&
-      referralPending &&
-      backend?.subscription_active !== true;
-    const planAmount = referralApplies
-      ? Number.isFinite(discountedMonthlyRaw) && discountedMonthlyRaw > 0
-        ? discountedMonthlyRaw
-        : Math.max(0, listAmount - referralDiscount)
-      : listAmount;
+    const planAmount = listAmount;
 
     const pointsCfg = paymentConfig?.points_redemption || {};
     const pointsEnabled = pointsCfg.enabled !== false;
@@ -157,7 +137,7 @@ export function useBilling(params: UseBillingParams) {
     );
 
     const maxRedeemablePoints = pointsPerUsdc * maxDiscountUsdc;
-    const pointsCanApply = pointsEnabled && !referralApplies;
+    const pointsCanApply = pointsEnabled;
     const actualRedeem = pointsCanApply ? Math.min(totalPoints, maxRedeemablePoints) : 0;
     const discountUnits = Math.floor(actualRedeem / pointsPerUsdc);
     const pointsUsed = discountUnits * pointsPerUsdc;
@@ -167,8 +147,6 @@ export function useBilling(params: UseBillingParams) {
     return {
       planAmount,
       listAmount,
-      referralApplied: referralApplies,
-      referralDiscountAmount: referralApplies ? listAmount - planAmount : 0,
       pointsEnabled,
       pointsPerUsdc,
       maxDiscountUsdc,
@@ -179,8 +157,6 @@ export function useBilling(params: UseBillingParams) {
     };
   }, [
     paymentConfig?.points_redemption,
-    backend?.referral,
-    backend?.subscription_active,
     selectedPlan?.plan_code,
     selectedPlan?.amount_usdc,
     totalPoints,

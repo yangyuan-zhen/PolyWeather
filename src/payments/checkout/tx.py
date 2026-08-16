@@ -6,7 +6,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import requests as requests_lib
-from loguru import logger
 from web3 import Web3
 
 from src.auth.supabase_entitlement import SUPABASE_ENTITLEMENT
@@ -619,31 +618,6 @@ class TxMixin:
         source = str(row.get("source") or "").strip().lower()
         return "trial" in plan_code or "trial" in source
 
-    def _settle_referral_reward_for_intent(
-        self,
-        user_id: str,
-        intent: PaymentIntentRecord,
-        tx_hash: str,
-    ) -> Dict[str, Any]:
-        metadata = dict(intent.metadata or {})
-        if not isinstance(metadata.get("referral_attribution"), dict):
-            return {}
-        try:
-            result = SUPABASE_ENTITLEMENT.settle_referral_reward(
-                referred_user_id=user_id,
-                payment_intent_id=intent.intent_id,
-                tx_hash=tx_hash,
-            )
-            return dict(result) if isinstance(result, dict) else {}
-        except Exception as exc:
-            logger.warning(
-                "referral reward settlement failed user_id={} intent_id={}: {}",
-                user_id,
-                intent.intent_id,
-                exc,
-            )
-            return {"awarded": False, "reason": "settlement_error"}
-
     def _ensure_confirm_side_effects(
         self,
         user_id: str,
@@ -666,15 +640,9 @@ class TxMixin:
                 },
             )
         subscription_row = self._ensure_confirmed_subscription(user_id, intent, tx_hash)
-        referral_reward = self._settle_referral_reward_for_intent(
-            user_id,
-            intent,
-            tx_hash,
-        )
         return {
             "payment": payment_row,
             "subscription": subscription_row,
-            "referral_reward": referral_reward,
         }
 
     def _attempt_confirm_repair(
@@ -827,7 +795,6 @@ class TxMixin:
                 "already_confirmed": True,
                 "payment": repaired.get("payment"),
                 "subscription": repaired.get("subscription"),
-                "referral_reward": repaired.get("referral_reward"),
             }
         if intent.status in {"cancelled", "expired"}:
             raise PaymentCheckoutError(409, f"intent status is {intent.status}")
@@ -1031,7 +998,6 @@ class TxMixin:
                     "duplicate_tx_hash": tx_hash_text,
                     "payment": repaired.get("payment"),
                     "subscription": repaired.get("subscription"),
-                    "referral_reward": repaired.get("referral_reward"),
                 }
             raise PaymentCheckoutError(
                 409, f"intent status is {refreshed.status}, cannot confirm"
@@ -1067,7 +1033,6 @@ class TxMixin:
         plan = self._select_plan(intent.plan_code)
         payment_row = {}
         subscription_row = {}
-        referral_reward = {}
         try:
             payment_row = self._insert_payment_record(
                 user_id=user_id,
@@ -1085,11 +1050,6 @@ class TxMixin:
                 payload=payload,
             )
             intent.metadata = confirmed_metadata
-            referral_reward = self._settle_referral_reward_for_intent(
-                user_id,
-                intent,
-                tx_hash_text,
-            )
         except PaymentCheckoutError as exc:
             repaired = self._attempt_confirm_repair(
                 user_id=user_id,
@@ -1100,7 +1060,6 @@ class TxMixin:
             )
             payment_row = repaired.get("payment") or payment_row
             subscription_row = repaired.get("subscription") or subscription_row
-            referral_reward = repaired.get("referral_reward") or referral_reward
             if not subscription_row:
                 raise
         self._notify_telegram(
@@ -1126,7 +1085,6 @@ class TxMixin:
             "transaction": tx_payload,
             "payment": payment_row,
             "subscription": subscription_row,
-            "referral_reward": referral_reward,
             "points_redemption": points_result,
             "tx": payload,
         }

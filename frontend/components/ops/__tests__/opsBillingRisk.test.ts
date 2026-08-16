@@ -28,15 +28,15 @@ export function runTests() {
     "ops client must expose billing risk and successful payments endpoints",
   );
   assert(
-    paymentsPage.includes("支付与邀请风控流水") &&
+    paymentsPage.includes("支付风控流水") &&
       paymentsPage.includes("试用漏开") &&
       paymentsPage.includes("Intent 卡住") &&
       paymentsPage.includes("积分异常") &&
-      paymentsPage.includes("推荐奖励结算") &&
-      paymentsPage.includes("月度邀请封顶") &&
+      !paymentsPage.includes("推荐奖励结算") &&
+      !paymentsPage.includes("月度邀请封顶") &&
       paymentsPage.includes("occurrence_count") &&
       paymentsPage.includes("支付事件不匹配"),
-    "ops payment page must surface trial, stuck intent, referral, points, and monthly-cap risk signals",
+    "ops payment page must surface trial, stuck intent and points risk signals without referral rewards",
   );
   assert(
     billingRiskRoute.includes("requireOpsProxyAuth") &&

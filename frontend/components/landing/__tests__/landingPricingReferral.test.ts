@@ -135,7 +135,7 @@ export function runTests() {
   assert(!source.includes("Request API") && !source.includes("申请 API"), "landing page must not invite users to buy or request API access");
   assert(source.includes("Team") && source.includes("团队"), "landing page must describe the Team tier");
   assert(source.includes("Trial") && source.includes("Pro") && source.includes("API") && source.includes("Team"), "landing pricing ladder must clearly name Trial / Pro / API / Team");
-  assert(source.includes("20 USDC") && source.includes("+3500 积分"), "landing page must describe referral discount and reward");
+  assert(!source.includes("20 USDC") && !source.includes("+3500 积分"), "landing page must remove referral discount and reward copy");
   assert(!source.includes("AI 气象证据链解读"), "legacy AI evidence-chain wording must be removed");
   assert(!source.includes("AI weather evidence"), "legacy AI evidence wording must be removed");
   assert(!source.includes("$10"), "legacy $10/month pricing must be removed from landing page");

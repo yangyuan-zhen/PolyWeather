@@ -176,3 +176,43 @@ class AdminMixin:
         except Exception as exc:
             logger.warning(f"supabase profile users batch query error users={len(user_ids)}: {exc}")
             return {}
+
+
+    def grant_points_to_user(self, user_id: str, points: int) -> Dict[str, object]:
+        """Grant points to a user, falling back to Supabase user_metadata."""
+        user_key = str(user_id or "").strip().lower()
+        amount = int(points or 0)
+        if not user_key:
+            return {"ok": False, "reason": "invalid_user"}
+        if amount <= 0:
+            return {"ok": False, "reason": "invalid_points"}
+
+        try:
+            from src.database.db_manager import DBManager
+
+            db_result = DBManager().grant_points_by_supabase_user_id(user_key, amount)
+        except Exception as exc:
+            db_result = {"ok": False, "reason": f"bot_db_error:{exc}"}
+        if bool(db_result.get("ok")):
+            return {
+                "ok": True,
+                "source": "bot_db",
+                "points_before": int(db_result.get("points_before") or 0),
+                "points_added": amount,
+                "points_after": int(db_result.get("points_after") or 0),
+            }
+
+        user_obj = self._admin_get_user(user_key)
+        metadata = dict(user_obj.get("user_metadata") or {})
+        before = self._extract_points_from_metadata(metadata)
+        after = before + amount
+        metadata["points"] = after
+        metadata["total_points"] = after
+        self._admin_update_user_metadata(user_key, metadata)
+        return {
+            "ok": True,
+            "source": "supabase_metadata",
+            "points_before": before,
+            "points_added": amount,
+            "points_after": after,
+        }

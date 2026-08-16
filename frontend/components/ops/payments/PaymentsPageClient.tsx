@@ -151,7 +151,6 @@ export function PaymentsPageClient() {
   }));
   const riskSummary = risk?.summary ?? {};
   const riskIssues = risk?.issues ?? [];
-  const referralRewards = risk?.recent_referral_rewards ?? [];
   const hasRisk = Number(riskSummary.issues ?? 0) > 0;
 
   return (
@@ -167,7 +166,7 @@ export function PaymentsPageClient() {
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2">
             {hasRisk ? <AlertTriangle className="h-4 w-4 text-amber-500" /> : <ShieldCheck className="h-4 w-4 text-emerald-500" />}
-            支付与邀请风控流水
+            支付风控流水
           </CardTitle>
           <span className="text-xs text-slate-500">最近 {risk?.window_days ?? 30} 天 · {compactDate(risk?.checked_at)}</span>
         </CardHeader>
@@ -178,8 +177,6 @@ export function PaymentsPageClient() {
             <RiskStat label="试用漏开" value={Number(riskSummary.trial_gaps ?? 0)} sub="后端试用/订阅证据缺失" />
             <RiskStat label="支付异常" value={Number(riskSummary.payment_incidents ?? incidents.length)} sub="未标记处理" />
             <RiskStat label="积分异常" value={Number(riskSummary.points_discount_issues ?? 0)} sub="确认后未扣/少扣" />
-            <RiskStat label="推荐异常" value={Number(riskSummary.referral_settlement_issues ?? 0)} sub="转化无奖励记录" />
-            <RiskStat label="上限命中" value={Number(riskSummary.monthly_cap_hits ?? 0)} sub="月度邀请封顶" />
           </div>
 
           {risk?.query_errors?.length ? (
@@ -266,42 +263,6 @@ export function PaymentsPageClient() {
           </CardContent>
         </Card>
       </div>
-
-      <Card>
-        <CardHeader><CardTitle>推荐奖励结算 ({referralRewards.length})</CardTitle></CardHeader>
-        <CardContent>
-          {referralRewards.length === 0 ? (
-            <span className="text-sm text-slate-500">最近没有推荐奖励记录</span>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-left text-slate-500">
-                    <th className="py-2 pr-4 font-bold">ID</th>
-                    <th className="py-2 pr-4 font-bold">邀请人</th>
-                    <th className="py-2 pr-4 font-bold">被邀请人</th>
-                    <th className="py-2 pr-4 font-bold">奖励</th>
-                    <th className="py-2 pr-4 font-bold">Intent</th>
-                    <th className="py-2 pr-4 font-bold">时间</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {referralRewards.slice(0, 20).map((row, index) => (
-                    <tr key={`${row.id}-${index}`} className="border-b border-slate-100">
-                      <td className="py-2 pr-4 font-mono text-xs text-slate-500">{String(row.id ?? "—")}</td>
-                      <td className="py-2 pr-4 font-mono text-xs text-slate-500">{String(row.referrer_user_id ?? "—").slice(0, 10)}...</td>
-                      <td className="py-2 pr-4 font-mono text-xs text-slate-500">{String(row.referred_user_id ?? "—").slice(0, 10)}...</td>
-                      <td className="py-2 pr-4 text-emerald-700 font-bold">+{Number(row.reward_points ?? 0).toLocaleString()} 分</td>
-                      <td className="py-2 pr-4 font-mono text-xs text-blue-700">{String(row.payment_intent_id ?? "—").slice(0, 14)}</td>
-                      <td className="py-2 pr-4 whitespace-nowrap text-xs text-slate-500">{compactDate(String(row.created_at ?? ""))}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader><CardTitle>支付异常 ({incidents.length})</CardTitle></CardHeader>

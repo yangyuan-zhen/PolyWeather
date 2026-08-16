@@ -5,10 +5,6 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
-class ReferralApplyRequest(BaseModel):
-    code: str = Field(..., min_length=3, max_length=32)
-
-
 class AnalyticsEventRequest(BaseModel):
     event_type: str = Field(..., min_length=3, max_length=64)
     client_id: Optional[str] = Field(default=None, max_length=128)

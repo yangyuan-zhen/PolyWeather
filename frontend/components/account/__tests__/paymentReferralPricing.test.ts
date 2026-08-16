@@ -33,14 +33,13 @@ export function runTests() {
   );
 
   assert(
-    accountCopy.includes("3天试用") &&
-      accountCopy.includes("邀请码"),
-    "account copy must describe trial limits and referral code UI",
+    accountCopy.includes("3天试用") && !accountCopy.includes("邀请码"),
+    "account copy must describe trial limits and remove referral code UI",
   );
   assert(
-    accountCenter.includes("copy.referralInviteLimit") &&
-      accountCenter.includes("applyReferralCode"),
-    "account center must expose referral controls",
+    !accountCenter.includes("applyReferralCode") &&
+      !accountCenter.includes("referralInviteLimit"),
+    "account center must not expose referral controls",
   );
   assert(
     accountCenter.includes("pro_quarterly") &&
@@ -49,12 +48,13 @@ export function runTests() {
     "account center must show monthly and quarterly Pro prices",
   );
   assert(
-    accountCopy.includes("20 USDC") &&
-      accountCopy.includes("+3500 积分") &&
+    !accountCopy.includes("20 USDC") &&
+      !accountCopy.includes("+3500 积分") &&
+      !accountCopy.includes("邀请首月") &&
       accountCopy.includes("月付订单最多抵扣 3 USDC") &&
       accountCopy.includes("季度订单最多抵扣 8 USDC") &&
       !accountCopy.includes("群内有效发言"),
-    "account copy must describe balanced referral points and remove group-message points",
+    "account copy must remove referral rewards and keep points discount rules",
   );
   assert(
     !useAccountPayment.includes("monthlyPlanList") &&
@@ -70,8 +70,9 @@ export function runTests() {
   assert(
     !useBilling.includes("telegram") &&
       !useBilling.includes("telegramGroupPriceApplies") &&
-      !useBilling.includes("bind_token"),
-    "billing hook must not read Telegram group pricing or bind-token flows",
+      !useBilling.includes("bind_token") &&
+      !useBilling.includes("referral"),
+    "billing hook must not read Telegram group pricing, bind-token or referral flows",
   );
   assert(
     !accountCenter.includes(["private", "Group", "Monthly", "Plan"].join("")) &&
@@ -89,8 +90,8 @@ export function runTests() {
     "payment management must display payment amounts as USDC without relying on the removed checkout overlay",
   );
   assert(
-    types.includes("ReferralSummary") &&
-      types.includes("referral?: ReferralSummary | null") &&
+    !types.includes("ReferralSummary") &&
+      !types.includes("referral?: ReferralSummary") &&
       !types.includes("TelegramPricing") &&
       !types.includes("telegram_pricing") &&
       !types.includes("is_private_group_member") &&
@@ -98,6 +99,6 @@ export function runTests() {
       !types.includes("weekly_rank") &&
       types.includes("duration_days: number") &&
       types.includes("max_discount_usdc_by_plan"),
-    "account auth and payment types must include referral summary and plan durations, without Telegram pricing or weekly leaderboard fields",
+    "account auth and payment types must exclude referral, Telegram pricing and weekly leaderboard fields",
   );
 }

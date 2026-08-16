@@ -8,8 +8,6 @@ from typing import Any, Dict, List, Optional
 
 from web3 import Web3
 
-from src.auth.supabase_entitlement import SUPABASE_ENTITLEMENT
-from src.payments.chain_config import REFERRAL_FIRST_MONTH_DISCOUNT_USDC
 from src.payments.checkout.models import PaymentCheckoutError, PaymentIntentRecord
 from src.payments.checkout.admin import _format_decimal
 
@@ -82,55 +80,6 @@ class IntentMixin:
             "amount_usdc_decimal": amount_dec,
         }
 
-    def _get_pending_referral_attribution(self, user_id: str) -> Optional[Dict[str, Any]]:
-        try:
-            row = SUPABASE_ENTITLEMENT.get_pending_referral_attribution(user_id)
-            return dict(row) if isinstance(row, dict) else None
-        except Exception:
-            return None
-
-    def _has_prior_paid_subscription(self, user_id: str) -> bool:
-        try:
-            return bool(SUPABASE_ENTITLEMENT.has_paid_subscription(user_id))
-        except Exception:
-            return False
-
-    def _apply_referral_pricing(
-        self,
-        user_id: str,
-        plan: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        out = dict(plan)
-        attribution = self._get_pending_referral_attribution(user_id)
-        if not attribution or self._has_prior_paid_subscription(user_id):
-            return out
-
-        out["referral_attribution"] = {
-            "id": attribution.get("id"),
-            "code": str(attribution.get("code") or "").strip().upper(),
-            "referrer_user_id": str(attribution.get("referrer_user_id") or "").strip(),
-            "referred_user_id": user_id,
-        }
-        if str(out.get("plan_code") or "").strip().lower() != "pro_monthly":
-            return out
-
-        base_amount = _parse_decimal(out.get("amount_usdc_decimal"), Decimal("0"))
-        discount = min(REFERRAL_FIRST_MONTH_DISCOUNT_USDC, base_amount)
-        discounted = base_amount - discount
-        if discount <= 0 or discounted <= 0:
-            return out
-
-        out["amount_before_discount_usdc_decimal"] = base_amount
-        out["amount_usdc_decimal"] = discounted
-        out["amount_usdc"] = _format_decimal(discounted)
-        out["referral_discount"] = {
-            "discount_usdc": _format_decimal(discount),
-            "amount_before_discount_usdc": _format_decimal(base_amount),
-            "amount_after_discount_usdc": _format_decimal(discounted),
-            "reason": "first_month_referral",
-        }
-        return out
-
     def _build_tx_payload(self, intent: PaymentIntentRecord) -> Dict[str, Any]:
         contract = self._get_contract(intent.receiver_address, intent.chain_id)
         tx_data = contract.encode_abi(
@@ -169,7 +118,7 @@ class IntentMixin:
     ) -> Dict[str, Any]:
         self._ensure_enabled()
         selected_plan = self._select_plan(plan_code)
-        plan = self._apply_referral_pricing(user_id, selected_plan)
+        plan = selected_plan
         selected_token = self._resolve_supported_token(token_address, chain_id)
         selected_chain_id = int(selected_token.chain_id)
         mode = str(payment_mode or "strict").strip().lower()
@@ -211,12 +160,11 @@ class IntentMixin:
             "amount_before_discount_usdc_decimal",
             plan_amount_usdc,
         )
-        referral_discount_applied = isinstance(plan.get("referral_discount"), dict)
         redemption = self._build_points_redemption(
             user_id=user_id,
             plan_code=str(plan.get("plan_code") or plan_code),
             plan_amount_usdc=plan_amount_usdc,
-            use_points=bool(use_points) and not referral_discount_applied,
+            use_points=bool(use_points),
             requested_points_to_consume=points_to_consume,
         )
         final_amount_usdc = redemption["pay_amount_usdc"]
@@ -231,10 +179,6 @@ class IntentMixin:
         combined_metadata["chain_id"] = selected_chain_id
         combined_metadata["chain_code"] = selected_token.chain_code
         combined_metadata["chain_name"] = selected_token.chain_name
-        if isinstance(plan.get("referral_attribution"), dict):
-            combined_metadata["referral_attribution"] = plan["referral_attribution"]
-        if isinstance(plan.get("referral_discount"), dict):
-            combined_metadata["referral_discount"] = plan["referral_discount"]
         receiver_address = (
             selected_token.direct_receiver_address
             if mode == "direct"

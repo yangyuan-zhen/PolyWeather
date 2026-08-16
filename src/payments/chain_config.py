@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from decimal import Decimal
 from typing import Any, Dict
 
 DEFAULT_POLYGON_CHAIN_ID = 137
@@ -77,8 +76,6 @@ DEFAULT_PLAN_CATALOG: Dict[str, Dict[str, Any]] = {
     "pro_monthly": {"plan_id": 101, "amount_usdc": "29.9", "duration_days": 30},
     "pro_quarterly": {"plan_id": 102, "amount_usdc": "79.9", "duration_days": 90},
 }
-
-REFERRAL_FIRST_MONTH_DISCOUNT_USDC = Decimal("9.9")
 
 DEFAULT_POINTS_MAX_DISCOUNT_BY_PLAN: Dict[str, int] = {
     "pro_monthly": 3,

@@ -10,9 +10,6 @@ export function createAccountCopy(isEn: boolean): Record<string, string> {
       guestUser: isEn ? "Signed-out account" : "未登录账户",
       joinedAt: isEn ? "Joined" : "加入时间",
       totalPoints: isEn ? "Total Points" : "总积分 (荣誉)",
-      weeklyPoints: isEn ? "This Month Invites" : "本月有效邀请",
-      weeklyRank: isEn ? "Monthly Cap" : "月度上限",
-      weeklyRewards: isEn ? "Referral Rewards" : "邀请奖励",
       membershipDetails: isEn ? "Membership Details" : "会员权限详情",
       identityStatus: isEn ? "Identity Status" : "身份状态",
       accountFeedbackTitle: isEn ? "My Feedback" : "我的反馈",
@@ -49,24 +46,6 @@ export function createAccountCopy(isEn: boolean): Record<string, string> {
       monthlyPlan: isEn ? "Monthly" : "月付",
       quarterlyPlan: isEn ? "Quarterly" : "季度",
       trialBadge: isEn ? "3-day trial" : "3天试用",
-      referralTitle: isEn ? "Referral Code" : "邀请码",
-      referralMyCode: isEn ? "My invite code" : "我的邀请码",
-      referralApplyLabel: isEn ? "Use invite code" : "使用邀请码",
-      referralApplyPlaceholder: isEn ? "Enter invite code" : "输入邀请码",
-      referralApplyButton: isEn ? "Apply" : "应用",
-      referralApplied: isEn
-        ? "Referral code applied. Your first monthly payment is now discounted."
-        : "邀请码已应用，首月 Pro 将按邀请价结算。",
-      referralApplyFailed: isEn ? "Failed to apply referral code" : "邀请码应用失败",
-      referralDiscountHint: isEn
-        ? "Invite discount: first monthly Pro is 20 USDC."
-        : "邀请首月价：Pro 月付 20 USDC。",
-      referralRewardHint: isEn
-        ? "When an invited user pays for Pro, you receive +3500 points."
-        : "被邀请人成功付费后，邀请人获得 +3500 积分。",
-      referralInviteLimit: isEn
-        ? "Monthly referral reward cap: 10 paid invites, up to +35000 points."
-        : "每月最多 10 个有效付费邀请奖励，最高 +35000 积分。",
       paymentToken: isEn ? "Payment Token" : "支付币种",
       paymentAccount: isEn ? "Subscription Account" : "订阅归属账号",
       paymentWallet: isEn ? "Paying Wallet" : "付款钱包",
@@ -309,8 +288,8 @@ export function createAccountCopy(isEn: boolean): Record<string, string> {
         : "加载支付配置失败: {raw}",
       // ── Points / Footer ────────────────────────────────────────────────
       pointsRule: isEn
-        ? "Points rule: points are earned through successful paid referrals only. 500 points = 1 USDC. Monthly orders can use up to 3 USDC off; quarterly orders can use up to 8 USDC off."
-        : "积分规则：积分仅通过有效付费邀请获得。500 积分 = 1 USDC。月付订单最多抵扣 3 USDC，季度订单最多抵扣 8 USDC。",
+        ? "Points rule: 500 points = 1 USDC. Monthly orders can use up to 3 USDC off; quarterly orders can use up to 8 USDC off."
+        : "积分规则：500 积分 = 1 USDC。月付订单最多抵扣 3 USDC，季度订单最多抵扣 8 USDC。",
       pointsDiscount: isEn
         ? "Available: {points} points discounting ${amount}. Applied automatically on renewal."
         : "当前可用 {points} 积分抵扣 ${amount}，续费时会自动生效。",

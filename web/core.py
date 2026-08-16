@@ -125,7 +125,6 @@ from web.schemas.auth import (  # noqa: E402, F401
     AnalyticsEventRequest,
     FeedbackRewardRequest,
     GrantPointsRequest,
-    ReferralApplyRequest,
     UserFeedbackRequest,
 )
 from web.schemas.payments import (  # noqa: E402, F401

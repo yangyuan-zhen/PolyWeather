@@ -496,7 +496,7 @@ def test_ops_source_health_flags_expected_official_sources(monkeypatch):
     )
 
 
-def test_ops_billing_risk_surfaces_trial_payment_referral_and_points(monkeypatch):
+def test_ops_billing_risk_surfaces_trial_payment_and_points(monkeypatch):
     from src.database.db_manager import DBManager
 
     now = datetime.now(timezone.utc)
@@ -530,42 +530,6 @@ def test_ops_billing_risk_surfaces_trial_payment_referral_and_points(monkeypatch
                         }
                     },
                 },
-            ]
-        if table == "referral_attributions":
-            return [
-                {
-                    "id": 1,
-                    "code": "CAP1",
-                    "referrer_user_id": "referrer-cap",
-                    "referred_user_id": "referred-cap",
-                    "status": "capped",
-                    "updated_at": recent,
-                    "created_at": recent,
-                },
-                {
-                    "id": 2,
-                    "code": "MISS1",
-                    "referrer_user_id": "referrer-missing",
-                    "referred_user_id": "referred-missing",
-                    "status": "converted",
-                    "converted_payment_intent_id": "intent-converted",
-                    "converted_at": recent,
-                    "updated_at": recent,
-                    "created_at": recent,
-                },
-            ]
-        if table == "referral_rewards":
-            return [
-                {
-                    "id": 10,
-                    "referral_attribution_id": 99,
-                    "referrer_user_id": "referrer-ok",
-                    "referred_user_id": "referred-ok",
-                    "payment_intent_id": "intent-ok",
-                    "reward_points": 3500,
-                    "reward_days": 0,
-                    "created_at": recent,
-                }
             ]
         if table == "trial_claims":
             return []
@@ -616,15 +580,11 @@ def test_ops_billing_risk_surfaces_trial_payment_referral_and_points(monkeypatch
     assert summary["stuck_intents"] == 1
     assert summary["trial_gaps"] == 1
     assert summary["points_discount_issues"] == 1
-    assert summary["referral_settlement_issues"] == 1
-    assert summary["monthly_cap_hits"] == 1
     assert summary["payment_incidents"] == 1
-    assert payload["recent_referral_rewards"][0]["reward_points"] == 3500
     assert {
         "payment_intent",
         "signup_trial",
         "points_redemption",
-        "referral",
     }.issubset({issue["category"] for issue in payload["issues"]})
 
 
@@ -3491,13 +3451,6 @@ def test_auth_me_entitlement_scope_skips_non_access_profile_sections(monkeypatch
         raising=False,
     )
     monkeypatch.setattr(
-        web_core.SUPABASE_ENTITLEMENT,
-        "get_referral_summary",
-        lambda user_id: (_ for _ in ()).throw(
-            AssertionError("entitlement scope must not block on referral summary"),
-        ),
-    )
-    monkeypatch.setattr(
         routes,
         "_resolve_auth_points",
         lambda request: (_ for _ in ()).throw(
@@ -3516,7 +3469,6 @@ def test_auth_me_entitlement_scope_skips_non_access_profile_sections(monkeypatch
     assert payload["subscription_active"] is True
     assert payload["subscription_plan_code"] == "pro_monthly"
     assert payload["points"] == 7
-    assert payload["referral"] is None
 
 
 def test_backend_entitlement_token_binds_forwarded_supabase_identity(monkeypatch):
