@@ -351,4 +351,4 @@ docker compose logs -f polyweather | egrep "payment event loop started|payment c
 
 本仓库代码自 `2026-03-30` 起采用 `AGPL-3.0-only`。对外公开文档仅覆盖通用 API 契约；生产商业策略参数、私有运营阈值与托管服务能力不在公开文档披露。
 
-详见：[AGPL-3.0 与商用边界](OPEN_CORE_POLICY.md)
+详见：[商业化与开源边界](COMMERCIALIZATION.md)

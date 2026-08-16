@@ -10,7 +10,7 @@
 
 ![PolyWeather 实时终端](frontend/public/static/web.webp)
 
-## 当前产品状态（2026-08-01）
+## 当前产品状态（2026-08-16）
 
 - 已上线 DEB 正态概率引擎：整度概率桶由 `deb_normal` 正态引擎输出。
 - 已移除 WeatherNext2：Google WeatherNext2 GCS Zarr worker 下线，概率与预报基于 Open-Meteo 模型套件上的 DEB 融合。
@@ -20,8 +20,13 @@
 - 已上线自动补单：事件监听 + 周期确认双链路。
 - 已上线支付运行态与审计接口：`/api/payments/runtime`。
 - 已上线轻量运营后台：`/ops`（会员、用户反馈处理、积分、补分、支付异常单）。
-- 已上线轻量可观测性：`/healthz`、`/api/system/status`、`/metrics`。
 - 轻量可观测性：`/healthz`、`/api/system/status`、`/api/system/cache-status`、`/api/system/priority-warm`、`/metrics`（ops 鉴权）+ `scripts/check_ops_health.py` 巡检（14 个外部服务探测）。
+- 已上线预测 API：`/api/cities/deb-forecast` 输出 DEB 预测 + 多模型 3 天日报（entitlement token 鉴权），结果缓存 5 分钟秒回；济南 ZSJN / 郑州 ZHCC 已入 registry（52 城），深圳即流浮山（HKO 站）。
+- 终端图表支持 3 天（72h）窗口：观测 / 模型共识 median-min-max / DEB 锚点；x 轴每 6 小时刻度 + 午夜日期标记。
+- 机场 METAR 报文曲线已全部移除（用户需求）：仅保留结算源、官方增强网络（JMA / HKO / MGM 等）与 TAF 信号曲线。
+- DEB 校准改进：温度段独立 σ（≥37°C cov90 0.820→0.893）、城市偏差近 14 天加权（模式切换 2 周收敛）、推理校正上限 3→5°C（7 月高估 4-6°C 不再截断）。
+- 终端新用户三步引导（实况锚点 → DEB → 市场概率）；落地页与图片体积优化（Load 7.7s → 4.4s）。
+- 支付地址白名单拆分：合约模式校验新合约 `0x1fD90A`、manual 模式校验直转 EOA `0x351a1bca`。
 - 实时终端已切换到可重放事件流：可见城市图表通过 `/api/events?cities=...&since_revision=...` 订阅 `city_observation_patch.v1`，生产环境使用 Redis Stream 做短窗口 replay，本地/单进程可回退 SQLite event log。
 - 图表刷新由实测事件驱动：SSE patch 直接合并到当前曲线，不弹 loading 遮罩；只有可见图表启用 60 秒无 patch 兜底，浏览器后台返回前台时会主动补齐最新 detail。
 - 城市图表默认展示“全天”，可选“高温”窗口由 DEB hourly path 推导；所有图表横轴都按城市当地时间展示，不按用户浏览器时区。
@@ -47,7 +52,7 @@
 - 市场信号中的“模型-市场差”口径为 `模型概率 - 市场隐含概率`，正值表示天气概率高于市场报价，负值表示市场已经更充分计价。
 - 概率区已改为“校准模型概率”；默认展示 DEB 正态概率引擎（`deb_normal`）输出，legacy 高斯作为回退分支，模型共识作为辅助参考。
 - 今日日内结构解读以规则与结构化信号为主，AI 文案只作为可降级辅助层，不替代实测、DEB、TAF 或结算逻辑。
-- 前端设计系统全面重构：统一 CSS token 体系、消除 !important 滥用（134→49）、合并断点（18→10）、数百处硬编码颜色迁移至 CSS 变量、添加 ARIA 无障碍属性和键盘导航。完整审查记录见 `docs/frontend-ui-design-review.md`。
+- 前端设计系统全面重构：统一 CSS token 体系、消除 !important 滥用（134→49）、合并断点（18→10）、数百处硬编码颜色迁移至 CSS 变量、添加 ARIA 无障碍属性和键盘导航。完整审查记录见 `docs/reviews/frontend-ui-design-review.md`。
 
 ## 许可证与商用边界（重要）
 
@@ -57,11 +62,11 @@
 - 不包含在仓库中的部分：生产私有数据、商业风控规则、运营阈值、收费策略细节、内部对账与增长工具、内部错价策略、仓位规则与交易 Bot 执行代码。
 - 商标、品牌、域名、生产数据库与托管服务运营能力，不因代码许可证一并授权。
 
-详细见：[AGPL-3.0 与商用边界](docs/OPEN_CORE_POLICY.md)
+详细见：[商业化与开源边界](docs/COMMERCIALIZATION.md)
 
 ## 核心能力
 
-- 聚合 51 个监控城市的实测与预报数据。
+- 聚合 52 个监控城市的实测与预报数据。
 - DEB（Dynamic Error Balancing）融合多模型最高温。
 - 构建 DEB 加权小时共识曲线，用于峰值窗口判断和图表默认 DEB 展示。
 - 输出结算导向校准概率分布（`mu` + 温度桶），主路径为 DEB 正态引擎（`deb_normal`），legacy 高斯校准保留为回退。
@@ -86,7 +91,7 @@ flowchart LR
     WX --> MGM["MGM（土耳其站网）"]
     WX --> JMA["JMA AMeDAS（日本）"]
     WX --> OM["Open-Meteo"]
-    WX --> SETTLE["NOAA Synoptic / HKO / IMGW（结算源）"]
+    WX --> SETTLE["AviationWeather METAR / HKO / IMGW（结算源）"]
 
     API --> ANA["DEB + 小时共识 + 概率 + 市场扫描"]
     API --> SSE["SSE /api/events"]
@@ -96,10 +101,10 @@ flowchart LR
     ANA --> STATE["SQLite runtime state<br/>legacy files only for migration/export fallback"]
 ```
 
-## 监控城市（51）
+## 监控城市（52）
 
 - 欧洲/中东/非洲：Ankara、Istanbul、Moscow、London、Paris、Munich、Milan、Warsaw、Madrid、Tel Aviv、Amsterdam、Helsinki、Lagos、Cape Town、Jeddah
-- 亚太：Seoul、Busan、Hong Kong、Lau Fau Shan、Taipei、Shanghai、Beijing、Wuhan、Chengdu、Chongqing、Shenzhen、Guangzhou、Singapore、Tokyo、Kuala Lumpur、Jakarta、Manila、Wellington
+- 亚太：Seoul、Busan、Hong Kong、Taipei、Shanghai、Beijing、Wuhan、Chengdu、Chongqing、Shenzhen（流浮山 HKO 结算）、Guangzhou、Jinan、Zhengzhou、Singapore、Tokyo、Kuala Lumpur、Jakarta、Manila、Wellington
 - 美洲：Toronto、New York、Los Angeles、San Francisco、Aurora、Austin、Houston、Chicago、Dallas、Miami、Atlanta、Seattle、Mexico City、Buenos Aires、Sao Paulo、Panama City
 - 南亚：Lucknow、Karachi
 
@@ -122,8 +127,11 @@ npm run dev
 ## 近期更新
 
 - 概率主引擎为 DEB 正态引擎（`deb_normal`）。
-- WeatherNext2 已移除：Google WeatherNext2 worker 及其侧边栏入口下线，概率与预报基于 Open-Meteo 模型套件上的 DEB 融合。
-- 数据源清理：Wunderground、台北 CWA、AMSC AWOS（中国跑道）、NMC/CMA（中国内地）已移除；深圳结算源切换为流浮山 HKO（LFS）。
+- 预测 API 已上线（`/api/cities/deb-forecast`，结果缓存 5 分钟）。
+- 机场 METAR 报文曲线全部移除；WeatherNext2 已移除；Telegram 群依赖与积分邀请机制已下线。
+- 数据源清理：Wunderground、台北 CWA、AMSC AWOS（中国跑道）、NMC/CMA（中国内地）已移除；深圳结算源切换为流浮山 HKO（LFS）；NOAA 结算源切为免费 aviationweather METAR。
+- DEB 校准：温度段独立 σ、近 14 天加权城市偏差、推理校正上限 3→5°C。
+- 服务端稳定性：SQLite 18.9GB → 2GB（队列/观测/快照清理 + VACUUM）、`load_history` 缓存、预测 API 事件循环安全。
 - 高斯概率 tooltip 已改为展示完整温度区间概率分布，不再只显示最高概率的单个区间；主图继续聚焦实测和预测曲线。
 - 用户反馈已形成产品闭环：终端提交会自动附带图表上下文，用户可在站内查看处理状态，运营侧可为真实、有建设性的反馈发放积分奖励。
 
@@ -199,22 +207,19 @@ POLYWEATHER_OPS_ADMIN_EMAILS=yhrsc30@gmail.com
 
 - 英文总览：[README.md](README.md)
 - API 文档（中文）：[docs/API_ZH.md](docs/API_ZH.md)
-- 商业化说明：[docs/COMMERCIALIZATION.md](docs/COMMERCIALIZATION.md)
-- AGPL-3.0 边界：[docs/OPEN_CORE_POLICY.md](docs/OPEN_CORE_POLICY.md)
+- 商业化与开源边界：[docs/COMMERCIALIZATION.md](docs/COMMERCIALIZATION.md)
 - Supabase 接入：[docs/SUPABASE_SETUP_ZH.md](docs/SUPABASE_SETUP_ZH.md)
 - 配置与密钥管理：[docs/CONFIGURATION_ZH.md](docs/CONFIGURATION_ZH.md)
 - 前端部署（Docker / VPS）：[docs/FRONTEND_DEPLOYMENT_ZH.md](docs/FRONTEND_DEPLOYMENT_ZH.md)
 - 技术债：[docs/TECH_DEBT_ZH.md](docs/TECH_DEBT_ZH.md)
-- 机场实时数据源：[docs/AIRPORT_REALTIME_SOURCES.md](docs/AIRPORT_REALTIME_SOURCES.md)
-- 机场市场监控（中文）：[docs/AIRPORT_MARKET_MONITOR_ZH.md](docs/AIRPORT_MARKET_MONITOR_ZH.md)
-- 外部服务总览：[docs/SERVICES_ZH.md](docs/SERVICES_ZH.md)
+- 数据源总览（含机场高频）：[docs/DATA_SOURCES_ZH.md](docs/DATA_SOURCES_ZH.md)
+- 运维手册（外部服务 / 运营后台 / 监控）：[docs/OPS_ZH.md](docs/OPS_ZH.md)
 - 支付合约验证：[docs/payments/POLYGONSCAN_VERIFY.md](docs/payments/POLYGONSCAN_VERIFY.md)
 - 支付审计说明：[docs/payments/PAYMENT_AUDIT_ZH.md](docs/payments/PAYMENT_AUDIT_ZH.md)
 - 支付 V2 升级方案：[docs/payments/PAYMENT_UPGRADE_V2_ZH.md](docs/payments/PAYMENT_UPGRADE_V2_ZH.md)
-- 运营后台说明：[docs/OPS_ADMIN_ZH.md](docs/OPS_ADMIN_ZH.md)
-- 外部监控说明：[docs/MONITORING_ZH.md](docs/MONITORING_ZH.md)
+- 设计/产品/数据评审归档：[docs/reviews/](docs/reviews/)
 - DEB 模型家族去重规则：[docs/MODEL_STACK_AND_DEB_ZH.md](docs/MODEL_STACK_AND_DEB_ZH.md)
-- 深度评估报告：[docs/deep-research-report.md](docs/deep-research-report.md)
+- 深度评估报告：[docs/reviews/deep-research-report.md](docs/reviews/deep-research-report.md)
 - 发布流程：[RELEASE.md](RELEASE.md)
 - 变更记录：[CHANGELOG.md](CHANGELOG.md)
 

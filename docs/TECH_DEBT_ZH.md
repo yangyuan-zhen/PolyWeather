@@ -33,7 +33,7 @@ flowchart TD
 
 ## 2. 近期已关闭
 
-- **前端设计系统工程债务（2026-05-10）**：消除 !important 滥用（134→49）、统一断点体系（18→10）、数百处硬编码颜色迁移至 CSS 变量、修复 accent-green 蓝色 Bug、添加 ARIA 无障碍属性、去重 @keyframes、移除死代码（1,697 行）。详见 `docs/frontend-ui-design-review.md`。
+- **前端设计系统工程债务（2026-05-10）**：消除 !important 滥用（134→49）、统一断点体系（18→10）、数百处硬编码颜色迁移至 CSS 变量、修复 accent-green 蓝色 Bug、添加 ARIA 无障碍属性、去重 @keyframes、移除死代码（1,697 行）。详见 `docs/reviews/frontend-ui-design-review.md`。
 - 支付主链路已上线（intent -> submit -> confirm）。
 - 支付自动补单已上线（Event Loop + Confirm Loop，循环参数可配置）。
 - 支付事件重放脚本已补齐。

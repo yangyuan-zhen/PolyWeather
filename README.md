@@ -21,17 +21,16 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 
 [![Star History Chart](https://api.star-history.com/svg?repos=yangyuan-zhen/PolyWeather&type=Date)](https://star-history.com/#yangyuan-zhen/PolyWeather&Date)
 
-## Product Status (2026-08-01)
+## Product Status (2026-08-16)
 
+- Forecast API live: `/api/cities/deb-forecast` returns per-city DEB prediction + 3-day multi-model daily forecasts (entitlement-token auth); results are cached for 5 minutes so repeat calls answer in ~1.4s.
 - DEB normal probability engine live: integer-degree probability buckets come from the DEB normal engine (`deb_normal`).
 - WeatherNext2 removed: the Google WeatherNext2 GCS Zarr worker was retired; probability and forecasts rely on the DEB blend over the Open-Meteo model suite.
-- Subscription live: `Pro Monthly 29.9 USDC / 30 days` and `Pro Quarterly 79.9 USDC / 90 days`.
-- Referral pricing live: invited users can get the first monthly Pro at `20 USDC`; inviters receive `3500` points after a valid first Pro payment, capped at 10 paid invites per month.
-- Points are redeemable for payment discounts (`500 pts = 1 USDC`, monthly max `3 USDC`, quarterly max `8 USDC`). Useful user feedback can also receive manual point rewards through ops.
+- Referral/invite pricing removed; points remain redeemable for payment discounts (`500 pts = 1 USDC`, monthly max `3 USDC`, quarterly max `8 USDC`). Useful user feedback can also receive manual point rewards through ops.
 - Onchain checkout live: Polygon contract checkout (USDC / USDC.e) plus Ethereum mainnet USDC direct-transfer confirmation.
 - Auto-reconciliation live: event listener + periodic confirm loop.
 - Ops dashboard live: `/ops` for memberships, leaderboard, user feedback triage, manual point grants, and payment incident triage.
-- Lightweight observability live: `/healthz`, `/api/system/status`, `/metrics`.
+- Lightweight observability live: `/healthz`, `/api/system/status`, `/api/system/cache-status`, `/api/system/priority-warm`, `/metrics` (ops auth) + `scripts/check_ops_health.py` probes.
 - Realtime terminal live: visible city charts subscribe through `/api/events?cities=...&since_revision=...`, receive `city_observation_patch.v1` SSE patches, and replay short gaps from Redis Stream in production or SQLite fallback in local/single-node mode.
 - Chart refresh is observation-driven: live patches merge into the current chart without a loading overlay; only visible charts run a 60s no-patch fallback, and returning from a background browser tab triggers a foreground catch-up refresh.
 - Temperature charts default to All Day, keep an optional Peak window derived from the DEB hourly path, and render all timestamps in the selected city's local time.
@@ -55,7 +54,14 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 - Browser extension now uses `DEB` for multi-day forecast and stays positioned as a lightweight lead-in to the main site.
 - Official nearby-network layer now covers `MGM` (Turkey), `JMA AMeDAS` (Japan), and `HKO` (Hong Kong).
 - Tokyo now ingests Haneda `JMA AMeDAS` 10-minute temperature as the official enhancement layer.
-- Frontend design system overhauled: unified CSS token system, eliminated `!important` abuse (134→49 in light theme), consolidated breakpoints (18→10), migrated hardcoded colors to CSS variables, added ARIA attributes and focus-visible keyboard navigation. See `docs/frontend-ui-design-review.md` for the full audit trail.
+- Airport METAR report curves fully removed from terminal charts; only settlement-source curves, official networks (JMA/HKO/MGM), and TAF markers remain.
+- Terminal charts gained a 3-day (72h) window: observations, model-consensus median/min/max, DEB anchors; x-axis ticks every 6 hours with midnight date markers.
+- DEB calibration improvements: per-temperature-stratum sigma (>=37C cov90 0.820 -> 0.893), 14-day recency-weighted city bias (regime shifts converge within 2 weeks), inference correction cap raised 3C -> 5C (July's 4-6C systematic over-prediction is no longer truncated).
+- Registry now covers 52 cities: Jinan (ZSJN) and Zhengzhou (ZHCC) added; Shenzhen settles on Lau Fau Shan HKO station (`lau fau shan` maps to `shenzhen`).
+- Service stability: SQLite shrank 18.9GB -> 2GB (failed-queue purge, 30-day retention for raw observations/intraday snapshots, VACUUM); `load_history` caching and event-loop-safe forecast API eliminated the stall/healthz starvation incidents.
+- New-user onboarding tour in the terminal (observation anchor -> DEB -> market probability).
+- Payment receiver whitelist split: contract checkout validates the new contract `0x1fD90A`, manual mode validates the direct EOA `0x351a1bca`.
+- Frontend design system overhauled: unified CSS token system, eliminated `!important` abuse (134→49 in light theme), consolidated breakpoints (18→10), migrated hardcoded colors to CSS variables, added ARIA attributes and focus-visible keyboard navigation. See `docs/reviews/frontend-ui-design-review.md` for the full audit trail.
 
 ## License & Commercial Boundary
 
@@ -65,11 +71,11 @@ This repository is licensed under **GNU AGPL-3.0 only** from `2026-03-30` onward
 - Not included in this repository: private production data, internal operating thresholds, commercial risk rules, pricing strategy details, growth tooling, internal mispricing strategy, position sizing rules, and trading bot execution code.
 - Trademark, brand, domain, production databases, and hosted-service operations are **not** granted by the code license.
 
-See: [AGPL-3.0 & Commercial Boundary](docs/OPEN_CORE_POLICY.md)
+See: [Commercialization & License](docs/COMMERCIALIZATION.md)
 
 ## Core Capabilities
 
-- Aggregates observations and forecasts for 51 monitored cities.
+- Aggregates observations and forecasts for 52 monitored cities.
 - Uses DEB (Dynamic Error Balancing) to blend multi-model highs.
 - Builds a DEB-weighted hourly consensus path for peak-window logic and chart display.
 - Generates settlement-oriented calibrated probability buckets via the DEB normal-distribution engine (`deb_normal`, integer-degree probability `P(T==τ)=Φ((τ+0.5-μ)/σ)-Φ((τ-0.5-μ)/σ)`), with the legacy Gaussian calibration path retained as a fallback.
@@ -97,9 +103,8 @@ flowchart LR
     WX --> MGM["MGM (Turkey station network)"]
     WX --> OM["Open-Meteo"]
     WX --> JMA["JMA AMeDAS (Japan)"]
-    WX --> SETTLE["NOAA Synoptic / HKO / IMGW (settlement)"]
+    WX --> SETTLE["AviationWeather METAR / HKO / IMGW (settlement)"]
 
-    API --> ARB["Polymarket Arbitrage Overview"]
     API --> ANA["DEB + Hourly Consensus + Probability + Market Scan"]
     API --> SSE["SSE /api/events"]
     WX --> SSE
@@ -108,10 +113,10 @@ flowchart LR
     ANA --> STATE["SQLite runtime state"]
 ```
 
-## Monitored Cities (51)
+## Monitored Cities (52)
 
 - Europe / Middle East / Africa: Ankara, Istanbul, Moscow, London, Paris, Munich, Milan, Warsaw, Madrid, Tel Aviv, Amsterdam, Helsinki, Lagos, Cape Town, Jeddah
-- APAC: Seoul, Busan, Hong Kong, Lau Fau Shan, Taipei, Shanghai, Beijing, Qingdao, Wuhan, Chengdu, Chongqing, Shenzhen, Guangzhou, Singapore, Tokyo, Kuala Lumpur, Jakarta, Manila, Wellington
+- APAC: Seoul, Busan, Hong Kong, Taipei, Shanghai, Beijing, Qingdao, Wuhan, Chengdu, Chongqing, Shenzhen (Lau Fau Shan HKO settlement), Guangzhou, Jinan, Zhengzhou, Singapore, Tokyo, Kuala Lumpur, Jakarta, Manila, Wellington
 - Americas: Toronto, New York, Los Angeles, San Francisco, Aurora, Austin, Houston, Chicago, Dallas, Miami, Atlanta, Seattle, Mexico City, Buenos Aires, Sao Paulo, Panama City
 - South Asia: Lucknow, Karachi
 
@@ -207,21 +212,18 @@ Production payment routes are configured by the backend. Polygon remains the def
 - Chinese API guide: [docs/API_ZH.md](docs/API_ZH.md)
 - TAF signal guide (ZH): [docs/TAF_SIGNAL_ZH.md](docs/TAF_SIGNAL_ZH.md)
 - Model stack & DEB (ZH): [docs/MODEL_STACK_AND_DEB_ZH.md](docs/MODEL_STACK_AND_DEB_ZH.md)
-- Commercialization: [docs/COMMERCIALIZATION.md](docs/COMMERCIALIZATION.md)
-- AGPL-3.0 policy: [docs/OPEN_CORE_POLICY.md](docs/OPEN_CORE_POLICY.md)
+- Commercialization & license: [docs/COMMERCIALIZATION.md](docs/COMMERCIALIZATION.md)
+- Data sources overview (ZH): [docs/DATA_SOURCES_ZH.md](docs/DATA_SOURCES_ZH.md)
+- Ops / services / monitoring (ZH): [docs/OPS_ZH.md](docs/OPS_ZH.md)
 - Supabase setup (ZH): [docs/SUPABASE_SETUP_ZH.md](docs/SUPABASE_SETUP_ZH.md)
 - Configuration & secrets (ZH): [docs/CONFIGURATION_ZH.md](docs/CONFIGURATION_ZH.md)
 - Frontend deployment (ZH): [docs/FRONTEND_DEPLOYMENT_ZH.md](docs/FRONTEND_DEPLOYMENT_ZH.md)
 - Tech debt (ZH): [docs/TECH_DEBT_ZH.md](docs/TECH_DEBT_ZH.md)
-- Airport realtime sources: [docs/AIRPORT_REALTIME_SOURCES.md](docs/AIRPORT_REALTIME_SOURCES.md)
-- Airport market monitor (ZH): [docs/AIRPORT_MARKET_MONITOR_ZH.md](docs/AIRPORT_MARKET_MONITOR_ZH.md)
-- Services overview (ZH): [docs/SERVICES_ZH.md](docs/SERVICES_ZH.md)
+- Design & research reviews: [docs/reviews/](docs/reviews/)
 - Payment verification: [docs/payments/POLYGONSCAN_VERIFY.md](docs/payments/POLYGONSCAN_VERIFY.md)
 - Payment audit: [docs/payments/PAYMENT_AUDIT_ZH.md](docs/payments/PAYMENT_AUDIT_ZH.md)
 - Payment V2 upgrade: [docs/payments/PAYMENT_UPGRADE_V2_ZH.md](docs/payments/PAYMENT_UPGRADE_V2_ZH.md)
-- Ops admin guide: [docs/OPS_ADMIN_ZH.md](docs/OPS_ADMIN_ZH.md)
-- Monitoring guide (ZH): [docs/MONITORING_ZH.md](docs/MONITORING_ZH.md)
-- Deep research report: [docs/deep-research-report.md](docs/deep-research-report.md)
+- Ops / services / monitoring guide (ZH): [docs/OPS_ZH.md](docs/OPS_ZH.md)
 - Release process: [RELEASE.md](RELEASE.md)
 - Changelog: [CHANGELOG.md](CHANGELOG.md)
 

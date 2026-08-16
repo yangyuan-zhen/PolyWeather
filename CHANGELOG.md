@@ -1,6 +1,42 @@
 # Changelog
 
-## 1.9.0 - 2026-08-01（待发布）
+## 1.9.0 - 2026-08-16（待发布）
+
+### 预测 API（外部项目接入）
+- **新增 `/api/cities/deb-forecast`**：输出 23 城（10 中国 + 13 国际监控）的 DEB 融合预测 + 多模型 3 天日报（`models_daily`），鉴权同 pro 接口（entitlement token）；`cities` 参数可自定义任意 registry 城市。
+- **结果缓存 5 分钟**：全量计算一次，TTL 内单城/全量请求切片秒回（生产实测冷算 ~11s → 二次调用 ~1.4s）。
+- **事件循环安全**：并发计算改用 asyncio 门控（并发 2），不再阻塞 `/healthz` 与其他请求。
+- **新增 3 城到 registry**：济南 ZSJN、郑州 ZHCC 加入结算与预测；深圳即流浮山（HKO 站），`lau fau shan` 作为别名映射 `shenzhen`，不重复提供。
+
+### 移除机场报文曲线（用户强需求）
+- **METAR 报文曲线全部移除**：前端 1D 图表不再绘制普通 METAR 温度曲线（`metar 系列`），StatsBars 冗余温度块同步隐藏；MADIS 仅保留官方网络（MGM / JMA AMeDAS / HKO / 安卡拉与伊斯坦布尔 MGM fallback）。
+- TAF 信号、官方网络增强曲线（JMA/HKO/MGM 等）与结算源曲线保留。
+
+### DEB 校准与质量改进
+- **温度段独立 σ**：`temp_sigmas` 分层（≥37°C 等温度段独立稳健 σ，样本 ≥30 才产出，旧 stats 兼容回退）；≥37°C cov90 0.820→0.893、chi2 234→205。
+- **近期加权城市偏差**：`train_deb_lead_stats` 城市偏差由全历史中位数改为近 14 天指数衰减加权（0.9^天数），无近期样本回退全历史；7 月高估 → 8 月复热后中国城市偏差 2 周内翻转收敛。
+- **推理校正放开**：`max_adjustment` 3°C → 5°C（7 月多模型系统性高估 4-6°C 不再被截断）、`bias_lookback_days` 30 → 21 天；生产验证 mexico city / madrid / sao paulo 校正从 -3.0 放开至 -5.0。
+- **`load_history` 全量重载风暴修复**：SQLite 模式加缓存命中（此前每次城市分析全表加载 daily_records_store，并发分析打满 CPU 卡死）；reconcile/seed 直写后失效缓存。
+
+### 3 天 72 小时图表
+- 图表新增 3D 时间窗：观测/模型共识 median/min/max/DEB 锚点（`build72hChartData`），detail 构建时缓存缺 hourly 自动补拉（生产 4 城均 72 点）。
+- x 轴每小时刻度 + 午夜日期标记（`M/D`）；修复 72 刻度重叠错位：每 6 小时一个刻度（午夜仍在网格），字号调大。
+
+### 服务端事故修复（2026-08-16 生产事故）
+- **根因**：SQLite 膨胀至 18.9GB（`raw_observation_store` 8.6GB + `intraday_path_snapshots_store` 2.5GB + **312 万行 failed 观察刷新队列**）→ 慢查询与三进程锁竞争阻塞事件循环 → 源站假死（Cloudflare 侧无故障，对外表现为超时）。
+- **恢复**：清空 312 万行 failed 队列并加 `(city, source, status)` 索引；两表重建保留 30 天；训练快照表清空；`VACUUM` 收缩 18.9GB → 2GB；WAL 51GB 回收；磁盘 78G → 27G。
+- **防复发**：`METAR 空响应（204/非 JSON）` 不再中断分析链（降级为缺测）；预测 API 不再阻塞事件循环。
+- 修复后生产稳定：healthz 8ms、CPU <1%（此前周期 100%+ 空转）。
+
+### 新用户引导与性能
+- **终端三步引导**（`TerminalOnboardingTour`）：实况锚点 → DEB → 市场概率，`localStorage polyweather_terminal_onboarding_v1`。
+- 落地页次要路由 `prefetch=false`（Load 7.7s → 4.4s）、`tel.png` → `tel.webp`（352KB → 89KB）、Cloudflare 静态资源 1 年缓存。
+- 支付地址白名单拆分：合约模式校验新合约 `0x1fD90A`、manual 模式校验直转 EOA `0x351a1bca`（修复断链，旧 EOA 59.8 USDC 已取回）。
+
+### 训练与真值链
+- **训练 OOM 修复**：`load_all_rows()` 全量加载 65.9 万行快照 → SQL 聚合 `load_earliest_lead_days()`（内存 3GB → 94MB，cycle 40 分钟 → 3 分钟，samples 3472 → 3586+）。
+- **真值回填恢复**：reconcile 改单城增量（`load_city` / `upsert_record`），生产 `actual_high` 回填至当天。
+- **NOAA 免费接口**：SynopticData（需 token）→ aviationweather METAR（免费），生产零 401。
 
 ### 移除套利对比
 - **Polymarket 套利对比整套下线**：删除 `/api/arbitrage/*` 路由与服务（`web/routers/arbitrage.py`、`web/services/arbitrage_service.py`）、Redis 结果缓存与 warmer 预热、前端 `ArbitrageDashboard` 与侧边栏第 5 项、`arbitrage-client`/`arbitrage-types` 客户端模块。
@@ -128,7 +164,7 @@
 - 移除 dead code（1,697 行）：public/static/style.css + public/legacy/index.html
 - Dashboard.module.css 本地变量桥接至全局 token
 - 清理冗余文档：移除 FRONTEND_REDESIGN_REPORT.md、TECH_DEBT.md 重复文件、AGENTS.md
-- 参考：docs/frontend-ui-design-review.md 完整修复记录
+- 参考：docs/reviews/frontend-ui-design-review.md 完整修复记录
 
 ## 1.5.5 - 2026-04-27
 
