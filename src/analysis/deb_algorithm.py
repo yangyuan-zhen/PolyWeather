@@ -225,6 +225,8 @@ def load_history(filepath):
     mode = get_state_storage_mode()
 
     if mode == STATE_STORAGE_SQLITE:
+        if _history_cache:
+            return _history_cache
         try:
             data = _daily_record_repo.load_all()
             _history_cache = data
@@ -516,6 +518,10 @@ def _reconcile_recent_metar_actual_highs(city_name: str, lookback_days: int = 7)
         if updated > 0:
             for d in [d for d in target_dates if d in city_data]:
                 _daily_record_repo.upsert_record(city_key, d, city_data[d])
+            # 该路径用 load_city（不经 load_history），直接改写 DB 行，
+            # 需要让 load_history 的全量缓存失效，避免读到旧修正。
+            global _history_cache
+            _history_cache = {}
 
         return {
             "ok": True,
@@ -621,6 +627,10 @@ def _reconcile_recent_hko_actual_highs(city_name: str, lookback_days: int = 14):
         if updated > 0:
             for d in [d for d in target_dates if d in city_data]:
                 _daily_record_repo.upsert_record(city_key, d, city_data[d])
+            # 该路径用 load_city（不经 load_history），直接改写 DB 行，
+            # 需要让 load_history 的全量缓存失效，避免读到旧修正。
+            global _history_cache
+            _history_cache = {}
 
         return {
             "ok": True,
@@ -743,6 +753,10 @@ def _reconcile_recent_noaa_actual_highs(city_name: str, lookback_days: int = 14)
         if updated > 0:
             for d in [d for d in target_dates if d in city_data]:
                 _daily_record_repo.upsert_record(city_key, d, city_data[d])
+            # 该路径用 load_city（不经 load_history），直接改写 DB 行，
+            # 需要让 load_history 的全量缓存失效，避免读到旧修正。
+            global _history_cache
+            _history_cache = {}
 
         return {
             "ok": True,
@@ -815,6 +829,8 @@ def bootstrap_recent_daily_history_if_missing(city_name: str, lookback_days: int
         if seeded_days:
             for day in seeded_days:
                 _daily_record_repo.upsert_record(city_key, day, city_rows[day])
+            global _history_cache
+            _history_cache = {}
 
         reconcile_result = reconcile_recent_actual_highs(city_key, lookback_days=lookback_days)
         result = {
