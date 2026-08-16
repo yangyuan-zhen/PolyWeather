@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   Coins,
   CreditCard,
-  MessageSquare,
   ShieldCheck,
 } from "lucide-react";
 import { useI18n } from "@/hooks/useI18n";
@@ -53,8 +52,6 @@ export function SubscriptionHelpClient() {
     priceText: isEn ? "29.9 / 30d · 79.9 / 90d" : "29.9 / 30天 · 79.9 / 90天",
     discountLabel: isEn ? "Points Discount" : "积分抵扣",
     discountText: isEn ? "Monthly 3U · Quarterly 8U" : "月付 3U · 季度 8U",
-    communityLabel: isEn ? "Telegram Group" : "Telegram 群",
-    communityLink: isEn ? "Open Account Center" : "前往账户中心",
     faqTitle: isEn ? "FAQ" : "常见问题",
   }), [isEn]);
 
@@ -76,7 +73,7 @@ export function SubscriptionHelpClient() {
           </div>
           <p className="text-sm text-slate-600 md:text-base">{copy.description}</p>
 
-          <div className="mt-6 grid gap-3 md:grid-cols-3">
+          <div className="mt-6 grid gap-3 md:grid-cols-2">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="mb-2 flex items-center gap-2 text-blue-700">
                 <CreditCard size={16} />
@@ -90,18 +87,6 @@ export function SubscriptionHelpClient() {
                 <span className="text-sm font-semibold">{copy.discountLabel}</span>
               </div>
               <p className="text-xl font-bold">{copy.discountText}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="mb-2 flex items-center gap-2 text-indigo-700">
-                <MessageSquare size={16} />
-                <span className="text-sm font-semibold">{copy.communityLabel}</span>
-              </div>
-              <Link
-                href="/account"
-                className="inline-flex min-h-9 items-center text-sm font-semibold text-blue-700 underline decoration-blue-500/50 underline-offset-4"
-              >
-                {copy.communityLink}
-              </Link>
             </div>
           </div>
         </section>

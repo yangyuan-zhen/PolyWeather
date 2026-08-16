@@ -188,10 +188,11 @@ export function runTests() {
   );
   assert(
     accountCenterSource.includes("data-testid=\"payment-management-grid\"") &&
-      accountCenterSource.includes('hasTelegramPanel ? "" : "lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]"') &&
+      accountCenterSource.includes('"grid gap-6 lg:items-start lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]"') &&
       accountCenterSource.includes("data-testid=\"payment-guard-grid\"") &&
-      accountCenterSource.includes('hasTelegramPanel ? "" : "sm:grid-cols-2"'),
-    "payment management must only split into internal columns when it is not already sharing the row with a Telegram panel",
+      accountCenterSource.includes('"grid gap-3 sm:grid-cols-2"') &&
+      !accountCenterSource.includes("hasTelegramPanel"),
+    "payment management must keep its internal column split now that the Telegram panel is removed",
   );
   assert(
     !accountCenterSource.includes("`/bind ${userId}${email ? ` ${email}` : \"\"}`") &&
@@ -199,16 +200,19 @@ export function runTests() {
     "Telegram fallback copy must not expose the legacy /bind supabase_user_id command",
   );
   assert(
-    accountCenterSource.includes("telegramBindCommand") &&
-      accountCenterSource.includes("createTelegramBotBindCommand") &&
-      accountCenterSource.includes("handleCopyTelegramBindCommand"),
-    "account Telegram fallback copy must generate a fresh one-time /start bind token before copying",
+    !accountCenterSource.includes("telegramBindCommand") &&
+      !accountCenterSource.includes("createTelegramBotBindCommand") &&
+      !accountCenterSource.includes("handleCopyTelegramBindCommand") &&
+      !accountCenterSource.includes("telegramBindOpening"),
+    "account Telegram bind/copy UI must be removed from AccountCenter",
   );
   assert(
-    useBillingSource.includes("bot_command") &&
-      useBillingSource.includes("createTelegramBotBindCommand") &&
-      useBillingSource.includes("telegramBindCommand"),
-    "billing hook must persist the backend /start bind token command for Telegram fallback copy",
+    !useBillingSource.includes("bot_command") &&
+      !useBillingSource.includes("createTelegramBotBindCommand") &&
+      !useBillingSource.includes("telegramBindCommand") &&
+      !useBillingSource.includes("bind-by-token") &&
+      !useBillingSource.includes("bot-bind-link"),
+    "billing hook must not persist Telegram bind-token commands or call the removed bind endpoints",
   );
   assert(
     !appAnalyticsSource.includes('NEXT_PUBLIC_POLYWEATHER_APP_ANALYTICS === "true"') &&

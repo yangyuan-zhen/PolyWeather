@@ -31,7 +31,6 @@ def _require_ops(request):
 # ---------------------------------------------------------------------------
 from web.services.ops.users import (  # noqa: E402, F401
     get_ops_analytics_funnel,
-    get_ops_weekly_leaderboard,
     grant_ops_feedback_reward,
     grant_ops_points,
     list_ops_audit_log,
@@ -85,7 +84,6 @@ from web.services.ops.config import (  # noqa: E402, F401
     get_ops_config,
     get_ops_logs,
     get_ops_sensitive_config,
-    get_ops_telegram_audit,
     get_ops_user_subscriptions,
     grant_ops_subscription,
     update_ops_config,

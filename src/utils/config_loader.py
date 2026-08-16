@@ -1,11 +1,6 @@
 import os
 from dotenv import load_dotenv
 
-from src.utils.telegram_chat_ids import (
-    get_primary_telegram_chat_id_from_env,
-    get_telegram_chat_ids_from_env,
-)
-
 
 def load_config():
     """
@@ -23,12 +18,6 @@ def load_config():
         "weather": {
             "openweather_api_key": get_env_or_none("OPENWEATHER_API_KEY"),
             "visualcrossing_api_key": get_env_or_none("VISUALCROSSING_API_KEY"),
-            "proxy": os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY"),
-        },
-        "telegram": {
-            "bot_token": os.getenv("TELEGRAM_BOT_TOKEN"),
-            "chat_id": get_primary_telegram_chat_id_from_env(),
-            "chat_ids": get_telegram_chat_ids_from_env(),
             "proxy": os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY"),
         },
         "config": {

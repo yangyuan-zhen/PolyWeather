@@ -92,9 +92,6 @@ export const opsApi = {
       body: JSON.stringify({ email, points }),
     });
   },
-  leaderboard(limit = 10) {
-    return opsFetch<Record<string, unknown>>(`/api/ops/leaderboard/weekly?limit=${limit}`);
-  },
   memberships() {
     return opsFetch<Record<string, unknown>>("/api/ops/memberships?limit=200");
   },
@@ -315,22 +312,5 @@ export const opsApi = {
       };
       rows?: Array<Record<string, unknown>>;
     }>(`/api/ops/market-opportunities${suffix}`);
-  },
-  telegramAudit() {
-    return opsFetch<{
-      anomalies: Array<{
-        telegram_id: number;
-        username: string;
-        chat_id: string;
-        status: string;
-        anomaly_type: "unbound" | "expired" | "trial_only";
-        reason: string;
-        email: string | null;
-        expires_at: string | null;
-      }>;
-      valid_count: number;
-      anomaly_count: number;
-      error?: string;
-    }>("/api/ops/telegram/members-audit");
   },
 };

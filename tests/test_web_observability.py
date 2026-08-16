@@ -2904,145 +2904,6 @@ def test_payment_wallets_requires_identity_without_subscription_gate(monkeypatch
     assert response.json() == {"wallets": [], "chain_id": 137}
 
 
-def test_telegram_identity_endpoints_skip_subscription_gate(monkeypatch):
-    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "enabled", True)
-    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "require_subscription", True)
-    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "supabase_url", "https://example.supabase.co")
-    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "anon_key", "anon-key")
-    monkeypatch.setattr(web_core, "_SUPABASE_AUTH_REQUIRED", True)
-
-    class _Identity:
-        user_id = "user-1"
-        email = "user@example.com"
-        points = 0
-        created_at = "2026-05-01T00:00:00+00:00"
-
-    class _FakePricing:
-        configured = True
-
-        @staticmethod
-        def verify_login_payload(payload):
-            return {"telegram_id": int(payload["id"]), "username": "tester"}
-
-        @staticmethod
-        def get_member_status(telegram_id):
-            return "member"
-
-        @staticmethod
-        def resolve_price_for_telegram_id(telegram_id):
-            return {"telegram_id": telegram_id, "pricing_source": "telegram_group_member"}
-
-    class _FakeDB:
-        @staticmethod
-        def upsert_user(telegram_id, username):
-            return None
-
-        @staticmethod
-        def bind_supabase_identity(*, telegram_id, supabase_user_id, supabase_email):
-            return {"ok": True}
-
-        @staticmethod
-        def consume_bind_token(token):
-            return 12345
-
-        @staticmethod
-        def create_web_bind_token(*, supabase_user_id, supabase_email, ttl_minutes):
-            return "bind-token"
-
-    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "get_identity", lambda token: _Identity())
-    monkeypatch.setattr(
-        web_core.SUPABASE_ENTITLEMENT,
-        "has_active_subscription",
-        lambda user_id: (_ for _ in ()).throw(
-            AssertionError("telegram identity endpoints should not query subscription gate"),
-        ),
-    )
-    monkeypatch.setattr(auth_api, "TelegramGroupPricing", lambda: _FakePricing())
-    monkeypatch.setattr(auth_api, "DBManager", lambda: _FakeDB())
-
-    auth_headers = {"Authorization": "Bearer access-token"}
-
-    login_response = client.post(
-        "/api/auth/telegram/login",
-        headers=auth_headers,
-        json={"id": 12345, "username": "tester", "auth_date": 1770000000, "hash": "x" * 64},
-    )
-    assert login_response.status_code == 200
-
-    token_response = client.post(
-        "/api/auth/telegram/bind-by-token",
-        headers=auth_headers,
-        json={"token": "token-12345"},
-    )
-    assert token_response.status_code == 200
-
-    link_response = client.post(
-        "/api/auth/telegram/bot-bind-link",
-        headers=auth_headers,
-    )
-    assert link_response.status_code == 200
-    link_payload = link_response.json()
-    assert link_payload["start_param"] == "bind_bind-token"
-    assert link_payload["bot_command"] == "/start bind_bind-token"
-    assert link_payload["bot_url"].endswith("?start=bind_bind-token")
-
-
-def test_telegram_bind_by_token_does_not_require_existing_group_member(monkeypatch):
-    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "enabled", True)
-    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "require_subscription", True)
-    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "supabase_url", "https://example.supabase.co")
-    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "anon_key", "anon-key")
-    monkeypatch.setattr(web_core, "_SUPABASE_AUTH_REQUIRED", True)
-
-    class _Identity:
-        user_id = "user-1"
-        email = "user@example.com"
-        points = 0
-        created_at = "2026-05-01T00:00:00+00:00"
-
-    class _FakePricing:
-        configured = True
-
-        @staticmethod
-        def get_member_status(telegram_id):
-            raise AssertionError("bind fallback must not require existing group membership")
-
-        @staticmethod
-        def resolve_price_for_telegram_id(telegram_id):
-            return {"telegram_id": telegram_id, "pricing_source": "telegram_public"}
-
-    class _FakeDB:
-        @staticmethod
-        def consume_bind_token(token):
-            return 12345
-
-        @staticmethod
-        def upsert_user(telegram_id, username):
-            return None
-
-        @staticmethod
-        def bind_supabase_identity(*, telegram_id, supabase_user_id, supabase_email):
-            return {
-                "ok": True,
-                "telegram_id": telegram_id,
-                "supabase_user_id": supabase_user_id,
-                "supabase_email": supabase_email,
-            }
-
-    monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "get_identity", lambda token: _Identity())
-    monkeypatch.setattr(auth_api, "TelegramGroupPricing", lambda: _FakePricing())
-    monkeypatch.setattr(auth_api, "DBManager", lambda: _FakeDB())
-
-    response = client.post(
-        "/api/auth/telegram/bind-by-token",
-        headers={"Authorization": "Bearer access-token"},
-        json={"token": "token-12345"},
-    )
-
-    assert response.status_code == 200
-    assert response.json()["telegram_id"] == 12345
-
-
 def test_auth_me_does_not_reconcile_on_status_probe(monkeypatch):
     monkeypatch.setattr(routes, "_assert_entitlement", lambda request: None)
 
@@ -3052,7 +2913,6 @@ def test_auth_me_does_not_reconcile_on_status_probe(monkeypatch):
 
     monkeypatch.setattr(routes, "_bind_optional_supabase_identity", _bind_identity)
     monkeypatch.setattr(routes, "_resolve_auth_points", lambda request: 0)
-    monkeypatch.setattr(routes, "_resolve_weekly_profile", lambda request: {"weekly_points": 0, "weekly_rank": None})
     monkeypatch.setattr(routes.SUPABASE_ENTITLEMENT, "enabled", True)
 
     reconcile_calls = {"count": 0}
@@ -3098,7 +2958,6 @@ def test_auth_me_reuses_identity_bound_by_entitlement(monkeypatch):
     monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "supabase_url", "https://example.supabase.co")
     monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "anon_key", "anon-key")
     monkeypatch.setattr(web_core, "_SUPABASE_AUTH_REQUIRED", True)
-    monkeypatch.setattr(routes, "_resolve_weekly_profile", lambda request: {"weekly_points": 0, "weekly_rank": None})
 
     class _Identity:
         user_id = "user-1"
@@ -3145,7 +3004,6 @@ def test_auth_me_uses_subscription_window_as_required_subscription_gate(monkeypa
     monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "supabase_url", "https://example.supabase.co")
     monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "anon_key", "anon-key")
     monkeypatch.setattr(web_core, "_SUPABASE_AUTH_REQUIRED", True)
-    monkeypatch.setattr(routes, "_resolve_weekly_profile", lambda request: {"weekly_points": 0, "weekly_rank": None})
 
     class _Identity:
         user_id = "user-1"
@@ -3199,7 +3057,6 @@ def test_auth_me_entitlement_scope_reuses_subscription_access_window_cache(monke
     monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "enabled", True)
     monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "require_subscription", False)
     monkeypatch.setattr(web_core, "_SUPABASE_AUTH_REQUIRED", False)
-    monkeypatch.setattr(routes, "_resolve_weekly_profile", lambda request: {"weekly_points": 0, "weekly_rank": None})
     monkeypatch.setattr(routes, "_resolve_auth_points", lambda request: 0)
 
     def _bind_identity(request):
@@ -3410,7 +3267,6 @@ def test_auth_me_preserves_unknown_subscription_window(monkeypatch):
     monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "enabled", True)
     monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "require_subscription", False)
     monkeypatch.setattr(web_core, "_SUPABASE_AUTH_REQUIRED", False)
-    monkeypatch.setattr(routes, "_resolve_weekly_profile", lambda request: {"weekly_points": 0, "weekly_rank": None})
     monkeypatch.setattr(routes, "_resolve_auth_points", lambda request: 0)
 
     def _bind_identity(request):
@@ -3455,7 +3311,6 @@ def test_auth_me_uses_window_rows_for_non_required_latest_known_subscription(mon
     monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "enabled", True)
     monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "require_subscription", False)
     monkeypatch.setattr(web_core, "_SUPABASE_AUTH_REQUIRED", False)
-    monkeypatch.setattr(routes, "_resolve_weekly_profile", lambda request: {"weekly_points": 0, "weekly_rank": None})
     monkeypatch.setattr(routes, "_resolve_auth_points", lambda request: 0)
 
     def _bind_identity(request):
@@ -3509,7 +3364,6 @@ def test_auth_me_skips_latest_active_after_empty_non_required_window(monkeypatch
     monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "enabled", True)
     monkeypatch.setattr(web_core.SUPABASE_ENTITLEMENT, "require_subscription", False)
     monkeypatch.setattr(web_core, "_SUPABASE_AUTH_REQUIRED", False)
-    monkeypatch.setattr(routes, "_resolve_weekly_profile", lambda request: {"weekly_points": 0, "weekly_rank": None})
     monkeypatch.setattr(routes, "_resolve_auth_points", lambda request: 0)
 
     def _bind_identity(request):
@@ -3650,13 +3504,6 @@ def test_auth_me_entitlement_scope_skips_non_access_profile_sections(monkeypatch
             AssertionError("entitlement scope must not block on points summary"),
         ),
     )
-    monkeypatch.setattr(
-        routes,
-        "_resolve_weekly_profile",
-        lambda request: (_ for _ in ()).throw(
-            AssertionError("entitlement scope must not block on weekly profile"),
-        ),
-    )
 
     response = client.get(
         "/api/auth/me?scope=entitlement",
@@ -3669,7 +3516,6 @@ def test_auth_me_entitlement_scope_skips_non_access_profile_sections(monkeypatch
     assert payload["subscription_active"] is True
     assert payload["subscription_plan_code"] == "pro_monthly"
     assert payload["points"] == 7
-    assert payload["weekly_points"] == 0
     assert payload["referral"] is None
 
 
@@ -3995,90 +3841,6 @@ def test_ops_memberships_growth_reuses_active_subscription_window_query(monkeypa
 
     assert response.status_code == 200
     assert any(day["paid"] == 1 for day in response.json()["daily"])
-
-
-def test_ops_telegram_audit_reuses_active_subscription_window_query(monkeypatch):
-    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "bot-token")
-    monkeypatch.setenv("TELEGRAM_CHAT_IDS", "chat-1")
-    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
-    monkeypatch.delenv("POLYWEATHER_TELEGRAM_GROUP_ID", raising=False)
-    monkeypatch.delenv("POLYWEATHER_TELEGRAM_TOPICS_GROUP_ID", raising=False)
-    monkeypatch.setattr(ops_api, "_require_ops", lambda request: None)
-
-    class _FakeRows(list):
-        def fetchall(self):
-            return self
-
-    class _FakeConnection:
-        row_factory = None
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return False
-
-        def execute(self, sql):
-            if "FROM users" in sql:
-                return _FakeRows([{"telegram_id": 1, "username": "tester"}])
-            if "FROM supabase_bindings" in sql:
-                return _FakeRows(
-                    [
-                        {
-                            "telegram_id": 1,
-                            "supabase_user_id": "user-1",
-                            "supabase_email": "one@example.com",
-                        }
-                    ]
-                )
-            raise AssertionError(sql)
-
-    class _FakeDB:
-        @staticmethod
-        def _get_connection():
-            return _FakeConnection()
-
-    class _Response:
-        status_code = 200
-
-        @staticmethod
-        def json():
-            return {"ok": True, "result": {"status": "member"}}
-
-    import requests as requests_module
-    import src.database.db_manager as db_module
-
-    monkeypatch.setattr(db_module, "DBManager", lambda: _FakeDB())
-    monkeypatch.setattr(requests_module, "get", lambda *args, **kwargs: _Response())
-    monkeypatch.setattr(
-        routes.SUPABASE_ENTITLEMENT,
-        "list_active_subscriptions",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("telegram audit should not run a separate active subscription query"),
-        ),
-    )
-    monkeypatch.setattr(
-        routes.SUPABASE_ENTITLEMENT,
-        "list_active_subscription_windows",
-        lambda limit=5000: {
-            "subscriptions": [
-                {
-                    "user_id": "user-1",
-                    "plan_code": "pro_monthly",
-                    "source": "payment_contract",
-                    "starts_at": "2026-03-01T00:00:00+00:00",
-                    "expires_at": "2099-01-01T00:00:00+00:00",
-                }
-            ],
-            "windows": {},
-        },
-        raising=False,
-    )
-
-    result = ops_api.get_ops_telegram_audit(object())
-
-    assert result["valid_count"] == 1
-    assert result["anomaly_count"] == 0
 
 
 def test_ops_memberships_overview_combines_memberships_and_growth_in_one_subscription_query(monkeypatch):

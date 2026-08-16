@@ -5,20 +5,6 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
-class TelegramLoginRequest(BaseModel):
-    id: int
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    username: Optional[str] = None
-    photo_url: Optional[str] = None
-    auth_date: int
-    hash: str = Field(..., min_length=10)
-
-
-class TelegramBindTokenRequest(BaseModel):
-    token: str = Field(..., min_length=8)
-
-
 class ReferralApplyRequest(BaseModel):
     code: str = Field(..., min_length=3, max_length=32)
 

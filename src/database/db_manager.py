@@ -4,7 +4,7 @@ import json
 import threading
 import time
 from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, Set, Tuple
 from urllib.parse import urlparse
 
@@ -17,7 +17,6 @@ from src.database.repos.user_repo import UserRepo
 from src.database.repos.payment_repo import PaymentRepo
 from src.database.repos.observation_repo import ObservationRepo
 from src.database.repos.cache_repo import CacheRepo
-from src.database.repos.binding_repo import BindingRepo
 from src.database.repos.admin_repo import AdminRepo
 
 
@@ -26,8 +25,6 @@ class DBManager:
     _initialized_paths: Set[str] = set()
     _points_sync_lock = threading.Lock()
     _points_sync_cache: Dict[str, Dict[str, Any]] = {}
-    _profile_sync_lock = threading.Lock()
-    _profile_sync_cache: Dict[str, Dict[str, Any]] = {}
 
     def __init__(self, db_path: Optional[str] = None):
         self.db_path = self._resolve_db_path(db_path)
@@ -66,14 +63,6 @@ class DBManager:
             return self.__cache_repo
 
     @property
-    def _binding_repo(self) -> BindingRepo:
-        try:
-            return self.__binding_repo
-        except AttributeError:
-            self.__binding_repo = BindingRepo(self._get_connection)
-            return self.__binding_repo
-
-    @property
     def _admin_repo(self) -> AdminRepo:
         try:
             return self.__admin_repo
@@ -106,9 +95,6 @@ class DBManager:
             self._init_db()
             self._initialized_paths.add(cache_key)
 
-    def _supabase_profiles_endpoint(self) -> str:
-        return get_supabase_admin_client().profiles_endpoint()
-
     def _supabase_service_headers(self) -> Dict[str, str]:
         client = get_supabase_admin_client()
         if not client.configured:
@@ -117,73 +103,6 @@ class DBManager:
 
     def _supabase_admin_users_endpoint(self) -> str:
         return get_supabase_admin_client().admin_users_endpoint()
-
-    def _profile_sync_min_interval_sec(self) -> float:
-        raw = str(
-            os.getenv("POLYWEATHER_SUPABASE_PROFILE_SYNC_MIN_INTERVAL_SEC", "3600")
-            or ""
-        ).strip()
-        try:
-            return max(0.0, float(raw))
-        except ValueError:
-            return 3600.0
-
-    def _profile_sync_cache_key(self, supabase_user_id: str) -> str:
-        endpoint = self._supabase_profiles_endpoint()
-        return f"{endpoint}:{str(supabase_user_id or '').strip().lower()}"
-
-    def _should_skip_profile_sync(
-        self,
-        *,
-        supabase_user_id: str,
-        telegram_id: Optional[int],
-        telegram_username: Optional[str],
-        force: bool = False,
-    ) -> bool:
-        if force:
-            return False
-        min_interval = self._profile_sync_min_interval_sec()
-        if min_interval <= 0:
-            return False
-        payload_key = {
-            "telegram_id": int(telegram_id) if telegram_id is not None else None,
-            "telegram_username": str(telegram_username or "").strip() or None,
-        }
-        cache_key = self._profile_sync_cache_key(supabase_user_id)
-        now_ts = time.monotonic()
-        with self._profile_sync_lock:
-            cached = self._profile_sync_cache.get(cache_key)
-            if not isinstance(cached, dict):
-                return False
-            cached_payload = cached.get("payload")
-            cached_ts = float(cached.get("ts") or 0.0)
-            return cached_payload == payload_key and now_ts - cached_ts < min_interval
-
-    def _remember_profile_sync(
-        self,
-        *,
-        supabase_user_id: str,
-        telegram_id: Optional[int],
-        telegram_username: Optional[str],
-    ) -> None:
-        cache_key = self._profile_sync_cache_key(supabase_user_id)
-        payload_key = {
-            "telegram_id": int(telegram_id) if telegram_id is not None else None,
-            "telegram_username": str(telegram_username or "").strip() or None,
-        }
-        with self._profile_sync_lock:
-            self._profile_sync_cache[cache_key] = {
-                "payload": payload_key,
-                "ts": time.monotonic(),
-            }
-            if len(self._profile_sync_cache) > 4096:
-                oldest_key = min(
-                    self._profile_sync_cache,
-                    key=lambda key: float(
-                        self._profile_sync_cache[key].get("ts") or 0.0
-                    ),
-                )
-                self._profile_sync_cache.pop(oldest_key, None)
 
     def _points_sync_cache_key(self, telegram_id: int) -> str:
         return f"{os.path.abspath(self.db_path)}:{int(telegram_id)}"
@@ -262,20 +181,12 @@ class DBManager:
         with self._get_connection() as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
-                "SELECT supabase_user_id FROM supabase_bindings WHERE telegram_id = ? LIMIT 1",
+                "SELECT supabase_user_id FROM users WHERE telegram_id = ? LIMIT 1",
                 (int(telegram_id),),
             ).fetchone()
-            if row and row["supabase_user_id"]:
-                supabase_user_id = str(row["supabase_user_id"]).strip()
-            if not supabase_user_id:
-                row = conn.execute(
-                    "SELECT supabase_user_id FROM users WHERE telegram_id = ? LIMIT 1",
-                    (int(telegram_id),),
-                ).fetchone()
-                if row and row["supabase_user_id"]:
-                    supabase_user_id = str(row["supabase_user_id"]).strip()
-            if not supabase_user_id:
+            if not row or not row["supabase_user_id"]:
                 return False
+            supabase_user_id = str(row["supabase_user_id"]).strip()
             pts_row = conn.execute(
                 "SELECT points FROM users WHERE telegram_id = ? LIMIT 1",
                 (int(telegram_id),),
@@ -301,109 +212,9 @@ class DBManager:
             )
         return ok
 
-    def _sync_supabase_profile_telegram_fields(
-        self,
-        *,
-        supabase_user_id: str,
-        telegram_id: Optional[int],
-        telegram_username: Optional[str],
-        force: bool = False,
-    ) -> bool:
-        normalized_uid = str(supabase_user_id or "").strip().lower()
-        endpoint = self._supabase_profiles_endpoint()
-        headers = self._supabase_service_headers()
-        if not normalized_uid or not endpoint or not headers:
-            return False
-        if self._should_skip_profile_sync(
-            supabase_user_id=normalized_uid,
-            telegram_id=telegram_id,
-            telegram_username=telegram_username,
-            force=force,
-        ):
-            return False
-
-        payload = {
-            "telegram_user_id": int(telegram_id) if telegram_id is not None else None,
-            "telegram_username": str(telegram_username or "").strip() or None,
-            "updated_at": datetime.now().isoformat(),
-        }
-        admin = get_supabase_admin_client()
-        ok = admin.patch_profile(normalized_uid, payload)
-        if ok:
-            self._remember_profile_sync(
-                supabase_user_id=normalized_uid,
-                telegram_id=telegram_id,
-                telegram_username=telegram_username,
-            )
-        return ok
-
-    def _sync_bound_supabase_profiles_for_telegram(
-        self,
-        *,
-        telegram_id: int,
-        telegram_username: Optional[str],
-    ) -> None:
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """
-                SELECT supabase_user_id
-                FROM supabase_bindings
-                WHERE telegram_id = ?
-                """,
-                (int(telegram_id),),
-            ).fetchall()
-        for row in rows:
-            user_id = str((row["supabase_user_id"] if row else "") or "").strip().lower()
-            if not user_id:
-                continue
-            self._sync_supabase_profile_telegram_fields(
-                supabase_user_id=user_id,
-                telegram_id=telegram_id,
-                telegram_username=telegram_username,
-            )
     def _init_db(self):
         """Create tables if they don't exist."""
         _schema_init_db(self._get_connection(), self.db_path)
-
-    @staticmethod
-    def _float_or_none(value: Any) -> Optional[float]:
-        try:
-            if value is None or value == "":
-                return None
-            return float(value)
-        except (TypeError, ValueError):
-            return None
-
-    @staticmethod
-    def _int_or_none(value: Any) -> Optional[int]:
-        try:
-            if value is None or value == "":
-                return None
-            return int(float(value))
-        except (TypeError, ValueError):
-            return None
-
-    @staticmethod
-    def _parse_datetime_or_none(value: Any) -> Optional[datetime]:
-        raw = str(value or "").strip()
-        if not raw:
-            return None
-        try:
-            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-        except ValueError:
-            return None
-        if parsed.tzinfo is None:
-            return parsed.replace(tzinfo=timezone.utc)
-        return parsed.astimezone(timezone.utc)
-
-    @classmethod
-    def _source_latency_or_none(cls, observed_at: Any, fetched_at: Any) -> Optional[float]:
-        observed = cls._parse_datetime_or_none(observed_at)
-        fetched = cls._parse_datetime_or_none(fetched_at)
-        if observed is None or fetched is None:
-            return None
-        return max(0.0, round((fetched - observed).total_seconds(), 3))
 
     def _cache_table_name(self, kind: str) -> Optional[str]:
         normalized = str(kind or "").strip().lower()
@@ -1161,18 +972,6 @@ class DBManager:
                 (email,),
             ).fetchone()
             if not user_row:
-                user_row = conn.execute(
-                    """
-                    SELECT u.telegram_id, u.username, u.points, b.supabase_email,
-                           b.supabase_user_id
-                    FROM users u
-                    JOIN supabase_bindings b ON b.telegram_id = u.telegram_id
-                    WHERE lower(trim(COALESCE(b.supabase_email, ''))) = ?
-                    LIMIT 1
-                    """,
-                    (email,),
-                ).fetchone()
-            if not user_row:
                 return {
                     "ok": False,
                     "reason": "user_not_found",
@@ -1498,44 +1297,6 @@ class DBManager:
         return self._payment_repo.mark_related_payment_audit_events_resolved(event_id, resolved_by)
 
     @staticmethod
-    def _safe_week_key(value: str) -> str:
-        text = str(value or "").strip()
-        if len(text) >= 8 and "-W" in text:
-            return text[:8]
-        return ""
-
-    def _upsert_weekly_archive(
-        self,
-        conn: sqlite3.Connection,
-        telegram_id: int,
-        week_key: str,
-        points: int,
-    ) -> None:
-        wk = self._safe_week_key(week_key)
-        if not wk:
-            return
-        pts = max(0, int(points or 0))
-        conn.execute(
-            """
-            INSERT INTO weekly_points_archive (telegram_id, week_key, points, updated_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(telegram_id, week_key) DO UPDATE SET
-                points = excluded.points,
-                updated_at = excluded.updated_at
-            """,
-            (int(telegram_id), wk, pts, datetime.now().isoformat()),
-        )
-
-    @staticmethod
-    def _read_bonus_config(env_key: str, fallback: int) -> int:
-        raw = os.getenv(env_key)
-        if raw is None or raw.strip() == "":
-            return fallback
-        try:
-            return max(0, int(raw))
-        except Exception:
-            return fallback
-
     def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
         existing = {
             row[1]
@@ -1553,22 +1314,6 @@ class DBManager:
         if not key:
             return None
         conn.row_factory = sqlite3.Row
-        row = conn.execute(
-            """
-            SELECT telegram_id
-            FROM supabase_bindings
-            WHERE lower(trim(COALESCE(supabase_user_id, ''))) = ?
-            LIMIT 1
-            """,
-            (key,),
-        ).fetchone()
-        if row:
-            try:
-                return int(row["telegram_id"])
-            except Exception:
-                return None
-
-        # Legacy fallback before supabase_bindings migration.
         row = conn.execute(
             """
             SELECT telegram_id
@@ -1590,10 +1335,6 @@ class DBManager:
 
     def get_user_by_supabase_user_id(self, supabase_user_id: str) -> Optional[Dict[str, Any]]:
         return self._user_repo.get_user_by_supabase_user_id(supabase_user_id)
-
-    def list_supabase_user_ids_for_telegram(self, telegram_id: int) -> List[str]:
-        """Return all Supabase accounts currently bound to a Telegram user."""
-        return self._user_repo.list_supabase_user_ids_for_telegram(telegram_id)
 
     def search_users(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
         return self._user_repo.search_users(query, limit)
@@ -1661,48 +1402,6 @@ class DBManager:
     def upsert_user(self, telegram_id: int, username: str):
         return self._user_repo.upsert_user(telegram_id, username)
 
-    def bind_supabase_identity(
-        self,
-        telegram_id: int,
-        supabase_user_id: str,
-        supabase_email: str = "",
-    ) -> Dict[str, Any]:
-        return self._binding_repo.bind_supabase_identity(telegram_id, supabase_user_id, supabase_email)
-
-    def unbind_supabase_identity(self, telegram_id: int) -> Dict[str, Any]:
-        return self._binding_repo.unbind_supabase_identity(telegram_id)
-
-    def create_bind_token(self, telegram_id: int, ttl_minutes: int = 10) -> str:
-        return self._binding_repo.create_bind_token(telegram_id, ttl_minutes)
-
-    def consume_bind_token(self, token: str) -> Optional[int]:
-        return self._binding_repo.consume_bind_token(token)
-
-    def peek_web_bind_token(self, token: str) -> Optional[Dict[str, str]]:
-        return self._binding_repo.peek_web_bind_token(token)
-
-    def create_web_bind_token(
-        self,
-        supabase_user_id: str,
-        supabase_email: str = "",
-        ttl_minutes: int = 10,
-    ) -> str:
-        return self._binding_repo.create_web_bind_token(supabase_user_id, supabase_email, ttl_minutes)
-
-    def consume_web_bind_token(self, token: str) -> Optional[Dict[str, str]]:
-        return self._binding_repo.consume_web_bind_token(token)
-
-    def add_message_activity(
-        self,
-        telegram_id: int,
-        text: str,
-        points_to_add: int = 1,
-        cooldown_sec: int = 30,
-        daily_cap: int = 20,
-        min_text_length: int = 4,
-    ) -> Dict[str, Any]:
-        return self._user_repo.add_message_activity(telegram_id, text, points_to_add, cooldown_sec, daily_cap, min_text_length)
-
     def track_query_usage(self, telegram_id: int, query_type: str) -> Dict[str, Any]:
         return self._user_repo.track_query_usage(telegram_id, query_type)
 
@@ -1712,51 +1411,8 @@ class DBManager:
     def spend_points_by_supabase_user_id(self, supabase_user_id: str, amount: int) -> Dict[str, Any]:
         return self._user_repo.spend_points_by_supabase_user_id(supabase_user_id, amount)
 
-    def set_premium(self, telegram_id: int, plan: str, months: int = 1):
-        self._user_repo.set_premium(telegram_id, plan, months)
-
     def get_leaderboard(self, limit: int = 10):
         return self._user_repo.get_leaderboard(limit)
-
-    def get_weekly_leaderboard(self, limit: int = 10):
-        return self._user_repo.get_weekly_leaderboard(limit)
-
-    def get_weekly_profile(self, telegram_id: int) -> Dict[str, Any]:
-        return self._user_repo.get_weekly_profile(telegram_id)
-
-    def get_weekly_profile_by_supabase_user_id(self, supabase_user_id: str) -> Dict[str, Any]:
-        return self._user_repo.get_weekly_profile_by_supabase_user_id(supabase_user_id)
-
-    def get_weekly_reward_candidates(self, week_key: str, limit: int = 10):
-        return self._user_repo.get_weekly_reward_candidates(week_key, limit)
-
-    def get_weekly_participation_candidates(self, week_key: str, exclude_ids: set):
-        return self._user_repo.get_weekly_participation_candidates(week_key, exclude_ids)
-
-    def is_weekly_reward_settled(self, week_key: str) -> bool:
-        return self._user_repo.is_weekly_reward_settled(week_key)
-
-    def mark_weekly_reward_settled(
-        self,
-        week_key: str,
-        winners_count: int,
-        summary: Optional[Dict[str, Any]] = None,
-    ) -> None:
-        self._user_repo.mark_weekly_reward_settled(week_key, winners_count, summary)
-
-    def apply_weekly_reward_payout(
-        self,
-        week_key: str,
-        telegram_id: int,
-        rank: int,
-        username: str,
-        points_bonus: int,
-        pro_days: int,
-        supabase_user_id: str = "",
-        pro_granted: bool = False,
-        pro_error: str = "",
-    ) -> bool:
-        return self._user_repo.apply_weekly_reward_payout(week_key, telegram_id, rank, username, points_bonus, pro_days, supabase_user_id, pro_granted, pro_error)
 
     def record_user_growth_snapshot(
         self,

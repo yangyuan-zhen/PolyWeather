@@ -65,7 +65,7 @@ export function runTests() {
     "landing route must prefer an explicit locale query before cookie or Accept-Language",
   );
   assert(source.includes("3 天免费试用"), "landing page must advertise the 3-day trial");
-  assert(source.includes("试用期权益和 Pro 一致，除了不显示付费 Telegram 群链接"), "landing page must state trial access matches Pro except the paid group link");
+  assert(source.includes("试用期权益和 Pro 一致") && !source.includes("付费 Telegram 群"), "landing page must state trial access matches Pro without a paid Telegram group link");
   assert(!source.includes("高频刷新与 API 仍为 Pro 权益"), "landing page must not incorrectly exclude high-frequency refresh or API from trial access");
   assert(source.includes("bg-[#fbfbfa]"), "landing page must use a light Notion-style background");
   assert(source.includes("WeatherWorkflowIllustration"), "landing page must include a friendly illustration surface");

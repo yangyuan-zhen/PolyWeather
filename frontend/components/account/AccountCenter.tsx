@@ -7,8 +7,6 @@ import type { User } from "@supabase/supabase-js";
 import {
   User as UserIcon,
   Shield,
-  Fingerprint,
-  Bot,
   RefreshCw,
   LogOut,
   ChevronLeft,
@@ -30,6 +28,7 @@ import {
   Minus,
   ShieldCheck,
   BarChart3,
+  Bot,
   Sparkles,
   ChevronRight,
   Loader2,
@@ -43,12 +42,7 @@ import { markAnalyticsOnce, trackAppEvent } from "@/lib/app-analytics";
 import { useI18n } from "@/hooks/useI18n";
 
 import type { AuthMeResponse } from "./types";
-import {
-  TELEGRAM_BOT_URL,
-  TELEGRAM_GROUP_URL,
-  TELEGRAM_TOPICS_GROUP_URL,
-  WALLETCONNECT_PROJECT_ID,
-} from "./constants";
+import { WALLETCONNECT_PROJECT_ID } from "./constants";
 import { InfoRow, PlusIcon } from "./AccountInfoRow";
 import { AccountFeedbackPanel } from "./AccountFeedbackPanel";
 import { TurnstileWidget } from "@/components/security/TurnstileWidget";
@@ -131,9 +125,6 @@ export function AccountCenter() {
     paymentError,
     lastIntentId,
     lastPaymentStartedAt,
-    telegramBindOpening,
-    telegramBindUrl,
-    telegramBindCommand,
     manualPayment,
     manualTxHash,
     txValidation,
@@ -148,7 +139,6 @@ export function AccountCenter() {
     setLastIntentId,
     setLastTxHash,
     setLastPaymentStartedAt,
-    setTelegramBindOpening,
     setPaymentMethodTab,
     setManualPayment,
     setManualTxHash,
@@ -203,8 +193,6 @@ export function AccountCenter() {
     createManualPaymentIntent,
     submitManualPaymentTx,
     validateTxHash,
-    createTelegramBotBindCommand,
-    openTelegramBotBindLink,
   } = useAccountPayment({
     isEn,
     supabaseReady,
@@ -396,10 +384,6 @@ export function AccountCenter() {
   const hasQueuedExtension = Boolean(
     isSubscribed && queuedExtensionDays > 0,
   );
-  const canAccessPaidTelegramGroup = Boolean(isSubscribed && !isTrialSubscription);
-  const hasTelegramPanel = Boolean(isTrialSubscription || canAccessPaidTelegramGroup);
-  const telegramBound =
-    Number(backend?.telegram_pricing?.telegram_id || 0) > 0;
   const displayExpiryRaw = isSubscribed
     ? totalExpiryRaw
     : currentExpiryRaw;
@@ -550,22 +534,12 @@ export function AccountCenter() {
   const pointSourceRows = Object.entries(pointsLedger?.by_source ?? {});
   const recentPointEvents = pointsLedger?.recent ?? [];
 
-  // ── Telegram bind command ──────────────────────────────
-  const bindCommand = telegramBindCommand || copy.telegramBindCommandPlaceholder;
-
   // ── Copy handler ──────────────────────────────────────
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     });
-  };
-
-  const handleCopyTelegramBindCommand = async () => {
-    if (!isAuthenticated || telegramBindOpening) return;
-    const command = await createTelegramBotBindCommand();
-    if (!command) return;
-    handleCopy(command);
   };
 
   const applyReferralCode = useCallback(async () => {
@@ -1072,117 +1046,9 @@ export function AccountCenter() {
           refreshLabel={copy.refresh}
         />
 
-        {/* Telegram Bot Section & Payment Details */}
+        {/* Payment Details & Wallet Management */}
         {showSecondarySections ? (
-          <div
-            className={`lg:col-span-12 grid grid-cols-1 items-start gap-6 ${
-              hasTelegramPanel ? "xl:grid-cols-[minmax(0,0.9fr)_minmax(620px,1.1fr)]" : ""
-            }`}
-          >
-            {isTrialSubscription && (
-              <section className="group relative min-w-0 overflow-hidden rounded-2xl border border-amber-200 bg-amber-50 p-8 shadow-sm">
-                <Bot
-                  size={140}
-                  className="absolute -right-8 -bottom-8 -rotate-12 text-amber-100"
-                />
-                <div className="relative z-10">
-                  <h3 className="mb-2 flex items-center gap-2 text-lg font-bold text-amber-800">
-                    <Bot size={22} /> {copy.telegramBind}
-                  </h3>
-                  <p className="text-sm leading-6 text-amber-900">
-                    {copy.trialPaidGroupLocked}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={focusPaymentManagement}
-                    disabled={!canStartPayment}
-                    className="mt-5 inline-flex items-center gap-2 rounded-xl border border-amber-700 bg-amber-600 px-4 py-3 text-xs font-bold text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Crown size={14} />
-                    {copy.upgradePro}
-                  </button>
-                </div>
-              </section>
-            )}
-            {canAccessPaidTelegramGroup && (
-              <section className="group relative min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-                <Bot
-                  size={140}
-                  className="absolute -right-8 -bottom-8 -rotate-12 text-slate-100 transition-transform duration-1000 group-hover:rotate-0"
-                />
-                <div className="relative z-10">
-                  <h3 className="mb-2 flex items-center gap-2 text-lg font-bold text-blue-700">
-                    <Bot size={22} /> {copy.telegramBind}
-                  </h3>
-                  <p className="mb-6 text-sm text-slate-500">
-                    {copy.telegramHint}
-                  </p>
-
-                  <div className="mb-4 flex flex-wrap gap-2">
-                    {TELEGRAM_TOPICS_GROUP_URL &&
-                      TELEGRAM_TOPICS_GROUP_URL !== TELEGRAM_GROUP_URL &&
-                      telegramBound ? (
-                      <Link
-                        href={TELEGRAM_TOPICS_GROUP_URL}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
-                      >
-                        {copy.telegramTopicsGroupLink}
-                        <ExternalLink size={12} />
-                      </Link>
-                    ) : null}
-                    {TELEGRAM_GROUP_URL && telegramBound ? (
-                      <Link
-                        href={TELEGRAM_GROUP_URL}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100"
-                      >
-                        {copy.telegramGroupLink}
-                        <ExternalLink size={12} />
-                      </Link>
-                    ) : null}
-                  </div>
-                  <div className="flex gap-2">
-                    <code className="flex-grow overflow-hidden text-ellipsis whitespace-nowrap rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-xs text-blue-700">
-                      {bindCommand}
-                    </code>
-                    <button
-                      onClick={() => void openTelegramBotBindLink()}
-                      disabled={telegramBindOpening || !isAuthenticated}
-                      className="rounded-xl border border-cyan-700 bg-cyan-600 px-4 py-3 text-xs font-bold text-white shadow-sm transition-all hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50"
-                      title={copy.telegramBotBindLink}
-                      aria-label={copy.telegramBotBindLink}
-                    >
-                      {telegramBindOpening
-                        ? "..."
-                        : copy.telegramBotBindLink}
-                    </button>
-                    <button
-                      onClick={() => void handleCopyTelegramBindCommand()}
-                      disabled={telegramBindOpening || !isAuthenticated}
-                      className="rounded-xl border border-blue-700 bg-blue-600 p-4 text-white shadow-sm transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                      title={copy.copyCommand}
-                      aria-label={copy.copyCommand}
-                    >
-                      {copied ? (
-                        <CheckCircle2 size={20} />
-                      ) : (
-                        <Copy size={20} />
-                      )}
-                    </button>
-                  </div>
-                  <p className="mt-2 text-[11px] leading-5 text-slate-400">
-                    {copy.telegramFallbackHint}
-                  </p>
-                  <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-6 text-amber-800">
-                    {copy.paymentManualSupport}
-                  </div>
-                </div>
-              </section>
-            )}
-
+          <div className="lg:col-span-12 grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(620px,1.1fr)]">
             {/* Payment Details / Wallet Management */}
             <section className="w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:p-7">
               <div>
@@ -1197,16 +1063,6 @@ export function AccountCenter() {
                 {!paymentError && paymentInfo ? (
                   <div className="mb-4 rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-[11px] text-cyan-800">
                     {paymentInfo}
-                    {telegramBindUrl ? (
-                      <a
-                        href={telegramBindUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-1 block break-all text-cyan-700 underline hover:text-cyan-900"
-                      >
-                        {telegramBindUrl}
-                      </a>
-                    ) : null}
                   </div>
                 ) : null}
                 {!paymentHostAllowed ? (
@@ -1221,9 +1077,7 @@ export function AccountCenter() {
                 <div
                   id="payment-management"
                   data-testid="payment-management-grid"
-                  className={`grid gap-6 lg:items-start ${
-                    hasTelegramPanel ? "" : "lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]"
-                  }`}
+                  className="grid gap-6 lg:items-start lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]"
                 >
                   <div className="space-y-5">
                     <div>
@@ -1334,7 +1188,7 @@ export function AccountCenter() {
                     </div>
                     <div
                       data-testid="payment-guard-grid"
-                      className={`grid gap-3 ${hasTelegramPanel ? "" : "sm:grid-cols-2"}`}
+                      className="grid gap-3 sm:grid-cols-2"
                     >
                       <InfoRow
                         icon={Mail}

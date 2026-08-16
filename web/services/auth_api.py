@@ -11,9 +11,8 @@ from typing import Any, Callable, Dict, Optional, TypeVar
 from fastapi import HTTPException, Request
 from loguru import logger
 
-from src.auth.telegram_group_pricing import TelegramGroupPricing
 from src.database.db_manager import DBManager
-from web.core import ReferralApplyRequest, TelegramLoginRequest
+from web.core import ReferralApplyRequest
 import web.routes as legacy_routes
 
 
@@ -371,15 +370,10 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
 
         if entitlement_scope:
             points = _state_points(request)
-            weekly_profile = {"weekly_points": 0, "weekly_rank": None}
         else:
             points = timer.measure(
                 "auth_points",
                 lambda: legacy_routes._resolve_auth_points(request),
-            )
-            weekly_profile = timer.measure(
-                "weekly_profile",
-                lambda: legacy_routes._resolve_weekly_profile(request),
             )
         points_ledger = {
             "balance": points,
@@ -403,36 +397,12 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
                     "by_source": {},
                 }
 
-        def resolve_telegram_pricing() -> Any:
-            if not user_id:
-                return None
-            pricing = TelegramGroupPricing()
-            if not pricing.configured:
-                return None
-            linked = DBManager().get_user_by_supabase_user_id(user_id)
-            telegram_id = (
-                int(linked.get("telegram_id") or 0) if isinstance(linked, dict) else 0
-            )
-            return pricing.resolve_price_for_telegram_id(telegram_id or None)
-
-        telegram_pricing = None
-        if user_id and not entitlement_scope:
-            try:
-                telegram_pricing = timer.measure(
-                    "telegram_pricing",
-                    resolve_telegram_pricing,
-                )
-            except Exception:
-                telegram_pricing = None
-
         payload = {
             "authenticated": bool(user_id),
             "user_id": user_id,
             "email": email,
             "points": points,
             "points_ledger": points_ledger,
-            "weekly_points": weekly_profile["weekly_points"],
-            "weekly_rank": weekly_profile["weekly_rank"],
             "entitlement_mode": (
                 "supabase_required"
                 if legacy_routes.SUPABASE_ENTITLEMENT.enabled
@@ -457,7 +427,6 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
             "subscription_total_expires_at": subscription_total_expires_at,
             "subscription_queued_days": subscription_queued_days,
             "subscription_queued_count": subscription_queued_count,
-            "telegram_pricing": telegram_pricing,
             "referral": referral,
         }
         authenticated_for_log = bool(payload["authenticated"])
@@ -493,95 +462,3 @@ def apply_referral_code(request: Request, body: ReferralApplyRequest) -> Dict[st
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-def login_with_telegram(request: Request, body: TelegramLoginRequest) -> Dict[str, Any]:
-    identity = _require_auth_identity_without_subscription_gate(request)
-    pricing = TelegramGroupPricing()
-    if not pricing.configured:
-        raise HTTPException(status_code=503, detail="telegram login is not configured")
-    try:
-        payload = body.model_dump() if hasattr(body, "model_dump") else body.dict()
-        verified = pricing.verify_login_payload(payload)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    telegram_id = int(verified["telegram_id"])
-    username = str(verified.get("username") or "").strip()
-    db = DBManager()
-    db.upsert_user(telegram_id, username)
-    bind_result = db.bind_supabase_identity(
-        telegram_id=telegram_id,
-        supabase_user_id=identity["user_id"],
-        supabase_email=identity.get("email") or "",
-    )
-    if not bind_result.get("ok"):
-        raise HTTPException(status_code=409, detail=str(bind_result.get("reason") or "telegram bind failed"))
-    price = pricing.resolve_price_for_telegram_id(telegram_id)
-    return {
-        "ok": True,
-        "telegram": verified,
-        "binding": bind_result,
-        "telegram_pricing": price,
-    }
-
-
-def bind_telegram_by_token(request: Request, body) -> Dict[str, Any]:
-    """Bind Telegram identity using a one-time token from the bot /bind command."""
-    identity = _require_auth_identity_without_subscription_gate(request)
-
-    token = str(getattr(body, "token", "") or "").strip()
-    if not token:
-        raise HTTPException(status_code=400, detail="bind_token is required")
-
-    db = DBManager()
-    telegram_id = db.consume_bind_token(token)
-    if telegram_id is None:
-        raise HTTPException(status_code=400, detail="invalid or expired bind token")
-
-    db.upsert_user(telegram_id, "")
-    bind_result = db.bind_supabase_identity(
-        telegram_id=telegram_id,
-        supabase_user_id=identity["user_id"],
-        supabase_email=identity.get("email") or "",
-    )
-    if not bind_result.get("ok"):
-        raise HTTPException(
-            status_code=409,
-            detail=str(bind_result.get("reason") or "telegram bind failed"),
-        )
-
-    price = TelegramGroupPricing().resolve_price_for_telegram_id(telegram_id)
-    return {
-        "ok": True,
-        "telegram_id": telegram_id,
-        "binding": bind_result,
-        "telegram_pricing": price,
-    }
-
-
-def create_telegram_bot_bind_link(request: Request) -> Dict[str, Any]:
-    """Create a one-time web-to-bot bind deep link for the authenticated account."""
-    identity = _require_auth_identity_without_subscription_gate(request)
-
-    db = DBManager()
-    token = db.create_web_bind_token(
-        supabase_user_id=identity["user_id"],
-        supabase_email=identity.get("email") or "",
-        ttl_minutes=10,
-    )
-    start_param = f"bind_{token}"
-    bot_username = str(
-        legacy_routes.os.getenv("TELEGRAM_BOT_USERNAME")
-        or legacy_routes.os.getenv("NEXT_PUBLIC_TELEGRAM_BOT_USERNAME")
-        or "polyyuanbot"
-    ).strip().lstrip("@")
-    bot_url = f"https://t.me/{bot_username}?start={start_param}"
-    bot_command = f"/start {start_param}"
-    return {
-        "ok": True,
-        "token": token,
-        "start_param": start_param,
-        "bot_command": bot_command,
-        "bot_url": bot_url,
-        "expires_in_seconds": 600,
-    }

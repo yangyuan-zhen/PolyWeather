@@ -1,7 +1,7 @@
 """Authentication guards and identity resolution for PolyWeather."""
 
 import os
-from typing import Any, Dict
+from typing import Dict
 
 from fastapi import HTTPException, Request
 from loguru import logger
@@ -125,26 +125,6 @@ def _resolve_auth_points(request: Request, account_db=None) -> int:
                 )
 
     return points
-
-
-def _resolve_weekly_profile(request: Request, account_db=None) -> Dict[str, Any]:
-
-    if account_db is None:
-        from web.core import _account_db as _db
-        account_db = _db
-
-    user_id = str(getattr(request.state, "auth_user_id", "") or "").strip()
-    if not user_id:
-        return {"weekly_points": 0, "weekly_rank": None}
-    try:
-        profile = account_db.get_weekly_profile_by_supabase_user_id(user_id)
-        return {
-            "weekly_points": int(profile.get("weekly_points") or 0),
-            "weekly_rank": profile.get("weekly_rank"),
-        }
-    except Exception as exc:
-        logger.warning(f"auth weekly profile fallback failed user_id={user_id}: {exc}")
-        return {"weekly_points": 0, "weekly_rank": None}
 
 
 def _assert_entitlement(request: Request) -> None:

@@ -58,9 +58,6 @@ POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN=
 # WalletConnect（支持手机钱包扫码）
 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
 NEXT_PUBLIC_WALLETCONNECT_POLYGON_RPC_URL=https://polygon-bor-rpc.publicnode.com
-
-# Overlay 跳转
-NEXT_PUBLIC_TELEGRAM_GROUP_URL=https://t.me/<your_group>
 ```
 
 ### 4.2 后端 / Bot（.env）

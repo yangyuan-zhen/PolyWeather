@@ -487,7 +487,7 @@ def get_ops_billing_risk(
     trial_claims = collect(
         "trial_claims",
         {
-            "select": "id,user_id,email,telegram_user_id,claimed_at,created_at",
+            "select": "id,user_id,email,claimed_at,created_at",
             "order": "created_at.desc",
             "limit": str(max(safe_limit * 10, 500)),
         },

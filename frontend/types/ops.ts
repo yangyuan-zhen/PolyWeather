@@ -287,12 +287,9 @@ export type BillingRiskPayload = {
 };
 
 export type OpsUser = {
-  telegram_id?: number;
   username?: string;
   supabase_email?: string;
   points?: number;
-  weekly_points?: number;
-  message_count?: number;
 };
 
 export type UsersPayload = {
@@ -323,17 +320,6 @@ export type MembershipEntry = {
 export type MembershipsPayload = {
   memberships?: MembershipEntry[];
   total?: number;
-};
-
-export type LeaderboardEntry = {
-  telegram_id?: number;
-  username?: string;
-  weekly_points?: number;
-  rank?: number;
-};
-
-export type LeaderboardPayload = {
-  leaderboard?: LeaderboardEntry[];
 };
 
 export type FunnelPayload = {

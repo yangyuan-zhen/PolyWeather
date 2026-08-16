@@ -9,7 +9,6 @@ from typing import Any, Dict, List, Optional
 from web3 import Web3
 
 from src.auth.supabase_entitlement import SUPABASE_ENTITLEMENT
-from src.auth.telegram_group_pricing import TelegramGroupPricing
 from src.payments.chain_config import REFERRAL_FIRST_MONTH_DISCOUNT_USDC
 from src.payments.checkout.models import PaymentCheckoutError, PaymentIntentRecord
 from src.payments.checkout.admin import _format_decimal
@@ -82,37 +81,6 @@ class IntentMixin:
             "amount_usdc": _format_decimal(amount_dec),
             "amount_usdc_decimal": amount_dec,
         }
-
-    def _apply_telegram_group_pricing(
-        self,
-        user_id: str,
-        plan: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        out = dict(plan)
-        if str(out.get("plan_code") or "").strip().lower() != "pro_monthly":
-            return out
-        pricing = TelegramGroupPricing()
-        if not pricing.configured:
-            return out
-        telegram_id = None
-        try:
-            user = self._db.get_user_by_supabase_user_id(user_id)
-            if isinstance(user, dict):
-                telegram_id = int(user.get("telegram_id") or 0) or None
-        except Exception:
-            telegram_id = None
-        price_payload = pricing.resolve_price_for_telegram_id(telegram_id)
-        if not bool(price_payload.get("is_private_group_member")):
-            return out
-        amount_dec = _parse_decimal(
-            price_payload.get("amount_usdc"), out["amount_usdc_decimal"]
-        )
-        if amount_dec <= 0:
-            return out
-        out["amount_usdc"] = _format_decimal(amount_dec)
-        out["amount_usdc_decimal"] = amount_dec
-        out["telegram_pricing"] = price_payload
-        return out
 
     def _get_pending_referral_attribution(self, user_id: str) -> Optional[Dict[str, Any]]:
         try:
@@ -201,8 +169,6 @@ class IntentMixin:
     ) -> Dict[str, Any]:
         self._ensure_enabled()
         selected_plan = self._select_plan(plan_code)
-        if self.telegram_payment_pricing_enabled:
-            selected_plan = self._apply_telegram_group_pricing(user_id, selected_plan)
         plan = self._apply_referral_pricing(user_id, selected_plan)
         selected_token = self._resolve_supported_token(token_address, chain_id)
         selected_chain_id = int(selected_token.chain_id)
@@ -265,8 +231,6 @@ class IntentMixin:
         combined_metadata["chain_id"] = selected_chain_id
         combined_metadata["chain_code"] = selected_token.chain_code
         combined_metadata["chain_name"] = selected_token.chain_name
-        if isinstance(plan.get("telegram_pricing"), dict):
-            combined_metadata["telegram_pricing"] = plan["telegram_pricing"]
         if isinstance(plan.get("referral_attribution"), dict):
             combined_metadata["referral_attribution"] = plan["referral_attribution"]
         if isinstance(plan.get("referral_discount"), dict):

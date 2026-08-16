@@ -35,7 +35,7 @@ const PRO_FEATURES_EN = [
   "DEB blend forecast with model-spread context",
   "Model-implied distribution and probability estimates",
   "Intraday windows, deviation metrics, and settlement context",
-  "Paid Telegram group eligibility and alert workflows",
+  "Settlement-change alert workflows",
   "Priority support for subscription and access issues",
 ];
 
@@ -44,7 +44,7 @@ const PRO_FEATURES_ZH = [
   "DEB 智能融合预报与模型分歧背景",
   "模型隐含分布预测与概率估算",
   "日内观测窗口、偏差度量与结算背景",
-  "付费 Telegram 群准入与提醒工作流",
+  "结算变化提醒工作流",
   "订阅与准入问题优先支持",
 ];
 
@@ -260,7 +260,7 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
         {
           icon: "shield",
           title: "Access Control",
-          body: "Trial users get the same product experience as Pro, except the paid Telegram group link stays hidden.",
+          body: "Trial users get the same product experience as Pro.",
         },
       ]
     : [
@@ -277,7 +277,7 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
         {
           icon: "shield",
           title: "权益分层",
-          body: "试用期权益和 Pro 一致，唯一例外是不显示付费 Telegram 群链接。",
+          body: "试用期权益和 Pro 一致。",
         },
       ];
 
@@ -356,8 +356,8 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
               </div>
               <p className="landing-rise landing-delay-3 mt-4 text-sm text-slate-500">
                 {isEn
-                  ? "Start with a one-time 3-day trial. Trial access matches Pro except for the paid Telegram group link."
-                  : "新用户可先领一次 3 天试用。试用期权益和 Pro 一致，除了不显示付费 Telegram 群链接。"}
+                  ? "Start with a one-time 3-day trial. Trial access matches Pro."
+                  : "新用户可先领一次 3 天试用。试用期权益和 Pro 一致。"}
               </p>
             </div>
 
@@ -603,8 +603,8 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                 </h3>
                 <p className="mt-3 flex-1 text-sm leading-7 text-slate-600">
                   {isEn
-                    ? "Automatically granted once after signup. Trial access matches Pro, except trial accounts do not see the paid Telegram group link."
-                    : "注册后自动开通一次，体验核心产品；试用期权益和 Pro 一致，除了不显示付费 Telegram 群链接。"}
+                    ? "Automatically granted once after signup. Trial access matches Pro."
+                    : "注册后自动开通一次，体验核心产品；试用期权益和 Pro 一致。"}
                 </p>
                 <Link
                   href="/auth/login?next=%2Fterminal&mode=signup"
@@ -629,8 +629,8 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                 </h3>
                 <p className="mt-3 text-sm leading-7 text-slate-600">
                   {isEn
-                    ? "Full terminal access, chart guides, advanced context, and paid Telegram group eligibility."
-                    : "完整终端权限、读图指南、高级上下文和付费 Telegram 群准入资格。"}
+                    ? "Full terminal access, chart guides, advanced context, and settlement-change alert workflows."
+                    : "完整终端权限、读图指南、高级上下文和结算变化提醒工作流。"}
                 </p>
                 <div className="mt-7 space-y-2">
                   <div className="flex items-baseline gap-2">
@@ -682,8 +682,8 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                 </h3>
                 <p className="mt-3 flex-1 text-sm leading-7 text-slate-600">
                   {isEn
-                    ? "Not sold as a public product right now. The public site and Telegram workflow remain the supported product surface."
-                    : "目前不作为公开产品售卖。当前支持的产品形态仍是网站终端和 Telegram 工作流。"}
+                    ? "Not sold as a public product right now. The public site and Telegram alerts remain the supported product surface."
+                    : "目前不作为公开产品售卖。当前支持的产品形态仍是网站终端和 Telegram 提醒。"}
                 </p>
                 <div className="mt-7 rounded-md border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600">
                   {isEn ? "Not for sale. We will revisit API packaging only after endpoint docs, keys, limits, and support boundaries are ready." : "暂不售卖。只有接口文档、key、限额和支持边界准备好后，才重新评估 API 产品化。"}
@@ -707,8 +707,8 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                 </h3>
                 <p className="mt-3 flex-1 text-sm leading-7 text-slate-600">
                   {isEn
-                    ? "For teams that need shared access, Telegram workflow support, and manual onboarding."
-                    : "面向需要共享权限、Telegram 工作流支持和人工开通的团队。"}
+                    ? "For teams that need shared access, alert workflow support, and manual onboarding."
+                    : "面向需要共享权限、提醒工作流支持和人工开通的团队。"}
                 </p>
                 <div className="mt-7 rounded-md border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600">
                   {isEn
@@ -804,8 +804,8 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
               </h2>
               <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600">
                 {isEn
-                  ? "Reach out directly for subscription recovery, Telegram access, city coverage, and product feedback."
-                  : "订阅恢复、Telegram 入群、城市覆盖和产品反馈，可以直接联系我。"}
+                  ? "Reach out directly for subscription recovery, city coverage, and product feedback."
+                  : "订阅恢复、城市覆盖和产品反馈，可以直接联系我。"}
               </p>
             </div>
 

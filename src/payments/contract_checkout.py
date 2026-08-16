@@ -278,10 +278,6 @@ class PaymentContractCheckoutService(RpcMixin, TokenMixin, WalletMixin, IntentMi
         self.notify_telegram = _env_bool(
             "POLYWEATHER_PAYMENT_TELEGRAM_NOTIFY_ENABLED", True
         )
-        self.telegram_payment_pricing_enabled = _env_bool(
-            "POLYWEATHER_PAYMENT_TELEGRAM_PRICING_ENABLED",
-            True,
-        )
         self.points_enabled = _env_bool("POLYWEATHER_PAYMENT_POINTS_ENABLED", True)
         self.points_per_usdc = max(
             1, _env_int("POLYWEATHER_PAYMENT_POINTS_PER_USDC", 500)

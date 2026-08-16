@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import sqlite3
@@ -18,26 +17,19 @@ from src.auth.supabase_admin_client import get_supabase_admin_client
 
 
 class UserRepo:
-    """Repository for user accounts, points, leaderboards, and growth milestones."""
+    """Repository for user accounts, points, and growth milestones."""
 
     _sync_lock = threading.Lock()
     _sync_cache: Dict[str, Dict[str, Any]] = {}
-    _profile_sync_lock = threading.Lock()
-    _profile_sync_cache: Dict[str, Dict[str, Any]] = {}
 
     def __init__(self, get_connection):
         self._get_connection = get_connection
-        self._profile_sync_cache = {}
-        self._profile_sync_lock = threading.Lock()
         self._sync_cache = {}
         self._sync_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Supabase sync helpers (copied verbatim from DBManager)
     # ------------------------------------------------------------------
-
-    def _supabase_profiles_endpoint(self) -> str:
-        return get_supabase_admin_client().profiles_endpoint()
 
     def _supabase_service_headers(self) -> Dict[str, str]:
         client = get_supabase_admin_client()
@@ -47,73 +39,6 @@ class UserRepo:
 
     def _supabase_admin_users_endpoint(self) -> str:
         return get_supabase_admin_client().admin_users_endpoint()
-
-    def _profile_sync_min_interval_sec(self) -> float:
-        raw = str(
-            os.getenv("POLYWEATHER_SUPABASE_PROFILE_SYNC_MIN_INTERVAL_SEC", "3600")
-            or ""
-        ).strip()
-        try:
-            return max(0.0, float(raw))
-        except ValueError:
-            return 3600.0
-
-    def _profile_sync_cache_key(self, supabase_user_id: str) -> str:
-        endpoint = self._supabase_profiles_endpoint()
-        return f"{endpoint}:{str(supabase_user_id or '').strip().lower()}"
-
-    def _should_skip_profile_sync(
-        self,
-        *,
-        supabase_user_id: str,
-        telegram_id: Optional[int],
-        telegram_username: Optional[str],
-        force: bool = False,
-    ) -> bool:
-        if force:
-            return False
-        min_interval = self._profile_sync_min_interval_sec()
-        if min_interval <= 0:
-            return False
-        payload_key = {
-            "telegram_id": int(telegram_id) if telegram_id is not None else None,
-            "telegram_username": str(telegram_username or "").strip() or None,
-        }
-        cache_key = self._profile_sync_cache_key(supabase_user_id)
-        now_ts = time.monotonic()
-        with self._profile_sync_lock:
-            cached = self._profile_sync_cache.get(cache_key)
-            if not isinstance(cached, dict):
-                return False
-            cached_payload = cached.get("payload")
-            cached_ts = float(cached.get("ts") or 0.0)
-            return cached_payload == payload_key and now_ts - cached_ts < min_interval
-
-    def _remember_profile_sync(
-        self,
-        *,
-        supabase_user_id: str,
-        telegram_id: Optional[int],
-        telegram_username: Optional[str],
-    ) -> None:
-        cache_key = self._profile_sync_cache_key(supabase_user_id)
-        payload_key = {
-            "telegram_id": int(telegram_id) if telegram_id is not None else None,
-            "telegram_username": str(telegram_username or "").strip() or None,
-        }
-        with self._profile_sync_lock:
-            self._profile_sync_cache[cache_key] = {
-                "payload": payload_key,
-                "ts": time.monotonic(),
-            }
-            if len(self._profile_sync_cache) > 4096:
-                oldest_key = min(
-                    self._profile_sync_cache,
-                    key=lambda key: float(
-                        self._profile_sync_cache[key].get("ts") or 0.0
-                    ),
-                )
-                self._profile_sync_cache.pop(oldest_key, None)
 
     def _points_sync_cache_key(self, telegram_id: int) -> str:
         return f"{id(self)}:{int(telegram_id)}"
@@ -192,18 +117,11 @@ class UserRepo:
         with self._get_connection() as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
-                "SELECT supabase_user_id FROM supabase_bindings WHERE telegram_id = ? LIMIT 1",
+                "SELECT supabase_user_id FROM users WHERE telegram_id = ? LIMIT 1",
                 (int(telegram_id),),
             ).fetchone()
             if row and row["supabase_user_id"]:
                 supabase_user_id = str(row["supabase_user_id"]).strip()
-            if not supabase_user_id:
-                row = conn.execute(
-                    "SELECT supabase_user_id FROM users WHERE telegram_id = ? LIMIT 1",
-                    (int(telegram_id),),
-                ).fetchone()
-                if row and row["supabase_user_id"]:
-                    supabase_user_id = str(row["supabase_user_id"]).strip()
             if not supabase_user_id:
                 return False
             pts_row = conn.execute(
@@ -231,117 +149,9 @@ class UserRepo:
             )
         return ok
 
-    def _sync_supabase_profile_telegram_fields(
-        self,
-        *,
-        supabase_user_id: str,
-        telegram_id: Optional[int],
-        telegram_username: Optional[str],
-        force: bool = False,
-    ) -> bool:
-        normalized_uid = str(supabase_user_id or "").strip().lower()
-        endpoint = self._supabase_profiles_endpoint()
-        headers = self._supabase_service_headers()
-        if not normalized_uid or not endpoint or not headers:
-            return False
-        if self._should_skip_profile_sync(
-            supabase_user_id=normalized_uid,
-            telegram_id=telegram_id,
-            telegram_username=telegram_username,
-            force=force,
-        ):
-            return False
-
-        payload = {
-            "telegram_user_id": int(telegram_id) if telegram_id is not None else None,
-            "telegram_username": str(telegram_username or "").strip() or None,
-            "updated_at": datetime.now().isoformat(),
-        }
-        admin = get_supabase_admin_client()
-        ok = admin.patch_profile(normalized_uid, payload)
-        if ok:
-            self._remember_profile_sync(
-                supabase_user_id=normalized_uid,
-                telegram_id=telegram_id,
-                telegram_username=telegram_username,
-            )
-        return ok
-
-    def _sync_bound_supabase_profiles_for_telegram(
-        self,
-        *,
-        telegram_id: int,
-        telegram_username: Optional[str],
-    ) -> None:
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """
-                SELECT supabase_user_id
-                FROM supabase_bindings
-                WHERE telegram_id = ?
-                """,
-                (int(telegram_id),),
-            ).fetchall()
-        for row in rows:
-            user_id = str((row["supabase_user_id"] if row else "") or "").strip().lower()
-            if not user_id:
-                continue
-            self._sync_supabase_profile_telegram_fields(
-                supabase_user_id=user_id,
-                telegram_id=telegram_id,
-                telegram_username=telegram_username,
-            )
-
     # ------------------------------------------------------------------
     # Static helpers
     # ------------------------------------------------------------------
-
-    @staticmethod
-    def _float_or_none(value: Any) -> Optional[float]:
-        try:
-            if value is None or value == "":
-                return None
-            return float(value)
-        except (TypeError, ValueError):
-            return None
-
-    @staticmethod
-    def _int_or_none(value: Any) -> Optional[int]:
-        try:
-            if value is None or value == "":
-                return None
-            return int(float(value))
-        except (TypeError, ValueError):
-            return None
-
-    @staticmethod
-    def _parse_datetime_or_none(value: Any) -> Optional[datetime]:
-        raw = str(value or "").strip()
-        if not raw:
-            return None
-        try:
-            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-        except ValueError:
-            return None
-        if parsed.tzinfo is None:
-            return parsed.replace(tzinfo=timezone.utc)
-        return parsed.astimezone(timezone.utc)
-
-    @classmethod
-    def _source_latency_or_none(cls, observed_at: Any, fetched_at: Any) -> Optional[float]:
-        observed = cls._parse_datetime_or_none(observed_at)
-        fetched = cls._parse_datetime_or_none(fetched_at)
-        if observed is None or fetched is None:
-            return None
-        return max(0.0, round((fetched - observed).total_seconds(), 3))
-
-    @staticmethod
-    def _safe_week_key(value: str) -> str:
-        text = str(value or "").strip()
-        if len(text) >= 8 and "-W" in text:
-            return text[:8]
-        return ""
 
     @staticmethod
     def _read_bonus_config(env_key: str, fallback: int) -> int:
@@ -419,22 +229,6 @@ class UserRepo:
         row = conn.execute(
             """
             SELECT telegram_id
-            FROM supabase_bindings
-            WHERE lower(trim(COALESCE(supabase_user_id, ''))) = ?
-            LIMIT 1
-            """,
-            (key,),
-        ).fetchone()
-        if row:
-            try:
-                return int(row["telegram_id"])
-            except Exception:
-                return None
-
-        # Legacy fallback before supabase_bindings migration.
-        row = conn.execute(
-            """
-            SELECT telegram_id
             FROM users
             WHERE lower(trim(COALESCE(supabase_user_id, ''))) = ?
             LIMIT 1
@@ -447,28 +241,6 @@ class UserRepo:
             return int(row["telegram_id"])
         except Exception:
             return None
-
-    def _upsert_weekly_archive(
-        self,
-        conn: sqlite3.Connection,
-        telegram_id: int,
-        week_key: str,
-        points: int,
-    ) -> None:
-        wk = self._safe_week_key(week_key)
-        if not wk:
-            return
-        pts = max(0, int(points or 0))
-        conn.execute(
-            """
-            INSERT INTO weekly_points_archive (telegram_id, week_key, points, updated_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(telegram_id, week_key) DO UPDATE SET
-                points = excluded.points,
-                updated_at = excluded.updated_at
-            """,
-            (int(telegram_id), wk, pts, datetime.now().isoformat()),
-        )
 
     # ------------------------------------------------------------------
     # Points ledger
@@ -648,10 +420,6 @@ class UserRepo:
                     expiry = datetime.fromisoformat(user['web_expiry'])
                     if expiry < now:
                         user['is_web_premium'] = False
-                if user['group_expiry']:
-                    expiry = datetime.fromisoformat(user['group_expiry'])
-                    if expiry < now:
-                        user['is_group_premium'] = False
                 return user
         return None
 
@@ -677,38 +445,6 @@ class UserRepo:
                 return dict(row)
         return None
 
-    def list_supabase_user_ids_for_telegram(self, telegram_id: int) -> List[str]:
-        """Return all Supabase accounts currently bound to a Telegram user."""
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """
-                SELECT supabase_user_id
-                FROM supabase_bindings
-                WHERE telegram_id = ?
-                ORDER BY updated_at DESC, supabase_user_id ASC
-                """,
-                (int(telegram_id),),
-            ).fetchall()
-            ids = {
-                str(row["supabase_user_id"] or "").strip().lower()
-                for row in rows
-                if str(row["supabase_user_id"] or "").strip()
-            }
-            legacy = conn.execute(
-                """
-                SELECT supabase_user_id
-                FROM users
-                WHERE telegram_id = ?
-                LIMIT 1
-                """,
-                (int(telegram_id),),
-            ).fetchone()
-            legacy_id = str((legacy["supabase_user_id"] if legacy else "") or "").strip().lower()
-            if legacy_id:
-                ids.add(legacy_id)
-            return sorted(ids)
-
     def search_users(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
         text = str(query or "").strip()
         safe_limit = max(1, min(int(limit or 20), 100))
@@ -721,17 +457,11 @@ class UserRepo:
                         telegram_id,
                         username,
                         points,
-                        daily_points,
-                        daily_points_date,
-                        weekly_points,
-                        weekly_points_week,
-                        message_count,
                         supabase_user_id,
                         supabase_email,
-                        created_at,
-                        last_message_at
+                        created_at
                     FROM users
-                    ORDER BY points DESC, message_count DESC, telegram_id ASC
+                    ORDER BY points DESC, telegram_id ASC
                     LIMIT ?
                     """,
                     (safe_limit,),
@@ -744,21 +474,15 @@ class UserRepo:
                     telegram_id,
                     username,
                     points,
-                    daily_points,
-                    daily_points_date,
-                    weekly_points,
-                    weekly_points_week,
-                    message_count,
                     supabase_user_id,
                     supabase_email,
-                    created_at,
-                    last_message_at
+                    created_at
                 FROM users
                 WHERE
                     CAST(telegram_id AS TEXT) = ?
                     OR lower(trim(COALESCE(username, ''))) LIKE ?
                     OR lower(trim(COALESCE(supabase_email, ''))) LIKE ?
-                ORDER BY points DESC, message_count DESC, telegram_id ASC
+                ORDER BY points DESC, telegram_id ASC
                 LIMIT ?
                 """,
                 (
@@ -792,9 +516,7 @@ class UserRepo:
                     username,
                     supabase_email,
                     created_at,
-                    points,
-                    weekly_points,
-                    message_count
+                    points
                 FROM users
                 WHERE lower(trim(COALESCE(supabase_user_id, ''))) IN ({placeholders})
                 """,
@@ -830,17 +552,6 @@ class UserRepo:
                 """,
                 (email,),
             ).fetchone()
-            if not row:
-                row = conn.execute(
-                    """
-                    SELECT u.points
-                    FROM users u
-                    JOIN supabase_bindings b ON b.telegram_id = u.telegram_id
-                    WHERE lower(trim(COALESCE(b.supabase_email, ''))) = ?
-                    LIMIT 1
-                    """,
-                    (email,),
-                ).fetchone()
             if row:
                 return max(0, int(row["points"] or 0))
         return 0
@@ -1087,191 +798,6 @@ class UserRepo:
                 username = excluded.username
             """, (telegram_id, username))
             conn.commit()
-        self._sync_bound_supabase_profiles_for_telegram(
-            telegram_id=int(telegram_id),
-            telegram_username=username,
-        )
-
-    def add_message_activity(
-        self,
-        telegram_id: int,
-        text: str,
-        points_to_add: int = 1,
-        cooldown_sec: int = 30,
-        daily_cap: int = 20,
-        min_text_length: int = 4,
-    ) -> Dict[str, Any]:
-        """Award points for valid group activity with cooldown and daily cap."""
-        now = datetime.now()
-        normalized = "".join((text or "").split()).lower()
-        if len(normalized) < min_text_length:
-            return {"awarded": False, "reason": "too_short"}
-        fingerprint = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
-
-        today_str = now.strftime("%Y-%m-%d")
-        iso_year, iso_week, _ = now.isocalendar()
-        week_key = f"{iso_year}-W{iso_week:02d}"
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            # Keep dedupe table bounded.
-            stale_day = (now - timedelta(days=14)).strftime("%Y-%m-%d")
-            conn.execute(
-                "DELETE FROM activity_fingerprints WHERE activity_date < ?",
-                (stale_day,),
-            )
-            cursor = conn.execute(
-                """
-                SELECT points, daily_points, daily_points_date, weekly_points, weekly_points_week, last_message_at,
-                       message_count, welcome_bonus_claimed
-                FROM users WHERE telegram_id = ?
-                """,
-                (telegram_id,),
-            )
-            row = cursor.fetchone()
-            if not row:
-                return {"awarded": False, "reason": "user_missing"}
-
-            duplicated = conn.execute(
-                """
-                SELECT 1
-                FROM activity_fingerprints
-                WHERE telegram_id = ? AND activity_date = ? AND fingerprint = ?
-                LIMIT 1
-                """,
-                (telegram_id, today_str, fingerprint),
-            ).fetchone()
-            if duplicated:
-                return {"awarded": False, "reason": "duplicate_content"}
-
-            last_message_at = row["last_message_at"]
-            if last_message_at:
-                last_at = datetime.fromisoformat(last_message_at)
-                if (now - last_at).total_seconds() < cooldown_sec:
-                    return {"awarded": False, "reason": "cooldown"}
-
-            daily_points = int(row["daily_points"] or 0)
-            daily_points_date = row["daily_points_date"] or ""
-            if daily_points_date != today_str:
-                daily_points = 0
-            # Guard against historical overflow values (legacy bug).
-            if daily_points > daily_cap:
-                daily_points = daily_cap
-
-            weekly_points = int(row["weekly_points"] or 0)
-            weekly_points_week = row["weekly_points_week"] or ""
-            if weekly_points_week != week_key:
-                if weekly_points_week and weekly_points > 0:
-                    self._upsert_weekly_archive(
-                        conn,
-                        telegram_id=telegram_id,
-                        week_key=weekly_points_week,
-                        points=weekly_points,
-                    )
-                weekly_points = 0
-
-            if daily_points >= daily_cap:
-                conn.execute(
-                    """
-                    UPDATE users
-                    SET last_message_at = ?, daily_points = ?, daily_points_date = ?,
-                        weekly_points = ?, weekly_points_week = ?
-                    WHERE telegram_id = ?
-                    """,
-                    (
-                        now.isoformat(),
-                        daily_points,
-                        today_str,
-                        weekly_points,
-                        week_key,
-                        telegram_id,
-                    ),
-                )
-                self._upsert_weekly_archive(
-                    conn,
-                    telegram_id=telegram_id,
-                    week_key=week_key,
-                    points=weekly_points,
-                )
-                conn.commit()
-                return {
-                    "awarded": False,
-                    "reason": "daily_cap",
-                    "daily_points": daily_points,
-                    "weekly_points": weekly_points,
-                }
-
-            remaining = max(0, daily_cap - daily_points)
-            points_added = min(max(0, points_to_add), remaining)
-            if points_added <= 0:
-                conn.commit()
-                return {
-                    "awarded": False,
-                    "reason": "daily_cap",
-                    "daily_points": daily_points,
-                    "weekly_points": weekly_points,
-                }
-
-            welcome_bonus = 0
-            first_message_bonus = 0
-
-            is_first_message_of_day = daily_points == 0
-            is_new_user = int(row["message_count"] or 0) == 0 and not int(row["welcome_bonus_claimed"] or 0)
-
-            if is_new_user:
-                welcome_bonus = self._read_bonus_config("POLYWEATHER_BOT_WELCOME_BONUS", 20)
-            if is_first_message_of_day:
-                first_message_bonus = self._read_bonus_config("POLYWEATHER_BOT_FIRST_MESSAGE_BONUS", 2)
-
-            total_added = points_added + welcome_bonus + first_message_bonus
-
-            conn.execute("""
-                UPDATE users
-                SET message_count = message_count + 1,
-                    points = points + ?,
-                    daily_points = ?,
-                    daily_points_date = ?,
-                    weekly_points = ?,
-                    weekly_points_week = ?,
-                    last_message_at = ?,
-                    welcome_bonus_claimed = MAX(welcome_bonus_claimed, ?)
-                WHERE telegram_id = ?
-            """, (
-                total_added,
-                daily_points + total_added,
-                today_str,
-                weekly_points + total_added,
-                week_key,
-                now.isoformat(),
-                1 if welcome_bonus > 0 else 0,
-                telegram_id,
-            ))
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO activity_fingerprints
-                (telegram_id, activity_date, fingerprint)
-                VALUES (?, ?, ?)
-                """,
-                (telegram_id, today_str, fingerprint),
-            )
-            self._upsert_weekly_archive(
-                conn,
-                telegram_id=telegram_id,
-                week_key=week_key,
-                points=weekly_points + total_added,
-            )
-            conn.commit()
-            self._sync_points_to_supabase_user_metadata(telegram_id)
-            return {
-                "awarded": True,
-                "reason": "ok",
-                "points_added": points_added,
-                "welcome_bonus": welcome_bonus,
-                "first_message_bonus": first_message_bonus,
-                "total_added": total_added,
-                "daily_points": daily_points + total_added,
-                "weekly_points": weekly_points + total_added,
-                "weekly_week": week_key,
-            }
 
     def spend_points(self, telegram_id: int, amount: int) -> Dict[str, Any]:
         if amount <= 0:
@@ -1359,315 +885,12 @@ class UserRepo:
         with self._get_connection() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute("""
-                SELECT username, points, message_count 
-                FROM users 
-                ORDER BY points DESC 
+                SELECT username, points
+                FROM users
+                ORDER BY points DESC
                 LIMIT ?
             """, (limit,))
             return [dict(row) for row in cursor.fetchall()]
-
-    def get_weekly_leaderboard(self, limit: int = 10):
-        now = datetime.now()
-        iso_year, iso_week, _ = now.isocalendar()
-        week_key = f"{iso_year}-W{iso_week:02d}"
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute(
-                """
-                SELECT *
-                FROM (
-                    SELECT
-                        username,
-                        u.points AS points,
-                        u.message_count AS message_count,
-                        u.telegram_id AS telegram_id,
-                        COALESCE(a.points,
-                            CASE
-                                WHEN u.weekly_points_week = ? THEN COALESCE(u.weekly_points, 0)
-                                ELSE 0
-                            END
-                        ) AS weekly_points
-                    FROM users u
-                    LEFT JOIN weekly_points_archive a
-                        ON a.telegram_id = u.telegram_id
-                        AND a.week_key = ?
-                ) ranked
-                WHERE weekly_points > 0
-                ORDER BY weekly_points DESC, points DESC, message_count DESC, telegram_id ASC
-                LIMIT ?
-                """,
-                (week_key, week_key, limit),
-            )
-            return [dict(row) for row in cursor.fetchall()]
-
-    def get_weekly_profile(self, telegram_id: int) -> Dict[str, Any]:
-        now = datetime.now()
-        iso_year, iso_week, _ = now.isocalendar()
-        week_key = f"{iso_year}-W{iso_week:02d}"
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """
-                SELECT
-                    u.telegram_id,
-                    COALESCE(u.points, 0) AS points,
-                    COALESCE(u.message_count, 0) AS message_count,
-                    COALESCE(a.points,
-                        CASE
-                            WHEN u.weekly_points_week = ? THEN COALESCE(u.weekly_points, 0)
-                            ELSE 0
-                        END
-                    ) AS weekly_points
-                FROM users u
-                LEFT JOIN weekly_points_archive a
-                    ON a.telegram_id = u.telegram_id
-                    AND a.week_key = ?
-                ORDER BY weekly_points DESC, points DESC, message_count DESC, u.telegram_id ASC
-                """,
-                (week_key, week_key),
-            ).fetchall()
-
-        weekly_rank: Optional[int] = None
-        weekly_points = 0
-        total_ranked = 0
-        for idx, row in enumerate(rows, start=1):
-            row_weekly_points = int(row["weekly_points"] or 0)
-            if row_weekly_points > 0:
-                total_ranked += 1
-            if int(row["telegram_id"] or 0) == int(telegram_id):
-                weekly_rank = idx if row_weekly_points > 0 else None
-                weekly_points = row_weekly_points
-        return {
-            "week_key": week_key,
-            "weekly_points": max(0, int(weekly_points or 0)),
-            "weekly_rank": weekly_rank,
-            "total_ranked": total_ranked,
-        }
-
-    def get_weekly_profile_by_supabase_user_id(self, supabase_user_id: str) -> Dict[str, Any]:
-        key = str(supabase_user_id or "").strip().lower()
-        if not key:
-            return {"weekly_points": 0, "weekly_rank": None, "total_ranked": 0}
-
-        now = datetime.now()
-        iso_year, iso_week, _ = now.isocalendar()
-        week_key = f"{iso_year}-W{iso_week:02d}"
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            target_telegram_id = self._find_telegram_id_by_supabase_user_id(conn, key)
-            if target_telegram_id is None:
-                return {"weekly_points": 0, "weekly_rank": None, "total_ranked": 0}
-            rows = conn.execute(
-                """
-                SELECT
-                    telegram_id,
-                    COALESCE(points, 0) AS points,
-                    COALESCE(message_count, 0) AS message_count,
-                    CASE
-                        WHEN weekly_points_week = ? THEN COALESCE(weekly_points, 0)
-                        ELSE 0
-                    END AS weekly_points
-                FROM users
-                ORDER BY weekly_points DESC, points DESC, message_count DESC, telegram_id ASC
-                """,
-                (week_key,),
-            ).fetchall()
-
-        weekly_rank: Optional[int] = None
-        weekly_points = 0
-        for idx, row in enumerate(rows, start=1):
-            if int(row["telegram_id"] or 0) == int(target_telegram_id):
-                weekly_rank = idx
-                weekly_points = int(row["weekly_points"] or 0)
-                break
-        return {
-            "weekly_points": max(0, int(weekly_points or 0)),
-            "weekly_rank": weekly_rank,
-            "total_ranked": len(rows),
-        }
-
-    # ------------------------------------------------------------------
-    # Weekly rewards
-    # ------------------------------------------------------------------
-
-    def get_weekly_reward_candidates(self, week_key: str, limit: int = 10):
-        wk = self._safe_week_key(week_key)
-        if not wk:
-            return []
-        top_n = max(1, int(limit or 10))
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """
-                SELECT *
-                FROM (
-                    SELECT
-                        u.telegram_id,
-                        u.username,
-                        lower(trim(COALESCE(u.supabase_user_id, ''))) AS supabase_user_id,
-                        COALESCE(u.supabase_email, '') AS supabase_email,
-                        COALESCE(u.points, 0) AS points,
-                        COALESCE(u.message_count, 0) AS message_count,
-                        COALESCE(a.points,
-                            CASE
-                                WHEN u.weekly_points_week = ? THEN COALESCE(u.weekly_points, 0)
-                                ELSE 0
-                            END
-                        ) AS weekly_points
-                    FROM users u
-                    LEFT JOIN weekly_points_archive a
-                        ON a.telegram_id = u.telegram_id
-                        AND a.week_key = ?
-                ) ranked
-                WHERE weekly_points > 0
-                ORDER BY weekly_points DESC, points DESC, message_count DESC, telegram_id ASC
-                LIMIT ?
-                """,
-                (wk, wk, top_n),
-            ).fetchall()
-            return [dict(row) for row in rows]
-
-    def get_weekly_participation_candidates(self, week_key: str, exclude_ids: set):
-        wk = self._safe_week_key(week_key)
-        if not wk:
-            return []
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """
-                SELECT *
-                FROM (
-                    SELECT
-                        u.telegram_id,
-                        u.username,
-                        COALESCE(a.points,
-                            CASE
-                                WHEN u.weekly_points_week = ? THEN COALESCE(u.weekly_points, 0)
-                                ELSE 0
-                            END
-                        ) AS weekly_points
-                    FROM users u
-                    LEFT JOIN weekly_points_archive a
-                        ON a.telegram_id = u.telegram_id
-                        AND a.week_key = ?
-                ) ranked
-                WHERE weekly_points > 0
-                """,
-                (wk, wk),
-            ).fetchall()
-            return [dict(row) for row in rows if int(row["telegram_id"] or 0) not in exclude_ids]
-
-    def is_weekly_reward_settled(self, week_key: str) -> bool:
-        wk = self._safe_week_key(week_key)
-        if not wk:
-            return False
-        with self._get_connection() as conn:
-            row = conn.execute(
-                "SELECT 1 FROM weekly_reward_runs WHERE week_key = ? LIMIT 1",
-                (wk,),
-            ).fetchone()
-            return bool(row)
-
-    def mark_weekly_reward_settled(
-        self,
-        week_key: str,
-        winners_count: int,
-        summary: Optional[Dict[str, Any]] = None,
-    ) -> None:
-        wk = self._safe_week_key(week_key)
-        if not wk:
-            return
-        summary_json = None
-        if isinstance(summary, dict):
-            try:
-                summary_json = json.dumps(summary, ensure_ascii=False)
-            except Exception:
-                summary_json = None
-        with self._get_connection() as conn:
-            conn.execute(
-                """
-                INSERT INTO weekly_reward_runs (week_key, settled_at, winners_count, summary_json)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(week_key) DO UPDATE SET
-                    settled_at = excluded.settled_at,
-                    winners_count = excluded.winners_count,
-                    summary_json = excluded.summary_json
-                """,
-                (
-                    wk,
-                    datetime.now().isoformat(),
-                    max(0, int(winners_count or 0)),
-                    summary_json,
-                ),
-            )
-            conn.commit()
-
-    def apply_weekly_reward_payout(
-        self,
-        week_key: str,
-        telegram_id: int,
-        rank: int,
-        username: str,
-        points_bonus: int,
-        pro_days: int,
-        supabase_user_id: str = "",
-        pro_granted: bool = False,
-        pro_error: str = "",
-    ) -> bool:
-        wk = self._safe_week_key(week_key)
-        if not wk:
-            return False
-        bonus = max(0, int(points_bonus or 0))
-        with self._get_connection() as conn:
-            exists = conn.execute(
-                """
-                SELECT 1
-                FROM weekly_reward_payouts
-                WHERE week_key = ? AND telegram_id = ?
-                LIMIT 1
-                """,
-                (wk, int(telegram_id)),
-            ).fetchone()
-            if exists:
-                return False
-
-            if bonus > 0:
-                conn.execute(
-                    "UPDATE users SET points = COALESCE(points, 0) + ? WHERE telegram_id = ?",
-                    (bonus, int(telegram_id)),
-                )
-            conn.execute(
-                """
-                INSERT INTO weekly_reward_payouts (
-                    week_key, telegram_id, rank, username, points_bonus, pro_days,
-                    supabase_user_id, pro_granted, pro_error, created_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    wk,
-                    int(telegram_id),
-                    int(rank or 0),
-                    str(username or ""),
-                    bonus,
-                    max(0, int(pro_days or 0)),
-                    str(supabase_user_id or "").strip().lower(),
-                    1 if pro_granted else 0,
-                    str(pro_error or ""),
-                    datetime.now().isoformat(),
-                ),
-            )
-            conn.commit()
-            if bonus > 0:
-                self._sync_points_to_supabase_user_metadata(
-                    int(telegram_id),
-                    force=True,
-                )
-            return True
-
-    # ------------------------------------------------------------------
-    # User growth snapshots & milestones
-    # ------------------------------------------------------------------
 
     def record_user_growth_snapshot(
         self,

@@ -72,7 +72,6 @@ export function MembershipsPageClient() {
     if (source === "payment_contract") return "链上支付";
     if (source === "ops_manual_grant") return "后台赠送";
     if (source === "signup_trial") return "注册体验";
-    if (source === "weekly_reward") return "周奖励";
     return source;
   };
 

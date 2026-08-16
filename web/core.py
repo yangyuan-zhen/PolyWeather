@@ -126,8 +126,6 @@ from web.schemas.auth import (  # noqa: E402, F401
     FeedbackRewardRequest,
     GrantPointsRequest,
     ReferralApplyRequest,
-    TelegramBindTokenRequest,
-    TelegramLoginRequest,
     UserFeedbackRequest,
 )
 from web.schemas.payments import (  # noqa: E402, F401
@@ -171,10 +169,6 @@ def _bind_optional_supabase_identity(request):
 
 def _resolve_auth_points(request):
     return _auth_guards._resolve_auth_points(request, account_db=_account_db)
-
-
-def _resolve_weekly_profile(request):
-    return _auth_guards._resolve_weekly_profile(request, account_db=_account_db)
 
 
 def _assert_entitlement(request):

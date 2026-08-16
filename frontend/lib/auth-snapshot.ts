@@ -12,7 +12,6 @@ export type AuthSnapshotLike = {
   subscription_queued_count?: number | null;
   points?: number | null;
   referral?: unknown;
-  telegram_pricing?: unknown;
   degraded_auth_profile?: boolean | null;
   entitlement_snapshot?: boolean | null;
 };
@@ -89,6 +88,5 @@ export function mergeAccountAuthSnapshot<T extends AuthSnapshotLike>(
         ? next.points
         : previous.points,
     referral: next.referral ?? previous.referral,
-    telegram_pricing: next.telegram_pricing ?? previous.telegram_pricing,
   };
 }

@@ -52,7 +52,6 @@ from web.core import (
     _require_ops_admin,  # noqa: F401 - compatibility export for tests and transitional routers
     _require_supabase_identity,  # noqa: F401 - compatibility export for tests and transitional routers
     _resolve_auth_points,  # noqa: F401 - compatibility export for tests and transitional routers
-    _resolve_weekly_profile,  # noqa: F401 - compatibility export for tests and transitional routers
     _sf,
     _weather,  # noqa: F401 - compatibility export for tests and transitional routers
 )

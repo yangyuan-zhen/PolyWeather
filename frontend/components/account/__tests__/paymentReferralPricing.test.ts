@@ -27,10 +27,6 @@ export function runTests() {
     path.join(projectRoot, "components", "account", "useBilling.ts"),
     "utf8",
   );
-  const telegramPricing = fs.readFileSync(
-    path.join(projectRoot, "components", "account", "telegram-pricing.ts"),
-    "utf8",
-  );
   const types = fs.readFileSync(
     path.join(projectRoot, "components", "account", "types.ts"),
     "utf8",
@@ -38,15 +34,13 @@ export function runTests() {
 
   assert(
     accountCopy.includes("3天试用") &&
-      accountCopy.includes("付费 Telegram 群") &&
       accountCopy.includes("邀请码"),
     "account copy must describe trial limits and referral code UI",
   );
   assert(
-    accountCenter.includes("copy.trialPaidGroupLocked") &&
-      accountCenter.includes("copy.referralInviteLimit") &&
+    accountCenter.includes("copy.referralInviteLimit") &&
       accountCenter.includes("applyReferralCode"),
-    "account center must expose trial paid-group gating and referral controls",
+    "account center must expose referral controls",
   );
   assert(
     accountCenter.includes("pro_quarterly") &&
@@ -68,22 +62,16 @@ export function runTests() {
     "payment hooks must not filter checkout plans down to monthly only",
   );
   assert(
-    useAccountPayment.includes("applyTelegramGroupPricingToPlanList") &&
-      useAccountPayment.includes("backend?.telegram_pricing") &&
-      useAccountPayment.includes("isTelegramPrivateGroupPriceEligible") &&
-      telegramPricing.includes("is_private_group_member") &&
-      telegramPricing.includes("telegram_private_group_member") &&
-      !telegramPricing.includes("is_group_member") &&
-      useAccountPayment.includes('=== "pro_monthly"') &&
-      useAccountPayment.includes("amount_usdc: telegramAmountUsdc"),
-    "account payment plan cards must only display the 5 USDC discounted monthly price after verified /bind eligibility",
+    !useAccountPayment.includes("telegram") &&
+      !useAccountPayment.includes("applyTelegramGroupPricingToPlanList") &&
+      !useAccountPayment.includes("telegramPricing"),
+    "account payment hook must not apply Telegram group pricing to checkout plans",
   );
   assert(
-    useBilling.includes("telegramGroupPriceApplies") &&
-      useBilling.includes("isTelegramPrivateGroupPriceEligible") &&
-      useBilling.includes("backend?.telegram_pricing") &&
-      useBilling.includes("!telegramGroupPriceApplies"),
-    "billing must not let referral first-month pricing override the lower verified monthly price",
+    !useBilling.includes("telegram") &&
+      !useBilling.includes("telegramGroupPriceApplies") &&
+      !useBilling.includes("bind_token"),
+    "billing hook must not read Telegram group pricing or bind-token flows",
   );
   assert(
     !accountCenter.includes(["private", "Group", "Monthly", "Plan"].join("")) &&
@@ -103,9 +91,13 @@ export function runTests() {
   assert(
     types.includes("ReferralSummary") &&
       types.includes("referral?: ReferralSummary | null") &&
-      types.includes("is_private_group_member?: boolean") &&
+      !types.includes("TelegramPricing") &&
+      !types.includes("telegram_pricing") &&
+      !types.includes("is_private_group_member") &&
+      !types.includes("weekly_points") &&
+      !types.includes("weekly_rank") &&
       types.includes("duration_days: number") &&
       types.includes("max_discount_usdc_by_plan"),
-    "account auth and payment types must include referral summary, private Telegram pricing, and plan durations",
+    "account auth and payment types must include referral summary and plan durations, without Telegram pricing or weekly leaderboard fields",
   );
 }

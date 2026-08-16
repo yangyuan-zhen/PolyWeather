@@ -17,7 +17,6 @@ export function usePaymentState() {
   const [paymentError, setPaymentError] = useState("");
   const [lastIntentId, setLastIntentId] = useState("");
   const [lastTxHash, setLastTxHash] = useState("");
-  const [telegramBindOpening, setTelegramBindOpening] = useState(false);
   const [manualPayment, setManualPayment] = useState<
     CreatedIntent["direct_payment"] | null
   >(null);
@@ -56,8 +55,6 @@ export function usePaymentState() {
     setLastIntentId,
     lastTxHash,
     setLastTxHash,
-    telegramBindOpening,
-    setTelegramBindOpening,
     manualPayment,
     setManualPayment,
     manualTxHash,

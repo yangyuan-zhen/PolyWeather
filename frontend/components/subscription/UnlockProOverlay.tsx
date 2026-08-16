@@ -22,7 +22,6 @@ import {
 import s from "./UnlockProOverlay.module.css";
 
 const DEFAULT_FAQ_HREF = "/subscription-help";
-const DEFAULT_TELEGRAM_GROUP_URL = "";
 
 export type UnlockProBilling = {
   pointsEnabled: boolean;
@@ -52,7 +51,6 @@ type UnlockProOverlayProps = {
   errorText?: string;
   infoText?: string;
   faqHref?: string;
-  telegramGroupUrl?: string;
   txHash?: string;
   chainId?: number;
   paymentTokenLabel?: string;
@@ -96,7 +94,6 @@ export function UnlockProOverlay({
   errorText,
   infoText,
   faqHref = DEFAULT_FAQ_HREF,
-  telegramGroupUrl = DEFAULT_TELEGRAM_GROUP_URL,
   txHash,
   chainId = 137,
   paymentTokenLabel,
@@ -127,7 +124,6 @@ export function UnlockProOverlay({
   const progressPct = billing.pointsEnabled
     ? Math.min(100, Math.round((points / maxPointsForFullDiscount) * 100))
     : 0;
-  const resolvedTelegramGroupUrl = String(telegramGroupUrl || "").trim();
   const txHref =
     txHash && txHash.startsWith("0x")
       ? `${chainId === 137 ? "https://polygonscan.com" : "https://etherscan.io"}/tx/${txHash}`
@@ -320,26 +316,12 @@ export function UnlockProOverlay({
             )}
 
             <div style={{ marginTop: "auto", paddingTop: 16 }}>
-              {resolvedTelegramGroupUrl ? (
-                <Link
-                  href={resolvedTelegramGroupUrl}
-                  target="_blank"
-                  className={s.unavailCta}
-                >
-                  <MessageSquare size={12} />
-                  {isEn
-                    ? "Invite paid users to earn points"
-                    : "邀请付费用户即可获得积分"}
-                  <ArrowRight size={11} />
-                </Link>
-              ) : (
-                <span className={s.unavailCta} style={{ cursor: "default" }}>
-                  <MessageSquare size={12} />
-                  {isEn
-                    ? "Invite paid users to earn points"
-                    : "邀请付费用户即可获得积分"}
-                </span>
-              )}
+              <span className={s.unavailCta} style={{ cursor: "default" }}>
+                <MessageSquare size={12} />
+                {isEn
+                  ? "Invite paid users to earn points"
+                  : "邀请付费用户即可获得积分"}
+              </span>
             </div>
           </div>
         )}

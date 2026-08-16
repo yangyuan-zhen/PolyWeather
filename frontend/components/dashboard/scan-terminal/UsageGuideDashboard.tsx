@@ -247,9 +247,6 @@ export function UsageGuideDashboard({ isEn }: { isEn: boolean }) {
                 isEn
                   ? "Turkey airport-station curves use MGM data when available, so Ankara and Istanbul should be read from the MGM airport anchor."
                   : "土耳其机场站优先使用 MGM 数据，安卡拉和伊斯坦布尔应以 MGM 机场锚点阅读。",
-                isEn
-                  ? "The 3-day trial has the same core terminal access as Pro, except the paid Telegram group link is hidden."
-                  : "3 天试用拥有和 Pro 一致的核心决策台权益，仅不显示付费 Telegram 群链接。",
               ].map((text) => (
                 <div key={text} className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold leading-5 text-amber-900">
                   {text}
@@ -264,8 +261,8 @@ export function UsageGuideDashboard({ isEn }: { isEn: boolean }) {
                 </div>
                 <p className="text-xs leading-5 text-slate-500">
                   {isEn
-                    ? "Monthly and quarterly Pro unlock the full paid workflow, including the Telegram group entry after subscription activation."
-                    : "月付和季度 Pro 开通后解锁完整付费工作流，并在账户页显示 Telegram 群入口。"}
+                    ? "Monthly and quarterly Pro unlock the full paid workflow, including settlement-change alerts after subscription activation."
+                    : "月付和季度 Pro 开通后解锁完整付费工作流，并在开通后启用结算变化提醒。"}
                 </p>
               </div>
             </div>

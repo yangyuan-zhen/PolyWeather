@@ -70,17 +70,12 @@ def validate_runtime_env(
     )
     entitlement_guard = _env_bool("POLYWEATHER_REQUIRE_ENTITLEMENT", False)
     payment_enabled = _env_bool("POLYWEATHER_PAYMENT_ENABLED", False)
-    weekly_reward_enabled = _env_bool("POLYWEATHER_WEEKLY_REWARD_ENABLED", False)
     growth_reward_enabled = _env_bool("POLYWEATHER_GROWTH_REWARD_ENABLED", False)
 
     if component_key == "bot":
         missing = _missing(["TELEGRAM_BOT_TOKEN"])
         if missing:
             report.errors.append(f"Bot 启动缺少必填变量: {', '.join(missing)}")
-        if not (_has("TELEGRAM_CHAT_ID") or _has("TELEGRAM_CHAT_IDS")):
-            report.warnings.append(
-                "未配置 TELEGRAM_CHAT_ID / TELEGRAM_CHAT_IDS，群组命令与积分目标为空"
-            )
 
     if auth_enabled:
         missing = _missing(["SUPABASE_URL", "SUPABASE_ANON_KEY"])
@@ -89,7 +84,6 @@ def validate_runtime_env(
         if (
             auth_required
             or auth_require_subscription
-            or weekly_reward_enabled
             or growth_reward_enabled
         ):
             missing = _missing(["SUPABASE_SERVICE_ROLE_KEY"])

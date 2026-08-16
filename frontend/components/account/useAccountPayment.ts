@@ -14,33 +14,13 @@ import type {
   AuthMeResponse,
   BoundWallet,
   PaymentConfig,
-  PaymentPlan,
   ProviderMode,
   InjectedProviderOption,
-  TelegramPricing,
 } from "./types";
 import { usePaymentState } from "./usePaymentState";
 import { useWalletBind } from "./useWalletBind";
 import { usePaymentFlow } from "./usePaymentFlow";
 import { useBilling } from "./useBilling";
-import {
-  isTelegramPrivateGroupPriceEligible,
-  telegramPrivateGroupAmountUsdc,
-} from "./telegram-pricing";
-
-function applyTelegramGroupPricingToPlanList(
-  plans: PaymentPlan[],
-  pricing?: TelegramPricing | null,
-): PaymentPlan[] {
-  if (!isTelegramPrivateGroupPriceEligible(pricing)) return plans;
-  const telegramAmountUsdc = telegramPrivateGroupAmountUsdc(pricing);
-  if (!telegramAmountUsdc) return plans;
-  return plans.map((plan) =>
-    String(plan.plan_code || "").toLowerCase() === "pro_monthly"
-      ? { ...plan, amount_usdc: telegramAmountUsdc }
-      : plan,
-  );
-}
 
 // ============================================================
 export interface UseAccountPaymentParams {
@@ -94,8 +74,6 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
     setLastIntentId,
     lastTxHash,
     setLastTxHash,
-    telegramBindOpening,
-    setTelegramBindOpening,
     manualPayment,
     setManualPayment,
     manualTxHash,
@@ -421,10 +399,7 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
   ]);
 
   // ── Selected plan (derived, shared across sub-hooks) ───
-  const effectivePlanList = applyTelegramGroupPricingToPlanList(
-    paymentConfig?.plans || [],
-    backend?.telegram_pricing,
-  );
+  const effectivePlanList = paymentConfig?.plans || [];
   const selectedPlan = effectivePlanList.find((p) => p.plan_code === selectedPlanCode) || effectivePlanList[0];
 
   // ── useWalletBind ──────────────────────────────────────
@@ -480,7 +455,6 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
     setPaymentBusy,
     setPaymentInfo,
     setPaymentError,
-    setTelegramBindOpening,
     clearPaymentState,
     selectedPlan,
     getValidAccessToken,
@@ -562,9 +536,6 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
     lastIntentId,
     lastTxHash,
     lastPaymentStartedAt,
-    telegramBindOpening,
-    telegramBindUrl: billing.telegramBindUrl,
-    telegramBindCommand: billing.telegramBindCommand,
     manualPayment,
     manualTxHash,
     txValidation,
@@ -579,7 +550,6 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
     setLastIntentId,
     setLastTxHash,
     setLastPaymentStartedAt,
-    setTelegramBindOpening,
     setPaymentMethodTab,
     setManualPayment,
     setManualTxHash,
@@ -637,7 +607,5 @@ export function useAccountPayment(params: UseAccountPaymentParams) {
     createManualPaymentIntent: paymentFlow.createManualPaymentIntent,
     submitManualPaymentTx: paymentFlow.submitManualPaymentTx,
     validateTxHash: paymentFlow.validateTxHash,
-    createTelegramBotBindCommand: billing.createTelegramBotBindCommand,
-    openTelegramBotBindLink: billing.openTelegramBotBindLink,
   };
 }

@@ -60,7 +60,7 @@ class BotEntitlementService:
                 return EntitlementDecision(True, "supabase_subscription_active")
             return EntitlementDecision(False, "supabase_subscription_required")
 
-        has_premium = bool(user.get("is_web_premium") or user.get("is_group_premium"))
+        has_premium = bool(user.get("is_web_premium"))
         if has_premium:
             return EntitlementDecision(True, "premium_user")
         return EntitlementDecision(False, "premium_required")

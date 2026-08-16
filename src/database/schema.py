@@ -20,55 +20,8 @@ def init_db(conn: Any, db_path: str) -> None:
             username TEXT,
             is_web_premium BOOLEAN DEFAULT 0,
             web_expiry TIMESTAMP,
-            is_group_premium BOOLEAN DEFAULT 0,
-            group_expiry TIMESTAMP,
             points INTEGER DEFAULT 0,
-            daily_points INTEGER DEFAULT 0,
-            daily_points_date TEXT,
-            message_count INTEGER DEFAULT 0,
-            last_message_at TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS activity_fingerprints (
-            telegram_id INTEGER NOT NULL,
-            activity_date TEXT NOT NULL,
-            fingerprint TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (telegram_id, activity_date, fingerprint)
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS weekly_points_archive (
-            telegram_id INTEGER NOT NULL,
-            week_key TEXT NOT NULL,
-            points INTEGER DEFAULT 0,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (telegram_id, week_key)
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS weekly_reward_runs (
-            week_key TEXT PRIMARY KEY,
-            settled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            winners_count INTEGER DEFAULT 0,
-            summary_json TEXT
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS weekly_reward_payouts (
-            week_key TEXT NOT NULL,
-            telegram_id INTEGER NOT NULL,
-            rank INTEGER DEFAULT 0,
-            username TEXT,
-            points_bonus INTEGER DEFAULT 0,
-            pro_days INTEGER DEFAULT 0,
-            supabase_user_id TEXT,
-            pro_granted INTEGER DEFAULT 0,
-            pro_error TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (week_key, telegram_id)
         )
     """)
     conn.execute("""
@@ -413,41 +366,6 @@ def init_db(conn: Any, db_path: str) -> None:
         "CREATE INDEX IF NOT EXISTS idx_user_feedback_email_created_at ON user_feedback(user_email, created_at DESC)"
     )
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS supabase_bindings (
-            supabase_user_id TEXT PRIMARY KEY,
-            telegram_id INTEGER NOT NULL,
-            supabase_email TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_supabase_bindings_telegram_id ON supabase_bindings(telegram_id)"
-    )
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS telegram_bind_tokens (
-            token TEXT PRIMARY KEY,
-            telegram_id INTEGER NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            expires_at TIMESTAMP NOT NULL
-        )
-    """)
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_telegram_bind_tokens_expires ON telegram_bind_tokens(expires_at)"
-    )
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS web_telegram_bind_tokens (
-            token TEXT PRIMARY KEY,
-            supabase_user_id TEXT NOT NULL,
-            supabase_email TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            expires_at TIMESTAMP NOT NULL
-        )
-    """)
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_web_telegram_bind_tokens_expires ON web_telegram_bind_tokens(expires_at)"
-    )
-    conn.execute("""
         CREATE TABLE IF NOT EXISTS airport_obs_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             icao TEXT NOT NULL,
@@ -464,13 +382,8 @@ def init_db(conn: Any, db_path: str) -> None:
     )
 
     # Column migrations (ensure columns exist on legacy tables)
-    _ensure_column(conn, "users", "daily_points", "INTEGER DEFAULT 0")
-    _ensure_column(conn, "users", "daily_points_date", "TEXT")
-    _ensure_column(conn, "users", "weekly_points", "INTEGER DEFAULT 0")
-    _ensure_column(conn, "users", "weekly_points_week", "TEXT")
     _ensure_column(conn, "users", "supabase_user_id", "TEXT")
     _ensure_column(conn, "users", "supabase_email", "TEXT")
-    _ensure_column(conn, "users", "welcome_bonus_claimed", "INTEGER DEFAULT 0")
     _ensure_column(conn, "users", "daily_city_queries", "INTEGER DEFAULT 0")
     _ensure_column(conn, "users", "daily_deb_queries", "INTEGER DEFAULT 0")
     _ensure_column(conn, "users", "daily_queries_date", "TEXT")
@@ -479,20 +392,6 @@ def init_db(conn: Any, db_path: str) -> None:
     _ensure_column(conn, "user_feedback", "rewarded_at", "TIMESTAMP")
     _ensure_column(conn, "user_feedback", "reward_status", "TEXT DEFAULT ''")
 
-    # Migrate legacy one-to-one binding column into mapping table.
-    conn.execute("""
-        INSERT OR IGNORE INTO supabase_bindings (
-            supabase_user_id, telegram_id, supabase_email, created_at, updated_at
-        )
-        SELECT
-            lower(trim(COALESCE(supabase_user_id, ''))),
-            telegram_id,
-            COALESCE(supabase_email, ''),
-            CURRENT_TIMESTAMP,
-            CURRENT_TIMESTAMP
-        FROM users
-        WHERE trim(COALESCE(supabase_user_id, '')) <> ''
-    """)
     conn.commit()
 
 

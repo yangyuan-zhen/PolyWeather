@@ -97,47 +97,6 @@ class SupabaseAdminClient:
             )
             return False
 
-    def patch_profile(
-        self,
-        supabase_user_id: str,
-        fields: Dict[str, Any],
-        *,
-        timeout: float = 8.0,
-    ) -> bool:
-        """PATCH /rest/v1/profiles?id=eq.{user_id} with telegram fields."""
-        if not self.configured:
-            return False
-        endpoint = self.profiles_endpoint()
-        if not endpoint:
-            return False
-
-        try:
-            resp = requests.patch(
-                endpoint,
-                params={"id": f"eq.{supabase_user_id}"},
-                json=fields,
-                headers=self._service_headers(),
-                timeout=timeout,
-            )
-            ok = resp.status_code in (200, 204)
-            if not ok:
-                logger.warning(
-                    "supabase profiles patch failed "
-                    "user_id={} status={} body={}",
-                    supabase_user_id,
-                    resp.status_code,
-                    (resp.text or "")[:240],
-                )
-            return ok
-        except Exception as exc:
-            logger.warning(
-                "supabase profiles patch error user_id={}: {}",
-                supabase_user_id,
-                exc,
-            )
-            return False
-
-
 # Module-level singleton — mirrors the pattern used by DBManager.
 _supabase_admin_client: Optional[SupabaseAdminClient] = None
 

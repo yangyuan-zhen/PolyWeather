@@ -18,7 +18,6 @@ from web.services.ops_api import (
     get_ops_observation_collector_status,
     get_ops_source_health,
     get_ops_truth_history,
-    get_ops_weekly_leaderboard,
     list_ops_audit_log,
     list_ops_feedback,
     list_ops_refund_cases,
@@ -37,7 +36,6 @@ from web.services.ops_api import (
     update_ops_sensitive_config,
     update_ops_feedback_status,
     get_ops_training_accuracy,
-    get_ops_telegram_audit,
 )
 from web.services.request_timing import ServerTimingRecorder, attach_server_timing_header
 
@@ -73,11 +71,6 @@ async def ops_online_users(request: Request, response: Response):
 @router.get("/api/ops/users")
 async def ops_search_users(request: Request, q: str = "", limit: int = 20):
     return search_ops_users(request, q=q, limit=limit)
-
-
-@router.get("/api/ops/leaderboard/weekly")
-async def ops_weekly_leaderboard(request: Request, limit: int = 20):
-    return get_ops_weekly_leaderboard(request, limit=limit)
 
 
 @router.get("/api/ops/audit-log")
@@ -349,11 +342,6 @@ async def ops_observation_collector_status(
 @router.get("/api/ops/training/accuracy")
 async def ops_training_accuracy(request: Request):
     return get_ops_training_accuracy(request)
-
-
-@router.get("/api/ops/telegram/members-audit")
-async def ops_telegram_audit(request: Request):
-    return get_ops_telegram_audit(request)
 
 
 @router.get("/api/ops/market-opportunities")

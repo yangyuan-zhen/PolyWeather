@@ -62,13 +62,13 @@ function SubscriptionGate({
         "Real-time station and METAR signals",
         "DEB forecast curves and model comparison",
         "Full terminal grid with high-frequency refresh",
-        "API and paid Telegram group access on paid Pro",
+        "API and settlement alert access on paid Pro",
       ]
     : [
         "实时气象站与 METAR 信号",
         "DEB 预测曲线与模型对比",
         "完整终端网格与高频刷新",
-        "付费 Pro 可进入 API 与付费 Telegram 群",
+        "付费 Pro 可使用 API 与结算提醒",
       ];
 
   return (
@@ -122,8 +122,8 @@ function SubscriptionGate({
             </h1>
             <p className="mt-2 text-sm leading-6 text-slate-600">
               {isEn
-                ? "Your account is verified, but it does not currently have an active subscription. Renewing restores live temperature evidence, DEB paths, settlement alerts, and paid Telegram/API access."
-                : "你的账号已验证，但当前没有有效订阅。续费后会立即恢复实时温度、DEB 路径、结算提醒和付费 Telegram/API 权益。"}
+                ? "Your account is verified, but it does not currently have an active subscription. Renewing restores live temperature evidence, DEB paths, settlement alerts, and API access."
+                : "你的账号已验证，但当前没有有效订阅。续费后会立即恢复实时温度、DEB 路径、结算提醒和 API 权益。"}
             </p>
           </div>
 

@@ -82,12 +82,6 @@ def list_ops_audit_log(
     return {"events": rows, "total": len(rows)}
 
 
-def get_ops_weekly_leaderboard(request: Request, limit: int = 20) -> Dict[str, Any]:
-    _require_ops(request)
-    db = _get_db()
-    return {"leaderboard": db.get_weekly_leaderboard(limit=limit)}
-
-
 # ═══════════════════════════════════════════════════════════════════════
 #  Points
 # ═══════════════════════════════════════════════════════════════════════

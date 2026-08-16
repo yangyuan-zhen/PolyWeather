@@ -44,9 +44,6 @@ class LoopStatus:
 class RuntimeStatus:
     started_at: str
     loops: List[LoopStatus]
-    command_access_mode: str
-    protected_commands: List[str]
-    required_group_chat_id: str
 
     def loop_map(self) -> Dict[str, LoopStatus]:
         return {loop.key: loop for loop in self.loops}
@@ -59,21 +56,12 @@ class StartupCoordinator:
         self,
         bot: Any,
         config: Dict[str, Any],
-        command_access_mode: str,
-        protected_commands: List[str],
-        required_group_chat_id: str,
     ):
         self.bot = bot
         self.config = config
-        self.command_access_mode = command_access_mode
-        self.protected_commands = protected_commands
-        self.required_group_chat_id = required_group_chat_id
         self._runtime_status = RuntimeStatus(
             started_at=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
             loops=[],
-            command_access_mode=command_access_mode,
-            protected_commands=protected_commands,
-            required_group_chat_id=required_group_chat_id,
         )
 
     def get_runtime_status(self) -> RuntimeStatus:
@@ -82,16 +70,12 @@ class StartupCoordinator:
     def start_all(self) -> RuntimeStatus:
         loops = [
             self._start_growth_milestone_reward_loop(),
-            self._start_weekly_reward_loop(),
             self._start_payment_event_loop(),
             self._start_payment_confirm_loop(),
         ]
         self._runtime_status = RuntimeStatus(
             started_at=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
             loops=loops,
-            command_access_mode=self.command_access_mode,
-            protected_commands=self.protected_commands,
-            required_group_chat_id=self.required_group_chat_id,
         )
         return self._runtime_status
 
@@ -144,39 +128,6 @@ class StartupCoordinator:
             started=started,
             reason=reason,
             details=details,
-        )
-
-    def _start_weekly_reward_loop(self) -> LoopStatus:
-        enabled = _env_bool("POLYWEATHER_WEEKLY_REWARD_ENABLED", False)
-        settle_weekday = min(
-            7, max(1, _env_int("POLYWEATHER_WEEKLY_REWARD_SETTLE_WEEKDAY", 1))
-        )
-        settle_hour = min(
-            23, max(0, _env_int("POLYWEATHER_WEEKLY_REWARD_SETTLE_HOUR", 0))
-        )
-        settle_minute = min(
-            59, max(0, _env_int("POLYWEATHER_WEEKLY_REWARD_SETTLE_MINUTE", 5))
-        )
-        check_interval = max(
-            30, _env_int("POLYWEATHER_WEEKLY_REWARD_CHECK_INTERVAL_SEC", 300)
-        )
-        details = {
-            "timezone": str(
-                os.getenv("POLYWEATHER_WEEKLY_REWARD_TIMEZONE") or "Asia/Shanghai"
-            ).strip(),
-            "settle_weekday": settle_weekday,
-            "settle_time": f"{settle_hour:02d}:{settle_minute:02d}",
-            "check_interval_sec": check_interval,
-        }
-        return self._start_with_validation(
-            key="weekly_reward",
-            label="周榜奖励结算",
-            configured_enabled=enabled,
-            details=details,
-            validation_error=None,
-            starter=lambda: import_module(
-                "src.bot.weekly_reward_loop"
-            ).start_weekly_reward_loop(),
         )
 
     def _start_growth_milestone_reward_loop(self) -> LoopStatus:
@@ -285,10 +236,6 @@ def render_runtime_status_html(status: RuntimeStatus) -> str:
     lines = [
         "🧭 <b>Bot 启动诊断</b>",
         f"启动时间: <code>{status.started_at}</code>",
-        "",
-        f"命令准入: <code>{status.command_access_mode}</code>",
-        f"受保护命令: <code>{', '.join(status.protected_commands) or '--'}</code>",
-        f"目标群组: <code>{status.required_group_chat_id or '--'}</code>",
         "",
         "后台循环:",
     ]

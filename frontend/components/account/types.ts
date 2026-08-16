@@ -4,8 +4,6 @@ export type AuthMeResponse = {
   email?: string | null;
   points?: number;
   points_ledger?: PointsLedgerSummary;
-  weekly_points?: number;
-  weekly_rank?: number | string | null;
   entitlement_mode?: string | null;
   auth_required?: boolean;
   subscription_required?: boolean;
@@ -18,7 +16,6 @@ export type AuthMeResponse = {
   subscription_total_expires_at?: string | null;
   subscription_queued_days?: number | null;
   subscription_queued_count?: number | null;
-  telegram_pricing?: TelegramPricing | null;
   referral?: ReferralSummary | null;
   degraded_auth_profile?: boolean | null;
   degraded_reason?: string | null;
@@ -58,16 +55,6 @@ export type ReferralSummary = {
   monthly_reward_points?: number;
   applied_code?: string;
   attribution_status?: string;
-};
-
-export type TelegramPricing = {
-  configured?: boolean;
-  telegram_id?: number | null;
-  telegram_status?: string | null;
-  is_group_member?: boolean;
-  is_private_group_member?: boolean;
-  amount_usdc?: string;
-  pricing_source?: string;
 };
 
 export type PaymentPlan = {

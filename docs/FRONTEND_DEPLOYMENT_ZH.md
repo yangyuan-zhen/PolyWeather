@@ -118,17 +118,7 @@ POLYWEATHER_OPS_ADMIN_EMAILS=yhrsc30@gmail.com
 
 `/ops` 页面入口会读取管理员邮箱白名单，前端和后端容器都应配置相同的值。
 
-### 4. Telegram 入口（构建期）
-
-```
-NEXT_PUBLIC_TELEGRAM_GROUP_URL=https://t.me/<your_group>
-NEXT_PUBLIC_TELEGRAM_BOT_URL=https://t.me/polyyuanbot
-NEXT_PUBLIC_TELEGRAM_LOGIN_BOT_USERNAME=polyyuanbot
-```
-
-只影响按钮跳转，不影响核心页面加载。
-
-### 5. 前端观测与预热开关（推荐默认关闭）
+### 4. 前端观测与预热开关（推荐默认关闭）
 
 ```
 NEXT_PUBLIC_POLYWEATHER_APP_ANALYTICS=false

@@ -12,7 +12,7 @@
 | AviationWeather (NOAA) | METAR / TAF 航空观测 | ✅ |
 | MADIS (NOAA) | 美国机场 5 分钟高频观测 | ✅ |
 | Supabase | 用户认证、订阅状态、会员恢复 | ✅ |
-| Telegram Bot API | Bot 消息、账号绑定、群成员检查 | ✅ |
+| Telegram Bot API | 机器人私聊查询、支付私聊通知 | ✅ |
 | Redis | `city_observation_patch.v1` Stream、SSE replay、多 worker fanout | ✅ |
 | SQLite | 运行态数据库、支付审计、实时事件 fallback | ✅ |
 

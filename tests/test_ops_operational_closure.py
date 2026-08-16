@@ -268,15 +268,9 @@ def test_auth_me_payload_includes_points_ledger_summary(monkeypatch):
     monkeypatch.setattr(auth_api.legacy_routes, "_assert_entitlement", lambda request: None)
     monkeypatch.setattr(auth_api.legacy_routes, "_bind_optional_supabase_identity", lambda request: None)
     monkeypatch.setattr(auth_api.legacy_routes, "_resolve_auth_points", lambda request: 850)
-    monkeypatch.setattr(
-        auth_api.legacy_routes,
-        "_resolve_weekly_profile",
-        lambda request: {"weekly_points": 0, "weekly_rank": None},
-    )
     monkeypatch.setattr(auth_api.legacy_routes, "SUPABASE_ENTITLEMENT", FakeEntitlement())
     monkeypatch.setattr(auth_api.legacy_routes, "_SUPABASE_AUTH_REQUIRED", False, raising=False)
     monkeypatch.setattr(auth_api, "DBManager", lambda: FakeDB())
-    monkeypatch.setattr(auth_api.TelegramGroupPricing, "configured", False, raising=False)
 
     payload = auth_api.get_auth_me_payload(RequestStub())
 

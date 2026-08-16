@@ -139,7 +139,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "filter.scanCta": "开始扫描",
 
     "account.title": "账户中心",
-    "account.subtitle": "查看身份、权限与 Bot 绑定信息",
+    "account.subtitle": "查看身份与权限状态",
     "account.backDashboard": "返回看板",
     "account.refresh": "刷新",
     "account.signIn": "登录 / 注册",
@@ -156,7 +156,6 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "account.card.membership": "会员与权限",
     "account.card.identity": "身份信息",
     "account.card.backend": "后端鉴权",
-    "account.card.bot": "Bot 绑定",
     "account.field.email": "邮箱",
     "account.field.userId": "用户 ID",
     "account.field.provider": "登录方式",
@@ -165,9 +164,6 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "account.field.backendStatus": "后端状态",
     "account.field.subscription": "订阅结果",
     "account.field.requirement": "订阅要求",
-    "account.field.bindCommand": "绑定命令",
-    "account.field.bindHint":
-      "将下面命令发送到 Telegram Bot，可把网页账户与机器人权限绑定。",
     "account.mode.supabaseRequired": "Supabase 强制登录",
     "account.mode.supabaseOptional": "Supabase 可选登录",
     "account.mode.supabase": "Supabase 会话鉴权",
@@ -324,7 +320,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "filter.scanCta": "Start Scan",
 
     "account.title": "Account Center",
-    "account.subtitle": "Review identity, access status, and bot binding info",
+    "account.subtitle": "Review identity and access status",
     "account.backDashboard": "Back to Dashboard",
     "account.refresh": "Refresh",
     "account.signIn": "Sign in / Sign up",
@@ -341,7 +337,6 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "account.card.membership": "Membership & Access",
     "account.card.identity": "Identity",
     "account.card.backend": "Backend Auth",
-    "account.card.bot": "Bot Binding",
     "account.field.email": "Email",
     "account.field.userId": "User ID",
     "account.field.provider": "Sign-in method",
@@ -350,9 +345,6 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "account.field.backendStatus": "Backend status",
     "account.field.subscription": "Subscription result",
     "account.field.requirement": "Subscription policy",
-    "account.field.bindCommand": "Binding command",
-    "account.field.bindHint":
-      "Send this command to the Telegram bot to bind web account identity.",
     "account.mode.supabaseRequired": "Supabase required auth",
     "account.mode.supabaseOptional": "Supabase optional auth",
     "account.mode.supabase": "Supabase session auth",

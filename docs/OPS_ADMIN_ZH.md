@@ -30,7 +30,6 @@ POLYWEATHER_OPS_ADMIN_EMAILS=yhrsc30@gmail.com
 - 系统健康：`/api/ops/health-check`、`/api/ops/logs`
 - 系统状态 / 缓存桶 / summary 缓存命中（`/api/system/status`、`/api/system/cache-status`）
 - 在线用户与用户列表：`/api/ops/online-users`、`/api/ops/users`
-- 周榜：`/api/ops/leaderboard/weekly`
 - 用户反馈：`/api/ops/feedback`
 - 会员：`/api/ops/memberships`（含 `/memberships/growth`、`/memberships/overview`）
 - 支付：`/api/ops/payments`、`/api/ops/payments/incidents`、`/api/ops/refunds`、`/api/ops/billing-risk`
@@ -40,7 +39,6 @@ POLYWEATHER_OPS_ADMIN_EMAILS=yhrsc30@gmail.com
 - 观测源健康：`/api/ops/source-health`
 - 观测采集器状态：`/api/ops/observation-collector-status`
 - 训练准确性：`/api/ops/training/accuracy`
-- Telegram 会员审计：`/api/ops/telegram/members-audit`
 - 市场机会：`/api/ops/market-opportunities`
 - 运行配置：`/api/ops/config`、`/api/ops/sensitive-config`
 
