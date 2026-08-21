@@ -36,8 +36,6 @@ def _resolve_settlement_source(city_meta: Dict[str, Any]) -> Tuple[str, str]:
         "metar": "METAR",
         "hko": "HKO",
         "noaa": "NOAA",
-        "mgm": "MGM",
-
     }
     return source, source_label_map.get(source, source.upper())
 
@@ -106,70 +104,6 @@ def _render_local_time(
     return "N/A"
 
 
-def _derive_mgm_daily_highs_from_hourly(
-    mgm: Dict[str, Any],
-    fallback_utc_offset: int,
-) -> Dict[str, float]:
-    if not isinstance(mgm, dict):
-        return {}
-    hourly = mgm.get("hourly")
-    if not isinstance(hourly, list) or not hourly:
-        return {}
-
-    samples: List[Tuple[str, float]] = []
-    parsed_datetimes: List[datetime] = []
-    local_tz = timezone(timedelta(seconds=int(fallback_utc_offset)))
-    for row in hourly:
-        if not isinstance(row, dict):
-            continue
-        temp = _sf(row.get("temp"))
-        raw_time = str(row.get("time") or "").strip()
-        if temp is None or not raw_time:
-            continue
-
-        date_key = None
-        if "T" in raw_time:
-            try:
-                dt = datetime.fromisoformat(raw_time.replace("Z", "+00:00"))
-                if dt.tzinfo is not None:
-                    dt = dt.astimezone(local_tz)
-                else:
-                    dt = dt.replace(tzinfo=local_tz)
-                parsed_datetimes.append(dt)
-                date_key = dt.strftime("%Y-%m-%d")
-            except Exception:
-                if len(raw_time) >= 10 and raw_time[4] == "-" and raw_time[7] == "-":
-                    date_key = raw_time[:10]
-        elif len(raw_time) >= 10 and raw_time[4] == "-" and raw_time[7] == "-":
-            date_key = raw_time[:10]
-
-        if not date_key:
-            continue
-
-        samples.append((date_key, temp))
-
-    if not samples:
-        return {}
-
-    # Guardrail: do not derive "daily highs" from short intraday snippets.
-    if parsed_datetimes:
-        parsed_datetimes.sort()
-        horizon_hours = (
-            parsed_datetimes[-1] - parsed_datetimes[0]
-        ).total_seconds() / 3600.0
-        if horizon_hours < 30:
-            return {}
-    elif len(samples) < 24:
-        return {}
-
-    daily_highs: Dict[str, float] = {}
-    for date_key, temp in samples:
-        prev = daily_highs.get(date_key)
-        daily_highs[date_key] = temp if prev is None else max(prev, temp)
-
-    return daily_highs
-
-
 def _append_future_forecast_lines(
     lines: List[str],
     weather_data: Dict[str, Any],
@@ -178,14 +112,6 @@ def _append_future_forecast_lines(
     temp_symbol: str,
     fallback_utc_offset: int,
 ) -> None:
-    mgm = weather_data.get("mgm") or {}
-    mgm_daily = (mgm.get("daily_forecasts") or {}) if isinstance(mgm, dict) else {}
-    mgm_hourly_daily = _derive_mgm_daily_highs_from_hourly(mgm, fallback_utc_offset)
-    if not isinstance(mgm_daily, dict):
-        mgm_daily = {}
-    for date_key, day_high in mgm_hourly_daily.items():
-        if date_key not in mgm_daily:
-            mgm_daily[date_key] = day_high
     mm_raw = weather_data.get("multi_model") or {}
     mm_daily = mm_raw.get("daily_forecasts", {}) if isinstance(mm_raw, dict) else {}
     nws_periods = (weather_data.get("nws") or {}).get("forecast_periods", []) or []
@@ -193,14 +119,7 @@ def _append_future_forecast_lines(
     if len(dates) > 1:
         future_forecasts = []
         for d, t in zip(dates[1:], max_temps[1:]):
-            mgm_value = mgm_daily.get(d) if isinstance(mgm_daily, dict) else None
-            if mgm_value is not None:
-                mgm_display = f"{float(mgm_value):.1f}"
-                future_forecasts.append(
-                    f"{d[5:]}: {t}{temp_symbol} | <b>MGM: {mgm_display}{temp_symbol}</b>"
-                )
-            else:
-                future_forecasts.append(f"{d[5:]}: {t}{temp_symbol}")
+            future_forecasts.append(f"{d[5:]}: {t}{temp_symbol}")
         lines.append("📅 " + " | ".join(future_forecasts))
         return
 
@@ -208,21 +127,6 @@ def _append_future_forecast_lines(
         timezone(timedelta(seconds=int(fallback_utc_offset)))
     )
     today_local = local_now.strftime("%Y-%m-%d")
-
-    if isinstance(mgm_daily, dict) and mgm_daily:
-        future = []
-        for day in sorted(mgm_daily.keys()):
-            if day <= today_local:
-                continue
-            day_temp = mgm_daily.get(day)
-            if day_temp is None:
-                continue
-            future.append(f"{day[5:]}: {day_temp}{temp_symbol}")
-            if len(future) >= 2:
-                break
-        if future:
-            lines.append("📅 " + " | ".join(future))
-        return
 
     if isinstance(mm_daily, dict) and mm_daily:
         future = []
@@ -267,7 +171,6 @@ def _append_future_forecast_lines(
 def _build_wx_summary(
     metar_current: Dict[str, Any],
     metar_clouds: List[Dict[str, Any]],
-    mgm_cloud: Optional[Any],
 ) -> str:
     wx_desc = str(metar_current.get("wx_desc") or "").upper().strip()
     if wx_desc:
@@ -291,29 +194,16 @@ def _build_wx_summary(
     if metar_clouds:
         cover_code = str((metar_clouds[-1] or {}).get("cover") or "")
 
-    if cover_code in ("SKC", "CLR") or (cover_code == "" and mgm_cloud is not None and mgm_cloud <= 1):
+    if cover_code in ("SKC", "CLR"):
         return "☀️ 晴"
-    if cover_code == "FEW" or (cover_code == "" and mgm_cloud is not None and mgm_cloud <= 2):
+    if cover_code == "FEW":
         return "🌤️ 晴间少云"
-    if cover_code == "SCT" or (cover_code == "" and mgm_cloud is not None and mgm_cloud <= 4):
+    if cover_code == "SCT":
         return "⛅ 晴间多云"
-    if cover_code == "BKN" or (cover_code == "" and mgm_cloud is not None and mgm_cloud <= 6):
+    if cover_code == "BKN":
         return "🌥️ 多云"
-    if cover_code == "OVC" or (cover_code == "" and mgm_cloud is not None and mgm_cloud <= 8):
+    if cover_code == "OVC":
         return "☁️ 阴天"
-    if mgm_cloud is not None:
-        cloud_names = {
-            0: "☀️ 晴",
-            1: "☀️ 晴",
-            2: "🌤️ 少云",
-            3: "⛅ 散云",
-            4: "⛅ 散云",
-            5: "🌥️ 多云",
-            6: "🌥️ 多云",
-            7: "☁️ 阴",
-            8: "☁️ 阴天",
-        }
-        return cloud_names.get(int(mgm_cloud), "")
     return ""
 
 
@@ -324,7 +214,6 @@ def build_city_query_report(
 ) -> str:
     open_meteo = weather_data.get("open-meteo", {}) or {}
     metar = weather_data.get("metar", {}) or {}
-    mgm = weather_data.get("mgm") or {}
     settlement_current = weather_data.get("settlement_current") or {}
     if not isinstance(settlement_current, dict):
         settlement_current = {}
@@ -335,7 +224,7 @@ def build_city_query_report(
     settlement_source, settlement_source_label = _resolve_settlement_source(city_meta)
     use_settlement_current = settlement_source in {"hko", "noaa"} and bool(sc_current)
     fallback_utc_offset = int(city_meta.get("tz_offset", 0))
-    nws_periods = ((weather_data.get("nws") or {}).get("forecast_periods") or [])
+    nws_periods = (weather_data.get("nws") or {}).get("forecast_periods") or []
     if nws_periods:
         try:
             first_start = nws_periods[0].get("start_time")
@@ -366,15 +255,16 @@ def build_city_query_report(
     max_temps = (daily.get("temperature_2m_max") or [])[:3]
 
     nws_high = _sf((weather_data.get("nws") or {}).get("today_high"))
-    mgm_high = _sf((mgm.get("today_high") if isinstance(mgm, dict) else None))
     metar_max_so_far = _sf((metar.get("current") or {}).get("max_temp_so_far"))
-    settlement_max_so_far = _sf(sc_current.get("max_temp_so_far")) if use_settlement_current else None
+    settlement_max_so_far = (
+        _sf(sc_current.get("max_temp_so_far")) if use_settlement_current else None
+    )
 
     today_t = _sf(max_temps[0]) if max_temps else None
     fallback_source = None
     metar_only_fallback = False
     if today_t is None:
-        for source_name, candidate in (("NWS", nws_high), ("MGM", mgm_high)):
+        for source_name, candidate in (("NWS", nws_high),):
             if candidate is not None:
                 today_t = candidate
                 fallback_source = source_name
@@ -395,18 +285,17 @@ def build_city_query_report(
             sources.append("NWS")
         if fallback_source != "NWS":
             comp_parts.append(f"NWS: {nws_high:.1f}{temp_symbol}")
-    if mgm_high is not None:
-        if "MGM" not in sources:
-            sources.append("MGM")
-        if fallback_source != "MGM":
-            comp_parts.append(f"MGM: {mgm_high:.1f}{temp_symbol}")
     if fallback_source and fallback_source not in sources:
         sources.append(fallback_source)
     if metar_only_fallback:
         if not sources:
             sources = ["Model unavailable"]
         source_name = settlement_source_label if use_settlement_current else "METAR"
-        fallback_val = settlement_max_so_far if settlement_max_so_far is not None else metar_max_so_far
+        fallback_val = (
+            settlement_max_so_far
+            if settlement_max_so_far is not None
+            else metar_max_so_far
+        )
         if fallback_val is not None:
             comp_parts.append(f"{source_name}实测回退: {fallback_val:.1f}{temp_symbol}")
     if not sources:
@@ -414,9 +303,7 @@ def build_city_query_report(
 
     comp_str = f" ({' | '.join(comp_parts)})" if comp_parts else ""
     msg_lines.append(f"\n📊 <b>预报 ({' | '.join(sources)})</b>")
-    msg_lines.append(
-        f"👉 <b>今天: {today_t_display}{temp_symbol}{comp_str}</b>"
-    )
+    msg_lines.append(f"👉 <b>今天: {today_t_display}{temp_symbol}{comp_str}</b>")
 
     _append_future_forecast_lines(
         lines=msg_lines,
@@ -431,21 +318,26 @@ def build_city_query_report(
     sunsets = daily.get("sunset", []) or []
     sunshine_durations = daily.get("sunshine_duration", []) or []
     if sunrises and sunsets:
-        sunrise_t = str(sunrises[0]).split("T")[1][:5] if "T" in str(sunrises[0]) else str(sunrises[0])
-        sunset_t = str(sunsets[0]).split("T")[1][:5] if "T" in str(sunsets[0]) else str(sunsets[0])
+        sunrise_t = (
+            str(sunrises[0]).split("T")[1][:5]
+            if "T" in str(sunrises[0])
+            else str(sunrises[0])
+        )
+        sunset_t = (
+            str(sunsets[0]).split("T")[1][:5]
+            if "T" in str(sunsets[0])
+            else str(sunsets[0])
+        )
         sun_line = f"🌅 日出 {sunrise_t} | 🌇 日落 {sunset_t}"
         if sunshine_durations:
             sun_line += f" | ☀️ 日照 {float(sunshine_durations[0]) / 3600:.1f}h"
         msg_lines.append(sun_line)
 
     metar_current = metar.get("current", {}) if isinstance(metar, dict) else {}
-    mgm_current = mgm.get("current", {}) if isinstance(mgm, dict) else {}
     primary_current = sc_current if use_settlement_current else metar_current
     cur_temp = _sf(primary_current.get("temp"))
     if cur_temp is None:
         cur_temp = _sf(metar_current.get("temp"))
-    if cur_temp is None:
-        cur_temp = _sf(mgm_current.get("temp"))
     max_p = _sf(primary_current.get("max_temp_so_far"))
     if max_p is None:
         max_p = _sf(metar_current.get("max_temp_so_far"))
@@ -454,9 +346,13 @@ def build_city_query_report(
         max_p_time = metar_current.get("max_temp_time")
     obs_t_str = "N/A"
     metar_age_min = None
-    main_source = settlement_source_label if use_settlement_current else ("METAR" if metar else "MGM")
+    main_source = settlement_source_label if use_settlement_current else "METAR"
 
-    settlement_obs_time = str(settlement_current.get("observation_time") or "").strip() if use_settlement_current else ""
+    settlement_obs_time = (
+        str(settlement_current.get("observation_time") or "").strip()
+        if use_settlement_current
+        else ""
+    )
     if settlement_obs_time:
         obs_t = settlement_obs_time
         try:
@@ -468,7 +364,12 @@ def build_city_query_report(
                 utc_offset = fallback_utc_offset
             local_dt = dt.astimezone(timezone(timedelta(seconds=int(utc_offset))))
             obs_t_str = local_dt.strftime("%H:%M")
-            metar_age_min = int((datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds() / 60)
+            metar_age_min = int(
+                (
+                    datetime.now(timezone.utc) - dt.astimezone(timezone.utc)
+                ).total_seconds()
+                / 60
+            )
         except Exception:
             obs_t_str = obs_t[:16]
     elif metar and metar.get("observation_time"):
@@ -481,21 +382,15 @@ def build_city_query_report(
                     utc_offset = fallback_utc_offset
                 local_dt = dt.astimezone(timezone(timedelta(seconds=int(utc_offset))))
                 obs_t_str = local_dt.strftime("%H:%M")
-                metar_age_min = int((datetime.now(timezone.utc) - dt).total_seconds() / 60)
+                metar_age_min = int(
+                    (datetime.now(timezone.utc) - dt).total_seconds() / 60
+                )
             elif " " in obs_t:
                 obs_t_str = obs_t.split(" ")[1][:5]
             else:
                 obs_t_str = obs_t
         except Exception:
             obs_t_str = obs_t[:16]
-    elif mgm:
-        mgm_time = str(mgm_current.get("time") or "")
-        if "T" in mgm_time:
-            dt = datetime.fromisoformat(mgm_time.replace("Z", "+00:00"))
-            mgm_time = dt.astimezone(timezone(timedelta(hours=3))).strftime("%H:%M")
-        elif " " in mgm_time:
-            mgm_time = mgm_time.split(" ")[1][:5]
-        obs_t_str = mgm_time or "N/A"
 
     age_tag = ""
     if metar_age_min is not None:
@@ -512,14 +407,14 @@ def build_city_query_report(
             max_str += f" @{max_p_time}"
         max_str += f" → {settlement_source_label} {settled_val}{temp_symbol})"
 
-    metar_clouds = primary_current.get("clouds", []) if isinstance(primary_current, dict) else []
-    mgm_cloud = mgm_current.get("cloud_cover") if isinstance(mgm_current, dict) else None
-    wx_summary = _build_wx_summary(primary_current, metar_clouds, mgm_cloud)
+    metar_clouds = (
+        primary_current.get("clouds", []) if isinstance(primary_current, dict) else []
+    )
+    wx_summary = _build_wx_summary(primary_current, metar_clouds)
     wx_display = f" {wx_summary}" if wx_summary else ""
     msg_lines.append(
         f"\n✈️ <b>实测 ({main_source}): {cur_temp}{temp_symbol}</b>{max_str} |{wx_display} | {obs_t_str}{age_tag}"
     )
-
 
     if use_settlement_current:
         # HKO detailed observations
@@ -534,24 +429,20 @@ def build_city_query_report(
             m_wind = metar_current.get("wind_speed_kt")
             m_dir = metar_current.get("wind_dir")
             m_vis = metar_current.get("visibility_mi")
-            msg_lines.append(f"   [METAR] 🌪 {m_wind or 0}kt ({m_dir or 0}°) | 👁️ {m_vis or 10}mi")
+            msg_lines.append(
+                f"   [METAR] 🌪 {m_wind or 0}kt ({m_dir or 0}°) | 👁️ {m_vis or 10}mi"
+            )
     elif metar:
         wind = metar_current.get("wind_speed_kt")
         wind_dir = metar_current.get("wind_dir")
         vis = metar_current.get("visibility_mi")
-        if not mgm:
-            msg_lines.append(f"   [METAR] 🌪 {wind or 0}kt ({wind_dir or 0}°) | 👁️ {vis or 10}mi")
-    if mgm:
-        wind_dir = mgm_current.get("wind_dir")
-        wind_speed_ms = mgm_current.get("wind_speed_ms")
-        if wind_dir is not None and wind_speed_ms is not None:
-            dirs = ["北", "东北", "东", "东南", "南", "西南", "西", "西北"]
-            dir_str = dirs[int((float(wind_dir) + 22.5) % 360 / 45)] + "风"
-            msg_lines.append(
-                f"   [MGM] 🌬️ {dir_str}{wind_dir}° ({wind_speed_ms} m/s) | 💧 降水: {mgm_current.get('rain_24h') or 0}mm"
-            )
+        msg_lines.append(
+            f"   [METAR] 🌪 {wind or 0}kt ({wind_dir or 0}°) | 👁️ {vis or 10}mi"
+        )
 
-    feature_str, _ai_context, _structured = analyze_weather_trend(weather_data, temp_symbol, city_name)
+    feature_str, _ai_context, _structured = analyze_weather_trend(
+        weather_data, temp_symbol, city_name
+    )
     if feature_str:
         msg_lines.append("\n💡 <b>分析</b>:")
         for line in feature_str.split("\n"):

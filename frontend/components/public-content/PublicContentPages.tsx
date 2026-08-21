@@ -224,7 +224,7 @@ export function BriefsIndexPageView({ locale = "en-US" }: { locale?: LandingLoca
               {copy.sourcePanelBody}
             </p>
             <div className="mt-4">
-              <SourceLinks locale={locale} slugs={["mgm", "metar", "hko", "noaa"]} />
+              <SourceLinks locale={locale} slugs={["metar", "hko", "noaa"]} />
             </div>
           </div>
         </section>

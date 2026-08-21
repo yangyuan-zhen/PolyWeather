@@ -135,7 +135,7 @@ export const PUBLIC_CONTENT_COPY: Record<LandingLocale, PublicContentCopy> = {
     sourceLinks: "来源链接",
     sourceNotes: "来源说明",
     sourcePanelBody:
-      "来源页解释为什么 MGM、METAR、HKO、NOAA 和模型指引会在 PolyWeather 工作流中分开展示。",
+      "来源页解释为什么 METAR、HKO、NOAA 和模型指引会在 PolyWeather 工作流中分开展示。",
     sourcePanelTitle: "官方来源上下文",
     sources: "来源",
     updated: "更新",
@@ -180,7 +180,7 @@ export const PUBLIC_CONTENT_COPY: Record<LandingLocale, PublicContentCopy> = {
     sourceLinks: "Source links",
     sourceNotes: "Source notes",
     sourcePanelBody:
-      "Source pages explain why MGM, METAR, HKO, NOAA, and model guidance are displayed separately in PolyWeather workflows.",
+      "Source pages explain why METAR, HKO, NOAA, and model guidance are displayed separately in PolyWeather workflows.",
     sourcePanelTitle: "Official-source context",
     sources: "Sources",
     updated: "Updated",
@@ -201,17 +201,17 @@ export const PUBLIC_BRIEFS: PublicBrief[] = [
     date: "2026-06-24",
     title: "Ankara Weather Market Brief - 24 Jun 2026",
     description:
-      "A public market brief for Ankara maximum temperature judgment, focused on MGM settlement-source behavior, DEB blended forecast context, and anomaly checks.",
+      "A public market brief for Ankara maximum temperature judgment, focused on official settlement-source behavior, DEB blended forecast context, and anomaly checks.",
     market: "Same-day maximum temperature judgment",
-    settlementSource: "MGM official station",
+    settlementSource: "Official airport station (METAR)",
     updatedAt: "2026-06-24T13:55:00+03:00",
     publishedAt: "2026-06-24T13:55:00+03:00",
     dataFreshness:
       "Static public snapshot. Paid terminal users should verify the latest official observation and SSE replay state before acting.",
     debRead:
-      "DEB kept the intraday high-temperature read below the isolated MGM spike and closer to the observed official range.",
+      "DEB kept the intraday high-temperature read below the isolated observation spike and closer to the observed official range.",
     sourceRead:
-      "MGM is treated as the primary settlement reference. A single 27.1°C point should be checked against adjacent official readings before it is accepted as a new high.",
+      "The official station is treated as the primary settlement reference. A single 27.1°C point should be checked against adjacent official readings before it is accepted as a new high.",
     modelRead:
       "ECMWF was warmer than the DEB blend in the early afternoon window, but the public brief weights official observations above model-only movement.",
     riskRead:
@@ -219,9 +219,9 @@ export const PUBLIC_BRIEFS: PublicBrief[] = [
     notFinancialAdvice:
       "This brief is weather-research content for prediction-market preparation. It is not financial advice and does not guarantee settlement outcomes.",
     distributionText:
-      "Ankara 2026-06-24 public Weather Market Brief: MGM official readings favored a 24.5°C observed high over an isolated 27.1°C spike; DEB stayed below the outlier. Not financial advice.",
+      "Ankara 2026-06-24 public Weather Market Brief: official readings favored a 24.5°C observed high over an isolated 27.1°C spike; DEB stayed below the outlier. Not financial advice.",
     primaryCtaLabel: "Open live terminal",
-    sourceSlugs: ["mgm", "metar", "ecmwf"],
+    sourceSlugs: ["metar", "ecmwf"],
     methodologySlugs: ["deb", "settlement-sources"],
     signals: [
       {
@@ -242,7 +242,7 @@ export const PUBLIC_BRIEFS: PublicBrief[] = [
     ],
     checkpoints: [
       "Check whether the suspected spike appears in the official high-temperature summary.",
-      "Compare adjacent MGM observations before treating a single point as settlement-relevant.",
+      "Compare adjacent official observations before treating a single point as settlement-relevant.",
       "Review the paid terminal for live chart patches and source freshness before market close.",
     ],
   },
@@ -429,24 +429,6 @@ export const METHODOLOGY_PAGES: MethodologyPage[] = [
 
 export const SOURCE_PAGES: SourcePage[] = [
   {
-    slug: "mgm",
-    title: "MGM Weather Source",
-    description:
-      "PolyWeather source note for Turkish MGM observations used in Ankara-style temperature market analysis.",
-    updatedAt: "2026-06-24T00:00:00Z",
-    operator: "Turkish State Meteorological Service",
-    coverage: "Turkey official station network, including Ankara market context.",
-    cadence: "Source cadence varies by station and publication path; terminal freshness checks are required.",
-    settlementUse:
-      "Used as the primary official-source family when Ankara markets reference Turkish official observations.",
-    reliabilityNotes: [
-      "Single-point spikes should be compared with neighboring timestamps before being accepted.",
-      "Official summaries can lag raw point observations.",
-      "Cache and SSE replay state should be checked when a value appears suddenly.",
-    ],
-    relatedMethodologySlugs: ["settlement-sources", "deb"],
-  },
-  {
     slug: "metar",
     title: "METAR Airport Observations",
     description:
@@ -526,15 +508,15 @@ const BRIEF_LOCALIZATIONS: Record<string, Partial<PublicBrief>> = {
     countryName: "土耳其",
     title: "安卡拉天气市场简报 - 2026年6月24日",
     description:
-      "安卡拉最高温公开简报，聚焦 MGM 结算源行为、DEB 融合预报背景和异常值复核。",
+      "安卡拉最高温公开简报，聚焦官方结算源行为、DEB 融合预报背景和异常值复核。",
     market: "当日最高温判断",
-    settlementSource: "MGM 官方站",
+    settlementSource: "官方机场站 (METAR)",
     dataFreshness:
       "静态公开快照。付费终端用户行动前应核对最新官方观测和 SSE replay 状态。",
     debRead:
-      "DEB 将日内最高温读数压在孤立 MGM 尖峰下方，更接近已观测的官方区间。",
+      "DEB 将日内最高温读数压在孤立观测尖峰下方，更接近已观测的官方区间。",
     sourceRead:
-      "MGM 被视为主要结算参考。单个 27.1°C 点位在接受为新高前，需要与相邻官方读数比对。",
+      "官方站被视为主要结算参考。单个 27.1°C 点位在接受为新高前，需要与相邻官方读数比对。",
     modelRead:
       "ECMWF 在午后窗口比 DEB 融合更暖，但公开简报把官方观测置于纯模型移动之上。",
     riskRead:
@@ -542,7 +524,7 @@ const BRIEF_LOCALIZATIONS: Record<string, Partial<PublicBrief>> = {
     notFinancialAdvice:
       "本简报是用于预测市场准备的天气研究内容，不构成金融建议，也不保证结算结果。",
     distributionText:
-      "安卡拉 2026-06-24 公开天气市场简报：MGM 官方读数更支持 24.5°C 已观测高温，而非孤立 27.1°C 尖峰；DEB 仍低于异常点。非金融建议。",
+      "安卡拉 2026-06-24 公开天气市场简报：官方读数更支持 24.5°C 已观测高温，而非孤立 27.1°C 尖峰；DEB 仍低于异常点。非金融建议。",
     primaryCtaLabel: "打开实时终端",
     signals: [
       {
@@ -563,7 +545,7 @@ const BRIEF_LOCALIZATIONS: Record<string, Partial<PublicBrief>> = {
     ],
     checkpoints: [
       "检查疑似尖峰是否进入官方高温摘要。",
-      "在把单点视为结算相关之前，先比较相邻 MGM 观测。",
+      "在把单点视为结算相关之前，先比较相邻官方观测。",
       "市场关闭前查看付费终端的实时图表 patch 和来源新鲜度。",
     ],
   },
@@ -733,19 +715,6 @@ const METHODOLOGY_PAGE_LOCALIZATIONS: Record<string, Partial<MethodologyPage>> =
 };
 
 const SOURCE_PAGE_LOCALIZATIONS: Record<string, Partial<SourcePage>> = {
-  mgm: {
-    title: "MGM 天气来源",
-    description: "PolyWeather 针对土耳其 MGM 观测的来源说明，用于安卡拉类温度市场分析。",
-    operator: "土耳其国家气象局",
-    coverage: "土耳其官方站网络，包含安卡拉市场上下文。",
-    cadence: "来源频率会随站点和发布路径变化；终端仍需要检查新鲜度。",
-    settlementUse: "当安卡拉市场引用土耳其官方观测时，作为主要官方来源族使用。",
-    reliabilityNotes: [
-      "单点尖峰在接受前应与相邻时间戳比对。",
-      "官方摘要可能滞后于原始点位观测。",
-      "数值突然出现时，应检查缓存和 SSE replay 状态。",
-    ],
-  },
   metar: {
     title: "METAR 机场观测",
     description: "PolyWeather 针对机场 METAR 观测的来源说明，用作温度市场工作流中的快速证据。",

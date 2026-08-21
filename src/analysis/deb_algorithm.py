@@ -106,7 +106,6 @@ def _deb_model_priority(model_name: str) -> int:
         "ecmwf": 30,
         "gfs": 30,
         "jma": 30,
-        "mgm": 45,
         "nws": 45,
         "hko": 45,
         "lgbm": 50,

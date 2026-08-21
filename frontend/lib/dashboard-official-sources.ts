@@ -163,11 +163,6 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
   ],
   istanbul: [
     {
-      label: "MGM",
-      href: "https://www.mgm.gov.tr/?il=Istanbul&ilce=Istanbul%20Havalimani",
-      kind: "agency",
-    },
-    {
       label: "NOAA LTFM Timeseries",
       href: "https://www.weather.gov/wrh/timeseries?site=LTFM",
       kind: "agency",
@@ -327,11 +322,6 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
     },
   ],
   ankara: [
-    {
-      label: "MGM",
-      href: "https://www.mgm.gov.tr/?il=Ankara&ilce=Esenboga",
-      kind: "agency",
-    },
     {
       label: "LTAC METAR",
       href: "https://aviationweather.gov/data/metar/?id=LTAC&decoded=1&taf=1",

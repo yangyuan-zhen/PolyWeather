@@ -288,7 +288,6 @@ function fallbackCadenceSeconds(sourceText: string) {
   if (value.includes("cowin")) return 60;
   if (value.includes("hko")) return 600;
   if (value.includes("jma") || value.includes("fmi") || value.includes("knmi")) return 600;
-  if (value.includes("mgm")) return 900;
   if (value.includes("mss") || value.includes("singapore")) return 60;
   return null;
 }

@@ -148,7 +148,6 @@ HRDPS > RDPS > GDPS > GEM
 - ECMWF AIFS
 - GFS
 - JMA
-- MGM
 - NWS
 - HKO
 - Open-Meteo

@@ -129,8 +129,6 @@ def _source_health_entry(
 def _expected_city_source_codes(city: str, payload: dict[str, Any]) -> list[str]:
     city_key = str(city or "").strip().lower().replace(" ", "")
     expected: list[str] = []
-    if city_key in {"ankara", "istanbul"}:
-        expected.append("mgm")
     if city_key == "amsterdam":
         expected.append("knmi")
     if city_key in {"telaviv", "telavivyafo"}:
@@ -173,22 +171,7 @@ def _collect_city_source_health(city: str, entry: dict[str, Any] | None) -> dict
     add("official_airport_primary", official.get("airport_primary"), fallback_label="Official airport station")
     add("official_airport_primary", official.get("airport_primary_current"), fallback_label="Official airport station")
 
-    mgm = payload.get("mgm") if isinstance(payload.get("mgm"), dict) else {}
-    if mgm:
-        mgm_current = mgm.get("current") if isinstance(mgm.get("current"), dict) else {}
-        add(
-            "official_network",
-            {
-                **mgm_current,
-                "source_code": "mgm",
-                "source_label": "MGM",
-                "obs_time": mgm.get("obs_time") or mgm_current.get("time"),
-            },
-            fallback_code="mgm",
-            fallback_label="MGM",
-        )
-
-    for nearby in payload.get("official_nearby") or payload.get("mgm_nearby") or []:
+    for nearby in payload.get("official_nearby") or payload.get("nearby_stations") or []:
         if isinstance(nearby, dict):
             add("nearby_official", nearby, fallback_label="Nearby official")
 

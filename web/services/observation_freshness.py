@@ -39,13 +39,6 @@ _OBSERVATION_SOURCE_PROFILES: Dict[str, Dict[str, Any]] = {
         "expected_grace_sec": 600,
         "stale_after_sec": 2700,
     },
-    "mgm": {
-        "label": "MGM",
-        "native_update_interval_sec": 900,
-        "fresh_window_sec": 900,
-        "expected_grace_sec": 900,
-        "stale_after_sec": 3600,
-    },
     "ims": {
         "label": "IMS",
         "native_update_interval_sec": 600,
@@ -98,7 +91,9 @@ _OBSERVATION_SOURCE_PROFILES: Dict[str, Dict[str, Any]] = {
 }
 
 
-def observation_age_min(value: Any, now_utc: Optional[datetime] = None) -> Optional[int]:
+def observation_age_min(
+    value: Any, now_utc: Optional[datetime] = None
+) -> Optional[int]:
     obs_dt = parse_utc_datetime(value)
     if obs_dt is None:
         return None
@@ -118,8 +113,6 @@ def canonical_observation_source_code(value: Any) -> str:
         return "knmi"
     if "hko" in raw:
         return "hko"
-    if "mgm" in raw:
-        return "mgm"
     if "ims" in raw:
         return "ims"
     if "madis" in raw:
@@ -151,7 +144,9 @@ def build_observation_freshness(
     now_utc: Optional[datetime] = None,
 ) -> Dict[str, Any]:
     code = canonical_observation_source_code(source_code or source_label)
-    profile = _OBSERVATION_SOURCE_PROFILES.get(code) or _OBSERVATION_SOURCE_PROFILES["metar"]
+    profile = (
+        _OBSERVATION_SOURCE_PROFILES.get(code) or _OBSERVATION_SOURCE_PROFILES["metar"]
+    )
     now = now_utc or datetime.now(timezone.utc)
     obs_dt = parse_utc_datetime(observed_at)
     age_sec = None
@@ -169,7 +164,9 @@ def build_observation_freshness(
     elif age_sec <= int(profile["fresh_window_sec"]):
         status = "fresh"
         reason = "within_native_fresh_window"
-    elif age_sec <= int(profile["native_update_interval_sec"]) + int(profile["expected_grace_sec"]):
+    elif age_sec <= int(profile["native_update_interval_sec"]) + int(
+        profile["expected_grace_sec"]
+    ):
         status = "expected_wait"
         reason = "within_source_expected_cadence"
     elif age_sec <= int(profile["stale_after_sec"]):
@@ -187,11 +184,15 @@ def build_observation_freshness(
     return {
         "source_code": code,
         "source_label": str(source_label or profile["label"]),
-        "observed_at": obs_dt.isoformat() if obs_dt is not None else optional_str(observed_at),
+        "observed_at": obs_dt.isoformat()
+        if obs_dt is not None
+        else optional_str(observed_at),
         "observed_at_local": optional_str(observed_at_local),
         "ingested_at": optional_str(ingested_at),
         "native_update_interval_sec": int(profile["native_update_interval_sec"]),
-        "expected_next_update_at": expected_next.isoformat() if expected_next is not None else None,
+        "expected_next_update_at": expected_next.isoformat()
+        if expected_next is not None
+        else None,
         "freshness_status": status,
         "freshness_reason": reason,
         "age_sec": age_sec,

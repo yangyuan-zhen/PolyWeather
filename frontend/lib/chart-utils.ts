@@ -6,7 +6,6 @@ import {
   getObservationSourceCode,
   getObservationSourceTag,
   getRealtimeObservationTag,
-  isTurkishMgmCity,
 } from "@/lib/observation-source-utils";
 import { formatTafMarkerType } from "@/lib/taf-utils";
 import {
@@ -148,32 +147,16 @@ export function getTemperatureChartData(
   locale: Locale = "zh-CN",
 ) {
   const hourly = detail.hourly || {};
-  const mgmHourlyRows = Array.isArray(detail.mgm?.hourly)
-    ? detail.mgm?.hourly || []
-    : [];
-  const axis = buildChartTimeAxis(
-    hourly.times,
-    hourly.temps,
-    mgmHourlyRows,
-    isTurkishMgmCity(detail),
-  );
+  const axis = buildChartTimeAxis(hourly.times, hourly.temps);
   const { times, temps } = axis;
   if (!times.length) return null;
 
-  const mgmHourlyMax = mgmHourlyRows
-    .map((row) => Number(row?.temp))
-    .filter((value) => Number.isFinite(value))
-    .reduce<number | null>(
-      (maxValue, value) => (maxValue == null ? value : Math.max(maxValue, value)),
-      null,
-    );
   const baseline = buildDebBaselinePath(
     times,
     temps,
     detail.deb?.prediction,
     detail.local_time,
     detail.forecast?.today_high,
-    mgmHourlyMax,
   );
   let {
     debTemps,
@@ -201,8 +184,6 @@ export function getTemperatureChartData(
       }
     }
   }
-  const suppressAnkaraMgmObservation = isTurkishMgmCity(detail);
-
   const observationTag = getRealtimeObservationTag(detail);
   const observationCode = getObservationSourceCode(detail);
   const settlementSource =
@@ -316,37 +297,11 @@ export function getTemperatureChartData(
   );
   const calibratedFuture = calibratedPath.future;
 
-  const mgmPoints = new Array(times.length).fill(null);
-  if (
-    !suppressAnkaraMgmObservation &&
-    detail.mgm?.temp != null &&
-    detail.mgm?.time
-  ) {
-    const index = findNearestTimeIndex(times, detail.mgm.time);
-    const temp = Number(detail.mgm.temp);
-    if (index >= 0 && Number.isFinite(temp)) {
-      mgmPoints[index] = temp;
-    }
-  }
-
-  const mgmHourlyPoints = new Array(times.length).fill(null);
-  let hasMgmHourly = false;
-  mgmHourlyRows.forEach((item) => {
-    const index = findNearestTimeIndex(times, String(item.time || ""));
-    const temp = Number(item.temp);
-    if (index >= 0 && Number.isFinite(temp)) {
-      mgmHourlyPoints[index] = temp;
-      hasMgmHourly = true;
-    }
-  });
-
   const allValues = [
     ...debTemps.filter((value) => value != null),
     ...calibratedFuture.filter((value) => value != null),
     ...metarPoints.filter((value) => value != null),
     ...airportMetarPoints.filter((value) => value != null),
-    ...mgmPoints.filter((value) => value != null),
-    ...mgmHourlyPoints.filter((value) => value != null),
   ] as number[];
 
   if (!allValues.length) return null;
@@ -473,10 +428,7 @@ export function getTemperatureChartData(
   };
 
   const legendParts: string[] = [];
-  if (!suppressAnkaraMgmObservation && detail.mgm?.temp != null) {
-    legendParts.push(`MGM: ${detail.mgm.temp}${detail.temp_symbol}`);
-  }
-  if (!hasMgmHourly && Math.abs(offset) > 0.3) {
+  if (Math.abs(offset) > 0.3) {
     const sign = offset > 0 ? "+" : "";
     legendParts.push(
       isEnglish(locale)
@@ -490,23 +442,6 @@ export function getTemperatureChartData(
       isEnglish(locale)
         ? `DEB calibrated path applies latest observation bias ${sign}${calibratedPath.adjustmentDelta.toFixed(1)}${detail.temp_symbol}.`
         : `DEB 修正路径使用最新观测偏差 ${sign}${calibratedPath.adjustmentDelta.toFixed(1)}${detail.temp_symbol}。`,
-    );
-  }
-  if (hasMgmHourly) {
-    const hourly = detail.hourly || {};
-    const hasPrimaryHourly =
-      Array.isArray(hourly.times) &&
-      Array.isArray(hourly.temps) &&
-      Math.min(hourly.times.length, hourly.temps.length) > 0;
-    const mgmIsForecastBase = !hasPrimaryHourly && isTurkishMgmCity(detail);
-    legendParts.push(
-      isEnglish(locale)
-        ? mgmIsForecastBase
-          ? "Using MGM hourly forecast as the DEB curve base"
-          : "MGM hourly forecast is shown as official hourly guidance"
-        : mgmIsForecastBase
-          ? "已使用 MGM 小时预报作为 DEB 曲线基底"
-          : "MGM 小时预报作为官方小时指引显示",
     );
   }
   if ((detail.trend?.recent?.length || 0) > 0 || observationSource.length > 0) {
@@ -599,13 +534,8 @@ export function getTemperatureChartData(
   const debSeries = buildSeriesPoints(times, debTemps);
   const calibratedFutureSeries = buildSeriesPoints(times, calibratedFuture);
   const tempsSeries = buildSeriesPoints(times, temps);
-  const mgmHourlySeries = buildSeriesPoints(times, mgmHourlyPoints);
   const metarSeries = buildObservationPointSeries(observationSource);
   const airportMetarSeries = buildObservationPointSeries(airportMetarSource);
-  const mgmSeries =
-    !suppressAnkaraMgmObservation && detail.mgm?.temp != null && detail.mgm?.time
-      ? buildObservationPointSeries([{ time: detail.mgm.time, temp: detail.mgm.temp }])
-      : [];
   const tafCurrentMarkerSeries = tafMarkers
     .filter((marker) => marker.isCurrent)
     .map((marker) => ({
@@ -645,13 +575,8 @@ export function getTemperatureChartData(
       debPast,
       debPastSeries,
       debSeries,
-      hasMgmHourly,
       metarPoints,
       metarSeries,
-      mgmHourlyPoints,
-      mgmHourlySeries,
-      mgmPoints,
-      mgmSeries,
       offset,
       tafCurrentMarkerPoints,
       tafCurrentMarkerSeries,

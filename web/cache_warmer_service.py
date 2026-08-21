@@ -58,9 +58,7 @@ DEFAULT_HOT_CITIES = ASIA_CORE_CITIES + EUROPE_CORE_CITIES + US_CORE_CITIES
 SOURCE_PRIORITY_WEIGHT = {
     "hko": 10,
     "noaa": 8,
-    "mgm": 8,
     "metar": 6,
-
 }
 _CACHE_WARMER_DB = DBManager()
 

@@ -13,8 +13,6 @@
 | 香港 | HKO | HKO | HKO 官方 CSV (`data.weather.gov.hk`) | 10 分钟 | 官方气象站温度 | 免费 |
 | 深圳 | 流浮山 | LFS | HKO 官方 CSV (`data.weather.gov.hk`) | 10 分钟 | 官方自动站温度（结算源） | 免费 |
 | 东京 | 羽田 | RJTT | JMA AMeDAS (`jma.go.jp`) | 10 分钟 | 机场站点实时温度 | 免费 |
-| 安卡拉 | Esenboğa | 17128 | MGM (`servis.mgm.gov.tr`) | 5-15 分钟 | 机场站点实时温度 | 免费 |
-| 伊斯坦布尔 | 伊斯坦布尔机场 | 17058 | MGM (`servis.mgm.gov.tr`) | 5-15 分钟 | 机场站点实时温度 | 免费 |
 | 赫尔辛基 | Vantaa | EFHK | FMI (`opendata.fmi.fi`) | 10 分钟 | 机场站点实时温度 | 免费 |
 | 阿姆斯特丹 | Schiphol | EHAM | KNMI (`dataplatform.knmi.nl`) | 10 分钟 | 机场站点实时温度 | 免费（需注册） |
 | 巴黎 | Le Bourget | LFPB | AROME HD (`api.open-meteo.com`) | 15 分钟 | 模型预报（非实测） | 免费 |
@@ -55,10 +53,10 @@
 ## 独立观测采集器
 
 - Web/API 进程启动 `observation-collector` 后台线程，按源频率独立采集
-- 默认频率：MADIS HFMETAR 300s、CoWIN 60s、HKO 600s、MGM 300s、JMA AMeDAS 600s
+- 默认频率：MADIS HFMETAR 300s、CoWIN 60s、HKO 600s、JMA AMeDAS 600s
 - 每次采集复用 `weather_sources.py` 现有 `_attach_*` 写入逻辑，负责写 `airport_obs_log` / `runway_obs_log` / 今日观测缓存，并通过 `/api/internal/collector-patch` 写 Redis Stream 或 SQLite event log 后广播 SSE
 - 采集成功后刷新对应城市 `panel` cache；前端继续使用 HTTP snapshot + SSE patch 更新
-- `observation_source_gate.py` 对 MADIS、HKO、CoWIN、MGM、JMA 等做 per-source/per-city singleflight 和 SQLite cooldown，防止 Web 请求、collector 和兜底分析同时打同一个外部源
+- `observation_source_gate.py` 对 MADIS、HKO、CoWIN、JMA 等做 per-source/per-city singleflight 和 SQLite cooldown，防止 Web 请求、collector 和兜底分析同时打同一个外部源
 
 ## 前端实时同步与 SSE Patch / Redis Stream 机制
 
@@ -153,8 +151,6 @@ DEB：18.2°C
 | 城市 | 来源 | 频率 | 国家/地区 |
 |------|------|------|------|
 | tokyo | JMA AMeDAS (44166) | 10 min | 日本 |
-| ankara | MGM (17128) | 5-15 min | 土耳其 |
-| istanbul | MGM (17058) | 5-15 min | 土耳其 |
 | helsinki | FMI 开放数据 | 10 min | 芬兰 |
 | amsterdam | KNMI 数据平台 | 10 min | 荷兰 |
 | shenzhen | HKO 官方 CSV (LFS) | ~10 min | 香港天文台流浮山自动站 |
@@ -192,10 +188,9 @@ DEB：18.2°C
 `country_networks.py:_airport_primary_from_raw()` 按以下顺序解析:
 
 1. MADIS HFMETAR（美国 11 城）
-2. MGM current（安卡拉/伊斯坦布尔）
-3. JMA AMeDAS current（东京）
-4. FMI current（赫尔辛基）
-5. KNMI current（阿姆斯特丹）
+2. JMA AMeDAS current（东京）
+3. FMI current（赫尔辛基）
+4. KNMI current（阿姆斯特丹）
 6. CoWIN 6087（香港 1min 参考站）
 7. AEROWEB current（巴黎）
 8. IMS current（特拉维夫）

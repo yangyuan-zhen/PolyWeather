@@ -137,7 +137,7 @@ def build_city_detail_payload(
             "taf": data.get("taf") or {},
             "weather_gov": {},
             "mgm": data.get("mgm") or {},
-            "mgm_nearby": data.get("mgm_nearby") or [],
+            "mgm_nearby": data.get("nearby_stations") or data.get("mgm_nearby") or [],
             "nearby_source": data.get("nearby_source")
             or (
                 "mgm"

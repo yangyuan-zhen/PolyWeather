@@ -254,12 +254,6 @@ export function runTests() {
       localTime: "17:28",
       times: ["00:00", "06:00", "12:00", "18:00"],
       temps: [15, 14, 16, 15],
-      airportPrimary: {
-        source_code: "mgm",
-        source_label: "MGM",
-        temp: 14.0,
-        obs_time: "2026-05-29T14:28:00Z",
-      },
       airportPrimaryTodayObs: [
         { time: "2026-05-29T13:28:00Z", temp: 17.0 },
         { time: "2026-05-29T14:28:00Z", temp: 14.0 },
@@ -273,12 +267,12 @@ export function runTests() {
     {},
   );
   assert(
-    ankaraDefaultSeries.some((item: any) => item.key === "madis" && item.label === "MGM"),
-    "Ankara MGM airport-primary weather-station curve should be visible by default",
+    !ankaraDefaultSeries.some((item: any) => item.key === "madis"),
+    "Ankara airport-primary curve should be gone after MGM removal",
   );
   assert(
     !ankaraDefaultSeries.some((item: any) => item.key === "metar"),
-    "airport METAR curve should be removed even for weather-station cities",
+    "airport METAR curve should stay removed (settlement line covers it)",
   );
   assert(
     __isTemperatureSeriesVisibleByDefaultForTest("guangzhou", "model_curve_ECMWF"),
@@ -607,19 +601,19 @@ export function runTests() {
       city: "istanbul",
       airport: "LTFM",
       metar_context: {
-        source: "mgm",
-        station_label: "MGM Istanbul Airport",
+        source: "metar",
+        station_label: "Istanbul Airport METAR",
       },
     } as any,
     null,
   );
   assert(
-    istanbulLabels.obsHeaderLabel === "气象站实测",
-    "Istanbul/MGM should be labeled as weather-station observations (legacy runway naming removed)",
+    istanbulLabels.obsHeaderLabel === "机场报文",
+    "Istanbul should fall back to airport-report labels after MGM removal",
   );
   assert(
-    istanbulLabels.obsHighLabel === "气象站",
-    "Istanbul/MGM high label should be weather station",
+    istanbulLabels.obsHighLabel === "机场报文",
+    "Istanbul high label should use the airport-report naming after MGM removal",
   );
 
   const panamaLabels = __getLiveObservationLabelsForTest(
@@ -841,8 +835,8 @@ export function runTests() {
       times: [],
       temps: [],
       airportPrimary: {
-        source_code: "mgm",
-        source_label: "MGM",
+        source_code: "metar",
+        source_label: "METAR",
         temp: 18.2,
         obs_time: "2026-05-29T12:10:00Z",
       },
@@ -860,14 +854,9 @@ export function runTests() {
     "1D",
   );
   const istanbulMgmSeries = seriesByKey(istanbulMgmOnlySeries.series as any, "madis") as any;
-  assert(istanbulMgmSeries?.label === "MGM", "Istanbul airport-primary series should be labeled MGM");
   assert(
-    istanbulMgmSeries.values.some((value: number | null) => value === 18.2),
-    "MGM series should append the latest MGM airport-primary observation",
-  );
-  assert(
-    !istanbulMgmSeries.values.some((value: number | null) => value === 17),
-    "MGM series should not mix METAR airportCurrent points into the MGM airport-station line",
+    istanbulMgmSeries == null,
+    "Istanbul airport-primary series should be removed after MGM removal (METAR settlement line covers it)",
   );
 
   const ankaraMgmWithMetarLabel = __buildTemperatureChartDataForTest(
@@ -884,7 +873,7 @@ export function runTests() {
       times: [],
       temps: [],
       airportPrimary: {
-        source_code: "mgm",
+        source_code: "metar",
         source_label: "METAR",
         temp: 14,
         obs_time: "2026-05-29T15:48:00Z",
@@ -907,8 +896,8 @@ export function runTests() {
   );
   const ankaraMgmSeries = seriesByKey(ankaraMgmWithMetarLabel.series as any, "madis") as any;
   const ankaraMetarSeries = seriesByKey(ankaraMgmWithMetarLabel.series as any, "metar") as any;
-  assert(ankaraMgmSeries?.label === "MGM", "Ankara MGM airport-primary series should be labeled MGM even if payload source_label says METAR");
-  assert(ankaraMetarSeries == null, "airport METAR curve should be removed (MGM primary covers Ankara)");
+  assert(ankaraMgmSeries == null, "Ankara airport-primary series should be removed after MGM removal");
+  assert(ankaraMetarSeries == null, "airport METAR curve should stay removed (settlement line covers it)");
 
   const shanghaiDebFromDetail = __buildTemperatureChartDataForTest(
     {

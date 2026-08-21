@@ -24,7 +24,6 @@
 | 服务 | 城市 | 状态 |
 | --- | --- | --- |
 | JMA AMeDAS | Tokyo | ✅ |
-| MGM (土耳其) | Ankara, Istanbul | ✅ |
 | FMI (芬兰) | Helsinki | ✅ |
 | KNMI (荷兰) | Amsterdam | ✅（需 key） |
 | CoWIN 6087 (香港) | Hong Kong 1 分钟参考站 | ✅ |
