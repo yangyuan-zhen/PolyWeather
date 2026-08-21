@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+import time
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Sequence
 
 from loguru import logger
@@ -25,7 +27,9 @@ def _selected_city_names(
     city_registry: Mapping[str, Mapping[str, Any]],
     cities: Optional[Iterable[str]],
 ) -> Sequence[str]:
-    selected = {_normalize_city(city) for city in (cities or []) if _normalize_city(city)}
+    selected = {
+        _normalize_city(city) for city in (cities or []) if _normalize_city(city)
+    }
     names = []
     for city in sorted(city_registry.keys()):
         normalized = _normalize_city(city)
@@ -33,6 +37,29 @@ def _selected_city_names(
             continue
         names.append(normalized)
     return tuple(names)
+
+
+def _rotating_analysis_slice(
+    supported_names: Sequence[str],
+    *,
+    batch_size: int,
+    interval_sec: int,
+    now_ts: Optional[float] = None,
+) -> tuple[Sequence[str], int]:
+    """Pick the per-city analysis slice for this cycle.
+
+    The slice index derives from ``wall_clock // interval`` so rotation
+    survives worker restarts without persistent state. ``batch_size <= 0``
+    (or >= city count) disables rotation and analyzes every city.
+    """
+    if batch_size <= 0 or batch_size >= len(supported_names):
+        return tuple(supported_names), -1
+    interval = max(1, int(interval_sec))
+    timestamp = time.time() if now_ts is None else float(now_ts)
+    cycle_index = int(timestamp // interval)
+    window_count = math.ceil(len(supported_names) / batch_size)
+    start = (cycle_index % window_count) * batch_size
+    return tuple(supported_names[start : start + batch_size]), cycle_index
 
 
 def _is_supported_training_city(city_meta: Mapping[str, Any]) -> bool:
@@ -70,23 +97,43 @@ def run_training_settlement_cycle(
     lookback_days: int = 10,
     skip_analysis: bool = False,
     skip_reconcile: bool = False,
+    analysis_batch_size: int = 0,
+    analysis_interval_sec: int = 21600,
+    now_ts: Optional[float] = None,
 ) -> Dict[str, Any]:
     registry = city_registry or CITY_REGISTRY
-    # Per-city _analyze refreshes forecasts/deb_prediction in daily_records, but
-    # on a full deployment the web service already maintains those records; the
-    # training cycle only needs settled truth (reconcile) plus the store.  Full
-    # per-city analysis across 51 cities takes 40+ minutes and accumulates the
-    # memory that used to OOM this worker before training even started.
+    # Per-city _analyze refreshes forecasts/deb_prediction in daily_records.
+    # Full 51-city analysis takes 40+ minutes and accumulates the memory that
+    # used to OOM this worker, so analysis rotates through a bounded slice of
+    # cities per cycle (analysis_batch_size); reconcile stays full-coverage
+    # because it is incremental and cheap.  batch_size <= 0 disables rotation.
     run_analysis = analysis_runner or _default_analysis_runner
     reconcile_actual = actual_reconciler or _default_actual_reconciler
     safe_lookback = max(1, int(lookback_days or 1))
+
+    all_names = _selected_city_names(registry, cities)
 
     processed = 0
     failed = 0
     unsupported = 0
     items = []
+    analysis_names: Sequence[str] = ()
+    analysis_cycle_index = -1
+    if not skip_analysis:
+        supported_names = [
+            name
+            for name in all_names
+            if _is_supported_training_city(registry.get(name) or {})
+        ]
+        analysis_names, analysis_cycle_index = _rotating_analysis_slice(
+            supported_names,
+            batch_size=int(analysis_batch_size or 0),
+            interval_sec=analysis_interval_sec,
+            now_ts=now_ts,
+        )
+        analysis_set = set(analysis_names)
 
-    for city in _selected_city_names(registry, cities):
+    for city in all_names:
         meta = registry.get(city) or {}
         if not _is_supported_training_city(meta):
             unsupported += 1
@@ -102,8 +149,10 @@ def run_training_settlement_cycle(
 
         try:
             analysis_payload = None
-            if not skip_analysis:
+            did_analysis = False
+            if not skip_analysis and city in analysis_set:
                 analysis_payload = run_analysis(city)
+                did_analysis = True
             if skip_reconcile:
                 reconcile_payload = {
                     "ok": True,
@@ -131,8 +180,12 @@ def run_training_settlement_cycle(
                     "ok": reconcile_ok,
                     "status": "processed" if reconcile_ok else "failed",
                     "analysis_status": (
-                        "skipped" if skip_analysis else str(
-                            (analysis_payload or {}).get("status") or "ok"
+                        "skipped"
+                        if skip_analysis
+                        else (
+                            "rotated_out"
+                            if not did_analysis
+                            else str((analysis_payload or {}).get("status") or "ok")
                         )
                     ),
                     "reconcile": dict(reconcile_payload or {}),
@@ -156,5 +209,8 @@ def run_training_settlement_cycle(
         "failed": failed,
         "unsupported": unsupported,
         "lookback_days": safe_lookback,
+        "analysis_batch_size": int(analysis_batch_size or 0),
+        "analysis_cycle_index": analysis_cycle_index,
+        "analyzed_cities": list(analysis_names),
         "items": items,
     }
