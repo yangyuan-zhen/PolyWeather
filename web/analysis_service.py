@@ -15,7 +15,6 @@ from web.core import (
     _cache,
     _CACHE_LOCK,
     CACHE_TTL,
-    CACHE_TTL_ANKARA,
     CITIES,
     CITY_RISK_PROFILES,
     SETTLEMENT_SOURCE_LABELS,
@@ -35,18 +34,22 @@ from src.data_collection.country_networks import build_country_network_snapshot
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
 from src.data_collection.city_time import get_city_utc_offset_seconds
 from src.data_collection.forecast_source_bundle import ensure_multi_model_hourly_payload
-from src.data_collection.multi_model_freshness import multi_model_forecasts_for_local_date
+from src.data_collection.multi_model_freshness import (
+    multi_model_forecasts_for_local_date,
+)
 from src.database.runtime_state import IntradayPathSnapshotRepository
 from web.services.city_payloads import (
     build_city_chart_detail_payload as _city_chart_payload_detail,
     build_city_detail_payload as _city_payload_detail,
-    build_city_summary_payload as _city_payload_summary
+    build_city_summary_payload as _city_payload_summary,
 )
 from web.services.observation_freshness import (
     build_observation_freshness as _build_observation_freshness,
     observation_age_min as _observation_age_min,
 )
-from web.services.intraday_meteorology import build_intraday_meteorology as _build_intraday_meteorology
+from web.services.intraday_meteorology import (
+    build_intraday_meteorology as _build_intraday_meteorology,
+)
 from web.services.analysis_signals import (
     _build_deviation_monitor,
     _build_taf_signal,
@@ -55,7 +58,6 @@ from web.services.analysis_signals import (
     _wind_components,  # noqa: F401 - compatibility re-export
 )
 
-TURKISH_MGM_CITIES = {"ankara", "istanbul"}
 HIGH_FREQ_AIRPORT_ANALYSIS_CITIES = {
     "seoul",
     "singapore",
@@ -80,7 +82,6 @@ HIGH_FREQ_AIRPORT_ANALYSIS_CITIES = {
 }
 
 
-
 def _should_build_country_network_snapshot(
     city: str,
     raw: Dict[str, Any],
@@ -90,33 +91,7 @@ def _should_build_country_network_snapshot(
 ) -> bool:
     if is_market_mode:
         return False
-    if not is_panel_mode:
-        return True
-
-    city_lower = (city or "").strip().lower()
-    if city_lower not in TURKISH_MGM_CITIES:
-        return False
-
-    return bool(
-        (raw or {}).get("mgm")
-        or (raw or {}).get("mgm_today_obs")
-        or (raw or {}).get("mgm_nearby")
-    )
-
-
-def _mgm_hourly_high(mgm: Dict[str, Any]) -> Optional[float]:
-    hourly = mgm.get("hourly") if isinstance(mgm, dict) else []
-    if not isinstance(hourly, list):
-        return None
-    values = []
-    for row in hourly:
-        if not isinstance(row, dict):
-            continue
-        value = _sf(row.get("temp"))
-        if value is not None:
-            values.append(value)
-    return max(values) if values else None
-
+    return True
 
 
 _ANALYSIS_CACHE_STATS_LOCK = threading.Lock()
@@ -132,6 +107,8 @@ _ANALYSIS_CACHE_STATS: Dict[str, Any] = {
 _SUMMARY_CACHE_LOCK = threading.Lock()
 _SUMMARY_CACHE_MAXSIZE = 128
 _SUMMARY_CACHE = LRUDict(maxsize=_SUMMARY_CACHE_MAXSIZE)
+
+
 def _dedupe_forecast_daily(rows: Any) -> list[Dict[str, Any]]:
     if not isinstance(rows, list):
         return []
@@ -157,7 +134,9 @@ def _format_observation_time_local(value: Any, utc_offset: int) -> str:
             dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
-            return dt.astimezone(timezone(timedelta(seconds=utc_offset))).strftime("%H:%M")
+            return dt.astimezone(timezone(timedelta(seconds=utc_offset))).strftime(
+                "%H:%M"
+            )
         except Exception:
             pass
     match = re.search(r"(\d{1,2}):(\d{2})", raw)
@@ -231,15 +210,23 @@ def _metar_is_current_local_day(
 def _record_analysis_cache_event(*, city: str, hit: bool, force_refresh: bool) -> None:
     now = datetime.now(timezone.utc).isoformat()
     with _ANALYSIS_CACHE_STATS_LOCK:
-        _ANALYSIS_CACHE_STATS["total_requests"] = int(_ANALYSIS_CACHE_STATS.get("total_requests") or 0) + 1
+        _ANALYSIS_CACHE_STATS["total_requests"] = (
+            int(_ANALYSIS_CACHE_STATS.get("total_requests") or 0) + 1
+        )
         _ANALYSIS_CACHE_STATS["last_city"] = city or ""
         if force_refresh:
-            _ANALYSIS_CACHE_STATS["force_refresh_requests"] = int(_ANALYSIS_CACHE_STATS.get("force_refresh_requests") or 0) + 1
+            _ANALYSIS_CACHE_STATS["force_refresh_requests"] = (
+                int(_ANALYSIS_CACHE_STATS.get("force_refresh_requests") or 0) + 1
+            )
         if hit:
-            _ANALYSIS_CACHE_STATS["cache_hits"] = int(_ANALYSIS_CACHE_STATS.get("cache_hits") or 0) + 1
+            _ANALYSIS_CACHE_STATS["cache_hits"] = (
+                int(_ANALYSIS_CACHE_STATS.get("cache_hits") or 0) + 1
+            )
             _ANALYSIS_CACHE_STATS["last_cache_hit_at"] = now
         else:
-            _ANALYSIS_CACHE_STATS["cache_misses"] = int(_ANALYSIS_CACHE_STATS.get("cache_misses") or 0) + 1
+            _ANALYSIS_CACHE_STATS["cache_misses"] = (
+                int(_ANALYSIS_CACHE_STATS.get("cache_misses") or 0) + 1
+            )
             _ANALYSIS_CACHE_STATS["last_cache_miss_at"] = now
 
 
@@ -258,8 +245,6 @@ def get_analysis_cache_stats() -> Dict[str, Any]:
 
 def _analysis_ttl_for_city(city: str) -> int:
     city_lower = city.lower()
-    if city_lower in TURKISH_MGM_CITIES:
-        return CACHE_TTL_ANKARA
     if city_lower in HIGH_FREQ_AIRPORT_ANALYSIS_CITIES:
         return 60
     return CACHE_TTL
@@ -320,11 +305,6 @@ def _set_cached_summary(city: str, payload: Dict[str, Any]) -> None:
         _SUMMARY_CACHE[city] = {"t": _time.time(), "d": dict(payload)}
 
 
-
-
-
-
-
 def _archive_intraday_path_snapshot(city: str, result: Dict[str, Any]) -> None:
     """Persist replayable intraday path inputs visible at analysis time."""
     hourly = result.get("hourly") or {}
@@ -348,9 +328,11 @@ def _archive_intraday_path_snapshot(city: str, result: Dict[str, Any]) -> None:
         for value in temps
     ]
     utc_offset = int(result.get("utc_offset_seconds") or 0)
-    snapshot_time = datetime.now(timezone.utc).astimezone(
-        timezone(timedelta(seconds=utc_offset))
-    ).isoformat(timespec="seconds")
+    snapshot_time = (
+        datetime.now(timezone.utc)
+        .astimezone(timezone(timedelta(seconds=utc_offset)))
+        .isoformat(timespec="seconds")
+    )
     payload = {
         "schema_version": 1,
         "city": city,
@@ -430,7 +412,9 @@ def _analyze(
     info = CITIES[city]
     lat, lon, is_f = info["lat"], info["lon"], info["f"]
     sym = "°F" if is_f else "°C"
-    settlement_source = str(info.get("settlement_source") or "metar").strip().lower() or "metar"
+    settlement_source = (
+        str(info.get("settlement_source") or "metar").strip().lower() or "metar"
+    )
     settlement_source_label = SETTLEMENT_SOURCE_LABELS.get(
         settlement_source,
         settlement_source.upper(),
@@ -449,14 +433,14 @@ def _analyze(
         force_refresh_observations_only=force_refresh_observations_only,
         include_taf=not is_panel_mode and not is_nearby_mode and not is_market_mode,
         include_nearby=not is_panel_mode and not is_market_mode,
-        include_ensemble=not is_panel_mode and not is_nearby_mode and not is_market_mode,
+        include_ensemble=not is_panel_mode
+        and not is_nearby_mode
+        and not is_market_mode,
         include_multi_model=not is_nearby_mode,
-        include_mgm=not is_market_mode,
     )
     om = raw.get("open-meteo", {})
     metar = raw.get("metar", {})
     taf = raw.get("taf", {})
-    mgm = raw.get("mgm") or {}
     settlement_current = raw.get("settlement_current") or {}
     ens_raw = raw.get("ensemble", {})
     mm = raw.get("multi_model", {})
@@ -464,8 +448,6 @@ def _analyze(
         om = {}
     if not isinstance(metar, dict):
         metar = {}
-    if not isinstance(mgm, dict):
-        mgm = {}
     if not isinstance(settlement_current, dict):
         settlement_current = {}
     if not isinstance(ens_raw, dict):
@@ -529,7 +511,6 @@ def _analyze(
 
     # ── 2. Current conditions (settlement > METAR > MGM > NMC fallback) ──
     mc = metar.get("current", {}) if metar else {}
-    mg_cur = mgm.get("current", {}) if mgm else {}
     sc_cur = settlement_current.get("current", {}) if settlement_current else {}
     use_settlement_current = settlement_source in {"hko", "noaa"} and bool(sc_cur)
     live_mc = mc if metar_current_is_today else {}
@@ -551,12 +532,12 @@ def _analyze(
         if cur_temp is not None:
             current_source = settlement_source or "settlement"
             current_source_label = settlement_source_label or "Settlement Station"
-            current_station_code = settlement_current.get("station_code") or current_station_code
-            current_station_name = settlement_current.get("station_name") or current_station_name
-    if cur_temp is None:
-        cur_temp = _sf(mg_cur.get("temp"))
-        if cur_temp is not None and not _is_plausible_city_temp(city, cur_temp, sym):
-            cur_temp = None
+            current_station_code = (
+                settlement_current.get("station_code") or current_station_code
+            )
+            current_station_name = (
+                settlement_current.get("station_name") or current_station_name
+            )
     if cur_temp is None:
         nmc_fallback = _fetch_nmc_current_fallback(city, use_fahrenheit=is_f)
         nmc_cur = nmc_fallback.get("current") or {}
@@ -573,11 +554,9 @@ def _analyze(
         max_so_far = None
     if max_so_far is None:
         max_so_far = _sf(live_mc.get("max_temp_so_far"))
-        if max_so_far is not None and not _is_plausible_city_temp(city, max_so_far, sym):
-            max_so_far = None
-    if max_so_far is None:
-        max_so_far = _sf(mg_cur.get("mgm_max_temp"))
-        if max_so_far is not None and not _is_plausible_city_temp(city, max_so_far, sym):
+        if max_so_far is not None and not _is_plausible_city_temp(
+            city, max_so_far, sym
+        ):
             max_so_far = None
     if max_so_far is None:
         max_so_far = cur_temp
@@ -585,15 +564,15 @@ def _analyze(
     max_temp_time = primary_current.get("max_temp_time")
     if not max_temp_time and not use_settlement_current:
         max_temp_time = live_mc.get("max_temp_time")
-    if not max_temp_time:
-        max_temp_time = mg_cur.get("time", "")
-        if " " in max_temp_time:
-            max_temp_time = max_temp_time.split(" ")[1][:5]
     if max_temp_time == "":
         max_temp_time = None
 
     raw_settlement_max = max_so_far
-    settle = apply_city_settlement(city.lower(), raw_settlement_max) if raw_settlement_max is not None else None
+    settle = (
+        apply_city_settlement(city.lower(), raw_settlement_max)
+        if raw_settlement_max is not None
+        else None
+    )
     display_settlement_max = settle if settle is not None else raw_settlement_max
 
     # Observation time → local
@@ -612,7 +591,10 @@ def _analyze(
             local_dt = dt.astimezone(timezone(timedelta(seconds=utc_offset)))
             obs_time_str = local_dt.strftime("%H:%M")
             metar_age_min = int(
-                (datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds() / 60
+                (
+                    datetime.now(timezone.utc) - dt.astimezone(timezone.utc)
+                ).total_seconds()
+                / 60
             )
         except Exception:
             obs_time_str = str(obs_t)[:16]
@@ -627,20 +609,22 @@ def _analyze(
     current_obs_raw = obs_t
     if current_source == "nmc":
         current_obs_raw = (
-            nmc_fallback.get("publish_time")
-            or nmc_fallback.get("timestamp")
+            nmc_fallback.get("publish_time") or nmc_fallback.get("timestamp")
             if isinstance(nmc_fallback, dict)
             else None
         )
     current_age_min = metar_age_min
     if current_obs_raw:
-        current_age_min = _observation_age_min(current_obs_raw, now_utc) or current_age_min
+        current_age_min = (
+            _observation_age_min(current_obs_raw, now_utc) or current_age_min
+        )
     current_freshness = _build_observation_freshness(
         source_code=current_source,
         source_label=current_source_label,
         observed_at=current_obs_raw,
         observed_at_local=obs_time_str,
-        ingested_at=primary_current.get("receipt_time") or primary_current.get("report_time"),
+        ingested_at=primary_current.get("receipt_time")
+        or primary_current.get("report_time"),
         age_min=current_age_min,
         now_utc=now_utc,
     )
@@ -648,11 +632,17 @@ def _analyze(
     airport_source_code = "metar"
     airport_source_label = "METAR"
     airport_obs_raw = metar.get("observation_time") if metar else None
-    airport_age_min = _observation_age_min(airport_obs_raw, now_utc) if airport_obs_raw else metar_age_min
+    airport_age_min = (
+        _observation_age_min(airport_obs_raw, now_utc)
+        if airport_obs_raw
+        else metar_age_min
+    )
     if airport_age_min is None:
         airport_age_min = metar_age_min
     airport_temp = _sf(live_mc.get("temp"))
-    if airport_temp is not None and not _is_plausible_city_temp(city, airport_temp, sym):
+    if airport_temp is not None and not _is_plausible_city_temp(
+        city, airport_temp, sym
+    ):
         airport_temp = None
     airport_freshness = _build_observation_freshness(
         source_code=airport_source_code,
@@ -664,7 +654,9 @@ def _analyze(
         now_utc=now_utc,
     )
 
-    airport_primary_current = dict(network_snapshot.get("airport_primary_current") or {})
+    airport_primary_current = dict(
+        network_snapshot.get("airport_primary_current") or {}
+    )
     if (
         airport_primary_current.get("source_code") == "metar"
         and metar
@@ -672,7 +664,9 @@ def _analyze(
     ):
         airport_primary_current["temp"] = None
         airport_primary_current["stale_for_today"] = True
-        airport_primary_current["last_observation_local_date"] = metar.get("observation_local_date")
+        airport_primary_current["last_observation_local_date"] = metar.get(
+            "observation_local_date"
+        )
         airport_primary_current["current_local_date"] = local_date_str
     if (
         airport_primary_current.get("source_code") == "metar"
@@ -764,15 +758,9 @@ def _analyze(
     )
     if om_today is None:
         nws_high = _sf(raw.get("nws", {}).get("today_high"))
-        mgm_high = _sf(mgm.get("today_high")) if mgm else None
-        mgm_hourly_high = _mgm_hourly_high(mgm)
         fallback_high = (
             nws_high
             if nws_high is not None
-            else mgm_high
-            if mgm_high is not None
-            else mgm_hourly_high
-            if mgm_hourly_high is not None
             else max_so_far
             if max_so_far is not None
             else cur_temp
@@ -782,15 +770,9 @@ def _analyze(
             if not forecast_daily:
                 forecast_daily = [{"date": local_date_str, "max_temp": om_today}]
     sunrise = (
-        sunrises[0].split("T")[1][:5]
-        if sunrises and "T" in str(sunrises[0])
-        else ""
+        sunrises[0].split("T")[1][:5] if sunrises and "T" in str(sunrises[0]) else ""
     )
-    sunset = (
-        sunsets[0].split("T")[1][:5]
-        if sunsets and "T" in str(sunsets[0])
-        else ""
-    )
+    sunset = sunsets[0].split("T")[1][:5] if sunsets and "T" in str(sunsets[0]) else ""
     sunshine_first = sunshine[0] if sunshine else None
     sunshine_h = round(sunshine_first / 3600, 1) if sunshine_first else 0
 
@@ -806,13 +788,6 @@ def _analyze(
     nws_high = _sf(raw.get("nws", {}).get("today_high"))
     if nws_high is not None:
         current_forecasts["NWS"] = nws_high
-    mgm_high = _sf(mgm.get("today_high")) if mgm else None
-    mgm_hourly_high = _mgm_hourly_high(mgm)
-    if mgm_high is not None:
-        current_forecasts["MGM"] = mgm_high
-    elif mgm_hourly_high is not None:
-        current_forecasts["MGM Hourly"] = mgm_hourly_high
-
     # ── 6. DEB fusion ──
     deb_val, deb_weights = None, ""
     deb_raw_val, deb_version = None, None
@@ -920,7 +895,9 @@ def _analyze(
                 continue
         if parsed_obs:
             parsed_obs.sort(key=lambda x: (x[0], x[1]))
-            h_times = [f"{local_date_str}T{hh:02d}:{mm:02d}" for hh, mm, _ in parsed_obs]
+            h_times = [
+                f"{local_date_str}T{hh:02d}:{mm:02d}" for hh, mm, _ in parsed_obs
+            ]
             h_temps = [v for _, _, v in parsed_obs]
             h_rad = [0 for _ in parsed_obs]
             h_dew = [None for _ in parsed_obs]
@@ -945,7 +922,9 @@ def _analyze(
                 "hourly_consensus": deb_hourly_consensus,
             },
         }
-    peak_hours = _resolve_peak_hours(peak_source, local_date_str, h_times, h_temps, om_today)
+    peak_hours = _resolve_peak_hours(
+        peak_source, local_date_str, h_times, h_temps, om_today
+    )
 
     first_peak_h = int(peak_hours[0].split(":")[0]) if peak_hours else 13
     last_peak_h = int(peak_hours[-1].split(":")[0]) if peak_hours else 15
@@ -988,8 +967,12 @@ def _analyze(
         probabilities_all = sd.get("probabilities_all", probabilities)
         dynamic_commentary = sd.get("dynamic_commentary") or dynamic_commentary
         deb_ensemble_signal = sd.get("deb_ensemble_signal") or {}
-        trend_info["is_dead_market"] = sd.get("trend_info", {}).get("is_dead_market", False)
-        trend_info["direction"] = sd.get("trend_info", {}).get("direction", trend_info.get("direction", "unknown"))
+        trend_info["is_dead_market"] = sd.get("trend_info", {}).get(
+            "is_dead_market", False
+        )
+        trend_info["direction"] = sd.get("trend_info", {}).get(
+            "direction", trend_info.get("direction", "unknown")
+        )
         trend_info["is_cooling"] = sd.get("trend_info", {}).get("is_cooling", False)
         peak_status = sd.get("peak_status", peak_status)
 
@@ -1035,12 +1018,16 @@ def _analyze(
         model_hourly_temp = None
         current_hour_str = f"{_local_hour:02d}:00"
         for idx, t_str in enumerate(hourly_times_list):
-            if str(t_str or "").startswith(current_hour_str) and idx < len(hourly_temps_list):
+            if str(t_str or "").startswith(current_hour_str) and idx < len(
+                hourly_temps_list
+            ):
                 candidate = _sf(hourly_temps_list[idx])
                 if candidate is not None:
                     model_hourly_temp = candidate
                     break
-        reference_temp = model_hourly_temp if model_hourly_temp is not None else cur_temp
+        reference_temp = (
+            model_hourly_temp if model_hourly_temp is not None else cur_temp
+        )
         if reference_temp is not None:
             hourly_bias = cur_temp - reference_temp
 
@@ -1054,11 +1041,16 @@ def _analyze(
                 weight = 0.80
 
             max_correction = 5.0 if str(sym or "").upper() == "F" else 3.0
-            hourly_correction = max(-max_correction, min(max_correction, hourly_bias * weight))
+            hourly_correction = max(
+                -max_correction, min(max_correction, hourly_bias * weight)
+            )
 
             _msf = max_so_far if max_so_far is not None else cur_temp
             max_so_far_excess = _msf - deb_val
-            max_correction_clamped = max(-max_correction, min(max_correction, max_so_far_excess * max(0.3, weight)))
+            max_correction_clamped = max(
+                -max_correction,
+                min(max_correction, max_so_far_excess * max(0.3, weight)),
+            )
 
             blended_correction = hourly_correction * 0.6 + max_correction_clamped * 0.4
             deb_intraday_adjustment = round(blended_correction, 1)
@@ -1152,9 +1144,7 @@ def _analyze(
             next_48h_hourly["cloud_cover"].append(
                 h_cloud_cover[i] if i < len(h_cloud_cover) else None
             )
-            next_48h_hourly["cape"].append(
-                h_cape[i] if i < len(h_cape) else None
-            )
+            next_48h_hourly["cape"].append(h_cape[i] if i < len(h_cape) else None)
             next_48h_hourly["convective_inhibition"].append(
                 h_cin[i] if i < len(h_cin) else None
             )
@@ -1204,82 +1194,13 @@ def _analyze(
         main = clouds[-1]
         cloud_desc = c_map.get(main.get("cover"), main.get("cover", ""))
 
-    if not cloud_desc and mgm:
-        mgc_cover = mgm.get("current", {}).get("cloud_cover")
-        if mgc_cover is not None:
-            cloud_desc_map = {
-                0: "晴朗",
-                1: "少云",
-                2: "少云",
-                3: "散云",
-                4: "散云",
-                5: "多云",
-                6: "多云",
-                7: "阴天",
-                8: "阴天",
-            }
-            cloud_desc = cloud_desc_map.get(mgc_cover, "")
-
     # Final fallback: If we have ANY actual observation but no cloud info, it's usually clear.
     if not cloud_desc:
-        if mc.get("temp") is not None or (mgm and mgm.get("current", {}).get("temp") is not None):
+        if mc.get("temp") is not None:
             # If weather phenomenon exists (e.g. rain), we'll let app.js handle wx_desc priority.
             # Otherwise, clear skies.
             if not mc.get("wx_desc"):
                 cloud_desc = "晴朗"
-
-    # ── 14. MGM data (Turkish MGM-supported cities) ──
-    mgm_data = {}
-    if mgm:
-        mgc = mgm.get("current", {})
-        mgm_time_str = mgc.get("time", "")
-        # MGM time is usually "2026-03-04T10:40:00.000Z" (UTC)
-        if mgm_time_str and "T" in mgm_time_str:
-            try:
-                # Handle ISO format with Z or +00:00
-                ts = mgm_time_str.replace("Z", "+00:00")
-                if "+" in ts:
-                    base, offset_part = ts.split("+", 1)
-                    if "." in base:
-                        base = base.split(".")[0]
-                    ts = base + "+" + offset_part
-                dt = datetime.fromisoformat(ts)
-                local_dt = dt.astimezone(timezone(timedelta(seconds=utc_offset or 0)))
-                mgm_time_str = local_dt.strftime("%H:%M")
-            except Exception as e:
-                logger.debug(f"MGM time conversion failed: {e}")
-                pass
-                
-        mgm_data = {
-            "temp": _sf(mgc.get("temp")),
-            "time": mgm_time_str,
-            "feels_like": _sf(mgc.get("feels_like")),
-            "humidity": _sf(mgc.get("humidity")),
-            "wind_dir": _sf(mgc.get("wind_dir")),
-            "wind_speed_ms": _sf(mgc.get("wind_speed_ms")),
-            "pressure": _sf(mgc.get("pressure")),
-            "cloud_cover": mgc.get("cloud_cover"),
-            "rain_24h": _sf(mgc.get("rain_24h")),
-            "today_high": _sf(mgm.get("today_high")),
-            "today_low": _sf(mgm.get("today_low")),
-            "hourly": [],
-        }
-
-        mgm_hourly = mgm.get("hourly", [])
-        for h in mgm_hourly:
-            dt_str = h.get("time")
-            val = _sf(h.get("temp"))
-            if dt_str and "T" in dt_str and val is not None:
-                try:
-                    dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-                    local_dt = dt.astimezone(timezone(timedelta(seconds=utc_offset)))
-                    mgm_data["hourly"].append({
-                        "time": local_dt.strftime("%Y-%m-%dT%H:%M"),
-                        "temp": val
-                    })
-                except Exception:
-                    pass
-
 
     # ── 15. Extended Multi-Model Daily ──
     multi_model_daily = {}
@@ -1299,16 +1220,9 @@ def _analyze(
             day_m = mm_daily_raw.get(d_str, {}).copy()
             if i < len(maxtemps) and maxtemps[i] is not None:
                 day_m["Open-Meteo"] = _sf(maxtemps[i])
-            
-            # Add MGM per-day forecast
-            mgm_daily = mgm.get("daily_forecasts", {})
-            if d_str in mgm_daily:
-                day_m["MGM"] = _sf(mgm_daily[d_str])
 
-            day_m = {
-                m: v for m, v in day_m.items() if not _is_excluded_model_name(m)
-            }
-            
+            day_m = {m: v for m, v in day_m.items() if not _is_excluded_model_name(m)}
+
             d_val, d_winfo = None, ""
             d_raw_val, d_version = None, None
             d_selected_version, d_guard_reason = None, None
@@ -1337,7 +1251,7 @@ def _analyze(
                         }
                 except Exception:
                     pass
-        
+
         if day_m:
             multi_model_daily[d_str] = {
                 "models": day_m,
@@ -1369,7 +1283,9 @@ def _analyze(
             else "full"
         ),
         "name": city,
-        "display_name": str(city_meta.get("display_name") or city_meta.get("name") or city.title()),
+        "display_name": str(
+            city_meta.get("display_name") or city_meta.get("name") or city.title()
+        ),
         "lat": lat,
         "lon": lon,
         "utc_offset_seconds": utc_offset,
@@ -1436,22 +1352,25 @@ def _analyze(
             "source_label": airport_source_label,
             "freshness": airport_freshness,
             "stale_for_today": bool(metar) and not metar_current_is_today,
-            "last_observation_local_date": metar.get("observation_local_date") if metar else None,
+            "last_observation_local_date": metar.get("observation_local_date")
+            if metar
+            else None,
             "current_local_date": local_date_str,
         },
         "settlement_station": network_snapshot.get("settlement_station") or {},
         "airport_primary": airport_primary_current,
-        "airport_primary_today_obs": network_snapshot.get("airport_primary_today_obs") or [],
+        "airport_primary_today_obs": network_snapshot.get("airport_primary_today_obs")
+        or [],
         "official_nearby": network_snapshot.get("official_nearby") or [],
         "official_network_source": network_snapshot.get("official_network_source"),
-        "official_network_status": network_snapshot.get("official_network_status") or {},
+        "official_network_status": network_snapshot.get("official_network_status")
+        or {},
         "network_lead_signal": network_snapshot.get("network_lead_signal") or {},
         "network_spread_signal": network_snapshot.get("network_spread_signal") or {},
         "center_station_candidate": network_snapshot.get("center_station_candidate"),
         "airport_vs_network_delta": network_snapshot.get("airport_vs_network_delta"),
-        "mgm": mgm_data,
-        "mgm_nearby": raw.get("mgm_nearby", []),
-        "nearby_source": raw.get("nearby_source") or ("mgm" if city.lower() in TURKISH_MGM_CITIES else "metar_cluster"),
+        "nearby_stations": raw.get("nearby_stations") or raw.get("mgm_nearby") or [],
+        "nearby_source": raw.get("nearby_source") or "metar_cluster",
         "forecast": {
             "today_high": om_today,
             "daily": forecast_daily,
@@ -1468,7 +1387,9 @@ def _analyze(
                 "model_metadata": mm.get("model_metadata") or {},
                 "model_keys": mm.get("model_keys") or {},
                 "attribution": mm.get("attribution"),
-            } if isinstance(mm, dict) and mm else {},
+            }
+            if isinstance(mm, dict) and mm
+            else {},
         },
         "multi_model": {
             **mm,
@@ -1485,7 +1406,9 @@ def _analyze(
             "intraday_adjustment": deb_intraday_adjustment,
             "hourly_consensus": deb_hourly_consensus,
             "hourly_path": deb_hourly_path,
-            "hourly_correction": (deb_hourly_path or {}).get("correction") if isinstance(deb_hourly_path, dict) else None,
+            "hourly_correction": (deb_hourly_path or {}).get("correction")
+            if isinstance(deb_hourly_path, dict)
+            else None,
             "ensemble_signal": deb_ensemble_signal,
             **deb_quality,
         },
@@ -1520,7 +1443,9 @@ def _analyze(
             "available_for_today": metar_current_is_today,
             "stale_for_today": bool(metar) and not metar_current_is_today,
             "last_observation_time": metar.get("observation_time") if metar else None,
-            "last_observation_local_date": metar.get("observation_local_date") if metar else None,
+            "last_observation_local_date": metar.get("observation_local_date")
+            if metar
+            else None,
             "current_local_date": local_date_str,
             "last_temp": _sf(mc.get("temp")) if mc else None,
         },
@@ -1559,7 +1484,9 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     info = CITIES[city]
     lat, lon, is_f = info["lat"], info["lon"], info["f"]
     sym = "°F" if is_f else "°C"
-    settlement_source = str(info.get("settlement_source") or "metar").strip().lower() or "metar"
+    settlement_source = (
+        str(info.get("settlement_source") or "metar").strip().lower() or "metar"
+    )
     settlement_source_label = SETTLEMENT_SOURCE_LABELS.get(
         settlement_source,
         settlement_source.upper(),
@@ -1586,19 +1513,24 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
 
     jobs: Dict[str, Any] = {
         "settlement_current": lambda: _weather.fetch_settlement_current(city) or {},
-        "open_meteo": lambda: _weather.fetch_from_open_meteo(lat, lon, use_fahrenheit=is_f) or {},
-        "multi_model": lambda: _weather.fetch_multi_model(lat, lon, city=city, use_fahrenheit=is_f) or {},
+        "open_meteo": lambda: _weather.fetch_from_open_meteo(
+            lat, lon, use_fahrenheit=is_f
+        )
+        or {},
+        "multi_model": lambda: _weather.fetch_multi_model(
+            lat, lon, city=city, use_fahrenheit=is_f
+        )
+        or {},
     }
     if _weather._supports_aviationweather(city):  # type: ignore[attr-defined]
-        jobs["metar"] = lambda: _weather.fetch_metar(
-            city,
-            use_fahrenheit=is_f,
-            utc_offset=default_utc_offset,
-        ) or {}
-    if city in TURKISH_MGM_CITIES:
-        istno, _province = _weather.TURKISH_PROVINCES.get(city, (None, None))  # type: ignore[attr-defined]
-        if istno:
-            jobs["mgm"] = lambda istno=istno: _weather.fetch_from_mgm(str(istno)) or {}
+        jobs["metar"] = (
+            lambda: _weather.fetch_metar(
+                city,
+                use_fahrenheit=is_f,
+                utc_offset=default_utc_offset,
+            )
+            or {}
+        )
     if is_f:
         jobs["nws"] = lambda: _weather.fetch_nws(lat, lon) or {}
     if settlement_source == "hko":
@@ -1606,10 +1538,7 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
 
     fetched: Dict[str, Any] = {}
     with ThreadPoolExecutor(max_workers=min(6, len(jobs))) as executor:
-        future_map = {
-            executor.submit(_safe_call, fn): key
-            for key, fn in jobs.items()
-        }
+        future_map = {executor.submit(_safe_call, fn): key for key, fn in jobs.items()}
         for future, key in [(future, key) for future, key in future_map.items()]:
             fetched[key] = future.result()
 
@@ -1631,7 +1560,6 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     local_time_str = f"{local_hour:02d}:{local_minute:02d}"
     local_hour_frac = local_hour + local_minute / 60.0
     metar = fetched.get("metar") or {}
-    mgm = fetched.get("mgm") or {}
     nws = fetched.get("nws") or {}
     hko_forecast = fetched.get("hko_forecast")
     metar_current_is_today = _metar_is_current_local_day(
@@ -1643,7 +1571,6 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     sc_cur = settlement_current.get("current") or {}
     mc = metar.get("current") or {}
     live_mc = mc if metar_current_is_today else {}
-    mg_cur = mgm.get("current") or {}
     use_settlement_current = settlement_source in {"hko", "noaa"} and bool(sc_cur)
     primary_current = sc_cur if use_settlement_current else live_mc
 
@@ -1663,10 +1590,6 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             current_source = settlement_source or "settlement"
             current_source_label = settlement_source_label or "Settlement Station"
     if cur_temp is None:
-        cur_temp = _sf(mg_cur.get("temp"))
-        if cur_temp is not None and not _is_plausible_city_temp(city, cur_temp, sym):
-            cur_temp = None
-    if cur_temp is None:
         nmc_fallback = _fetch_nmc_current_fallback(city, use_fahrenheit=is_f)
         nmc_cur = nmc_fallback.get("current") or {}
         nmc_temp = _sf(nmc_cur.get("temp"))
@@ -1680,11 +1603,9 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         max_so_far = None
     if max_so_far is None:
         max_so_far = _sf(live_mc.get("max_temp_so_far"))
-        if max_so_far is not None and not _is_plausible_city_temp(city, max_so_far, sym):
-            max_so_far = None
-    if max_so_far is None:
-        max_so_far = _sf(mg_cur.get("mgm_max_temp"))
-        if max_so_far is not None and not _is_plausible_city_temp(city, max_so_far, sym):
+        if max_so_far is not None and not _is_plausible_city_temp(
+            city, max_so_far, sym
+        ):
             max_so_far = None
     if max_so_far is None:
         max_so_far = cur_temp
@@ -1692,10 +1613,6 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     max_temp_time = primary_current.get("max_temp_time")
     if not max_temp_time and not use_settlement_current:
         max_temp_time = live_mc.get("max_temp_time")
-    if not max_temp_time:
-        mgm_time = str(mg_cur.get("time") or "")
-        if " " in mgm_time:
-            max_temp_time = mgm_time.split(" ")[1][:5]
 
     raw_settlement_max = max_so_far
     settle = (
@@ -1720,7 +1637,10 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             local_dt = dt.astimezone(timezone(timedelta(seconds=utc_offset)))
             obs_time_str = local_dt.strftime("%H:%M")
             obs_age_min = int(
-                (datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds() / 60
+                (
+                    datetime.now(timezone.utc) - dt.astimezone(timezone.utc)
+                ).total_seconds()
+                / 60
             )
         except Exception:
             obs_time_str = obs_t[:16]
@@ -1750,17 +1670,11 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     maxtemps = all_maxtemps[start_idx : start_idx + 5]
     om_today = _sf(maxtemps[0]) if maxtemps else None
     nws_high = _sf((nws or {}).get("today_high")) if isinstance(nws, dict) else None
-    mgm_high = _sf((mgm or {}).get("today_high")) if isinstance(mgm, dict) else None
-    mgm_hourly_high = _mgm_hourly_high(mgm)
 
     if om_today is None:
         fallback_high = (
             nws_high
             if nws_high is not None
-            else mgm_high
-            if mgm_high is not None
-            else mgm_hourly_high
-            if mgm_hourly_high is not None
             else max_so_far
             if max_so_far is not None
             else cur_temp
@@ -1778,10 +1692,6 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
                 current_forecasts[m] = temp_val
     if nws_high is not None:
         current_forecasts["NWS"] = nws_high
-    if mgm_high is not None:
-        current_forecasts["MGM"] = mgm_high
-    elif mgm_hourly_high is not None:
-        current_forecasts["MGM Hourly"] = mgm_hourly_high
     if hko_forecast is not None:
         temp_hko = _sf(hko_forecast)
         if temp_hko is not None:
@@ -1853,7 +1763,9 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         deb_prediction=deb_val,
         om_today=om_today,
         hourly_times=om_hourly.get("time", []) if isinstance(om_hourly, dict) else [],
-        hourly_temps=om_hourly.get("temperature_2m", []) if isinstance(om_hourly, dict) else [],
+        hourly_temps=om_hourly.get("temperature_2m", [])
+        if isinstance(om_hourly, dict)
+        else [],
         local_date=local_date_str,
         local_hour_frac=local_hour_frac,
         observation_points=(
@@ -1865,7 +1777,9 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     city_meta = CITY_REGISTRY.get(city, {}) or {}
     result = {
         "name": city,
-        "display_name": str(city_meta.get("display_name") or city_meta.get("name") or city.title()),
+        "display_name": str(
+            city_meta.get("display_name") or city_meta.get("name") or city.title()
+        ),
         "temp_symbol": sym,
         "utc_offset_seconds": utc_offset,
         "local_time": local_time_str,
@@ -1908,8 +1822,6 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
 
 def _build_city_summary_payload(data: Dict[str, Any]) -> Dict[str, Any]:
     return _city_payload_summary(data)
-
-
 
 
 def _build_city_detail_payload(
@@ -1967,10 +1879,10 @@ def _build_city_chart_detail_payload(
     return _city_chart_payload_detail(data, resolution=resolution)
 
 
-
 # ──────────────────────────────────────────────────────────
 #  Routes
 # ──────────────────────────────────────────────────────────
+
 
 def _build_city_market_scan_payload(
     data,

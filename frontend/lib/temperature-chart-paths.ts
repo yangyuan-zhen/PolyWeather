@@ -133,14 +133,11 @@ export interface ChartTimeAxis {
 
 /**
  * Build a 48-point intraday time axis (00:00 … 23:30) from an hourly
- * forecast series.  When the primary hourly series is empty AND the city
- * uses MGM as its forecast source, ``mgmHourly`` rows are used instead.
+ * forecast series.
  */
 export function buildChartTimeAxis(
   hourlyTimes: string[] | null | undefined,
   hourlyTemps: Array<number | null> | null | undefined,
-  mgmHourlyRows: Array<{ time?: string | null; temp?: number | null }> | null | undefined,
-  isTurkishMgm: boolean,
 ): ChartTimeAxis {
   const primaryTimes = Array.isArray(hourlyTimes) ? hourlyTimes : [];
   const primaryTemps = Array.isArray(hourlyTemps) ? hourlyTemps : [];
@@ -149,15 +146,8 @@ export function buildChartTimeAxis(
     primaryTemps.length > 0 &&
     Math.min(primaryTimes.length, primaryTemps.length) > 0;
 
-  const mgmRows = Array.isArray(mgmHourlyRows) ? mgmHourlyRows : [];
-  const useMgm = !hasPrimary && isTurkishMgm;
-
-  const rawTimes: string[] = useMgm
-    ? mgmRows.map((row) => String(row?.time || ""))
-    : primaryTimes;
-  const rawTemps: Array<number | null> = useMgm
-    ? mgmRows.map((row) => row?.temp ?? null)
-    : primaryTemps;
+  const rawTimes: string[] = primaryTimes;
+  const rawTemps: Array<number | null> = primaryTemps;
 
   const dataByHour = new Map<string, number | null>();
   rawTimes.forEach((raw, i) => {
@@ -233,7 +223,6 @@ export interface DebBaselinePath {
  * 1. The hourly curve's own maximum temperature
  * 2. ``forecastTodayHigh`` (Open-Meteo daily high) — only when hourly
  *    data is completely absent
- * 3. ``mgmHourlyMax`` — only when both hourly and forecast are absent
  *
  * This prevents a stale or unreliable ``forecast.today_high`` from
  * pushing/pulling the entire curve by an unrealistic offset (e.g. Moscow:
@@ -246,7 +235,6 @@ export function buildDebBaselinePath(
   debPrediction: number | null | undefined,
   localTime: string | null | undefined,
   forecastTodayHigh?: number | null,
-  mgmHourlyMax?: number | null,
 ): DebBaselinePath {
   const currentIndex = findNearestTimeIndex(times, localTime);
   const debMax = Number(debPrediction);
@@ -270,9 +258,6 @@ export function buildDebBaselinePath(
     (hourlyMax != null && Number.isFinite(hourlyMax) ? hourlyMax : null) ??
     (forecastTodayHigh != null && Number.isFinite(forecastTodayHigh)
       ? Number(forecastTodayHigh)
-      : null) ??
-    (mgmHourlyMax != null && Number.isFinite(mgmHourlyMax)
-      ? Number(mgmHourlyMax)
       : null);
 
   const offset =

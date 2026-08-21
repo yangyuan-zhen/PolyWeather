@@ -53,8 +53,8 @@ export function runTests() {
       content.includes("SOURCE_PAGES") &&
       content.includes('"ankara"') &&
       content.includes('"deb"') &&
-      content.includes('"mgm"'),
-    "public content module must define sample briefs plus DEB and MGM public pages",
+      content.includes('"metar"'),
+    "public content module must define sample briefs plus DEB and METAR public pages",
   );
   assert(
     content.includes("notFinancialAdvice") &&
@@ -76,7 +76,7 @@ export function runTests() {
     content.includes("METHODOLOGY_PAGE_LOCALIZATIONS") &&
       content.includes("SOURCE_PAGE_LOCALIZATIONS") &&
       content.includes("DEB 不是结算预言机") &&
-      content.includes("官方摘要可能滞后于原始点位观测"),
+      content.includes("METAR 可能比官方日摘要更新更快"),
     "public methodology and source pages must provide Chinese body-level localization, not title-only translation",
   );
   assert(
@@ -104,7 +104,7 @@ export function runTests() {
   );
   assert(
     publicPages.includes('MethodologyLinks locale={locale} slugs={["deb", "settlement-sources"]}') &&
-      publicPages.includes('SourceLinks locale={locale} slugs={["mgm", "metar", "hko", "noaa"]}') &&
+      publicPages.includes('SourceLinks locale={locale} slugs={["metar", "hko", "noaa"]}') &&
       briefsIndex.includes("Weather Market Brief"),
     "brief index must cross-link to DEB methodology and settlement source pages",
   );

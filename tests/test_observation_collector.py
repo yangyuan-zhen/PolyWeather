@@ -84,7 +84,6 @@ def test_observation_collector_profiles_match_source_cadence():
     assert profiles["madis_hfmetar"].interval_sec == 300
     assert profiles["cowin_obs"].interval_sec == 60
     assert profiles["hko_obs"].interval_sec == 600
-    assert profiles["mgm"].interval_sec == 300
     assert profiles["jma_amedas"].interval_sec == 600
     assert profiles["singapore_mss"].interval_sec == 60
     assert profiles["fmi"].interval_sec == 600
@@ -95,11 +94,9 @@ def test_observation_collector_profiles_match_source_cadence():
     assert "new york" in profiles["madis_hfmetar"].cities
     assert "hong kong" in profiles["cowin_obs"].cities
     assert {"hong kong", "shenzhen"}.issubset(set(profiles["hko_obs"].cities))
-    assert {"ankara", "istanbul"}.issubset(set(profiles["mgm"].cities))
     assert profiles["jma_amedas"].cities == ("tokyo",)
     assert profiles["aeroweb"].cities == ("paris",)
     assert {"madrid", "milan", "tokyo", "paris"}.issubset(set(profiles["metar"].cities))
-    assert SOURCE_CADENCE_SECONDS["mgm"] == 300
     assert SOURCE_CADENCE_SECONDS["jma_amedas"] == 600
     assert SOURCE_CADENCE_SECONDS["metar"] == 1800
 

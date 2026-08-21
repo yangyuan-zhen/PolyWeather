@@ -798,7 +798,7 @@ ALIASES = {
     "pus": "busan", "bus": "busan", "rkpk": "busan",
     "sha": "shanghai", "sh": "shanghai", "sin": "singapore",
     "sg": "singapore", "tok": "tokyo", "tyo": "tokyo",
-    "kul": "kuala lumpur", "wmkk": "kuala lumpur", "sepang": "kuala lumpur",
+    "kul": "kuala lumpur", "wmkk": "kuala lumpur", "klia": "kuala lumpur", "sepang": "kuala lumpur",
     "mnl": "manila", "manila": "manila", "rpll": "manila",
     "khi": "karachi", "karachi": "karachi", "opkc": "karachi", "jinnah": "karachi",
     "hel": "helsinki", "efhk": "helsinki", "vantaa": "helsinki",

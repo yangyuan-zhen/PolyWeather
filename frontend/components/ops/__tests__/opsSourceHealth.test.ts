@@ -29,7 +29,7 @@ export function runTests() {
   assert(
     systemPage.includes("城市数据源健康") &&
       systemPage.includes("sourceHealth") &&
-      systemPage.includes("MGM、KNMI、IMS") &&
+      systemPage.includes("KNMI、IMS") &&
       systemPage.includes("断线") &&
       systemPage.includes("延迟") &&
       systemPage.includes("sourceReasonLabel") &&

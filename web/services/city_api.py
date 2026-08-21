@@ -24,7 +24,6 @@ from web.services.canonical_temperature import build_city_weather_from_canonical
 from web.services.latest_observation_overlay import (
     overlay_latest_hko_observation,
     overlay_latest_jma_amedas_observation,
-    overlay_latest_mgm_observation,
     parse_observation_epoch,
 )
 from web.services.request_timing import ServerTimingRecorder
@@ -147,13 +146,6 @@ async def _overlay_latest_observation_sources(city: str, payload: Dict[str, Any]
         payload=latest_payload,
         fn=overlay_latest_jma_amedas_observation,
         args=(legacy_routes._weather, city, latest_payload, legacy_routes._CACHE_DB),
-    )
-    latest_payload = await _run_latest_observation_city_chart_overlay(
-        city=city,
-        overlay_name="mgm_latest_raw",
-        payload=latest_payload,
-        fn=overlay_latest_mgm_observation,
-        args=(legacy_routes._CACHE_DB, city, latest_payload),
     )
     latest_payload = await _run_latest_observation_city_chart_overlay(
         city=city,
@@ -490,44 +482,6 @@ def _clear_previous_day_observation_series(payload: Dict[str, Any], *, local_dat
         metar_status["current_local_date"] = local_date
 
 
-def _sync_latest_mgm_summary(
-    payload: Dict[str, Any],
-    latest_payload: Dict[str, Any],
-    *,
-    local_time: str,
-) -> None:
-    latest_current = latest_payload.get("current") if isinstance(latest_payload.get("current"), dict) else {}
-    latest_airport = (
-        latest_payload.get("airport_primary")
-        if isinstance(latest_payload.get("airport_primary"), dict)
-        else {}
-    )
-    latest_source = _observation_source_code(latest_current) or _observation_source_code(latest_airport)
-    if latest_source != "mgm":
-        return
-    temp = _float_or_none(latest_airport.get("temp") if latest_airport else None)
-    if temp is None:
-        temp = _float_or_none(latest_current.get("temp") if latest_current else None)
-    if temp is None:
-        return
-    payload["mgm"] = {
-        "temp": round(float(temp), 1),
-        "time": local_time,
-        "feels_like": round(float(temp), 1),
-        "humidity": None,
-        "wind_dir": None,
-        "wind_speed_ms": None,
-        "pressure": None,
-        "cloud_cover": None,
-        "rain_24h": None,
-        "today_high": None,
-        "today_low": None,
-        "station_code": latest_airport.get("station_code") or latest_current.get("station_code"),
-        "station_name": latest_airport.get("station_name") or latest_current.get("station_name"),
-        "hourly": [],
-    }
-
-
 def _merge_latest_observation_payload(
     city: str,
     payload: Dict[str, Any],
@@ -568,11 +522,6 @@ def _merge_latest_observation_payload(
                 ),
             )
             _clear_previous_day_observation_series(next_payload, local_date=local_context["local_date"])
-        _sync_latest_mgm_summary(
-            next_payload,
-            latest_payload,
-            local_time=local_context["local_time"],
-        )
     return next_payload
 
 

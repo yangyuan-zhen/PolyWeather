@@ -160,7 +160,6 @@ def test_fetch_all_sources_prioritizes_multi_model_before_forecast(monkeypatch, 
     monkeypatch.setattr(collector, "_log_temperature_unit", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_attach_settlement_sources", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_supports_aviationweather", lambda city: False)
-    monkeypatch.setattr(collector, "_attach_turkish_mgm_data", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_attach_israel_ims_data", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_attach_madis_hfmetar_data", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_attach_singapore_mss_data", lambda *args, **kwargs: None)
@@ -191,7 +190,6 @@ def test_fetch_all_sources_prioritizes_multi_model_before_forecast(monkeypatch, 
         include_ensemble=False,
         include_nearby=False,
         include_taf=False,
-        include_mgm=False,
     )
 
     assert calls[:2] == ["multi_model", "open_meteo"]
@@ -207,7 +205,6 @@ def test_fetch_all_sources_delegates_non_hf_forecast_bundle(monkeypatch, tmp_pat
     monkeypatch.setattr(collector, "_evict_city_caches", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_attach_settlement_sources", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_supports_aviationweather", lambda city: False)
-    monkeypatch.setattr(collector, "_attach_turkish_mgm_data", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_attach_cowin_official_nearby", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_attach_madis_hfmetar_data", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_attach_singapore_mss_data", lambda *args, **kwargs: None)
@@ -246,7 +243,6 @@ def test_fetch_all_sources_delegates_non_hf_forecast_bundle(monkeypatch, tmp_pat
         include_ensemble=False,
         include_nearby=False,
         include_taf=False,
-        include_mgm=False,
     )
 
     assert calls == [
@@ -385,7 +381,6 @@ def test_force_refresh_preserves_open_meteo_model_caches_by_default(monkeypatch,
     monkeypatch.setattr(collector, "fetch_multi_model", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "fetch_from_open_meteo", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_attach_nws_and_models", lambda *args, **kwargs: None)
-    monkeypatch.setattr(collector, "_attach_turkish_mgm_data", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_attach_israel_ims_data", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_attach_madis_hfmetar_data", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_attach_singapore_mss_data", lambda *args, **kwargs: None)
@@ -404,7 +399,6 @@ def test_force_refresh_preserves_open_meteo_model_caches_by_default(monkeypatch,
         include_ensemble=False,
         include_nearby=False,
         include_taf=False,
-        include_mgm=False,
     )
 
     assert captured["keep_model_caches"] is True

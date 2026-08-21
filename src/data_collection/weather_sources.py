@@ -15,7 +15,6 @@ from src.utils.refresh_policy import (
 )
 from src.data_collection.settlement_sources import SettlementSourceMixin
 from src.data_collection.metar_sources import MetarSourceMixin
-from src.data_collection.mgm_sources import MgmSourceMixin
 from src.data_collection.jma_amedas_sources import JmaAmedasSourceMixin
 from src.data_collection.nws_open_meteo_sources import NwsOpenMeteoSourceMixin
 from src.data_collection.fmi_sources import FmiSourceMixin
@@ -27,12 +26,26 @@ from src.data_collection.singapore_mss_sources import SingaporeMssSourceMixin
 from src.data_collection.ims_sources import ImsSourceMixin
 from src.data_collection.ncm_sources import NcmSourceMixin
 from src.data_collection.aeroweb_sources import AerowebSourceMixin
-from src.data_collection.city_time import get_city_utc_offset_seconds
 from src.data_collection.forecast_source_bundle import fetch_open_meteo_forecast_bundle
 from src.database.db_manager import DBManager
 
 
-class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, JmaAmedasSourceMixin, NwsOpenMeteoSourceMixin, FmiSourceMixin, KnmiSourceMixin, HkoObsSourceMixin, CowinSourceMixin, MadisSourceMixin, SingaporeMssSourceMixin, ImsSourceMixin, NcmSourceMixin, AerowebSourceMixin):
+class WeatherDataCollector(
+    OpenMeteoCacheMixin,
+    SettlementSourceMixin,
+    MetarSourceMixin,
+    JmaAmedasSourceMixin,
+    NwsOpenMeteoSourceMixin,
+    FmiSourceMixin,
+    KnmiSourceMixin,
+    HkoObsSourceMixin,
+    CowinSourceMixin,
+    MadisSourceMixin,
+    SingaporeMssSourceMixin,
+    ImsSourceMixin,
+    NcmSourceMixin,
+    AerowebSourceMixin,
+):
     """
     Multi-source weather data collector
 
@@ -40,12 +53,12 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
     - Open-Meteo (global forecast + multi-model ensemble)
     - METAR/TAF (aviation weather observations)
     - NWS (US National Weather Service)
-    - MGM (Turkish Meteorological Service)
     - JMA / HKO (country official networks)
     - Weather derivative markets
     """
 
     from src.data_collection.city_registry import CITY_REGISTRY
+
     CITY_TO_ICAO = {cid: info["icao"] for cid, info in CITY_REGISTRY.items()}
     # Alias
     CITY_TO_ICAO["nyc"] = "KLGA"
@@ -122,18 +135,11 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         "st. louis",
     }
 
-    TURKISH_PROVINCES = {
-        "ankara": ("17128", "Ankara"),
-        "istanbul": ("17058", "Istanbul"),
-    }
-
     def __init__(self, config: dict):
         self.config = config
 
         # Keep external calls short so one degraded source cannot block the whole city pipeline.
-        self.timeout = max(
-            2.0, float(os.getenv("POLYWEATHER_HTTP_TIMEOUT_SEC", "8"))
-        )
+        self.timeout = max(2.0, float(os.getenv("POLYWEATHER_HTTP_TIMEOUT_SEC", "8")))
         self.http_retry_count = max(
             0, int(os.getenv("POLYWEATHER_HTTP_RETRY_COUNT", "0"))
         )
@@ -168,18 +174,24 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         self.open_meteo_cache_ttl_sec = int(
             os.getenv("OPEN_METEO_CACHE_TTL_SEC", str(MODEL_CACHE_TTL_SEC))
         )
-        self.open_meteo_cache_ttl_sec = min(self.open_meteo_cache_ttl_sec, MODEL_CACHE_TTL_SEC)
+        self.open_meteo_cache_ttl_sec = min(
+            self.open_meteo_cache_ttl_sec, MODEL_CACHE_TTL_SEC
+        )
         self.open_meteo_ensemble_cache_ttl_sec = int(
             os.getenv("OPEN_METEO_ENSEMBLE_CACHE_TTL_SEC", str(MODEL_CACHE_TTL_SEC))
         )
-        self.open_meteo_ensemble_cache_ttl_sec = min(self.open_meteo_ensemble_cache_ttl_sec, MODEL_CACHE_TTL_SEC)
+        self.open_meteo_ensemble_cache_ttl_sec = min(
+            self.open_meteo_ensemble_cache_ttl_sec, MODEL_CACHE_TTL_SEC
+        )
         self.open_meteo_multi_model_cache_ttl_sec = int(
             os.getenv("OPEN_METEO_MULTI_MODEL_CACHE_TTL_SEC", str(MODEL_CACHE_TTL_SEC))
         )
-        self.open_meteo_multi_model_cache_ttl_sec = min(self.open_meteo_multi_model_cache_ttl_sec, MODEL_CACHE_TTL_SEC)
-        self.multi_model_cache_version = str(
-            os.getenv("OPEN_METEO_MULTI_MODEL_CACHE_VERSION", "v5")
-        ).strip() or "v5"
+        self.open_meteo_multi_model_cache_ttl_sec = min(
+            self.open_meteo_multi_model_cache_ttl_sec, MODEL_CACHE_TTL_SEC
+        )
+        self.multi_model_cache_version = (
+            str(os.getenv("OPEN_METEO_MULTI_MODEL_CACHE_VERSION", "v5")).strip() or "v5"
+        )
         self._open_meteo_cache: Dict[str, Dict] = {}
         self._ensemble_cache: Dict[str, Dict] = {}
         self._multi_model_cache: Dict[str, Dict] = {}
@@ -205,38 +217,36 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         self.metar_fast_cache_ttl_sec = int(
             os.getenv("METAR_FAST_CACHE_TTL_SEC", str(OBSERVATION_REFRESH_SEC))
         )
-        self.metar_fast_cache_ttl_sec = min(self.metar_fast_cache_ttl_sec, OBSERVATION_REFRESH_SEC)
-        # METAR cache migrated to self.cache (WeatherCacheManager)
-        self.taf_cache_ttl_sec = int(
-            os.getenv("TAF_CACHE_TTL_SEC", "900")
+        self.metar_fast_cache_ttl_sec = min(
+            self.metar_fast_cache_ttl_sec, OBSERVATION_REFRESH_SEC
         )
+        # METAR cache migrated to self.cache (WeatherCacheManager)
+        self.taf_cache_ttl_sec = int(os.getenv("TAF_CACHE_TTL_SEC", "900"))
         self._taf_cache: Dict[str, Dict] = {}
         self._taf_cache_lock = threading.Lock()
-        self.jma_cache_ttl_sec = int(
-            os.getenv("JMA_AMEDAS_CACHE_TTL_SEC", "120")
-        )
+        self.jma_cache_ttl_sec = int(os.getenv("JMA_AMEDAS_CACHE_TTL_SEC", "120"))
         self._jma_cache: Dict[str, Dict] = {}
         self._jma_cache_lock = threading.Lock()
         self.settlement_cache_ttl_sec = int(
             os.getenv("SETTLEMENT_SOURCE_CACHE_TTL_SEC", str(OBSERVATION_REFRESH_SEC))
         )
-        self.settlement_cache_ttl_sec = min(self.settlement_cache_ttl_sec, OBSERVATION_REFRESH_SEC)
+        self.settlement_cache_ttl_sec = min(
+            self.settlement_cache_ttl_sec, OBSERVATION_REFRESH_SEC
+        )
         self._settlement_cache: Dict[str, Dict] = {}
         self._settlement_cache_lock = threading.Lock()
-        self.fmi_cache_ttl_sec = int(
-            os.getenv("FMI_CACHE_TTL_SEC", "120")
-        )
+        self.fmi_cache_ttl_sec = int(os.getenv("FMI_CACHE_TTL_SEC", "120"))
         self._fmi_cache: Dict[str, Dict] = {}
         self._fmi_cache_lock = threading.Lock()
-        self.knmi_cache_ttl_sec = int(
-            os.getenv("KNMI_CACHE_TTL_SEC", "120")
-        )
+        self.knmi_cache_ttl_sec = int(os.getenv("KNMI_CACHE_TTL_SEC", "120"))
         self._knmi_cache: Dict[str, Dict] = {}
         self._knmi_cache_lock = threading.Lock()
         self.hko_obs_cache_ttl_sec = int(
             os.getenv("HKO_OBS_CACHE_TTL_SEC", str(OBSERVATION_REFRESH_SEC))
         )
-        self.hko_obs_cache_ttl_sec = min(self.hko_obs_cache_ttl_sec, OBSERVATION_REFRESH_SEC)
+        self.hko_obs_cache_ttl_sec = min(
+            self.hko_obs_cache_ttl_sec, OBSERVATION_REFRESH_SEC
+        )
         self._hko_obs_cache: Dict[str, Dict] = {}
         self.madis_cache_ttl_sec = int(
             os.getenv("MADIS_CACHE_TTL_SEC", "300")  # 5 min match update rate
@@ -248,7 +258,9 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         self.cowin_obs_cache_ttl_sec = int(
             os.getenv("COWIN_OBS_CACHE_TTL_SEC", str(OBSERVATION_REFRESH_SEC))
         )
-        self.cowin_obs_cache_ttl_sec = min(self.cowin_obs_cache_ttl_sec, OBSERVATION_REFRESH_SEC)
+        self.cowin_obs_cache_ttl_sec = min(
+            self.cowin_obs_cache_ttl_sec, OBSERVATION_REFRESH_SEC
+        )
         self._cowin_obs_cache: Dict[str, Dict] = {}
         self._cowin_obs_cache_lock = threading.Lock()
 
@@ -279,6 +291,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         )
         # Unified cache manager — new sources should use this instead of per-source dicts.
         from src.data_collection.weather_cache import WeatherCacheManager
+
         self.cache = WeatherCacheManager(
             trim_interval_writes=self._CACHE_TRIM_EVERY_N_WRITES,
         )
@@ -329,11 +342,27 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             # metar cache migrated to self.cache
             (self._taf_cache, self._taf_cache_lock, float(self.taf_cache_ttl_sec * 2)),
             (self._jma_cache, self._jma_cache_lock, float(self.jma_cache_ttl_sec * 2)),
-            (self._settlement_cache, self._settlement_cache_lock, float(self.settlement_cache_ttl_sec * 2)),
+            (
+                self._settlement_cache,
+                self._settlement_cache_lock,
+                float(self.settlement_cache_ttl_sec * 2),
+            ),
             (self._fmi_cache, self._fmi_cache_lock, float(self.fmi_cache_ttl_sec * 2)),
-            (self._knmi_cache, self._knmi_cache_lock, float(self.knmi_cache_ttl_sec * 2)),
-            (self._hko_obs_cache, self._hko_obs_cache_lock, float(self.hko_obs_cache_ttl_sec * 2)),
-            (self._cowin_obs_cache, self._cowin_obs_cache_lock, float(self.cowin_obs_cache_ttl_sec * 5)),
+            (
+                self._knmi_cache,
+                self._knmi_cache_lock,
+                float(self.knmi_cache_ttl_sec * 2),
+            ),
+            (
+                self._hko_obs_cache,
+                self._hko_obs_cache_lock,
+                float(self.hko_obs_cache_ttl_sec * 2),
+            ),
+            (
+                self._cowin_obs_cache,
+                self._cowin_obs_cache_lock,
+                float(self.cowin_obs_cache_ttl_sec * 5),
+            ),
         ]:
             stale = [
                 key
@@ -367,8 +396,12 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 return default
 
         attempts = max(1, _env_int("POLYWEATHER_COLLECTOR_PATCH_POST_ATTEMPTS", 3))
-        timeout_sec = max(0.1, _env_float("POLYWEATHER_COLLECTOR_PATCH_POST_TIMEOUT_SEC", 2.0))
-        backoff_sec = max(0.0, _env_float("POLYWEATHER_COLLECTOR_PATCH_POST_BACKOFF_SEC", 0.25))
+        timeout_sec = max(
+            0.1, _env_float("POLYWEATHER_COLLECTOR_PATCH_POST_TIMEOUT_SEC", 2.0)
+        )
+        backoff_sec = max(
+            0.0, _env_float("POLYWEATHER_COLLECTOR_PATCH_POST_BACKOFF_SEC", 0.25)
+        )
 
         last_error: Optional[BaseException] = None
         for attempt in range(1, attempts + 1):
@@ -461,7 +494,10 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         threading.Thread(target=post_patch, daemon=True).start()
         # MADIS cache is a single list, not a keyed dict — expire on age
         with self._madis_cache_lock:
-            if self._madis_cache is not None and time.time() - self._madis_cache_ts > self.madis_cache_ttl_sec * 2:
+            if (
+                self._madis_cache is not None
+                and time.time() - self._madis_cache_ts > self.madis_cache_ttl_sec * 2
+            ):
                 self._madis_cache = None
                 self._madis_cache_ts = 0.0
 
@@ -479,9 +515,8 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             try:
                 response = self.session.get(url, **kwargs)
                 last_response = response
-                if (
-                    attempt < attempts - 1
-                    and self._is_retryable_status(response.status_code)
+                if attempt < attempts - 1 and self._is_retryable_status(
+                    response.status_code
                 ):
                     wait_for = self.http_retry_backoff_sec * (attempt + 1)
                     logger.debug(
@@ -705,6 +740,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         使用 Open-Meteo Geocoding API 获取城市坐标 (免费, 无需 Key)
         """
         from src.data_collection.city_registry import CITY_REGISTRY
+
         normalized_city = city.lower().strip()
 
         # 1. Check registry first (Source of Truth)
@@ -713,10 +749,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             return {"lat": info["lat"], "lon": info["lon"]}
 
         # 2. Hardcoded specific cases or aliases
-        static_aliases = {
-            "new york's central park": "new york",
-            "nyc": "new york"
-        }
+        static_aliases = {"new york's central park": "new york", "nyc": "new york"}
         if normalized_city in static_aliases:
             root_city = static_aliases[normalized_city]
             info = CITY_REGISTRY[root_city]
@@ -955,7 +988,9 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             self._cowin_obs_cache.pop(f"cowin_obs:{normalized}:{use_fahrenheit}", None)
         with self._settlement_cache_lock:
             city_meta = self.CITY_REGISTRY.get(normalized) or {}
-            settlement_source = str(city_meta.get("settlement_source") or "").strip().lower()
+            settlement_source = (
+                str(city_meta.get("settlement_source") or "").strip().lower()
+            )
             if settlement_source == "hko":
                 station_code = (
                     str(city_meta.get("settlement_station_code") or "").strip()
@@ -991,8 +1026,12 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         return round(numeric, 1)
 
     def _supports_aviationweather(self, city_lower: str) -> bool:
-        city_meta = self.CITY_REGISTRY.get(str(city_lower or "").strip().lower(), {}) or {}
-        settlement_source = str(city_meta.get("settlement_source") or "").strip().lower()
+        city_meta = (
+            self.CITY_REGISTRY.get(str(city_lower or "").strip().lower(), {}) or {}
+        )
+        settlement_source = (
+            str(city_meta.get("settlement_source") or "").strip().lower()
+        )
         # HKO-settled Hong Kong cities (Hong Kong, shenzhen, future HKO stations)
         # are official observatory stations, not airport/METAR contracts. Do not fetch
         # AviationWeather for their city cards; Shenzhen remains ZGSZ/Bao'an METAR-backed.
@@ -1017,72 +1056,29 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             )
 
         city_meta = self.CITY_REGISTRY.get(str(city_lower or "").strip().lower()) or {}
-        settlement_source = str(city_meta.get("settlement_source") or "").strip().lower()
-        if settlement_source == "hko" or city_lower in ["hong_kong", "hong kong", "香港", "hk"]:
+        settlement_source = (
+            str(city_meta.get("settlement_source") or "").strip().lower()
+        )
+        if settlement_source == "hko" or city_lower in [
+            "hong_kong",
+            "hong kong",
+            "香港",
+            "hk",
+        ]:
             hko_forecast = self.fetch_hko_forecast()
             if hko_forecast:
                 results["hko_forecast"] = hko_forecast
-
-    def _attach_turkish_mgm_data(
-        self,
-        results: Dict,
-        city_lower: str,
-        *,
-        include_mgm: bool = True,
-        include_nearby: bool = True,
-    ) -> None:
-        if not include_mgm or city_lower not in self.TURKISH_PROVINCES:
-            return
-        istno, province = self.TURKISH_PROVINCES[city_lower]
-        mgm_data = self.fetch_from_mgm(istno)
-        if not mgm_data:
-            return
-        results["mgm"] = mgm_data
-        mgm_current = mgm_data.get("current") or {}
-        self._emit_temperature_patch_if_changed(
-            city_lower,
-            mgm_current.get("temp"),
-            mgm_data.get("obs_time"),
-            source="mgm",
-        )
-        try:
-            today_obs = self._update_official_today_obs(
-                source_code="mgm",
-                station_code=str(istno),
-                obs_iso=mgm_data.get("obs_time"),
-                current_temp=mgm_current.get("temp"),
-                utc_offset_seconds=get_city_utc_offset_seconds(city_lower),
-            )
-            if today_obs:
-                results["mgm_today_obs"] = today_obs
-        except Exception:
-            logger.exception("mgm today observation update failed for city={}", city_lower)
-        # Log airport obs for high-freq monitoring (Ankara 17128)
-        try:
-            DBManager().append_airport_obs(
-                icao=str(istno),
-                city=city_lower,
-                temp_c=mgm_current.get("temp"),
-                wind_kt=mgm_current.get("wind_speed_kt"),
-                pressure_hpa=mgm_current.get("pressure"),
-                obs_time=mgm_data.get("obs_time") or datetime.now().isoformat(),
-            )
-        except Exception:
-            logger.exception("airport_obs_log append failed for mgm city={}", city_lower)
-        if include_nearby:
-            results["nearby_source"] = "mgm"
-            nearby = self.fetch_mgm_nearby_stations(province, root_ist_no=istno)
-            if nearby:
-                results["mgm_nearby"] = nearby
 
     def _attach_global_nearby_cluster(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
     ) -> None:
         city_meta = self.CITY_REGISTRY.get(str(city_lower or "").strip().lower()) or {}
-        settlement_source = str(city_meta.get("settlement_source") or "").strip().lower()
+        settlement_source = (
+            str(city_meta.get("settlement_source") or "").strip().lower()
+        )
         if (
             city_lower not in self.CITY_METAR_CLUSTERS
-            or "mgm_nearby" in results
+            or "nearby_stations" in results
             or settlement_source in {"hko", "ims", "ncm", "aeroweb"}
         ):
             return
@@ -1091,11 +1087,12 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             cluster_icaos, use_fahrenheit=use_fahrenheit
         )
         if cluster_data:
-            results["mgm_nearby"] = cluster_data
+            results["nearby_stations"] = cluster_data
             results["nearby_source"] = "metar_cluster"
             # 写入 airport_obs_log，供高频推送的趋势检测使用
             try:
                 from src.database.db_manager import DBManager
+
                 db = DBManager()
                 obs_rows = []
                 for row in cluster_data:
@@ -1108,12 +1105,17 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                                 "city": city_lower,
                                 "temp_c": temp_c,
                                 "wind_kt": row.get("wind_speed_kt"),
-                                "obs_time": str(row.get("obs_time") or datetime.now().isoformat()),
+                                "obs_time": str(
+                                    row.get("obs_time") or datetime.now().isoformat()
+                                ),
                             }
                         )
                 db.append_airport_obs_batch(obs_rows)
             except Exception:
-                logger.exception("airport_obs_log append failed for metar cluster city={}", city_lower)
+                logger.exception(
+                    "airport_obs_log append failed for metar cluster city={}",
+                    city_lower,
+                )
 
     def _attach_israel_ims_data(self, results: Dict, city_lower: str) -> None:
         if city_lower != "tel aviv":
@@ -1137,7 +1139,9 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     obs_time=ims_data.get("obs_time") or datetime.now().isoformat(),
                 )
             except Exception:
-                logger.exception("airport_obs_log append failed for ims city={}", city_lower)
+                logger.exception(
+                    "airport_obs_log append failed for ims city={}", city_lower
+                )
 
     def _attach_saudi_ncm_data(self, results: Dict, city_lower: str) -> None:
         if city_lower != "jeddah":
@@ -1161,7 +1165,9 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     obs_time=ncm_data.get("obs_time") or datetime.now().isoformat(),
                 )
             except Exception:
-                logger.exception("airport_obs_log append failed for ncm city={}", city_lower)
+                logger.exception(
+                    "airport_obs_log append failed for ncm city={}", city_lower
+                )
 
     def _attach_paris_aeroweb_data(self, results: Dict, city_lower: str) -> None:
         if city_lower != "paris":
@@ -1185,8 +1191,9 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     obs_time=aw_data.get("obs_time") or datetime.now().isoformat(),
                 )
             except Exception:
-                logger.exception("airport_obs_log append failed for aeroweb city={}", city_lower)
-
+                logger.exception(
+                    "airport_obs_log append failed for aeroweb city={}", city_lower
+                )
 
     def _attach_japan_official_nearby(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
@@ -1206,8 +1213,8 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             official_rows[0].get("obs_time"),
             source="jma_amedas",
         )
-        if "mgm_nearby" not in results:
-            results["mgm_nearby"] = official_rows
+        if "nearby_stations" not in results:
+            results["nearby_stations"] = official_rows
         results["nearby_source"] = "jma"
         try:
             row = official_rows[0] if official_rows else {}
@@ -1219,7 +1226,9 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 obs_time=str(row.get("obs_time") or datetime.now().isoformat()),
             )
         except Exception:
-            logger.exception("airport_obs_log append failed for jma city={}", city_lower)
+            logger.exception(
+                "airport_obs_log append failed for jma city={}", city_lower
+            )
 
     def _attach_knmi_official_nearby(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
@@ -1239,8 +1248,8 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             rows[0].get("obs_time"),
             source="knmi",
         )
-        if "mgm_nearby" not in results:
-            results["mgm_nearby"] = rows
+        if "nearby_stations" not in results:
+            results["nearby_stations"] = rows
         results["nearby_source"] = "knmi"
         try:
             row = rows[0] if rows else {}
@@ -1251,16 +1260,16 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 obs_time=str(row.get("obs_time") or datetime.now().isoformat()),
             )
         except Exception:
-            logger.exception("airport_obs_log append failed for knmi city={}", city_lower)
+            logger.exception(
+                "airport_obs_log append failed for knmi city={}", city_lower
+            )
 
     def _attach_fmi_official_nearby(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
     ) -> None:
         if city_lower != "helsinki":
             return
-        rows = self.fetch_fmi_official_nearby(
-            city_lower, use_fahrenheit=use_fahrenheit
-        )
+        rows = self.fetch_fmi_official_nearby(city_lower, use_fahrenheit=use_fahrenheit)
         if not rows:
             return
         results["fmi_official_nearby"] = rows
@@ -1271,8 +1280,8 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             rows[0].get("obs_time"),
             source="fmi",
         )
-        if "mgm_nearby" not in results:
-            results["mgm_nearby"] = rows
+        if "nearby_stations" not in results:
+            results["nearby_stations"] = rows
         results["nearby_source"] = "fmi"
         try:
             row = rows[0] if rows else {}
@@ -1284,7 +1293,9 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 obs_time=str(row.get("obs_time") or datetime.now().isoformat()),
             )
         except Exception:
-            logger.exception("airport_obs_log append failed for fmi city={}", city_lower)
+            logger.exception(
+                "airport_obs_log append failed for fmi city={}", city_lower
+            )
 
     def _attach_hko_obs_official_nearby(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
@@ -1303,8 +1314,8 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             rows[0].get("obs_time"),
             source="hko_obs",
         )
-        if "mgm_nearby" not in results:
-            results["mgm_nearby"] = rows
+        if "nearby_stations" not in results:
+            results["nearby_stations"] = rows
         results["nearby_source"] = "hko_obs"
         try:
             row = rows[0] if rows else {}
@@ -1315,7 +1326,9 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 obs_time=str(row.get("obs_time") or datetime.now().isoformat()),
             )
         except Exception:
-            logger.exception("airport_obs_log append failed for hko_obs city={}", city_lower)
+            logger.exception(
+                "airport_obs_log append failed for hko_obs city={}", city_lower
+            )
 
     def _attach_cowin_official_nearby(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
@@ -1340,30 +1353,34 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             rows[0].get("obs_time"),
             source="cowin_obs",
         )
-        results["mgm_nearby"] = rows
+        results["nearby_stations"] = rows
         results["nearby_source"] = "cowin_obs"
         try:
             row = rows[0] if rows else {}
             temp_c = row.get("temp")
             if use_fahrenheit and temp_c is not None:
                 temp_c = round((temp_c - 32.0) * 5.0 / 9.0, 1)
-            
+
             DBManager().append_airport_obs(
                 icao=str(row.get("icao") or "COWIN6087"),
                 city=city_lower,
                 temp_c=temp_c,
                 obs_time=str(row.get("obs_time") or datetime.now().isoformat()),
             )
-            
+
             self._update_official_today_obs(
                 source_code="cowin_obs",
                 station_code=str(row.get("istNo") or "6087"),
-                obs_iso=str(row.get("obs_time") or datetime.now(timezone.utc).isoformat()),
+                obs_iso=str(
+                    row.get("obs_time") or datetime.now(timezone.utc).isoformat()
+                ),
                 current_temp=temp_c,
                 utc_offset_seconds=28800,
             )
         except Exception:
-            logger.exception("airport_obs_log append/update failed for cowin_obs city={}", city_lower)
+            logger.exception(
+                "airport_obs_log append/update failed for cowin_obs city={}", city_lower
+            )
 
     def _attach_madis_hfmetar_data(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
@@ -1377,8 +1394,10 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
 
         now_ts = time.time()
         with self._madis_cache_lock:
-            if (self._madis_cache is not None
-                    and now_ts - self._madis_cache_ts < self.madis_cache_ttl_sec):
+            if (
+                self._madis_cache is not None
+                and now_ts - self._madis_cache_ts < self.madis_cache_ttl_sec
+            ):
                 obs_list = self._madis_cache
             else:
                 obs_list = self.fetch_madis_hfmetar()
@@ -1428,9 +1447,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     )
                 break
 
-    def _attach_singapore_mss_data(
-        self, results: Dict, city_lower: str
-    ) -> None:
+    def _attach_singapore_mss_data(self, results: Dict, city_lower: str) -> None:
         """Fetch Singapore MSS 1-min temperature and inject into results."""
         if city_lower != "singapore":
             return
@@ -1461,11 +1478,13 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
     def _attach_warsaw_official_nearby(
         self, results: Dict, use_fahrenheit: bool
     ) -> None:
-        if "mgm_nearby" in results:
+        if "nearby_stations" in results:
             return
 
         official_rows = []
-        epwa_rows = self.fetch_metar_nearby_cluster(["EPWA"], use_fahrenheit=use_fahrenheit)
+        epwa_rows = self.fetch_metar_nearby_cluster(
+            ["EPWA"], use_fahrenheit=use_fahrenheit
+        )
         if epwa_rows:
             epwa = dict(epwa_rows[0])
             epwa["name"] = "Warszawa-Okęcie (EPWA)"
@@ -1480,7 +1499,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             official_rows.append(imgw_row)
 
         if official_rows:
-            results["mgm_nearby"] = official_rows
+            results["nearby_stations"] = official_rows
             results["nearby_source"] = "official_cluster"
 
     def _attach_nws_and_models(
@@ -1523,7 +1542,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         include_nearby: bool = True,
         include_ensemble: bool = True,
         include_multi_model: bool = True,
-        include_mgm: bool = True,
     ) -> Dict:
         """
         Fetch weather data from all available sources
@@ -1571,28 +1589,36 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     )
                     if metar_data:
                         results["metar"] = metar_data
-                if include_taf and supports_aviationweather and city_lower != "hong kong":
+                if (
+                    include_taf
+                    and supports_aviationweather
+                    and city_lower != "hong kong"
+                ):
                     taf_data = self.fetch_taf(city, utc_offset=utc_offset)
                     if taf_data:
                         results["taf"] = taf_data
 
-                self._attach_turkish_mgm_data(
-                    results,
-                    city_lower,
-                    include_mgm=include_mgm,
-                    include_nearby=include_nearby,
-                )
                 self._attach_madis_hfmetar_data(results, city_lower, use_fahrenheit)
                 self._attach_singapore_mss_data(results, city_lower)
                 self._attach_israel_ims_data(results, city_lower)
                 self._attach_saudi_ncm_data(results, city_lower)
                 self._attach_paris_aeroweb_data(results, city_lower)
                 if include_nearby:
-                    self._attach_japan_official_nearby(results, city_lower, use_fahrenheit)
-                    self._attach_fmi_official_nearby(results, city_lower, use_fahrenheit)
-                    self._attach_knmi_official_nearby(results, city_lower, use_fahrenheit)
-                    self._attach_cowin_official_nearby(results, city_lower, use_fahrenheit)
-                    self._attach_hko_obs_official_nearby(results, city_lower, use_fahrenheit)
+                    self._attach_japan_official_nearby(
+                        results, city_lower, use_fahrenheit
+                    )
+                    self._attach_fmi_official_nearby(
+                        results, city_lower, use_fahrenheit
+                    )
+                    self._attach_knmi_official_nearby(
+                        results, city_lower, use_fahrenheit
+                    )
+                    self._attach_cowin_official_nearby(
+                        results, city_lower, use_fahrenheit
+                    )
+                    self._attach_hko_obs_official_nearby(
+                        results, city_lower, use_fahrenheit
+                    )
                     if city_lower == "warsaw":
                         self._attach_warsaw_official_nearby(results, use_fahrenheit)
                     self._attach_global_nearby_cluster(
@@ -1619,28 +1645,35 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     )
                     if metar_data:
                         results["metar"] = metar_data
-                if include_taf and supports_aviationweather and city_lower != "hong kong":
+                if (
+                    include_taf
+                    and supports_aviationweather
+                    and city_lower != "hong kong"
+                ):
                     taf_data = self.fetch_taf(city, utc_offset=fallback_utc_offset)
                     if taf_data:
                         results["taf"] = taf_data
 
-                self._attach_turkish_mgm_data(
-                    results,
-                    city_lower,
-                    include_mgm=include_mgm,
-                    include_nearby=include_nearby,
-                )
-                self._attach_madis_hfmetar_data(results, city_lower, use_fahrenheit)
                 self._attach_singapore_mss_data(results, city_lower)
                 self._attach_israel_ims_data(results, city_lower)
                 self._attach_saudi_ncm_data(results, city_lower)
                 self._attach_paris_aeroweb_data(results, city_lower)
                 if include_nearby:
-                    self._attach_japan_official_nearby(results, city_lower, use_fahrenheit)
-                    self._attach_fmi_official_nearby(results, city_lower, use_fahrenheit)
-                    self._attach_knmi_official_nearby(results, city_lower, use_fahrenheit)
-                    self._attach_cowin_official_nearby(results, city_lower, use_fahrenheit)
-                    self._attach_hko_obs_official_nearby(results, city_lower, use_fahrenheit)
+                    self._attach_japan_official_nearby(
+                        results, city_lower, use_fahrenheit
+                    )
+                    self._attach_fmi_official_nearby(
+                        results, city_lower, use_fahrenheit
+                    )
+                    self._attach_knmi_official_nearby(
+                        results, city_lower, use_fahrenheit
+                    )
+                    self._attach_cowin_official_nearby(
+                        results, city_lower, use_fahrenheit
+                    )
+                    self._attach_hko_obs_official_nearby(
+                        results, city_lower, use_fahrenheit
+                    )
                     if city_lower == "warsaw":
                         self._attach_warsaw_official_nearby(results, use_fahrenheit)
                     self._attach_global_nearby_cluster(

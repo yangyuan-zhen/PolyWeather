@@ -8,8 +8,6 @@ from src.data_collection.city_registry import CITY_REGISTRY
 from src.data_collection.city_time import get_city_utc_offset_seconds
 
 
-
-
 def _japan_jma_cities() -> set[str]:
     return {"tokyo"}
 
@@ -88,7 +86,12 @@ def _format_obs_time_label(
                 return parsed.astimezone(local_tz).strftime("%H:%M")
             except Exception:
                 pass
-        suffix = "Z" if parsed.tzinfo is not None and parsed.utcoffset() == timezone.utc.utcoffset(parsed) else ""
+        suffix = (
+            "Z"
+            if parsed.tzinfo is not None
+            and parsed.utcoffset() == timezone.utc.utcoffset(parsed)
+            else ""
+        )
         return parsed.strftime("%H:%M") + suffix
     if not text:
         return None
@@ -99,7 +102,9 @@ def _format_obs_time_label(
     return text[:5] if len(text) >= 5 else text
 
 
-def _timing_delta_minutes(anchor_dt: Optional[datetime], station_dt: Optional[datetime]) -> Optional[int]:
+def _timing_delta_minutes(
+    anchor_dt: Optional[datetime], station_dt: Optional[datetime]
+) -> Optional[int]:
     if anchor_dt is None or station_dt is None:
         return None
     try:
@@ -115,7 +120,14 @@ def _station_age_minutes(station_dt: Optional[datetime]) -> Optional[int]:
     if station_dt is None or station_dt.tzinfo is None:
         return None
     try:
-        return int(round((datetime.now(timezone.utc) - station_dt.astimezone(timezone.utc)).total_seconds() / 60.0))
+        return int(
+            round(
+                (
+                    datetime.now(timezone.utc) - station_dt.astimezone(timezone.utc)
+                ).total_seconds()
+                / 60.0
+            )
+        )
     except Exception:
         return None
 
@@ -163,7 +175,9 @@ def _enrich_station_timing(
             display_utc_offset_seconds,
             row.get("obs_time_utc_offset_seconds"),
         )
-        if display_utc_offset_seconds is not None and enriched_row.get("obs_time_label"):
+        if display_utc_offset_seconds is not None and enriched_row.get(
+            "obs_time_label"
+        ):
             enriched_row["obs_time_display_tz"] = "city_local"
         enriched_row["age_minutes"] = age_minutes
         enriched_row["time_delta_vs_anchor_minutes"] = delta_minutes
@@ -181,8 +195,6 @@ def _provider_code_for_city(city: str) -> str:
     normalized = str(city or "").strip().lower()
     meta = _city_meta(normalized)
     settlement_source = str(meta.get("settlement_source") or "").strip().lower()
-    if normalized in {"ankara", "istanbul"}:
-        return "turkey_mgm"
     if normalized in {"busan", "seoul"}:
         return "korea_kma"
     if normalized == "tel aviv":
@@ -272,37 +284,8 @@ def _airport_primary_from_raw(city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
                 "receipt_time": metar.get("receipt_time"),
                 "obs_time_epoch": metar.get("obs_time_epoch"),
                 "obs_time_utc_offset_seconds": 0,
-                "wind_speed_kt": _safe_float(madis.get("wind_kt")) or _safe_float(current.get("wind_speed_kt")),
-                "wind_dir": _safe_float(current.get("wind_dir")),
-                "humidity": _safe_float(current.get("humidity")),
-                "visibility_mi": _safe_float(current.get("visibility_mi")),
-                "wx_desc": current.get("wx_desc"),
-                "raw_metar": current.get("raw_metar"),
-            },
-        )
-
-    mgm = raw.get("mgm") or {}
-    mgm_current = mgm.get("current") or {}
-    if mgm_current.get("temp") is not None:
-        return _normalize_station_row(
-            station_code=meta.get("icao") or str(mgm.get("istNo") or ""),
-            station_label=meta.get("airport_name") or mgm.get("station_label") or meta.get("icao"),
-            temp=_safe_float(mgm_current["temp"]),
-            obs_time=mgm.get("obs_time") or metar.get("observation_time"),
-            source_code="mgm",
-            source_label="MGM",
-            is_official=True,
-            is_airport_station=True,
-            is_settlement_anchor=False,
-            extra={
-                "max_so_far": _safe_float(current.get("max_temp_so_far")),
-                "max_temp_time": current.get("max_temp_time"),
-                "obs_age_min": None,
-                "report_time": metar.get("report_time"),
-                "receipt_time": metar.get("receipt_time"),
-                "obs_time_epoch": metar.get("obs_time_epoch"),
-                "obs_time_utc_offset_seconds": 0,
-                "wind_speed_kt": _safe_float(current.get("wind_speed_kt")),
+                "wind_speed_kt": _safe_float(madis.get("wind_kt"))
+                or _safe_float(current.get("wind_speed_kt")),
                 "wind_dir": _safe_float(current.get("wind_dir")),
                 "humidity": _safe_float(current.get("humidity")),
                 "visibility_mi": _safe_float(current.get("visibility_mi")),
@@ -315,7 +298,9 @@ def _airport_primary_from_raw(city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
     if jma.get("temp") is not None:
         return _normalize_station_row(
             station_code=meta.get("icao") or str(jma.get("icao") or "RJTT"),
-            station_label=meta.get("airport_name") or jma.get("station_label") or meta.get("icao"),
+            station_label=meta.get("airport_name")
+            or jma.get("station_label")
+            or meta.get("icao"),
             temp=_safe_float(jma["temp"]),
             obs_time=str(jma.get("obs_time") or metar.get("observation_time") or ""),
             source_code="jma_amedas",
@@ -344,7 +329,9 @@ def _airport_primary_from_raw(city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
     if fmi.get("temp") is not None:
         return _normalize_station_row(
             station_code=meta.get("icao") or str(fmi.get("icao") or "EFHK"),
-            station_label=meta.get("airport_name") or fmi.get("station_label") or meta.get("icao"),
+            station_label=meta.get("airport_name")
+            or fmi.get("station_label")
+            or meta.get("icao"),
             temp=_safe_float(fmi["temp"]),
             obs_time=str(fmi.get("obs_time") or metar.get("observation_time") or ""),
             source_code="fmi",
@@ -373,7 +360,9 @@ def _airport_primary_from_raw(city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
     if knmi.get("temp") is not None:
         return _normalize_station_row(
             station_code=meta.get("icao") or str(knmi.get("icao") or "EHAM"),
-            station_label=meta.get("airport_name") or knmi.get("station_label") or meta.get("icao"),
+            station_label=meta.get("airport_name")
+            or knmi.get("station_label")
+            or meta.get("icao"),
             temp=_safe_float(knmi["temp"]),
             obs_time=str(knmi.get("obs_time") or metar.get("observation_time") or ""),
             source_code="knmi",
@@ -447,7 +436,9 @@ def _airport_primary_from_raw(city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
     if aw_current.get("temp") is not None:
         return _normalize_station_row(
             station_code=meta.get("icao") or "LFPB",
-            station_label=meta.get("airport_name") or aeroweb.get("station_label") or "Paris Le Bourget (AEROWEB)",
+            station_label=meta.get("airport_name")
+            or aeroweb.get("station_label")
+            or "Paris Le Bourget (AEROWEB)",
             temp=_safe_float(aw_current["temp"]),
             obs_time=aeroweb.get("obs_time") or metar.get("observation_time"),
             source_code="aeroweb",
@@ -480,7 +471,9 @@ def _airport_primary_from_raw(city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
     if ims_current.get("temp") is not None:
         return _normalize_station_row(
             station_code=meta.get("icao") or ims.get("station_id") or "LLBG",
-            station_label=meta.get("airport_name") or ims.get("station_label") or "Ben Gurion Airport",
+            station_label=meta.get("airport_name")
+            or ims.get("station_label")
+            or "Ben Gurion Airport",
             temp=_safe_float(ims_current["temp"]),
             obs_time=ims.get("obs_time") or metar.get("observation_time"),
             source_code="ims",
@@ -513,7 +506,9 @@ def _airport_primary_from_raw(city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
     if ncm_current.get("temp") is not None:
         return _normalize_station_row(
             station_code=meta.get("icao") or "OEJN",
-            station_label=meta.get("airport_name") or ncm.get("station_label") or "King Abdulaziz Intl (NCM)",
+            station_label=meta.get("airport_name")
+            or ncm.get("station_label")
+            or "King Abdulaziz Intl (NCM)",
             temp=_safe_float(ncm_current["temp"]),
             obs_time=ncm.get("obs_time") or metar.get("observation_time"),
             source_code="ncm",
@@ -572,7 +567,9 @@ def _airport_primary_from_raw(city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
 
     return _normalize_station_row(
         station_code=meta.get("icao") or metar.get("icao"),
-        station_label=meta.get("airport_name") or metar.get("station_name") or metar.get("icao"),
+        station_label=meta.get("airport_name")
+        or metar.get("station_name")
+        or metar.get("icao"),
         temp=current.get("temp"),
         obs_time=metar.get("observation_time"),
         source_code="metar",
@@ -599,7 +596,7 @@ def _airport_primary_from_raw(city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _metar_cluster_rows(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
-    rows = raw.get("mgm_nearby") or []
+    rows = raw.get("nearby_stations") or raw.get("mgm_nearby") or []
     out: List[Dict[str, Any]] = []
     for row in rows:
         if not isinstance(row, dict):
@@ -621,7 +618,9 @@ def _metar_cluster_rows(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
                     "obs_time_epoch": row.get("obs_time_epoch"),
                     "obs_time_utc_offset_seconds": 0,
                     "wind_dir": _safe_float(row.get("wind_dir")),
-                    "wind_speed_kt": _safe_float(row.get("wind_speed_kt") or row.get("wind_speed")),
+                    "wind_speed_kt": _safe_float(
+                        row.get("wind_speed_kt") or row.get("wind_speed")
+                    ),
                     "raw_metar": row.get("raw_metar"),
                 },
             )
@@ -661,7 +660,9 @@ def _kma_rows(raw: Dict[str, Any], city: str) -> List[Dict[str, Any]]:
             continue
         out.append(
             _normalize_station_row(
-                station_code=row.get("station_code") or row.get("icao") or row.get("istNo"),
+                station_code=row.get("station_code")
+                or row.get("icao")
+                or row.get("istNo"),
                 station_label=row.get("station_label") or row.get("name"),
                 temp=row.get("temp"),
                 lat=row.get("lat"),
@@ -680,7 +681,6 @@ def _kma_rows(raw: Dict[str, Any], city: str) -> List[Dict[str, Any]]:
         )
     return out
 
-
     rows = raw.get("ru_official_nearby") or []
     out: List[Dict[str, Any]] = []
     for row in rows:
@@ -688,7 +688,9 @@ def _kma_rows(raw: Dict[str, Any], city: str) -> List[Dict[str, Any]]:
             continue
         out.append(
             _normalize_station_row(
-                station_code=row.get("station_code") or row.get("icao") or row.get("istNo"),
+                station_code=row.get("station_code")
+                or row.get("icao")
+                or row.get("istNo"),
                 station_label=row.get("station_label") or row.get("name"),
                 temp=row.get("temp"),
                 lat=row.get("lat"),
@@ -701,39 +703,6 @@ def _kma_rows(raw: Dict[str, Any], city: str) -> List[Dict[str, Any]]:
                 extra={
                     "distance_km": _safe_float(row.get("distance_km")),
                     "page_url": row.get("page_url"),
-                },
-            )
-        )
-    return out
-
-
-def _mgm_rows(raw: Dict[str, Any], city: str) -> List[Dict[str, Any]]:
-    meta = _city_meta(city)
-    rows = raw.get("mgm_nearby") or []
-    out: List[Dict[str, Any]] = []
-    airport_code = str(meta.get("icao") or "").strip().upper()
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        station_code = str(row.get("icao") or row.get("istNo") or "").strip() or None
-        station_label = row.get("name")
-        out.append(
-            _normalize_station_row(
-                station_code=station_code,
-                station_label=station_label,
-                temp=row.get("temp"),
-                lat=row.get("lat"),
-                lon=row.get("lon"),
-                obs_time=row.get("obs_time"),
-                source_code="mgm",
-                source_label="MGM",
-                is_official=True,
-                is_airport_station=_bool(station_code and station_code.upper() == airport_code)
-                or ("airport" in str(station_label or "").lower()),
-                is_settlement_anchor=False,
-                extra={
-                    "wind_dir": _safe_float(row.get("wind_dir")),
-                    "wind_speed_kt": _safe_float(row.get("wind_speed_kt") or row.get("wind_speed")),
                 },
             )
         )
@@ -756,7 +725,9 @@ def _settlement_anchor_row(city: str, raw: Dict[str, Any]) -> Optional[Dict[str,
         or meta.get("settlement_station_label")
         or meta.get("airport_name")
     )
-    settlement_source = str(meta.get("settlement_source") or "official").strip().lower() or "official"
+    settlement_source = (
+        str(meta.get("settlement_source") or "official").strip().lower() or "official"
+    )
     return _normalize_station_row(
         station_code=station_code,
         station_label=station_label,
@@ -779,7 +750,9 @@ def _settlement_anchor_row(city: str, raw: Dict[str, Any]) -> Optional[Dict[str,
 
 def _settlement_station_metadata(city: str) -> Dict[str, Any]:
     meta = _city_meta(city)
-    settlement_source = str(meta.get("settlement_source") or "metar").strip().lower() or "metar"
+    settlement_source = (
+        str(meta.get("settlement_source") or "metar").strip().lower() or "metar"
+    )
     station_code = (
         str(meta.get("settlement_station_code") or "").strip()
         or str(meta.get("icao") or "").strip()
@@ -812,7 +785,8 @@ def _network_signals(
     valid_rows = [
         row
         for row in official_rows
-        if _safe_float(row.get("temp")) is not None and row.get("usable_for_intraday") is not False
+        if _safe_float(row.get("temp")) is not None
+        and row.get("usable_for_intraday") is not False
     ]
     if not valid_rows:
         return {
@@ -842,7 +816,9 @@ def _network_signals(
             "leader_obs_time": hottest.get("obs_time"),
             "leader_obs_time_label": hottest.get("obs_time_label"),
             "leader_sync_status": hottest.get("sync_status"),
-            "leader_time_delta_vs_anchor_minutes": hottest.get("time_delta_vs_anchor_minutes"),
+            "leader_time_delta_vs_anchor_minutes": hottest.get(
+                "time_delta_vs_anchor_minutes"
+            ),
         },
         "network_spread_signal": {
             "available": spread is not None,
@@ -860,16 +836,24 @@ class CountryNetworkProvider:
     provider_code: str
     provider_label: str
 
-    def airport_primary_current(self, city: str, raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def airport_primary_current(
+        self, city: str, raw: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         return _airport_primary_from_raw(city, raw)
 
-    def airport_primary_history(self, city: str, target_date: str) -> Optional[Dict[str, Any]]:
+    def airport_primary_history(
+        self, city: str, target_date: str
+    ) -> Optional[Dict[str, Any]]:
         return None
 
-    def official_nearby_current(self, city: str, raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def official_nearby_current(
+        self, city: str, raw: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         return []
 
-    def official_nearby_history(self, city: str, target_date: str) -> List[Dict[str, Any]]:
+    def official_nearby_history(
+        self, city: str, target_date: str
+    ) -> List[Dict[str, Any]]:
         return []
 
     def settlement_station_metadata(self, city: str) -> Dict[str, Any]:
@@ -890,7 +874,9 @@ class GlobalMetarNetworkProvider(CountryNetworkProvider):
     def __init__(self) -> None:
         super().__init__("global_metar", "METAR")
 
-    def official_nearby_current(self, city: str, raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def official_nearby_current(
+        self, city: str, raw: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         return _metar_cluster_rows(raw)
 
     def official_network_status(self, city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
@@ -904,19 +890,13 @@ class GlobalMetarNetworkProvider(CountryNetworkProvider):
         }
 
 
-class TurkeyMgmNetworkProvider(CountryNetworkProvider):
-    def __init__(self) -> None:
-        super().__init__("turkey_mgm", "MGM")
-
-    def official_nearby_current(self, city: str, raw: Dict[str, Any]) -> List[Dict[str, Any]]:
-        return _mgm_rows(raw, city)
-
-
 class JapanJmaNetworkProvider(CountryNetworkProvider):
     def __init__(self) -> None:
         super().__init__("japan_jma", "JMA")
 
-    def official_nearby_current(self, city: str, raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def official_nearby_current(
+        self, city: str, raw: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         rows = _jma_rows(raw, city)
         if rows:
             return rows
@@ -929,7 +909,9 @@ class JapanJmaNetworkProvider(CountryNetworkProvider):
             "provider_code": self.provider_code,
             "provider_label": self.provider_label,
             "available": has_jma,
-            "mode": "official_active" if has_jma else ("fallback_metar_cluster" if rows else "reference_only"),
+            "mode": "official_active"
+            if has_jma
+            else ("fallback_metar_cluster" if rows else "reference_only"),
             "row_count": len(rows),
         }
 
@@ -938,7 +920,9 @@ class KoreaKmaNetworkProvider(CountryNetworkProvider):
     def __init__(self) -> None:
         super().__init__("korea_kma", "KMA")
 
-    def official_nearby_current(self, city: str, raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def official_nearby_current(
+        self, city: str, raw: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         rows = _kma_rows(raw, city)
         if rows:
             return rows
@@ -951,7 +935,9 @@ class KoreaKmaNetworkProvider(CountryNetworkProvider):
             "provider_code": self.provider_code,
             "provider_label": self.provider_label,
             "available": has_kma,
-            "mode": "official_active" if has_kma else ("fallback_metar_cluster" if rows else "reference_only"),
+            "mode": "official_active"
+            if has_kma
+            else ("fallback_metar_cluster" if rows else "reference_only"),
             "row_count": len(rows),
         }
 
@@ -960,7 +946,9 @@ class IsraelImsNetworkProvider(CountryNetworkProvider):
     def __init__(self) -> None:
         super().__init__("israel_ims", "IMS Lod Airport")
 
-    def official_nearby_current(self, city: str, raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def official_nearby_current(
+        self, city: str, raw: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         ims = raw.get("ims") or {}
         ims_current = ims.get("current") or {}
         if ims_current.get("temp") is not None:
@@ -1005,7 +993,9 @@ class AerowebNetworkProvider(CountryNetworkProvider):
     def __init__(self) -> None:
         super().__init__("fr_aeroweb", "AEROWEB")
 
-    def official_nearby_current(self, city: str, raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def official_nearby_current(
+        self, city: str, raw: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         aw = raw.get("aeroweb") or {}
         aw_current = aw.get("current") or {}
         if aw_current.get("temp") is not None:
@@ -1050,7 +1040,9 @@ class SaudiNcmNetworkProvider(CountryNetworkProvider):
     def __init__(self) -> None:
         super().__init__("saudi_ncm", "Saudi NCM")
 
-    def official_nearby_current(self, city: str, raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def official_nearby_current(
+        self, city: str, raw: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         ncm = raw.get("ncm") or {}
         ncm_current = ncm.get("current") or {}
         if ncm_current.get("temp") is not None:
@@ -1095,15 +1087,15 @@ class HongKongHkoNetworkProvider(CountryNetworkProvider):
     def __init__(self) -> None:
         super().__init__("hongkong_hko", "HKO")
 
-    def official_nearby_current(self, city: str, raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def official_nearby_current(
+        self, city: str, raw: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         anchor = _settlement_anchor_row(city, raw)
         return [anchor] if anchor else []
 
 
 def get_country_network_provider(city: str) -> CountryNetworkProvider:
     provider_code = _provider_code_for_city(city)
-    if provider_code == "turkey_mgm":
-        return TurkeyMgmNetworkProvider()
     if provider_code == "korea_kma":
         return KoreaKmaNetworkProvider()
     if provider_code == "japan_jma":
@@ -1131,19 +1123,22 @@ def build_country_network_snapshot(city: str, raw: Dict[str, Any]) -> Dict[str, 
     )
     status = provider.official_network_status(city, raw)
     signals = _network_signals(airport_primary, official_nearby)
-    usable_count = len([row for row in official_nearby if row.get("usable_for_intraday") is not False])
-    stale_count = len([row for row in official_nearby if row.get("sync_status") == "stale"])
-    unknown_count = len([row for row in official_nearby if row.get("sync_status") == "unknown"])
+    usable_count = len(
+        [row for row in official_nearby if row.get("usable_for_intraday") is not False]
+    )
+    stale_count = len(
+        [row for row in official_nearby if row.get("sync_status") == "stale"]
+    )
+    unknown_count = len(
+        [row for row in official_nearby if row.get("sync_status") == "unknown"]
+    )
     status = {
         **status,
         "usable_row_count": usable_count,
         "stale_row_count": stale_count,
         "unknown_timing_count": unknown_count,
     }
-    if provider.provider_code == "turkey_mgm":
-        airport_primary_today_obs = raw.get("mgm_today_obs") or []
-    else:
-        airport_primary_today_obs = ((raw.get("metar") or {}).get("today_obs") or [])
+    airport_primary_today_obs = (raw.get("metar") or {}).get("today_obs") or []
     if airport_primary.get("source_code") == "cowin_obs":
         live_points = raw.get("cowin_today_obs") or []
         if live_points:
@@ -1154,9 +1149,14 @@ def build_country_network_snapshot(city: str, raw: Dict[str, Any]) -> Dict[str, 
             ]
         if not airport_primary_today_obs:
             try:
-                from src.database.runtime_state import OfficialIntradayObservationRepository
+                from src.database.runtime_state import (
+                    OfficialIntradayObservationRepository,
+                )
+
                 repo = OfficialIntradayObservationRepository()
-                local_now = datetime.now(timezone.utc) + timedelta(seconds=city_offset or 0)
+                local_now = datetime.now(timezone.utc) + timedelta(
+                    seconds=city_offset or 0
+                )
                 local_date_str = local_now.strftime("%Y-%m-%d")
                 points = repo.load_points(
                     source_code="cowin_obs",
@@ -1164,7 +1164,9 @@ def build_country_network_snapshot(city: str, raw: Dict[str, Any]) -> Dict[str, 
                     target_date=local_date_str,
                 )
                 if points:
-                    airport_primary_today_obs = [{"time": p["time"], "temp": p["temp"]} for p in points]
+                    airport_primary_today_obs = [
+                        {"time": p["time"], "temp": p["temp"]} for p in points
+                    ]
             except Exception:
                 pass
 

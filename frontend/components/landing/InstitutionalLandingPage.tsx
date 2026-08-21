@@ -17,7 +17,7 @@ import { STATIC_CITY_LIST } from "@/lib/static-cities";
 const COVERAGE_EN = [
   "CoWIN 60s + HKO 600s",
   "MADIS 300s airport observations",
-  "MGM 300s + JMA AMeDAS 600s",
+  "JMA AMeDAS 600s",
   "Live chart updates",
   "Short Telegram alerts",
 ];
@@ -25,7 +25,7 @@ const COVERAGE_EN = [
 const COVERAGE_ZH = [
   "CoWIN 60s + HKO 600s",
   "MADIS 300s 机场观测",
-  "MGM 300s + JMA AMeDAS 600s",
+  "JMA AMeDAS 600s",
   "网页图表实时更新",
   "Telegram 简短提醒",
 ];

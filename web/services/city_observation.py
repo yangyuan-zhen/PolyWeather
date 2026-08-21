@@ -13,7 +13,6 @@ _CACHE_DB = DBManager()
 
 _SOURCE_LABELS = {
     "hko_obs": "HKO",
-    "mgm": "MGM",
     "jma_amedas": "JMA",
     "metar": "METAR",
     "madis_hfmetar": "NOAA MADIS",
@@ -21,7 +20,6 @@ _SOURCE_LABELS = {
 
 _PREFERRED_SOURCES = (
     "hko_obs",
-    "mgm",
     "jma_amedas",
     "madis_hfmetar",
     "metar",

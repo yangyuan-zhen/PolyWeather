@@ -2,7 +2,6 @@ import type { CityDetail } from "@/lib/dashboard-types";
 import type { Locale } from "@/lib/i18n";
 import {
   getRealtimeObservationTag,
-  isTurkishMgmCity,
 } from "@/lib/observation-source-utils";
 
 const METAR_WX_MAP: Record<
@@ -129,8 +128,6 @@ export function getHeroMetaItems(detail: CityDetail, locale: Locale = "zh-CN") {
   const current = detail.current || {};
   const parts: string[] = [];
   const sourceTag = getRealtimeObservationTag(detail);
-  const suppressAnkaraMgmObservation = isTurkishMgmCity(detail);
-
   if (current.obs_time) {
     const ageText =
       current.obs_age_min != null && current.obs_age_min >= 30
@@ -159,15 +156,6 @@ export function getHeroMetaItems(detail: CityDetail, locale: Locale = "zh-CN") {
     parts.push(`👁️ ${current.visibility_mi}mi`);
   }
 
-  if (!suppressAnkaraMgmObservation && detail.mgm?.temp != null) {
-    const timeMatch = detail.mgm.time?.match(/T?(\d{2}:\d{2})/);
-    const timeText = timeMatch ? ` @${timeMatch[1]}` : "";
-    parts.push(
-      isEnglish(locale)
-        ? `🛰 MGM Obs: ${detail.mgm.temp}${detail.temp_symbol}${timeText}`
-        : `🛰 MGM 实测: ${detail.mgm.temp}${detail.temp_symbol}${timeText}`,
-    );
-  }
 
   const trend = detail.trend || {};
   if (trend.is_dead_market) {

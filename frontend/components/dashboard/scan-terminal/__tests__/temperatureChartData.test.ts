@@ -32,7 +32,7 @@ export function runTests() {
     (_, hour) => `${String(hour).padStart(2, "0")}:00`,
   );
   const fullDayHourlyTemps = Array.from({ length: 24 }, (_, hour) => hour);
-  const fullDayAxis = buildChartTimeAxis(fullDayHourlyTimes, fullDayHourlyTemps, null, false);
+  const fullDayAxis = buildChartTimeAxis(fullDayHourlyTimes, fullDayHourlyTemps);
   assert(fullDayAxis.times.length === 48, "detail mini chart axis should expose all 48 half-hour slots");
   assert(fullDayAxis.times[47] === "23:30", "detail mini chart axis should end at 23:30");
   assert(fullDayAxis.temps[47] === 23, "23:30 should fall back to the 23:00 hourly temperature");
@@ -356,17 +356,13 @@ export function runTests() {
       current: {
         temp: 18,
         obs_time: "2026-05-17T10:50:00Z",
-        settlement_source: "mgm",
+        settlement_source: "metar",
       },
       forecast: { today_high: null },
       deb: { prediction: 24 },
-      mgm: {
-        hourly: [
-          { time: "11:00", temp: 19 },
-          { time: "12:00", temp: 21 },
-          { time: "13:00", temp: 22 },
-          { time: "14:00", temp: 23 },
-        ],
+      hourly: {
+        times: ["11:00", "12:00", "13:00", "14:00"],
+        temps: [19, 21, 22, 23],
       },
       metar_today_obs: [{ time: "13:00", temp: 22 }],
     } as unknown as CityDetail,
@@ -375,15 +371,15 @@ export function runTests() {
 
   assert(
     ankaraChartData?.datasets.debSeries.some((point) => point.labelTime === "13:00"),
-    "Ankara chart should build the DEB original path from MGM hourly data when Open-Meteo hourly is unavailable",
+    "Ankara chart should build the DEB original path from hourly data when Open-Meteo daily highs are unavailable",
   );
   assert(
     (ankaraChartData?.datasets.debSeries.length ?? 0) >= 4,
-    "Ankara chart should build the DEB original path from MGM hourly data",
+    "Ankara chart should build the DEB original path from hourly data",
   );
   assert(
     ankaraChartData?.datasets.debSeries.some((point) => point.labelTime === "13:00"),
-    "Ankara DEB path must include the MGM hourly point at 13:00",
+    "Ankara DEB path must include the hourly point at 13:00",
   );
   assert(
     ankaraChartData?.datasets.calibratedFutureSeries.length,
@@ -419,7 +415,6 @@ export function runTests() {
     24.5, // DEB prediction
     "13:00", // local time
     21.4, // forecast.today_high — unreliable!
-    null, // no MGM
   );
 
   assert(
@@ -446,7 +441,6 @@ export function runTests() {
     24,
     "13:00",
     null,
-    null,
   );
   assert(
     ankaraPartial.debTemps.length === 4,
@@ -470,7 +464,6 @@ export function runTests() {
     27, // DEB 2° above hourly max
     "10:00",
     26, // forecast.today_high close to reality
-    null,
   );
   assertNear(
     normalBaseline.offset,
@@ -747,8 +740,8 @@ export function runTests() {
   );
   const ankaraScanSeedSeries = ankaraScanSeedChart.series.find((item) => item.key === "madis");
   assert(
-    ankaraScanSeedSeries?.label === "MGM",
-    "Ankara scan-row-seeded airport-primary curve should default to MGM instead of NOAA MADIS when source metadata is missing",
+    ankaraScanSeedSeries == null,
+    "Ankara airport-primary curve should be removed after MGM removal (settlement METAR line already covers it)",
   );
 
   const staleAnkaraDetail = toFullChartDetail({

@@ -33,7 +33,6 @@ SOURCE_CADENCE_SECONDS = {
     "jma_amedas": 600,
     "fmi": 600,
     "knmi": 600,
-    "mgm": 300,
     "ims": 600,
     "ncm": 600,
     "aeroweb": 900,

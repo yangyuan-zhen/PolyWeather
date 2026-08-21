@@ -10,7 +10,6 @@ import {
   getObservationSourceCode,
   getObservationSourceTag,
   getRealtimeObservationTag,
-  isTurkishMgmCity,
 } from "@/lib/observation-source-utils";
 import {
   formatTemperatureValue,
@@ -165,7 +164,6 @@ export function getAirportNarrative(
 
 export function pickAnkaraNearbyStations(stations: NearbyStation[]) {
   const preferredNames = [
-    "Airport (MGM/17128)",
     "Ankara (Bölge/Center)",
     "Ankara (Bolge/Center)",
     "Etimesgut",
@@ -202,8 +200,10 @@ function distanceKm(
 export function pickMapNearbyStations(detail: CityDetail) {
   const stations = Array.isArray(detail.official_nearby)
     ? detail.official_nearby
-    : Array.isArray(detail.mgm_nearby)
-      ? detail.mgm_nearby
+    : Array.isArray(detail.nearby_stations)
+      ? detail.nearby_stations
+      : Array.isArray(detail.mgm_nearby)
+        ? detail.mgm_nearby
       : [];
   const city = String(detail.name || detail.display_name || "")
     .trim()
@@ -1602,16 +1602,14 @@ export function getShortTermNowcastLines(
     : [];
   const nearby = Array.isArray(detail.official_nearby) && detail.official_nearby.length
     ? detail.official_nearby
-    : Array.isArray(detail.mgm_nearby)
-      ? detail.mgm_nearby
+    : Array.isArray(detail.nearby_stations)
+      ? detail.nearby_stations
+      : Array.isArray(detail.mgm_nearby)
+        ? detail.mgm_nearby
       : [];
   const nearbySource = String(detail.nearby_source || "").toLowerCase();
   const sourceLabel =
-    nearbySource === "mgm" || isTurkishMgmCity(detail)
-      ? isEnglish(locale)
-        ? "MGM nearby stations"
-        : "MGM 周边站"
-      : nearbySource === "official_cluster"
+    nearbySource === "official_cluster"
         ? isEnglish(locale)
           ? "Official nearby stations"
           : "官方周边站"
@@ -1780,7 +1778,10 @@ function getOfficialObservationCandidates(detail: CityDetail) {
   const officialNearby = Array.isArray(detail.official_nearby)
     ? detail.official_nearby
     : [];
-  const mgmNearby = Array.isArray(detail.mgm_nearby) ? detail.mgm_nearby : [];
+  const mgmNearby =
+    Array.isArray(detail.nearby_stations) || Array.isArray(detail.mgm_nearby)
+      ? (detail.nearby_stations as NearbyStation[] | undefined) || detail.mgm_nearby || []
+      : [];
   const officialAnchor =
     officialNearby.find(
       (station) => station.is_settlement_anchor || station.is_airport_station,
@@ -1883,7 +1884,9 @@ function getObservationUpdateProfile(detail: CityDetail, locale: Locale) {
 
 export function getCityProfileStats(detail: CityDetail, locale: Locale = "zh-CN") {
   const risk = detail.risk || {};
-  const nearbyCount = Array.isArray(detail.mgm_nearby) ? detail.mgm_nearby.length : 0;
+  const nearbyCount =
+    (Array.isArray(detail.nearby_stations) ? detail.nearby_stations.length : 0) ||
+    (Array.isArray(detail.mgm_nearby) ? detail.mgm_nearby.length : 0);
   const nearbySource = String(detail.nearby_source || "").trim().toLowerCase();
   const sourceCode = getObservationSourceCode(detail);
   const isOfficialSource =
@@ -1922,9 +1925,6 @@ export function getCityProfileStats(detail: CityDetail, locale: Locale = "zh-CN"
       return `${stationName}${stationCode ? ` (${stationCode})` : ""}`;
     }
     const tag = getObservationSourceTag(detail);
-    if (sourceCode === "mgm") {
-      return isEnglish(locale) ? `MGM (${tag})` : `MGM (${tag})`;
-    }
     if (risk.airport && risk.icao) return `${risk.airport} (${risk.icao})`;
     if (risk.airport) return String(risk.airport);
     return isEnglish(locale) ? "No profile" : "暂无档案";
@@ -1989,9 +1989,7 @@ export function getCityProfileStats(detail: CityDetail, locale: Locale = "zh-CN"
             ? isEnglish(locale)
               ? "Official station cluster"
               : "官方站簇"
-            : nearbySource === "mgm"
-              ? "MGM"
-              : isEnglish(locale)
+            : isEnglish(locale)
                 ? "Airport / METAR network"
                 : "机场 / METAR 网络",
     });
@@ -2080,14 +2078,6 @@ export function getSettlementRiskNarrative(
           : `${stationTerm}距离较近，城市体感与结算温度通常更同步。`,
       );
     }
-  }
-
-  if (isTurkishMgmCity(detail)) {
-    lines.push(
-      isEnglish(locale)
-        ? "For Turkish MGM-supported cities, focus on the airport station plus MGM nearby-station linkage, not urban sensation alone."
-        : "对接入 MGM 的土耳其城市，需要重点看机场站与 MGM 周边站联动，不能只看城区体感。",
-    );
   }
 
   if (detail.current?.obs_age_min != null) {

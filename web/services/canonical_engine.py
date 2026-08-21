@@ -13,16 +13,12 @@ from web.realtime_patch_schema import normalize_observation_patch
 
 _SETTLEMENT_SOURCE_ADAPTERS = {
     "hko": {"hko_obs", "cowin_obs"},
-    
-    "mgm": {"mgm"},
     "noaa": {"madis_hfmetar", "metar", "noaa"},
-
 }
 
 _SOURCE_WEIGHTS = {
     "hko_obs": 680,
     "cowin_obs": 660,
-    "mgm": 640,
     "madis_hfmetar": 500,
     "metar": 460,
 }
@@ -33,11 +29,6 @@ _FRESHNESS_WEIGHTS = {
     "delayed": 35,
     "unknown": 20,
     "stale": 5,
-}
-
-_TURKISH_MGM_STATION_CODES = {
-    "ankara": "17128",
-    "istanbul": "17058",
 }
 
 
@@ -98,7 +89,9 @@ def _candidate_canonical(city: str, row: dict[str, Any]) -> Optional[dict[str, A
     observed_at_local = _observed_at_local(row)
     payload = {
         "name": city,
-        "temp_symbol": "°F" if str(row.get("value_unit") or "").lower().startswith("f") else "°C",
+        "temp_symbol": "°F"
+        if str(row.get("value_unit") or "").lower().startswith("f")
+        else "°C",
         "updated_at": str(row.get("fetched_at") or ""),
         "current": {
             "temp": value,
@@ -115,20 +108,23 @@ def _candidate_canonical(city: str, row: dict[str, Any]) -> Optional[dict[str, A
             "observation_status": "live",
         },
     }
-    return build_canonical_temperature(city, payload, fetched_at=str(row.get("fetched_at") or ""))
+    return build_canonical_temperature(
+        city, payload, fetched_at=str(row.get("fetched_at") or "")
+    )
 
 
-def _score(city: str, row: dict[str, Any], canonical: dict[str, Any]) -> tuple[int, float]:
+def _score(
+    city: str, row: dict[str, Any], canonical: dict[str, Any]
+) -> tuple[int, float]:
     meta = CITY_REGISTRY.get(city) or {}
     station_code = _station_code(row.get("station_code"))
-    is_turkish_mgm_city = city in _TURKISH_MGM_STATION_CODES
     settlement_station_code = _station_code(
-        _TURKISH_MGM_STATION_CODES.get(city)
-        if is_turkish_mgm_city
-        else (meta.get("settlement_station_code") or meta.get("icao"))
+        meta.get("settlement_station_code") or meta.get("icao")
     )
-    settlement_source = "mgm" if is_turkish_mgm_city else _normalized_source(meta.get("settlement_source"))
-    expected_sources = _SETTLEMENT_SOURCE_ADAPTERS.get(settlement_source, {settlement_source})
+    settlement_source = _normalized_source(meta.get("settlement_source"))
+    expected_sources = _SETTLEMENT_SOURCE_ADAPTERS.get(
+        settlement_source, {settlement_source}
+    )
     station_name = str(row.get("station_name") or "").strip().lower()
     candidates = {
         str(candidate or "").strip().lower()
@@ -169,7 +165,9 @@ def build_canonical_temperature_from_observations(
     return candidates[0][1]
 
 
-def build_realtime_event_from_canonical(canonical: dict[str, Any]) -> Optional[dict[str, Any]]:
+def build_realtime_event_from_canonical(
+    canonical: dict[str, Any],
+) -> Optional[dict[str, Any]]:
     if not isinstance(canonical, dict):
         return None
     try:
@@ -180,7 +178,11 @@ def build_realtime_event_from_canonical(canonical: dict[str, Any]) -> Optional[d
     source = _normalized_source(canonical.get("source"))
     if not city or not source:
         return None
-    unit = "fahrenheit" if str(canonical.get("temp_symbol") or "").upper().endswith("F") else "celsius"
+    unit = (
+        "fahrenheit"
+        if str(canonical.get("temp_symbol") or "").upper().endswith("F")
+        else "celsius"
+    )
     payload: dict[str, Any] = {
         "temp": value,
         "unit": unit,
@@ -188,7 +190,9 @@ def build_realtime_event_from_canonical(canonical: dict[str, Any]) -> Optional[d
     station_code = str(canonical.get("station_code") or "").strip()
     if station_code:
         payload["station_code"] = station_code
-    station_label = str(canonical.get("station_name") or canonical.get("source_label") or "").strip()
+    station_label = str(
+        canonical.get("station_name") or canonical.get("source_label") or ""
+    ).strip()
     if station_label:
         payload["station_label"] = station_label
     for key in ("freshness_status", "source_role"):
@@ -221,7 +225,9 @@ def build_realtime_event_from_canonical(canonical: dict[str, Any]) -> Optional[d
     )
 
 
-def refresh_canonical_temperature_from_latest(db: Any, city: str) -> Optional[dict[str, Any]]:
+def refresh_canonical_temperature_from_latest(
+    db: Any, city: str
+) -> Optional[dict[str, Any]]:
     getter = getattr(db, "list_latest_raw_observations_for_city", None)
     setter = getattr(db, "set_canonical_temperature", None)
     if not callable(getter) or not callable(setter):

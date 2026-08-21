@@ -186,17 +186,6 @@ export interface PeakInfo {
   status?: string;
 }
 
-export interface MgmData {
-  temp?: number | null;
-  time?: string | null;
-  today_high?: number | null;
-  today_low?: number | null;
-  hourly?: Array<{
-    time?: string | null;
-    temp?: number | null;
-  }>;
-}
-
 export interface ForecastDay {
   date: string;
   max_temp: number | null;
@@ -791,9 +780,8 @@ export interface CityDetail {
     time?: string;
     temp?: number | null;
   }>;
-  mgm?: MgmData;
-  mgm_nearby?: NearbyStation[];
-  official_nearby?: NearbyStation[];
+  nearby_stations?: NearbyStation[];
+  mgm_nearby?: NearbyStation[];  official_nearby?: NearbyStation[];
   nearby_source?: string;
   official_network_source?: string;
   official_network_status?: {

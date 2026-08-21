@@ -612,23 +612,12 @@ function appendLatestAirportObservation(
   return merged;
 }
 
-function isMgmAirportPrimary(hourly: ChartRenderState) {
-  const primary = hourly?.airportPrimary;
-  const sourceTokens = [
-    primary?.source_code,
-    primary?.source_label,
-    primary?.source,
-  ].map((value) => String(value || "").toLowerCase());
-  return sourceTokens.some((value) => value === "mgm" || value.includes("turkey_mgm"));
-}
-
 function canonicalAirportPrimarySourceLabel(hourly: ChartRenderState) {
   const primary = hourly?.airportPrimary;
   const tokens = [
     primary?.source_code,
     primary?.source,
   ].map((value) => String(value || "").trim().toLowerCase());
-  if (tokens.some((value) => value === "mgm" || value.includes("turkey_mgm"))) return "MGM";
   if (tokens.some((value) => value.includes("jma"))) return "JMA";
   if (tokens.some((value) => value.includes("fmi"))) return "FMI";
   if (tokens.some((value) => value.includes("knmi"))) return "KNMI";
@@ -691,13 +680,9 @@ function airportPrimarySeriesLabel(
   if (isHKO) return "HKO";
   const cityKey = normalizeCityKey(row?.city);
   const canonicalLabel = canonicalAirportPrimarySourceLabel(hourly);
-  if (canonicalLabel === "MGM") return canonicalLabel;
   const stationCode = airportCodeForSeriesLabel(hourly, row);
   if (airportPrimaryHasMetarSource(hourly)) {
     return stationCode ? `${stationCode} METAR` : "METAR";
-  }
-  if ((cityKey === "ankara" || cityKey === "istanbul") && (!canonicalLabel || canonicalLabel === "NOAA MADIS")) {
-    return "MGM";
   }
   const payloadLabel = String(hourly?.airportPrimary?.source_label || "").trim();
   if (payloadLabel && !isGenericAirportPrimaryLabel(payloadLabel)) return payloadLabel;
@@ -713,7 +698,7 @@ function airportPrimaryObservationPoints(hourly: ChartRenderState) {
   return appendLatestAirportObservation(
     hourly?.airportPrimaryTodayObs,
     hourly?.airportPrimary,
-    ...(isMgmAirportPrimary(hourly) ? [] : [hourly?.airportCurrent]),
+    hourly?.airportCurrent,
   );
 }
 
@@ -921,7 +906,6 @@ function conditionObservationSourceKey(source: AirportCurrentConditions | null |
     source?.source,
     source?.source_label,
   ].map((value) => String(value || "").trim().toLowerCase());
-  if (tokens.some((value) => value === "mgm" || value.includes("turkey_mgm"))) return "mgm";
   if (tokens.some((value) => value === "metar" || value.includes(" metar"))) return "metar";
   return tokens.find(Boolean) || "";
 }
@@ -1664,7 +1648,7 @@ function getLiveObservationLabels(
   hourly: ChartRenderState,
 ) {
   const normalizedKey = normalizeCityKey(row?.city);
-  const weatherStationCities = new Set(["ankara", "istanbul"]);
+  const weatherStationCities = new Set<string>();
   const isShenzhen = normalizedKey === "shenzhen";
   const isHKO = (normalizedKey === "hongkong" || normalizedKey === "laufaushan") && !isShenzhen;
   const isTokyo = normalizedKey === "tokyo";
@@ -1689,7 +1673,7 @@ function getLiveObservationLabels(
     .join(" ");
   const hasRealStationNetwork =
     weatherStationCities.has(normalizedKey) ||
-    /\b(mgm|turkey_mgm|jma_amedas|fmi|knmi|cowin_obs|ims|ncm|aeroweb|madis_hfmetar|singapore_mss)\b/.test(sourceTokens);
+    /\b(jma_amedas|fmi|knmi|cowin_obs|ims|ncm|aeroweb|madis_hfmetar|singapore_mss)\b/.test(sourceTokens);
   const isWeatherStation =
     !isHKO && !isShenzhen && !isTokyo && !isSingapore && !isParis
     && hasRealStationNetwork;
@@ -2279,15 +2263,13 @@ function buildFullDayChartData(
   }
 
   // ── Airport Primary (official weather-station network only) ──
-  // The airport-primary curve is kept ONLY for official networks (MGM/JMA/
+  // The airport-primary curve is kept ONLY for official networks (JMA/
   // FMI/KNMI/IMS/NCM/AeroWeb/MSS/HKO). Airport METAR / NOAA MADIS feeds are
   // airport-report data: for plain METAR-settled cities the settlement line
   // already IS the METAR station, so those curves would just duplicate it.
   const airportPrimaryLabel = airportPrimarySeriesLabel(hourly, isHKO, row);
   const officialCanonical = canonicalAirportPrimarySourceLabel(hourly);
-  const cityKeyForPrimary = normalizeCityKey(row?.city);
   const OFFICIAL_NETWORK_CANONICAL = new Set([
-    "MGM",
     "JMA",
     "FMI",
     "KNMI",
@@ -2297,15 +2279,9 @@ function buildFullDayChartData(
     "MSS",
     "HKO",
   ]);
-  // Ankara/Istanbul fall back to the Turkish MGM official network when the
-  // payload has no explicit source metadata; an explicit airport-METAR source
-  // still counts as an airport-report curve and stays removed.
   const isExplicitMetarPrimary = airportPrimaryHasMetarSource(hourly);
   const isOfficialNetworkPrimary =
-    OFFICIAL_NETWORK_CANONICAL.has(officialCanonical) ||
-    isHKO ||
-    ((cityKeyForPrimary === "ankara" || cityKeyForPrimary === "istanbul") &&
-      !isExplicitMetarPrimary);
+    OFFICIAL_NETWORK_CANONICAL.has(officialCanonical) || isHKO;
   if (finalMadisObs.length && isOfficialNetworkPrimary) {
     const madisVals = valuesAtTimeline(n, indexByTs, finalMadisObs);
     if (madisVals.some((v) => v !== null)) {

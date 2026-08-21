@@ -2307,7 +2307,7 @@ def test_stale_city_detail_uses_cached_full_payload_while_refreshing(monkeypatch
     assert refresh_calls == 0
 
 
-def test_stale_ankara_chart_data_overlays_latest_mgm_canonical(monkeypatch):
+def test_stale_ankara_chart_data_overlays_latest_canonical(monkeypatch):
     import asyncio
 
     class FakeCache:
@@ -2341,8 +2341,8 @@ def test_stale_ankara_chart_data_overlays_latest_mgm_canonical(monkeypatch):
                     },
                     "airport_current": {
                         "temp": 16.0,
-                        "source_code": "mgm",
-                        "source_label": "MGM",
+                        "source_code": "metar",
+                        "source_label": "METAR",
                         "obs_time": "2026-06-14T09:50:00+00:00",
                         "report_time": "2026-06-14T09:50:00+00:00",
                         "raw_metar": "METAR LTAC 140950Z 06013KT 9999 16/11 Q1015",
@@ -2356,7 +2356,6 @@ def test_stale_ankara_chart_data_overlays_latest_mgm_canonical(monkeypatch):
                         "last_observation_local_date": "2026-06-14",
                         "current_local_date": "2026-06-14",
                     },
-                    "mgm": {"temp": 16.7, "time": "12:50", "hourly": [{"time": "12:00", "temp": 16.5}]},
                     "hourly": {"times": ["2026-06-14T09:00:00Z"], "temps": [16.0]},
                     "deb": {"prediction": 23.0},
                 },
@@ -2369,11 +2368,11 @@ def test_stale_ankara_chart_data_overlays_latest_mgm_canonical(monkeypatch):
                     "city": "ankara",
                     "value": 19.0,
                     "temp_symbol": "°C",
-                    "source": "mgm",
-                    "source_label": "MGM",
+                    "source": "metar",
+                    "source_label": "METAR",
                     "source_role": "settlement_official",
-                    "station_code": "17128",
-                    "station_name": "Esenboga Airport",
+                    "station_code": "LTAC",
+                    "station_name": "Ankara Esenboga",
                     "observed_at": "2026-06-15T14:20:00+00:00",
                     "observed_at_local": "17:20",
                     "freshness_sec": 60,
@@ -2395,11 +2394,11 @@ def test_stale_ankara_chart_data_overlays_latest_mgm_canonical(monkeypatch):
     payload = asyncio.run(city_api._get_city_chart_data("ankara", force_refresh=False))
 
     assert payload["current"]["temp"] == 19.0
-    assert payload["current"]["source_code"] == "mgm"
-    assert payload["current"]["settlement_source_label"] == "MGM"
+    assert payload["current"]["source_code"] == "metar"
+    assert payload["current"]["settlement_source_label"] == "METAR"
     assert payload["airport_primary"]["temp"] == 19.0
-    assert payload["airport_primary"]["source_code"] == "mgm"
-    assert payload["airport_primary"]["station_code"] == "17128"
+    assert payload["airport_primary"]["source_code"] == "metar"
+    assert payload["airport_primary"]["station_code"] == "LTAC"
     assert payload["local_date"] == "2026-06-15"
     assert payload["local_time"] == "17:20"
     assert payload["airport_primary_today_obs"] == [{"time": "17:20", "temp": 19.0}]
@@ -2413,9 +2412,6 @@ def test_stale_ankara_chart_data_overlays_latest_mgm_canonical(monkeypatch):
     assert payload["metar_status"]["available_for_today"] is False
     assert payload["metar_status"]["stale_for_today"] is True
     assert payload["metar_status"]["current_local_date"] == "2026-06-15"
-    assert payload["mgm"]["temp"] == 19.0
-    assert payload["mgm"]["time"] == "17:20"
-    assert payload["mgm"].get("hourly") == []
     assert payload["deb"]["prediction"] == 23.0
 
 

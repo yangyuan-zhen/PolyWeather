@@ -203,17 +203,3 @@ def dedupe_forecast_daily(rows: Any) -> list:
         seen.add(date)
         out.append(row)
     return out
-
-
-def mgm_hourly_high(mgm: Dict[str, Any]) -> Optional[float]:
-    hourly = mgm.get("hourly") if isinstance(mgm, dict) else []
-    if not isinstance(hourly, list):
-        return None
-    values = []
-    for row in hourly:
-        if not isinstance(row, dict):
-            continue
-        value = _sf(row.get("temp"))
-        if value is not None:
-            values.append(value)
-    return max(values) if values else None

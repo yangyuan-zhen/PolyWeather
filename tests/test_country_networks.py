@@ -14,7 +14,6 @@ from src.data_collection.metar_sources import MetarSourceMixin
 from web.analysis_service import (
     _build_city_detail_payload,
     _build_intraday_meteorology,
-    _should_build_country_network_snapshot,
 )
 from web.core import CITIES
 
@@ -142,98 +141,6 @@ def test_metar_marks_previous_local_day_report_stale(monkeypatch):
     assert result["observation_local_date"] == "2026-04-20"
     assert result["current_local_date"] == "2026-04-21"
     assert result["today_obs"] == []
-
-
-def test_turkey_mgm_provider_returns_official_nearby_rows():
-    anchor_time = datetime.now(timezone.utc).replace(microsecond=0)
-    station_time = anchor_time + timedelta(minutes=8)
-    raw = {
-        "metar": {
-            "observation_time": anchor_time.isoformat().replace("+00:00", "Z"),
-            "current": {"temp": 16.0},
-        },
-        "mgm_nearby": [
-            {
-                "name": "Airport (MGM/17128)",
-                "istNo": "17128",
-                "lat": 40.1,
-                "lon": 32.9,
-                "temp": 17.1,
-                "obs_time": station_time.isoformat().replace("+00:00", "Z"),
-            }
-        ],
-    }
-
-    snapshot = build_country_network_snapshot("ankara", raw)
-
-    assert snapshot["provider_code"] == "turkey_mgm"
-    assert snapshot["official_network_status"]["available"] is True
-    assert snapshot["official_nearby"][0]["source_code"] == "mgm"
-    assert snapshot["official_nearby"][0]["is_official"] is True
-    assert snapshot["official_nearby"][0]["time_delta_vs_anchor_minutes"] == 8
-    assert snapshot["official_nearby"][0]["sync_status"] == "synced"
-    assert snapshot["official_nearby"][0]["usable_for_intraday"] is True
-    assert snapshot["official_network_status"]["usable_row_count"] == 1
-
-
-def test_turkey_mgm_primary_today_obs_uses_mgm_airport_history_not_metar():
-    raw = {
-        "metar": {
-            "observation_time": "2026-05-29T11:50:00Z",
-            "today_obs": [{"time": "14:50", "temp": 17.0}],
-            "current": {"temp": 17.0},
-        },
-        "mgm": {
-            "obs_time": "2026-05-29T11:56:00Z",
-            "current": {"temp": 17.3},
-        },
-        "mgm_today_obs": [{"time": "14:56", "temp": 17.3}],
-    }
-
-    snapshot = build_country_network_snapshot("ankara", raw)
-
-    assert snapshot["airport_primary_current"]["source_code"] == "mgm"
-    assert snapshot["airport_primary_today_obs"] == [{"time": "14:56", "temp": 17.3}]
-
-
-def test_panel_mode_still_builds_turkey_mgm_airport_snapshot():
-    raw = {
-        "mgm": {
-            "obs_time": "2026-05-29T11:56:00Z",
-            "current": {"temp": 17.3},
-        }
-    }
-
-    assert (
-        _should_build_country_network_snapshot(
-            "ankara", raw, is_panel_mode=True, is_market_mode=False
-        )
-        is True
-    )
-    assert (
-        _should_build_country_network_snapshot(
-            "istanbul", raw, is_panel_mode=True, is_market_mode=False
-        )
-        is True
-    )
-    assert (
-        _should_build_country_network_snapshot(
-            "guangzhou", raw, is_panel_mode=True, is_market_mode=False
-        )
-        is False
-    )
-    assert (
-        _should_build_country_network_snapshot(
-            "ankara", raw, is_panel_mode=False, is_market_mode=False
-        )
-        is True
-    )
-    assert (
-        _should_build_country_network_snapshot(
-            "ankara", raw, is_panel_mode=True, is_market_mode=True
-        )
-        is False
-    )
 
 
 def test_nearby_station_timing_marks_stale_rows_unusable_for_network_signal():
@@ -573,9 +480,9 @@ def test_city_detail_payload_exposes_airport_and_official_network_layers():
             "risk": {"icao": "LTAC", "airport": "Esenboga", "level": "medium", "warning": ""},
             "airport_primary": {"temp": 16.0, "source_code": "metar"},
             "airport_primary_today_obs": [{"time": "10:00", "temp": 16.0}],
-            "official_nearby": [{"station_code": "17128", "temp": 17.2, "source_code": "mgm"}],
-            "official_network_source": "turkey_mgm",
-            "official_network_status": {"provider_code": "turkey_mgm", "available": True},
+            "official_nearby": [{"station_code": "17128", "temp": 17.2, "source_code": "metar_cluster"}],
+            "official_network_source": "global_metar",
+            "official_network_status": {"provider_code": "global_metar", "available": True},
             "network_lead_signal": {"available": True, "delta": 1.2},
             "network_spread_signal": {"available": True, "spread": 2.1},
             "center_station_candidate": {"station_code": "17128", "temp": 17.2},
@@ -594,7 +501,7 @@ def test_city_detail_payload_exposes_airport_and_official_network_layers():
     )
 
     assert payload["official"]["airport_primary"]["source_code"] == "metar"
-    assert payload["official"]["official_nearby"][0]["source_code"] == "mgm"
+    assert payload["official"]["official_nearby"][0]["source_code"] == "metar_cluster"
     assert payload["settlement_station"]["settlement_station_code"] == "LTAC"
 
 

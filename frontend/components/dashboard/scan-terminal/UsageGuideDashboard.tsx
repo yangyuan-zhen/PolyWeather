@@ -67,7 +67,7 @@ const legendItems: Record<"zh" | "en", GuideCopy[]> = {
     { title: "实测 / 结算线", body: "优先展示结算跑道、官方站或城市核心实况，用于判断已兑现温度。" },
     { title: "DEB Forecast", body: "橙色预测路径，重点看它和实测线在峰值窗口前后的分歧。" },
     { title: "市场概率", body: "概率仍用于市场判断和后台分析，但默认不再占用温度主图空间。" },
-    { title: "机场报文", body: "METAR / MGM 作为机场站参考，默认只在适合的城市自动显示。" },
+    { title: "机场报文", body: "METAR 作为机场站参考，默认只在适合的城市自动显示。" },
     { title: "模型线", body: "ECMWF、GFS、ICON、GEM 等提供背景，默认弱化为辅助判断。" },
     { title: "跑道明细", body: "打开后可查看各跑道传感器，关闭后仍保留结算跑道温度。" },
   ],
@@ -75,7 +75,7 @@ const legendItems: Record<"zh" | "en", GuideCopy[]> = {
     { title: "Live / settlement", body: "Settlement runway, official station, or core live observation used as the realized anchor." },
     { title: "DEB Forecast", body: "Orange forecast path; focus on its gap versus live observations near the peak window." },
     { title: "Market probability", body: "Probability remains available for market analysis, but no longer occupies the main temperature chart by default." },
-    { title: "Airport reports", body: "METAR / MGM are airport references and are auto-shown only where they are useful by default." },
+    { title: "Airport reports", body: "METAR reports are airport references and are auto-shown only where they are useful by default." },
     { title: "Model lines", body: "ECMWF, GFS, ICON, GEM, and related model layers provide background context." },
     { title: "Runway details", body: "When disabled, the chart still keeps the settlement runway temperature visible." },
   ],
@@ -244,9 +244,6 @@ export function UsageGuideDashboard({ isEn }: { isEn: boolean }) {
                 isEn
                   ? "For cities other than Hong Kong and Shenzhen, airport METAR temperature is hidden by default. Users can still enable it manually."
                   : "除香港和深圳外，机场 METAR 温度默认不参与图表展示；用户仍可手动打开。",
-                isEn
-                  ? "Turkey airport-station curves use MGM data when available, so Ankara and Istanbul should be read from the MGM airport anchor."
-                  : "土耳其机场站优先使用 MGM 数据，安卡拉和伊斯坦布尔应以 MGM 机场锚点阅读。",
               ].map((text) => (
                 <div key={text} className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold leading-5 text-amber-900">
                   {text}

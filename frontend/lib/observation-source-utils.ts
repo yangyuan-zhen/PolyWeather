@@ -1,13 +1,6 @@
 import type { CityDetail } from "@/lib/dashboard-types";
 import { normalizeObservationSourceLabel } from "@/lib/source-labels";
 
-export function isTurkishMgmCity(detail: CityDetail) {
-  const city = String(detail.name || detail.display_name || "")
-    .trim()
-    .toLowerCase();
-  return city === "ankara" || city === "istanbul";
-}
-
 export function getObservationSourceCode(detail: CityDetail): string {
   const source = String(detail.current?.settlement_source || "")
     .trim()
@@ -45,7 +38,6 @@ export function getObservationSourceTag(detail: CityDetail): string {
       .toUpperCase();
     return icao ? `${icao} METAR` : "METAR";
   }
-  if (code === "mgm") return "MGM";
   return "METAR";
 }
 
