@@ -33,8 +33,19 @@ flowchart LR
 | `/api/city/{name}/summary` | GET | 轻量摘要 |
 | `/api/city/{name}/detail` | GET | 聚合详情（含 market_scan） |
 | `/api/history/{name}` | GET | 历史对账 |
+| `/api/cities/deb-forecast` | GET | DEB + 多模型预测（外部项目接入） |
 | `/api/events` | GET | SSE 实时观测事件流 |
 | `/api/internal/collector-patch` | POST | 采集器内部写入实时观测 patch |
+
+### `GET /api/cities/deb-forecast`
+
+面向外部项目的 DEB 融合预测 + 多模型日报。鉴权同 pro 接口（entitlement token），结果缓存 5 分钟。
+
+参数：
+
+- `cities=`：可选，逗号分隔城市名或别名（如 `rjtt`、`klia`）；为空返回默认 24 城监控清单（9 中国大陆 + 香港/深圳 + 东京/首尔/釜山/吉隆坡/马尼拉 + 特拉维夫/马德里/莫斯科/开普敦 + 南美 3 城）。registry 全量 51 城均可查询。
+
+每城返回：`deb_prediction` / `deb_weights` / `deb_quality` / `forecast_daily` / `models_daily` / `model_keys`。
 
 ### `GET /api/events`
 

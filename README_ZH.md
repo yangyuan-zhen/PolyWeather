@@ -21,9 +21,9 @@
 - 已上线支付运行态与审计接口：`/api/payments/runtime`。
 - 已上线轻量运营后台：`/ops`（会员、用户反馈处理、积分、补分、支付异常单）。
 - 轻量可观测性：`/healthz`、`/api/system/status`、`/api/system/cache-status`、`/api/system/priority-warm`、`/metrics`（ops 鉴权）+ `scripts/check_ops_health.py` 巡检（14 个外部服务探测）。
-- 已上线预测 API：`/api/cities/deb-forecast` 输出 DEB 预测 + 多模型 3 天日报（entitlement token 鉴权），结果缓存 5 分钟秒回；济南 ZSJN / 郑州 ZHCC 已入 registry（52 城），深圳即流浮山（HKO 站）。
+- 已上线预测 API：`/api/cities/deb-forecast` 输出 DEB 预测 + 多模型 3 天日报，默认 24 城监控清单（entitlement token 鉴权），结果缓存 5 分钟秒回；registry 全量 51 城，深圳即流浮山（HKO 站）。
 - 终端图表支持 3 天（72h）窗口：观测 / 模型共识 median-min-max / DEB 锚点；x 轴每 6 小时刻度 + 午夜日期标记。
-- 机场 METAR 报文曲线已全部移除（用户需求）：仅保留结算源、官方增强网络（JMA / HKO / MGM 等）与 TAF 信号曲线。
+- 机场 METAR 报文曲线已全部移除（用户需求）：仅保留结算源、官方增强网络（JMA / HKO）与 TAF 信号曲线；MGM（土耳其）数据源已整套下线，安卡拉/伊斯坦布尔回归 METAR 结算。
 - DEB 校准改进：温度段独立 σ（≥37°C cov90 0.820→0.893）、城市偏差近 14 天加权（模式切换 2 周收敛）、推理校正上限 3→5°C（7 月高估 4-6°C 不再截断）。
 - 终端新用户三步引导（实况锚点 → DEB → 市场概率）；落地页与图片体积优化（Load 7.7s → 4.4s）。
 - 支付地址白名单拆分：合约模式校验新合约 `0x1fD90A`、manual 模式校验直转 EOA `0x351a1bca`。
@@ -37,7 +37,6 @@
 - 香港默认展示 CoWIN `6087`（保良局陈守仁小学）1 分钟参考站曲线，HKO 10 分钟实测保留为官方气象层。
 - 运行态状态、缓存与核心离线训练/回填链路已完成 SQLite 主路径收口；legacy JSON/JSONL 仅保留给迁移、导出与显式回退输入。
 - 官方增强站网已统一接入：
-  - `MGM`（土耳其）
   - `JMA AMeDAS`（日本）
   - `HKO`（香港）
 - 数据源已清理：Wunderground、台北 `CWA`、中国跑道 `AMSC AWOS`、中国内地 `NMC/CMA` 均已移除；深圳结算源切换为流浮山 `HKO`（LFS）。
@@ -88,7 +87,6 @@ flowchart LR
 
     API --> WX["Weather Collector"]
     WX --> METAR["Aviation Weather（METAR）"]
-    WX --> MGM["MGM（土耳其站网）"]
     WX --> JMA["JMA AMeDAS（日本）"]
     WX --> OM["Open-Meteo"]
     WX --> SETTLE["AviationWeather METAR / HKO / IMGW（结算源）"]
@@ -101,11 +99,11 @@ flowchart LR
     ANA --> STATE["SQLite runtime state<br/>legacy files only for migration/export fallback"]
 ```
 
-## 监控城市（52）
+## 监控城市（51）
 
-- 欧洲/中东/非洲：Ankara、Istanbul、Moscow、London、Paris、Munich、Milan、Warsaw、Madrid、Tel Aviv、Amsterdam、Helsinki、Lagos、Cape Town、Jeddah
+- 欧洲/中东/非洲：Ankara、Istanbul、Moscow、London、Paris、Munich、Milan、Warsaw、Madrid、Tel Aviv、Amsterdam、Helsinki、Cape Town、Jeddah
 - 亚太：Seoul、Busan、Hong Kong、Taipei、Shanghai、Beijing、Wuhan、Chengdu、Chongqing、Shenzhen（流浮山 HKO 结算）、Guangzhou、Jinan、Zhengzhou、Singapore、Tokyo、Kuala Lumpur、Manila、Wellington
-- 美洲：Toronto、New York、Los Angeles、San Francisco、Aurora、Austin、Houston、Chicago、Dallas、Miami、Atlanta、Seattle、Mexico City、Buenos Aires、Sao Paulo、Panama City
+- 美洲：Toronto、New York、Los Angeles、San Francisco、Denver（Aurora/Buckley KBKF）、Austin、Houston、Chicago、Dallas、Miami、Atlanta、Seattle、Mexico City、Buenos Aires、Sao Paulo、Panama City
 - 南亚：Lucknow、Karachi
 
 ## 快速启动
