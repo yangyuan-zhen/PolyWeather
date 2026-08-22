@@ -79,7 +79,9 @@ def test_observation_collector_profiles_match_source_cadence():
     from web.observation_collector_service import build_observation_source_profiles
     from web.realtime_patch_schema import SOURCE_CADENCE_SECONDS
 
-    profiles = {profile.source: profile for profile in build_observation_source_profiles()}
+    profiles = {
+        profile.source: profile for profile in build_observation_source_profiles()
+    }
 
     assert profiles["madis_hfmetar"].interval_sec == 300
     assert profiles["cowin_obs"].interval_sec == 60
@@ -93,7 +95,7 @@ def test_observation_collector_profiles_match_source_cadence():
     assert profiles["metar"].interval_sec == 1800
     assert "new york" in profiles["madis_hfmetar"].cities
     assert "hong kong" in profiles["cowin_obs"].cities
-    assert {"hong kong", "shenzhen"}.issubset(set(profiles["hko_obs"].cities))
+    assert "hong kong" in set(profiles["hko_obs"].cities)
     assert profiles["jma_amedas"].cities == ("tokyo",)
     assert profiles["aeroweb"].cities == ("paris",)
     assert {"madrid", "milan", "tokyo", "paris"}.issubset(set(profiles["metar"].cities))
@@ -203,8 +205,16 @@ def test_raw_observation_store_lists_source_city_history(tmp_path):
     from src.database.db_manager import DBManager
 
     db = DBManager(str(tmp_path / "polyweather.db"))
-    first_observed_at = (datetime.now(timezone.utc) - timedelta(minutes=2)).replace(microsecond=0).isoformat()
-    second_observed_at = (datetime.now(timezone.utc) - timedelta(minutes=1)).replace(microsecond=0).isoformat()
+    first_observed_at = (
+        (datetime.now(timezone.utc) - timedelta(minutes=2))
+        .replace(microsecond=0)
+        .isoformat()
+    )
+    second_observed_at = (
+        (datetime.now(timezone.utc) - timedelta(minutes=1))
+        .replace(microsecond=0)
+        .isoformat()
+    )
     db.append_raw_observation(
         source="hko_obs",
         city="Chengdu",
@@ -335,7 +345,9 @@ def test_observation_refresh_request_queue_claims_pending_requests(tmp_path):
         reason="cold_canonical_fallback",
     )
 
-    claimed = db.claim_observation_refresh_requests(limit=5, owner="collector-1", now_ts=1000.0)
+    claimed = db.claim_observation_refresh_requests(
+        limit=5, owner="collector-1", now_ts=1000.0
+    )
 
     assert len(claimed) == 1
     request = claimed[0]
@@ -346,7 +358,12 @@ def test_observation_refresh_request_queue_claims_pending_requests(tmp_path):
 
     db.mark_observation_refresh_request_done(request["id"], status="done")
 
-    assert db.claim_observation_refresh_requests(limit=5, owner="collector-1", now_ts=1001.0) == []
+    assert (
+        db.claim_observation_refresh_requests(
+            limit=5, owner="collector-1", now_ts=1001.0
+        )
+        == []
+    )
 
 
 def test_observation_refresh_request_queue_coalesces_city_source_across_kinds(tmp_path):
@@ -367,7 +384,9 @@ def test_observation_refresh_request_queue_coalesces_city_source_across_kinds(tm
         reason="chart_cold_start",
     )
 
-    claimed = db.claim_observation_refresh_requests(limit=5, owner="collector-1", now_ts=1000.0)
+    claimed = db.claim_observation_refresh_requests(
+        limit=5, owner="collector-1", now_ts=1000.0
+    )
 
     assert len(claimed) == 1
     request = claimed[0]
@@ -479,13 +498,17 @@ def test_observation_collector_consumes_source_adapter_records(monkeypatch, tmp_
     assert collector.run_due_once(now_ts=1000.0) == 1
     assert calls == [("weather", "hko_obs", "qingdao", False)]
 
-    latest = db.get_latest_raw_observation("hko_obs", "qingdao", station_code="ZSQD", runway="17L")
+    latest = db.get_latest_raw_observation(
+        "hko_obs", "qingdao", station_code="ZSQD", runway="17L"
+    )
     assert latest is not None
     assert latest["value"] == 24.5
     assert latest["payload"]["temp_c"] == 24.5
 
 
-def test_observation_collector_recomputes_canonical_from_raw_latest_settlement_station(tmp_path):
+def test_observation_collector_recomputes_canonical_from_raw_latest_settlement_station(
+    tmp_path,
+):
     from src.database.db_manager import DBManager
     from web.observation_collector_service import (
         ObservationCollector,
@@ -520,18 +543,18 @@ def test_observation_collector_recomputes_canonical_from_raw_latest_settlement_s
 
     collector = ObservationCollector(
         weather=FakeWeather(),
-        profiles=[ObservationSourceProfile("hko_obs", ("shenzhen",), 600)],
+        profiles=[ObservationSourceProfile("hko_obs", ("hong kong",), 600)],
         observation_store=db,
         async_cache_refresh=False,
     )
 
     assert collector.run_due_once(now_ts=1000.0) == 1
 
-    canonical = db.get_canonical_temperature("shenzhen")
+    canonical = db.get_canonical_temperature("hong kong")
     assert canonical is not None
-    assert canonical["payload"]["station_code"] == "LFS"
-    assert canonical["payload"]["station_name"] == "Lau Fau Shan"
-    assert canonical["payload"]["value"] == 28.1
+    assert canonical["payload"]["station_code"] == "HKO"
+    assert canonical["payload"]["station_name"] == "Hong Kong Observatory"
+    assert canonical["payload"]["value"] == 27.6
 
 
 def test_observation_collector_appends_realtime_event_after_canonical_refresh(tmp_path):
@@ -578,7 +601,7 @@ def test_observation_collector_appends_realtime_event_after_canonical_refresh(tm
 
     collector = ObservationCollector(
         weather=FakeWeather(),
-        profiles=[ObservationSourceProfile("hko_obs", ("shenzhen",), 600)],
+        profiles=[ObservationSourceProfile("hko_obs", ("hong kong",), 600)],
         observation_store=db,
         realtime_event_store=FakeEventStore(),
         realtime_broadcaster=lambda event: broadcasted.append(event),
@@ -590,10 +613,10 @@ def test_observation_collector_appends_realtime_event_after_canonical_refresh(tm
     assert len(appended) == 1
     event = appended[0]
     assert event["type"] == "city_observation_patch.v1"
-    assert event["city"] == "shenzhen"
+    assert event["city"] == "hong kong"
     assert event["source"] == "hko_obs"
-    assert event["payload"]["temp"] == 28.1
-    assert event["payload"]["station_code"] == "LFS"
+    assert event["payload"]["temp"] == 27.6
+    assert event["payload"]["station_code"] == "HKO"
     assert broadcasted == [{**event, "revision": 7}]
 
 
@@ -753,7 +776,9 @@ def test_observation_collector_consumes_refresh_request_queue(tmp_path):
 
     assert collector.run_due_once(now_ts=100.0) == 1
     assert calls == ["qingdao"]
-    assert db.claim_observation_refresh_requests(limit=5, owner="test", now_ts=101.0) == []
+    assert (
+        db.claim_observation_refresh_requests(limit=5, owner="test", now_ts=101.0) == []
+    )
 
 
 def test_observation_collector_cache_refresh_does_not_block_source_polling():
@@ -822,7 +847,10 @@ def test_observation_collector_cache_refresh_does_not_block_source_polling():
 
 
 def test_observation_collector_records_source_status_to_runtime_state(tmp_path):
-    from src.database.runtime_state import ObservationCollectorStatusRepository, RuntimeStateDB
+    from src.database.runtime_state import (
+        ObservationCollectorStatusRepository,
+        RuntimeStateDB,
+    )
     from web.observation_collector_service import (
         ObservationCollector,
         ObservationSourceProfile,
@@ -880,7 +908,10 @@ def test_observation_collector_records_source_status_to_runtime_state(tmp_path):
 
 
 def test_observation_collector_records_failure_and_cooldown(tmp_path):
-    from src.database.runtime_state import ObservationCollectorStatusRepository, RuntimeStateDB
+    from src.database.runtime_state import (
+        ObservationCollectorStatusRepository,
+        RuntimeStateDB,
+    )
     from web.observation_collector_service import (
         ObservationCollector,
         ObservationSourceProfile,
@@ -923,8 +954,13 @@ def test_observation_collector_records_failure_and_cooldown(tmp_path):
     assert source["cooldown_count"] == 1
 
 
-def test_ops_observation_collector_status_returns_runtime_snapshot(monkeypatch, tmp_path):
-    from src.database.runtime_state import ObservationCollectorStatusRepository, RuntimeStateDB
+def test_ops_observation_collector_status_returns_runtime_snapshot(
+    monkeypatch, tmp_path
+):
+    from src.database.runtime_state import (
+        ObservationCollectorStatusRepository,
+        RuntimeStateDB,
+    )
     from web.services import ops_api
 
     db = RuntimeStateDB(str(tmp_path / "polyweather.db"))
@@ -945,7 +981,9 @@ def test_ops_observation_collector_status_returns_runtime_snapshot(monkeypatch, 
         "_require_ops_admin",
         lambda request: {"email": "ops@example.com"},
     )
-    monkeypatch.setattr(ops_api, "ObservationCollectorStatusRepository", lambda: status_repo)
+    monkeypatch.setattr(
+        ops_api, "ObservationCollectorStatusRepository", lambda: status_repo
+    )
 
     payload = ops_api.get_ops_observation_collector_status(object(), limit=10)
 
@@ -980,7 +1018,9 @@ def test_observation_collector_worker_does_not_bind_panel_cache_refresher(monkey
         def set():
             return None
 
-    monkeypatch.setattr(observation_collector_worker.signal, "signal", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        observation_collector_worker.signal, "signal", lambda *_args, **_kwargs: None
+    )
     monkeypatch.setattr(
         observation_collector_worker,
         "start_observation_collector_loop",
@@ -1043,5 +1083,9 @@ def test_airport_obs_batch_writes_share_one_sqlite_transaction(monkeypatch, tmp_
     )
 
     assert connection_calls["count"] == 1
-    assert [row["temp_c"] for row in db.get_airport_obs_recent("ZBAA", minutes=180)] == [24.0]
-    assert [row["temp_c"] for row in db.get_airport_obs_recent("ZBAD", minutes=180)] == [25.0]
+    assert [
+        row["temp_c"] for row in db.get_airport_obs_recent("ZBAA", minutes=180)
+    ] == [24.0]
+    assert [
+        row["temp_c"] for row in db.get_airport_obs_recent("ZBAD", minutes=180)
+    ] == [25.0]

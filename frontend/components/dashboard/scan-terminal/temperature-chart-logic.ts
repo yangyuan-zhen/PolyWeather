@@ -32,11 +32,7 @@ function isTemperatureSeriesVisibleByDefault(city: string, seriesKey: string) {
   }
   if (seriesKey === "metar") {
     const cityKey = normalizeCityKey(city);
-    return (
-      cityKey !== "hongkong" &&
-      cityKey !== "laufaushan" &&
-      cityKey !== "shenzhen"
-    );
+    return cityKey !== "hongkong";
   }
   if (seriesKey === "madis") {
     return true;
@@ -788,23 +784,11 @@ function getObservationDisplayMetrics(
 }
 
 function selectCompactSecondaryTemp({
-  isHKO,
-  isShenzhen,
   displayMetarTemp,
-  observedHighMetar,
 }: {
-  isHKO: boolean;
-  isShenzhen: boolean;
   displayMetarTemp: number | null;
-  observedHighMetar: number | null;
 }) {
-  if (isShenzhen) {
-    return observedHighMetar;
-  }
   // The compact secondary label is an observation cadence, so it must not display a daily high.
-  if (isHKO) {
-    return displayMetarTemp;
-  }
   return displayMetarTemp;
 }
 
@@ -1649,8 +1633,7 @@ function getLiveObservationLabels(
 ) {
   const normalizedKey = normalizeCityKey(row?.city);
   const weatherStationCities = new Set<string>();
-  const isShenzhen = normalizedKey === "shenzhen";
-  const isHKO = (normalizedKey === "hongkong" || normalizedKey === "laufaushan") && !isShenzhen;
+  const isHKO = normalizedKey === "hongkong";
   const isTokyo = normalizedKey === "tokyo";
   const isSingapore = normalizedKey === "singapore";
   const isParis = normalizedKey === "paris";
@@ -1675,30 +1658,27 @@ function getLiveObservationLabels(
     weatherStationCities.has(normalizedKey) ||
     /\b(jma_amedas|fmi|knmi|cowin_obs|ims|ncm|aeroweb|madis_hfmetar|singapore_mss)\b/.test(sourceTokens);
   const isWeatherStation =
-    !isHKO && !isShenzhen && !isTokyo && !isSingapore && !isParis
+    !isHKO && !isTokyo && !isSingapore && !isParis
     && hasRealStationNetwork;
 
-  const obsHeaderLabel = isShenzhen ? "天文台实测 (10分钟)"
-    : isHKO ? "参考站点 (1分钟)"
+  const obsHeaderLabel = isHKO ? "参考站点 (1分钟)"
     : isTokyo ? "机场气象站 (10分钟)"
     : isSingapore ? "航站楼温度"
     : isParis ? "官方机场观测 (15分钟)"
     : isWeatherStation ? "气象站实测"
     : "机场报文";
 
-  const metarHeaderLabel = (isShenzhen || isHKO) ? "天文台实测 (10分钟)"
+  const metarHeaderLabel = isHKO ? "天文台实测 (10分钟)"
     : "METAR 结算 (30分钟)";
 
-  const obsHighLabel = isShenzhen ? "天文台实测"
-    : isHKO ? "参考站点"
+  const obsHighLabel = isHKO ? "参考站点"
     : isTokyo ? "机场气象站"
     : isSingapore ? "航站楼"
     : isParis ? "官方机场观测"
     : isWeatherStation ? "气象站"
     : "机场报文";
 
-  const metarHighLabel = isShenzhen ? "天文台"
-    : isHKO ? "天文台"
+  const metarHighLabel = isHKO ? "天文台"
     : "METAR 官方";
 
   // When the primary observation layer IS the airport METAR (plain cities
@@ -1706,7 +1686,6 @@ function getLiveObservationLabels(
   // duplicates the same value; collapse it to the daily-high label instead.
   const metarRedundant =
     !isHKO &&
-    !isShenzhen &&
     !isTokyo &&
     !isSingapore &&
     !isParis &&
@@ -1715,7 +1694,6 @@ function getLiveObservationLabels(
   return {
     isHKO,
     isParis,
-    isShenzhen,
     isWeatherStation,
     metarHeaderLabel,
     metarHighLabel,
@@ -2182,25 +2160,19 @@ function buildFullDayChartData(
   );
 
   const settlementCityKey = normalizeCityKey(row?.city);
-  const isShenzhen = settlementCityKey === 'shenzhen';
-  const isHKO = (settlementCityKey === 'hongkong' || settlementCityKey === 'laufaushan'
-    || (row?.city || '').toLowerCase().includes('hong kong')
-    || (row?.city || '').toLowerCase().includes('lau fau shan')) && !isShenzhen;
+  const isHKO = settlementCityKey === 'hongkong'
+    || (row?.city || '').toLowerCase().includes('hong kong');
 
   let finalSettlementObs = settlementObs;
   let finalMadisObs = madisObs;
   if (isHKO) {
     finalSettlementObs = madisObs;
     finalMadisObs = settlementObs;
-  } else if (isShenzhen && !settlementObs.length && madisObs.length) {
-    finalSettlementObs = madisObs;
-    finalMadisObs = [];
   }
 
   // ── Settlement / MADIS fallback ──
-  const isHKOCity = settlementCityKey === 'hongkong' || settlementCityKey === 'laufaushan'
-    || settlementCityKey === 'shenzhen' || (row?.city || '').toLowerCase().includes('hong kong')
-    || (row?.city || '').toLowerCase().includes('lau fau shan');
+  const isHKOCity = settlementCityKey === 'hongkong'
+    || (row?.city || '').toLowerCase().includes('hong kong');
   const timelineSet = new Set<number>();
   finalSettlementObs.forEach((point) => timelineSet.add(point.ts));
   finalMadisObs.forEach((point) => timelineSet.add(point.ts));

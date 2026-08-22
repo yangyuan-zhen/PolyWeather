@@ -11,7 +11,7 @@ PolyWeather 是面向温度结算场景的气象决策层，不是通用天气�
 
 核心价值：
 
-- 观测优先（METAR / 机场主站 / 明确官方站点；JMA AMeDAS、CoWIN、HKO（流浮山 LFS）等作为增强层）
+- 观测优先（METAR / 机场主站 / 明确官方站点；JMA AMeDAS、CoWIN、HKO 等作为增强层）
 - 结算导向（DEB hourly consensus + 校准概率桶，主引擎 deb_normal 正态概率）
 - 气象判断优先（证据链、失效条件、下一观测点）
 - 市场映射（行情对照 + 错价雷达），但不把交易建议放在第一层产品承诺
@@ -67,7 +67,7 @@ PolyWeather 是面向温度结算场景的气象决策层，不是通用天气�
 3. 审计能力：支付日志、订阅变更、异常重试可追溯。
 4. 通知策略：支付成功私发、群内通知降噪。
 5. 安全边界：敏感配置不进仓库。
-6. 数据口径：机场市场按 METAR / 机场主站解释；深圳按流浮山 HKO（LFS）结算；TAF 唯一来源 NOAA AviationWeather，只作机场侧确认层；Wunderground / 台北 CWA / AMSC AWOS / NMC-CMA 已移除，不得再引用为数据源。
+6. 数据口径：机场市场按 METAR / 机场主站解释；深圳按宝安 ZGSZ METAR 结算；TAF 唯一来源 NOAA AviationWeather，只作机场侧确认层；Wunderground / 台北 CWA / AMSC AWOS / NMC-CMA 已移除，不得再引用为数据源。
 7. 加载口径：日内分析和右侧详情在 full detail 未补齐前必须显示同步状态，不能把旧缓存伪装成完整付费内容。
 8. 实时口径：终端图表应优先保留已有曲线并无痛合并 patch，不用 loading 遮罩覆盖已可用数据。
 

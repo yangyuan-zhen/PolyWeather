@@ -14,7 +14,6 @@ function assert(condition: unknown, message: string) {
 export function runTests() {
   const hongKong = __buildTemperatureStatsLabelsForTest({
     isEn: true,
-    isShenzhen: false,
     metarRedundant: false,
     obsHeaderLabel: "参考站点 (1分钟)",
     metarHeaderLabel: "天文台实测 (10分钟)",
@@ -30,33 +29,31 @@ export function runTests() {
 
   const shenzhen = __buildTemperatureStatsLabelsForTest({
     isEn: true,
-    isShenzhen: true,
     metarRedundant: false,
-    obsHeaderLabel: "天文台实测 (10分钟)",
-    metarHeaderLabel: "天文台实测 (10分钟)",
-    obsHighLabel: "天文台实测",
-    metarHighLabel: "天文台",
+    obsHeaderLabel: "机场报文",
+    metarHeaderLabel: "METAR 结算 (30分钟)",
+    obsHighLabel: "机场报文",
+    metarHighLabel: "METAR 官方",
   });
 
-  assert(shenzhen.primary === "HKO Live (10m)", "Shenzhen English primary label should match 天文台实测 (10分钟)");
-  assert(shenzhen.compactSecondary === "Daily High", "Shenzhen compact secondary label should match 当日最高");
-  assert(shenzhen.expandedSecondary === "HKO Live (10m) · Daily High", "Shenzhen expanded secondary label should match 天文台实测 + 当日最高");
-  assert(shenzhen.obsHigh === "HKO Live", "Shenzhen high summary should translate 天文台实测");
-  assert(shenzhen.metarHigh === "HKO", "Shenzhen high summary should translate 天文台");
+  assert(shenzhen.primary === "Airport METAR", "Shenzhen English primary label should translate 机场报文 after switching to ZGSZ METAR");
+  assert(shenzhen.compactSecondary === "METAR Settlement (30m)", "Shenzhen compact secondary label should follow the METAR cadence");
+  assert(shenzhen.expandedSecondary === "METAR Settlement (30m) · Daily High", "Shenzhen expanded secondary label should combine METAR cadence and daily high");
+  assert(shenzhen.obsHigh === "Airport METAR", "Shenzhen high summary should translate 机场报文");
+  assert(shenzhen.metarHigh === "Official METAR", "Shenzhen high summary should translate METAR 官方");
 
 
   const zh = __buildTemperatureStatsLabelsForTest({
     isEn: false,
-    isShenzhen: true,
     metarRedundant: false,
-    obsHeaderLabel: "天文台实测 (10分钟)",
-    metarHeaderLabel: "天文台实测 (10分钟)",
-    obsHighLabel: "天文台实测",
-    metarHighLabel: "天文台",
+    obsHeaderLabel: "机场报文",
+    metarHeaderLabel: "METAR 结算 (30分钟)",
+    obsHighLabel: "机场报文",
+    metarHighLabel: "METAR 官方",
   });
 
-  assert(zh.primary === "天文台实测 (10分钟)", "Chinese primary label should remain unchanged");
-  assert(zh.compactSecondary === "当日最高", "Chinese Shenzhen compact secondary label should remain 当日最高");
+  assert(zh.primary === "机场报文", "Chinese primary label should remain unchanged");
+  assert(zh.compactSecondary === "METAR 结算 (30分钟)", "Chinese Shenzhen compact secondary label should follow the METAR cadence");
 
   assert(temp(null, "°C") === "--", "empty temperature values should not render as 0.0°C while city detail is loading");
   assert(temp(undefined, "°C") === "--", "undefined temperature values should not render as 0.0°C while city detail is loading");
@@ -83,7 +80,6 @@ export function runTests() {
   );
   const plainMetar = __buildTemperatureStatsLabelsForTest({
     isEn: false,
-    isShenzhen: false,
     metarRedundant: true,
     obsHeaderLabel: "机场报文",
     metarHeaderLabel: "METAR 结算 (30分钟)",

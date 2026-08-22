@@ -395,12 +395,12 @@ export function runTests() {
       times: ["10:00", "14:00", "18:00"],
       temps: [30.2, 31.8, 30.7],
       airportPrimary: {
-        source_code: "hko",
-        source_label: "HKO",
+        source_code: "metar",
+        source_label: "ZGSZ METAR",
         temp: 29.9,
         obs_time: "2026-05-26T23:55:00Z",
       },
-      airportPrimaryTodayObs: [
+      settlementTodayObs: [
         ["2026-05-26T23:15:00Z", 29.5],
         ["2026-05-26T23:25:00Z", 29.7],
         ["2026-05-26T23:35:00Z", 29.9],
@@ -408,11 +408,11 @@ export function runTests() {
     } as any,
     "1D",
   );
-  const shenzhenHkoSeries = seriesByKey(shenzhenAirportPrimaryHko.series, "settlement") as any;
-  assert(shenzhenHkoSeries?.label === "HKO", "Shenzhen airport-primary HKO history should render as the HKO observation series");
+  const shenzhenMetarSeries = seriesByKey(shenzhenAirportPrimaryHko.series, "settlement") as any;
+  assert(shenzhenMetarSeries != null, "Shenzhen settlement series should render after switching from Lau Fau Shan HKO to ZGSZ METAR");
   assert(
-    shenzhenHkoSeries.values.filter((value: number | null) => value !== null).length >= 2,
-    "Shenzhen HKO observation series should include the airportPrimaryTodayObs curve points",
+    shenzhenMetarSeries.values.filter((value: number | null) => value !== null).length >= 2,
+    "Shenzhen settlement series should include the airportPrimaryTodayObs curve points",
   );
 
   const hongKongCowinAndHko = __buildTemperatureChartDataForTest(
@@ -499,19 +499,13 @@ export function runTests() {
   );
   assert(
     __selectCompactSecondaryTempForTest({
-      isHKO: true,
-      isShenzhen: false,
       displayMetarTemp: (hongKongMetrics as any).currentMetarTemp,
-      observedHighMetar: hongKongMetrics.observedHighMetar,
     }) === 28.1,
     "Hong Kong compact HKO stat should render the latest HKO point, not the HKO daily high",
   );
   assert(
     __selectCompactSecondaryTempForTest({
-      isHKO: false,
-      isShenzhen: false,
       displayMetarTemp: 72.0,
-      observedHighMetar: 73.9,
     }) === 72.0,
     "non-HKO compact secondary stat should render the latest METAR/current point, not the daily high",
   );
@@ -555,10 +549,7 @@ export function runTests() {
   );
   assert(
     __selectCompactSecondaryTempForTest({
-      isHKO: false,
-      isShenzhen: false,
       displayMetarTemp: (wuhanEarlyMorningMetrics as any).currentMetarTemp,
-      observedHighMetar: wuhanEarlyMorningMetrics.observedHighMetar,
     }) === 23.0,
     "Wuhan compact METAR settlement stat should not show a stale daily high at 04:23",
   );

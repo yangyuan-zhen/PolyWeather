@@ -120,7 +120,6 @@ function DebQualityBadge({ quality, isEn }: { quality?: DebQuality | null; isEn:
 
 function buildStatsLabels({
   isEn,
-  isShenzhen,
   metarRedundant,
   obsHeaderLabel,
   metarHeaderLabel,
@@ -128,7 +127,6 @@ function buildStatsLabels({
   metarHighLabel,
 }: {
   isEn: boolean;
-  isShenzhen: boolean;
   metarRedundant: boolean;
   obsHeaderLabel: string;
   metarHeaderLabel: string;
@@ -140,7 +138,7 @@ function buildStatsLabels({
   const dailyHigh = isEn ? "Daily High" : "当日最高";
   return {
     primary,
-    compactSecondary: isShenzhen ? dailyHigh : secondaryObservation,
+    compactSecondary: secondaryObservation,
     expandedSecondary: `${secondaryObservation} · ${dailyHigh}`,
     dailyPeakTitle: isEn ? "Daily Peak" : "当日最高气温",
     obsHigh: highLabel(obsHighLabel, isEn),
@@ -158,7 +156,6 @@ export function TemperatureStatsBars({
   obsHighLabel,
   metarHighLabel,
   metarRedundant,
-  isShenzhen,
   displayObsTemp,
   displayMetarTemp,
   observedHighMetar,
@@ -181,7 +178,6 @@ export function TemperatureStatsBars({
   obsHighLabel: string;
   metarHighLabel: string;
   metarRedundant: boolean;
-  isShenzhen: boolean;
   displayObsTemp: number | null;
   displayMetarTemp: number | null;
   observedHighMetar: number | null;
@@ -197,7 +193,6 @@ export function TemperatureStatsBars({
 }) {
   const labels = buildStatsLabels({
     isEn,
-    isShenzhen,
     metarRedundant,
     obsHeaderLabel,
     metarHeaderLabel,

@@ -1231,7 +1231,6 @@ export function LiveTemperatureThresholdChart({
 
   const {
     isHKO,
-    isShenzhen,
     metarHeaderLabel,
     metarHighLabel,
     obsHeaderLabel,
@@ -1245,10 +1244,7 @@ export function LiveTemperatureThresholdChart({
   );
   const displayObsTemp = currentObsTemp ?? liveTemp;
   const displayMetarTemp = selectCompactSecondaryTemp({
-    isHKO,
-    isShenzhen,
     displayMetarTemp: currentMetarTemp,
-    observedHighMetar,
   });
 
   const localDateStr = chartLocalDate || new Date().toISOString().slice(0, 10);
@@ -1590,7 +1586,6 @@ export function LiveTemperatureThresholdChart({
           obsHighLabel={obsHighLabel}
           metarHighLabel={metarHighLabel}
           metarRedundant={metarRedundant}
-          isShenzhen={isShenzhen}
           displayObsTemp={displayObsTemp}
           displayMetarTemp={displayMetarTemp}
           observedHighMetar={observedHighMetar}

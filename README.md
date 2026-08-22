@@ -47,7 +47,7 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 - Airport METAR report curves fully removed from terminal charts; only settlement-source curves, official networks (JMA/HKO), and TAF markers remain.
 - Terminal charts gained a 3-day (72h) window: observations, model-consensus median/min/max, DEB anchors; x-axis ticks every 6 hours with midnight date markers.
 - DEB calibration improvements: per-temperature-stratum sigma (>=37C cov90 0.820 -> 0.893), 14-day recency-weighted city bias (regime shifts converge within 2 weeks), inference correction cap raised 3C -> 5C (July's 4-6C systematic over-prediction is no longer truncated).
-- Registry now covers 51 cities: Jinan (ZSJN) and Zhengzhou (ZHCC) added, Jakarta removed; Shenzhen settles on Lau Fau Shan HKO station (`lau fau shan` maps to `shenzhen`).
+- Registry now covers 51 cities: Jinan (ZSJN) and Zhengzhou (ZHCC) added, Jakarta removed; Shenzhen settles on Bao'an airport METAR (ZGSZ).
 - Service stability: SQLite shrank 18.9GB -> 2GB (failed-queue purge, 30-day retention for raw observations/intraday snapshots, VACUUM); `load_history` caching and event-loop-safe forecast API eliminated the stall/healthz starvation incidents.
 - New-user onboarding tour in the terminal (observation anchor -> DEB -> market probability).
 - Payment receiver whitelist split: contract checkout validates the new contract `0x1fD90A`, manual mode validates the direct EOA `0x351a1bca`.
@@ -105,7 +105,7 @@ flowchart LR
 ## Monitored Cities (51)
 
 - Europe / Middle East / Africa: Ankara, Istanbul, Moscow, London, Paris, Munich, Milan, Warsaw, Madrid, Tel Aviv, Amsterdam, Helsinki, Cape Town, Jeddah
-- APAC: Seoul, Busan, Hong Kong, Taipei, Shanghai, Beijing, Qingdao, Wuhan, Chengdu, Chongqing, Shenzhen (Lau Fau Shan HKO settlement), Guangzhou, Jinan, Zhengzhou, Singapore, Tokyo, Kuala Lumpur, Manila, Wellington
+- APAC: Seoul, Busan, Hong Kong, Taipei, Shanghai, Beijing, Qingdao, Wuhan, Chengdu, Chongqing, Shenzhen (ZGSZ METAR), Guangzhou, Jinan, Zhengzhou, Singapore, Tokyo, Kuala Lumpur, Manila, Wellington
 - Americas: Toronto, New York, Los Angeles, San Francisco, Denver (Aurora/Buckley KBKF), Austin, Houston, Chicago, Dallas, Miami, Atlanta, Seattle, Mexico City, Buenos Aires, Sao Paulo, Panama City
 - South Asia: Lucknow, Karachi
 
@@ -129,7 +129,7 @@ npm run dev
 
 - Gaussian probability tooltip now lists the full temperature-range distribution instead of only the highest-probability bucket, while the main chart remains focused on observations and forecasts.
 - User feedback is now a product loop: terminal submissions attach chart context, users can track status in-app, and ops can reward useful feedback with points.
-- Airport-linked contracts use the METAR / airport primary observing site as the settlement anchor. Shenzhen now settles on Lau Fau Shan HKO (LFS); Wunderground, Taipei CWA, AMSC AWOS, and NMC/CMA sources have been removed.
+- Airport-linked contracts use the METAR / airport primary observing site as the settlement anchor. Shenzhen now settles on Bao'an airport METAR (ZGSZ); Wunderground, Taipei CWA, AMSC AWOS, NMC/CMA, and the Lau Fau Shan HKO settlement have been removed.
 - Hong Kong keeps `HKO` official readings in dashboard and history, without falling back to airport METAR lines.
 - Intraday analysis now separates meteorology conclusion, evidence chain, invalidation rules, confirmation rules, calibrated probability, and market reference.
 - `TAF` is used as an airport-side confirmation layer, not as the main temperature model (sole source: NOAA AviationWeather).
