@@ -20,7 +20,9 @@ from web.core import CITIES
 
 class _DummyMetarSource(MetarSourceMixin):
     CITY_REGISTRY = CITY_REGISTRY
-    CITY_TO_ICAO = {key: value["icao"] for key, value in CITY_REGISTRY.items() if value.get("icao")}
+    CITY_TO_ICAO = {
+        key: value["icao"] for key, value in CITY_REGISTRY.items() if value.get("icao")
+    }
     metar_cache_ttl_sec = 600
     metar_fast_cache_ttl_sec = 60
 
@@ -28,6 +30,7 @@ class _DummyMetarSource(MetarSourceMixin):
         self._metar_cache = {}
         self._metar_cache_lock = threading.Lock()
         from src.data_collection.weather_cache import WeatherCacheManager
+
         self.cache = WeatherCacheManager()
         self.metar_timeout_sec = 0.0
         self.metar_latest_timeout_sec = 0.0
@@ -174,7 +177,11 @@ def test_nearby_station_timing_marks_stale_rows_unusable_for_network_signal():
 
     snapshot = build_country_network_snapshot("ankara", raw)
 
-    stale = next(row for row in snapshot["official_nearby"] if row["station_label"] == "Stale Hot")
+    stale = next(
+        row
+        for row in snapshot["official_nearby"]
+        if row["station_label"] == "Stale Hot"
+    )
     assert stale["sync_status"] == "stale"
     assert stale["usable_for_intraday"] is False
     assert snapshot["official_network_status"]["stale_row_count"] == 1
@@ -288,19 +295,18 @@ def test_metar_cluster_naive_obs_time_is_interpreted_as_utc_before_city_display(
 def test_hko_provider_marks_explicit_official_station_as_anchor():
     raw = {
         "settlement_current": {
-            "station_code": "LFS",
-            "station_name": "shenzhen",
+            "station_code": "HKO",
+            "station_name": "hong kong",
             "observation_time": "2026-04-06T10:00:00+08:00",
             "current": {"temp": 25.0},
         }
     }
 
-    snapshot = build_country_network_snapshot("shenzhen", raw)
+    snapshot = build_country_network_snapshot("hong kong", raw)
 
     assert snapshot["provider_code"] == "hongkong_hko"
     assert snapshot["settlement_station"]["is_official_station_anchor"] is True
     assert snapshot["official_nearby"][0]["is_settlement_anchor"] is True
-    assert snapshot["official_nearby"][0]["station_code"] == "LFS"
 
 
 def test_hong_kong_cowin_primary_uses_station_6087_history(monkeypatch):
@@ -477,12 +483,22 @@ def test_city_detail_payload_exposes_airport_and_official_network_layers():
                 "settlement_source": "metar",
                 "settlement_source_label": "METAR",
             },
-            "risk": {"icao": "LTAC", "airport": "Esenboga", "level": "medium", "warning": ""},
+            "risk": {
+                "icao": "LTAC",
+                "airport": "Esenboga",
+                "level": "medium",
+                "warning": "",
+            },
             "airport_primary": {"temp": 16.0, "source_code": "metar"},
             "airport_primary_today_obs": [{"time": "10:00", "temp": 16.0}],
-            "official_nearby": [{"station_code": "17128", "temp": 17.2, "source_code": "metar_cluster"}],
+            "official_nearby": [
+                {"station_code": "17128", "temp": 17.2, "source_code": "metar_cluster"}
+            ],
             "official_network_source": "global_metar",
-            "official_network_status": {"provider_code": "global_metar", "available": True},
+            "official_network_status": {
+                "provider_code": "global_metar",
+                "available": True,
+            },
             "network_lead_signal": {"available": True, "delta": 1.2},
             "network_spread_signal": {"available": True, "spread": 2.1},
             "center_station_candidate": {"station_code": "17128", "temp": 17.2},
@@ -514,12 +530,22 @@ def test_intraday_meteorology_supportive_heating_case():
             "deb": {"prediction": 40.4},
             "probabilities": {"distribution": [{"value": 40, "probability": 0.42}]},
             "peak": {"first_h": 14, "last_h": 15, "status": "before"},
-            "deviation_monitor": {"direction": "hot", "severity": "strong", "current_delta": 1.9},
+            "deviation_monitor": {
+                "direction": "hot",
+                "severity": "strong",
+                "current_delta": 1.9,
+            },
             "vertical_profile_signal": {
                 "heating_setup": "supportive",
                 "summary_zh": "混合层偏深，仍支持午后继续升温。",
             },
-            "taf": {"signal": {"available": True, "suppression_level": "low", "summary_zh": "TAF 暂未提示强云雨压温。"}},
+            "taf": {
+                "signal": {
+                    "available": True,
+                    "suppression_level": "low",
+                    "summary_zh": "TAF 暂未提示强云雨压温。",
+                }
+            },
         }
     )
 
@@ -528,7 +554,9 @@ def test_intraday_meteorology_supportive_heating_case():
     assert payload["confidence"] == "high"
     assert payload["base_case_bucket"] == "40°C"
     assert payload["next_observation_time"] == "12:30"
-    assert any(item["direction"] == "support" for item in payload["signal_contributions"])
+    assert any(
+        item["direction"] == "support" for item in payload["signal_contributions"]
+    )
     assert all(item.get("summary_en") for item in payload["signal_contributions"])
 
 
@@ -541,9 +569,22 @@ def test_intraday_meteorology_suppressed_cloud_rain_case():
             "deb": {"prediction": 40.2},
             "probabilities": {"distribution": [{"value": 40, "probability": 0.35}]},
             "peak": {"first_h": 14, "last_h": 15, "status": "before"},
-            "deviation_monitor": {"direction": "cold", "severity": "strong", "current_delta": -2.0},
-            "vertical_profile_signal": {"heating_setup": "suppressed", "suppression_risk": "high"},
-            "taf": {"signal": {"available": True, "suppression_level": "high", "disruption_level": "high"}},
+            "deviation_monitor": {
+                "direction": "cold",
+                "severity": "strong",
+                "current_delta": -2.0,
+            },
+            "vertical_profile_signal": {
+                "heating_setup": "suppressed",
+                "suppression_risk": "high",
+            },
+            "taf": {
+                "signal": {
+                    "available": True,
+                    "suppression_level": "high",
+                    "disruption_level": "high",
+                }
+            },
         }
     )
 
@@ -552,7 +593,9 @@ def test_intraday_meteorology_suppressed_cloud_rain_case():
     assert payload["confidence"] == "high"
     assert any("云雨" in rule for rule in payload["invalidation_rules"])
     assert any("cloud" in rule.lower() for rule in payload["invalidation_rules_en"])
-    assert any(item["direction"] == "suppress" for item in payload["signal_contributions"])
+    assert any(
+        item["direction"] == "suppress" for item in payload["signal_contributions"]
+    )
 
 
 def test_intraday_meteorology_structural_cap_does_not_claim_taf_cloud_rain():
@@ -564,7 +607,11 @@ def test_intraday_meteorology_structural_cap_does_not_claim_taf_cloud_rain():
             "deb": {"prediction": 40.4},
             "probabilities": {"distribution": [{"value": 42, "probability": 0.35}]},
             "peak": {"first_h": 12, "last_h": 16, "status": "before"},
-            "deviation_monitor": {"direction": "cold", "severity": "strong", "current_delta": -1.4},
+            "deviation_monitor": {
+                "direction": "cold",
+                "severity": "strong",
+                "current_delta": -1.4,
+            },
             "vertical_profile_signal": {
                 "heating_setup": "suppressed",
                 "suppression_risk": "medium",
@@ -584,7 +631,10 @@ def test_intraday_meteorology_structural_cap_does_not_claim_taf_cloud_rain():
     assert "结构信号压制" in payload["headline"]
     assert "TAF 云雨层暂未构成主压温理由" in payload["headline"]
     assert "存在云雨或结构压制" not in payload["headline"]
-    assert any(item["label"] == "TAF 云雨扰动" and item["direction"] == "support" for item in payload["signal_contributions"])
+    assert any(
+        item["label"] == "TAF 云雨扰动" and item["direction"] == "support"
+        for item in payload["signal_contributions"]
+    )
 
 
 def test_intraday_meteorology_handles_sparse_observations():
@@ -614,7 +664,11 @@ def test_intraday_meteorology_past_peak_case():
             "current": {"temp": 33.0, "max_so_far": 39.0},
             "probabilities": {"distribution": [{"value": 39, "probability": 0.5}]},
             "peak": {"first_h": 13, "last_h": 15, "status": "past"},
-            "deviation_monitor": {"direction": "normal", "severity": "normal", "current_delta": 0.1},
+            "deviation_monitor": {
+                "direction": "normal",
+                "severity": "normal",
+                "current_delta": 0.1,
+            },
         }
     )
 

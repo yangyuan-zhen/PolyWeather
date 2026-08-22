@@ -21,7 +21,7 @@
 - 已上线支付运行态与审计接口：`/api/payments/runtime`。
 - 已上线轻量运营后台：`/ops`（会员、用户反馈处理、积分、补分、支付异常单）。
 - 轻量可观测性：`/healthz`、`/api/system/status`、`/api/system/cache-status`、`/api/system/priority-warm`、`/metrics`（ops 鉴权）+ `scripts/check_ops_health.py` 巡检（14 个外部服务探测）。
-- 已上线预测 API：`/api/cities/deb-forecast` 输出 DEB 预测 + 多模型 3 天日报，默认 24 城监控清单（entitlement token 鉴权），结果缓存 5 分钟秒回；registry 全量 51 城，深圳即流浮山（HKO 站）。
+- 已上线预测 API：`/api/cities/deb-forecast` 输出 DEB 预测 + 多模型 3 天日报，默认 24 城监控清单（entitlement token 鉴权），结果缓存 5 分钟秒回；registry 全量 51 城，深圳结算为宝安机场 ZGSZ METAR。
 - 终端图表支持 3 天（72h）窗口：观测 / 模型共识 median-min-max / DEB 锚点；x 轴每 6 小时刻度 + 午夜日期标记。
 - 机场 METAR 报文曲线已全部移除（用户需求）：仅保留结算源、官方增强网络（JMA / HKO）与 TAF 信号曲线；MGM（土耳其）数据源已整套下线，安卡拉/伊斯坦布尔回归 METAR 结算。
 - DEB 校准改进：温度段独立 σ（≥37°C cov90 0.820→0.893）、城市偏差近 14 天加权（模式切换 2 周收敛）、推理校正上限 3→5°C（7 月高估 4-6°C 不再截断）。
@@ -39,7 +39,7 @@
 - 官方增强站网已统一接入：
   - `JMA AMeDAS`（日本）
   - `HKO`（香港）
-- 数据源已清理：Wunderground、台北 `CWA`、中国跑道 `AMSC AWOS`、中国内地 `NMC/CMA` 均已移除；深圳结算源切换为流浮山 `HKO`（LFS）。
+- 数据源已清理：Wunderground、台北 `CWA`、中国跑道 `AMSC AWOS`、中国内地 `NMC/CMA` 均已移除；深圳结算源切换为宝安机场 `ZGSZ` METAR（流浮山 LFS 结算已下线）。
 - 东京现已接入羽田 `JMA AMeDAS` 10 分钟温度作为官方增强层。
 - 已支持 Dashboard 定向预热 worker / cron 路径，运行态在 `/api/system/status` 与 `/ops` 可见。
 - `/ops` 现已展示缓存桶数量、summary cache hit/miss 与运行态 heartbeat。
@@ -102,7 +102,7 @@ flowchart LR
 ## 监控城市（51）
 
 - 欧洲/中东/非洲：Ankara、Istanbul、Moscow、London、Paris、Munich、Milan、Warsaw、Madrid、Tel Aviv、Amsterdam、Helsinki、Cape Town、Jeddah
-- 亚太：Seoul、Busan、Hong Kong、Taipei、Shanghai、Beijing、Wuhan、Chengdu、Chongqing、Shenzhen（流浮山 HKO 结算）、Guangzhou、Jinan、Zhengzhou、Singapore、Tokyo、Kuala Lumpur、Manila、Wellington
+- 亚太：Seoul、Busan、Hong Kong、Taipei、Shanghai、Beijing、Wuhan、Chengdu、Chongqing、Shenzhen（宝安 ZGSZ METAR）、Guangzhou、Jinan、Zhengzhou、Singapore、Tokyo、Kuala Lumpur、Manila、Wellington
 - 美洲：Toronto、New York、Los Angeles、San Francisco、Denver（Aurora/Buckley KBKF）、Austin、Houston、Chicago、Dallas、Miami、Atlanta、Seattle、Mexico City、Buenos Aires、Sao Paulo、Panama City
 - 南亚：Lucknow、Karachi
 
@@ -127,7 +127,7 @@ npm run dev
 - 概率主引擎为 DEB 正态引擎（`deb_normal`）。
 - 预测 API 已上线（`/api/cities/deb-forecast`，结果缓存 5 分钟）。
 - 机场 METAR 报文曲线全部移除；WeatherNext2 已移除；Telegram 群依赖与积分邀请机制已下线。
-- 数据源清理：Wunderground、台北 CWA、AMSC AWOS（中国跑道）、NMC/CMA（中国内地）已移除；深圳结算源切换为流浮山 HKO（LFS）；NOAA 结算源切为免费 aviationweather METAR。
+- 数据源清理：Wunderground、台北 CWA、AMSC AWOS（中国跑道）、NMC/CMA（中国内地）与流浮山 LFS 结算已移除；深圳结算切换为宝安 ZGSZ METAR；NOAA 结算源切为免费 aviationweather METAR。
 - DEB 校准：温度段独立 σ、近 14 天加权城市偏差、推理校正上限 3→5°C。
 - 服务端稳定性：SQLite 18.9GB → 2GB（队列/观测/快照清理 + VACUUM）、`load_history` 缓存、预测 API 事件循环安全。
 - 高斯概率 tooltip 已改为展示完整温度区间概率分布，不再只显示最高概率的单个区间；主图继续聚焦实测和预测曲线。

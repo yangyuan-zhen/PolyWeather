@@ -11,7 +11,7 @@
 |------|------|-----------|--------|------|------|------|
 | 香港 | CoWIN 6087 | 6087 | CoWIN (`cowin.hku.hk`) | 1 分钟 | 参考站温度（保良局陈守仁小学） | 免费 |
 | 香港 | HKO | HKO | HKO 官方 CSV (`data.weather.gov.hk`) | 10 分钟 | 官方气象站温度 | 免费 |
-| 深圳 | 流浮山 | LFS | HKO 官方 CSV (`data.weather.gov.hk`) | 10 分钟 | 官方自动站温度（结算源） | 免费 |
+| 深圳 | 宝安机场 | ZGSZ | AviationWeather METAR (`aviationweather.gov`) | 小时级+特报 | 机场报文温度（结算源） | 免费 |
 | 东京 | 羽田 | RJTT | JMA AMeDAS (`jma.go.jp`) | 10 分钟 | 机场站点实时温度 | 免费 |
 | 赫尔辛基 | Vantaa | EFHK | FMI (`opendata.fmi.fi`) | 10 分钟 | 机场站点实时温度 | 免费 |
 | 阿姆斯特丹 | Schiphol | EHAM | KNMI (`dataplatform.knmi.nl`) | 10 分钟 | 机场站点实时温度 | 免费（需注册） |
@@ -153,7 +153,7 @@ DEB：18.2°C
 | tokyo | JMA AMeDAS (44166) | 10 min | 日本 |
 | helsinki | FMI 开放数据 | 10 min | 芬兰 |
 | amsterdam | KNMI 数据平台 | 10 min | 荷兰 |
-| shenzhen | HKO 官方 CSV (LFS) | ~10 min | 香港天文台流浮山自动站 |
+| shenzhen | ZGSZ METAR | 30-60 min | 深圳宝安国际机场 |
 | tel aviv | IMS Lod (225) | 实时 | 以色列 |
 | paris | AEROWEB 实况 / AROME HD | 实时/15min | 法国 (AROME是15分钟临近预报) |
 
@@ -166,7 +166,7 @@ DEB：18.2°C
 | london | EGLC | Met Office 仅 1 小时更新 |
 | jeddah | OEJN | NCM 数据源目前不可用 |
 | moscow | UUWW | 仅 UUWW METAR 单站 |
-| shenzhen | ZGSZ | 已接入 HKO 流浮山 10 分钟数据，见 Tier 3 |
+| shenzhen | ZGSZ | 结算源为宝安机场 METAR，见 Tier 2 |
 | munich | EDDM | DWD 延迟约 1 小时 |
 | milan | LIMC | 无已知实时源 |
 | warsaw | EPWA | 含 IMGW 附近站 |

@@ -12,6 +12,9 @@
 ### 预测 API 扩展
 - **deb-forecast 默认清单扩至 24 城**：新增东京 (RJTT)、吉隆坡 (WMKK, 补 `klia` 别名)、阿姆斯特丹 (EHAM)；registry 全量 51 城仍可通过 `cities` 参数查询。
 
+### 深圳结算源切换
+- **流浮山 HKO (LFS) 结算下线**：深圳结算源切为宝安机场 ZGSZ METAR；`hko_obs` 站表移除深圳条目、registry 删除 `disable_aviationweather`/LFS 站点配置、`laufaushan`/`流浮山` 别名清理（`lfs` 别名保留）；前端深圳 HKO 图表特判（曲线交换、紧凑标签、METAR 隐藏）全部移除。
+
 ### 城市清单修正
 - **Jakarta 移除收尾**：静态城市清单删除 Jakarta、补齐此前缺失的济南/郑州，落地页城市数 50 → 51，与生产 registry 完全对齐。
 

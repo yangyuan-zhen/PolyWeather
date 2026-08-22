@@ -1,7 +1,7 @@
 """HKO (Hong Kong Observatory) 1-minute real-time data source.
 
 Fetches 1-minute temperature from HKO's public regional-weather API
-for Hong Kong Observatory (HKO) and Lau Fau Shan (LFS) stations.
+for the Hong Kong Observatory (HKO) station.
 No API key required.
 """
 
@@ -20,17 +20,15 @@ from loguru import logger
 from src.data_collection.observation_source_gate import run_observation_source
 from src.utils.metrics import record_source_call
 
-HKO_BASE_URL = os.getenv("HKO_BASE_URL", "").strip() or "https://data.weather.gov.hk/weatherAPI/hko_data/regional-weather"
+HKO_BASE_URL = (
+    os.getenv("HKO_BASE_URL", "").strip()
+    or "https://data.weather.gov.hk/weatherAPI/hko_data/regional-weather"
+)
 HKO_STATIONS = {
     "hong kong": {
         "code": "HK Observatory",
         "icao": "HKO",
         "label": "HK Observatory 1min (HKO)",
-    },
-    "shenzhen": {
-        "code": "Lau Fau Shan",
-        "icao": "LFS",
-        "label": "流浮山天文台 1min (HKO)",
     },
 }
 
@@ -100,14 +98,16 @@ class HkoObsSourceMixin:
         with self._hko_obs_cache_lock:
             cached = self._hko_obs_cache.get(cache_key)
             if cached and now_ts - cached["t"] < self.hko_obs_cache_ttl_sec:
-                record_source_call("hko_obs", "current", "cache_hit",
-                                   (time.perf_counter() - started) * 1000.0)
+                record_source_call(
+                    "hko_obs",
+                    "current",
+                    "cache_hit",
+                    (time.perf_counter() - started) * 1000.0,
+                )
                 return cached["d"]
 
         try:
-            csv_text = self._hko_http_get(
-                f"{HKO_BASE_URL}/latest_1min_temperature.csv"
-            )
+            csv_text = self._hko_http_get(f"{HKO_BASE_URL}/latest_1min_temperature.csv")
             reader = csv.DictReader(io.StringIO(csv_text))
             temp_c = None
             obs_time = None
@@ -121,8 +121,12 @@ class HkoObsSourceMixin:
                     break
 
             if temp_c is None:
-                record_source_call("hko_obs", "current", "no_temperature",
-                                   (time.perf_counter() - started) * 1000.0)
+                record_source_call(
+                    "hko_obs",
+                    "current",
+                    "no_temperature",
+                    (time.perf_counter() - started) * 1000.0,
+                )
                 return None
 
             temp = round(temp_c * 9 / 5 + 32, 1) if use_fahrenheit else round(temp_c, 1)
@@ -143,8 +147,12 @@ class HkoObsSourceMixin:
 
             with self._hko_obs_cache_lock:
                 self._hko_obs_cache[cache_key] = {"d": result, "t": now_ts}
-            record_source_call("hko_obs", "current", "success",
-                               (time.perf_counter() - started) * 1000.0)
+            record_source_call(
+                "hko_obs",
+                "current",
+                "success",
+                (time.perf_counter() - started) * 1000.0,
+            )
             return result
 
         except Exception as exc:
@@ -152,11 +160,16 @@ class HkoObsSourceMixin:
             with self._hko_obs_cache_lock:
                 stale = self._hko_obs_cache.get(cache_key)
                 if stale:
-                    record_source_call("hko_obs", "current", "stale_cache",
-                                       (time.perf_counter() - started) * 1000.0)
+                    record_source_call(
+                        "hko_obs",
+                        "current",
+                        "stale_cache",
+                        (time.perf_counter() - started) * 1000.0,
+                    )
                     return stale["d"]
-            record_source_call("hko_obs", "current", "error",
-                               (time.perf_counter() - started) * 1000.0)
+            record_source_call(
+                "hko_obs", "current", "error", (time.perf_counter() - started) * 1000.0
+            )
             return None
 
     def fetch_hko_obs_official_nearby(

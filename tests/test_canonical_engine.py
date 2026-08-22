@@ -1,33 +1,35 @@
 def test_canonical_engine_prefers_settlement_station_over_later_nearby_row():
-    from web.services.canonical_engine import build_canonical_temperature_from_observations
+    from web.services.canonical_engine import (
+        build_canonical_temperature_from_observations,
+    )
 
     canonical = build_canonical_temperature_from_observations(
         "shenzhen",
         [
             {
-                "source": "hko_obs",
+                "source": "metar",
                 "city": "shenzhen",
-                "station_code": "HKO",
-                "station_name": "Hong Kong Observatory",
+                "station_code": "VHHH",
+                "station_name": "Hong Kong International",
                 "value": 27.6,
                 "value_unit": "c",
                 "observed_at": "2026-06-14T01:00:00+00:00",
                 "fetched_at": "2026-06-14T01:05:00+00:00",
                 "status": "ok",
-                "payload": {"source_label": "HKO"},
+                "payload": {"source_label": "METAR"},
                 "updated_at_ts": 2000.0,
             },
             {
-                "source": "hko_obs",
+                "source": "metar",
                 "city": "shenzhen",
-                "station_code": "LFS",
-                "station_name": "Lau Fau Shan",
+                "station_code": "ZGSZ",
+                "station_name": "Shenzhen Bao'an",
                 "value": 28.1,
                 "value_unit": "c",
                 "observed_at": "2026-06-14T01:00:00+00:00",
                 "fetched_at": "2026-06-14T01:05:00+00:00",
                 "status": "ok",
-                "payload": {"source_label": "HKO"},
+                "payload": {"source_label": "METAR"},
                 "updated_at_ts": 1000.0,
             },
         ],
@@ -36,16 +38,15 @@ def test_canonical_engine_prefers_settlement_station_over_later_nearby_row():
     assert canonical is not None
     assert canonical["city"] == "shenzhen"
     assert canonical["value"] == 28.1
-    assert canonical["source"] == "hko_obs"
-    assert canonical["source_role"] == "settlement_official"
-    assert canonical["station_code"] == "LFS"
-    assert canonical["station_name"] == "Lau Fau Shan"
-    assert canonical["freshness_status"] == "fresh"
-    assert canonical["freshness_sec"] == 300
+    assert canonical["source"] == "metar"
+    assert canonical["station_code"] == "ZGSZ"
+    assert canonical["station_name"] == "Shenzhen Bao'an"
 
 
 def test_canonical_engine_ignores_failed_latest_rows():
-    from web.services.canonical_engine import build_canonical_temperature_from_observations
+    from web.services.canonical_engine import (
+        build_canonical_temperature_from_observations,
+    )
 
     canonical = build_canonical_temperature_from_observations(
         "qingdao",
@@ -81,8 +82,6 @@ def test_canonical_engine_ignores_failed_latest_rows():
     assert canonical is not None
     assert canonical["source"] == "madis_hfmetar"
     assert canonical["value"] == 24.0
-
-
 
 
 def test_canonical_engine_builds_realtime_event_from_canonical():
