@@ -54,6 +54,7 @@ DEFAULT_FORECAST_CITIES: List[str] = [
     "cape town",
     "tokyo",
     "kuala lumpur",
+    "amsterdam",
     "hong kong",
 ]
 
