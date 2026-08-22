@@ -15,16 +15,18 @@ import type { CityListItem } from "@/lib/dashboard-types";
 import { STATIC_CITY_LIST } from "@/lib/static-cities";
 
 const COVERAGE_EN = [
-  "CoWIN 60s + HKO 600s",
+  "METAR settlement anchors across 51 cities",
+  "CoWIN 60s + HKO 600s (Hong Kong)",
   "MADIS 300s airport observations",
-  "JMA AMeDAS 600s",
+  "JMA AMeDAS / FMI / KNMI official layers",
   "Live chart updates",
 ];
 
 const COVERAGE_ZH = [
-  "CoWIN 60s + HKO 600s",
+  "51 城 METAR 结算锚点",
+  "CoWIN 60s + HKO 600s（香港）",
   "MADIS 300s 机场观测",
-  "JMA AMeDAS 600s",
+  "JMA AMeDAS / FMI / KNMI 官方增强层",
   "网页图表实时更新",
 ];
 
@@ -240,8 +242,10 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
     "bg-sky-100 text-sky-700",
     "bg-emerald-100 text-emerald-700",
     "bg-amber-100 text-amber-700",
+    "bg-violet-100 text-violet-700",
+    "bg-cyan-100 text-cyan-700",
   ];
-  const coverageIcons: IconName[] = ["cloudSun", "lineChart", "bell"];
+  const coverageIcons: IconName[] = ["radar", "cloudSun", "lineChart", "database", "clock"];
 
   const platformCards: Array<{ body: string; icon: IconName; title: string }> = isEn
     ? [
