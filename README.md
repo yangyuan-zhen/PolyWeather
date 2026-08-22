@@ -21,9 +21,9 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 
 [![Star History Chart](https://api.star-history.com/svg?repos=yangyuan-zhen/PolyWeather&type=Date)](https://star-history.com/#yangyuan-zhen/PolyWeather&Date)
 
-## Product Status (2026-08-16)
+## Product Status (2026-08-22)
 
-- Forecast API live: `/api/cities/deb-forecast` returns per-city DEB prediction + 3-day multi-model daily forecasts (entitlement-token auth); results are cached for 5 minutes so repeat calls answer in ~1.4s.
+- Forecast API live: `/api/cities/deb-forecast` returns per-city DEB prediction + 3-day multi-model daily forecasts for a 24-city default watchlist (entitlement-token auth); results are cached for 5 minutes so repeat calls answer in ~1.4s.
 - DEB normal probability engine live: integer-degree probability buckets come from the DEB normal engine (`deb_normal`).
 - WeatherNext2 removed: the Google WeatherNext2 GCS Zarr worker was retired; probability and forecasts rely on the DEB blend over the Open-Meteo model suite.
 - Referral/invite pricing removed; points remain redeemable for payment discounts (`500 pts = 1 USDC`, monthly max `3 USDC`, quarterly max `8 USDC`). Useful user feedback can also receive manual point rewards through ops.
@@ -52,12 +52,12 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 - Temperature chart now overlays `TAF Timing` markers near the expected peak window.
 - Trade cue now combines upper-air structure, `TAF`, market crowding, and `edge_percent`.
 - Browser extension now uses `DEB` for multi-day forecast and stays positioned as a lightweight lead-in to the main site.
-- Official nearby-network layer now covers `MGM` (Turkey), `JMA AMeDAS` (Japan), and `HKO` (Hong Kong).
+- Official nearby-network layer now covers `JMA AMeDAS` (Japan) and `HKO` (Hong Kong); the Turkish MGM source has been fully removed (Ankara/Istanbul settle on airport METAR).
 - Tokyo now ingests Haneda `JMA AMeDAS` 10-minute temperature as the official enhancement layer.
-- Airport METAR report curves fully removed from terminal charts; only settlement-source curves, official networks (JMA/HKO/MGM), and TAF markers remain.
+- Airport METAR report curves fully removed from terminal charts; only settlement-source curves, official networks (JMA/HKO), and TAF markers remain.
 - Terminal charts gained a 3-day (72h) window: observations, model-consensus median/min/max, DEB anchors; x-axis ticks every 6 hours with midnight date markers.
 - DEB calibration improvements: per-temperature-stratum sigma (>=37C cov90 0.820 -> 0.893), 14-day recency-weighted city bias (regime shifts converge within 2 weeks), inference correction cap raised 3C -> 5C (July's 4-6C systematic over-prediction is no longer truncated).
-- Registry now covers 52 cities: Jinan (ZSJN) and Zhengzhou (ZHCC) added; Shenzhen settles on Lau Fau Shan HKO station (`lau fau shan` maps to `shenzhen`).
+- Registry now covers 51 cities: Jinan (ZSJN) and Zhengzhou (ZHCC) added, Jakarta removed; Shenzhen settles on Lau Fau Shan HKO station (`lau fau shan` maps to `shenzhen`).
 - Service stability: SQLite shrank 18.9GB -> 2GB (failed-queue purge, 30-day retention for raw observations/intraday snapshots, VACUUM); `load_history` caching and event-loop-safe forecast API eliminated the stall/healthz starvation incidents.
 - New-user onboarding tour in the terminal (observation anchor -> DEB -> market probability).
 - Payment receiver whitelist split: contract checkout validates the new contract `0x1fD90A`, manual mode validates the direct EOA `0x351a1bca`.
@@ -75,7 +75,7 @@ See: [Commercialization & License](docs/COMMERCIALIZATION.md)
 
 ## Core Capabilities
 
-- Aggregates observations and forecasts for 52 monitored cities.
+- Aggregates observations and forecasts for 51 monitored cities.
 - Uses DEB (Dynamic Error Balancing) to blend multi-model highs.
 - Builds a DEB-weighted hourly consensus path for peak-window logic and chart display.
 - Generates settlement-oriented calibrated probability buckets via the DEB normal-distribution engine (`deb_normal`, integer-degree probability `P(T==τ)=Φ((τ+0.5-μ)/σ)-Φ((τ-0.5-μ)/σ)`), with the legacy Gaussian calibration path retained as a fallback.
@@ -86,7 +86,7 @@ See: [Commercialization & License](docs/COMMERCIALIZATION.md)
 - Adds an in-app feedback loop with chart context, user-visible feedback status, ops triage, and manual point rewards for useful reports and suggestions.
 - Adds peak-window-oriented intraday analysis with meteorology headline, path buckets, evidence chain, invalidation rules, and confirmation rules.
 - Adds airport-side `TAF` timing overlays and airport suppression/disruption interpretation for non-Hong Kong airport cities.
-- Adds official nearby-network enhancement layers for Japan, Hong Kong, and Turkey without replacing airport settlement anchors.
+- Adds official nearby-network enhancement layers for Japan and Hong Kong without replacing airport settlement anchors.
 
 ## Reference Architecture
 
@@ -100,7 +100,6 @@ flowchart LR
     API --> WX["Weather Collector"]
     WX --> METAR["Aviation Weather (METAR)"]
     WX --> TAF["Aviation Weather (TAF)"]
-    WX --> MGM["MGM (Turkey station network)"]
     WX --> OM["Open-Meteo"]
     WX --> JMA["JMA AMeDAS (Japan)"]
     WX --> SETTLE["AviationWeather METAR / HKO / IMGW (settlement)"]
@@ -115,9 +114,9 @@ flowchart LR
 
 ## Monitored Cities (51)
 
-- Europe / Middle East / Africa: Ankara, Istanbul, Moscow, London, Paris, Munich, Milan, Warsaw, Madrid, Tel Aviv, Amsterdam, Helsinki, Lagos, Cape Town, Jeddah
+- Europe / Middle East / Africa: Ankara, Istanbul, Moscow, London, Paris, Munich, Milan, Warsaw, Madrid, Tel Aviv, Amsterdam, Helsinki, Cape Town, Jeddah
 - APAC: Seoul, Busan, Hong Kong, Taipei, Shanghai, Beijing, Qingdao, Wuhan, Chengdu, Chongqing, Shenzhen (Lau Fau Shan HKO settlement), Guangzhou, Jinan, Zhengzhou, Singapore, Tokyo, Kuala Lumpur, Manila, Wellington
-- Americas: Toronto, New York, Los Angeles, San Francisco, Aurora, Austin, Houston, Chicago, Dallas, Miami, Atlanta, Seattle, Mexico City, Buenos Aires, Sao Paulo, Panama City
+- Americas: Toronto, New York, Los Angeles, San Francisco, Denver (Aurora/Buckley KBKF), Austin, Houston, Chicago, Dallas, Miami, Atlanta, Seattle, Mexico City, Buenos Aires, Sao Paulo, Panama City
 - South Asia: Lucknow, Karachi
 
 ## Quick Start

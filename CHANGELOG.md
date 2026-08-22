@@ -1,6 +1,21 @@
 # Changelog
 
-## 1.9.0 - 2026-08-16（待发布）
+## 1.9.1 - 2026-08-22
+
+### 训练数据链恢复
+- **训练结算 worker 轮转分析**：新增 `POLYWEATHER_TRAINING_SETTLEMENT_ANALYSIS_BATCH_SIZE`（默认 6），`SKIP_ANALYSIS=false` 时每周期只分析 N 城、按墙钟时间片轮转（无状态、重启安全），reconcile 保持全量；解决 6 月中旬起 forecast 快照断供导致的训练集饥饿，且不复辟 51 城全量分析的 OOM。生产已激活并跑通首轮（51 城 processed / 内存 ~100MB）。
+
+### 移除 MGM（土耳其气象局）
+- **MGM 数据源整套下线**：删除 `mgm_sources.py` 采集器、`TurkeyMgmNetworkProvider`、canonical 结算权重与适配映射、latest-observation 覆盖层、观测 collector profile 与健康探针；安卡拉/伊斯坦布尔结算与实况回归 METAR 机场报文（LTAC/LTFM）。
+- **前端同步清理**：MGM 图表线/图例/标签特判、`isTurkishMgmCity`、轴回退路径、`MgmData` 类型、公开内容页 MGM 来源页与安卡拉简报表述全部移除；周边站载荷键 `mgm_nearby` 改名 `nearby_stations`（读取兼容旧键）。
+
+### 预测 API 扩展
+- **deb-forecast 默认清单扩至 24 城**：新增东京 (RJTT)、吉隆坡 (WMKK, 补 `klia` 别名)、阿姆斯特丹 (EHAM)；registry 全量 51 城仍可通过 `cities` 参数查询。
+
+### 城市清单修正
+- **Jakarta 移除收尾**：静态城市清单删除 Jakarta、补齐此前缺失的济南/郑州，落地页城市数 50 → 51，与生产 registry 完全对齐。
+
+ ## 1.9.0 - 2026-08-16（待发布）
 
 ### 预测 API（外部项目接入）
 - **新增 `/api/cities/deb-forecast`**：输出 23 城（10 中国 + 13 国际监控）的 DEB 融合预测 + 多模型 3 天日报（`models_daily`），鉴权同 pro 接口（entitlement token）；`cities` 参数可自定义任意 registry 城市。

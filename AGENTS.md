@@ -11,11 +11,11 @@
 E:\web\PolyWeather
 ├── web/                 # FastAPI 后端 (app.py → create_app)
 ├── src/                 # Python 核心库 (analysis, data_collection, bot, database, payments)
-├── tests/               # pytest (85 个文件)
+├── tests/               # pytest (74 个文件)
 ├── frontend/            # Next.js 15 + React 19 + TypeScript
 ├── scripts/             # 运维/工具脚本 (Python)
 ├── deploy.sh            # VPS 部署脚本
-├── docker-compose.yml   # 6+ 服务: web, frontend, bot, collector, warmer, training, weathernext2
+├── docker-compose.yml   # 7 服务: web, frontend, bot, collector, warmer, training_settlement, redis
 ├── bot_listener.py      # Telegram 机器人入口
 ├── run.py               # 机器人启动脚本 (调用 bot_listener.py)
 ├── pyproject.toml       # ruff 配置: E/F rules, line-length=88, py311
@@ -57,7 +57,7 @@ docker compose down && docker compose up -d --build
 
 ## 架构要点
 
-- Docker Compose 多服务: `web` (FastAPI :8000), `frontend` (Next.js :3000), `bot` (Telegram), `collector` (观测采集), `warmer` (缓存预热), `training_settlement` (训练结算), `weathernext2_worker` (GCP WeatherNext2)
+- Docker Compose 多服务: `web` (FastAPI :8000), `frontend` (Next.js :3000), `bot` (Telegram), `collector` (观测采集), `warmer` (缓存预热), `training_settlement` (训练结算：轮转分析 + 真值回填)
 - 前端 → Nginx (反代) → Cloudflare
 - SSE 实时事件: 生产用 Redis Stream, 本地可切 SQLite
 - 付费墙: middleware.ts (服务端) + `ProductAccessRequired` (客户端)
