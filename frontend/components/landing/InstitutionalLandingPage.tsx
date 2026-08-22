@@ -19,7 +19,6 @@ const COVERAGE_EN = [
   "MADIS 300s airport observations",
   "JMA AMeDAS 600s",
   "Live chart updates",
-  "Short Telegram alerts",
 ];
 
 const COVERAGE_ZH = [
@@ -27,7 +26,6 @@ const COVERAGE_ZH = [
   "MADIS 300s 机场观测",
   "JMA AMeDAS 600s",
   "网页图表实时更新",
-  "Telegram 简短提醒",
 ];
 
 const PRO_FEATURES_EN = [
@@ -312,9 +310,6 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
             <a href="#coverage" className="hover:text-slate-950">
               {isEn ? "Data" : "数据"}
             </a>
-            <a href="#screenshots" className="hover:text-slate-950">
-              {isEn ? "Screens" : "截图"}
-            </a>
             <a href="#supported-cities" className="hover:text-slate-950">
               {isEn ? "Cities" : "城市"}
             </a>
@@ -368,18 +363,35 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                   polyweather.app/terminal
                 </span>
               </div>
-              <div className="mt-2 aspect-[16/9] overflow-hidden rounded-md border border-slate-100 bg-slate-100">
-                <img
-                  src="/static/web.webp"
-                  width="680"
-                  height="340"
-                  alt={isEn ? "PolyWeather terminal preview" : "PolyWeather 终端预览"}
-                  className="h-full w-full object-cover object-top"
-                  decoding="async"
-                  fetchPriority="high"
-                  loading="eager"
-                  sizes="(min-width: 1024px) 960px, calc(100vw - 48px)"
-                />
+              <div className="mt-2 aspect-[16/9] overflow-hidden rounded-md border border-slate-100 bg-gradient-to-b from-slate-50 to-slate-100 p-5 sm:p-8">
+                <div className="grid h-full grid-cols-2 gap-3 sm:grid-cols-4">
+                  {heroStats.map((item) => (
+                    <div
+                      key={`preview-${item.label}`}
+                      className="flex flex-col justify-center rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm"
+                    >
+                      <div className="font-mono text-sm font-black text-slate-950 sm:text-base">
+                        {item.value}
+                      </div>
+                      <div className="mt-0.5 text-[10px] font-semibold text-slate-500">
+                        {item.label}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {(isEn
+                    ? ["Settlement obs", "DEB blend", "Model consensus", "Calibrated probability", "Market buckets"]
+                    : ["结算实测", "DEB 融合", "模型共识", "校准概率", "市场温度桶"]
+                  ).map((chip) => (
+                    <span
+                      key={chip}
+                      className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold text-slate-600"
+                    >
+                      {chip}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -445,13 +457,13 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                         "Official nearby-network context across Asia, Europe, and the US",
                         "Hong Kong CoWIN + HKO dual-source reading",
                         "Live pages update as new source readings arrive",
-                        "Telegram sends concise alerts without noisy refresh loops",
+                        "DEB calibration with per-stratum sigma and recency-weighted city bias",
                       ]
                     : [
                         "覆盖亚洲、欧洲与美国的官方邻近站网实测上下文",
                         "香港 CoWIN + HKO 双源读数",
                         "源头有新读数时，网页自动补上变化",
-                        "Telegram 只发简短提醒，避免噪音刷屏",
+                        "DEB 校准：温度段独立 σ 与近期加权城市偏差",
                       ]
                   ).map((item) => (
                     <div key={item} className="landing-hover-lift rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-semibold leading-6 text-slate-700">
@@ -460,62 +472,6 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                   ))}
                 </div>
               </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="screenshots" className="border-b border-slate-200 bg-[#fbfbfa] px-4 py-20 sm:px-6">
-          <div className="mx-auto max-w-6xl">
-            <div className="max-w-2xl">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-                {isEn ? "Product Screenshots" : "产品截图"}
-              </p>
-              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-                {isEn ? "The terminal and alerts are the product." : "终端和提醒就是核心产品。"}
-              </h2>
-              <p className="mt-4 text-sm leading-7 text-slate-600">
-                {isEn
-                  ? "See what you will use before subscribing: a browser terminal for live temperature evidence, plus short Telegram alerts when settlement signals change."
-                  : "订阅前先看清你会用到什么：网页上看实时温度证据；结算源有变化时，在 Telegram 收到简短提醒。"}
-              </p>
-            </div>
-
-            <div className="mt-10 grid gap-5 lg:grid-cols-[1.4fr_0.8fr]">
-              <figure className="landing-hover-lift rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
-                <div className="aspect-[16/9] overflow-hidden rounded-md border border-slate-100 bg-slate-100">
-                  <img
-                    src="/static/web.webp"
-                    width="680"
-                    height="340"
-                    alt={isEn ? "Realtime terminal screenshot" : "实时终端截图"}
-                    className="h-full w-full object-cover object-top transition duration-500 hover:scale-[1.015]"
-                    decoding="async"
-                    loading="lazy"
-                    sizes="(min-width: 1024px) 760px, calc(100vw - 48px)"
-                  />
-                </div>
-                <figcaption className="px-2 py-3 text-xs font-semibold text-slate-500">
-                  {isEn ? "Browser terminal: settlement observations, DEB, source cadence, and market context." : "浏览器终端：结算实测、DEB、源头频率和市场上下文。"}
-                </figcaption>
-              </figure>
-
-              <figure className="landing-hover-lift rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
-                <div className="aspect-[9/16] max-h-[520px] overflow-hidden rounded-md border border-slate-100 bg-slate-100">
-                  <img
-                    src="/static/tel.webp"
-                    width="420"
-                    height="640"
-                    alt={isEn ? "Telegram alert screenshot" : "Telegram 提醒截图"}
-                    className="h-full w-full object-cover object-top transition duration-500 hover:scale-[1.015]"
-                    decoding="async"
-                    loading="lazy"
-                    sizes="(min-width: 1024px) 340px, calc(100vw - 48px)"
-                  />
-                </div>
-                <figcaption className="px-2 py-3 text-xs font-semibold text-slate-500">
-                  {isEn ? "Telegram alerts: concise settlement-source updates for paid users." : "Telegram 提醒：为付费用户提供简洁的结算源更新。"}
-                </figcaption>
-              </figure>
             </div>
           </div>
         </section>
@@ -531,8 +487,8 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
               </h2>
               <p className="mt-4 text-sm leading-7 text-slate-600">
                 {isEn
-                  ? "PolyWeather follows each source's real update rhythm. The website refreshes the visible charts as new readings arrive, while Telegram keeps alerts short and readable."
-                  : "PolyWeather 跟随每个数据源自己的更新节奏。网页图表会补上最新读数，Telegram 只保留短提醒，让你快速知道哪里变了。"}
+                  ? "PolyWeather follows each source's real update rhythm: visible charts refresh as new readings arrive, and the terminal combines settlement observations with DEB context in one view."
+                  : "PolyWeather 跟随每个数据源自己的更新节奏：可见图表随新读数自动补齐，终端把结算实测与 DEB 上下文放在同一个视图里。"}
               </p>
               <div className="mt-6 flex flex-wrap gap-2">
                 <Link
@@ -675,8 +631,8 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                 </h3>
                 <p className="mt-3 flex-1 text-sm leading-7 text-slate-600">
                   {isEn
-                    ? "Not sold as a public product right now. The public site and Telegram alerts remain the supported product surface."
-                    : "目前不作为公开产品售卖。当前支持的产品形态仍是网站终端和 Telegram 提醒。"}
+                    ? "Not sold as a public product right now. The web terminal remains the supported product surface."
+                    : "目前不作为公开产品售卖。当前支持的产品形态是网页终端。"}
                 </p>
                 <div className="mt-7 rounded-md border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600">
                   {isEn ? "Not for sale. We will revisit API packaging only after endpoint docs, keys, limits, and support boundaries are ready." : "暂不售卖。只有接口文档、key、限额和支持边界准备好后，才重新评估 API 产品化。"}

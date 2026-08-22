@@ -77,14 +77,9 @@ export function runTests() {
   );
   assert(!fs.existsSync(publicPngPath), "heavy PNG preview must not remain in public static assets");
   assert(fs.existsSync(fixturePngPath), "PNG preview may only remain as a test fixture");
-  assert(fs.existsSync(webpPath), "landing page must ship a WebP preview image for the LCP product screenshot");
-  assert(
-    fs.statSync(webpPath).size < fs.statSync(fixturePngPath).size * 0.65,
-    "WebP preview must be materially smaller than the PNG LCP image",
-  );
-  assert(source.includes("/static/web.webp"), "landing page must load the lighter WebP product preview image");
-  assert(source.includes("/static/tel.webp"), "landing page must include the Telegram alert screenshot (webp, not the 352KB png)");
-  assert(source.includes("#screenshots"), "landing navigation must expose the product screenshot section");
+  assert(!fs.existsSync(webpPath), "outdated terminal screenshot must not remain in public static assets");
+  assert(!source.includes("/static/web.webp"), "landing page must not embed the outdated terminal screenshot");
+  assert(!source.includes("/static/tel.webp"), "Telegram alert screenshot should stay removed after group-push sunset");
   assert(source.includes("#supported-cities"), "landing navigation must expose the supported cities section");
   assert(source.includes('id="supported-cities"'), "landing page must include a supported cities section");
   assert(source.includes("当前支持城市"), "landing page must tell Chinese users which cities are currently supported");
@@ -117,11 +112,8 @@ export function runTests() {
   assert(source.includes("结算源优先") && source.includes("差异化卖点"), "landing page must explain the differentiated settlement-source positioning");
   assert(!source.includes('src="/static/web.png"'), "landing hero must not use the heavy PNG as its primary LCP image");
   assert(
-    source.includes('width="680"') &&
-      source.includes('height="340"') &&
-      source.includes('fetchPriority="high"') &&
-      source.includes('decoding="async"'),
-    "landing product preview must expose stable intrinsic dimensions and high fetch priority",
+    !source.includes("/static/web.webp") && !source.includes("/static/tel.webp"),
+    "landing page must be free of outdated product screenshots",
   );
   assert(
     analyticsSource.includes('"landing_view"') &&
