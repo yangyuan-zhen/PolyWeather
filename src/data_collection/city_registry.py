@@ -896,7 +896,6 @@ ALIASES = {
     "多伦多": "toronto",
     "首尔": "seoul",
     "香港": "hong kong",
-    "深圳": "shenzhen",
     "臺北": "taipei",
     "釜山": "busan",
     "上海": "shanghai",
