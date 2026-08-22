@@ -7,16 +7,6 @@ Official dashboard: [polyweather.top](https://polyweather.top/)
 
 Public docs center: `/docs/intro` on the main site (bilingual product documentation for the current terminal, chart reading, realtime source cadence, settlement stations, and the browser extension).
 
-## Product Screenshots
-
-### Realtime Terminal
-
-![PolyWeather realtime terminal](frontend/public/static/web.webp)
-
-### Telegram Alerts
-
-![PolyWeather Telegram alerts](frontend/public/static/tel.png)
-
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=yangyuan-zhen/PolyWeather&type=Date)](https://star-history.com/#yangyuan-zhen/PolyWeather&Date)

@@ -375,14 +375,21 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
               polyweather.top/terminal
             </span>
           </div>
-          <img
-            src="/static/web.webp"
-            width="680"
-            height="340"
-            alt={isEn ? "PolyWeather terminal preview" : "PolyWeather 终端预览"}
-            className="aspect-[16/9] w-full object-cover object-top"
-            decoding="async"
-          />
+          <div className="aspect-[16/9] w-full bg-gradient-to-b from-slate-800 to-slate-900 p-4">
+            <div className="grid h-full grid-cols-3 gap-2">
+              {(isEn
+                ? ["Settlement obs", "DEB blend", "Probability"]
+                : ["结算实测", "DEB 融合", "校准概率"]
+              ).map((chip) => (
+                <div
+                  key={chip}
+                  className="flex items-center justify-center rounded-lg border border-white/10 bg-white/[0.06] px-2 text-center text-[11px] font-bold text-slate-300"
+                >
+                  {chip}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="relative z-10 mt-5 grid grid-cols-3 gap-2">
