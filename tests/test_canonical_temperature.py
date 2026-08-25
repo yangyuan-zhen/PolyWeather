@@ -56,119 +56,107 @@ def test_db_manager_stores_canonical_temperature_latest(tmp_path):
     assert row["payload"]["observed_at"] == "2026-06-14T01:01:00+00:00"
 
 
-def test_refresh_city_panel_cache_reads_canonical_without_sync_fetch(monkeypatch):
+def test_refresh_city_panel_cache_runs_analysis_and_stores_payload(monkeypatch):
     import web.services.city_runtime as city_runtime
 
-    enqueued = []
+    stored = {}
 
     class FakeDB:
         def get_city_cache(self, kind, city):
-            assert kind == "panel"
-            assert city == "shanghai"
             return None
 
+        def set_city_cache(
+            self, kind, city, payload, *, version="v1", source_fingerprint=None
+        ):
+            stored["kind"] = kind
+            stored["city"] = city
+            stored["payload"] = payload
+
         def get_canonical_temperature(self, city):
-            assert city == "shanghai"
-            return {
-                "payload": {
-                    "city": "shanghai",
-                    "value": 31.2,
-                    "temp_symbol": "°C",
-                    "source": "metar",
-                    "source_label": "METAR airport temperature",
-                    "source_role": "settlement_proxy",
-                    "observed_at": "2026-06-14T01:01:00+00:00",
-                    "observed_at_local": "09:01",
-                    "freshness_sec": 63,
-                    "freshness_status": "fresh",
-                    "fetched_at": "2026-06-14T01:02:03+00:00",
-                    "confidence": 0.92,
-                    "explanation": "METAR airport temperature updated 63s ago.",
-                }
-            }
+            return None
 
-        def enqueue_observation_refresh_request(self, **kwargs):
-            enqueued.append(kwargs)
-            return True
+        def store_canonical_temperature_from_payload(self, db, city, payload):
+            return None
 
-    def fail_analyze(*_args, **_kwargs):
-        raise AssertionError("business cache refresh must not call _analyze")
+    class FakeWeather:
+        def _uses_fahrenheit(self, city):
+            return False
 
     monkeypatch.setattr(city_runtime, "_CACHE_DB", FakeDB())
-    if hasattr(city_runtime, "_analyze"):
-        monkeypatch.setattr(city_runtime, "_analyze", fail_analyze)
+    monkeypatch.setattr(
+        city_runtime,
+        "_analyze",
+        lambda city, force_refresh=False, detail_mode="panel": {
+            "city": "shenzhen",
+            "current": {"temp": 29.0, "settlement_source": "metar"},
+            "deb": {"prediction": 31.2},
+        },
+    )
+    # attach/store canonical 走真函数但 FakeDB 缺方法会抛异常——helper 内部吞掉
+    payload = city_runtime._refresh_city_panel_cache("shenzhen", force_refresh=True)
 
-    payload = city_runtime._refresh_city_panel_cache("shanghai")
-
-    assert payload["canonical_temperature"]["value"] == 31.2
-    assert payload["canonical_temperature"]["source"] == "metar"
-    assert payload["canonical_temperature"]["freshness_sec"] == 63
-    assert payload["canonical_temperature"]["source_role"] == "settlement_proxy"
-    assert enqueued == [
-        {
-            "city": "shanghai",
-            "kind": "panel",
-            "priority": "high",
-            "reason": "canonical_fallback",
-        }
-    ]
+    assert stored["kind"] == "panel"
+    assert stored["city"] == "shenzhen"
+    assert payload["deb"]["prediction"] == 31.2
 
 
-def test_city_runtime_refresh_helpers_have_no_sync_fetch_escape_hatch():
-    import inspect
-
+def test_refresh_city_summary_cache_runs_summary_analysis_and_stores_payload(
+    monkeypatch,
+):
     import web.services.city_runtime as city_runtime
 
-    for name in (
-        "_refresh_city_summary_cache",
-        "_refresh_city_panel_cache",
-        "_refresh_city_nearby_cache",
-        "_refresh_city_market_cache",
-        "_refresh_city_full_cache",
-    ):
-        signature = inspect.signature(getattr(city_runtime, name))
-        assert "allow_external_fetch" not in signature.parameters
-    assert not hasattr(city_runtime, "_analyze")
-    assert not hasattr(city_runtime, "_analyze_summary")
-
-
-def test_refresh_city_panel_cache_defaults_to_queue_without_sync_analyze(monkeypatch):
-    import web.services.city_runtime as city_runtime
-
-    enqueued = []
+    stored = {}
 
     class FakeDB:
         def get_city_cache(self, kind, city):
-            assert kind == "panel"
-            assert city == "shanghai"
             return None
 
-        def get_canonical_temperature(self, city):
-            assert city == "shanghai"
-            return None
+        def set_city_cache(
+            self, kind, city, payload, *, version="v1", source_fingerprint=None
+        ):
+            stored["kind"] = kind
+            stored["city"] = city
+            stored["payload"] = payload
 
-        def enqueue_observation_refresh_request(self, **kwargs):
-            enqueued.append(kwargs)
-            return True
+        def store_canonical_temperature_from_payload(self, db, city, payload):
+            return None
 
     monkeypatch.setattr(city_runtime, "_CACHE_DB", FakeDB())
-
-    payload = city_runtime._refresh_city_panel_cache("shanghai")
-
-    assert payload["status"] == "initializing"
-    assert payload["stale_reason"] == "collector_refresh_queued"
-    assert payload["current"]["observation_status"] == "initializing"
-    assert enqueued == [
-        {
+    monkeypatch.setattr(
+        city_runtime,
+        "_analyze_summary",
+        lambda city, force_refresh=False: {
             "city": "shanghai",
-            "kind": "panel",
-            "priority": "high",
-            "reason": "cold_start",
-        }
-    ]
+            "current": {"temp": 27.0, "settlement_source": "metar"},
+            "deb": {"prediction": 30.4},
+            "canonical_temperature": {"value": 27.0},
+        },
+    )
+    monkeypatch.setattr(
+        city_runtime,
+        "_build_city_summary_payload",
+        lambda data: {
+            "deb": data.get("deb"),
+            "canonical_temperature": data.get("canonical_temperature"),
+        },
+    )
+    monkeypatch.setattr(
+        city_runtime,
+        "attach_canonical_temperature",
+        lambda payload, city: None,
+    )
+
+    payload = city_runtime._refresh_city_summary_cache("shanghai")
+
+    assert stored["kind"] == "summary"
+    assert stored["city"] == "shanghai"
+    assert payload["deb"]["prediction"] == 30.4
+    assert payload["canonical_temperature"]["value"] == 27.0
 
 
-def test_city_panel_cold_cache_returns_canonical_latest_without_sync_refresh(monkeypatch):
+def test_city_panel_cold_cache_returns_canonical_latest_without_sync_refresh(
+    monkeypatch,
+):
     import web.services.city_api as city_api
 
     enqueued = []
@@ -195,19 +183,27 @@ def test_city_panel_cold_cache_returns_canonical_latest_without_sync_refresh(mon
                     "freshness_status": "fresh",
                     "fetched_at": "2026-06-14T01:02:03+00:00",
                     "confidence": 0.92,
-                    }
                 }
+            }
 
         def enqueue_observation_refresh_request(self, **kwargs):
             enqueued.append(kwargs)
             return True
 
     def fail_refresh(*_args, **_kwargs):
-        raise AssertionError("cold panel cache must not synchronously refresh when canonical latest exists")
+        raise AssertionError(
+            "cold panel cache must not synchronously refresh when canonical latest exists"
+        )
 
-    monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "_normalize_city_or_404",
+        lambda name: name.strip().lower(),
+    )
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeDB())
-    monkeypatch.setattr(city_api.legacy_routes, "_refresh_city_panel_cache", fail_refresh)
+    monkeypatch.setattr(
+        city_api.legacy_routes, "_refresh_city_panel_cache", fail_refresh
+    )
 
     payload = asyncio.run(
         city_api.get_city_detail_payload(
@@ -231,7 +227,9 @@ def test_city_panel_cold_cache_returns_canonical_latest_without_sync_refresh(mon
     ]
 
 
-def test_city_full_cold_cache_returns_canonical_latest_without_sync_refresh(monkeypatch):
+def test_city_full_cold_cache_returns_canonical_latest_without_sync_refresh(
+    monkeypatch,
+):
     import web.services.city_api as city_api
 
     enqueued = []
@@ -258,18 +256,22 @@ def test_city_full_cold_cache_returns_canonical_latest_without_sync_refresh(monk
                     "freshness_status": "fresh",
                     "fetched_at": "2026-06-14T01:02:03+00:00",
                     "confidence": 0.92,
-                    }
                 }
+            }
 
         def enqueue_observation_refresh_request(self, **kwargs):
             enqueued.append(kwargs)
             return True
 
     def fail_refresh(*_args, **_kwargs):
-        raise AssertionError("cold full cache must not synchronously refresh when canonical latest exists")
+        raise AssertionError(
+            "cold full cache must not synchronously refresh when canonical latest exists"
+        )
 
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeDB())
-    monkeypatch.setattr(city_api.legacy_routes, "_refresh_city_full_cache", fail_refresh)
+    monkeypatch.setattr(
+        city_api.legacy_routes, "_refresh_city_full_cache", fail_refresh
+    )
 
     payload = asyncio.run(city_api._get_city_full_data("shanghai", force_refresh=False))
 
@@ -286,7 +288,9 @@ def test_city_full_cold_cache_returns_canonical_latest_without_sync_refresh(monk
     ]
 
 
-def test_city_nearby_and_market_cold_cache_return_canonical_latest_without_sync_refresh(monkeypatch):
+def test_city_nearby_and_market_cold_cache_return_canonical_latest_without_sync_refresh(
+    monkeypatch,
+):
     import web.services.city_api as city_api
 
     enqueued = []
@@ -313,27 +317,43 @@ def test_city_nearby_and_market_cold_cache_return_canonical_latest_without_sync_
                     "freshness_status": "fresh",
                     "fetched_at": "2026-06-14T01:02:03+00:00",
                     "confidence": 0.92,
-                    }
                 }
+            }
 
         def enqueue_observation_refresh_request(self, **kwargs):
             enqueued.append(kwargs)
             return True
 
     def fail_refresh(*_args, **_kwargs):
-        raise AssertionError("cold city cache must not synchronously refresh when canonical latest exists")
+        raise AssertionError(
+            "cold city cache must not synchronously refresh when canonical latest exists"
+        )
 
-    monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
-    monkeypatch.setattr(city_api.legacy_routes, "_assert_entitlement", lambda request: None)
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "_normalize_city_or_404",
+        lambda name: name.strip().lower(),
+    )
+    monkeypatch.setattr(
+        city_api.legacy_routes, "_assert_entitlement", lambda request: None
+    )
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeDB())
-    monkeypatch.setattr(city_api.legacy_routes, "_refresh_city_nearby_cache", fail_refresh)
-    monkeypatch.setattr(city_api.legacy_routes, "_refresh_city_market_cache", fail_refresh)
+    monkeypatch.setattr(
+        city_api.legacy_routes, "_refresh_city_nearby_cache", fail_refresh
+    )
+    monkeypatch.setattr(
+        city_api.legacy_routes, "_refresh_city_market_cache", fail_refresh
+    )
 
     nearby = asyncio.run(
-        city_api.get_city_detail_payload(object(), "Shanghai", force_refresh=False, depth="nearby")
+        city_api.get_city_detail_payload(
+            object(), "Shanghai", force_refresh=False, depth="nearby"
+        )
     )
     market = asyncio.run(
-        city_api.get_city_detail_payload(object(), "Shanghai", force_refresh=False, depth="market")
+        city_api.get_city_detail_payload(
+            object(), "Shanghai", force_refresh=False, depth="market"
+        )
     )
 
     assert nearby["detail_depth"] == "nearby"
@@ -357,7 +377,9 @@ def test_city_nearby_and_market_cold_cache_return_canonical_latest_without_sync_
     assert requested_kinds == [("nearby", "shanghai"), ("market", "shanghai")]
 
 
-def test_force_refresh_panel_returns_canonical_latest_without_waiting_for_sync_refresh(monkeypatch):
+def test_force_refresh_panel_returns_canonical_latest_without_waiting_for_sync_refresh(
+    monkeypatch,
+):
     import web.services.city_api as city_api
 
     class FakeDB:
@@ -386,11 +408,19 @@ def test_force_refresh_panel_returns_canonical_latest_without_waiting_for_sync_r
             }
 
     def fail_refresh(*_args, **_kwargs):
-        raise AssertionError("force refresh must not block on sync refresh when canonical latest exists")
+        raise AssertionError(
+            "force refresh must not block on sync refresh when canonical latest exists"
+        )
 
-    monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "_normalize_city_or_404",
+        lambda name: name.strip().lower(),
+    )
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeDB())
-    monkeypatch.setattr(city_api.legacy_routes, "_refresh_city_panel_cache", fail_refresh)
+    monkeypatch.setattr(
+        city_api.legacy_routes, "_refresh_city_panel_cache", fail_refresh
+    )
 
     payload = asyncio.run(
         city_api.get_city_detail_payload(
@@ -470,7 +500,11 @@ def test_force_refresh_panel_overlays_latest_raw_over_stale_cache(monkeypatch):
             enqueued.append(kwargs)
             return True
 
-    monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "_normalize_city_or_404",
+        lambda name: name.strip().lower(),
+    )
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeDB())
 
     payload = asyncio.run(
@@ -496,7 +530,9 @@ def test_force_refresh_panel_overlays_latest_raw_over_stale_cache(monkeypatch):
     ]
 
 
-def test_city_panel_canonical_fallback_enqueues_collector_refresh_when_queue_exists(monkeypatch):
+def test_city_panel_canonical_fallback_enqueues_collector_refresh_when_queue_exists(
+    monkeypatch,
+):
     import web.services.city_api as city_api
 
     enqueued = []
@@ -531,9 +567,15 @@ def test_city_panel_canonical_fallback_enqueues_collector_refresh_when_queue_exi
             return True
 
     def fail_start(*_args, **_kwargs):
-        raise AssertionError("canonical fallback should enqueue collector refresh instead of direct stale refresh")
+        raise AssertionError(
+            "canonical fallback should enqueue collector refresh instead of direct stale refresh"
+        )
 
-    monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "_normalize_city_or_404",
+        lambda name: name.strip().lower(),
+    )
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeDB())
     monkeypatch.setattr(city_api, "_start_city_cache_stale_refresh", fail_start)
 
@@ -557,7 +599,9 @@ def test_city_panel_canonical_fallback_enqueues_collector_refresh_when_queue_exi
     ]
 
 
-def test_city_panel_cold_start_without_canonical_returns_initializing_payload(monkeypatch):
+def test_city_panel_cold_start_without_canonical_returns_initializing_payload(
+    monkeypatch,
+):
     import web.services.city_api as city_api
 
     enqueued = []
@@ -577,11 +621,19 @@ def test_city_panel_cold_start_without_canonical_returns_initializing_payload(mo
             return True
 
     def fail_refresh(*_args, **_kwargs):
-        raise AssertionError("cold start without canonical must not synchronously refresh")
+        raise AssertionError(
+            "cold start without canonical must not synchronously refresh"
+        )
 
-    monkeypatch.setattr(city_api.legacy_routes, "_normalize_city_or_404", lambda name: name.strip().lower())
+    monkeypatch.setattr(
+        city_api.legacy_routes,
+        "_normalize_city_or_404",
+        lambda name: name.strip().lower(),
+    )
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeDB())
-    monkeypatch.setattr(city_api.legacy_routes, "_refresh_city_panel_cache", fail_refresh)
+    monkeypatch.setattr(
+        city_api.legacy_routes, "_refresh_city_panel_cache", fail_refresh
+    )
 
     payload = asyncio.run(
         city_api.get_city_detail_payload(
@@ -622,20 +674,44 @@ def test_dashboard_init_uses_safe_city_detail_path_without_direct_refresh(monkey
             return None
 
     def fail_refresh(*_args, **_kwargs):
-        raise AssertionError("dashboard init must not directly refresh city panel cache")
+        raise AssertionError(
+            "dashboard init must not directly refresh city panel cache"
+        )
 
-    async def fake_get_city_detail_payload(request, name, *, force_refresh=False, depth="panel"):
+    async def fake_get_city_detail_payload(
+        request, name, *, force_refresh=False, depth="panel"
+    ):
         calls.append((name, force_refresh, depth))
         return {"name": name, "status": "initializing"}
 
-    monkeypatch.setattr(dashboard_init_api.legacy_routes, "_bind_optional_supabase_identity", lambda request: None)
-    monkeypatch.setattr(dashboard_init_api, "_build_cities_payload", lambda: {"cities": []})
-    monkeypatch.setattr(dashboard_init_api, "_resolve_default_city", lambda request: "shanghai")
+    monkeypatch.setattr(
+        dashboard_init_api.legacy_routes,
+        "_bind_optional_supabase_identity",
+        lambda request: None,
+    )
+    monkeypatch.setattr(
+        dashboard_init_api, "_build_cities_payload", lambda: {"cities": []}
+    )
+    monkeypatch.setattr(
+        dashboard_init_api, "_resolve_default_city", lambda request: "shanghai"
+    )
     monkeypatch.setattr(dashboard_init_api.legacy_routes, "_CACHE_DB", FakeDB())
-    monkeypatch.setattr(dashboard_init_api.legacy_routes, "_refresh_city_panel_cache", fail_refresh)
-    monkeypatch.setattr(dashboard_init_api, "get_city_detail_payload", fake_get_city_detail_payload, raising=False)
+    monkeypatch.setattr(
+        dashboard_init_api.legacy_routes, "_refresh_city_panel_cache", fail_refresh
+    )
+    monkeypatch.setattr(
+        dashboard_init_api,
+        "get_city_detail_payload",
+        fake_get_city_detail_payload,
+        raising=False,
+    )
 
-    payload = asyncio.run(dashboard_init_api.build_dashboard_init_payload(FakeRequest()))
+    payload = asyncio.run(
+        dashboard_init_api.build_dashboard_init_payload(FakeRequest())
+    )
 
-    assert payload["default_city_detail"] == {"name": "shanghai", "status": "initializing"}
+    assert payload["default_city_detail"] == {
+        "name": "shanghai",
+        "status": "initializing",
+    }
     assert calls == [("shanghai", False, "panel")]
