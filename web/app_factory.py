@@ -69,16 +69,16 @@ def create_app() -> FastAPI:
     ):
         from web.core import _weather
         from web.observation_collector_service import start_observation_collector_loop
-        from web.services.city_runtime import _refresh_city_panel_cache
+        from web.services.city_runtime import _refresh_city_summary_cache
 
         thread = start_observation_collector_loop(
             weather=_weather,
-            # Rebuild the per-city panel analysis cache after each observation
-            # refresh. Without this, summary/panel caches are never written and
-            # DEB predictions disappear from city payloads (regression from
-            # ccc88662). The refresh itself is queued/rate-limited downstream
-            # via the observation-refresh request queue.
-            cache_refresher=lambda city: _refresh_city_panel_cache(
+            # Rebuild the per-city summary analysis cache (DEB + observations)
+            # after each observation refresh. Without this, summary caches are
+            # never written and DEB predictions disappear from city payloads
+            # (regression from ccc88662). The refresh itself is queued and
+            # rate-limited downstream via the observation-refresh queue.
+            cache_refresher=lambda city: _refresh_city_summary_cache(
                 city, force_refresh=False
             ),
         )
