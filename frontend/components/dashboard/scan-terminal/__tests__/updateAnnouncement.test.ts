@@ -35,7 +35,7 @@ export function runTests() {
   const systemApiSource = fs.readFileSync(path.join(repoRoot, "web", "services", "system_api.py"), "utf8");
   const systemRouterSource = fs.readFileSync(path.join(repoRoot, "web", "routers", "system.py"), "utf8");
   const dbSource = fs.readFileSync(path.join(repoRoot, "src", "database", "db_manager.py"), "utf8");
-  const middlewareSource = fs.readFileSync(path.join(projectRoot, "middleware.ts"), "utf8");
+  const middlewareSource = fs.readFileSync(path.join(projectRoot, "proxy.ts"), "utf8");
 
   assert(fs.existsSync(componentPath), "terminal must have a compact update announcement component");
   assert(!fs.existsSync(nextRoutePath), "update announcements should not depend on an admin-managed API proxy");
