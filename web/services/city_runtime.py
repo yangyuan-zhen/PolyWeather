@@ -22,11 +22,16 @@ from src.data_collection.city_registry import ALIASES
 from src.data_collection.city_time import get_city_utc_offset_seconds  # noqa: F401 - compatibility export for transitional routers
 from src.utils.refresh_policy import OBSERVATION_REFRESH_SEC, SCAN_ROWS_REFRESH_SEC
 from web.analysis_service import (
+    _analyze,
+    _analyze_summary,
     _build_city_chart_detail_payload,  # noqa: F401 - compatibility export for chart detail batches
     _build_city_detail_payload,  # noqa: F401 - compatibility export for tests and transitional routers
     _build_city_market_scan_payload,
+    _build_city_summary_payload,
 )
 from web.services.canonical_temperature import (
+    attach_canonical_temperature,
+    store_canonical_temperature_from_payload,
     build_city_weather_from_canonical,
 )
 from web.scan_terminal_service import build_scan_terminal_payload  # noqa: F401 - compatibility export for tests and transitional routers
@@ -147,15 +152,67 @@ US_CORE_CITIES = [
     "atlanta",
     "seattle",
 ]
-CITY_SUMMARY_CACHE_TTL_SEC = min(SCAN_ROWS_REFRESH_SEC, max(30, int(os.getenv("POLYWEATHER_CITY_SUMMARY_CACHE_TTL_SEC", str(SCAN_ROWS_REFRESH_SEC)))))
-CITY_PANEL_CACHE_TTL_SEC = min(SCAN_ROWS_REFRESH_SEC, max(30, int(os.getenv("POLYWEATHER_CITY_PANEL_CACHE_TTL_SEC", str(SCAN_ROWS_REFRESH_SEC)))))
-CITY_NEARBY_CACHE_TTL_SEC = min(SCAN_ROWS_REFRESH_SEC, max(30, int(os.getenv("POLYWEATHER_CITY_NEARBY_CACHE_TTL_SEC", str(SCAN_ROWS_REFRESH_SEC)))))
-CITY_MARKET_CACHE_TTL_SEC = min(SCAN_ROWS_REFRESH_SEC, max(30, int(os.getenv("POLYWEATHER_CITY_MARKET_CACHE_TTL_SEC", str(SCAN_ROWS_REFRESH_SEC)))))
-CITY_FULL_CACHE_TTL_SEC = min(OBSERVATION_REFRESH_SEC, max(30, int(os.getenv("POLYWEATHER_CITY_FULL_CACHE_TTL_SEC", str(OBSERVATION_REFRESH_SEC)))))
+CITY_SUMMARY_CACHE_TTL_SEC = min(
+    SCAN_ROWS_REFRESH_SEC,
+    max(
+        30,
+        int(
+            os.getenv(
+                "POLYWEATHER_CITY_SUMMARY_CACHE_TTL_SEC", str(SCAN_ROWS_REFRESH_SEC)
+            )
+        ),
+    ),
+)
+CITY_PANEL_CACHE_TTL_SEC = min(
+    SCAN_ROWS_REFRESH_SEC,
+    max(
+        30,
+        int(
+            os.getenv(
+                "POLYWEATHER_CITY_PANEL_CACHE_TTL_SEC", str(SCAN_ROWS_REFRESH_SEC)
+            )
+        ),
+    ),
+)
+CITY_NEARBY_CACHE_TTL_SEC = min(
+    SCAN_ROWS_REFRESH_SEC,
+    max(
+        30,
+        int(
+            os.getenv(
+                "POLYWEATHER_CITY_NEARBY_CACHE_TTL_SEC", str(SCAN_ROWS_REFRESH_SEC)
+            )
+        ),
+    ),
+)
+CITY_MARKET_CACHE_TTL_SEC = min(
+    SCAN_ROWS_REFRESH_SEC,
+    max(
+        30,
+        int(
+            os.getenv(
+                "POLYWEATHER_CITY_MARKET_CACHE_TTL_SEC", str(SCAN_ROWS_REFRESH_SEC)
+            )
+        ),
+    ),
+)
+CITY_FULL_CACHE_TTL_SEC = min(
+    OBSERVATION_REFRESH_SEC,
+    max(
+        30,
+        int(
+            os.getenv(
+                "POLYWEATHER_CITY_FULL_CACHE_TTL_SEC", str(OBSERVATION_REFRESH_SEC)
+            )
+        ),
+    ),
+)
 MARKET_SCAN_PAYLOAD_TTL_SEC = max(
     5,
     int(os.getenv("POLYWEATHER_MARKET_SCAN_PAYLOAD_TTL_SEC", "30")),
 )
+
+
 def _city_cache_is_fresh(entry: Optional[dict], ttl_sec: int) -> bool:
     if not isinstance(entry, dict):
         return False
@@ -186,7 +243,11 @@ def _market_scan_cache_key(
     requested_date = str(target_date or "").strip()
     selected_date = requested_date or local_date
     multi_model_daily = data.get("multi_model_daily") or {}
-    if requested_date and isinstance(multi_model_daily, dict) and requested_date not in multi_model_daily:
+    if (
+        requested_date
+        and isinstance(multi_model_daily, dict)
+        and requested_date not in multi_model_daily
+    ):
         selected_date = local_date
     normalized_slug = str(market_slug or "").strip().lower()
     return f"{selected_date}|{normalized_slug}|lite={1 if lite else 0}"
@@ -287,7 +348,9 @@ def _enqueue_city_observation_refresh(city: str, kind: str, *, reason: str) -> b
             )
         )
     except Exception as exc:
-        logger.debug("city cache collector enqueue skipped city={} kind={}: {}", city, kind, exc)
+        logger.debug(
+            "city cache collector enqueue skipped city={} kind={}: {}", city, kind, exc
+        )
         return False
 
 
@@ -327,10 +390,14 @@ def _canonical_city_payload(city: str, *, detail_depth: str) -> dict:
         {
             "city": city,
             "detail_depth": detail_depth,
-            "display_name": str(city_meta.get("display_name") or city_meta.get("name") or city.title()),
+            "display_name": str(
+                city_meta.get("display_name") or city_meta.get("name") or city.title()
+            ),
             "lat": city_info.get("lat"),
             "lon": city_info.get("lon"),
-            "temp_symbol": canonical.get("temp_symbol") or payload.get("temp_symbol") or ("\u00b0F" if city_info.get("f") else "\u00b0C"),
+            "temp_symbol": canonical.get("temp_symbol")
+            or payload.get("temp_symbol")
+            or ("\u00b0F" if city_info.get("f") else "\u00b0C"),
             "risk": {
                 "level": risk.get("risk_level", "low"),
                 "emoji": risk.get("risk_emoji", ""),
@@ -339,7 +406,8 @@ def _canonical_city_payload(city: str, *, detail_depth: str) -> dict:
                 "distance_km": risk.get("distance_km", 0),
                 "warning": risk.get("warning", ""),
             },
-            "probabilities": payload.get("probabilities") or {"mu": None, "distribution": []},
+            "probabilities": payload.get("probabilities")
+            or {"mu": None, "distribution": []},
         }
     )
     return payload
@@ -352,7 +420,9 @@ def _initializing_city_payload(city: str, *, detail_depth: str) -> dict:
     return {
         "city": city,
         "name": city,
-        "display_name": str(city_meta.get("display_name") or city_meta.get("name") or city.title()),
+        "display_name": str(
+            city_meta.get("display_name") or city_meta.get("name") or city.title()
+        ),
         "detail_depth": detail_depth,
         "status": "initializing",
         "stale": True,
@@ -390,7 +460,9 @@ def _initializing_city_payload(city: str, *, detail_depth: str) -> dict:
     }
 
 
-def _queued_city_cache_payload(city: str, kind: str, *, force_refresh: bool = False) -> dict:
+def _queued_city_cache_payload(
+    city: str, kind: str, *, force_refresh: bool = False
+) -> dict:
     normalized = str(city or "").strip().lower()
     cached = _cached_city_payload(kind, normalized)
     if cached:
@@ -415,16 +487,57 @@ def _queued_city_cache_payload(city: str, kind: str, *, force_refresh: bool = Fa
     return _initializing_city_payload(normalized, detail_depth=kind)
 
 
+def _attach_and_store_canonical_temperature(city: str, payload: dict) -> dict:
+    if not isinstance(payload, dict):
+        return payload
+    attach_canonical_temperature(payload, city=city)
+    try:
+        store_canonical_temperature_from_payload(_CACHE_DB, city, payload)
+    except Exception as exc:
+        logger.debug("canonical temperature store skipped city={}: {}", city, exc)
+    return payload
+
+
 def _refresh_city_summary_cache(city: str, force_refresh: bool = False) -> dict:
-    return _queued_city_cache_payload(city, "summary", force_refresh=force_refresh)
+    data = _analyze_summary(city, force_refresh=force_refresh)
+    _attach_and_store_canonical_temperature(city, data)
+    payload = _build_city_summary_payload(data)
+    if data.get("canonical_temperature"):
+        payload["canonical_temperature"] = data["canonical_temperature"]
+    _CACHE_DB.set_city_cache(
+        "summary",
+        city,
+        payload,
+        version="v1",
+        source_fingerprint=f"{city}:summary",
+    )
+    return payload
 
 
 def _refresh_city_panel_cache(city: str, force_refresh: bool = False) -> dict:
-    return _queued_city_cache_payload(city, "panel", force_refresh=force_refresh)
+    payload = _analyze(city, force_refresh=force_refresh, detail_mode="panel")
+    _attach_and_store_canonical_temperature(city, payload)
+    _CACHE_DB.set_city_cache(
+        "panel",
+        city,
+        payload,
+        version="v1",
+        source_fingerprint=f"{city}:panel",
+    )
+    return payload
 
 
 def _refresh_city_nearby_cache(city: str, force_refresh: bool = False) -> dict:
-    return _queued_city_cache_payload(city, "nearby", force_refresh=force_refresh)
+    payload = _analyze(city, force_refresh=force_refresh, detail_mode="nearby")
+    _attach_and_store_canonical_temperature(city, payload)
+    _CACHE_DB.set_city_cache(
+        "nearby",
+        city,
+        payload,
+        version="v1",
+        source_fingerprint=f"{city}:nearby",
+    )
+    return payload
 
 
 def _refresh_city_market_cache(city: str, force_refresh: bool = False) -> dict:
@@ -468,7 +581,11 @@ def _select_priority_city_batches(client_timezone: Optional[str]) -> dict[str, o
         primary = list(EUROPE_CORE_CITIES)
         secondary = list(ASIA_CORE_CITIES)
         region = "europe"
-    elif normalized.startswith("asia/") or normalized.startswith("australia/") or normalized.startswith("pacific/"):
+    elif (
+        normalized.startswith("asia/")
+        or normalized.startswith("australia/")
+        or normalized.startswith("pacific/")
+    ):
         primary = list(ASIA_CORE_CITIES)
         secondary = list(EUROPE_CORE_CITIES)
         region = "asia"
@@ -564,7 +681,9 @@ def _build_recent_deb_performance_index(
         abs_errors: list[float] = []
         for _, actual, deb_prediction in settled:
             abs_errors.append(abs(deb_prediction - actual))
-            if apply_city_settlement(city_name, actual) == apply_city_settlement(city_name, deb_prediction):
+            if apply_city_settlement(city_name, actual) == apply_city_settlement(
+                city_name, deb_prediction
+            ):
                 hit_count += 1
 
         sample_count = len(settled)
@@ -582,10 +701,14 @@ def _build_recent_deb_performance_index(
             "tier": tier,
             "sample_count": sample_count,
             "hit_rate": round(hit_rate, 4) if hit_rate is not None else None,
-            "mae": round(sum(abs_errors) / sample_count, 3) if sample_count > 0 else None,
+            "mae": round(sum(abs_errors) / sample_count, 3)
+            if sample_count > 0
+            else None,
             "last_date": settled[0][0] if settled else None,
         }
     return index
 
-__all__ = [name for name in globals() if not (name.startswith('__') and name.endswith('__'))]
 
+__all__ = [
+    name for name in globals() if not (name.startswith("__") and name.endswith("__"))
+]
