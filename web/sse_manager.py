@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import threading
 import time
 from collections import defaultdict
@@ -12,6 +13,10 @@ from typing import Any, AsyncIterator, DefaultDict, Iterable, Optional, Set
 
 HEARTBEAT_INTERVAL_SECONDS = 30
 QUEUE_MAXSIZE = 256
+MAX_CONNECTION_SECONDS = max(
+    HEARTBEAT_INTERVAL_SECONDS,
+    int(os.getenv("POLYWEATHER_SSE_MAX_CONNECTION_SECONDS", "240")),
+)
 
 
 class SseManager:
@@ -126,6 +131,7 @@ class SseManager:
             if connected_revision is not None:
                 self._revision = max(self._revision, int(connected_revision or 0))
 
+        connected_at = time.monotonic()
         try:
             yield self._format_event({
                 "type": "connected",
@@ -140,12 +146,19 @@ class SseManager:
                 self._track_revision({"revision": resync_event.get("latest_revision")})
                 yield self._format_event(resync_event)
             while True:
+                remaining_seconds = MAX_CONNECTION_SECONDS - (
+                    time.monotonic() - connected_at
+                )
+                if remaining_seconds <= 0:
+                    return
                 try:
                     event = await asyncio.wait_for(
                         queue.get(),
-                        timeout=HEARTBEAT_INTERVAL_SECONDS,
+                        timeout=min(HEARTBEAT_INTERVAL_SECONDS, remaining_seconds),
                     )
                 except asyncio.TimeoutError:
+                    if time.monotonic() - connected_at >= MAX_CONNECTION_SECONDS:
+                        return
                     event = {
                         "type": "heartbeat",
                         "revision": self._revision,

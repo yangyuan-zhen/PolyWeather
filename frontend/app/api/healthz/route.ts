@@ -19,10 +19,19 @@ export async function GET(req: NextRequest) {
     const auth = await buildBackendRequestHeaders(req, {
       includeSupabaseIdentity: false,
     });
-    const res = await fetch(`${API_BASE}/healthz`, {
+    let res = await fetch(`${API_BASE}/healthz`, {
       headers: auth.headers,
       cache: "no-store",
     });
+    if (
+      res.status === 404 &&
+      (res.headers.get("content-type") || "").includes("text/html")
+    ) {
+      res = await fetch(`${API_BASE}/api/healthz`, {
+        headers: auth.headers,
+        cache: "no-store",
+      });
+    }
     const raw = await res.text();
     const response = new NextResponse(raw, {
       status: res.status,

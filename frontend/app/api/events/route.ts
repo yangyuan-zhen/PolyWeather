@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
+const SSE_PROXY_MAX_DURATION_MS = 240_000;
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -20,6 +21,7 @@ export async function GET(req: NextRequest) {
 
   const upstream = await fetch(upstreamUrl.toString(), {
     cache: "no-store",
+    signal: AbortSignal.timeout(SSE_PROXY_MAX_DURATION_MS),
     headers: {
       Accept: "text/event-stream",
       Cookie: req.headers.get("cookie") || "",
