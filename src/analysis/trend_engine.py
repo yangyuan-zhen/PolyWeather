@@ -846,6 +846,42 @@ def analyze_weather_trend(
         except Exception:
             deb_normal_payload = None
 
+    # ── Dynamic forecast adjustment (live METAR evidence on top of DEB) ──
+    deb_dynamic_notes: List[str] = []
+    if deb_normal_payload and not is_dead_market:
+        try:
+            from src.analysis.dynamic_forecast import build_dynamic_forecast_payload
+
+            metar_obs_for_dynamic = (
+                (weather_data.get("metar") or {}).get("today_obs")
+                or weather_data.get("metar_today_obs")
+                or []
+            )
+            clouds_now = primary_current.get("clouds") or []
+            cover_code = str((clouds_now[-1] or {}).get("cover") or "") if clouds_now else ""
+            cloud_cover_octas = {"SKC": 0, "CLR": 0, "FEW": 2, "SCT": 4, "BKN": 6, "OVC": 8}.get(
+                cover_code, None
+            )
+            dynamic_payload = build_dynamic_forecast_payload(
+                deb_normal_payload,
+                max_so_far=max_so_far,
+                metar_today_obs=metar_obs_for_dynamic if isinstance(metar_obs_for_dynamic, list) else [],
+                wx_desc=str(primary_current.get("wx_desc") or ""),
+                cloud_cover=cloud_cover_octas,
+                taf_signal=(weather_data.get("taf") or {}).get("signal"),
+                peak_first_hour=first_peak_h,
+                peak_last_hour=last_peak_h,
+                local_hour=local_hour,
+                is_dead_market=bool(is_dead_market),
+            )
+            if dynamic_payload is not None:
+                deb_normal_payload = dynamic_payload
+                deb_dynamic_notes = [
+                    str(n) for n in (dynamic_payload.get("dynamic_notes") or [])
+                ]
+        except Exception as exc:
+            logger.debug("dynamic forecast adjustment skipped: {}", exc)
+
     if is_dead_market:
         probability_engine = "dead_market"
         settled_wu = (
@@ -888,8 +924,13 @@ def analyze_weather_trend(
         if prob_parts:
             mu_label = f"μ={mu:.1f}" if mu is not None else "μ=--"
             prob_str = " | ".join(prob_parts)
-            insights.append(f"🎲 <b>DEB 正态概率</b> ({mu_label})：{prob_str}")
-            ai_features.append(f"🎲 DEB 正态概率分布：{prob_str}")
+            dyn_tag = ""
+            if deb_normal_payload.get("dynamic_adjusted"):
+                dyn_tag = " · 动态校正"
+                if deb_dynamic_notes:
+                    dyn_tag += f" ({','.join(deb_dynamic_notes)})"
+            insights.append(f"🎲 <b>DEB 正态概率</b> ({mu_label}{dyn_tag})：{prob_str}")
+            ai_features.append(f"🎲 DEB 正态概率分布{dyn_tag}：{prob_str}")
 
     # === Settlement center (mu) ===
     # When a probability engine (deb_normal / dead_market) already anchored mu,
