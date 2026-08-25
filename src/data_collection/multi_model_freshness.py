@@ -79,7 +79,10 @@ def open_meteo_forecast_has_current_window(
     raw_date_values.extend(hourly.get("time") or [])
     parsed_dates = [parsed for raw in raw_date_values for parsed in [_parse_date(raw)] if parsed]
     if not parsed_dates:
-        return True
+        # Empty payloads (e.g. a transient Open-Meteo failure cached in the
+        # memory LRU) must not be treated as a valid current-window cache hit,
+        # otherwise the stale empty entry is served until its TTL expires.
+        return False
     return max(parsed_dates) >= today
 
 
