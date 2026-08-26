@@ -12,7 +12,7 @@ export function runTests() {
     "utf8",
   );
   const middlewareSource = fs.readFileSync(
-    path.join(projectRoot, "middleware.ts"),
+    path.join(projectRoot, "proxy.ts"),
     "utf8",
   );
   const opsProxyAuthSource = fs.readFileSync(
