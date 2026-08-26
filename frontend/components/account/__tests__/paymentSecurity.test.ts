@@ -11,7 +11,7 @@ export function runTests() {
   const projectRoot = process.cwd();
   const receiverModulePath = path.join(projectRoot, "lib", "payment-receiver.ts");
   const backendAuthPath = path.join(projectRoot, "lib", "backend-auth.ts");
-  const middlewarePath = path.join(projectRoot, "middleware.ts");
+  const middlewarePath = path.join(projectRoot, "proxy.ts");
   const accountCenterPath = path.join(
     projectRoot,
     "components",

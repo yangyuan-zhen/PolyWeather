@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: "standalone",
+  output: process.env.VERCEL ? undefined : "standalone",
   reactStrictMode: true,
   async headers() {
     const immutableCacheHeader = {
@@ -21,6 +21,24 @@ const nextConfig = {
         value: "public, max-age=600, stale-while-revalidate=3600",
       },
     ];
+    const securityHeaders = [
+      {
+        key: "X-Content-Type-Options",
+        value: "nosniff",
+      },
+      {
+        key: "Referrer-Policy",
+        value: "strict-origin-when-cross-origin",
+      },
+      {
+        key: "Permissions-Policy",
+        value: "camera=(), microphone=()",
+      },
+      {
+        key: "X-Frame-Options",
+        value: "SAMEORIGIN",
+      },
+    ];
     const staticExts = ["jpg", "jpeg", "png", "gif", "ico", "svg", "webp", "avif", "woff2", "ttf", "eot", "css", "js"];
     const staticAssetRules = staticExts.map((ext) => ({
       source: `/:path(.+\\.${ext})`,
@@ -36,7 +54,14 @@ const nextConfig = {
       source,
       headers: publicPageHeaders,
     }));
-    return [...staticAssetRules, ...publicPageRules];
+    return [
+      {
+        source: "/:path*",
+        headers: securityHeaders,
+      },
+      ...staticAssetRules,
+      ...publicPageRules,
+    ];
   },
 };
 

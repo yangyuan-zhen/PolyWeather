@@ -163,7 +163,7 @@ async function handleSupabaseOptionalSession(request: NextRequest) {
   return response;
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const requestHost =
     request.headers.get("x-forwarded-host") ||
     request.headers.get("host") ||
