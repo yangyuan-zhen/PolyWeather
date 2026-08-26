@@ -8,7 +8,7 @@ def test_frontend_dockerfile_uses_standalone_multistage_runtime():
     dockerfile = (ROOT / "frontend" / "Dockerfile").read_text(encoding="utf-8")
     next_config = (ROOT / "frontend" / "next.config.mjs").read_text(encoding="utf-8")
 
-    assert 'output: "standalone"' in next_config
+    assert 'output: process.env.VERCEL ? undefined : "standalone"' in next_config
     assert "AS deps" in dockerfile
     assert "AS builder" in dockerfile
     assert "AS runner" in dockerfile
