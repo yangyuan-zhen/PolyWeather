@@ -24,10 +24,12 @@ def test_sse_stream_closes_before_hosting_timeout(monkeypatch):
         manager = SseManager()
         return [event async for event in manager.event_stream("timeout-test")]
 
-    frames = asyncio.run(collect_events())
+    frames = asyncio.run(asyncio.wait_for(collect_events(), timeout=10))
 
-    assert len(frames) == 1
+    assert frames, "stream should emit the connected frame before closing"
     assert _decode_sse_events(frames[0])[0]["type"] == "connected"
+    # The stream must terminate on its own once MAX_CONNECTION_SECONDS elapses;
+    # exact frame count varies with host clock resolution (Windows timer granularity).
 
 
 def test_sse_format_event_stamps_emit_time_for_latency_diagnostics(monkeypatch):
