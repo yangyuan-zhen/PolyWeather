@@ -141,6 +141,7 @@ def build_recent_bias_corrector(
     min_samples: int = 3,
     shrinkage_samples: int = 5,
     max_adjustment: float = 5.0,
+    decay_factor: float = 0.90,
 ) -> RecentBiasCorrector:
     by_city: dict[str, list[dict[str, Any]]] = {}
     for record in history:
@@ -159,7 +160,14 @@ def build_recent_bias_corrector(
         samples = len(signed_actual_minus_prediction)
         if samples < min_samples:
             continue
-        raw_bias = statistics.mean(signed_actual_minus_prediction)
+        # Exponential recency weighting: most recent day weight=1, each older
+        # day multiplied by decay_factor (0.9 => half-life ~6.6 days). This
+        # lets the bias track regime switches within ~1 week instead of
+        # averaging a 30-day window that straddles the switch.
+        weights = [decay_factor**i for i in range(samples)]
+        raw_bias = sum(
+            w * e for w, e in zip(weights, signed_actual_minus_prediction)
+        ) / sum(weights)
         shrink = min(1.0, samples / max(float(shrinkage_samples), 1.0))
         adjusted = raw_bias * shrink
         adjusted = max(-abs(max_adjustment), min(abs(max_adjustment), adjusted))
@@ -196,8 +204,7 @@ def build_bucket_calibrated_corrector(
     max_abs = abs(float(max_adjustment or 0.0))
     candidate_count = int(round((max_abs * 2) / safe_step)) + 1
     candidates = [
-        round(-max_abs + idx * safe_step, 1)
-        for idx in range(max(candidate_count, 1))
+        round(-max_abs + idx * safe_step, 1) for idx in range(max(candidate_count, 1))
     ]
 
     for city, rows in by_city.items():
@@ -378,7 +385,13 @@ def choose_guarded_deb_correction(
             bucket_metrics=bucket_metrics,
         )
 
-    if abs(float(bucket.get("bias_adjustment") or 0.0) - float(recent.get("bias_adjustment") or 0.0)) < 0.05:
+    if (
+        abs(
+            float(bucket.get("bias_adjustment") or 0.0)
+            - float(recent.get("bias_adjustment") or 0.0)
+        )
+        < 0.05
+    ):
         return _guarded_deb_result(
             bucket,
             selected_version=DEB_BUCKET_CALIBRATED_VERSION,
@@ -414,7 +427,9 @@ def choose_guarded_deb_correction(
                 adjustment=float(bucket_holdout.get("bias_adjustment") or 0.0),
                 lookback_days=safe_validation_samples,
             )
-            if _bucket_holdout_is_better(recent_holdout_metrics, bucket_holdout_metrics):
+            if _bucket_holdout_is_better(
+                recent_holdout_metrics, bucket_holdout_metrics
+            ):
                 return _guarded_deb_result(
                     bucket,
                     selected_version=DEB_BUCKET_CALIBRATED_VERSION,
@@ -673,9 +688,7 @@ def write_backtest_report(
                     f"{DEB_BUCKET_CALIBRATED_VERSION}_prediction": bucket.get(
                         "prediction"
                     ),
-                    f"{DEB_BUCKET_CALIBRATED_VERSION}_error": bucket.get(
-                        "error"
-                    ),
+                    f"{DEB_BUCKET_CALIBRATED_VERSION}_error": bucket.get("error"),
                     f"{DEB_BUCKET_CALIBRATED_VERSION}_bias_adjustment": bucket.get(
                         "bias_adjustment"
                     ),
@@ -685,9 +698,7 @@ def write_backtest_report(
                     f"{DEB_GUARDED_CALIBRATED_VERSION}_prediction": guarded.get(
                         "prediction"
                     ),
-                    f"{DEB_GUARDED_CALIBRATED_VERSION}_error": guarded.get(
-                        "error"
-                    ),
+                    f"{DEB_GUARDED_CALIBRATED_VERSION}_error": guarded.get("error"),
                     f"{DEB_GUARDED_CALIBRATED_VERSION}_bias_adjustment": guarded.get(
                         "bias_adjustment"
                     ),
@@ -784,9 +795,7 @@ def backtest_deb_weight_configs(
     from src.analysis.deb_algorithm import calculate_dynamic_weight_components
 
     chosen = configs or DEFAULT_WEIGHT_CONFIGS
-    config_names = [
-        str(cfg.get("name") or f"cfg{i}") for i, cfg in enumerate(chosen)
-    ]
+    config_names = [str(cfg.get("name") or f"cfg{i}") for i, cfg in enumerate(chosen)]
 
     report_rows: list[dict[str, Any]] = []
     eval_by_config: dict[str, list[dict[str, Any]]] = {
@@ -827,7 +836,9 @@ def backtest_deb_weight_configs(
                         history_data={city: history},
                     )
                     pred = components.get("prediction")
-                    used_equal = int(components.get("days_used") or 0) < min_history_days
+                    used_equal = (
+                        int(components.get("days_used") or 0) < min_history_days
+                    )
                 if pred is None:
                     prediction_by_cfg[name] = None
                     error_by_cfg[name] = None
