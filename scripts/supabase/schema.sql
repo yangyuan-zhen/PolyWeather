@@ -200,6 +200,7 @@ begin
       'active',
       coalesce(v_claim.claimed_at, v_now),
       coalesce(v_claim.claimed_at, v_now) + interval '7 days',
+      'signup_trial',
       v_now,
       v_now
     )
@@ -227,6 +228,7 @@ begin
           'plan_code', 'signup_trial_3d',
           'expires_at', coalesce(v_claim.claimed_at, v_now) + interval '7 days'
         ),
+        v_now
       );
       return jsonb_build_object(
         'created', true,
