@@ -2,7 +2,7 @@ import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 import {
   REGIONS,
   getCityRegion,
-} from "@/components/dashboard/scan-terminal/continent-grouping";
+} from "@/lib/continent-grouping";
 
 export const MODEL_SUMMARY_MODEL_COLUMNS = [
   { key: "ECMWF", label: "ECMWF" },

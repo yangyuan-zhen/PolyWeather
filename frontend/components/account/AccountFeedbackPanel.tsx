@@ -6,7 +6,7 @@ import type { UserFeedbackEntry, UserFeedbackPayload } from "@/types/ops";
 import {
   feedbackStatusLabel,
   feedbackStatusTone,
-} from "@/components/dashboard/scan-terminal/feedback-status";
+} from "@/lib/feedback-status";
 import {
   getSupabaseBrowserClient,
   hasSupabasePublicEnv,

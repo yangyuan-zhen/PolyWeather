@@ -34,7 +34,6 @@ from web.services.canonical_temperature import (
     store_canonical_temperature_from_payload,
     build_city_weather_from_canonical,
 )
-from web.scan_terminal_service import build_scan_terminal_payload  # noqa: F401 - compatibility export for tests and transitional routers
 from web.core import (
     CITIES,
     CITY_REGISTRY,  # noqa: F401 - compatibility export for tests and transitional routers

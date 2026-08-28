@@ -112,20 +112,6 @@ export function runTests() {
     "generic backend JSON proxy errors must remain non-cacheable when Cache Everything is enabled",
   );
 
-  const scanTerminalProxy = readFrontend("app", "api", "scan", "terminal", "route.ts");
-  assert.match(scanTerminalProxy, /createProxyTimer\(req,\s*"scan_terminal"\)/);
-  assert.match(scanTerminalProxy, /timing:\s*timer/);
-  assert.match(
-    scanTerminalProxy,
-    /POLYWEATHER_SCAN_TERMINAL_PROXY_TIMEOUT_MS\s*\|\|\s*"60000"/,
-    "scan terminal proxy should allow the production backend enough time for batched model refreshes",
-  );
-  assert.match(
-    scanTerminalProxy,
-    /export const maxDuration = 70/,
-    "scan terminal proxy timeout budget should remain below the Next route execution cap",
-  );
-
   const cityDetailProxy = readFrontend("app", "api", "city", "[name]", "detail", "route.ts");
   assert.match(cityDetailProxy, /createProxyTimer\(req,\s*"city_detail"\)/);
   for (const stage of ["auth_headers", "backend_fetch", "backend_read"]) {

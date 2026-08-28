@@ -10,13 +10,6 @@ export function runTests() {
   const turnstileLibPath = path.join(projectRoot, "lib", "turnstile.ts");
   const widgetPath = path.join(projectRoot, "components", "security", "TurnstileWidget.tsx");
   const loginPath = path.join(projectRoot, "components", "auth", "LoginClient.tsx");
-  const feedbackModalPath = path.join(
-    projectRoot,
-    "components",
-    "dashboard",
-    "scan-terminal",
-    "UserFeedbackModal.tsx",
-  );
   const feedbackRoutePath = path.join(projectRoot, "app", "api", "feedback", "route.ts");
   const paymentIntentRoutePath = path.join(projectRoot, "app", "api", "payments", "intents", "route.ts");
   const paymentSubmitRoutePath = path.join(
@@ -37,7 +30,6 @@ export function runTests() {
   const turnstileLib = fs.readFileSync(turnstileLibPath, "utf8");
   const widgetSource = fs.readFileSync(widgetPath, "utf8");
   const loginSource = fs.readFileSync(loginPath, "utf8");
-  const feedbackModalSource = fs.readFileSync(feedbackModalPath, "utf8");
   const feedbackRouteSource = fs.readFileSync(feedbackRoutePath, "utf8");
   const paymentIntentRouteSource = fs.readFileSync(paymentIntentRoutePath, "utf8");
   const paymentSubmitRouteSource = fs.readFileSync(paymentSubmitRoutePath, "utf8");
@@ -65,12 +57,6 @@ export function runTests() {
       loginSource.includes("signInWithPassword") &&
       loginSource.includes("signUp"),
     "login/signup must attach a Turnstile captchaToken to Supabase auth calls",
-  );
-  assert(
-    feedbackModalSource.includes("TurnstileWidget") &&
-      feedbackModalSource.includes("getTurnstileTokenForAction") &&
-      feedbackModalSource.includes("turnstile_token"),
-    "feedback modal must include a Turnstile token in feedback submissions",
   );
   assert(
     feedbackRouteSource.includes('requireTurnstileForRequest(req, "feedback_submit"') &&
