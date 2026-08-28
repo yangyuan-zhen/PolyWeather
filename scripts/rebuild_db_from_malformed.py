@@ -1,7 +1,9 @@
 """Rebuild polyweather.db from prod backup + recoverable batches from malformed DB."""
+
 import pathlib
 import shutil
 import sqlite3
+
 src = pathlib.Path("data/polyweather.db")
 prod = pathlib.Path("data/polyweather-prod.db")
 dst = pathlib.Path("data/polyweather_rebuilt.db")
@@ -40,15 +42,24 @@ for tbl in tables:
         batch = 5000
         copied = 0
         bad = 0
-        for start in range(1, int(max_id)+1, batch):
+        for start in range(1, int(max_id) + 1, batch):
             try:
-                rows = src_con.execute(f"SELECT * FROM {tbl} WHERE id BETWEEN ? AND ? ", (start, start+batch-1)).fetchall()
-                cols = [d[0] for d in src_con.execute(f"SELECT * FROM {tbl} LIMIT 0").description]
+                rows = src_con.execute(
+                    f"SELECT * FROM {tbl} WHERE id BETWEEN ? AND ? ",
+                    (start, start + batch - 1),
+                ).fetchall()
+                cols = [
+                    d[0]
+                    for d in src_con.execute(f"SELECT * FROM {tbl} LIMIT 0").description
+                ]
                 if not rows:
                     continue
                 # Insert or replace
-                placeholders = ",".join(["?"]*len(cols))
-                dst_con.executemany(f"INSERT OR REPLACE INTO {tbl} ({','.join(cols)}) VALUES ({placeholders})", rows)
+                placeholders = ",".join(["?"] * len(cols))
+                dst_con.executemany(
+                    f"INSERT OR REPLACE INTO {tbl} ({','.join(cols)}) VALUES ({placeholders})",
+                    rows,
+                )
                 copied += len(rows)
             except sqlite3.DatabaseError as e:
                 bad += 1

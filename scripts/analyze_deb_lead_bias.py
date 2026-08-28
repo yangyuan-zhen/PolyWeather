@@ -93,7 +93,9 @@ def main():
     ):
         city = str(row["city"]).strip().lower()
         try:
-            truth[(city, row["target_date"])] = to_c(float(row["actual_high"]), city in f_cities)
+            truth[(city, row["target_date"])] = to_c(
+                float(row["actual_high"]), city in f_cities
+            )
         except (TypeError, ValueError):
             continue
     print(f"truth rows: {len(truth)}")
@@ -123,8 +125,10 @@ def main():
     print(f"  ...that also have settled truth        : {labelled}")
     print(f"  total training samples with truth      : {trainable}")
     print(f"  lead coverage                          : {labelled / trainable:.1%}")
-    print("  -> every uncovered sample falls back to lead=1 in "
-          "_walk_forward_deb_residuals")
+    print(
+        "  -> every uncovered sample falls back to lead=1 in "
+        "_walk_forward_deb_residuals"
+    )
 
     # Baseline: the value training actually consumes (last snapshot of the day).
     baseline = []
@@ -148,9 +152,10 @@ def main():
     scanned = 0
     # The main DB has corrupt pages, so scan in id ranges and skip damaged
     # batches rather than aborting the whole run.
-    max_id = conn.execute(
-        "SELECT MAX(id) FROM intraday_path_snapshots_store"
-    ).fetchone()[0] or 0
+    max_id = (
+        conn.execute("SELECT MAX(id) FROM intraday_path_snapshots_store").fetchone()[0]
+        or 0
+    )
     batch = 5000
     bad_batches = []
     for start in range(1, int(max_id) + 1, batch):
@@ -181,7 +186,9 @@ def main():
     conn.close()
     if bad_batches:
         print(f"  ! skipped {len(bad_batches)} corrupt id batches")
-    print(f"snapshots scanned: {scanned}, matched to truth: {sum(len(v) for v in buckets.values())}")
+    print(
+        f"snapshots scanned: {scanned}, matched to truth: {sum(len(v) for v in buckets.values())}"
+    )
 
     print("\n=== baseline (what training sees: last snapshot of the day)")
     b = summarize(baseline)
@@ -276,8 +283,14 @@ def main():
         print(f"\n=== production sigma (lead=1) = {p1:.2f} vs measured MAD-sigma")
         print(f"  {'bucket':10s} {'measured':>9s} {'under-estimate':>15s}")
         for key in (
-            "D0_00h", "D0_03h", "D0_06h", "D0_08h", "D0_09h",
-            "D0_12h", "D0_18h", "D0_23h",
+            "D0_00h",
+            "D0_03h",
+            "D0_06h",
+            "D0_08h",
+            "D0_09h",
+            "D0_12h",
+            "D0_18h",
+            "D0_23h",
         ):
             if key in buckets and len(buckets[key]) >= 30:
                 s = summarize(buckets[key])
@@ -294,14 +307,42 @@ def main():
                 out.extend(vals)
         return out
 
-    early = collect(["D-1_", "D0_00h", "D0_01h", "D0_02h", "D0_03h", "D0_04h",
-                     "D0_05h", "D0_06h", "D0_07h", "D0_08h", "D0_09h", "D0_10h",
-                     "D0_11h"])
-    late = collect(["D0_15h", "D0_16h", "D0_17h", "D0_18h", "D0_19h", "D0_20h",
-                    "D0_21h", "D0_22h", "D0_23h"])
+    early = collect(
+        [
+            "D-1_",
+            "D0_00h",
+            "D0_01h",
+            "D0_02h",
+            "D0_03h",
+            "D0_04h",
+            "D0_05h",
+            "D0_06h",
+            "D0_07h",
+            "D0_08h",
+            "D0_09h",
+            "D0_10h",
+            "D0_11h",
+        ]
+    )
+    late = collect(
+        [
+            "D0_15h",
+            "D0_16h",
+            "D0_17h",
+            "D0_18h",
+            "D0_19h",
+            "D0_20h",
+            "D0_21h",
+            "D0_22h",
+            "D0_23h",
+        ]
+    )
 
     print("\n=== regime comparison")
-    for label, vals in (("early (D-1 + D0 00-11h)", early), ("late  (D0 15-23h)", late)):
+    for label, vals in (
+        ("early (D-1 + D0 00-11h)", early),
+        ("late  (D0 15-23h)", late),
+    ):
         s = summarize(vals)
         print(
             f"  {label:24s} n={s['n']:6d}  MAE={s['mae']:.2f}  "
