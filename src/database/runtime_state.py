@@ -1575,6 +1575,7 @@ class IntradayPathSnapshotRepository:
 
 def _top_bucket(snapshot: Optional[List[Dict[str, Any]]]) -> Optional[int]:
     best_value = None
+    best_prob = -1.0
     for row in snapshot or []:
         if not isinstance(row, dict):
             continue

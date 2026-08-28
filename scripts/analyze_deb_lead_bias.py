@@ -308,15 +308,15 @@ def main():
             f"bias={s['bias']:+.2f}  sigma={s['sigma']:.2f}"
         )
     if early and late:
-        e, l = summarize(early), summarize(late)
+        early_s, late_s = summarize(early), summarize(late)
         print(
-            f"\n  MAE inflation (early vs late): {e['mae'] / l['mae'] - 1:+.1%}"
-            f"   sigma inflation: {e['sigma'] / l['sigma'] - 1:+.1%}"
+            f"\n  MAE inflation (early vs late): {early_s['mae'] / late_s['mae'] - 1:+.1%}"
+            f"   sigma inflation: {early_s['sigma'] / late_s['sigma'] - 1:+.1%}"
         )
         print(
             f"  MAE inflation (early vs training baseline): "
-            f"{e['mae'] / b['mae'] - 1:+.1%}"
-            f"   sigma: {e['sigma'] / b['sigma'] - 1:+.1%}"
+            f"{early_s['mae'] / b['mae'] - 1:+.1%}"
+            f"   sigma: {early_s['sigma'] / b['sigma'] - 1:+.1%}"
         )
 
 
