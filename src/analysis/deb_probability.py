@@ -61,7 +61,7 @@ RECENT_BIAS_DECAY = 0.9
 # which broke >=37C PIT (mean 0.51 -> 0.71). Raising the bar to 30 drops those
 # small unreliable groups while keeping the well-sampled <=32C / 33-36C strata.
 MIN_ADJUST_SAMPLES = 30
-MIN_SIGMA_SAMPLES = 4
+MIN_SIGMA_SAMPLES = 15
 
 # Celsius -> Fahrenheit, matching settlement rounding to whole degrees.
 def _c_to_f(value: float) -> float:
@@ -117,11 +117,16 @@ def _sigma_for_lead(
     # pooled sigma made >=37C PIT std collapse to ~0.19 (over-confident).
     if temp_key:
         temp_sigmas = stats.get("temp_sigmas") or {}
-        lead_temp = temp_sigmas.get(str(lead_key)) or {}
-        value = _sf(lead_temp.get(temp_key))
-        if value is not None:
-            return max(value, MIN_SIGMA)
-    sigmas = stats.get("lead_sigmas") or {}
+        # Try current lead, then fall back to other leads' same-temp sigma
+        # before degrading to the pooled lead sigma. This fixes the lead=0
+        # high-temp inversion where lead_0's >=37 pool has only 4 samples
+        # (fallback to 1.263 was smaller than lead_1's 2.024, i.e. more
+        # confident nearer settlement).
+        for lk in (str(lead_key), "1", "0", "2"):
+            lead_temp = temp_sigmas.get(lk) or {}
+            value = _sf(lead_temp.get(temp_key))
+            if value is not None:
+                return max(value, MIN_SIGMA)
     value = _sf(sigmas.get(str(lead_key)))
     if value is None:
         value = _sf(sigmas.get("1")) or _sf(sigmas.get("0"))
