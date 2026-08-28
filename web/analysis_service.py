@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import json
 import re
-import time as _time
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
@@ -375,6 +375,40 @@ def _archive_intraday_path_snapshot(city: str, result: Dict[str, Any]) -> None:
     except Exception as exc:
         logger.debug(f"intraday path snapshot archive skipped for {city}: {exc}")
 
+
+def _archive_probability_snapshot(city: str, result: Dict[str, Any]) -> None:
+    """Persist earliest-seen probability inputs for training lead labelling."""
+    try:
+        from src.database.runtime_state import ProbabilitySnapshotRepository
+
+        payload = result.get("probabilities") or {}
+        # deb_normal engine stores mu/sigma via deb_probability; use result fields
+        deb = result.get("deb") or {}
+        prob_snapshot = payload.get("probabilities") if isinstance(payload, dict) else None
+        shadow = result.get("shadow_probabilities") or {}
+        ts = (
+            datetime.now(timezone.utc)
+            .astimezone(timezone(timedelta(seconds=int(result.get("utc_offset_seconds") or 0))))
+            .isoformat(timespec="seconds")
+        )
+        snap_payload = {
+            "city": city,
+            "date": str(result.get("local_date") or "").strip(),
+            "timestamp": ts,
+            "raw_mu": _sf((payload.get("mu") if isinstance(payload, dict) else None) or deb.get("prediction")),
+            "raw_sigma": _sf(payload.get("sigma") if isinstance(payload, dict) else None),
+            "max_so_far": _sf((result.get("current") or {}).get("max_so_far")),
+            "peak_status": str((result.get("peak") or {}).get("status") or ""),
+            "probability_mode": str(payload.get("engine") if isinstance(payload, dict) else "") or "deb_normal",
+            "prob_snapshot": prob_snapshot,
+            "shadow_prob_snapshot": shadow.get("probabilities") if isinstance(shadow, dict) else None,
+            "payload_json": json.dumps(result, ensure_ascii=False, default=str),
+        }
+        if not snap_payload["city"] or not snap_payload["date"]:
+            return
+        ProbabilitySnapshotRepository().append_snapshot(snap_payload)
+    except Exception as exc:
+        logger.debug(f"probability snapshot archive skipped for {city}: {exc}")
 
 def _analyze(
     city: str,
@@ -1456,7 +1490,7 @@ def _analyze(
     result["intraday_meteorology"] = _build_intraday_meteorology(result)
     if normalized_detail_mode == "full":
         _archive_intraday_path_snapshot(city, result)
-
+        _archive_probability_snapshot(city, result)
     with _CACHE_LOCK:
         _cache[cache_key] = {"t": _time.time(), "d": result}
     return result

@@ -61,6 +61,7 @@ RECENT_BIAS_DECAY = 0.9
 # which broke >=37C PIT (mean 0.51 -> 0.71). Raising the bar to 30 drops those
 # small unreliable groups while keeping the well-sampled <=32C / 33-36C strata.
 MIN_ADJUST_SAMPLES = 30
+MIN_SIGMA_SAMPLES = 4
 
 # Celsius -> Fahrenheit, matching settlement rounding to whole degrees.
 def _c_to_f(value: float) -> float:
@@ -308,6 +309,12 @@ def _walk_forward_deb_residuals(
 
     # Earliest snapshot timestamp per (city, date) for lead computation.
     lead_by_cd: Dict[tuple[str, str], int] = {}
+    # Earliest deb_prediction per (city, date) for train/serve alignment:
+    # daily_records_store is upserted on every analysis call, so its
+    # deb_prediction is the *last* snapshot of the day (23h). Inference
+    # happens at 00-08h (first snapshot). Using the last snapshot makes
+    # training 1.6x too optimistic (MAE 1.37 vs 2.19, sigma 1.17 vs 1.95).
+    earliest_pred_by_cd: Dict[tuple[str, str], float] = {}
     try:
         # SQL-side aggregation: the snapshot table grows to hundreds of
         # thousands of rows (payload_json included); loading all of them just
@@ -315,6 +322,14 @@ def _walk_forward_deb_residuals(
         # and OOM-killed the training worker on production.
         snap_repo = ProbabilitySnapshotRepository()
         lead_by_cd.update(snap_repo.load_earliest_lead_days())
+    except Exception:
+        pass
+    try:
+        from src.database.runtime_state import IntradayPathSnapshotRepository
+
+        earliest_pred_by_cd.update(
+            IntradayPathSnapshotRepository().load_earliest_deb_prediction()
+        )
     except Exception:
         pass
 
@@ -332,15 +347,19 @@ def _walk_forward_deb_residuals(
             if actual is None or not isinstance(forecasts, dict) or not forecasts:
                 history[target_date] = record
                 continue
-            # Preferred prediction basis: the stored deb_prediction the engine
-            # actually published for this (city, date) - this is exactly what
-            # `_build_deb_normal_probability_payload` consumes at inference
-            # time, so trained bias/sigma/strata correct the real output.
-            # Fall back to a walk-forward recomputation when it is missing.
+            # Preferred prediction basis: the *first* intraday snapshot of
+            # this (city, date) — what the user actually saw in the morning
+            # (00-08h). Falls back to the stored last-snapshot deb_prediction
+            # (what training used before) and then to a walk-forward recompute.
             pred_c: Optional[float] = None
-            stored = _sf(record.get("deb_prediction"))
-            if stored is not None:
-                pred_c = _to_c(stored, str(city).strip().lower())
+            key = (str(city).strip().lower(), str(target_date)[:10])
+            earliest = earliest_pred_by_cd.get(key)
+            if earliest is not None:
+                pred_c = _to_c(earliest, str(city).strip().lower())
+            if pred_c is None:
+                stored = _sf(record.get("deb_prediction"))
+                if stored is not None:
+                    pred_c = _to_c(stored, str(city).strip().lower())
             if pred_c is None:
                 components = calculate_dynamic_weight_components(
                     city,
@@ -520,7 +539,7 @@ def train_deb_lead_stats(
         # tighter than the pooled lead pool (>=37C PIT std ~0.19 with the
         # pooled sigma). Emit a stratum sigma only when the group is
         # well-sampled; otherwise inference falls back to the lead sigma.
-        if len(resid) >= MIN_ADJUST_SAMPLES:
+        if len(resid) >= MIN_SIGMA_SAMPLES:
             temp_sigmas.setdefault(str(lead_key), {})[temp_key] = round(
                 _robust_sigma(resid), 3
             )
