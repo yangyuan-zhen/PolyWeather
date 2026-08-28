@@ -33,7 +33,7 @@ export function runTests() {
   );
 
   assert(
-    accountCopy.includes("3天试用") && !accountCopy.includes("邀请码"),
+    accountCopy.includes("7天试用") && !accountCopy.includes("邀请码"),
     "account copy must describe trial limits and remove referral code UI",
   );
   assert(

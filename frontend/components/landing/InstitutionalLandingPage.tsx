@@ -353,8 +353,8 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
               </div>
               <p className="landing-rise landing-delay-3 mt-4 text-sm text-slate-500">
                 {isEn
-                  ? "Start with a one-time 3-day trial. Trial access matches Pro."
-                  : "新用户可先领一次 3 天试用。试用期权益和 Pro 一致。"}
+                  ? "Start with a one-time 7-day trial. Trial access matches Pro."
+                  : "新用户可先领一次 7 天试用。试用期权益和 Pro 一致。"}
               </p>
             </div>
 
@@ -545,8 +545,8 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
               </h2>
               <p className="mt-4 text-base leading-8 text-slate-600">
                 {isEn
-                  ? "New users receive one 3-day trial. Monthly and quarterly Pro unlock the full entitlement set."
-                  : "新用户可领取一次 3 天试用，月付与季度 Pro 解锁完整权益。"}
+                  ? "New users receive one 7-day trial. Monthly and quarterly Pro unlock the full entitlement set."
+                  : "新用户可领取一次 7 天试用，月付与季度 Pro 解锁完整权益。"}
               </p>
             </div>
 
@@ -557,7 +557,7 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                   {isEn ? "Trial" : "试用"}
                 </div>
                 <h3 className="mt-5 text-2xl font-black text-slate-950">
-                  {isEn ? "3-day free trial" : "3 天免费试用"}
+                  {isEn ? "7-day free trial" : "7 天免费试用"}
                 </h3>
                 <p className="mt-3 flex-1 text-sm leading-7 text-slate-600">
                   {isEn

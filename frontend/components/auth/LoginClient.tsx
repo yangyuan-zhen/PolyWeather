@@ -90,8 +90,8 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
       ? "Sign in to continue to your weather decision terminal."
       : "登录后进入你的天气决策终端。",
     signupSubtitle: isEn
-      ? "Create an account and get a one-time 3-day trial. No payment required first."
-      : "创建账号后自动开启一次 3 天试用，无需先付款。",
+      ? "Create an account and get a one-time 7-day trial. No payment required first."
+      : "创建账号后自动开启一次 7 天试用，无需先付款。",
     googleOneClick: isEn
       ? "Continue with Google"
       : "使用 Google 账号一键登录",
@@ -449,7 +449,7 @@ export function LoginClient({ nextPath, initialError, initialMode }: LoginClient
             <div className="mb-6">
               <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-emerald-700">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                {isLogin ? copy.loginSubmit : isEn ? "3-day trial" : "3 天试用"}
+                {isLogin ? copy.loginSubmit : isEn ? "7-day trial" : "7 天试用"}
               </div>
               <h1 className="mb-2 text-2xl font-black tracking-tight text-slate-950">
                 {isLogin ? copy.welcomeBack : copy.signUpTitle}

@@ -45,7 +45,7 @@ export function createAccountCopy(isEn: boolean): Record<string, string> {
       proPlan: isEn ? "Pro Plan" : "Pro 套餐",
       monthlyPlan: isEn ? "Monthly" : "月付",
       quarterlyPlan: isEn ? "Quarterly" : "季度",
-      trialBadge: isEn ? "3-day trial" : "3天试用",
+      trialBadge: isEn ? "7-day trial" : "7天试用",
       paymentToken: isEn ? "Payment Token" : "支付币种",
       paymentAccount: isEn ? "Subscription Account" : "订阅归属账号",
       paymentWallet: isEn ? "Paying Wallet" : "付款钱包",

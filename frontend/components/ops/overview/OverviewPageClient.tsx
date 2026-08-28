@@ -113,7 +113,7 @@ export function OverviewPageClient() {
   });
   const planBreakdown = Object.entries(planCounts)
     .map(([k, v]) => {
-      const label = k.startsWith("signup_trial") ? "3天体验" : k === "pro_monthly" ? "月付" : k === "pro_quarterly" ? "季付" : k === "pro_yearly" ? "年付" : k;
+      const label = k.startsWith("signup_trial") ? "7天体验" : k === "pro_monthly" ? "月付" : k === "pro_quarterly" ? "季付" : k === "pro_yearly" ? "年付" : k;
       return { name: label, value: v };
     })
     .sort((a, b) => b.value - a.value);
