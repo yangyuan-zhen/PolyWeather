@@ -4,7 +4,6 @@ from fastapi.testclient import TestClient
 
 from web.app import app
 import web.services.city_api as city_api
-import web.services.scan_api as scan_api
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -128,48 +127,6 @@ def test_city_detail_response_includes_backend_server_timing(monkeypatch):
     assert "city_detail_total" in server_timing
 
 
-def test_scan_terminal_response_includes_backend_server_timing(monkeypatch):
-    monkeypatch.setattr(scan_api.legacy_routes, "_assert_entitlement", lambda request: None)
-    monkeypatch.setattr(
-        scan_api.legacy_routes,
-        "build_scan_terminal_payload",
-        lambda filters, force_refresh=False, timing_recorder=None, **_kwargs: {
-            "rows": [],
-            "filters": filters,
-            "status": "ready",
-            "stale": False,
-        },
-    )
-
-    response = client.get("/api/scan/terminal?limit=1")
-
-    assert response.status_code == 200
-    server_timing = response.headers["server-timing"]
-    assert "scan_terminal_assert_entitlement" in server_timing
-    assert "scan_terminal_build_payload" in server_timing
-    assert "scan_terminal_total" in server_timing
-    assert response.headers["cache-control"] == "no-store, max-age=0"
-    assert response.headers["cloudflare-cdn-cache-control"] == response.headers["cache-control"]
-
-
-def test_scan_terminal_stale_response_is_not_cached(monkeypatch):
-    monkeypatch.setattr(scan_api.legacy_routes, "_assert_entitlement", lambda request: None)
-    monkeypatch.setattr(
-        scan_api.legacy_routes,
-        "build_scan_terminal_payload",
-        lambda filters, force_refresh=False, timing_recorder=None, **_kwargs: {
-            "rows": [],
-            "filters": filters,
-            "status": "ready",
-            "stale": True,
-        },
-    )
-
-    response = client.get("/api/scan/terminal?limit=1")
-
-    assert response.status_code == 200
-    assert response.headers["cache-control"] == "no-store, max-age=0"
-    assert response.headers["cloudflare-cdn-cache-control"] == "no-store, max-age=0"
 
 
 def test_online_users_response_includes_backend_server_timing():

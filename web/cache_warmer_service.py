@@ -215,6 +215,8 @@ class CacheWarmer:
         return completed
 
     def _warm_scan(self) -> bool:
+        if not callable(self.scan_warmer):
+            return False
         try:
             self.scan_warmer({}, force_refresh=False)
             return True
@@ -268,12 +270,10 @@ def _queue_city_panel_refresh(city: str, *, force_refresh: bool = False) -> bool
 
 def build_default_cache_warmer() -> CacheWarmer:
     from web.core import CITIES
-    from web.scan_terminal_service import build_scan_terminal_payload
-
     hot_cities = _parse_city_list(os.getenv("POLYWEATHER_WARMER_HOT_CITIES"))
     return CacheWarmer(
         city_provider=lambda: CITIES,
-        scan_warmer=build_scan_terminal_payload,
+        scan_warmer=None,  # scan terminal removed
         city_panel_warmer=_queue_city_panel_refresh,
         scan_interval_sec=_env_int("POLYWEATHER_WARMER_SCAN_INTERVAL_SEC", 120),
         city_interval_sec=_env_int("POLYWEATHER_WARMER_CITY_INTERVAL_SEC", 30),
