@@ -9,7 +9,7 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=yangyuan-zhen/PolyWeather&type=Date)](https://star-history.com/#yangyuan-zhen/PolyWeather&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=yangyuan-zhen/polyweather&type=Date)](https://star-history.com/#yangyuan-zhen/PolyWeather&Date)
 
 ## Product Status (2026-08-22)
 
