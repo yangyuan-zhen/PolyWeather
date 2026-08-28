@@ -111,7 +111,6 @@ POLYWEATHER_OPS_ADMIN_EMAILS=yhrsc30@gmail.com
 - 观测源健康：`/api/ops/source-health`
 - 观测采集器状态：`/api/ops/observation-collector-status`
 - 训练准确性：`/api/ops/training/accuracy`
-- 市场机会：`/api/ops/market-opportunities`
 - 运行配置：`/api/ops/config`、`/api/ops/sensitive-config`
 
 ### 写能力
