@@ -68,12 +68,6 @@ from web.services.ops.health import (  # noqa: E402, F401
     get_ops_truth_history,
 )
 
-# ---------------------------------------------------------------------------
-# Internal market opportunities
-# ---------------------------------------------------------------------------
-from web.services.ops.market_opportunities import (  # noqa: E402, F401
-    get_ops_market_opportunities,
-)
 
 # ---------------------------------------------------------------------------
 # Config / Subscriptions / Logs / Telegram
