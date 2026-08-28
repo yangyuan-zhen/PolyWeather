@@ -5,7 +5,7 @@ from typing import Optional
 
 SIGNUP_TRIAL_PLAN_CODE = "signup_trial_3d"
 SIGNUP_TRIAL_SOURCE = "signup_trial"
-SIGNUP_TRIAL_DAYS = 3
+SIGNUP_TRIAL_DAYS = 7
 
 
 def _env_bool(name: str, default: bool = False) -> bool:

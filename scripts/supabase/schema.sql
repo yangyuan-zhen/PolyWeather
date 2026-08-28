@@ -152,7 +152,7 @@ declare
     where trim(input_wallet.value) <> ''
   );
   v_now timestamptz := now();
-  v_expires timestamptz := v_now + interval '3 days';
+  v_expires timestamptz := v_now + interval '7 days';
   v_claim public.trial_claims%rowtype;
   v_claim_id bigint;
   v_rows integer := 0;
@@ -199,8 +199,7 @@ begin
       'signup_trial_3d',
       'active',
       coalesce(v_claim.claimed_at, v_now),
-      coalesce(v_claim.claimed_at, v_now) + interval '3 days',
-      'signup_trial',
+      coalesce(v_claim.claimed_at, v_now) + interval '7 days',
       v_now,
       v_now
     )
@@ -226,15 +225,14 @@ begin
         'supabase_auth',
         jsonb_build_object(
           'plan_code', 'signup_trial_3d',
-          'expires_at', coalesce(v_claim.claimed_at, v_now) + interval '3 days'
+          'expires_at', coalesce(v_claim.claimed_at, v_now) + interval '7 days'
         ),
-        v_now
       );
       return jsonb_build_object(
         'created', true,
         'repaired', true,
         'plan_code', 'signup_trial_3d',
-        'expires_at', coalesce(v_claim.claimed_at, v_now) + interval '3 days'
+        'expires_at', coalesce(v_claim.claimed_at, v_now) + interval '7 days'
       );
     end if;
 

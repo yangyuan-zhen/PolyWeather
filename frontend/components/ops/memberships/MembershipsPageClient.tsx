@@ -60,7 +60,7 @@ export function MembershipsPageClient() {
 
   const planLabel = (code?: string) => {
     if (!code) return "—";
-    if (code.startsWith("signup_trial")) return "3天体验";
+    if (code.startsWith("signup_trial")) return "7天体验";
     if (code === "pro_monthly") return "月付";
     if (code === "pro_quarterly") return "季付";
     if (code === "pro_yearly") return "年付";
