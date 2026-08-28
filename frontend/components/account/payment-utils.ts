@@ -172,9 +172,35 @@ export function normalizePaymentError(error: unknown): NormalizedPaymentError {
     );
   if (userRejected) {
     return {
-      message: "你已取消钱包操作。",
+      message: "你已取消钱包操作。单号已保留，可直接重试支付，无需重建订单。",
       pending: false,
       userRejected: true,
+    };
+  }
+
+  const chainMismatch =
+    code === 4902 ||
+    /wrong network|unsupported chain|switch chain|chain.*mismatch|invalid chain|chain id|network.*mismatch|请切换.*网络|add.*chain/i.test(
+      lower,
+    ) ||
+    /chain/i.test(lower) && /mismatch|wrong|unsupported|switch|invalid/i.test(lower);
+  if (chainMismatch) {
+    return {
+      message: "网络不匹配：请在钱包中切换到 Polygon 网络后重试。如未添加 Polygon，请先添加。",
+      pending: false,
+      userRejected: false,
+    };
+  }
+
+  const insufficientTokenBalance =
+    /insufficient.*balance|exceeds balance|exceeds.*allowance|transfer amount exceeds|erc20.*insufficient|not enough.*usdc|usdc.*insufficient|余额不足/i.test(
+      lower,
+    ) && !/gas|pol|matic|network fee|手续费/.test(lower);
+  if (insufficientTokenBalance) {
+    return {
+      message: "支付代币余额不足：USDC 余额不足以支付本次订单，请充值后重试。单号已保留。",
+      pending: false,
+      userRejected: false,
     };
   }
 
@@ -188,6 +214,27 @@ export function normalizePaymentError(error: unknown): NormalizedPaymentError {
   if (insufficientGas) {
     return {
       message: "钱包 POL 不足，无法支付链上手续费，请先充值少量 POL 后重试。",
+      pending: false,
+      userRejected: false,
+    };
+  }
+
+  const rpcError =
+    /timeout|timed out|network error|fetch failed|connection.*failed|could not detect network|rpc error|disconnected|offline/i.test(
+      lower,
+    );
+  if (rpcError) {
+    return {
+      message: "网络连接超时或 RPC 异常，请检查网络/WalletConnect 连接后重试。",
+      pending: false,
+      userRejected: false,
+    };
+  }
+
+  const allowanceError = /allowance|approve/i.test(lower) && /fail|error|revert/i.test(lower);
+  if (allowanceError) {
+    return {
+      message: "授权失败：请在钱包中确认授权交易，或尝试重新授权。",
       pending: false,
       userRejected: false,
     };
