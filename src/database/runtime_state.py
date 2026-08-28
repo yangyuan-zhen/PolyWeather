@@ -1540,9 +1540,41 @@ class IntradayPathSnapshotRepository:
                 continue
         return out
 
+    def load_earliest_deb_prediction(self) -> Dict[tuple[str, str], float]:
+        """Earliest deb_prediction per (city, target_date) for training.
+
+        Uses the first intraday snapshot of the day (what the user saw in the
+        morning) instead of the last upsert in daily_records_store (what the
+        user saw at 23h). This closes the 1.6x MAE / 1.67x sigma train/serve
+        skew shown in scripts/analyze_deb_lead_bias.py.
+        """
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT city, target_date, deb_prediction
+                FROM intraday_path_snapshots_store
+                WHERE id IN (
+                    SELECT MIN(id) FROM intraday_path_snapshots_store
+                    GROUP BY city, target_date
+                )
+                """
+            ).fetchall()
+        out: Dict[tuple[str, str], float] = {}
+        for row in rows:
+            city = str(row["city"] or "").strip().lower()
+            date_str = str(row["target_date"] or "")[:10]
+            pred = row["deb_prediction"]
+            if not city or not date_str or pred is None:
+                continue
+            try:
+                out[(city, date_str)] = float(pred)
+            except Exception:
+                continue
+        return out
+
+
 def _top_bucket(snapshot: Optional[List[Dict[str, Any]]]) -> Optional[int]:
     best_value = None
-    best_prob = -1.0
     for row in snapshot or []:
         if not isinstance(row, dict):
             continue
