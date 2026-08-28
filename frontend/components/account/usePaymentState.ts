@@ -29,6 +29,14 @@ export function usePaymentState() {
     "wallet",
   );
   const [lastPaymentStartedAt, setLastPaymentStartedAt] = useState(0);
+  const [lastTxPayload, setLastTxPayload] = useState<any>(null);
+  const [lastIntentCreatedAt, setLastIntentCreatedAt] = useState(0);
+  const [lastIntentMeta, setLastIntentMeta] = useState<{
+    wallet: string;
+    chainId: number;
+    tokenAddress: string;
+    planCode: string;
+  } | null>(null);
 
   const clearPaymentMessages = useCallback(() => {
     setPaymentError("");
@@ -41,6 +49,9 @@ export function usePaymentState() {
     setManualPayment(null);
     setManualTxHash("");
     setLastPaymentStartedAt(0);
+    setLastTxPayload(null);
+    setLastIntentCreatedAt(0);
+    setLastIntentMeta(null);
     setTxValidation({ loading: false, checked: false });
   }, []);
 
@@ -65,6 +76,12 @@ export function usePaymentState() {
     setPaymentMethodTab,
     lastPaymentStartedAt,
     setLastPaymentStartedAt,
+    lastTxPayload,
+    setLastTxPayload,
+    lastIntentCreatedAt,
+    setLastIntentCreatedAt,
+    lastIntentMeta,
+    setLastIntentMeta,
     clearPaymentMessages,
     clearPaymentState,
   };

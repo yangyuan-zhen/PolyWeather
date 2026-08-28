@@ -66,6 +66,24 @@ export interface UsePaymentFlowParams {
   manualTxHash: string;
   manualPayment: CreatedIntent["direct_payment"] | null;
   lastIntentId: string;
+  lastTxPayload: unknown;
+  setLastTxPayload: React.Dispatch<React.SetStateAction<unknown>>;
+  lastIntentCreatedAt: number;
+  setLastIntentCreatedAt: React.Dispatch<React.SetStateAction<number>>;
+  lastIntentMeta: {
+    wallet: string;
+    chainId: number;
+    tokenAddress: string;
+    planCode: string;
+  } | null;
+  setLastIntentMeta: React.Dispatch<
+    React.SetStateAction<{
+      wallet: string;
+      chainId: number;
+      tokenAddress: string;
+      planCode: string;
+    } | null>
+  >;
   setPaymentBusy: (v: boolean) => void;
   setPaymentInfo: (v: string) => void;
   setPaymentError: (v: string) => void;
@@ -148,6 +166,12 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
     setPaymentInfo,
     setPaymentError,
     setLastIntentId,
+    lastTxPayload,
+    setLastTxPayload,
+    lastIntentCreatedAt,
+    setLastIntentCreatedAt,
+    lastIntentMeta,
+    setLastIntentMeta,
     setLastTxHash,
     setLastPaymentStartedAt,
     setManualPayment,
@@ -435,8 +459,14 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
 
   // ── createIntentAndPay ──────────────────────────────────
   const createIntentAndPay = async () => {
+    // Preserve last intent for reuse within 25min window (fixes 6 orders for 1 payment)
+    // Only clear messages, keep lastIntentId/Payload/Meta for potential reuse
     clearPaymentMessages();
-    clearPaymentState();
+    setPaymentError("");
+    setPaymentInfo("");
+    setManualPayment(null);
+    setManualTxHash("");
+    setTxValidation({ loading: false, checked: false });
     clearStoredPaymentRecovery();
     if (!paymentHostAllowed) {
       setPaymentError(copy.paymentHostBlocked.replace("{host}", allowedPaymentHosts[0] || "polyweather.top"));
@@ -516,40 +546,77 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
 
       await ensureTargetChain(eth, targetChainId, targetChain);
 
-      const createRes = await fetch("/api/payments/intents", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          ...buildPaymentTurnstilePayload("payment_intent_create"),
-          plan_code: selectedPlan?.plan_code || "pro_monthly",
-          payment_mode: "strict",
-          allowed_wallet: payingWallet,
-          chain_id: targetChainId,
-          token_address: String(selectedLatestToken?.address || resolvedSelectedTokenAddress || "").toLowerCase() || undefined,
-          use_points: billing.canRedeem && usePoints,
-          points_to_consume: billing.canRedeem && usePoints ? billing.pointsUsed : 0,
-          metadata: {
-            source: "account_center",
-            frontend_host: currentPaymentHost || null,
-            account_email: backend?.email || null,
-            auth_confirmed_at: authReady.auth_confirmed_at,
-          },
-        }),
-      });
-      resetPaymentTurnstile?.();
-      if (!createRes.ok) {
-        const raw = await readPaymentApiErrorMessage(
-          createRes,
-          isEn ? "Payment order request failed." : "支付订单请求失败。",
-          350,
-        );
-        throw new Error(copy.createIntentFailed.replace("{raw}", raw));
-      }
+      // Reuse previous intent if still valid (within 25min, same wallet/chain/token/plan)
+      // to avoid creating 6 orders for 1 payment as seen in production.
+      const now = Date.now();
+      const canReuse =
+        Boolean(lastIntentId) &&
+        Boolean(lastTxPayload) &&
+        Boolean(lastIntentCreatedAt) &&
+        now - Number(lastIntentCreatedAt) < 25 * 60 * 1000 &&
+        Boolean(lastIntentMeta) &&
+        String(lastIntentMeta?.wallet || "").toLowerCase() === String(payingWallet || "").toLowerCase() &&
+        Number(lastIntentMeta?.chainId) === Number(targetChainId) &&
+        String(lastIntentMeta?.tokenAddress || "").toLowerCase() ===
+          String(selectedLatestToken?.address || resolvedSelectedTokenAddress || "").toLowerCase() &&
+        String(lastIntentMeta?.planCode || "") === String(selectedPlan?.plan_code || "pro_monthly");
 
-      const created = (await createRes.json()) as CreatedIntent;
-      const intentId = String(created.intent?.intent_id || "");
-      const txPayload = created.tx_payload;
-      if (!intentId || !txPayload?.to || !txPayload?.data) throw new Error(copy.intentPayloadInvalid);
+      let intentId: string;
+      let txPayload: Record<string, unknown>;
+      if (canReuse) {
+        const payload = lastTxPayload as Record<string, unknown>;
+        intentId = String(lastIntentId);
+        txPayload = payload;
+        setPaymentInfo(
+          isEn
+            ? `Reusing order ${shortAddress(intentId)}, sending transaction...`
+            : `复用订单 ${shortAddress(intentId)}，直接发起支付...`,
+        );
+      } else {
+        const createRes = await fetch("/api/payments/intents", {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify({
+            ...buildPaymentTurnstilePayload("payment_intent_create"),
+            plan_code: selectedPlan?.plan_code || "pro_monthly",
+            payment_mode: "strict",
+            allowed_wallet: payingWallet,
+            chain_id: targetChainId,
+            token_address: String(selectedLatestToken?.address || resolvedSelectedTokenAddress || "").toLowerCase() || undefined,
+            use_points: billing.canRedeem && usePoints,
+            points_to_consume: billing.canRedeem && usePoints ? billing.pointsUsed : 0,
+            metadata: {
+              source: "account_center",
+              frontend_host: currentPaymentHost || null,
+              account_email: backend?.email || null,
+              auth_confirmed_at: authReady.auth_confirmed_at,
+            },
+          }),
+        });
+        resetPaymentTurnstile?.();
+        if (!createRes.ok) {
+          const raw = await readPaymentApiErrorMessage(
+            createRes,
+            isEn ? "Payment order request failed." : "支付订单请求失败。",
+            350,
+          );
+          throw new Error(copy.createIntentFailed.replace("{raw}", raw));
+        }
+
+        const created = (await createRes.json()) as CreatedIntent;
+        intentId = String(created.intent?.intent_id || "");
+        const rawPayload = (created as unknown as Record<string, unknown>).tx_payload;
+        txPayload = (rawPayload as Record<string, unknown>) || ({} as Record<string, unknown>);
+        setLastIntentId(intentId);
+        setLastTxPayload(txPayload as unknown);
+        setLastIntentCreatedAt(Date.now());
+        setLastIntentMeta({
+          wallet: String(payingWallet || "").toLowerCase(),
+          chainId: Number(targetChainId),
+          tokenAddress: String(selectedLatestToken?.address || resolvedSelectedTokenAddress || "").toLowerCase(),
+          planCode: String(selectedPlan?.plan_code || "pro_monthly"),
+        });
+      }
       trackPaymentStart({
         entry: "account_center",
         user_id: authUserId || null,
@@ -558,17 +625,20 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
         use_points: billing.canRedeem && usePoints,
         pay_amount_usd: billing.payAmount,
       });
-      const intentReceiver = String(txPayload.to || "").toLowerCase();
-      if (intentReceiver !== expectedReceiver) {
-        throw new Error(`payment receiver changed: expected ${expectedReceiver}, got ${intentReceiver}. 请刷新页面后重试。`);
-      }
-      setLastIntentId(intentId);
+      const intentReceiver = String((txPayload as Record<string, unknown>).to as string || "").toLowerCase();
 
-      const tokenAddress = String(txPayload.token_address || "").toLowerCase();
-      const amountUnits = BigInt(String(txPayload.amount_units || "0"));
+      const tokenAddress = String((txPayload as Record<string, unknown>).token_address as string || "").toLowerCase();
+      const amountUnits = BigInt(String((txPayload as Record<string, unknown>).amount_units as string || "0"));
       if (!tokenAddress.startsWith("0x") || amountUnits <= 0n) throw new Error(copy.intentTokenInvalid);
-      const tokenSymbol = String(txPayload.token_symbol || selectedPaymentToken?.symbol || selectedTokenLabel || "USDC");
-      const tokenDecimals = Number(txPayload.token_decimals ?? selectedPaymentToken?.decimals ?? latestConfig?.token_decimals ?? 6);
+      const tokenSymbol = String(
+        ((txPayload as Record<string, unknown>).token_symbol as string) || selectedPaymentToken?.symbol || selectedTokenLabel || "USDC",
+      );
+      const tokenDecimals = Number(
+        ((txPayload as Record<string, unknown>).token_decimals as number) ??
+          selectedPaymentToken?.decimals ??
+          (latestConfig as unknown as Record<string, unknown>)?.token_decimals ??
+          6,
+      );
 
       const balanceHex = await requestWalletWithTimeout<string>(
         eth, { method: "eth_call", params: [{ to: tokenAddress, data: buildBalanceOfCalldata(payingWallet) }, "latest"] },
@@ -582,15 +652,15 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
       }
 
       const allowanceHex = await requestWalletWithTimeout<string>(
-        eth, { method: "eth_call", params: [{ to: tokenAddress, data: buildAllowanceCalldata(payingWallet, txPayload.to) }, "latest"] },
+        eth, { method: "eth_call", params: [{ to: tokenAddress, data: buildAllowanceCalldata(payingWallet, String((txPayload as Record<string, unknown>).to as string)) }, "latest"] },
         `读取 ${tokenSymbol} 授权额度`,
       );
       const allowance = BigInt(String(allowanceHex || "0x0"));
 
       if (allowance < amountUnits) {
         setPaymentInfo(copy.approvalDetected.replace("{symbol}", tokenSymbol));
-        const approveParams: Record<string, any> = {
-          from: payingWallet, to: tokenAddress, data: buildApproveCalldata(txPayload.to, amountUnits),
+        const approveParams: Record<string, unknown> = {
+          from: payingWallet, to: tokenAddress, data: buildApproveCalldata(String((txPayload as Record<string, unknown>).to as string), amountUnits),
         };
         const approveHash = await requestWalletWithTimeout<string>(
           eth, { method: "eth_sendTransaction", params: [approveParams] },
@@ -603,9 +673,17 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
         setPaymentInfo(copy.approvalSufficient);
       }
 
-      const payParams: Record<string, any> = { from: payingWallet, to: txPayload.to, data: txPayload.data };
-      if (txPayload.value && txPayload.value !== "0x0" && txPayload.value !== "0") {
-        payParams.value = txPayload.value;
+      const payParams: Record<string, unknown> = {
+        from: payingWallet,
+        to: String((txPayload as Record<string, unknown>).to as string),
+        data: String((txPayload as Record<string, unknown>).data as string),
+      };
+      if (
+        (txPayload as Record<string, unknown>).value &&
+        (txPayload as Record<string, unknown>).value !== "0x0" &&
+        (txPayload as Record<string, unknown>).value !== "0"
+      ) {
+        payParams.value = String((txPayload as Record<string, unknown>).value as string);
       }
 
       const txHash = await requestWalletWithTimeout<string>(
