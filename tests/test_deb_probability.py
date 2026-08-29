@@ -11,6 +11,7 @@ from src.analysis.deb_probability import (
     _lead_key,
     _load_deb_normal_stats,
     _normal_cdf,
+    _sigma_for_lead,
     train_deb_lead_stats,
 )
 
@@ -382,6 +383,27 @@ def test_train_deb_lead_stats_prefers_earliest_snapshot_prediction():
     # Earliest-snapshot basis: 33.0 - 30.0 = +3.0, i.e. neither the stored
     # basis (+1.0) nor the walk-forward basis (+5.0).
     assert abs(result["lead_biases"]["1"] - 3.0) < 0.3
+
+
+def test_sigma_for_lead_floors_temp_stratum_at_pooled():
+    # A thinly-sampled temperature stratum must never be more confident than
+    # the pooled lead sigma: lead_0's 33-36 group had 22 samples and produced
+    # 0.778 while the 304-sample <=32 group produced 1.626 on the same lead.
+    stats = {
+        "lead_sigmas": {"0": 1.557, "1": 1.401},
+        "temp_sigmas": {
+            "0": {"<=32": 1.626, "33-36": 0.778},
+            "1": {"<=32": 1.401, "33-36": 1.323, ">=37": 2.024},
+        },
+    }
+    # 22-sample stratum is floored up to the pooled lead sigma.
+    assert _sigma_for_lead(stats, 0, "33-36") == pytest.approx(1.557, abs=0.01)
+    # Well-sampled stratum keeps its own value when it is above pooled.
+    assert _sigma_for_lead(stats, 0, "<=32") == pytest.approx(1.626, abs=0.01)
+    # High-temp stratum resolves through cross-lead fallback and stays above pooled.
+    assert _sigma_for_lead(stats, 0, ">=37") == pytest.approx(2.024, abs=0.01)
+    # Same rule on lead=1: 1.323 is floored up to pooled 1.401.
+    assert _sigma_for_lead(stats, 1, "33-36") == pytest.approx(1.401, abs=0.01)
 
 
 def test_train_deb_lead_stats_falls_back_to_walkforward_without_stored():
