@@ -112,6 +112,11 @@ def _sigma_for_lead(
 ) -> float:
     if not stats:
         return 2.5
+    sigmas = stats.get("lead_sigmas") or {}
+    pooled = _sf(sigmas.get(str(lead_key)))
+    if pooled is None:
+        pooled = _sf(sigmas.get("1")) or _sf(sigmas.get("0"))
+    pooled = pooled if pooled is not None else 2.5
     # Temperature-stratum sigma (per lead) wins when available: hot-day
     # residual pools are much tighter than the pooled lead pool, and using the
     # pooled sigma made >=37C PIT std collapse to ~0.19 (over-confident).
@@ -126,7 +131,11 @@ def _sigma_for_lead(
             lead_temp = temp_sigmas.get(lk) or {}
             value = _sf(lead_temp.get(temp_key))
             if value is not None:
-                return max(value, MIN_SIGMA)
+                # Floor: temp-stratum sigma must not be below pooled sigma,
+                # otherwise a 22-sample 33-36 group (0.778) would be more
+                # confident than the 304-sample <=32 group (1.626) on the
+                # same lead — the same inversion shifted to another bucket.
+                return max(value, pooled, MIN_SIGMA)
     value = _sf(sigmas.get(str(lead_key)))
     if value is None:
         value = _sf(sigmas.get("1")) or _sf(sigmas.get("0"))
@@ -286,6 +295,8 @@ def _walk_forward_deb_residuals(
     daily_records: Dict[str, Dict[str, Dict[str, Any]]],
     *,
     min_history_days: int = 2,
+    lead_by_cd: Optional[Dict[tuple[str, str], int]] = None,
+    earliest_pred_by_cd: Optional[Dict[tuple[str, str], float]] = None,
 ) -> List[Dict[str, Any]]:
     """Walk-forward no-leakage residual rows: (lead, residual_c).
 
@@ -293,12 +304,13 @@ def _walk_forward_deb_residuals(
     recomputed using ONLY history strictly before the target date (same logic as
     `_build_training_rows` in deb_ml_calibration.py, minus the LightGBM step).
 
-    `lead` is derived from the earliest probability snapshot timestamp of that
-    (city, date) when available; otherwise falls back to 1 (default one-day-ahead).
+    `lead` and the earliest-snapshot prediction are injected by the caller
+    (training_settlement_worker) so this function stays pure: it never touches
+    the runtime DB. Missing entries fall back to lead=1 and to the stored
+    deb_prediction respectively.
     """
     from src.analysis.deb_algorithm import calculate_dynamic_weight_components
     from src.data_collection.city_registry import CITY_REGISTRY
-    from src.database.runtime_state import ProbabilitySnapshotRepository
 
     f_cities = {
         str(c).strip().lower()
@@ -312,31 +324,14 @@ def _walk_forward_deb_residuals(
             return None
         return (v - 32.0) * 5.0 / 9.0 if city in f_cities else v
 
-    # Earliest snapshot timestamp per (city, date) for lead computation.
-    lead_by_cd: Dict[tuple[str, str], int] = {}
-    # Earliest deb_prediction per (city, date) for train/serve alignment:
+    # Earliest snapshot timestamp per (city, date) for lead computation, and
+    # earliest deb_prediction per (city, date) for train/serve alignment:
     # daily_records_store is upserted on every analysis call, so its
     # deb_prediction is the *last* snapshot of the day (23h). Inference
     # happens at 00-08h (first snapshot). Using the last snapshot makes
     # training 1.6x too optimistic (MAE 1.37 vs 2.19, sigma 1.17 vs 1.95).
-    earliest_pred_by_cd: Dict[tuple[str, str], float] = {}
-    try:
-        # SQL-side aggregation: the snapshot table grows to hundreds of
-        # thousands of rows (payload_json included); loading all of them just
-        # to derive one lead integer per (city, date) cost multiple GB of RAM
-        # and OOM-killed the training worker on production.
-        snap_repo = ProbabilitySnapshotRepository()
-        lead_by_cd.update(snap_repo.load_earliest_lead_days())
-    except Exception:
-        pass
-    try:
-        from src.database.runtime_state import IntradayPathSnapshotRepository
-
-        earliest_pred_by_cd.update(
-            IntradayPathSnapshotRepository().load_earliest_deb_prediction()
-        )
-    except Exception:
-        pass
+    lead_by_cd = dict(lead_by_cd or {})
+    earliest_pred_by_cd = dict(earliest_pred_by_cd or {})
 
     rows: List[Dict[str, Any]] = []
     for city, by_date in (daily_records or {}).items():
@@ -395,6 +390,8 @@ def train_deb_lead_stats(
     daily_records: Dict[str, Dict[str, Dict[str, Any]]],
     *,
     min_samples: int = 20,
+    lead_by_cd: Optional[Dict[tuple[str, str], int]] = None,
+    earliest_pred_by_cd: Optional[Dict[tuple[str, str], float]] = None,
 ) -> Dict[str, Any]:
     """Train lead-stratified residual stats from settled history (no leakage).
 
@@ -414,7 +411,11 @@ def train_deb_lead_stats(
     small-sample groups contribute nothing and large-sample groups (e.g. Seoul
     +2.8C, 33-36C warm band) correct the lead bias.
     """
-    rows = _walk_forward_deb_residuals(daily_records)
+    rows = _walk_forward_deb_residuals(
+        daily_records,
+        lead_by_cd=lead_by_cd,
+        earliest_pred_by_cd=earliest_pred_by_cd,
+    )
     by_lead: Dict[int, List[float]] = {}
     by_lead_city: Dict[tuple[int, str], Dict[str, List[float]]] = {}
     by_lead_temp: Dict[tuple[int, str], List[float]] = {}
