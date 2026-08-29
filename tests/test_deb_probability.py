@@ -359,6 +359,31 @@ def test_train_deb_lead_stats_uses_stored_deb_prediction_as_residual_basis():
     assert abs(result["lead_biases"]["1"] - 1.0) < 0.3
 
 
+def test_train_deb_lead_stats_prefers_earliest_snapshot_prediction():
+    # Train/serve alignment: daily_records_store keeps the LAST snapshot of the
+    # day (~23h) while inference happens on the FIRST one (00-08h). When an
+    # earliest-snapshot prediction is supplied it must win over the stored
+    # value, otherwise training is ~1.6x too optimistic.
+    daily_records = {}
+    dates = [f"2026-05-{i + 1:02d}" for i in range(25)]
+    for date in dates:
+        daily_records.setdefault("singapore", {})[date] = _make_record(
+            "singapore",
+            date,
+            33.0,
+            {"Open-Meteo": 28.0, "ECMWF": 28.1},
+            deb_prediction=32.0,
+        )
+    earliest = {("singapore", date): 30.0 for date in dates}
+    result = train_deb_lead_stats(
+        daily_records, min_samples=10, earliest_pred_by_cd=earliest
+    )
+    assert result["trained"] is True
+    # Earliest-snapshot basis: 33.0 - 30.0 = +3.0, i.e. neither the stored
+    # basis (+1.0) nor the walk-forward basis (+5.0).
+    assert abs(result["lead_biases"]["1"] - 3.0) < 0.3
+
+
 def test_train_deb_lead_stats_falls_back_to_walkforward_without_stored():
     # Without a stored deb_prediction the training falls back to a walk-forward
     # recomputation (no leakage): raw blend ~28.0, actual 33.0 -> +5.0 bias.

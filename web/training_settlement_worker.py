@@ -20,6 +20,8 @@ from src.analysis.deb_weight_snapshot import refresh_deb_weight_snapshots
 from src.database.runtime_state import (
     DailyRecordRepository,
     DebNormalResidualStatsRepository,
+    IntradayPathSnapshotRepository,
+    ProbabilitySnapshotRepository,
 )
 from web.training_settlement_service import run_training_settlement_cycle
 
@@ -121,8 +123,6 @@ def _run_once(
         cutoff = (
             datetime.now(timezone.utc) - timedelta(days=retention_days)
         ).isoformat(timespec="seconds")
-        from src.database.runtime_state import ProbabilitySnapshotRepository
-
         pruned = ProbabilitySnapshotRepository().prune_before(cutoff)
         result["snapshot_prune"] = {"retention_days": retention_days, "pruned": pruned}
     except Exception as exc:
@@ -160,7 +160,28 @@ def _run_once(
         daily_records = DailyRecordRepository().load_all(
             fields=("forecasts", "actual_high", "deb_prediction", "mu")
         )
-        stats = train_deb_lead_stats(daily_records)
+        # Lead labels and earliest-snapshot predictions are read here (not
+        # inside train_deb_lead_stats) so the trainer stays a pure function of
+        # its inputs and unit tests are not polluted by the runtime DB.
+        lead_by_cd: dict = {}
+        earliest_pred_by_cd: dict = {}
+        try:
+            lead_by_cd.update(
+                ProbabilitySnapshotRepository().load_earliest_lead_days()
+            )
+        except Exception as exc:
+            logger.warning("earliest lead days unavailable: {}", exc)
+        try:
+            earliest_pred_by_cd.update(
+                IntradayPathSnapshotRepository().load_earliest_deb_prediction()
+            )
+        except Exception as exc:
+            logger.warning("earliest deb prediction unavailable: {}", exc)
+        stats = train_deb_lead_stats(
+            daily_records,
+            lead_by_cd=lead_by_cd,
+            earliest_pred_by_cd=earliest_pred_by_cd,
+        )
         DebNormalResidualStatsRepository().upsert_stats(stats)
         result["deb_normal_residual_stats"] = {
             "trained": bool(stats.get("trained")),
