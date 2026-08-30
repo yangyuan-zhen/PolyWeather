@@ -1,0 +1,183 @@
+/* Scan terminal empty, loading, error, and skeleton signal states. */
+
+/* ── Empty state ── */
+.root :global(.scan-empty-state) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 48px 32px;
+  text-align: center;
+  gap: 12px;
+}
+
+.root :global(.scan-empty-icon) {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(77, 163, 255, 0.1);
+  border: 1px solid rgba(77, 163, 255, 0.16);
+  display: grid;
+  place-items: center;
+  color: var(--color-accent-secondary);
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+.root :global(.scan-empty-title) {
+  font-size: 20px;
+  font-weight: 800;
+  color: #e8f2ff;
+}
+
+.root :global(.scan-empty-copy) {
+  max-width: 360px;
+  font-size: 14px;
+  color: #8fa4c3;
+  line-height: 1.6;
+}
+
+/* ── Error state ── */
+.root :global(.scan-error-state) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 48px 32px;
+  text-align: center;
+  gap: 12px;
+}
+
+.root :global(.scan-error-icon) {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  display: grid;
+  place-items: center;
+  color: #FCA5A5;
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+.root :global(.scan-error-title) {
+  font-size: 20px;
+  font-weight: 800;
+  color: #e8f2ff;
+}
+
+.root :global(.scan-error-copy) {
+  max-width: 360px;
+  font-size: 14px;
+  color: #8fa4c3;
+  line-height: 1.6;
+}
+
+.root :global(.scan-retry-button) {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 10px 16px;
+  border: 1px solid rgba(77, 163, 255, 0.3);
+  border-radius: 12px;
+  background: rgba(77, 163, 255, 0.12);
+  color: #9ecbff;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.root :global(.scan-retry-button:hover) {
+  background: rgba(77, 163, 255, 0.18);
+  border-color: rgba(111, 183, 255, 0.48);
+}
+
+.root :global(.scan-loading-state) {
+  flex: 1;
+  min-height: 520px;
+  display: grid;
+  place-items: center;
+  padding: 48px 32px;
+  text-align: center;
+}
+
+.root :global(.scan-loading-signal) {
+  position: relative;
+  width: min(100%, 420px);
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  padding: 28px 30px;
+  background: transparent;
+}
+
+.root :global(.scan-loading-signal.compact) {
+  width: min(100%, 340px);
+  gap: 12px;
+  padding: 18px 20px;
+}
+
+.root :global(.scan-loading-spinner-wrapper) {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+}
+
+.root :global(.scan-loading-spinner-ring) {
+  position: absolute;
+  inset: 0;
+  border: 2px solid transparent;
+  border-top-color: #3b82f6;
+  border-right-color: #60a5fa;
+  border-radius: 50%;
+  animation: scan-loading-spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.12);
+}
+
+.root :global(.scan-loading-spinner-logo) {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.root :global(.scan-loading-copy-block) {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 7px;
+  justify-items: center;
+}
+
+.root :global(.scan-loading-copy-block strong) {
+  color: var(--color-text-primary);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.root :global(.scan-loading-copy-block span) {
+  max-width: 320px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+@keyframes scan-loading-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+

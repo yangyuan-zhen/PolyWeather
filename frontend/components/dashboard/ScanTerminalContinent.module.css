@@ -1,0 +1,65 @@
+/* ScanTerminalContinent — continent group headers and mobile cards */
+
+.root {
+  --gap-green: #16a34a;
+  --gap-orange: #ea580c;
+  --gap-slate: #475569;
+  --gap-gray: #94a3b8;
+  --gap-red: #dc2626;
+}
+
+/* Group header row */
+.groupHeader {
+  background: #eef2f6;
+  border-bottom: 1px solid #cbd5e1;
+}
+.groupHeader:hover {
+  background: #e2e8f0;
+}
+
+/* Mobile: hide scrollbar on tab bar */
+.mobileTabs {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.mobileTabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* Mobile card */
+.mobileCard {
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.mobileCard:hover {
+  background: #f0f7ff;
+}
+
+/* Signal badge colors */
+.signalActive {
+  color: #059669;
+}
+.signalWatch {
+  color: #d97706;
+}
+.signalClosed {
+  color: #94a3b8;
+}
+.signalData {
+  color: #dc2626;
+}
+
+/* Light theme overrides — match scan-terminal's .scan-terminal.light scope */
+:global(.scan-terminal.light) .groupHeader {
+  background: #f8fafc;
+  border-bottom-color: #e2e8f0;
+}
+:global(.scan-terminal.light) .groupHeader:hover {
+  background: #f1f5f9;
+}
+:global(.scan-terminal.light) .mobileCard {
+  background: #ffffff;
+  border-color: #e2e8f0;
+}

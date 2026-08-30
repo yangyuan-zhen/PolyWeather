@@ -217,6 +217,61 @@ warm_public_route() {
     return 0
 }
 
+wait_for_scan_terminal_snapshot() {
+    local name="$1"
+    local url="$2"
+    local timeout="${3:-35}"
+    local attempts="${4:-8}"
+    local delay="${5:-5}"
+    local output=""
+    local body=""
+    local compact=""
+    local http_status=""
+    local status=""
+
+    for i in $(seq 1 "$attempts"); do
+        if output=$(curl -sS -w "\nhttp=%{http_code}" --max-time "$timeout" "$url" 2>&1); then
+            http_status="$(printf '%s\n' "$output" | sed -n 's/^http=//p' | tail -n 1)"
+            body="$(printf '%s\n' "$output" | sed '$d')"
+            if [ "$http_status" = "401" ]; then
+                echo "✅ $name protected after attempt $i/$attempts (http=401)"
+                return 0
+            fi
+            compact="$(printf '%s' "$body" | tr -d '\n\r\t ')"
+            if printf '%s' "$compact" | grep -q '"status":"ready"'; then
+                echo "✅ $name ready after attempt $i/$attempts"
+                return 0
+            fi
+            if printf '%s' "$compact" | grep -q '"status":"stale"'; then
+                echo "✅ $name stale snapshot available after attempt $i/$attempts"
+                return 0
+            fi
+            if printf '%s' "$compact" | grep -q '"stale_reason":"市场扫描快照正在初始化"'; then
+                echo "✅ $name initializing after attempt $i/$attempts"
+                return 0
+            fi
+            if printf '%s' "$compact" | grep -q '"status":"partial"'; then
+                echo "✅ $name partial snapshot (market data degraded) after attempt $i/$attempts"
+                return 0
+            fi
+            if printf '%s' "$compact" | grep -q '"status":"failed"'; then
+                echo "✅ $name failed snapshot (market data unavailable) after attempt $i/$attempts"
+                return 0
+            fi
+            status="$(printf '%s' "$compact" | sed -n 's/.*"status":"\([^"]*\)".*/\1/p' | head -n 1)"
+            echo "   $name not ready attempt $i/$attempts http=${http_status:-unknown} status=${status:-unknown}"
+        else
+            echo "   $name request failed attempt $i/$attempts ($output)"
+        fi
+        if [ "$i" != "$attempts" ]; then
+            sleep "$delay"
+        fi
+    done
+
+    echo "❌ $name did not return a snapshot payload (ready/stale/partial/failed) or http=401"
+    return 1
+}
+
 validate_frontend_api_base_url() {
     local api_base="${POLYWEATHER_API_BASE_URL:-}"
     if [ -z "$api_base" ]; then
@@ -284,6 +339,7 @@ compose_up_retry "frontend" -d --no-deps polyweather_frontend
 echo "Waiting for frontend..."
 wait_for_local_service "frontend root" "http://127.0.0.1:3001/" 5 40 2 || FAILED_FRONTEND=1
 wait_for_local_service "frontend terminal" "http://127.0.0.1:3001/terminal" 10 20 2 || FAILED_FRONTEND=1
+wait_for_scan_terminal_snapshot "scan terminal snapshot" "http://127.0.0.1:3001/api/scan/terminal" 35 8 5 || FAILED_FRONTEND=1
 FAILED_FRONTEND="${FAILED_FRONTEND:-0}"
 if [ "$FAILED_FRONTEND" = "1" ]; then
     echo "❌ Frontend did not become healthy"
@@ -292,6 +348,7 @@ if [ "$FAILED_FRONTEND" = "1" ]; then
 fi
 
 warm_public_route "terminal" "https://polyweather.top/terminal" 20 4 3
+warm_public_route "scan terminal" "https://polyweather.top/api/scan/terminal" 35 3 2
 warm_public_route "auth snapshot" "https://polyweather.top/api/auth/me?prefer_snapshot=1" 10 3 2
 warm_public_route "local cities recent stats" "http://127.0.0.1:8000/api/cities?refresh_deb_recent=1" 15 2 2
 warm_public_route "cities" "https://polyweather.top/api/cities" 20 3 2

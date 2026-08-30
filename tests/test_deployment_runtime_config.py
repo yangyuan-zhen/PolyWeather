@@ -35,6 +35,28 @@ def test_nginx_proxy_buffers_cover_supabase_auth_cookies():
     assert "proxy_busy_buffers_size 32k;" in nginx_conf
 
 
+def test_scan_terminal_prewarm_is_lazy_by_default():
+    app_factory = (ROOT / "web" / "app_factory.py").read_text(encoding="utf-8")
+
+    assert "POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED" in app_factory
+    assert "start_scan_terminal_prewarm()" not in app_factory.replace(
+        "if _scan_terminal_prewarm_enabled():\n            start_scan_terminal_prewarm()",
+        "",
+    )
+
+
+def test_scan_terminal_prewarm_only_runs_for_web_service(monkeypatch):
+    from web import app_factory
+
+    monkeypatch.setenv("POLYWEATHER_SCAN_TERMINAL_PREWARM_ENABLED", "true")
+    monkeypatch.delenv("POLYWEATHER_SERVICE_ROLE", raising=False)
+    assert app_factory._scan_terminal_prewarm_enabled() is False
+
+    monkeypatch.setenv("POLYWEATHER_SERVICE_ROLE", "bot")
+    assert app_factory._scan_terminal_prewarm_enabled() is False
+
+    monkeypatch.setenv("POLYWEATHER_SERVICE_ROLE", "web")
+    assert app_factory._scan_terminal_prewarm_enabled() is True
 
 
 def test_observation_collector_only_runs_for_collector_service(monkeypatch):
@@ -159,6 +181,29 @@ def test_docker_compose_exposes_cloudflare_free_runtime_env():
     assert "POLYWEATHER_R2_SECRET_ACCESS_KEY: ${POLYWEATHER_R2_SECRET_ACCESS_KEY:-}" in web_block
 
 
+def test_scan_terminal_backend_timeout_returns_before_next_proxy_abort():
+    import web.services.scan_terminal_config as scan_terminal_config
+
+    route_source = (
+        ROOT / "frontend" / "app" / "api" / "scan" / "terminal" / "route.ts"
+    ).read_text(encoding="utf-8")
+    config_source = (
+        ROOT / "web" / "services" / "scan_terminal_config.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'POLYWEATHER_SCAN_TERMINAL_PROXY_TIMEOUT_MS || "60000"' in route_source
+    assert '"POLYWEATHER_SCAN_TERMINAL_BUILD_TIMEOUT_SEC",\n    30,' in config_source
+    assert '"POLYWEATHER_SCAN_TERMINAL_MAX_WORKERS",\n    1,' in config_source
+    assert (
+        '"POLYWEATHER_SCAN_TERMINAL_PREWARM_PAYLOAD_TIMEOUT_SEC",\n    30,'
+        in config_source
+    )
+    assert scan_terminal_config.SCAN_TERMINAL_BUILD_TIMEOUT_SEC <= 30
+    assert (
+        scan_terminal_config.SCAN_TERMINAL_PREWARM_PAYLOAD_TIMEOUT_SEC
+        >= scan_terminal_config.SCAN_TERMINAL_BUILD_TIMEOUT_SEC
+    )
+
 
 def test_deploy_workflow_applies_cloudflare_rules_when_token_is_available():
     workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
@@ -225,10 +270,18 @@ def test_deploy_script_retries_startup_smoke_checks():
     script = (ROOT / "deploy.sh").read_text(encoding="utf-8")
 
     assert "smoke_check()" in script
-    assert "wait_for_scan_terminal_snapshot()" not in script
+    assert "wait_for_scan_terminal_snapshot()" in script
+    assert '"status":"ready"' in script
+    assert '"status":"stale"' in script
+    assert "stale snapshot available" in script
+    assert "http=401" in script
+    assert '"stale_reason":"市场扫描快照正在初始化"' in script
+    assert "initializing after attempt" in script
+    assert 'wait_for_scan_terminal_snapshot "scan terminal snapshot" "http://127.0.0.1:3001/api/scan/terminal"' in script
+    assert script.index("wait_for_scan_terminal_snapshot") < script.index("run_public_smoke_checks")
     assert 'smoke_check "healthz" "https://api.polyweather.top/healthz" 15 3 5' in script
     assert 'warm_public_route "local cities recent stats" "http://127.0.0.1:8000/api/cities?refresh_deb_recent=1"' in script
-    assert 'warm_public_route "scan terminal" "https://polyweather.top/api/scan/terminal"' not in script
+    assert 'warm_public_route "scan terminal" "https://polyweather.top/api/scan/terminal"' in script
     assert 'smoke_check "local cities" "http://127.0.0.1:8000/api/cities" 10 6 3' not in script
     assert 'smoke_check "frontend cities" "https://polyweather.top/api/cities" 20 5 5' in script
     assert 'smoke_check "frontend" "https://www.polyweather.top/" 15 3 5' in script

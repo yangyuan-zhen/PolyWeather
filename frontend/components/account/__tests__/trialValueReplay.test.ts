@@ -13,8 +13,8 @@ export function runTests() {
     path.join(projectRoot, "components", "account", "AccountCenter.tsx"),
     "utf8",
   );
-  const terminalPage = fs.readFileSync(
-    path.join(projectRoot, "app", "terminal", "page.tsx"),
+  const dashboardSource = fs.readFileSync(
+    path.join(projectRoot, "components", "dashboard", "ScanTerminalDashboard.tsx"),
     "utf8",
   );
 
@@ -31,8 +31,10 @@ export function runTests() {
   );
 
   assert(
-    terminalPage.includes("Terminal Offline") || terminalPage.includes("terminal"),
-    "terminal page should exist even when scan terminal is offline",
+    dashboardSource.includes("recordTrialValueReplay") &&
+      dashboardSource.includes("isTrialTerminalAccess") &&
+      dashboardSource.includes("selectedRow"),
+    "terminal trial users must record real terminal usage for later value replay",
   );
 
   assert(
