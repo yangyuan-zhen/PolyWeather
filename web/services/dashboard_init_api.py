@@ -48,6 +48,26 @@ async def build_dashboard_init_payload(request: Request) -> Dict[str, Any]:
                 "dashboard_init default_city={} panel failed: {}", default_city, exc
             )
 
+    scan_payload: Optional[Dict[str, Any]] = None
+    if is_pro:
+        try:
+            scan_payload = await run_in_threadpool(
+                legacy_routes.build_scan_terminal_payload,
+                {
+                    "scan_mode": "tradable",
+                    "min_price": 0.05,
+                    "max_price": 0.95,
+                    "min_edge_pct": 2.0,
+                    "min_liquidity": 500.0,
+                    "market_type": "maxtemp",
+                    "time_range": "today",
+                    "limit": 25,
+                },
+                False,
+            )
+        except Exception as exc:
+            logger.warning("dashboard_init scan terminal failed: {}", exc)
+
     duration_ms = round((time.perf_counter() - started) * 1000.0, 1)
     logger.info(
         "dashboard_init is_pro={} default_city={} duration_ms={}",
@@ -62,4 +82,6 @@ async def build_dashboard_init_payload(request: Request) -> Dict[str, Any]:
         "default_city_detail": detail_payload,
         "is_pro": is_pro,
     }
+    if scan_payload is not None:
+        payload["scan_terminal"] = scan_payload
     return payload
