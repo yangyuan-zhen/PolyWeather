@@ -62,14 +62,22 @@ docker compose down && docker compose up -d --build
 - SSE 实时事件: 生产用 Redis Stream, 本地可切 SQLite
 - 付费墙: middleware.ts (服务端) + `ProductAccessRequired` (客户端)
 - `config/` + `web/schemas/` + `web/services/` 存放共享配置和载荷构建
+- DEB 训练：`train_deb_lead_stats` 按 `lead 0/1/2 × 温段 <=32/33-36/>=37` 分池，`lead` 与首快照 `deb_prediction` 均取 `intraday_path_snapshots_store` 的 `MIN(id)`（`00-08h` 所见），`temp_sigmas` 阈值 `MIN_SIGMA_SAMPLES=15` 且跨 `lead` 回退 + `pooled` 下限防过度自信；`ProbabilitySnapshot` 由 `web/analysis_service._archive_probability_snapshot` 在 `full` 分析时落库
+- DB 运维：`SQLite WAL` + `busy_timeout=5000`；生产 `2GB` 库若 `PRAGMA integrity_check` 报 `Rowid out of order` 用 `REINDEX runway_obs_log/payment_audit_events`（比 `VACUUM` 轻），`intraday` 丢 `0.34%` 由 `load_earliest_deb_prediction` 批容错兜住；评估脚本 `scripts/assess_db_integrity.py` 只读 `44s` 输出 `COUNT`/`扫描` 对比
+
+## 重要脚本
+
+- `scripts/analyze_deb_lead_bias.py` 首快照 vs 末快照 `MAE 1.6x / sigma 1.67x` 配对分析
+- `scripts/assess_db_integrity.py` 只读评估 `44s`：各表 `COUNT(*)` vs `rowid` 扫描与坏页定位
+- `scripts/verify_deb_fix_sigma.py` 只读验证 `BEFORE/AFTER` 的 `lead/temp sigmas`
+- `scripts/rebuild_db_from_malformed.py` 从 `prod` 备份 + `id 5000` 批跳坏页重建（仅 `intraday 0.34%` 丢行时无需停机重建）
+
+## 试用与定价
+
+- 新用户试用 `7 天`（`SIGNUP_TRIAL_DAYS=7`，`claim_signup_trial` 用 `interval 7 days`），`lead` 计算 `max(0, target - today_UTC)` 使线上 `lead 0` 为主流量
+
+## 已下线
+
+- 天气扫描终端 `web/scan_terminal_*` / `routers/scan` / `services/scan_api` 及其前端 `ScanTerminalDashboard` 已整块下线，`/terminal` 为离线占位；`deploy.sh` 已移除 `wait_for_scan_terminal_snapshot` 健康检查
 
 ## 测试注意
-
-- `python -m pytest` 跑全部（确保 requirements-dev.lock 已装）
-- 前端测试仅 `npm run test:business`（非 Jest/Vitest）
-- 配置文件参考 `docs/CONFIGURATION_ZH.md` 和 `.env.example`
-
-## CI/CD
-
-`main` push 触发: `python-quality` → `frontend-quality` → `build-and-push` (GHCR) → `deploy` (VPS via SSH)
-推送后检查 GitHub Actions 状态 + smoke test: `api.polyweather.top/healthz` + `polyweather.top/`
