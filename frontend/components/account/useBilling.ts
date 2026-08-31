@@ -112,9 +112,9 @@ export function useBilling(params: UseBillingParams) {
 
   // ── Billing ──────────────────────────────────────────────
   const billing = useMemo(() => {
-    const listAmountRaw = Number(selectedPlan?.amount_usdc ?? 29.9);
+  const listAmountRaw = Number(selectedPlan?.amount_usdc ?? 9.9);
     const listAmount =
-      Number.isFinite(listAmountRaw) && listAmountRaw > 0 ? listAmountRaw : 29.9;
+      Number.isFinite(listAmountRaw) && listAmountRaw > 0 ? listAmountRaw : 9.9;
     const selectedPlanCode = String(selectedPlan?.plan_code || "").toLowerCase();
     const planAmount = listAmount;
 

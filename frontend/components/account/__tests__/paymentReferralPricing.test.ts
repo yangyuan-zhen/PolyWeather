@@ -43,16 +43,16 @@ export function runTests() {
   );
   assert(
     accountCenter.includes("pro_quarterly") &&
-      accountCenter.includes("79.9") &&
-      accountCenter.includes("29.9"),
+      accountCenter.includes("24.9") &&
+      accountCenter.includes("9.9"),
     "account center must show monthly and quarterly Pro prices",
   );
   assert(
     !accountCopy.includes("20 USDC") &&
       !accountCopy.includes("+3500 积分") &&
       !accountCopy.includes("邀请首月") &&
-      accountCopy.includes("月付订单最多抵扣 3 USDC") &&
-      accountCopy.includes("季度订单最多抵扣 8 USDC") &&
+      accountCopy.includes("月付订单最多抵扣 1 USDC") &&
+      accountCopy.includes("季度订单最多抵扣 3 USDC") &&
       !accountCopy.includes("群内有效发言"),
     "account copy must remove referral rewards and keep points discount rules",
   );

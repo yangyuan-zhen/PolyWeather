@@ -21,14 +21,14 @@ const FAQ_ITEMS = [
   {
     q_zh: "当前订阅价格是多少？",
     q_en: "What is the current subscription price?",
-    a_zh: "Pro 月付 29.9 USDC / 30 天，Pro 季度 79.9 USDC / 90 天。",
-    a_en: "Pro monthly is 29.9 USDC / 30 days. Pro quarterly is 79.9 USDC / 90 days.",
+    a_zh: "Pro 月付 9.9 USDC / 30 天，Pro 季度 24.9 USDC / 90 天。",
+    a_en: "Pro monthly is 9.9 USDC / 30 days. Pro quarterly is 24.9 USDC / 90 days.",
   },
   {
     q_zh: "积分如何抵扣？",
     q_en: "How do points work for discounts?",
-    a_zh: "满 500 积分起兑，每 500 积分抵 1U。月付最多抵 3U，季度最多抵 8U。",
-    a_en: "500 points minimum: every 500 points = 1 USDC off. Monthly orders can use up to 3 USDC off; quarterly orders can use up to 8 USDC off.",
+    a_zh: "满 500 积分起兑，每 500 积分抵 1U。月付最多抵 1U，季度最多抵 3U。",
+    a_en: "500 points minimum: every 500 points = 1 USDC off. Monthly orders can use up to 1 USDC off; quarterly orders can use up to 3 USDC off.",
   },
   {
     q_zh: "支持哪些钱包和支付方式？",
@@ -49,9 +49,9 @@ export function SubscriptionHelpClient() {
       ? "Complete subscription rules and payment guide."
       : "这里是完整的订阅规则和支付说明。你可以先在页面内绑定钱包，再直接开通 Pro。",
     priceLabel: isEn ? "Price" : "订阅价格",
-    priceText: isEn ? "29.9 / 30d · 79.9 / 90d" : "29.9 / 30天 · 79.9 / 90天",
+    priceText: isEn ? "9.9 / 30d · 24.9 / 90d" : "9.9 / 30天 · 24.9 / 90天",
     discountLabel: isEn ? "Points Discount" : "积分抵扣",
-    discountText: isEn ? "Monthly 3U · Quarterly 8U" : "月付 3U · 季度 8U",
+    discountText: isEn ? "Monthly 1U · Quarterly 3U" : "月付 1U · 季度 3U",
     faqTitle: isEn ? "FAQ" : "常见问题",
   }), [isEn]);
 

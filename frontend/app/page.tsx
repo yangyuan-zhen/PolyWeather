@@ -48,7 +48,7 @@ export default async function HomePage({
       {
         "@type": "Offer",
         name: "Pro monthly",
-        price: "29.90",
+        price: "9.90",
         priceCurrency: "USD",
         description:
           "Pro subscription for 30 days.",
@@ -57,7 +57,7 @@ export default async function HomePage({
       {
         "@type": "Offer",
         name: "Pro quarterly",
-        price: "79.90",
+        price: "24.90",
         priceCurrency: "USD",
         description: "Pro subscription for 90 days.",
         availability: "https://schema.org/InStock",
