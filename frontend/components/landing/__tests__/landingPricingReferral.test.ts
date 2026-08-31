@@ -123,8 +123,8 @@ export function runTests() {
       authActionsSource.includes('"enter_terminal"'),
     "landing client islands must emit the top-of-funnel analytics events",
   );
-  assert(source.includes("29.9") && source.includes("30 天"), "landing page must show monthly Pro pricing");
-  assert(source.includes("79.9") && source.includes("90 天"), "landing page must show quarterly Pro pricing");
+  assert(source.includes("9.9") && source.includes("30 天"), "landing page must show monthly Pro pricing");
+  assert(source.includes("24.9") && source.includes("90 天"), "landing page must show quarterly Pro pricing");
   assert(source.includes("API") && source.includes("暂不售卖"), "landing page must describe API as not currently for sale");
   assert(!source.includes("Request API") && !source.includes("申请 API"), "landing page must not invite users to buy or request API access");
   assert(source.includes("Team") && source.includes("团队"), "landing page must describe the Team tier");
@@ -133,8 +133,8 @@ export function runTests() {
   assert(!source.includes("AI 气象证据链解读"), "legacy AI evidence-chain wording must be removed");
   assert(!source.includes("AI weather evidence"), "legacy AI evidence wording must be removed");
   assert(!source.includes("$10"), "legacy $10/month pricing must be removed from landing page");
-  assert(appPageSource.includes('price: "29.90"'), "JSON-LD must expose monthly Pro pricing");
-  assert(appPageSource.includes('price: "79.90"'), "JSON-LD must expose quarterly Pro pricing");
+  assert(appPageSource.includes('price: "9.90"'), "JSON-LD must expose monthly Pro pricing");
+  assert(appPageSource.includes('price: "24.90"'), "JSON-LD must expose quarterly Pro pricing");
   assert(!appPageSource.includes('price: "10.00"'), "legacy JSON-LD pricing must be removed");
   assert(!appPageSource.includes("PreloadTerminalData"), "landing route must not add a fourth client island");
   assert(

@@ -73,11 +73,11 @@ ERC20_TRANSFER_EVENT_ABI = {
 }
 
 DEFAULT_PLAN_CATALOG: Dict[str, Dict[str, Any]] = {
-    "pro_monthly": {"plan_id": 101, "amount_usdc": "29.9", "duration_days": 30},
-    "pro_quarterly": {"plan_id": 102, "amount_usdc": "79.9", "duration_days": 90},
+    "pro_monthly": {"plan_id": 101, "amount_usdc": "9.9", "duration_days": 30},
+    "pro_quarterly": {"plan_id": 102, "amount_usdc": "24.9", "duration_days": 90},
 }
 
 DEFAULT_POINTS_MAX_DISCOUNT_BY_PLAN: Dict[str, int] = {
-    "pro_monthly": 3,
-    "pro_quarterly": 8,
+    "pro_monthly": 1,
+    "pro_quarterly": 3,
 }

@@ -129,7 +129,7 @@ function SubscriptionGate({
 
           <div className="p-8">
             <div className="mb-6 flex items-baseline gap-1">
-              <span className="text-4xl font-black text-slate-900">29.9 USDC</span>
+              <span className="text-4xl font-black text-slate-900">9.9 USDC</span>
               <span className="text-base text-slate-500">
                 {t("month", isEn)}
               </span>

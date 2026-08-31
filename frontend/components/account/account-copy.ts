@@ -289,7 +289,7 @@ export function createAccountCopy(isEn: boolean): Record<string, string> {
       // ── Points / Footer ────────────────────────────────────────────────
       pointsRule: isEn
         ? "Points rule: 500 points = 1 USDC. Monthly orders can use up to 3 USDC off; quarterly orders can use up to 8 USDC off."
-        : "积分规则：500 积分 = 1 USDC。月付订单最多抵扣 3 USDC，季度订单最多抵扣 8 USDC。",
+        : "积分规则：500 积分 = 1 USDC。月付订单最多抵扣 1 USDC，季度订单最多抵扣 3 USDC。",
       pointsDiscount: isEn
         ? "Available: {points} points discounting ${amount}. Applied automatically on renewal."
         : "当前可用 {points} 积分抵扣 ${amount}，续费时会自动生效。",

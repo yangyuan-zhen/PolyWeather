@@ -286,13 +286,13 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
   const heroStats = isEn
     ? [
         { label: "Trial", value: "3 days" },
-        { label: "Monthly", value: "29.9 USDC" },
-        { label: "Quarterly", value: "79.9 USDC" },
+        { label: "Monthly", value: "9.9 USDC" },
+        { label: "Quarterly", value: "24.9 USDC" },
       ]
     : [
         { label: "试用", value: "3 天" },
-        { label: "月付", value: "29.9 USDC" },
-        { label: "季度", value: "79.9 USDC" },
+        { label: "月付", value: "9.9 USDC" },
+        { label: "季度", value: "24.9 USDC" },
       ];
 
   return (
@@ -551,11 +551,11 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
                 </p>
                 <div className="mt-7 space-y-2">
                   <div className="flex items-baseline gap-2">
-                    <span className="font-mono text-4xl font-black text-slate-950">29.9</span>
+                    <span className="font-mono text-4xl font-black text-slate-950">9.9</span>
                     <span className="text-sm font-semibold text-slate-500">USDC / 30 天</span>
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="font-mono text-2xl font-black text-slate-950">79.9</span>
+                    <span className="font-mono text-2xl font-black text-slate-950">24.9</span>
                     <span className="text-sm font-semibold text-slate-500">USDC / 90 天</span>
                   </div>
                 </div>
