@@ -100,16 +100,23 @@ def _build_city_forecast(city: str) -> Optional[Dict[str, Any]]:
     )
     forecast = data.get("forecast") if isinstance(data.get("forecast"), dict) else {}
     daily_forecasts = multi_model.get("daily_forecasts") or {}
+    hourly_times = multi_model.get("hourly_times") or []
+    hourly_forecasts = multi_model.get("hourly_forecasts") or {}
 
     return {
         "local_date": data.get("local_date"),
         "local_time": data.get("local_time"),
+        "utc_offset_seconds": data.get("utc_offset_seconds"),
         "temp_symbol": data.get("temp_symbol"),
         "deb_prediction": deb.get("prediction"),
         "deb_weights": deb.get("weights_info"),
         "deb_quality": deb.get("quality_tier"),
         "forecast_daily": forecast.get("daily") or [],
         "models_daily": daily_forecasts,
+        "models_hourly": {
+            "times": hourly_times,
+            "curves": hourly_forecasts,
+        },
         "model_keys": multi_model.get("model_keys") or [],
     }
 
