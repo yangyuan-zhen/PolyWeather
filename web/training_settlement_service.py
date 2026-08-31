@@ -81,7 +81,12 @@ def _can_reconcile_actual_history(city_meta: Mapping[str, Any]) -> bool:
 def _default_analysis_runner(city: str) -> Mapping[str, Any]:
     from web.analysis_service import _analyze
 
-    return _analyze(city, force_refresh=False, detail_mode="panel")
+    return _analyze(
+        city,
+        force_refresh=False,
+        detail_mode="panel",
+        archive_training_snapshots=True,
+    )
 
 
 def _default_actual_reconciler(city: str, *, lookback_days: int) -> Mapping[str, Any]:
@@ -187,6 +192,9 @@ def run_training_settlement_cycle(
                             if not did_analysis
                             else str((analysis_payload or {}).get("status") or "ok")
                         )
+                    ),
+                    "analysis_archive": dict(
+                        (analysis_payload or {}).get("training_snapshot_archive") or {}
                     ),
                     "reconcile": dict(reconcile_payload or {}),
                 }

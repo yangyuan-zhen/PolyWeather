@@ -306,13 +306,13 @@ def _set_cached_summary(city: str, payload: Dict[str, Any]) -> None:
         _SUMMARY_CACHE[city] = {"t": _time.time(), "d": dict(payload)}
 
 
-def _archive_intraday_path_snapshot(city: str, result: Dict[str, Any]) -> None:
+def _archive_intraday_path_snapshot(city: str, result: Dict[str, Any]) -> bool:
     """Persist replayable intraday path inputs visible at analysis time."""
     hourly = result.get("hourly") or {}
     times = hourly.get("times") if isinstance(hourly, dict) else []
     temps = hourly.get("temps") if isinstance(hourly, dict) else []
     if not isinstance(times, list) or not isinstance(temps, list) or not times:
-        return
+        return False
 
     forecast = result.get("forecast") or {}
     deb = result.get("deb") or {}
@@ -373,11 +373,13 @@ def _archive_intraday_path_snapshot(city: str, result: Dict[str, Any]) -> None:
     }
     try:
         IntradayPathSnapshotRepository().append_snapshot(payload)
+        return True
     except Exception as exc:
         logger.debug(f"intraday path snapshot archive skipped for {city}: {exc}")
+        return False
 
 
-def _archive_probability_snapshot(city: str, result: Dict[str, Any]) -> None:
+def _archive_probability_snapshot(city: str, result: Dict[str, Any]) -> bool:
     """Persist earliest-seen probability inputs for training lead labelling."""
     try:
         from src.database.runtime_state import ProbabilitySnapshotRepository
@@ -406,16 +408,20 @@ def _archive_probability_snapshot(city: str, result: Dict[str, Any]) -> None:
             "payload_json": json.dumps(result, ensure_ascii=False, default=str),
         }
         if not snap_payload["city"] or not snap_payload["date"]:
-            return
+            return False
         ProbabilitySnapshotRepository().append_snapshot(snap_payload)
+        return True
     except Exception as exc:
         logger.debug(f"probability snapshot archive skipped for {city}: {exc}")
+        return False
 
 def _analyze(
     city: str,
     force_refresh: bool = False,
     force_refresh_observations_only: bool = False,
     detail_mode: str = "full",
+    *,
+    archive_training_snapshots: bool = False,
 ) -> Dict[str, Any]:
     """Fetch, analyse, and return structured weather data for one city.
 
@@ -437,7 +443,11 @@ def _analyze(
         normalized_detail_mode = "full"
     cache_key = _analysis_cache_key(city, normalized_detail_mode)
 
-    if not force_refresh and not force_refresh_observations_only:
+    # Training snapshots must represent a fresh analysis, not a potentially
+    # stale panel cache. The response remains panel-shaped; only the archive
+    # side effect is enabled for the training worker.
+    cache_allowed = not archive_training_snapshots
+    if cache_allowed and not force_refresh and not force_refresh_observations_only:
         cached = _cache.get(cache_key)
         if cached and _time.time() - cached["t"] < ttl:
             _record_analysis_cache_event(city=city, hit=True, force_refresh=False)
@@ -1489,9 +1499,11 @@ def _analyze(
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     result["intraday_meteorology"] = _build_intraday_meteorology(result)
-    if normalized_detail_mode == "full":
-        _archive_intraday_path_snapshot(city, result)
-        _archive_probability_snapshot(city, result)
+    if normalized_detail_mode == "full" or archive_training_snapshots:
+        result["training_snapshot_archive"] = {
+            "intraday": _archive_intraday_path_snapshot(city, result),
+            "probability": _archive_probability_snapshot(city, result),
+        }
     with _CACHE_LOCK:
         _cache[cache_key] = {"t": _time.time(), "d": result}
     return result

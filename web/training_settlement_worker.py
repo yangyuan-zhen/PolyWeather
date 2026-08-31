@@ -104,6 +104,27 @@ def _run_once(
             300, _env_int("POLYWEATHER_TRAINING_SETTLEMENT_INTERVAL_SEC", 21600)
         ),
     )
+    archive_summary = {
+        "analyzed": 0,
+        "intraday": 0,
+        "probability": 0,
+        "intraday_failed": 0,
+        "probability_failed": 0,
+    }
+    for item in result.get("items") or []:
+        archive = item.get("analysis_archive") or {}
+        if not archive:
+            continue
+        archive_summary["analyzed"] += 1
+        if archive.get("intraday") is True:
+            archive_summary["intraday"] += 1
+        else:
+            archive_summary["intraday_failed"] += 1
+        if archive.get("probability") is True:
+            archive_summary["probability"] += 1
+        else:
+            archive_summary["probability_failed"] += 1
+    result["training_snapshot_archive"] = archive_summary
     try:
         snapshot_result = refresh_deb_weight_snapshots(cities=cities)
         result["weight_snapshots"] = snapshot_result
