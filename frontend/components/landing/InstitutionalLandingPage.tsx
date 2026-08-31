@@ -358,47 +358,6 @@ function InstitutionalLandingScreen({ locale }: { locale: LandingLocale }) {
               </p>
             </div>
 
-            <div className="landing-float-slow landing-screen-glow mx-auto mt-14 max-w-5xl rounded-lg border border-slate-200 bg-white p-2 shadow-[0_24px_70px_rgba(15,23,42,0.12)]">
-              <div className="flex h-9 items-center gap-2 border-b border-slate-200 px-3">
-                <span className="h-2.5 w-2.5 rounded-full bg-[#ff6b6b]" />
-                <span className="h-2.5 w-2.5 rounded-full bg-[#ffd166]" />
-                <span className="landing-pulse-dot h-2.5 w-2.5 rounded-full bg-[#06d6a0]" />
-                <span className="ml-2 text-xs font-semibold text-slate-400">
-                  polyweather.app/terminal
-                </span>
-              </div>
-              <div className="mt-2 aspect-[16/9] overflow-hidden rounded-md border border-slate-100 bg-gradient-to-b from-slate-50 to-slate-100 p-5 sm:p-8">
-                <div className="grid h-full grid-cols-2 gap-3 sm:grid-cols-4">
-                  {heroStats.map((item) => (
-                    <div
-                      key={`preview-${item.label}`}
-                      className="flex flex-col justify-center rounded-md border border-slate-200 bg-white px-3 py-2 shadow-sm"
-                    >
-                      <div className="font-mono text-sm font-black text-slate-950 sm:text-base">
-                        {item.value}
-                      </div>
-                      <div className="mt-0.5 text-[10px] font-semibold text-slate-500">
-                        {item.label}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {(isEn
-                    ? ["Settlement obs", "DEB blend", "Model consensus", "Calibrated probability", "Market buckets"]
-                    : ["结算实测", "DEB 融合", "模型共识", "校准概率", "市场温度桶"]
-                  ).map((chip) => (
-                    <span
-                      key={chip}
-                      className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold text-slate-600"
-                    >
-                      {chip}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-
             <div className="mx-auto mt-8 grid max-w-5xl gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {heroStats.map((item) => (
                 <div

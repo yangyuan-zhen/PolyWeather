@@ -69,6 +69,8 @@ export function runTests() {
   assert(!source.includes("高频刷新与 API 仍为 Pro 权益"), "landing page must not incorrectly exclude high-frequency refresh or API from trial access");
   assert(source.includes("bg-[#fbfbfa]"), "landing page must use a light Notion-style background");
   assert(source.includes("WeatherWorkflowIllustration"), "landing page must include a friendly illustration surface");
+  assert(!source.includes("polyweather.app/terminal"), "landing hero must not show a terminal preview");
+  assert(!source.includes("landing-screen-glow"), "landing hero must not render the terminal chart preview frame");
   assert(
     /className="text-base font-black tracking-tight text-slate-950[\s\S]*?>\s*PolyWeather\s*<\/Link>/.test(
       source,
