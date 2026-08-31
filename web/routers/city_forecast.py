@@ -138,16 +138,8 @@ async def _compute_forecasts(resolved: List[str]) -> Dict[str, Dict[str, Any]]:
     }
 
 
-@router.get("/api/cities/deb-forecast")
-async def city_deb_forecast(
-    request: Request,
-    cities: str = "",
-):
-    """DEB + multi-model forecasts for the watchlist (or a custom city list).
-
-    Serves from the 5-minute result cache; missing cities (first call, TTL
-    expiry, or a custom list extending the cache) are computed on demand.
-    """
+async def _get_forecast_results(request: Request, cities: str) -> Dict[str, Any]:
+    """Resolve, authorize, cache, and compute forecasts for public endpoints."""
     import web.routes as legacy_routes
 
     legacy_routes._assert_entitlement(request)
@@ -200,4 +192,48 @@ async def city_deb_forecast(
         "temp_symbol_default": "°C",
         "count": len(results),
         "cities": results,
+    }
+
+
+@router.get("/api/cities/deb-forecast")
+async def city_deb_forecast(
+    request: Request,
+    cities: str = "",
+):
+    """Legacy DEB + multi-model forecast endpoint."""
+    return await _get_forecast_results(request, cities)
+
+
+@router.get("/api/v1/forecasts")
+async def v1_forecasts(
+    request: Request,
+    cities: str = "",
+):
+    """Stable PolyWeather API v1 forecast endpoint for external consumers."""
+    payload = await _get_forecast_results(request, cities)
+    forecasts: Dict[str, Any] = {}
+    for city, legacy in payload["cities"].items():
+        forecasts[city] = {
+            "local_date": legacy.get("local_date"),
+            "local_time": legacy.get("local_time"),
+            "utc_offset_seconds": legacy.get("utc_offset_seconds"),
+            "temp_symbol": legacy.get("temp_symbol"),
+            "deb": {
+                "prediction": legacy.get("deb_prediction"),
+                "weights": legacy.get("deb_weights"),
+                "quality": legacy.get("deb_quality"),
+            },
+            "daily": legacy.get("forecast_daily") or [],
+            "models": {
+                "keys": legacy.get("model_keys") or [],
+                "daily": legacy.get("models_daily") or {},
+                "hourly": legacy.get("models_hourly")
+                or {"times": [], "curves": {}},
+            },
+        }
+    return {
+        "generated_at": payload["generated_at"],
+        "temp_symbol_default": payload["temp_symbol_default"],
+        "count": len(forecasts),
+        "forecasts": forecasts,
     }

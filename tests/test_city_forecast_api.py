@@ -109,6 +109,31 @@ def test_deb_forecast_custom_city_list(monkeypatch):
     assert set(payload["cities"]) == {"beijing", "shanghai"}
 
 
+def test_v1_forecasts_returns_normalized_public_shape(monkeypatch):
+    monkeypatch.setattr(
+        "web.analysis_service._analyze", _fake_analyze, raising=False
+    )
+    monkeypatch.setattr(
+        "web.routes._assert_entitlement", lambda request: None
+    )
+    monkeypatch.setattr("web.routers.city_forecast._FORECAST_CACHE", {})
+
+    response = client.get("/api/v1/forecasts", params={"cities": "beijing"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["count"] == 1
+    beijing = payload["forecasts"]["beijing"]
+    assert beijing["deb"]["prediction"] == 33.5
+    assert beijing["daily"][0]["max_temp"] == 33.0
+    assert beijing["models"]["keys"] == ["ecmwf", "gfs", "deb"]
+    assert beijing["models"]["hourly"]["times"] == [
+        "2026-08-16T13:00",
+        "2026-08-16T14:00",
+    ]
+    assert beijing["models"]["hourly"]["curves"]["ecmwf"] == [32.1, 33.2]
+
+
 def test_deb_forecast_resolves_aliases(monkeypatch):
     monkeypatch.setattr(
         "web.analysis_service._analyze", _fake_analyze, raising=False
