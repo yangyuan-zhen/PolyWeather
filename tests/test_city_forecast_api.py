@@ -31,6 +31,14 @@ def _fake_analyze(city, force_refresh=False, detail_mode="panel"):
         },
         "multi_model": {
             "model_keys": ["ecmwf", "gfs", "deb"],
+            "hourly_times": [
+                "2026-08-16T13:00",
+                "2026-08-16T14:00",
+            ],
+            "hourly_forecasts": {
+                "ecmwf": [32.1, 33.2],
+                "gfs": [31.8, 32.8],
+            },
             "daily_forecasts": {
                 "2026-08-16": {"ecmwf": 33.2, "gfs": 32.8, "deb": 33.5},
                 "2026-08-17": {"ecmwf": 34.0, "gfs": 33.1, "deb": 34.2},
@@ -75,6 +83,11 @@ def test_deb_forecast_default_watchlist_shape(monkeypatch):
     assert beijing["deb_prediction"] == 33.5
     assert "ECMWF" in beijing["deb_weights"]
     assert beijing["models_daily"]["2026-08-17"]["gfs"] == 33.1
+    assert beijing["models_hourly"]["times"] == [
+        "2026-08-16T13:00",
+        "2026-08-16T14:00",
+    ]
+    assert beijing["models_hourly"]["curves"]["ecmwf"] == [32.1, 33.2]
     assert beijing["forecast_daily"][0]["max_temp"] == 33.0
     assert beijing["local_date"] == "2026-08-16"
 
