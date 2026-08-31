@@ -302,7 +302,6 @@ export const DOCS_PAGES: DocsPage[] = [
               {
                 type: "bullets",
                 items: [
-                  "MADIS 300s：美国高频机场观测城市。",
                   "CoWIN 60s：香港 6087 参考站。",
                   "HKO 600s：香港天文台官方 10 分钟层。",
                   "CWA / JMA / FMI / KNMI / MGM：按各自官方或可用频率采集。",
@@ -349,7 +348,6 @@ export const DOCS_PAGES: DocsPage[] = [
               {
                 type: "bullets",
                 items: [
-                  "MADIS 300s: US high-frequency airport observations.",
                   "CoWIN 60s: Hong Kong 6087 reference station.",
                   "HKO 600s: Hong Kong Observatory official 10-minute layer.",
                   "CWA / JMA / FMI / KNMI / MGM: collected at each source's official or available cadence.",
