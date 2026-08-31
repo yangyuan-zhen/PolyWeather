@@ -31,6 +31,22 @@ def test_training_settlement_cycle_runs_analysis_and_reconciles_supported_cities
     assert calls["reconcile"] == [("shanghai", 9)]
 
 
+def test_training_settlement_cycle_preserves_analysis_archive_status():
+    result = run_training_settlement_cycle(
+        city_registry={"shanghai": {"icao": "ZSSS", "settlement_source": "metar"}},
+        analysis_runner=lambda city: {
+            "city": city,
+            "training_snapshot_archive": {"intraday": True, "probability": False},
+        },
+        actual_reconciler=lambda city, *, lookback_days: {"ok": True, "updated": 0},
+    )
+
+    assert result["items"][0]["analysis_archive"] == {
+        "intraday": True,
+        "probability": False,
+    }
+
+
 def test_training_settlement_cycle_continues_after_city_failure():
     calls = []
 
@@ -98,6 +114,35 @@ def test_default_actual_reconciler_bootstraps_missing_history(monkeypatch):
 
     assert result == {"ok": True, "seeded": 8, "updated": 8}
     assert calls == [("shanghai", 10)]
+
+
+def test_default_analysis_runner_archives_training_snapshots(monkeypatch):
+    calls = []
+
+    def analyzer(city, **kwargs):
+        calls.append((city, kwargs))
+        return {"city": city}
+
+    monkeypatch.setattr(
+        training_settlement_service,
+        "_default_analysis_runner",
+        training_settlement_service._default_analysis_runner,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "web.analysis_service._analyze",
+        analyzer,
+    )
+
+    result = training_settlement_service._default_analysis_runner("shanghai")
+
+    assert result == {"city": "shanghai"}
+    assert calls == [
+        (
+            "shanghai",
+            {"force_refresh": False, "detail_mode": "panel", "archive_training_snapshots": True},
+        )
+    ]
 
 
 def test_rotating_analysis_slice_rotates_by_cycle_index():
