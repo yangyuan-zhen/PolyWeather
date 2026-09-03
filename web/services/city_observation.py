@@ -272,13 +272,27 @@ def _observation_block(
     temp: float,
     obs_time: str,
     observed_at_local: str = "",
+    fetched_at: str = "",
 ) -> dict[str, Any]:
+    from src.data_collection.data_quality import evaluate_observation
+
+    quality = evaluate_observation(
+        source=source,
+        station=station_code,
+        observed_at=obs_time,
+        fetched_at=fetched_at,
+        temp=temp,
+        value_unit="c",
+    )
     freshness = {
-        "freshness_status": "fresh",
+        "freshness_status": quality["freshness_status"],
         "observed_at": obs_time or None,
         "observed_at_local": observed_at_local or None,
         "source_code": source,
         "source_label": source_label,
+        "age_seconds": quality["age_seconds"],
+        "quality_flags": quality["quality_flags"],
+        "status": quality["status"],
     }
     return {
         "city": city,
@@ -294,6 +308,7 @@ def _observation_block(
         "obs_time": obs_time or observed_at_local,
         "freshness": freshness,
         "observation_status": "live",
+        "data_quality": quality,
     }
 
 
@@ -318,6 +333,7 @@ def _payload_from_raw(city: str, row: dict[str, Any], raw_payload: dict[str, Any
         temp=temp,
         obs_time=obs_time,
         observed_at_local=observed_at_local,
+        fetched_at=str(row.get("fetched_at") or ""),
     )
     metar_point = {
         "time": local_time,

@@ -461,7 +461,11 @@ class ObservationCollector:
         if wrote:
             refreshed_cities: set[str] = set()
             for city in {record.city for record in written_records}:
-                canonical = refresh_canonical_temperature_from_latest(self.observation_store, city)
+                try:
+                    canonical = refresh_canonical_temperature_from_latest(self.observation_store, city)
+                except Exception as exc:
+                    logger.debug("canonical refresh skipped city={}: {}", city, exc)
+                    continue
                 if canonical:
                     refreshed_cities.add(city)
                     self._append_realtime_event(canonical)

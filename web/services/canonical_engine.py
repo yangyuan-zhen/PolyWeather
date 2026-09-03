@@ -83,6 +83,13 @@ def _candidate_canonical(city: str, row: dict[str, Any]) -> Optional[dict[str, A
     value = row.get("value")
     if value is None or str(row.get("status") or "").strip().lower() != "ok":
         return None
+    try:
+        import math as _math
+
+        if not _math.isfinite(float(value)):
+            return None
+    except (TypeError, ValueError):
+        return None
     source = _normalized_source(row.get("source"))
     source_label = _source_label(row)
     observed_at = str(row.get("observed_at") or "").strip()
