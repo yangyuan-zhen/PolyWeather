@@ -6,6 +6,23 @@ implementing their own freshness thresholds.
 
 Status vocabulary (stable, additive only):
   fresh / delayed / stale / invalid / source_error / fallback
+
+State machine (single authority: evaluate_observation + combine_observation_with_source_health):
+  fresh        trigger: valid obs within source fresh_window; recovery: new fresh obs.
+               canonical: yes. SSE: yes. last_success: yes. failures: reset path.
+  delayed      trigger: valid obs past expected cadence but within stale_after.
+               canonical: yes (flagged). SSE: yes. last_success: yes.
+  stale        trigger: valid obs older than stale_after, or no valid obs at all.
+               canonical: only if nothing fresher exists. SSE: no new event. Ops: red.
+  invalid      trigger: missing/NaN/out-of-range/future/missing-time obs. Never
+               overwrites latest valid, never becomes canonical, never emits SSE.
+               last_success_at untouched, failure counter untouched.
+  source_error trigger: active source collector failing AND latest valid obs no
+               longer fresh (delayed/stale), or no valid obs + collector errors.
+               Requires last_error. A single transient failure while obs is fresh
+               stays fresh + quality_flags ["recent_source_errors"].
+  fallback     trigger: active_source != primary_source with a usable obs.
+               Carries fallback_reason/fallback_since/primary_last_success.
 """
 
 from __future__ import annotations
@@ -104,7 +121,7 @@ def evaluate_observation(
         status = INVALID
     elif "future_timestamp" in quality_flags:
         status = INVALID
-    elif fallback_in_use:
+    elif fallback_in_use and freshness_status in {"fresh", "expected_wait", "delayed"}:
         status = FALLBACK
     elif freshness_status == "fresh":
         status = FRESH
@@ -172,3 +189,89 @@ def guard_observation(
             if 0 < gap_sec <= 1800 and abs(temp_c - prev_c) > MAX_JUMP_C_30MIN:
                 return {"accept": False, "reason": "extreme_jump"}
     return {"accept": True, "reason": "ok"}
+
+
+def primary_source_for_city(city: Any) -> str:
+    """Registry settlement source (lowercase, defaults to metar)."""
+    try:
+        from src.data_collection.city_registry import CITY_REGISTRY
+
+        meta = CITY_REGISTRY.get(str(city or "").strip().lower()) or {}
+        return str(meta.get("settlement_source") or "metar").strip().lower() or "metar"
+    except Exception:
+        return "metar"
+
+
+def fallback_info(
+    *,
+    city: Any,
+    active_source: Any,
+    active_observed_at: Any = None,
+    primary_last_success_at: Any = None,
+) -> Dict[str, Any]:
+    """Describe primary/active/fallback triple for a city."""
+    primary = primary_source_for_city(city)
+    active = str(active_source or "").strip().lower()
+    in_fallback = bool(active) and active != primary
+    reason = ""
+    if in_fallback:
+        reason = f"primary_{primary}_not_usable"
+    return {
+        "primary_source": primary,
+        "active_source": active or None,
+        "fallback_in_use": in_fallback,
+        "fallback_reason": reason,
+        "fallback_since": str(active_observed_at or "") or None,
+        "primary_last_success_at": str(primary_last_success_at or "") or None,
+    }
+
+
+def combine_observation_with_source_health(
+    *,
+    quality: Dict[str, Any],
+    failing_now: bool = False,
+    last_error: Any = None,
+    consecutive_failures: int = 0,
+) -> Dict[str, Any]:
+    """Fold collector health into an observation quality verdict (additive).
+
+    Never downgrades a fresh valid observation to source_error on transient
+    failure; surfaces it via quality_flags instead. Upgrades delayed/stale
+    with active collector failures to source_error (requires last_error).
+    """
+    out = dict(quality)
+    flags = list(out.get("quality_flags") or [])
+    status = str(out.get("status") or "stale")
+    freshness_status = str(out.get("freshness_status") or "")
+    if failing_now and status == "fresh":
+        if "recent_source_errors" not in flags:
+            flags.append("recent_source_errors")
+        out["quality_flags"] = flags
+        out["consecutive_failures"] = int(consecutive_failures or 0)
+        if last_error:
+            out["last_error"] = str(last_error)[:500]
+        return out
+    if failing_now and status == "fallback" and freshness_status in {"fresh", "expected_wait"}:
+        if "recent_source_errors" not in flags:
+            flags.append("recent_source_errors")
+        out["quality_flags"] = flags
+        out["consecutive_failures"] = int(consecutive_failures or 0)
+        if last_error:
+            out["last_error"] = str(last_error)[:500]
+        return out
+    if failing_now and (
+        status in {"delayed", "stale"}
+        or (status == "fallback" and freshness_status not in {"fresh", "expected_wait"})
+    ):
+        out["status"] = "source_error"
+        if last_error:
+            out["last_error"] = str(last_error)[:500]
+        out["consecutive_failures"] = int(consecutive_failures or 0)
+        if "collector_failing" not in flags:
+            flags.append("collector_failing")
+        out["quality_flags"] = flags
+        return out
+    if status == "stale" and last_error and not failing_now:
+        out["last_error"] = str(last_error)[:500]
+    out["quality_flags"] = flags
+    return out
