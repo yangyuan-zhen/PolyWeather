@@ -93,6 +93,13 @@ export type DataQualityCity = {
   age_seconds?: number | null;
   status?: string;
   fallback_in_use?: boolean;
+  fallback_reason?: string | null;
+  fallback_since?: string | null;
+  primary_source?: string | null;
+  active_source?: string | null;
+  primary_last_success_at?: string | null;
+  last_success_at?: string | null;
+  last_error_at?: string | null;
   consecutive_failures?: number;
   request_latency_ms?: number | null;
   last_error?: string | null;
