@@ -482,11 +482,11 @@ export function SystemPageClient() {
                 <thead className="bg-slate-50 text-slate-500">
                   <tr>
                     <th className="px-3 py-2">城市</th>
-                    <th className="px-3 py-2">来源/站点</th>
+                    <th className="px-3 py-2">Active/Primary</th>
                     <th className="px-3 py-2">状态</th>
                     <th className="px-3 py-2">延迟</th>
                     <th className="px-3 py-2">Fallback</th>
-                    <th className="px-3 py-2">最近错误</th>
+                    <th className="px-3 py-2">失败/错误</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -497,7 +497,16 @@ export function SystemPageClient() {
                       <tr key={c.city} className="border-t border-slate-100">
                         <td className="px-3 py-2 font-mono font-bold text-slate-800">{c.city}</td>
                         <td className="px-3 py-2 text-slate-600">
-                          {[c.source, c.station].filter(Boolean).join(" / ") || "—"}
+                          <div className="font-semibold text-slate-800">
+                            {[c.active_source || c.source, c.station].filter(Boolean).join(" / ") || "—"}
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            primary: {c.primary_source || "—"}
+                            {c.fallback_since ? ` · since ${String(c.fallback_since).slice(11, 16)}` : ""}
+                          </div>
+                          {c.fallback_reason ? (
+                            <div className="text-[11px] text-amber-600">{c.fallback_reason}</div>
+                          ) : null}
                         </td>
                         <td className={`px-3 py-2 font-bold ${sourceStatusTone(c.status)}`}>{c.status}</td>
                         <td className="px-3 py-2 font-mono text-slate-600">
@@ -505,7 +514,12 @@ export function SystemPageClient() {
                         </td>
                         <td className="px-3 py-2 text-slate-600">{c.fallback_in_use ? "是" : "否"}</td>
                         <td className="px-3 py-2 text-slate-500" title={c.last_error || ""}>
-                          {(c.last_error || (c.quality_flags || []).join(",") || "—").slice(0, 80)}
+                          <div>×{c.consecutive_failures ?? 0}</div>
+                          <div className="text-[11px]">
+                            ok: {c.last_success_at ? String(c.last_success_at).slice(11, 16) : "—"}
+                            {" / "}err: {c.last_error_at ? String(c.last_error_at).slice(11, 16) : "—"}
+                          </div>
+                          <div className="text-[11px]">{(c.last_error || "").slice(0, 60) || "—"}</div>
                         </td>
                       </tr>
                     ))}
