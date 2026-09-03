@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { opsApi } from "@/lib/ops-api";
 import type {
+  DataQualityPayload,
   ObservationCollectorStatusPayload,
   SourceHealthPayload,
   SystemStatusPayload,
@@ -107,22 +108,25 @@ export function SystemPageClient() {
   const [status, setStatus] = useState<SystemStatusPayload | null>(null);
   const [sourceHealth, setSourceHealth] = useState<SourceHealthPayload | null>(null);
   const [collectorStatus, setCollectorStatus] = useState<ObservationCollectorStatusPayload | null>(null);
+  const [dataQuality, setDataQuality] = useState<DataQualityPayload | null>(null);
   const [error, setError] = useState("");
 
   const load = async () => {
     setLoading(true);
     setError("");
     try {
-      const [h, s, sh, cs] = await Promise.all([
+      const [h, s, sh, cs, dq] = await Promise.all([
         opsApi.health(),
         opsApi.systemStatus() as Promise<SystemStatusPayload>,
         opsApi.sourceHealth(80) as Promise<SourceHealthPayload>,
         opsApi.observationCollectorStatus(200) as Promise<ObservationCollectorStatusPayload>,
+        opsApi.dataQuality() as Promise<DataQualityPayload>,
       ]);
       setHealth(h);
       setStatus(s);
       setSourceHealth(sh);
       setCollectorStatus(cs);
+      setDataQuality(dq);
     } catch (e) {
       setError(String(e).slice(0, 200));
     } finally {
@@ -446,6 +450,74 @@ export function SystemPageClient() {
               有城市缺少 full/panel 缓存，可能是后台冷启动或该城市尚未预热。
             </div>
           ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-4 w-4 text-emerald-500" />
+            数据质量（统一口径）
+            {dataQuality?.overall ? (
+              <Badge className="ml-2">{String(dataQuality.overall)}</Badge>
+            ) : null}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-6">
+            {["fresh", "delayed", "stale", "invalid", "source_error", "fallback"].map((key) => (
+              <div key={key} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <div className="text-[11px] text-slate-500">{key}</div>
+                <div className={`text-lg font-black ${sourceStatusTone(key)}`}>
+                  {dataQuality?.status_counts?.[key] ?? 0}
+                </div>
+              </div>
+            ))}
+          </div>
+          {(dataQuality?.cities || []).filter((c) =>
+            ["stale", "invalid", "source_error"].includes(String(c.status || "")),
+          ).length ? (
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <table className="w-full min-w-[860px] text-left text-xs">
+                <thead className="bg-slate-50 text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2">城市</th>
+                    <th className="px-3 py-2">来源/站点</th>
+                    <th className="px-3 py-2">状态</th>
+                    <th className="px-3 py-2">延迟</th>
+                    <th className="px-3 py-2">Fallback</th>
+                    <th className="px-3 py-2">最近错误</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(dataQuality?.cities || [])
+                    .filter((c) => ["stale", "invalid", "source_error"].includes(String(c.status || "")))
+                    .slice(0, 12)
+                    .map((c) => (
+                      <tr key={c.city} className="border-t border-slate-100">
+                        <td className="px-3 py-2 font-mono font-bold text-slate-800">{c.city}</td>
+                        <td className="px-3 py-2 text-slate-600">
+                          {[c.source, c.station].filter(Boolean).join(" / ") || "—"}
+                        </td>
+                        <td className={`px-3 py-2 font-bold ${sourceStatusTone(c.status)}`}>{c.status}</td>
+                        <td className="px-3 py-2 font-mono text-slate-600">
+                          {c.age_seconds == null ? "—" : `${Math.floor(Number(c.age_seconds) / 60)}m`}
+                        </td>
+                        <td className="px-3 py-2 text-slate-600">{c.fallback_in_use ? "是" : "否"}</td>
+                        <td className="px-3 py-2 text-slate-500" title={c.last_error || ""}>
+                          {(c.last_error || (c.quality_flags || []).join(",") || "—").slice(0, 80)}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+              <ShieldCheck className="h-4 w-4" />
+              统一口径下无 stale/invalid/source_error 城市。
+            </div>
+          )}
         </CardContent>
       </Card>
 

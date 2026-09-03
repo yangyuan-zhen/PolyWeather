@@ -22,6 +22,9 @@ export const opsApi = {
   observationCollectorStatus(limit = 200) {
     return opsFetch<Record<string, unknown>>(`/api/ops/observation-collector-status?limit=${limit}`);
   },
+  dataQuality() {
+    return opsFetch<Record<string, unknown>>("/api/system/data-quality");
+  },
   paymentRuntime() {
     return opsFetch<Record<string, unknown>>("/api/payments/runtime");
   },
