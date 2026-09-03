@@ -250,6 +250,9 @@ class DBManager:
     def set_canonical_temperature(self, city: str, payload: Dict[str, Any]) -> None:
         return self._observation_repo.set_canonical_temperature(city, payload)
 
+    def delete_canonical_temperature(self, city: str) -> None:
+        return self._observation_repo.delete_canonical_temperature(city)
+
     def append_raw_observation(
         self,
         *,
