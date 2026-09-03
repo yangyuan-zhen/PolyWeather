@@ -191,7 +191,7 @@ class ObservationRepo:
             previous_latest = conn.execute(
                 """
                 SELECT status, error_count, last_success_at, fetched_at,
-                       observed_at, value, value_unit
+                       observed_at, value, value_unit, source_latency_sec
                 FROM raw_observation_latest
                 WHERE source = ? AND city = ?
                 ORDER BY updated_at_ts DESC
@@ -206,7 +206,12 @@ class ObservationRepo:
             previous_observed_at = str(previous_latest[4] or "").strip() if previous_latest else ""
             previous_value = previous_latest[5] if previous_latest else None
             previous_unit = str(previous_latest[6] or "").strip() if previous_latest else ""
-            if safe_status == "ok" and safe_observed_at and previous_observed_at:
+            previous_latency = previous_latest[7] if previous_latest else None
+            # Semantics: store keeps every attempt (audit); latest keeps only
+            # the newest *usable* observation. Guard runs for every ok row,
+            # including the first one (absolute checks need no previous row).
+            reject_reason: str | None = None
+            if safe_status == "ok":
                 try:
                     from src.data_collection.data_quality import guard_observation
 
@@ -217,24 +222,41 @@ class ObservationRepo:
                         fetched_at=safe_fetched_at,
                         temp=value_float,
                         value_unit=str(value_unit or ""),
-                        prev_observed_at=previous_observed_at,
+                        prev_observed_at=previous_observed_at or None,
                         prev_temp=previous_value,
                         prev_temp_unit=previous_unit or str(value_unit or ""),
                     )
                     if not verdict.get("accept"):
+                        reject_reason = str(verdict.get("reason") or "invalid")
+                except Exception as exc:
+                    # Fail-closed: a guard bug must never pollute latest valid.
+                    reject_reason = "guard_error"
+                    try:
+                        from loguru import logger as _guard_logger
+
+                        _guard_logger.warning(
+                            "observation guard failed closed city={} source={} error={}",
+                            normalized_city,
+                            normalized_source,
+                            str(exc)[:200],
+                        )
+                    except Exception:
+                        pass
+                if reject_reason is not None:
+                    try:
                         from loguru import logger as _logger
 
                         _logger.warning(
                             "raw observation rejected city={} source={} reason={} observed_at={} prev_observed_at={}",
                             normalized_city,
                             normalized_source,
-                            verdict.get("reason"),
+                            reject_reason,
                             safe_observed_at,
                             previous_observed_at,
                         )
-                        safe_status = "invalid"
-                except Exception:
-                    pass
+                    except Exception:
+                        pass
+                    safe_status = "invalid"
             if safe_status == "ok":
                 safe_error_count = 0
                 success_at = str(last_success_at or safe_fetched_at).strip()
@@ -272,44 +294,136 @@ class ObservationRepo:
                     created_at_ts,
                 ),
             )
-            conn.execute(
-                """
-                INSERT INTO raw_observation_latest (
-                    source, city, station_code, station_name, runway, value,
-                    value_unit, observed_at, fetched_at, source_latency_sec,
-                    status, error_count, last_success_at, payload_json, updated_at_ts
+            if reject_reason is not None:
+                # Invalid data is audit-only: latest valid row stays untouched.
+                conn.commit()
+                return
+            if safe_status == "ok":
+                conn.execute(
+                    """
+                    INSERT INTO raw_observation_latest (
+                        source, city, station_code, station_name, runway, value,
+                        value_unit, observed_at, fetched_at, source_latency_sec,
+                        status, error_count, last_success_at, payload_json, updated_at_ts
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(source, city, station_code, runway) DO UPDATE SET
+                        station_name = excluded.station_name,
+                        value = excluded.value,
+                        value_unit = excluded.value_unit,
+                        observed_at = excluded.observed_at,
+                        fetched_at = excluded.fetched_at,
+                        source_latency_sec = excluded.source_latency_sec,
+                        status = excluded.status,
+                        error_count = excluded.error_count,
+                        last_success_at = excluded.last_success_at,
+                        payload_json = excluded.payload_json,
+                        updated_at_ts = excluded.updated_at_ts
+                    """,
+                    (
+                        normalized_source,
+                        normalized_city,
+                        safe_station_code,
+                        safe_station_name,
+                        safe_runway,
+                        value_float,
+                        str(value_unit or "").strip(),
+                        safe_observed_at,
+                        safe_fetched_at,
+                        latency_float,
+                        safe_status,
+                        safe_error_count,
+                        success_at,
+                        payload_json,
+                        created_at_ts,
+                    ),
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(source, city, station_code, runway) DO UPDATE SET
-                    station_name = excluded.station_name,
-                    value = excluded.value,
-                    value_unit = excluded.value_unit,
-                    observed_at = excluded.observed_at,
-                    fetched_at = excluded.fetched_at,
-                    source_latency_sec = excluded.source_latency_sec,
-                    status = excluded.status,
-                    error_count = excluded.error_count,
-                    last_success_at = excluded.last_success_at,
-                    payload_json = excluded.payload_json,
-                    updated_at_ts = excluded.updated_at_ts
-                """,
-                (
-                    normalized_source,
-                    normalized_city,
-                    safe_station_code,
-                    safe_station_name,
-                    safe_runway,
-                    value_float,
-                    str(value_unit or "").strip(),
-                    safe_observed_at,
-                    safe_fetched_at,
-                    latency_float,
-                    safe_status,
-                    safe_error_count,
-                    success_at,
-                    payload_json,
-                    created_at_ts,
-                ),
+            elif previous_status == "ok" and previous_observed_at:
+                # Fetch/parse failures surface bookkeeping only; the last
+                # valid measurement stays readable.
+                conn.execute(
+                    """
+                    INSERT INTO raw_observation_latest (
+                        source, city, station_code, station_name, runway, value,
+                        value_unit, observed_at, fetched_at, source_latency_sec,
+                        status, error_count, last_success_at, payload_json, updated_at_ts
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(source, city, station_code, runway) DO UPDATE SET
+                        status = excluded.status,
+                        error_count = excluded.error_count,
+                        last_success_at = excluded.last_success_at,
+                        payload_json = excluded.payload_json,
+                        updated_at_ts = excluded.updated_at_ts
+                    """,
+                    (
+                        normalized_source,
+                        normalized_city,
+                        safe_station_code,
+                        safe_station_name,
+                        safe_runway,
+                        previous_value,
+                        previous_unit,
+                        previous_observed_at,
+                        previous_fetched_at,
+                        previous_latency,
+                        safe_status,
+                        safe_error_count,
+                        success_at,
+                        payload_json,
+                        created_at_ts,
+                    ),
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO raw_observation_latest (
+                        source, city, station_code, station_name, runway, value,
+                        value_unit, observed_at, fetched_at, source_latency_sec,
+                        status, error_count, last_success_at, payload_json, updated_at_ts
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(source, city, station_code, runway) DO UPDATE SET
+                        station_name = excluded.station_name,
+                        value = excluded.value,
+                        value_unit = excluded.value_unit,
+                        observed_at = excluded.observed_at,
+                        fetched_at = excluded.fetched_at,
+                        source_latency_sec = excluded.source_latency_sec,
+                        status = excluded.status,
+                        error_count = excluded.error_count,
+                        last_success_at = excluded.last_success_at,
+                        payload_json = excluded.payload_json,
+                        updated_at_ts = excluded.updated_at_ts
+                    """,
+                    (
+                        normalized_source,
+                        normalized_city,
+                        safe_station_code,
+                        safe_station_name,
+                        safe_runway,
+                        value_float,
+                        str(value_unit or "").strip(),
+                        safe_observed_at,
+                        safe_fetched_at,
+                        latency_float,
+                        safe_status,
+                        safe_error_count,
+                        success_at,
+                        payload_json,
+                        created_at_ts,
+                    ),
+                )
+            conn.commit()
+
+    def delete_canonical_temperature(self, city: str) -> None:
+        normalized_city = str(city or "").strip().lower()
+        if not normalized_city:
+            return
+        with self._get_connection() as conn:
+            conn.execute(
+                "DELETE FROM canonical_temperature_latest WHERE city = ?",
+                (normalized_city,),
             )
             conn.commit()
 

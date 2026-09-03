@@ -271,7 +271,9 @@ def test_raw_observation_failure_preserves_last_success_and_increments_errors(tm
 
     assert latest is not None
     assert latest["status"] == "timeout"
-    assert latest["value"] is None
+    # Failure surfaces bookkeeping only; last valid measurement is preserved.
+    assert latest["value"] == 24.0
+    assert latest["observed_at"] == "2026-06-14T01:00:00+00:00"
     assert latest["error_count"] == 1
     assert latest["last_success_at"] == "2026-06-14T01:01:00+00:00"
     assert latest["payload"]["error"] == "upstream timeout"

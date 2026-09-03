@@ -155,11 +155,12 @@ def test_repo_keeps_newer_when_older_arrives(tmp_path):
 
     db = DBManager(str(tmp_path / "obs.db"))
     now = datetime.now(timezone.utc)
+    first_obs = _iso(now - timedelta(minutes=5))
     db.append_raw_observation(
         source="metar",
         city="paris",
         value=22.5,
-        observed_at=_iso(now - timedelta(minutes=5)),
+        observed_at=first_obs,
         fetched_at=_iso(now),
         station_code="LFPB",
         status="ok",
@@ -175,8 +176,10 @@ def test_repo_keeps_newer_when_older_arrives(tmp_path):
     )
     latest = db.get_latest_raw_observation("metar", "paris", station_code="LFPB")
     assert latest is not None
-    assert latest["status"] == "invalid"
-    assert float(latest["value"]) == 18.0 or latest["observed_at"] is not None
+    # Regression is audit-only: latest valid row is untouched.
+    assert latest["status"] == "ok"
+    assert float(latest["value"]) == 22.5
+    assert latest["observed_at"] == first_obs
 
 
 def test_repo_records_error_status_and_keeps_last_success(tmp_path):
@@ -416,4 +419,6 @@ def test_collector_restart_resumes_without_duplicate_canonical(tmp_path):
     )
     second = db.get_latest_raw_observation("metar", "paris", station_code="LFPB")
     assert first is not None and second is not None
-    assert second["status"] == "invalid"
+    # Duplicate is audit-only: latest valid row is untouched.
+    assert second["status"] == "ok"
+    assert second["observed_at"] == first["observed_at"]
