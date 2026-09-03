@@ -274,7 +274,7 @@ def _observation_block(
     observed_at_local: str = "",
     fetched_at: str = "",
 ) -> dict[str, Any]:
-    from src.data_collection.data_quality import evaluate_observation
+    from src.data_collection.data_quality import evaluate_observation, primary_source_for_city
 
     quality = evaluate_observation(
         source=source,
@@ -283,6 +283,10 @@ def _observation_block(
         fetched_at=fetched_at,
         temp=temp,
         value_unit="c",
+        fallback_in_use=bool(
+            source
+            and source.strip().lower() != primary_source_for_city(city)
+        ),
     )
     freshness = {
         "freshness_status": quality["freshness_status"],

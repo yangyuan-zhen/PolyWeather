@@ -90,6 +90,13 @@ def _candidate_canonical(city: str, row: dict[str, Any]) -> Optional[dict[str, A
             return None
     except (TypeError, ValueError):
         return None
+    try:
+        from web.services.analysis_utils import parse_utc_datetime as _parse_dt
+
+        if _parse_dt(row.get("observed_at")) is None:
+            return None
+    except Exception:
+        return None
     source = _normalized_source(row.get("source"))
     source_label = _source_label(row)
     observed_at = str(row.get("observed_at") or "").strip()
@@ -169,7 +176,19 @@ def build_canonical_temperature_from_observations(
     if not candidates:
         return None
     candidates.sort(key=lambda item: item[0], reverse=True)
-    return candidates[0][1]
+    winner = candidates[0][1]
+    try:
+        from src.data_collection.data_quality import fallback_info
+
+        info = fallback_info(
+            city=normalized_city,
+            active_source=winner.get("source"),
+            active_observed_at=winner.get("observed_at"),
+        )
+        winner.update(info)
+    except Exception:
+        pass
+    return winner
 
 
 def build_realtime_event_from_canonical(
@@ -206,6 +225,11 @@ def build_realtime_event_from_canonical(
         text = str(canonical.get(key) or "").strip()
         if text:
             payload[key] = text
+    if canonical.get("fallback_in_use"):
+        payload["fallback_in_use"] = True
+        reason = str(canonical.get("fallback_reason") or "").strip()
+        if reason:
+            payload["fallback_reason"] = reason
     for key in (
         "freshness_sec",
         "confidence",
