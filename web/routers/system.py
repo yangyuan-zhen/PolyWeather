@@ -5,7 +5,9 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Request
 from fastapi.responses import PlainTextResponse
 
+from src.database.db_manager import DBManager
 from web.services.dashboard_init_api import build_dashboard_init_payload
+from web.services.data_quality_api import build_data_quality_snapshot
 from web.services.system_api import (
     get_health_payload,
     get_prometheus_metrics_response,
@@ -39,6 +41,16 @@ async def system_priority_warm(
     timezone: Optional[str] = None,
 ):
     return run_system_priority_warm(request, background_tasks, timezone=timezone)
+
+
+@router.get("/api/system/data-quality")
+async def system_data_quality(request: Request):
+    from web.services.ops_api import _require_ops
+
+    _require_ops(request)
+    from fastapi.concurrency import run_in_threadpool
+
+    return await run_in_threadpool(build_data_quality_snapshot, DBManager())
 
 
 @router.get("/metrics", response_class=PlainTextResponse)
