@@ -1,0 +1,1197 @@
+{
+  "generated_by": "scripts/generate_city_datasource_map.py",
+  "cities": {
+    "amsterdam": {
+      "city_id": "amsterdam",
+      "display_name": "Amsterdam",
+      "timezone": "Europe/Amsterdam",
+      "tz_offset_seconds": 3600,
+      "icao": "EHAM",
+      "settlement_source": "noaa",
+      "settlement_station_code": "EHAM",
+      "settlement_station_label": "Amsterdam Airport Schiphol Station",
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "ankara": {
+      "city_id": "ankara",
+      "display_name": "Ankara",
+      "timezone": "Europe/Istanbul",
+      "tz_offset_seconds": 10800,
+      "icao": "LTAC",
+      "settlement_source": "metar",
+      "settlement_station_code": "LTAC",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "atlanta": {
+      "city_id": "atlanta",
+      "display_name": "Atlanta",
+      "timezone": "America/New_York",
+      "tz_offset_seconds": -18000,
+      "icao": "KATL",
+      "settlement_source": "metar",
+      "settlement_station_code": "KATL",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "madis",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "austin": {
+      "city_id": "austin",
+      "display_name": "Austin",
+      "timezone": "America/Chicago",
+      "tz_offset_seconds": -21600,
+      "icao": "KAUS",
+      "settlement_source": "metar",
+      "settlement_station_code": "KAUS",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "madis",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "beijing": {
+      "city_id": "beijing",
+      "display_name": "Beijing",
+      "timezone": "Asia/Shanghai",
+      "tz_offset_seconds": 28800,
+      "icao": "ZBAA",
+      "settlement_source": "metar",
+      "settlement_station_code": "ZBAA",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "buenos aires": {
+      "city_id": "buenos aires",
+      "display_name": "Buenos Aires",
+      "timezone": "America/Argentina/Buenos_Aires",
+      "tz_offset_seconds": -10800,
+      "icao": "SAEZ",
+      "settlement_source": "metar",
+      "settlement_station_code": "SAEZ",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "madis",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "busan": {
+      "city_id": "busan",
+      "display_name": "Busan",
+      "timezone": "Asia/Seoul",
+      "tz_offset_seconds": 32400,
+      "icao": "RKPK",
+      "settlement_source": "noaa",
+      "settlement_station_code": "RKPK",
+      "settlement_station_label": "Busan/Gimhae International Airport Station",
+      "aux_sources": [
+        "korea_kma",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "cape town": {
+      "city_id": "cape town",
+      "display_name": "Cape Town",
+      "timezone": "Africa/Johannesburg",
+      "tz_offset_seconds": 7200,
+      "icao": "FACT",
+      "settlement_source": "noaa",
+      "settlement_station_code": "FACT",
+      "settlement_station_label": "Cape Town International Airport Station",
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "chengdu": {
+      "city_id": "chengdu",
+      "display_name": "Chengdu",
+      "timezone": "Asia/Shanghai",
+      "tz_offset_seconds": 28800,
+      "icao": "ZUUU",
+      "settlement_source": "metar",
+      "settlement_station_code": "ZUUU",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "chicago": {
+      "city_id": "chicago",
+      "display_name": "Chicago",
+      "timezone": "America/Chicago",
+      "tz_offset_seconds": -21600,
+      "icao": "KORD",
+      "settlement_source": "metar",
+      "settlement_station_code": "KORD",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "madis",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "chongqing": {
+      "city_id": "chongqing",
+      "display_name": "Chongqing",
+      "timezone": "Asia/Shanghai",
+      "tz_offset_seconds": 28800,
+      "icao": "ZUCK",
+      "settlement_source": "metar",
+      "settlement_station_code": "ZUCK",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "dallas": {
+      "city_id": "dallas",
+      "display_name": "Dallas",
+      "timezone": "America/Chicago",
+      "tz_offset_seconds": -21600,
+      "icao": "KDAL",
+      "settlement_source": "metar",
+      "settlement_station_code": "KDAL",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "madis",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "denver": {
+      "city_id": "denver",
+      "display_name": "Denver",
+      "timezone": "America/Denver",
+      "tz_offset_seconds": -25200,
+      "icao": "KBKF",
+      "settlement_source": "metar",
+      "settlement_station_code": "KBKF",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "madis",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "guangzhou": {
+      "city_id": "guangzhou",
+      "display_name": "Guangzhou",
+      "timezone": "Asia/Shanghai",
+      "tz_offset_seconds": 28800,
+      "icao": "ZGGG",
+      "settlement_source": "noaa",
+      "settlement_station_code": "ZGGG",
+      "settlement_station_label": "Guangzhou Baiyun International Airport Station",
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "helsinki": {
+      "city_id": "helsinki",
+      "display_name": "Helsinki",
+      "timezone": "Europe/Helsinki",
+      "tz_offset_seconds": 7200,
+      "icao": "EFHK",
+      "settlement_source": "noaa",
+      "settlement_station_code": "EFHK",
+      "settlement_station_label": "Helsinki Airport Station",
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "hong kong": {
+      "city_id": "hong kong",
+      "display_name": "Hong Kong",
+      "timezone": "Asia/Hong_Kong",
+      "tz_offset_seconds": 28800,
+      "icao": "VHHH",
+      "settlement_source": "hko",
+      "settlement_station_code": "HKO",
+      "settlement_station_label": "HK Observatory",
+      "aux_sources": [
+        "cowin",
+        "hko",
+        "hongkong_hko",
+        "metar"
+      ],
+      "update_interval_sec": 600,
+      "freshness": {
+        "fresh_window_sec": 900,
+        "expected_grace_sec": 600,
+        "stale_after_sec": 2700
+      },
+      "fallback": "none",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "houston": {
+      "city_id": "houston",
+      "display_name": "Houston",
+      "timezone": "America/Chicago",
+      "tz_offset_seconds": -21600,
+      "icao": "KHOU",
+      "settlement_source": "metar",
+      "settlement_station_code": "KHOU",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "madis",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "istanbul": {
+      "city_id": "istanbul",
+      "display_name": "Istanbul",
+      "timezone": "Europe/Istanbul",
+      "tz_offset_seconds": 10800,
+      "icao": "LTFM",
+      "settlement_source": "noaa",
+      "settlement_station_code": "LTFM",
+      "settlement_station_label": "Istanbul Airport",
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "jeddah": {
+      "city_id": "jeddah",
+      "display_name": "Jeddah",
+      "timezone": "Asia/Riyadh",
+      "tz_offset_seconds": 10800,
+      "icao": "OEJN",
+      "settlement_source": "ncm",
+      "settlement_station_code": "OEJN",
+      "settlement_station_label": "Jeddah King Abdulaziz Intl (NCM)",
+      "aux_sources": [
+        "metar",
+        "saudi_ncm"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 900,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "jinan": {
+      "city_id": "jinan",
+      "display_name": "Jinan",
+      "timezone": "Asia/Shanghai",
+      "tz_offset_seconds": 28800,
+      "icao": "ZSJN",
+      "settlement_source": "metar",
+      "settlement_station_code": "ZSJN",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "karachi": {
+      "city_id": "karachi",
+      "display_name": "Karachi",
+      "timezone": "Asia/Karachi",
+      "tz_offset_seconds": 18000,
+      "icao": "OPKC",
+      "settlement_source": "noaa",
+      "settlement_station_code": "OPKC",
+      "settlement_station_label": "Karachi/Jinnah International Airport Station",
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "kuala lumpur": {
+      "city_id": "kuala lumpur",
+      "display_name": "Kuala Lumpur",
+      "timezone": "Asia/Kuala_Lumpur",
+      "tz_offset_seconds": 28800,
+      "icao": "WMKK",
+      "settlement_source": "noaa",
+      "settlement_station_code": "WMKK",
+      "settlement_station_label": "Kuala Lumpur International Airport Station",
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "london": {
+      "city_id": "london",
+      "display_name": "London",
+      "timezone": "Europe/London",
+      "tz_offset_seconds": 0,
+      "icao": "EGLC",
+      "settlement_source": "metar",
+      "settlement_station_code": "EGLC",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "los angeles": {
+      "city_id": "los angeles",
+      "display_name": "Los Angeles",
+      "timezone": "America/Los_Angeles",
+      "tz_offset_seconds": -28800,
+      "icao": "KLAX",
+      "settlement_source": "metar",
+      "settlement_station_code": "KLAX",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "madis",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "lucknow": {
+      "city_id": "lucknow",
+      "display_name": "Lucknow",
+      "timezone": "Asia/Kolkata",
+      "tz_offset_seconds": 19800,
+      "icao": "VILK",
+      "settlement_source": "metar",
+      "settlement_station_code": "VILK",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "madrid": {
+      "city_id": "madrid",
+      "display_name": "Madrid",
+      "timezone": "Europe/Madrid",
+      "tz_offset_seconds": 3600,
+      "icao": "LEMD",
+      "settlement_source": "metar",
+      "settlement_station_code": "LEMD",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "manila": {
+      "city_id": "manila",
+      "display_name": "Manila",
+      "timezone": "Asia/Manila",
+      "tz_offset_seconds": 28800,
+      "icao": "RPLL",
+      "settlement_source": "noaa",
+      "settlement_station_code": "RPLL",
+      "settlement_station_label": "Manila/Ninoy Aquino International Airport Station",
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "mexico city": {
+      "city_id": "mexico city",
+      "display_name": "Mexico City",
+      "timezone": "America/Mexico_City",
+      "tz_offset_seconds": -21600,
+      "icao": "MMMX",
+      "settlement_source": "metar",
+      "settlement_station_code": "MMMX",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "madis",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "miami": {
+      "city_id": "miami",
+      "display_name": "Miami",
+      "timezone": "America/New_York",
+      "tz_offset_seconds": -18000,
+      "icao": "KMIA",
+      "settlement_source": "metar",
+      "settlement_station_code": "KMIA",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "madis",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "milan": {
+      "city_id": "milan",
+      "display_name": "Milan",
+      "timezone": "Europe/Rome",
+      "tz_offset_seconds": 3600,
+      "icao": "LIMC",
+      "settlement_source": "metar",
+      "settlement_station_code": "LIMC",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "moscow": {
+      "city_id": "moscow",
+      "display_name": "Moscow",
+      "timezone": "Europe/Moscow",
+      "tz_offset_seconds": 10800,
+      "icao": "UUWW",
+      "settlement_source": "metar",
+      "settlement_station_code": "UUWW",
+      "settlement_station_label": "Vnukovo International Airport",
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "munich": {
+      "city_id": "munich",
+      "display_name": "Munich",
+      "timezone": "Europe/Berlin",
+      "tz_offset_seconds": 3600,
+      "icao": "EDDM",
+      "settlement_source": "metar",
+      "settlement_station_code": "EDDM",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "new york": {
+      "city_id": "new york",
+      "display_name": "New York",
+      "timezone": "America/New_York",
+      "tz_offset_seconds": -18000,
+      "icao": "KLGA",
+      "settlement_source": "metar",
+      "settlement_station_code": "KLGA",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "madis",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "panama city": {
+      "city_id": "panama city",
+      "display_name": "Panama City",
+      "timezone": "America/Panama",
+      "tz_offset_seconds": -18000,
+      "icao": "MPMG",
+      "settlement_source": "noaa",
+      "settlement_station_code": "MPMG",
+      "settlement_station_label": "Panama City/Marcos A. Gelabert Airport Station",
+      "aux_sources": [
+        "global_metar",
+        "madis",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "paris": {
+      "city_id": "paris",
+      "display_name": "Paris",
+      "timezone": "Europe/Paris",
+      "tz_offset_seconds": 3600,
+      "icao": "LFPB",
+      "settlement_source": "aeroweb",
+      "settlement_station_code": "LFPB",
+      "settlement_station_label": "Paris Le Bourget (AEROWEB)",
+      "aux_sources": [
+        "fr_aeroweb",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 900,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "qingdao": {
+      "city_id": "qingdao",
+      "display_name": "Qingdao",
+      "timezone": "Asia/Shanghai",
+      "tz_offset_seconds": 28800,
+      "icao": "ZSQD",
+      "settlement_source": "noaa",
+      "settlement_station_code": "ZSQD",
+      "settlement_station_label": "Qingdao Jiaodong International Airport Station",
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "san francisco": {
+      "city_id": "san francisco",
+      "display_name": "San Francisco",
+      "timezone": "America/Los_Angeles",
+      "tz_offset_seconds": -28800,
+      "icao": "KSFO",
+      "settlement_source": "metar",
+      "settlement_station_code": "KSFO",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "madis",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "sao paulo": {
+      "city_id": "sao paulo",
+      "display_name": "São Paulo",
+      "timezone": "America/Sao_Paulo",
+      "tz_offset_seconds": -10800,
+      "icao": "SBGR",
+      "settlement_source": "metar",
+      "settlement_station_code": "SBGR",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "madis",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "seattle": {
+      "city_id": "seattle",
+      "display_name": "Seattle",
+      "timezone": "America/Los_Angeles",
+      "tz_offset_seconds": -28800,
+      "icao": "KSEA",
+      "settlement_source": "metar",
+      "settlement_station_code": "KSEA",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "madis",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "seoul": {
+      "city_id": "seoul",
+      "display_name": "Seoul",
+      "timezone": "Asia/Seoul",
+      "tz_offset_seconds": 32400,
+      "icao": "RKSI",
+      "settlement_source": "metar",
+      "settlement_station_code": "RKSI",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "korea_kma",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "shanghai": {
+      "city_id": "shanghai",
+      "display_name": "Shanghai",
+      "timezone": "Asia/Shanghai",
+      "tz_offset_seconds": 28800,
+      "icao": "ZSPD",
+      "settlement_source": "metar",
+      "settlement_station_code": "ZSPD",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "shenzhen": {
+      "city_id": "shenzhen",
+      "display_name": "Shenzhen",
+      "timezone": "Asia/Hong_Kong",
+      "tz_offset_seconds": 28800,
+      "icao": "ZGSZ",
+      "settlement_source": "metar",
+      "settlement_station_code": "ZGSZ",
+      "settlement_station_label": "Shenzhen Bao'an Airport (ZGSZ)",
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "singapore": {
+      "city_id": "singapore",
+      "display_name": "Singapore",
+      "timezone": "Asia/Singapore",
+      "tz_offset_seconds": 28800,
+      "icao": "WSSS",
+      "settlement_source": "metar",
+      "settlement_station_code": "WSSS",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "metar",
+        "singapore_mss"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "taipei": {
+      "city_id": "taipei",
+      "display_name": "Taipei",
+      "timezone": "Asia/Taipei",
+      "tz_offset_seconds": 28800,
+      "icao": "RCSS",
+      "settlement_source": "metar",
+      "settlement_station_code": "RCSS",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "tel aviv": {
+      "city_id": "tel aviv",
+      "display_name": "Tel Aviv",
+      "timezone": "Asia/Jerusalem",
+      "tz_offset_seconds": 7200,
+      "icao": "LLBG",
+      "settlement_source": "ims",
+      "settlement_station_code": "225",
+      "settlement_station_label": "Lod Airport",
+      "aux_sources": [
+        "israel_ims",
+        "metar"
+      ],
+      "update_interval_sec": 600,
+      "freshness": {
+        "fresh_window_sec": 900,
+        "expected_grace_sec": 600,
+        "stale_after_sec": 2700
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "tokyo": {
+      "city_id": "tokyo",
+      "display_name": "Tokyo",
+      "timezone": "Asia/Tokyo",
+      "tz_offset_seconds": 32400,
+      "icao": "RJTT",
+      "settlement_source": "metar",
+      "settlement_station_code": "RJTT",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "japan_jma",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "toronto": {
+      "city_id": "toronto",
+      "display_name": "Toronto",
+      "timezone": "America/Toronto",
+      "tz_offset_seconds": -18000,
+      "icao": "CYYZ",
+      "settlement_source": "metar",
+      "settlement_station_code": "CYYZ",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "madis",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "warsaw": {
+      "city_id": "warsaw",
+      "display_name": "Warsaw",
+      "timezone": "Europe/Warsaw",
+      "tz_offset_seconds": 3600,
+      "icao": "EPWA",
+      "settlement_source": "metar",
+      "settlement_station_code": "EPWA",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "wellington": {
+      "city_id": "wellington",
+      "display_name": "Wellington",
+      "timezone": "Pacific/Auckland",
+      "tz_offset_seconds": 46800,
+      "icao": "NZWN",
+      "settlement_source": "metar",
+      "settlement_station_code": "NZWN",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "wuhan": {
+      "city_id": "wuhan",
+      "display_name": "Wuhan",
+      "timezone": "Asia/Shanghai",
+      "tz_offset_seconds": 28800,
+      "icao": "ZHHH",
+      "settlement_source": "metar",
+      "settlement_station_code": "ZHHH",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    },
+    "zhengzhou": {
+      "city_id": "zhengzhou",
+      "display_name": "Zhengzhou",
+      "timezone": "Asia/Shanghai",
+      "tz_offset_seconds": 28800,
+      "icao": "ZHCC",
+      "settlement_source": "metar",
+      "settlement_station_code": "ZHCC",
+      "settlement_station_label": null,
+      "aux_sources": [
+        "global_metar",
+        "metar"
+      ],
+      "update_interval_sec": 900,
+      "freshness": {
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600
+      },
+      "fallback": "metar_cluster",
+      "canonical_selection": "score(settlement+station+freshness)",
+      "frontend_source": "live_observation via /api/city/{city}/observation + SSE patch"
+    }
+  }
+}
