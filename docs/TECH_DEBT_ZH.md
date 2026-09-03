@@ -47,6 +47,14 @@ flowchart TD
 - **数据源清理（2026-08-01）**：移除 Wunderground、台北 CWA、AMSC AWOS、NMC/CMA；深圳改挂流浮山 HKO（LFS）；结算源收敛为 NOAA Synoptic（11 城）+ HKO（2 城）+ IMGW（可选）；TAF 唯一来源 NOAA AviationWeather。
 - **监控栈收敛（2026-08-01）**：移除 Prometheus / Alertmanager / Alert Relay / Grafana 四组件与 `monitoring/` 目录，监控收敛为 FastAPI 轻量端点 + 巡检脚本。
 
+## 2.5 观测可靠性专项已关闭（2026-09）
+
+- 统一数据质量层：`src/data_collection/data_quality.py`（`evaluate_observation`/`guard_observation`），`status` 六态 `fresh/delayed/stale/invalid/source_error/fallback`，`API/collector/前端` 共用同一口径；`_observation_block` 不再写死 `fresh`
+- 异常保护：时间戳倒退/未来/越界/跳变/重复/NaN 在 `observation_repo` 落库前拦截并 `warning` 留痕；`canonical` 候选过滤非有限温度；`collector` 按 `record` 与按 `city` 双层隔离
+- 健康快照：`GET /api/system/data-quality`（`web/services/data_quality_api.py`）输出 `51` 城 `source/station/age/status/fallback/last_error`，`Ops/系统状态` 页新增数据质量卡片；巡检 `scripts/check_data_quality.py` 只读，`exit 0/1/2`
+- 机器可读映射：`config/city_datasource_map.json` 由 `scripts/generate_city_datasource_map.py` 从 `CITY_REGISTRY` 生成（`51` 城）
+- 冲突修正：`FAHRENHEIT_CITIES 6→11` 与 `registry.use_fahrenheit` 对齐；`SETTLEMENT_SOURCE_LABELS` 补 `IMS/NCM/AEROWEB`；`DATA_SOURCES` 去深圳 Tier4 重复行并澄清巴黎 AROME 非实测
+
 ## 3. 高优先级技术债
 
 | 项目 | 影响 | 建议动作 |

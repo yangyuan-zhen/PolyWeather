@@ -155,7 +155,7 @@ DEB：18.2°C
 | amsterdam | KNMI 数据平台 | 10 min | 荷兰 |
 | shenzhen | ZGSZ METAR | 30-60 min | 深圳宝安国际机场 |
 | tel aviv | IMS Lod (225) | 实时 | 以色列 |
-| paris | AEROWEB 实况 / AROME HD | 实时/15min | 法国 (AROME是15分钟临近预报) |
+| paris | AEROWEB 实况 + AROME HD 临近预报 | 实况按 METAR 节拍/预报 15min | 法国 (AROME 是模型预报非实测，仅作参考层) |
 
 > 注：台北 CWA 已于 2026-06 移除（观测零匹配）；台北改走 NOAA Synoptic 结算源。
 
@@ -166,7 +166,6 @@ DEB：18.2°C
 | london | EGLC | Met Office 仅 1 小时更新 |
 | jeddah | OEJN | NCM 数据源目前不可用 |
 | moscow | UUWW | 仅 UUWW METAR 单站 |
-| shenzhen | ZGSZ | 结算源为宝安机场 METAR，见 Tier 2 |
 | munich | EDDM | DWD 延迟约 1 小时 |
 | milan | LIMC | 无已知实时源 |
 | warsaw | EPWA | 含 IMGW 附近站 |

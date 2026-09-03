@@ -11,7 +11,7 @@
 E:\web\PolyWeather
 ├── web/                 # FastAPI 后端 (app.py → create_app)
 ├── src/                 # Python 核心库 (analysis, data_collection, bot, database, payments)
-├── tests/               # pytest (74 个文件)
+├── tests/               # pytest (75+ 个文件，含故障注入)
 ├── frontend/            # Next.js 15 + React 19 + TypeScript
 ├── scripts/             # 运维/工具脚本 (Python)
 ├── deploy.sh            # VPS 部署脚本
@@ -78,6 +78,6 @@ docker compose down && docker compose up -d --build
 
 ## 已下线
 
-- 天气扫描终端 `web/scan_terminal_*` / `routers/scan` / `services/scan_api` 及其前端 `ScanTerminalDashboard` 已整块下线，`/terminal` 为离线占位；`deploy.sh` 已移除 `wait_for_scan_terminal_snapshot` 健康检查
+- 比价环节已下线：`web/services/ops/market_opportunities`（模型概率-市场隐含概率只读对比）整块移除；天气终端（观测/METAR/多模型/DEB 曲线、`ScanTerminalDashboard`、`api/scan/terminal`）保留；`deploy.sh` 已移除 `wait_for_scan_terminal_snapshot` 健康检查
 
 ## 测试注意
