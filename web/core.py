@@ -67,6 +67,9 @@ SETTLEMENT_SOURCE_LABELS: Dict[str, str] = {
     "metar": "METAR",
     "hko": "HKO",
     "noaa": "NOAA",
+    "ims": "IMS",
+    "ncm": "NCM",
+    "aeroweb": "AEROWEB",
 }
 
 

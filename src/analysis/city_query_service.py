@@ -16,6 +16,11 @@ FAHRENHEIT_CITIES = {
     "miami",
     "atlanta",
     "seattle",
+    "los angeles",
+    "san francisco",
+    "denver",
+    "austin",
+    "houston",
 }
 
 
@@ -36,6 +41,9 @@ def _resolve_settlement_source(city_meta: Dict[str, Any]) -> Tuple[str, str]:
         "metar": "METAR",
         "hko": "HKO",
         "noaa": "NOAA",
+        "ims": "IMS",
+        "ncm": "NCM",
+        "aeroweb": "AEROWEB",
     }
     return source, source_label_map.get(source, source.upper())
 

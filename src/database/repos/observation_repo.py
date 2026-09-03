@@ -190,7 +190,8 @@ class ObservationRepo:
         with self._get_connection() as conn:
             previous_latest = conn.execute(
                 """
-                SELECT status, error_count, last_success_at, fetched_at
+                SELECT status, error_count, last_success_at, fetched_at,
+                       observed_at, value, value_unit
                 FROM raw_observation_latest
                 WHERE source = ? AND city = ?
                 ORDER BY updated_at_ts DESC
@@ -202,6 +203,38 @@ class ObservationRepo:
             previous_last_success = str(previous_latest[2] or "").strip() if previous_latest else ""
             previous_status = str(previous_latest[0] or "").strip().lower() if previous_latest else ""
             previous_fetched_at = str(previous_latest[3] or "").strip() if previous_latest else ""
+            previous_observed_at = str(previous_latest[4] or "").strip() if previous_latest else ""
+            previous_value = previous_latest[5] if previous_latest else None
+            previous_unit = str(previous_latest[6] or "").strip() if previous_latest else ""
+            if safe_status == "ok" and safe_observed_at and previous_observed_at:
+                try:
+                    from src.data_collection.data_quality import guard_observation
+
+                    verdict = guard_observation(
+                        city=normalized_city,
+                        source=normalized_source,
+                        observed_at=safe_observed_at,
+                        fetched_at=safe_fetched_at,
+                        temp=value_float,
+                        value_unit=str(value_unit or ""),
+                        prev_observed_at=previous_observed_at,
+                        prev_temp=previous_value,
+                        prev_temp_unit=previous_unit or str(value_unit or ""),
+                    )
+                    if not verdict.get("accept"):
+                        from loguru import logger as _logger
+
+                        _logger.warning(
+                            "raw observation rejected city={} source={} reason={} observed_at={} prev_observed_at={}",
+                            normalized_city,
+                            normalized_source,
+                            verdict.get("reason"),
+                            safe_observed_at,
+                            previous_observed_at,
+                        )
+                        safe_status = "invalid"
+                except Exception:
+                    pass
             if safe_status == "ok":
                 safe_error_count = 0
                 success_at = str(last_success_at or safe_fetched_at).strip()
