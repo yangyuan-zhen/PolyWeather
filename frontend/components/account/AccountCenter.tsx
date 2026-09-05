@@ -1407,7 +1407,7 @@ export function AccountCenter() {
       </main>
 
       <footer className="mt-16 text-center text-slate-600 text-[10px] uppercase tracking-[0.3em] font-mono z-10 pb-8">
-        copy.footerEngine
+        {copy.footerEngine}
       </footer>
     </div>
   );
