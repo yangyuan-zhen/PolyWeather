@@ -415,6 +415,107 @@ def _archive_probability_snapshot(city: str, result: Dict[str, Any]) -> bool:
         logger.debug(f"probability snapshot archive skipped for {city}: {exc}")
         return False
 
+
+def _archive_future_training_snapshots(
+    city: str,
+    result: Dict[str, Any],
+    *,
+    max_lead_days: int = 2,
+) -> Dict[str, int]:
+    """Persist first-seen DEB forecasts for D+1/D+2 training labels."""
+    summary = {"intraday": 0, "probability": 0, "skipped": 0}
+    local_date = str(result.get("local_date") or "").strip()[:10]
+    daily = result.get("multi_model_daily") or {}
+    if not local_date or not isinstance(daily, dict):
+        return summary
+    try:
+        local_day = datetime.strptime(local_date, "%Y-%m-%d").date()
+    except ValueError:
+        return summary
+
+    offset = int(result.get("utc_offset_seconds") or 0)
+    snapshot_time = (
+        datetime.now(timezone.utc)
+        .astimezone(timezone(timedelta(seconds=offset)))
+        .isoformat(timespec="seconds")
+    )
+    for target_date, daily_payload in daily.items():
+        date_text = str(target_date or "").strip()[:10]
+        try:
+            lead_days = (
+                datetime.strptime(date_text, "%Y-%m-%d").date() - local_day
+            ).days
+        except ValueError:
+            summary["skipped"] += 1
+            continue
+        if not 1 <= lead_days <= max(1, int(max_lead_days)):
+            continue
+        payload = daily_payload if isinstance(daily_payload, dict) else {}
+        deb = payload.get("deb") if isinstance(payload.get("deb"), dict) else {}
+        prediction = _sf(deb.get("prediction"))
+        if prediction is None:
+            summary["skipped"] += 1
+            continue
+
+        models = payload.get("models") if isinstance(payload.get("models"), dict) else {}
+        forecast_high = _sf(models.get("Open-Meteo"))
+        snapshot_payload = {
+            "schema_version": 1,
+            "snapshot_kind": "future_deb_forecast",
+            "city": city,
+            "target_date": date_text,
+            "snapshot_time": snapshot_time,
+            "local_time": str(result.get("local_time") or "").strip(),
+            "utc_offset_seconds": offset,
+            "lead_days": lead_days,
+            "deb_prediction": prediction,
+            "forecast_today_high": forecast_high,
+            "current_temp": None,
+            "max_so_far": None,
+            "future_forecast": payload,
+        }
+        intraday_saved = False
+        try:
+            IntradayPathSnapshotRepository().append_snapshot(snapshot_payload)
+            summary["intraday"] += 1
+            intraday_saved = True
+        except Exception as exc:
+            logger.debug(
+                "future intraday snapshot archive skipped city={} date={}: {}",
+                city,
+                date_text,
+                exc,
+            )
+        if not intraday_saved:
+            summary["skipped"] += 1
+            continue
+        try:
+            from src.database.runtime_state import ProbabilitySnapshotRepository
+
+            ProbabilitySnapshotRepository().append_snapshot(
+                {
+                    "city": city,
+                    "date": date_text,
+                    "timestamp": snapshot_time,
+                    "raw_mu": prediction,
+                    "raw_sigma": None,
+                    "max_so_far": None,
+                    "peak_status": "future_forecast",
+                    "probability_mode": "deb_future_training",
+                    "payload_json": json.dumps(snapshot_payload, ensure_ascii=False),
+                }
+            )
+            summary["probability"] += 1
+        except Exception as exc:
+            logger.debug(
+                "future probability snapshot archive skipped city={} date={}: {}",
+                city,
+                date_text,
+                exc,
+            )
+    return summary
+
+
 def _analyze(
     city: str,
     force_refresh: bool = False,
@@ -1503,6 +1604,7 @@ def _analyze(
         result["training_snapshot_archive"] = {
             "intraday": _archive_intraday_path_snapshot(city, result),
             "probability": _archive_probability_snapshot(city, result),
+            "future": _archive_future_training_snapshots(city, result),
         }
     with _CACHE_LOCK:
         _cache[cache_key] = {"t": _time.time(), "d": result}

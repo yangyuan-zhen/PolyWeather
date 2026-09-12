@@ -108,6 +108,8 @@ def _run_once(
         "analyzed": 0,
         "intraday": 0,
         "probability": 0,
+        "future_intraday": 0,
+        "future_probability": 0,
         "intraday_failed": 0,
         "probability_failed": 0,
     }
@@ -124,6 +126,14 @@ def _run_once(
             archive_summary["probability"] += 1
         else:
             archive_summary["probability_failed"] += 1
+        future = archive.get("future") or {}
+        if isinstance(future, dict):
+            archive_summary["future_intraday"] += max(
+                0, int(future.get("intraday") or 0)
+            )
+            archive_summary["future_probability"] += max(
+                0, int(future.get("probability") or 0)
+            )
     result["training_snapshot_archive"] = archive_summary
     try:
         snapshot_result = refresh_deb_weight_snapshots(cities=cities)
