@@ -4,12 +4,6 @@
 
 官方看板：[polyweather.top](https://polyweather.top/)
 
-## 产品截图
-
-### 实时终端
-
-![PolyWeather 实时终端](frontend/public/static/web.webp)
-
 ## 当前产品状态（2026-08-16）
 
 - 已上线 DEB 正态概率引擎：整度概率桶由 `deb_normal` 正态引擎输出。
