@@ -1,7 +1,9 @@
 import json
 import sqlite3
+import threading
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
+from loguru import logger
 
 
 class PaymentRepo:
@@ -237,6 +239,11 @@ class PaymentRepo:
             )
             conn.commit()
 
+    _AUDIT_PRUNE_KEEP = 20000
+    _AUDIT_PRUNE_EVERY = 500
+    _audit_write_counter = 0
+    _audit_counter_lock = threading.Lock()
+
     def append_payment_audit_event(self, event_type: str, payload: Dict[str, Any]) -> None:
         kind = str(event_type or "").strip().lower()
         if not kind:
@@ -251,6 +258,44 @@ class PaymentRepo:
                 (kind, json.dumps(body, ensure_ascii=False), datetime.now().isoformat()),
             )
             conn.commit()
+        # Amortized retention: the audit log is only ever read newest-first, so
+        # prune only every N writes to keep it bounded without paying a prune
+        # on every payment-loop heartbeat write.
+        with PaymentRepo._audit_counter_lock:
+            PaymentRepo._audit_write_counter += 1
+            due = PaymentRepo._audit_write_counter >= PaymentRepo._AUDIT_PRUNE_EVERY
+            if due:
+                PaymentRepo._audit_write_counter = 0
+        if due:
+            try:
+                self.prune_payment_audit_events(PaymentRepo._AUDIT_PRUNE_KEEP)
+            except Exception:
+                logger.opt(exception=True).warning("payment audit prune failed")
+
+    def prune_payment_audit_events(self, keep_latest: int) -> int:
+        """Delete payment audit events beyond the newest ``keep_latest`` rows.
+
+        537k of the 589k rows are ``event_loop_cycle`` heartbeats (one row per
+        payment-loop tick) that no reader ever consumes: list_payment_audit_events
+        only ever reads the newest 50-500 rows. Unbounded growth here was the
+        main driver of the 9.5GB production DB (1.9.0 outage class).
+        """
+        keep = max(int(keep_latest or 0), 0)
+        if keep <= 0:
+            return 0
+        with self._get_connection() as conn:
+            cur = conn.execute(
+                """
+                DELETE FROM payment_audit_events
+                WHERE id NOT IN (
+                    SELECT id FROM payment_audit_events
+                    ORDER BY id DESC LIMIT ?
+                )
+                """,
+                (keep,),
+            )
+            conn.commit()
+            return int(cur.rowcount or 0)
 
     def list_payment_audit_events(
         self,

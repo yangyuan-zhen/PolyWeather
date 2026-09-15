@@ -182,6 +182,22 @@ def _run_once(
         logger.exception("truth revisions prune failed: {}", exc)
         result["truth_revisions_prune"] = {"error": str(exc)}
     try:
+        # Retention guard: payment_audit_events is append-only. 537k of 589k
+        # production rows were event_loop_cycle heartbeats that no reader
+        # consumes (list_payment_audit_events only reads newest 50-500 rows);
+        # that growth was the main driver of the 9.5GB DB.
+        audit_keep = max(
+            5000,
+            int(os.getenv("POLYWEATHER_PAYMENT_AUDIT_KEEP_ROWS", "20000") or 20000),
+        )
+        from src.database.db_manager import DBManager
+
+        audit_pruned = DBManager().prune_payment_audit_events(audit_keep)
+        result["payment_audit_prune"] = {"keep": audit_keep, "pruned": audit_pruned}
+    except Exception as exc:
+        logger.exception("payment audit prune failed: {}", exc)
+        result["payment_audit_prune"] = {"error": str(exc)}
+    try:
         if not _env_bool("POLYWEATHER_DEB_ML_CALIBRATION"):
             # Inference only applies the LightGBM residual path when this flag
             # is on (deb_ml_calibration._deb_ml_flag_enabled); training it

@@ -370,6 +370,9 @@ class DBManager:
     def append_payment_audit_event(self, event_type: str, payload: Dict[str, Any]) -> None:
         return self._payment_repo.append_payment_audit_event(event_type, payload)
 
+    def prune_payment_audit_events(self, keep_latest: int) -> int:
+        return self._payment_repo.prune_payment_audit_events(keep_latest)
+
     def append_ops_audit_event(
         self,
         *,
