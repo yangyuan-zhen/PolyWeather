@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import json
+import threading
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import requests
@@ -18,6 +19,7 @@ from src.database.runtime_state import (
 
 # Cross-platform file locking
 import sys
+
 if sys.platform == "win32":
     import msvcrt
 
@@ -45,13 +47,35 @@ else:
     def _unlock(f):
         fcntl.flock(f, fcntl.LOCK_UN)
 
-# Simple memory cache to avoid blasting the disk if queried 10 times a minute
+
+# Simple memory cache to avoid blasting the disk if queried 10 times a minute.
+# Guarded by _history_cache_lock: the settlement worker reconciles cities
+# concurrently and every successful reconcile invalidates this cache, so an
+# unsynchronized `_history_cache = {}` can race with a concurrent fill and
+# resurrect a stale dict after another thread already refreshed it.
 _history_cache = {}
 _history_mtime = 0
+_history_cache_lock = threading.Lock()
 _daily_record_repo = DailyRecordRepository()
 _training_feature_repo = TrainingFeatureRecordRepository()
 _truth_record_repo = TruthRecordRepository()
 _TRUTH_VERSION = "v1"
+
+# Shared connection pool for the settlement sources. The reconcile pass issues
+# one request per city (HKO issues one per city-date), and a bare requests.get
+# pays a fresh TCP+TLS handshake every time; a single session keeps the
+# aviationweather.gov / data.weather.gov.hk connections alive across cities.
+_HTTP_SESSION = requests.Session()
+_HTTP_SESSION.headers.update(
+    {"User-Agent": "PolyWeather-TrainingSettlement/1.0 (weather truth reconcile)"}
+)
+
+
+def _invalidate_history_cache() -> None:
+    """Clear the history cache under lock (see _history_cache_lock note)."""
+    global _history_cache
+    with _history_cache_lock:
+        _history_cache = {}
 
 
 def _sf(value):
@@ -189,7 +213,11 @@ def compute_hourly_model_errors(
 
         mae = sum(abs_errors) / samples
         rmse = (sum(sq_errors) / samples) ** 0.5
-        result[model] = {"mae": round(mae, 2), "rmse": round(rmse, 2), "samples": samples}
+        result[model] = {
+            "mae": round(mae, 2),
+            "rmse": round(rmse, 2),
+            "samples": samples,
+        }
 
     return result
 
@@ -231,7 +259,9 @@ def load_history(filepath):
             _history_cache = data
             return data
         except Exception as e:
-            logger.error(f"Error loading daily records from sqlite, fallback to file: {e}")
+            logger.error(
+                f"Error loading daily records from sqlite, fallback to file: {e}"
+            )
 
     if not os.path.exists(filepath):
         if mode == STATE_STORAGE_SQLITE:
@@ -332,8 +362,15 @@ def _truth_meta_for_city(city_meta: dict) -> dict:
     if not isinstance(city_meta, dict):
         city_meta = {}
     return {
-        "settlement_source": str(city_meta.get("settlement_source") or "metar").strip().lower(),
-        "settlement_station_code": str(city_meta.get("settlement_station_code") or city_meta.get("icao") or "").strip().upper() or None,
+        "settlement_source": str(city_meta.get("settlement_source") or "metar")
+        .strip()
+        .lower(),
+        "settlement_station_code": str(
+            city_meta.get("settlement_station_code") or city_meta.get("icao") or ""
+        )
+        .strip()
+        .upper()
+        or None,
         "settlement_station_label": str(
             city_meta.get("settlement_station_label")
             or city_meta.get("airport_name")
@@ -444,7 +481,9 @@ def _reconcile_recent_metar_actual_highs(city_name: str, lookback_days: int = 7)
             "%Y-%m-%d"
         )
         target_dates = sorted(
-            d for d in city_data.keys() if isinstance(d, str) and cutoff <= d < local_today
+            d
+            for d in city_data.keys()
+            if isinstance(d, str) and cutoff <= d < local_today
         )
         if not target_dates:
             return {"ok": True, "reason": "no_target_dates", "updated": 0}
@@ -460,7 +499,7 @@ def _reconcile_recent_metar_actual_highs(city_name: str, lookback_days: int = 7)
             f"https://aviationweather.gov/api/data/metar"
             f"?ids={icao}&format=json&hours={span_hours}"
         )
-        resp = requests.get(url, timeout=12)
+        resp = _HTTP_SESSION.get(url, timeout=12)
         resp.raise_for_status()
         rows = resp.json() or []
         if not isinstance(rows, list):
@@ -501,7 +540,11 @@ def _reconcile_recent_metar_actual_highs(city_name: str, lookback_days: int = 7)
                 city_meta=city_meta,
                 updated_by="backfill:metar_history",
                 reason="reconcile_recent_actual_highs",
-                source_payload={"icao": icao, "actual_high": corrected, "source": "metar"},
+                source_payload={
+                    "icao": icao,
+                    "actual_high": corrected,
+                    "source": "metar",
+                },
             )
             rec = city_data.get(d) or {}
             old = rec.get("actual_high")
@@ -519,8 +562,7 @@ def _reconcile_recent_metar_actual_highs(city_name: str, lookback_days: int = 7)
                 _daily_record_repo.upsert_record(city_key, d, city_data[d])
             # 该路径用 load_city（不经 load_history），直接改写 DB 行，
             # 需要让 load_history 的全量缓存失效，避免读到旧修正。
-            global _history_cache
-            _history_cache = {}
+            _invalidate_history_cache()
 
         return {
             "ok": True,
@@ -544,7 +586,9 @@ def _reconcile_recent_hko_actual_highs(city_name: str, lookback_days: int = 14):
         if not city_key or not isinstance(city_meta, dict):
             return {"ok": False, "reason": "unknown_city", "updated": 0}
 
-        station_code = str(city_meta.get("settlement_station_code") or "").strip().upper()
+        station_code = (
+            str(city_meta.get("settlement_station_code") or "").strip().upper()
+        )
         if not station_code:
             return {"ok": False, "reason": "missing_station_code", "updated": 0}
 
@@ -561,7 +605,9 @@ def _reconcile_recent_hko_actual_highs(city_name: str, lookback_days: int = 14):
             "%Y-%m-%d"
         )
         target_dates = sorted(
-            d for d in city_data.keys() if isinstance(d, str) and cutoff <= d < local_today
+            d
+            for d in city_data.keys()
+            if isinstance(d, str) and cutoff <= d < local_today
         )
         if not target_dates:
             return {"ok": True, "reason": "no_target_dates", "updated": 0}
@@ -573,7 +619,7 @@ def _reconcile_recent_hko_actual_highs(city_name: str, lookback_days: int = 14):
         for date_str in target_dates:
             date_token = date_str.replace("-", "")
             try:
-                resp = requests.get(
+                resp = _HTTP_SESSION.get(
                     base_url,
                     params={
                         "dataType": "RYES",
@@ -628,8 +674,7 @@ def _reconcile_recent_hko_actual_highs(city_name: str, lookback_days: int = 14):
                 _daily_record_repo.upsert_record(city_key, d, city_data[d])
             # 该路径用 load_city（不经 load_history），直接改写 DB 行，
             # 需要让 load_history 的全量缓存失效，避免读到旧修正。
-            global _history_cache
-            _history_cache = {}
+            _invalidate_history_cache()
 
         return {
             "ok": True,
@@ -653,7 +698,9 @@ def _reconcile_recent_noaa_actual_highs(city_name: str, lookback_days: int = 14)
         if not city_key or not isinstance(city_meta, dict):
             return {"ok": False, "reason": "unknown_city", "updated": 0}
 
-        station_code = str(city_meta.get("settlement_station_code") or "").strip().upper()
+        station_code = (
+            str(city_meta.get("settlement_station_code") or "").strip().upper()
+        )
         if not station_code:
             return {"ok": False, "reason": "missing_station_code", "updated": 0}
 
@@ -670,7 +717,9 @@ def _reconcile_recent_noaa_actual_highs(city_name: str, lookback_days: int = 14)
             "%Y-%m-%d"
         )
         target_dates = sorted(
-            d for d in city_data.keys() if isinstance(d, str) and cutoff <= d < local_today
+            d
+            for d in city_data.keys()
+            if isinstance(d, str) and cutoff <= d < local_today
         )
         if not target_dates:
             return {"ok": True, "reason": "no_target_dates", "updated": 0}
@@ -679,7 +728,7 @@ def _reconcile_recent_noaa_actual_highs(city_name: str, lookback_days: int = 14)
         # (replaces the SynopticData timeseries endpoint that 401'd with an
         # empty NOAA_WRH_MESO_TOKEN).  temp is Celsius, obsTime is epoch UTC.
         span_hours = max(72, min(240, (lookback_days + 3) * 24))
-        response = requests.get(
+        response = _HTTP_SESSION.get(
             "https://aviationweather.gov/api/data/metar",
             params={"ids": station_code, "format": "json", "hours": span_hours},
             timeout=15,
@@ -720,11 +769,7 @@ def _reconcile_recent_noaa_actual_highs(city_name: str, lookback_days: int = 14)
             t_c = daily_max.get(date_key)
             if t_c is None:
                 continue
-            next_value = (
-                round(t_c * 9 / 5 + 32, 1)
-                if use_fahrenheit
-                else round(t_c, 1)
-            )
+            next_value = round(t_c * 9 / 5 + 32, 1) if use_fahrenheit else round(t_c, 1)
             _persist_truth_record(
                 city_key,
                 date_key,
@@ -754,8 +799,7 @@ def _reconcile_recent_noaa_actual_highs(city_name: str, lookback_days: int = 14)
                 _daily_record_repo.upsert_record(city_key, d, city_data[d])
             # 该路径用 load_city（不经 load_history），直接改写 DB 行，
             # 需要让 load_history 的全量缓存失效，避免读到旧修正。
-            global _history_cache
-            _history_cache = {}
+            _invalidate_history_cache()
 
         return {
             "ok": True,
@@ -777,11 +821,15 @@ def reconcile_recent_actual_highs(city_name: str, lookback_days: int = 7):
     if not city_key or not isinstance(city_meta, dict):
         return {"ok": False, "reason": "unknown_city", "updated": 0}
 
-    settlement_source = str(city_meta.get("settlement_source") or "metar").strip().lower()
+    settlement_source = (
+        str(city_meta.get("settlement_source") or "metar").strip().lower()
+    )
     if settlement_source == "hko":
         return _reconcile_recent_hko_actual_highs(city_key, lookback_days=lookback_days)
     if settlement_source == "noaa":
-        return _reconcile_recent_noaa_actual_highs(city_key, lookback_days=lookback_days)
+        return _reconcile_recent_noaa_actual_highs(
+            city_key, lookback_days=lookback_days
+        )
     return _reconcile_recent_metar_actual_highs(city_key, lookback_days=lookback_days)
 
 
@@ -796,16 +844,30 @@ def bootstrap_recent_daily_history_if_missing(city_name: str, lookback_days: int
         if not city_key or not isinstance(city_meta, dict):
             return {"ok": False, "reason": "unknown_city", "seeded": 0, "updated": 0}
 
-        settlement_source = str(city_meta.get("settlement_source") or "metar").strip().lower()
+        settlement_source = (
+            str(city_meta.get("settlement_source") or "metar").strip().lower()
+        )
         if settlement_source not in {"metar", "hko", "noaa"}:
-            return {"ok": True, "reason": "unsupported_settlement_source", "seeded": 0, "updated": 0}
+            return {
+                "ok": True,
+                "reason": "unsupported_settlement_source",
+                "seeded": 0,
+                "updated": 0,
+            }
 
         icao = str(city_meta.get("icao") or "").strip().upper()
-        station_code = str(city_meta.get("settlement_station_code") or "").strip().upper()
+        station_code = (
+            str(city_meta.get("settlement_station_code") or "").strip().upper()
+        )
         if settlement_source == "metar" and not icao:
             return {"ok": False, "reason": "missing_icao", "seeded": 0, "updated": 0}
         if settlement_source in {"hko", "noaa"} and not station_code:
-            return {"ok": False, "reason": "missing_station_code", "seeded": 0, "updated": 0}
+            return {
+                "ok": False,
+                "reason": "missing_station_code",
+                "seeded": 0,
+                "updated": 0,
+            }
 
         tz_offset = int(city_meta.get("tz_offset") or 0)
         local_now = datetime.utcnow() + timedelta(seconds=tz_offset)
@@ -828,10 +890,11 @@ def bootstrap_recent_daily_history_if_missing(city_name: str, lookback_days: int
         if seeded_days:
             for day in seeded_days:
                 _daily_record_repo.upsert_record(city_key, day, city_rows[day])
-            global _history_cache
-            _history_cache = {}
+            _invalidate_history_cache()
 
-        reconcile_result = reconcile_recent_actual_highs(city_key, lookback_days=lookback_days)
+        reconcile_result = reconcile_recent_actual_highs(
+            city_key, lookback_days=lookback_days
+        )
         result = {
             "ok": True,
             "reason": "bootstrapped" if seeded > 0 else "already_seeded",
@@ -896,8 +959,7 @@ def update_daily_record(
     if probabilities is not None:
         # Store compact: [{"v": 25, "p": 0.8}, ...]
         compact_probs = [
-            {"v": p["value"], "p": p["probability"]}
-            for p in probabilities[:4]
+            {"v": p["value"], "p": p["probability"]} for p in probabilities[:4]
         ]
     compact_features = None
     if isinstance(probability_features, dict) and probability_features:
@@ -914,8 +976,7 @@ def update_daily_record(
     compact_shadow_probs = None
     if shadow_probabilities is not None:
         compact_shadow_probs = [
-            {"v": p["value"], "p": p["probability"]}
-            for p in shadow_probabilities[:4]
+            {"v": p["value"], "p": p["probability"]} for p in shadow_probabilities[:4]
         ]
     compact_calibration = None
     if isinstance(calibration_summary, dict) and calibration_summary:
@@ -937,7 +998,9 @@ def update_daily_record(
     old_mu = existing.get("mu")
     old_probs = existing.get("prob_snapshot")
     old_shadow_probs = existing.get("shadow_prob_snapshot")
-    old_forecasts = existing.get("forecasts") if isinstance(existing.get("forecasts"), dict) else {}
+    old_forecasts = (
+        existing.get("forecasts") if isinstance(existing.get("forecasts"), dict) else {}
+    )
     merged_forecasts = dict(old_forecasts)
     for model_name, model_value in next_forecasts.items():
         if model_value is not None:
@@ -946,17 +1009,16 @@ def update_daily_record(
             merged_forecasts[model_name] = model_value
     old_hourly_error = existing.get("hourly_error")
     # Merge hourly_error: keep existing per-model data and overlay new values
-    merged_hourly_error = dict(old_hourly_error) if isinstance(old_hourly_error, dict) else {}
+    merged_hourly_error = (
+        dict(old_hourly_error) if isinstance(old_hourly_error, dict) else {}
+    )
     if isinstance(hourly_error, dict):
         for model, err in hourly_error.items():
-            if isinstance(err, dict) and all(
-                k in err for k in ("mae", "samples")
-            ):
+            if isinstance(err, dict) and all(k in err for k in ("mae", "samples")):
                 # Prefer the entry with more samples
                 old_entry = merged_hourly_error.get(model)
-                if (
-                    not isinstance(old_entry, dict)
-                    or int(err.get("samples", 0)) >= int(old_entry.get("samples", 0))
+                if not isinstance(old_entry, dict) or int(err.get("samples", 0)) >= int(
+                    old_entry.get("samples", 0)
                 ):
                     merged_hourly_error[model] = {
                         "mae": round(float(err["mae"]), 2),
@@ -972,10 +1034,7 @@ def update_daily_record(
         and (deb_prediction is None or old_deb == deb_prediction)
         and (mu is None or old_mu == next_mu)
         and (compact_probs is None or old_probs == compact_probs)
-        and (
-            compact_shadow_probs is None
-            or old_shadow_probs == compact_shadow_probs
-        )
+        and (compact_shadow_probs is None or old_shadow_probs == compact_shadow_probs)
         and (
             compact_features is None
             or existing.get("probability_features") == compact_features
@@ -1033,7 +1092,9 @@ def update_daily_record(
                 },
             )
         except Exception as e:
-            logger.error(f"Error persisting truth record city={city_name} date={date_str}: {e}")
+            logger.error(
+                f"Error persisting truth record city={city_name} date={date_str}: {e}"
+            )
     try:
         _persist_training_feature_record(
             city_name,
@@ -1047,7 +1108,9 @@ def update_daily_record(
             probability_calibration=existing.get("probability_calibration"),
         )
     except Exception as e:
-        logger.error(f"Error persisting training feature record city={city_name} date={date_str}: {e}")
+        logger.error(
+            f"Error persisting training feature record city={city_name} date={date_str}: {e}"
+        )
 
     # 自动清理：训练特征需要更长窗口，保留最近 180 天的记录
     cutoff = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
@@ -1062,7 +1125,9 @@ def update_daily_record(
             cutoff = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
             _daily_record_repo.delete_older_than(cutoff)
         except Exception as e:
-            logger.error(f"Error upserting daily record to sqlite city={city_name} date={date_str}: {e}")
+            logger.error(
+                f"Error upserting daily record to sqlite city={city_name} date={date_str}: {e}"
+            )
             raise
 
     if mode != STATE_STORAGE_SQLITE:
@@ -1099,7 +1164,9 @@ def calculate_dynamic_weights(
     forecasts = components.get("forecasts") or {}
     weights = components.get("weights") or {}
     if not forecasts or not weights:
-        return components.get("prediction"), components.get("weights_info") or "暂无模型数据"
+        return components.get("prediction"), components.get(
+            "weights_info"
+        ) or "暂无模型数据"
     blended_high = sum(forecasts[m] * weights[m] for m in weights if m in forecasts)
     return round(blended_high, 1), components.get("weights_info") or "权重计算异常"
 
@@ -1172,7 +1239,9 @@ def calculate_dynamic_weight_components(
     city_data = data[city_name]
     sorted_dates = sorted(city_data.keys(), reverse=True)
     utc_offset = get_city_utc_offset_seconds(city_name)
-    today_str = (datetime.now(timezone.utc) + timedelta(seconds=utc_offset)).strftime("%Y-%m-%d")
+    today_str = (datetime.now(timezone.utc) + timedelta(seconds=utc_offset)).strftime(
+        "%Y-%m-%d"
+    )
     available_days = sum(
         1
         for d in sorted_dates
@@ -1184,7 +1253,9 @@ def calculate_dynamic_weight_components(
 
     # ── 改进3: 自适应 lookback — 数据多的城市用更多历史 ──
     adaptive_lookback = min(14, max(7, available_days // 4))
-    effective_lookback = max(lookback_days, adaptive_lookback) if lookback_days <= 7 else lookback_days
+    effective_lookback = (
+        max(lookback_days, adaptive_lookback) if lookback_days <= 7 else lookback_days
+    )
 
     # ── 改进1: 偏差惩罚 — per-model signed bias ──
     model_biases: dict = {model: 0.0 for model in forecasts.keys()}
@@ -1212,7 +1283,10 @@ def calculate_dynamic_weight_components(
             else:
                 model_family = _deb_model_family(model)
                 for hist_model, hist_val in past_forecasts.items():
-                    if hist_val is not None and _deb_model_family(hist_model) == model_family:
+                    if (
+                        hist_val is not None
+                        and _deb_model_family(hist_model) == model_family
+                    ):
                         matched_val = hist_val
                         break
             if matched_val is not None:
@@ -1223,7 +1297,7 @@ def calculate_dynamic_weight_components(
                     continue
                 usable_day = True
                 # Track signed error for bias
-                model_biases[model] += (pv - av)  # positive = model overpredicts
+                model_biases[model] += pv - av  # positive = model overpredicts
                 bias_samples[model] += 1
                 # Track absolute error for MAE
                 daily_error = abs(pv - av)
@@ -1233,7 +1307,7 @@ def calculate_dynamic_weight_components(
                     else None
                 )
                 blended_error = _blend_mae(daily_error, h_err)
-                decay_weight = decay_factor ** days_used
+                decay_weight = decay_factor**days_used
                 if av >= heat_threshold:
                     decay_weight *= 2.0
                 errors[model].append((blended_error, decay_weight))
@@ -1672,7 +1746,9 @@ def get_mu_accuracy(city_name):
 
         total += 1
         mu_errors.append(abs(mu_val - actual))
-        if apply_city_settlement(city_name, mu_val) == apply_city_settlement(city_name, actual):
+        if apply_city_settlement(city_name, mu_val) == apply_city_settlement(
+            city_name, actual
+        ):
             mu_hits += 1
 
         prob_snap = record.get("prob_snapshot", [])

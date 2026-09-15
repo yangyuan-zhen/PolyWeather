@@ -1,3 +1,5 @@
+import time
+
 import web.training_settlement_service as training_settlement_service
 from web.training_settlement_service import run_training_settlement_cycle
 
@@ -140,7 +142,11 @@ def test_default_analysis_runner_archives_training_snapshots(monkeypatch):
     assert calls == [
         (
             "shanghai",
-            {"force_refresh": False, "detail_mode": "panel", "archive_training_snapshots": True},
+            {
+                "force_refresh": False,
+                "detail_mode": "panel",
+                "archive_training_snapshots": True,
+            },
         )
     ]
 
@@ -238,3 +244,93 @@ def test_training_settlement_cycle_skip_analysis_still_reconciles_all():
     assert sorted(calls["reconcile"]) == ["hong kong", "shanghai"]
     assert result["analyzed_cities"] == []
     assert result["items"][0]["analysis_status"] == "skipped"
+
+
+def test_training_settlement_cycle_reconcles_concurrently_and_collects_per_city():
+    # Reconcile is network-bound (one request per city), so it runs
+    # concurrently. Each city must still receive its own result, and a
+    # failure in one city must not abort the others.
+    import threading
+
+    registry = {
+        f"city{i}": {"icao": f"ZS{i:03d}", "settlement_source": "metar"}
+        for i in range(6)
+    }
+    seen = []
+    seen_lock = threading.Lock()
+    max_concurrent = 0
+    inflight = 0
+
+    def actual_reconciler(city, *, lookback_days):
+        nonlocal inflight, max_concurrent
+        with seen_lock:
+            seen.append(city)
+            inflight += 1
+            max_concurrent = max(max_concurrent, inflight)
+        # Simulate network latency so the worker pool actually overlaps.
+        time.sleep(0.05)
+        with seen_lock:
+            inflight -= 1
+        if city == "city3":
+            raise RuntimeError("upstream station down")
+        return {"ok": True, "updated": 1, "source": "metar"}
+
+    result = run_training_settlement_cycle(
+        city_registry=registry,
+        analysis_runner=lambda city: {"city": city},
+        actual_reconciler=actual_reconciler,
+        skip_analysis=True,
+        reconcile_workers=4,
+    )
+
+    assert sorted(seen) == sorted(registry)
+    # 6 cities x 50ms serial = 300ms; overlapped across 4 workers it is well
+    # under that, proving the calls actually ran concurrently.
+    assert max_concurrent > 1
+    by_city = {item["city"]: item for item in result["items"]}
+    assert by_city["city3"]["ok"] is False
+    assert by_city["city0"]["ok"] is True
+    assert by_city["city0"]["reconcile"]["updated"] == 1
+
+
+def test_training_settlement_cycle_reconcile_single_city_stays_serial():
+    # A single-city registry must not spin up a pool just to reconcile itself.
+    registry = {"shanghai": {"icao": "ZSSS", "settlement_source": "metar"}}
+    result = run_training_settlement_cycle(
+        city_registry=registry,
+        analysis_runner=lambda city: {"city": city},
+        actual_reconciler=lambda city, *, lookback_days: {"ok": True, "updated": 1},
+        skip_analysis=True,
+        reconcile_workers=8,
+    )
+    assert result["ok"] is True
+    assert result["processed"] == 1
+
+
+def test_training_settlement_cycle_reconcile_pool_failure_falls_back_to_serial(
+    monkeypatch,
+):
+    # If the worker pool itself breaks, the cycle still reconciles every city.
+    registry = {
+        "shanghai": {"icao": "ZSSS", "settlement_source": "metar"},
+        "tokyo": {"icao": "RJTT", "settlement_source": "metar"},
+    }
+    calls = []
+
+    class _BrokenPool:
+        def __init__(self, max_workers):
+            raise RuntimeError("pool unavailable")
+
+    monkeypatch.setattr(training_settlement_service, "ThreadPoolExecutor", _BrokenPool)
+
+    result = run_training_settlement_cycle(
+        city_registry=registry,
+        analysis_runner=lambda city: {"city": city},
+        actual_reconciler=lambda city, *, lookback_days: calls.append(city)
+        or {"ok": True, "updated": 0},
+        skip_analysis=True,
+        reconcile_workers=4,
+    )
+
+    assert sorted(calls) == ["shanghai", "tokyo"]
+    assert result["ok"] is True

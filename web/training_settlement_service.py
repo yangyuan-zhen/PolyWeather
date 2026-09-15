@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import math
+import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Sequence
 
 from loguru import logger
@@ -14,9 +16,53 @@ from src.data_collection.city_registry import CITY_REGISTRY
 
 AnalysisRunner = Callable[[str], Mapping[str, Any]]
 ActualReconciler = Callable[..., Mapping[str, Any]]
+# A batch reconciler runs the network-bound truth fetch for many cities at once.
+# Settlement sources are one HTTP request per city (HKO is one per city-date),
+# which dominates cycle time when run serially across 48 supported cities.
+ActualBatchReconciler = Callable[..., Mapping[str, Any]]
 
 UNSUPPORTED_SETTLEMENT_SOURCES = set()
 RECONCILE_SETTLEMENT_SOURCES = {"metar", "hko", "noaa"}
+
+
+def _concurrent_reconcile(
+    cities: Sequence[str],
+    reconcile_actual: ActualReconciler,
+    *,
+    lookback_days: int,
+    max_workers: int,
+) -> Mapping[str, Mapping[str, Any]]:
+    """Run the per-city reconciler concurrently keyed by city.
+
+    Each reconciler call does its own HTTP fetch and its own DB writes. The
+    SQLite layer already serializes writers with a process-wide write lock
+    (`sqlite_write_lock`), so the only thing parallelised here is the network
+    wait, which is what dominates a serial 48-city pass.
+    """
+    results: Dict[str, Mapping[str, Any]] = {}
+    if len(cities) <= 1:
+        for city in cities:
+            results[city] = reconcile_actual(city, lookback_days=lookback_days)
+        return results
+    workers = max(1, min(int(max_workers or 1), len(cities)))
+    try:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            future_to_city = {
+                pool.submit(reconcile_actual, city, lookback_days=lookback_days): city
+                for city in cities
+            }
+            for future in as_completed(future_to_city):
+                city = future_to_city[future]
+                try:
+                    results[city] = future.result()
+                except Exception as exc:
+                    results[city] = {"ok": False, "reason": str(exc), "updated": 0}
+    except Exception as exc:
+        # A broken pool must not kill the whole cycle; fall back to serial.
+        logger.warning("concurrent reconcile failed, falling back to serial: {}", exc)
+        for city in cities:
+            results[city] = reconcile_actual(city, lookback_days=lookback_days)
+    return results
 
 
 def _normalize_city(city: str) -> str:
@@ -105,6 +151,7 @@ def run_training_settlement_cycle(
     analysis_batch_size: int = 0,
     analysis_interval_sec: int = 21600,
     now_ts: Optional[float] = None,
+    reconcile_workers: int = 0,
 ) -> Dict[str, Any]:
     registry = city_registry or CITY_REGISTRY
     # Per-city _analyze refreshes forecasts/deb_prediction in daily_records.
@@ -115,6 +162,18 @@ def run_training_settlement_cycle(
     run_analysis = analysis_runner or _default_analysis_runner
     reconcile_actual = actual_reconciler or _default_actual_reconciler
     safe_lookback = max(1, int(lookback_days or 1))
+    # Reconcile is one HTTP round-trip per city, so running the supported
+    # cities concurrently turns a 48-request serial pass into ~48/workers
+    # round-trips. DB writes still serialize through the process-wide write
+    # lock, so this only parallelises the network wait.
+    reconcile_workers = max(
+        0,
+        int(
+            reconcile_workers
+            or os.getenv("POLYWEATHER_TRAINING_RECONCILE_WORKERS")
+            or 8
+        ),
+    )
 
     all_names = _selected_city_names(registry, cities)
 
@@ -124,6 +183,7 @@ def run_training_settlement_cycle(
     items = []
     analysis_names: Sequence[str] = ()
     analysis_cycle_index = -1
+    analysis_set: set[str] = set()
     if not skip_analysis:
         supported_names = [
             name
@@ -137,6 +197,25 @@ def run_training_settlement_cycle(
             now_ts=now_ts,
         )
         analysis_set = set(analysis_names)
+    # Prefetch every reconcile result up front: the per-city reconciler is
+    # network-bound, so batching the supported cities lets them share the
+    # round-trip latency instead of paying it serially inside the loop. The
+    # analysis step stays serial (it is heavy and already rotates in slices).
+    reconcile_results: Mapping[str, Mapping[str, Any]] = {}
+    if not skip_reconcile:
+        reconcile_cities = [
+            city
+            for city in all_names
+            if _is_supported_training_city(registry.get(city) or {})
+            and _can_reconcile_actual_history(registry.get(city) or {})
+        ]
+        if reconcile_cities:
+            reconcile_results = _concurrent_reconcile(
+                reconcile_cities,
+                reconcile_actual,
+                lookback_days=safe_lookback,
+                max_workers=reconcile_workers,
+            )
 
     for city in all_names:
         meta = registry.get(city) or {}
@@ -165,8 +244,9 @@ def run_training_settlement_cycle(
                     "reason": "skipped_reconcile",
                     "source": str(meta.get("settlement_source") or "").strip().lower(),
                 }
-            elif _can_reconcile_actual_history(meta):
-                reconcile_payload = reconcile_actual(city, lookback_days=safe_lookback)
+            elif city in reconcile_results:
+                # Prefetched by _concurrent_reconcile above.
+                reconcile_payload = reconcile_results[city]
             else:
                 reconcile_payload = {
                     "ok": True,
