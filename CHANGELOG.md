@@ -182,7 +182,7 @@
 - 移除 dead code（1,697 行）：public/static/style.css + public/legacy/index.html
 - Dashboard.module.css 本地变量桥接至全局 token
 - 清理冗余文档：移除 FRONTEND_REDESIGN_REPORT.md、TECH_DEBT.md 重复文件、AGENTS.md
-- 参考：docs/reviews/frontend-ui-design-review.md 完整修复记录
+- 完整修复记录见 CHANGELOG 本节与 `docs/TECH_DEBT_ZH.md` 的「近期已关闭」
 
 ## 1.5.5 - 2026-04-27
 

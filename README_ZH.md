@@ -14,7 +14,7 @@
 
 - 已上线 DEB 正态概率引擎：整度概率桶由 `deb_normal` 正态引擎输出。
 - 已移除 WeatherNext2：Google WeatherNext2 GCS Zarr worker 下线，概率与预报基于 Open-Meteo 模型套件上的 DEB 融合。
-- 已上线订阅制：`Pro 月付 29.9 USDC / 30 天`，`Pro 季度 79.9 USDC / 90 天`。
+- 已上线订阅制：`Pro 月付 9.9 USDC / 30 天`，`Pro 季度 24.9 USDC / 90 天`。
 - 积分可用于支付抵扣（`500 分 = 1 USDC`，月付最多抵 `3 USDC`，季度最多抵 `8 USDC`）。真实、有上下文、有价值的用户反馈也可通过运营后台人工奖励积分。
 - 已上线链上支付：Polygon 合约支付（USDC / USDC.e）+ Ethereum 主网 USDC 直转确认。
 - 已上线自动补单：事件监听 + 周期确认双链路。
@@ -51,7 +51,7 @@
 - 市场信号中的“模型-市场差”口径为 `模型概率 - 市场隐含概率`，正值表示天气概率高于市场报价，负值表示市场已经更充分计价。
 - 概率区已改为“校准模型概率”；默认展示 DEB 正态概率引擎（`deb_normal`）输出，legacy 高斯作为回退分支，模型共识作为辅助参考。
 - 今日日内结构解读以规则与结构化信号为主，AI 文案只作为可降级辅助层，不替代实测、DEB、TAF 或结算逻辑。
-- 前端设计系统全面重构：统一 CSS token 体系、消除 !important 滥用（134→49）、合并断点（18→10）、数百处硬编码颜色迁移至 CSS 变量、添加 ARIA 无障碍属性和键盘导航。完整审查记录见 `docs/reviews/frontend-ui-design-review.md`。
+- 前端设计系统全面重构：统一 CSS token 体系、消除 !important 滥用（134→49）、合并断点（18→10）、数百处硬编码颜色迁移至 CSS 变量、添加 ARIA 无障碍属性和键盘导航。
 
 ## 许可证与商用边界（重要）
 
@@ -212,16 +212,12 @@ POLYWEATHER_OPS_ADMIN_EMAILS=yhrsc30@gmail.com
 - 技术债：[docs/TECH_DEBT_ZH.md](docs/TECH_DEBT_ZH.md)
 - 数据源总览（含机场高频）：[docs/DATA_SOURCES_ZH.md](docs/DATA_SOURCES_ZH.md)
 - 运维手册（外部服务 / 运营后台 / 监控）：[docs/OPS_ZH.md](docs/OPS_ZH.md)
-- 支付合约验证：[docs/payments/POLYGONSCAN_VERIFY.md](docs/payments/POLYGONSCAN_VERIFY.md)
-- 支付审计说明：[docs/payments/PAYMENT_AUDIT_ZH.md](docs/payments/PAYMENT_AUDIT_ZH.md)
-- 支付 V2 升级方案：[docs/payments/PAYMENT_UPGRADE_V2_ZH.md](docs/payments/PAYMENT_UPGRADE_V2_ZH.md)
-- 设计/产品/数据评审归档：[docs/reviews/](docs/reviews/)
+- 支付（合约边界 / 审计巡检 / V2 升级路线 / PolygonScan 验证）：[docs/payments/PAYMENTS_ZH.md](docs/payments/PAYMENTS_ZH.md)
 - DEB 模型家族去重规则：[docs/MODEL_STACK_AND_DEB_ZH.md](docs/MODEL_STACK_AND_DEB_ZH.md)
-- 深度评估报告：[docs/reviews/deep-research-report.md](docs/reviews/deep-research-report.md)
 - 发布流程：[RELEASE.md](RELEASE.md)
 - 变更记录：[CHANGELOG.md](CHANGELOG.md)
 
 ## 当前版本
 
-- 版本：`v1.8.1`（版本源文件；文档已为即将发布的 `v1.9.0` 刷新）
-- 文档最后更新：`2026-08-01`
+- 版本：`v1.9.1`（单一版本源 [VERSION](VERSION)）
+- 文档最后更新：`2026-09-16`

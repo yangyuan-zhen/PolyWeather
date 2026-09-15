@@ -27,11 +27,8 @@ TEXT_REPLACEMENTS = {
     ROOT / "docs" / "TECH_DEBT_ZH.md": [
         (r"技术债与工程待办（v[\d.]+）", f"技术债与工程待办（{DISPLAY_VERSION}）"),
     ],
-    ROOT / "docs" / "payments" / "POLYGONSCAN_VERIFY.md": [
-        (r"PolyWeatherCheckout PolygonScan 验证（v[\d.]+）", f"PolyWeatherCheckout PolygonScan 验证（{DISPLAY_VERSION}）"),
-    ],
-    ROOT / "docs" / "deep-research-report.md": [
-        (r"README 标注 `v[\d.]+`", f"README 标注 `{DISPLAY_VERSION}`"),
+    ROOT / "docs" / "payments" / "PAYMENTS_ZH.md": [
+        (r"版本：`v[\d.]+`", f"版本：`{DISPLAY_VERSION}`"),
     ],
 }
 

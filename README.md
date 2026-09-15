@@ -51,7 +51,7 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 - Service stability: SQLite shrank 18.9GB -> 2GB (failed-queue purge, 30-day retention for raw observations/intraday snapshots, VACUUM); `load_history` caching and event-loop-safe forecast API eliminated the stall/healthz starvation incidents.
 - New-user onboarding tour in the terminal (observation anchor -> DEB -> market probability).
 - Payment receiver whitelist split: contract checkout validates the new contract `0x1fD90A`, manual mode validates the direct EOA `0x351a1bca`.
-- Frontend design system overhauled: unified CSS token system, eliminated `!important` abuse (134→49 in light theme), consolidated breakpoints (18→10), migrated hardcoded colors to CSS variables, added ARIA attributes and focus-visible keyboard navigation. See `docs/reviews/frontend-ui-design-review.md` for the full audit trail.
+- Frontend design system overhauled: unified CSS token system, eliminated `!important` abuse (134→49 in light theme), consolidated breakpoints (18→10), migrated hardcoded colors to CSS variables, added ARIA attributes and focus-visible keyboard navigation.
 
 ## License & Commercial Boundary
 
@@ -208,15 +208,12 @@ Production payment routes are configured by the backend. Polygon remains the def
 - Configuration & secrets (ZH): [docs/CONFIGURATION_ZH.md](docs/CONFIGURATION_ZH.md)
 - Frontend deployment (ZH): [docs/FRONTEND_DEPLOYMENT_ZH.md](docs/FRONTEND_DEPLOYMENT_ZH.md)
 - Tech debt (ZH): [docs/TECH_DEBT_ZH.md](docs/TECH_DEBT_ZH.md)
-- Design & research reviews: [docs/reviews/](docs/reviews/)
-- Payment verification: [docs/payments/POLYGONSCAN_VERIFY.md](docs/payments/POLYGONSCAN_VERIFY.md)
-- Payment audit: [docs/payments/PAYMENT_AUDIT_ZH.md](docs/payments/PAYMENT_AUDIT_ZH.md)
-- Payment V2 upgrade: [docs/payments/PAYMENT_UPGRADE_V2_ZH.md](docs/payments/PAYMENT_UPGRADE_V2_ZH.md)
+- Payments (contract, audit, V2 roadmap, PolygonScan verification, ZH): [docs/payments/PAYMENTS_ZH.md](docs/payments/PAYMENTS_ZH.md)
 - Ops / services / monitoring guide (ZH): [docs/OPS_ZH.md](docs/OPS_ZH.md)
 - Release process: [RELEASE.md](RELEASE.md)
 - Changelog: [CHANGELOG.md](CHANGELOG.md)
 
 ## Version
 
-- Version: `v1.8.1` (release source file; docs refreshed for the upcoming `v1.9.0`)
-- Last Updated: `2026-08-01`
+- Version: `v1.9.1`
+- Last Updated: `2026-09-15`

@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PolyWeather Pro — a paid institutional weather-intelligence terminal. 51 monitored cities with real-time METAR/MADIS/CoWIN/HKO/JMA AMeDAS observations, DEB multi-model temperature blending, DEB normal-distribution probability calibration (deb_normal, legacy Gaussian fallback), and intraday bias correction. Weather-decision workspace for temperature-market judgment. Next.js 15 + React 19 frontend (Docker / VPS, behind Cloudflare + Nginx), FastAPI backend (VPS), Telegram bot.
+PolyWeather Pro — a paid institutional weather-intelligence terminal. 51 monitored cities with real-time METAR/MADIS/CoWIN/HKO/JMA AMeDAS observations, DEB multi-model temperature blending, DEB normal-distribution probability calibration (deb_normal, legacy Gaussian fallback), and intraday bias correction. Weather-decision workspace for temperature-market judgment. Next.js 16 + React 19 frontend (Docker / VPS, behind Cloudflare + Nginx), FastAPI backend (VPS), Telegram bot.
 
-**Business model**: Paid-only, 29.9 USDC/month or 79.9 USDC/quarter, referral first month 20 USDC. New users get a one-time 7-day trial. Landing page is public; `/terminal` requires login + active subscription.
+**Business model**: Paid-only, 9.9 USDC/month or 24.9 USDC/quarter. New users get a one-time 7-day trial. Landing page is public; `/terminal` requires login + active subscription.
 
 ## Environment & Preferences
 
@@ -26,7 +26,7 @@ cd frontend
 npm run dev          # dev server :3000
 npm run build        # production build
 npm run typecheck    # tsc --noEmit
-npm run test:business  # 66 business state tests
+npm run test:business  # 65 business state tests
 
 # Backend
 uvicorn web.app:app --reload --host 0.0.0.0 --port 8000
