@@ -309,7 +309,7 @@ async def _refresh_city_payload_with_stale_timeout(
         city,
         kind,
     )
-    return await _overlay_cached_wunderground(city, cached_before_refresh)
+    return await _overlay_cached_observations(city, cached_before_refresh)
 
 
 async def _refresh_city_cache_with_stale_timeout(
@@ -333,7 +333,7 @@ def _start_city_cache_stale_refresh(
     _enqueue_collector_refresh_request(normalized, cache_kind, reason="stale_refresh")
 
 
-async def _overlay_cached_wunderground(city: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+async def _overlay_cached_observations(city: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     latest_payload = await _overlay_cached_canonical_observation(city, payload)
     latest_payload = await _overlay_latest_observation_sources(city, latest_payload)
     return latest_payload
@@ -553,13 +553,13 @@ async def _get_city_full_data(city: str, *, force_refresh: bool) -> Dict[str, An
         if not legacy_routes._city_cache_is_fresh(cached_entry, legacy_routes.CITY_FULL_CACHE_TTL_SEC):
             if payload:
                 _start_city_full_stale_refresh(city)
-                return await _overlay_cached_wunderground(city, payload)
+                return await _overlay_cached_observations(city, payload)
             canonical_payload = await _get_canonical_city_payload(city, detail_depth="full")
             if canonical_payload:
                 _request_city_full_refresh(city)
                 return canonical_payload
             return _queue_and_build_initializing_city_payload(city, kind="full")
-        return await _overlay_cached_wunderground(city, payload)
+        return await _overlay_cached_observations(city, payload)
     canonical_payload = await _get_canonical_city_payload(city, detail_depth="full")
     if canonical_payload:
         _request_city_full_refresh(city)
@@ -1323,9 +1323,9 @@ async def get_city_detail_payload(
                 payload = cached_entry.get("payload") or {}
                 if payload:
                     _start_city_cache_stale_refresh(city, "panel")
-                    return await _overlay_cached_wunderground(city, payload)
+                    return await _overlay_cached_observations(city, payload)
                 return _queue_and_build_initializing_city_payload(city, kind="panel")
-            return await _overlay_cached_wunderground(city, cached_entry.get("payload") or {})
+            return await _overlay_cached_observations(city, cached_entry.get("payload") or {})
         canonical_payload = await _get_canonical_city_payload(city, detail_depth="panel")
         if canonical_payload:
             _request_city_cache_refresh(city, "panel")
@@ -1343,13 +1343,13 @@ async def get_city_detail_payload(
                 payload = cached_entry.get("payload") or {}
                 if payload:
                     _start_city_cache_stale_refresh(city, "nearby")
-                    return await _overlay_cached_wunderground(city, payload)
+                    return await _overlay_cached_observations(city, payload)
                 canonical_payload = await _get_canonical_city_payload(city, detail_depth="nearby")
                 if canonical_payload:
                     _request_city_cache_refresh(city, "nearby")
                     return canonical_payload
                 return _queue_and_build_initializing_city_payload(city, kind="nearby")
-            return await _overlay_cached_wunderground(city, cached_entry.get("payload") or {})
+            return await _overlay_cached_observations(city, cached_entry.get("payload") or {})
         canonical_payload = await _get_canonical_city_payload(city, detail_depth="nearby")
         if canonical_payload:
             _request_city_cache_refresh(city, "nearby")
@@ -1367,13 +1367,13 @@ async def get_city_detail_payload(
                 payload = cached_entry.get("payload") or {}
                 if payload:
                     _start_city_cache_stale_refresh(city, "market")
-                    return await _overlay_cached_wunderground(city, payload)
+                    return await _overlay_cached_observations(city, payload)
                 canonical_payload = await _get_canonical_city_payload(city, detail_depth="market")
                 if canonical_payload:
                     _request_city_cache_refresh(city, "market")
                     return canonical_payload
                 return _queue_and_build_initializing_city_payload(city, kind="market")
-            return await _overlay_cached_wunderground(city, cached_entry.get("payload") or {})
+            return await _overlay_cached_observations(city, cached_entry.get("payload") or {})
         canonical_payload = await _get_canonical_city_payload(city, detail_depth="market")
         if canonical_payload:
             _request_city_cache_refresh(city, "market")
@@ -1400,9 +1400,9 @@ async def get_city_summary_payload(
             payload = cached_entry.get("payload") or {}
             if payload:
                 _start_city_cache_stale_refresh(city, "summary")
-                return await _overlay_cached_wunderground(city, payload)
+                return await _overlay_cached_observations(city, payload)
             return _queue_and_build_initializing_city_payload(city, kind="summary")
-        return await _overlay_cached_wunderground(city, cached_entry.get("payload") or {})
+        return await _overlay_cached_observations(city, cached_entry.get("payload") or {})
     canonical_payload = await _get_canonical_city_payload(city, detail_depth="summary")
     if canonical_payload:
         _request_city_cache_refresh(city, "summary")

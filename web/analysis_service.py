@@ -146,10 +146,6 @@ def _format_observation_time_local(value: Any, utc_offset: int) -> str:
     return raw[:16]
 
 
-def _fetch_nmc_current_fallback(city: str, *, use_fahrenheit: bool) -> Dict[str, Any]:
-    return {}
-
-
 def _is_plausible_city_temp(city: str, value: Any, unit: str = "°C") -> bool:
     temp = _sf(value)
     if temp is None:
@@ -387,24 +383,38 @@ def _archive_probability_snapshot(city: str, result: Dict[str, Any]) -> bool:
         payload = result.get("probabilities") or {}
         # deb_normal engine stores mu/sigma via deb_probability; use result fields
         deb = result.get("deb") or {}
-        prob_snapshot = payload.get("probabilities") if isinstance(payload, dict) else None
+        prob_snapshot = (
+            payload.get("probabilities") if isinstance(payload, dict) else None
+        )
         shadow = result.get("shadow_probabilities") or {}
         ts = (
             datetime.now(timezone.utc)
-            .astimezone(timezone(timedelta(seconds=int(result.get("utc_offset_seconds") or 0))))
+            .astimezone(
+                timezone(timedelta(seconds=int(result.get("utc_offset_seconds") or 0)))
+            )
             .isoformat(timespec="seconds")
         )
         snap_payload = {
             "city": city,
             "date": str(result.get("local_date") or "").strip(),
             "timestamp": ts,
-            "raw_mu": _sf((payload.get("mu") if isinstance(payload, dict) else None) or deb.get("prediction")),
-            "raw_sigma": _sf(payload.get("sigma") if isinstance(payload, dict) else None),
+            "raw_mu": _sf(
+                (payload.get("mu") if isinstance(payload, dict) else None)
+                or deb.get("prediction")
+            ),
+            "raw_sigma": _sf(
+                payload.get("sigma") if isinstance(payload, dict) else None
+            ),
             "max_so_far": _sf((result.get("current") or {}).get("max_so_far")),
             "peak_status": str((result.get("peak") or {}).get("status") or ""),
-            "probability_mode": str(payload.get("engine") if isinstance(payload, dict) else "") or "deb_normal",
+            "probability_mode": str(
+                payload.get("engine") if isinstance(payload, dict) else ""
+            )
+            or "deb_normal",
             "prob_snapshot": prob_snapshot,
-            "shadow_prob_snapshot": shadow.get("probabilities") if isinstance(shadow, dict) else None,
+            "shadow_prob_snapshot": shadow.get("probabilities")
+            if isinstance(shadow, dict)
+            else None,
             "payload_json": json.dumps(result, ensure_ascii=False, default=str),
         }
         if not snap_payload["city"] or not snap_payload["date"]:
@@ -457,7 +467,9 @@ def _archive_future_training_snapshots(
             summary["skipped"] += 1
             continue
 
-        models = payload.get("models") if isinstance(payload.get("models"), dict) else {}
+        models = (
+            payload.get("models") if isinstance(payload.get("models"), dict) else {}
+        )
         forecast_high = _sf(models.get("Open-Meteo"))
         snapshot_payload = {
             "schema_version": 1,
@@ -684,16 +696,6 @@ def _analyze(
             current_station_name = (
                 settlement_current.get("station_name") or current_station_name
             )
-    if cur_temp is None:
-        nmc_fallback = _fetch_nmc_current_fallback(city, use_fahrenheit=is_f)
-        nmc_cur = nmc_fallback.get("current") or {}
-        nmc_temp = _sf(nmc_cur.get("temp"))
-        if nmc_temp is not None:
-            cur_temp = nmc_temp
-            current_source = "nmc"
-            current_source_label = "NMC"
-            current_station_code = nmc_fallback.get("station_code")
-            current_station_name = nmc_fallback.get("station_name")
 
     max_so_far = _sf(primary_current.get("max_temp_so_far"))
     if max_so_far is not None and not _is_plausible_city_temp(city, max_so_far, sym):
@@ -744,26 +746,8 @@ def _analyze(
             )
         except Exception:
             obs_time_str = str(obs_t)[:16]
-    nmc_fallback = None
-    if not obs_time_str and current_source == "nmc":
-        nmc_fallback = _fetch_nmc_current_fallback(city, use_fahrenheit=is_f)
-        obs_time_str = _format_observation_time_local(
-            nmc_fallback.get("publish_time") or nmc_fallback.get("timestamp"),
-            utc_offset,
-        )
-
     current_obs_raw = obs_t
-    if current_source == "nmc":
-        current_obs_raw = (
-            nmc_fallback.get("publish_time") or nmc_fallback.get("timestamp")
-            if isinstance(nmc_fallback, dict)
-            else None
-        )
     current_age_min = metar_age_min
-    if current_obs_raw:
-        current_age_min = (
-            _observation_age_min(current_obs_raw, now_utc) or current_age_min
-        )
     current_freshness = _build_observation_freshness(
         source_code=current_source,
         source_label=current_source_label,
@@ -1725,7 +1709,6 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
 
     current_source = settlement_source
     current_source_label = settlement_source_label
-    nmc_fallback: Dict[str, Any] = {}
     cur_temp = _sf(primary_current.get("temp"))
     if cur_temp is not None and not _is_plausible_city_temp(city, cur_temp, sym):
         cur_temp = None
@@ -1738,15 +1721,6 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         if cur_temp is not None:
             current_source = settlement_source or "settlement"
             current_source_label = settlement_source_label or "Settlement Station"
-    if cur_temp is None:
-        nmc_fallback = _fetch_nmc_current_fallback(city, use_fahrenheit=is_f)
-        nmc_cur = nmc_fallback.get("current") or {}
-        nmc_temp = _sf(nmc_cur.get("temp"))
-        if nmc_temp is not None:
-            cur_temp = nmc_temp
-            current_source = "nmc"
-            current_source_label = "NMC"
-
     max_so_far = _sf(primary_current.get("max_temp_so_far"))
     if max_so_far is not None and not _is_plausible_city_temp(city, max_so_far, sym):
         max_so_far = None
@@ -1793,13 +1767,6 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             )
         except Exception:
             obs_time_str = obs_t[:16]
-    if not obs_time_str and current_source == "nmc":
-        if not nmc_fallback:
-            nmc_fallback = _fetch_nmc_current_fallback(city, use_fahrenheit=is_f)
-        obs_time_str = _format_observation_time_local(
-            nmc_fallback.get("publish_time") or nmc_fallback.get("timestamp"),
-            utc_offset,
-        )
 
     om_daily = (open_meteo.get("daily") or {}) if isinstance(open_meteo, dict) else {}
     om_hourly = (open_meteo.get("hourly") or {}) if isinstance(open_meteo, dict) else {}

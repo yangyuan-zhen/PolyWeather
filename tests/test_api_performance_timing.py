@@ -71,7 +71,7 @@ def test_city_detail_batch_response_includes_backend_server_timing(monkeypatch):
         return payload
     monkeypatch.setattr(
         city_api,
-        "_overlay_cached_wunderground",
+        "_overlay_cached_observations",
         _noop_overlay,
     )
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())
@@ -111,7 +111,7 @@ def test_city_detail_response_includes_backend_server_timing(monkeypatch):
         return payload
     monkeypatch.setattr(
         city_api,
-        "_overlay_cached_wunderground",
+        "_overlay_cached_observations",
         _noop_overlay,
     )
     monkeypatch.setattr(city_api.legacy_routes, "_CACHE_DB", FakeCache())

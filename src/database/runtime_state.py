@@ -126,6 +126,12 @@ class RuntimeStateDB:
             )
             conn.execute(
                 """
+                CREATE INDEX IF NOT EXISTS idx_truth_revisions_updated_at
+                ON truth_revisions_store(updated_at)
+                """
+            )
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS probability_training_snapshots_store (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     city TEXT NOT NULL,
@@ -988,6 +994,23 @@ class TruthRecordRepository:
             conn.commit()
         return changed
 
+    def prune_revisions_before(self, cutoff_epoch: float) -> int:
+        """Delete truth revisions older than ``cutoff_epoch`` (unix seconds).
+
+        truth_revisions_store is append-only audit history for truth backfills.
+        It grew ~3.2k rows/day on 51 cities (389k rows in 122 days) and had no
+        retention guard, which is the same unbounded-growth class as the 1.9.0
+        DB-bloat outage. The (city, target_date) index keeps per-city audit
+        history queryable; this bounds total size.
+        """
+        with self.db.connect() as conn:
+            cur = conn.execute(
+                "DELETE FROM truth_revisions_store WHERE updated_at < ?",
+                (float(cutoff_epoch),),
+            )
+            conn.commit()
+            return int(cur.rowcount or 0)
+
     def replace_all(self, rows: Dict[str, Dict[str, Dict[str, Any]]]) -> int:
         count = 0
         with self.db.connect() as conn:
@@ -1002,6 +1025,7 @@ class TruthRecordRepository:
                     actual_high = record.get("actual_high")
                     if actual_high is None:
                         continue
+
                     payload_json = (
                         json.dumps(record.get("source_payload"), ensure_ascii=False)
                         if record.get("source_payload") is not None

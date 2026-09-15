@@ -22,6 +22,7 @@ from src.database.runtime_state import (
     DebNormalResidualStatsRepository,
     IntradayPathSnapshotRepository,
     ProbabilitySnapshotRepository,
+    TruthRecordRepository,
 )
 from web.training_settlement_service import run_training_settlement_cycle
 
@@ -160,6 +161,27 @@ def _run_once(
         logger.exception("probability snapshot prune failed: {}", exc)
         result["snapshot_prune"] = {"error": str(exc)}
     try:
+        # Retention guard: truth_revisions_store is append-only audit history
+        # for truth backfills (~3.2k rows/day across 51 cities). Without a
+        # bound it is the same unbounded-growth class as the 1.9.0 DB-bloat
+        # outage; per-(city, target_date) history stays queryable via the
+        # existing index.
+        revision_retention_days = max(
+            30,
+            int(os.getenv("POLYWEATHER_TRUTH_REVISIONS_RETENTION_DAYS", "120") or 120),
+        )
+        revision_cutoff = time.time() - revision_retention_days * 86400
+        pruned_revisions = TruthRecordRepository().prune_revisions_before(
+            revision_cutoff
+        )
+        result["truth_revisions_prune"] = {
+            "retention_days": revision_retention_days,
+            "pruned": pruned_revisions,
+        }
+    except Exception as exc:
+        logger.exception("truth revisions prune failed: {}", exc)
+        result["truth_revisions_prune"] = {"error": str(exc)}
+    try:
         if not _env_bool("POLYWEATHER_DEB_ML_CALIBRATION"):
             # Inference only applies the LightGBM residual path when this flag
             # is on (deb_ml_calibration._deb_ml_flag_enabled); training it
@@ -197,9 +219,7 @@ def _run_once(
         lead_by_cd: dict = {}
         earliest_pred_by_cd: dict = {}
         try:
-            lead_by_cd.update(
-                ProbabilitySnapshotRepository().load_earliest_lead_days()
-            )
+            lead_by_cd.update(ProbabilitySnapshotRepository().load_earliest_lead_days())
         except Exception as exc:
             logger.warning("earliest lead days unavailable: {}", exc)
         try:
