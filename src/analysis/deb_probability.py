@@ -63,6 +63,7 @@ RECENT_BIAS_DECAY = 0.9
 MIN_ADJUST_SAMPLES = 30
 MIN_SIGMA_SAMPLES = 15
 
+
 # Celsius -> Fahrenheit, matching settlement rounding to whole degrees.
 def _c_to_f(value: float) -> float:
     return value * 9.0 / 5.0 + 32.0
@@ -96,14 +97,46 @@ def _bucket_probability(mu: float, sigma: float, tau: float) -> float:
     return _normal_cdf((tau + 0.5 - mu) / sigma) - _normal_cdf((tau - 0.5 - mu) / sigma)
 
 
+def _nearest_available(
+    values: Dict[str, Any], lead_key: int, *, prefer_higher: bool
+) -> Optional[float]:
+    """Resolve a per-lead stat for a stratum that has no trained value.
+
+    When lead ``lead_key`` is missing (too few samples to train), fall back to
+    the nearest stratum. Uncertainty grows with lead, so the pooled sigma must
+    come from a stratum at least as far out — borrowing lead 1 for lead 2 keeps
+    D+2 from looking sharper than D+1. Bias does not have that monotonic
+    constraint, so it takes the genuinely nearest stratum.
+    """
+    key = str(lead_key)
+    if prefer_higher:
+        # Furthest-out first: sigma must not shrink as the horizon grows, so a
+        # missing stratum borrows from a stratum at least as far out before
+        # falling back to a nearer one.
+        order = [key] + [str(lk) for lk in _LEAD_KEYS if lk > lead_key]
+        order += [str(lk) for lk in sorted(_LEAD_KEYS) if lk < lead_key]
+    else:
+        # Genuinely nearest first: bias has no monotonic constraint.
+        order = [key] + [
+            str(lk)
+            for lk in sorted(
+                (lk for lk in _LEAD_KEYS if lk != lead_key),
+                key=lambda lk: abs(lk - lead_key),
+            )
+        ]
+    for lk in order:
+        value = _sf(values.get(lk))
+        if value is not None:
+            return value
+    return None
+
+
 def _bias_for_lead(stats: Optional[Dict[str, Any]], lead_key: int) -> float:
     if not stats:
         return 0.0
-    biases = stats.get("lead_biases") or {}
-    value = _sf(biases.get(str(lead_key)))
-    if value is None:
-        # Fall back to nearest available stratum.
-        value = _sf(biases.get("1")) or _sf(biases.get("0"))
+    value = _nearest_available(
+        stats.get("lead_biases") or {}, lead_key, prefer_higher=False
+    )
     return value if value is not None else 0.0
 
 
@@ -113,21 +146,28 @@ def _sigma_for_lead(
     if not stats:
         return 2.5
     sigmas = stats.get("lead_sigmas") or {}
-    pooled = _sf(sigmas.get(str(lead_key)))
-    if pooled is None:
-        pooled = _sf(sigmas.get("1")) or _sf(sigmas.get("0"))
+    # Prefer a stratum at least as far out as the requested lead: the pooled
+    # sigma is a floor for the temperature-stratum sigma below, so borrowing a
+    # nearer (smaller) sigma would make a longer forecast look sharper than a
+    # nearer one. Falls back to the nearest lower lead only when no higher
+    # stratum was trained at all.
+    pooled = _nearest_available(sigmas, lead_key, prefer_higher=True)
     pooled = pooled if pooled is not None else 2.5
     # Temperature-stratum sigma (per lead) wins when available: hot-day
     # residual pools are much tighter than the pooled lead pool, and using the
     # pooled sigma made >=37C PIT std collapse to ~0.19 (over-confident).
     if temp_key:
         temp_sigmas = stats.get("temp_sigmas") or {}
-        # Try current lead, then fall back to other leads' same-temp sigma
-        # before degrading to the pooled lead sigma. This fixes the lead=0
-        # high-temp inversion where lead_0's >=37 pool has only 4 samples
-        # (fallback to 1.263 was smaller than lead_1's 2.024, i.e. more
-        # confident nearer settlement).
-        for lk in (str(lead_key), "1", "0", "2"):
+        # Try the current lead first, then progressively further-out leads
+        # (same monotonicity rule as the pooled sigma), before nearer ones.
+        # This fixes the lead=0 high-temp inversion where lead_0's >=37 pool
+        # has only 4 samples (fallback to 1.263 was smaller than lead_1's
+        # 2.024, i.e. more confident nearer settlement).
+        for lk in (
+            [str(lead_key)]
+            + [str(x) for x in _LEAD_KEYS if x > lead_key]
+            + [str(x) for x in sorted(_LEAD_KEYS) if x < lead_key]
+        ):
             lead_temp = temp_sigmas.get(lk) or {}
             value = _sf(lead_temp.get(temp_key))
             if value is not None:
@@ -136,9 +176,7 @@ def _sigma_for_lead(
                 # confident than the 304-sample <=32 group (1.626) on the
                 # same lead — the same inversion shifted to another bucket.
                 return max(value, pooled, MIN_SIGMA)
-    value = _sf(sigmas.get(str(lead_key)))
-    if value is None:
-        value = _sf(sigmas.get("1")) or _sf(sigmas.get("0"))
+    value = _nearest_available(sigmas, lead_key, prefer_higher=True)
     return max(value if value is not None else 2.5, MIN_SIGMA)
 
 
@@ -207,7 +245,9 @@ def _bias_adjustment(
     return adj
 
 
-def _load_deb_normal_stats(db: Optional[RuntimeStateDB] = None) -> Optional[Dict[str, Any]]:
+def _load_deb_normal_stats(
+    db: Optional[RuntimeStateDB] = None,
+) -> Optional[Dict[str, Any]]:
     """Load lead-stratified residual stats; None when not trained yet."""
     try:
         return DebNormalResidualStatsRepository(db).load_stats()
@@ -278,7 +318,9 @@ def _build_deb_normal_probability_payload(
 
     probabilities_all = [_emit(b) for b in buckets_c]
     probabilities = sorted(
-        probabilities_all, key=lambda item: _sf(item.get("probability")) or 0, reverse=True
+        probabilities_all,
+        key=lambda item: _sf(item.get("probability")) or 0,
+        reverse=True,
     )[:TOP_BUCKETS]
 
     mu_out = mu_c if not is_fahrenheit_city else _c_to_f(mu_c)
@@ -367,12 +409,17 @@ def _walk_forward_deb_residuals(
                     history_data={city: history},
                 )
                 raw = components.get("prediction")
-                if raw is not None and int(components.get("days_used") or 0) >= min_history_days:
+                if (
+                    raw is not None
+                    and int(components.get("days_used") or 0) >= min_history_days
+                ):
                     pred_c = _to_c(raw, str(city).strip().lower())
             if pred_c is not None:
                 actual_c = _to_c(actual, str(city).strip().lower())
                 if actual_c is not None:
-                    lead = lead_by_cd.get((str(city).strip().lower(), str(target_date)[:10]), 1)
+                    lead = lead_by_cd.get(
+                        (str(city).strip().lower(), str(target_date)[:10]), 1
+                    )
                     rows.append(
                         {
                             "city": str(city).strip().lower(),
@@ -466,7 +513,7 @@ def train_deb_lead_stats(
                 entry = by_lead_city.get((lead_key, city))
                 if entry is not None:
                     entry["recent"].append(
-                        (row["residual_c"], RECENT_BIAS_DECAY ** days_ago)
+                        (row["residual_c"], RECENT_BIAS_DECAY**days_ago)
                     )
 
     lead_biases: Dict[str, float] = {}

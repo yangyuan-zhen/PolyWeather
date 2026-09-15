@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from src.analysis.deb_probability import (
+    _bias_for_lead,
     _bucket_probability,
     _build_deb_normal_probability_payload,
     _c_to_f,
@@ -111,15 +112,21 @@ def test_payload_shape_contract():
 
 def test_payload_mu_uses_bias():
     stats = _sample_stats()
-    payload = _build_deb_normal_probability_payload(30.0, lead=1, temp_symbol="°C", stats=stats)
+    payload = _build_deb_normal_probability_payload(
+        30.0, lead=1, temp_symbol="°C", stats=stats
+    )
     # mu = deb + bias(lead=1) = 30.0 + 1.1
     assert payload["mu"] == pytest.approx(31.1, abs=0.01)
 
 
 def test_payload_lead_strata_select_different_biases():
     stats = _sample_stats()
-    p0 = _build_deb_normal_probability_payload(30.0, lead=0, temp_symbol="°C", stats=stats)
-    p1 = _build_deb_normal_probability_payload(30.0, lead=1, temp_symbol="°C", stats=stats)
+    p0 = _build_deb_normal_probability_payload(
+        30.0, lead=0, temp_symbol="°C", stats=stats
+    )
+    p1 = _build_deb_normal_probability_payload(
+        30.0, lead=1, temp_symbol="°C", stats=stats
+    )
     assert p0["mu"] == pytest.approx(30.7, abs=0.01)
     assert p1["mu"] == pytest.approx(31.1, abs=0.01)
 
@@ -143,10 +150,14 @@ def test_payload_applies_temp_bucket_bias_adjustment():
     stats = _sample_stats()
     stats["temp_biases"] = {"1": {"33-36": 0.6}}
     # deb=35.0 falls in the 33-36 bucket -> +0.6 applied.
-    p = _build_deb_normal_probability_payload(35.0, lead=1, temp_symbol="°C", stats=stats)
+    p = _build_deb_normal_probability_payload(
+        35.0, lead=1, temp_symbol="°C", stats=stats
+    )
     assert p["mu"] == pytest.approx(36.7, abs=0.01)
     # deb=28.0 falls in the <=32 bucket -> no adjustment.
-    p2 = _build_deb_normal_probability_payload(28.0, lead=1, temp_symbol="°C", stats=stats)
+    p2 = _build_deb_normal_probability_payload(
+        28.0, lead=1, temp_symbol="°C", stats=stats
+    )
     assert p2["mu"] == pytest.approx(29.1, abs=0.01)
 
 
@@ -179,18 +190,24 @@ def test_payload_none_without_stats(monkeypatch):
         "src.analysis.deb_probability._load_deb_normal_stats", lambda *a, **k: None
     )
     assert (
-        _build_deb_normal_probability_payload(30.0, lead=1, temp_symbol="°C", stats=None)
+        _build_deb_normal_probability_payload(
+            30.0, lead=1, temp_symbol="°C", stats=None
+        )
         is None
     )
     assert (
-        _build_deb_normal_probability_payload(None, lead=1, temp_symbol="°C", stats=_sample_stats())
+        _build_deb_normal_probability_payload(
+            None, lead=1, temp_symbol="°C", stats=_sample_stats()
+        )
         is None
     )
 
 
 def test_payload_buckets_cover_mu_plus_minus_4sigma():
     stats = _sample_stats()
-    payload = _build_deb_normal_probability_payload(30.0, lead=1, temp_symbol="°C", stats=stats)
+    payload = _build_deb_normal_probability_payload(
+        30.0, lead=1, temp_symbol="°C", stats=stats
+    )
     vals = [b["value"] for b in payload["probabilities_all"]]
     mu = payload["mu"]
     assert min(vals) <= mu - 3 * stats["lead_sigmas"]["1"]
@@ -199,7 +216,58 @@ def test_payload_buckets_cover_mu_plus_minus_4sigma():
 
 def test_load_stats_from_empty_db_returns_none():
     # No training has run -> stats table empty -> None (engine falls back to WX2).
-    assert _load_deb_normal_stats() is None or isinstance(_load_deb_normal_stats(), dict)
+    assert _load_deb_normal_stats() is None or isinstance(
+        _load_deb_normal_stats(), dict
+    )
+
+
+def test_stats_round_trip_preserves_training_diagnostics(tmp_path):
+    # trained / reason / per_lead_samples used to be dropped on persist, so
+    # ops could not tell why a lead stratum was missing from the trained stats.
+    from src.database.runtime_state import (
+        DebNormalResidualStatsRepository,
+        RuntimeStateDB,
+    )
+
+    db = RuntimeStateDB(str(tmp_path / "stats_round_trip.db"))
+    repo = DebNormalResidualStatsRepository(db=db)
+    assert repo.load_stats() is None
+
+    trained = {
+        "trained": True,
+        "samples": 1450,
+        "window_days": 84,
+        "lead_biases": {"0": 0.9, "1": 0.6},
+        "lead_sigmas": {"0": 1.557, "1": 1.401},
+        "city_biases": {"1": {"seoul": 2.8}},
+        "temp_biases": {"1": {">=37": -0.881}},
+        "temp_sigmas": {"1": {">=37": 2.024}},
+        "per_lead_samples": {"0": 900, "1": 550},
+    }
+    repo.upsert_stats(trained)
+    reloaded = repo.load_stats()
+    assert reloaded is not None
+    assert reloaded["trained"] is True
+    assert reloaded["samples"] == 1450
+    assert reloaded["per_lead_samples"] == {"0": 900, "1": 550}
+    assert reloaded["lead_sigmas"]["1"] == pytest.approx(1.401, abs=0.001)
+    assert reloaded["city_biases"]["1"]["seoul"] == pytest.approx(2.8, abs=0.001)
+
+    # An untrained run keeps the diagnostics that explain the missing strata.
+    repo.upsert_stats(
+        {
+            "trained": False,
+            "reason": "insufficient_lead_samples",
+            "samples": 3,
+            "per_lead_samples": {"1": 3},
+        }
+    )
+    reloaded = repo.load_stats()
+    assert reloaded["trained"] is False
+    assert reloaded["reason"] == "insufficient_lead_samples"
+    assert reloaded["per_lead_samples"] == {"1": 3}
+    # Stale strata from the previous successful training are cleared, not merged.
+    assert reloaded["lead_sigmas"] == {}
 
 
 # ---- training (walk-forward, no leakage) ----
@@ -220,7 +288,9 @@ def _make_record(city, date, actual, forecasts, snap_ts=None, deb_prediction=Non
 def test_train_deb_lead_stats_insufficient_samples():
     daily_records = {
         "tokyo": {
-            "2026-04-01": _make_record("tokyo", "2026-04-01", 22.0, {"Open-Meteo": 21.0, "ECMWF": 20.5}),
+            "2026-04-01": _make_record(
+                "tokyo", "2026-04-01", 22.0, {"Open-Meteo": 21.0, "ECMWF": 20.5}
+            ),
         }
     }
     result = train_deb_lead_stats(daily_records, min_samples=20)
@@ -406,6 +476,33 @@ def test_sigma_for_lead_floors_temp_stratum_at_pooled():
     assert _sigma_for_lead(stats, 1, "33-36") == pytest.approx(1.401, abs=0.01)
 
 
+def test_sigma_for_lead_missing_stratum_does_not_borrow_a_narrower_one():
+    # lead 2 has too few samples to train, so its pooled sigma must fall back
+    # to a stratum at least as far out (lead 1), never to a nearer one that
+    # would make D+2 look sharper than D+1. Before the fix this returned
+    # sigmas["1"] = 1.401, i.e. narrower than lead 1's own pooled sigma path.
+    stats = {
+        "lead_sigmas": {"0": 1.557, "1": 1.401},
+        "temp_sigmas": {
+            "0": {"<=32": 1.626, "33-36": 0.778},
+            "1": {"<=32": 1.401, "33-36": 1.323, ">=37": 2.024},
+        },
+    }
+    # Missing stratum borrows the furthest-out available, not the narrowest.
+    assert _sigma_for_lead(stats, 2) == pytest.approx(1.557, abs=0.01)
+    # Same rule for the temperature stratum: no cross-lead fallback may make a
+    # longer horizon sharper than the pooled sigma of a nearer horizon.
+    assert _sigma_for_lead(stats, 2, "33-36") == pytest.approx(1.557, abs=0.01)
+    assert _sigma_for_lead(stats, 2, "<=32") == pytest.approx(1.626, abs=0.01)
+    # Bias has no monotonicity constraint: a missing stratum takes the
+    # genuinely nearest one (lead 1, not lead 0).
+    stats["lead_biases"] = {"0": 0.9, "1": 0.6}
+    assert _bias_for_lead(stats, 2) == pytest.approx(0.6, abs=0.01)
+    # When every stratum is missing the engine stays conservative.
+    assert _sigma_for_lead({"lead_sigmas": {}}, 2) == pytest.approx(2.5, abs=0.01)
+    assert _bias_for_lead({"lead_biases": {}}, 2) == 0.0
+
+
 def test_train_deb_lead_stats_falls_back_to_walkforward_without_stored():
     # Without a stored deb_prediction the training falls back to a walk-forward
     # recomputation (no leakage): raw blend ~28.0, actual 33.0 -> +5.0 bias.
@@ -451,7 +548,9 @@ def test_trend_engine_deb_normal_primary(monkeypatch):
         ],
         "probabilities_all": [],
     }
-    monkeypatch.setattr(te, "calculate_deb_prediction", lambda *a, **k: {"prediction": 36.5})
+    monkeypatch.setattr(
+        te, "calculate_deb_prediction", lambda *a, **k: {"prediction": 36.5}
+    )
     monkeypatch.setattr(
         te, "_build_deb_normal_probability_payload", lambda *a, **k: fake_payload
     )
@@ -467,10 +566,14 @@ def test_trend_engine_deb_normal_primary(monkeypatch):
 def test_trend_engine_no_probability_engine_when_deb_stats_missing(monkeypatch):
     import src.analysis.trend_engine as te
 
-    monkeypatch.setattr(te, "calculate_deb_prediction", lambda *a, **k: {"prediction": 36.5})
+    monkeypatch.setattr(
+        te, "calculate_deb_prediction", lambda *a, **k: {"prediction": 36.5}
+    )
     # payload builder returns None -> no probability engine (legacy Gaussian
     # branch was removed together with weathernext2)
-    monkeypatch.setattr(te, "_build_deb_normal_probability_payload", lambda *a, **k: None)
+    monkeypatch.setattr(
+        te, "_build_deb_normal_probability_payload", lambda *a, **k: None
+    )
 
     _, _, sd = te.analyze_weather_trend(_fake_weather_data(), "°C", "shanghai")
     assert sd.get("probability_engine") is None
@@ -493,7 +596,9 @@ def test_trend_engine_deb_normal_respects_existing_mu(monkeypatch):
         "probabilities": [{"value": 37, "range": "[36.5~37.5)", "probability": 0.2}],
         "probabilities_all": [],
     }
-    monkeypatch.setattr(te, "calculate_deb_prediction", lambda *a, **k: {"prediction": 36.5})
+    monkeypatch.setattr(
+        te, "calculate_deb_prediction", lambda *a, **k: {"prediction": 36.5}
+    )
     monkeypatch.setattr(
         te, "_build_deb_normal_probability_payload", lambda *a, **k: fake_payload
     )

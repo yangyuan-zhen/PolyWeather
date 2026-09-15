@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import json
@@ -28,7 +27,11 @@ _LOGGED_MODES: set[str] = set()
 
 
 def get_state_storage_mode() -> str:
-    raw = str(os.getenv("POLYWEATHER_STATE_STORAGE_MODE") or DEFAULT_STATE_STORAGE_MODE).strip().lower()
+    raw = (
+        str(os.getenv("POLYWEATHER_STATE_STORAGE_MODE") or DEFAULT_STATE_STORAGE_MODE)
+        .strip()
+        .lower()
+    )
     if raw == STATE_STORAGE_DUAL:
         logger.warning(
             f"POLYWEATHER_STATE_STORAGE_MODE={STATE_STORAGE_DUAL!r} is deprecated, normalize to {STATE_STORAGE_SQLITE}"
@@ -231,7 +234,10 @@ class RuntimeStateDB:
             if _intraday_legacy:
                 _intraday_sql = str(_intraday_legacy["sql"] or "")
                 _pk_pos = _intraday_sql.find("PRIMARY KEY")
-                if _pk_pos != -1 and "target_date" not in _intraday_sql[_pk_pos : _pk_pos + 160]:
+                if (
+                    _pk_pos != -1
+                    and "target_date" not in _intraday_sql[_pk_pos : _pk_pos + 160]
+                ):
                     conn.execute(
                         "ALTER TABLE official_intraday_observations_store RENAME TO official_intraday_observations_store_legacy"
                     )
@@ -257,7 +263,9 @@ class RuntimeStateDB:
                         FROM official_intraday_observations_store_legacy
                         """
                     )
-                    conn.execute("DROP TABLE official_intraday_observations_store_legacy")
+                    conn.execute(
+                        "DROP TABLE official_intraday_observations_store_legacy"
+                    )
                     conn.execute(
                         "CREATE INDEX IF NOT EXISTS idx_official_intraday_obs_station_date ON official_intraday_observations_store(source_code, station_code, target_date, observation_time)"
                     )
@@ -328,6 +336,9 @@ class RuntimeStateDB:
                 ("city_biases_json", "TEXT NOT NULL DEFAULT '{}'"),
                 ("temp_biases_json", "TEXT NOT NULL DEFAULT '{}'"),
                 ("temp_sigmas_json", "TEXT NOT NULL DEFAULT '{}'"),
+                ("trained", "INTEGER NOT NULL DEFAULT 0"),
+                ("train_reason", "TEXT NOT NULL DEFAULT ''"),
+                ("per_lead_samples_json", "TEXT NOT NULL DEFAULT '{}'"),
             ):
                 if col not in cols:
                     conn.execute(
@@ -423,7 +434,9 @@ class ObservationCollectorStatusRepository:
             )
             conn.commit()
 
-    def load_snapshot(self, *, now_ts: Optional[float] = None, limit: int = 500) -> Dict[str, Any]:
+    def load_snapshot(
+        self, *, now_ts: Optional[float] = None, limit: int = 500
+    ) -> Dict[str, Any]:
         now = float(time.time() if now_ts is None else now_ts)
         safe_limit = max(1, min(int(limit or 500), 1000))
         with self.db.connect() as conn:
@@ -451,12 +464,15 @@ class ObservationCollectorStatusRepository:
             last_failure_ts = _float_or_none(row["last_failure_ts"])
             updated_at_ts = _float_or_none(row["updated_at"])
             next_due_ts = last_due_ts + interval if last_due_ts is not None else None
-            due_in_sec = round(next_due_ts - now, 1) if next_due_ts is not None else None
-            latest_failure = (
-                last_failure_ts is not None
-                and (last_success_ts is None or last_failure_ts >= last_success_ts)
+            due_in_sec = (
+                round(next_due_ts - now, 1) if next_due_ts is not None else None
             )
-            in_cooldown = bool(latest_failure and next_due_ts is not None and next_due_ts > now)
+            latest_failure = last_failure_ts is not None and (
+                last_success_ts is None or last_failure_ts >= last_success_ts
+            )
+            in_cooldown = bool(
+                latest_failure and next_due_ts is not None and next_due_ts > now
+            )
             if last_started_ts is None:
                 status = "never_run"
             elif latest_failure:
@@ -488,10 +504,14 @@ class ObservationCollectorStatusRepository:
                 "next_due_ts": next_due_ts,
                 "next_due_at": _ts_to_utc_iso(next_due_ts),
                 "due_in_sec": due_in_sec,
-                "age_sec": round(now - last_success_ts, 1) if last_success_ts is not None else None,
+                "age_sec": round(now - last_success_ts, 1)
+                if last_success_ts is not None
+                else None,
                 "in_cooldown": in_cooldown,
                 "cooldown_until_ts": next_due_ts if in_cooldown else None,
-                "cooldown_until_at": _ts_to_utc_iso(next_due_ts) if in_cooldown else None,
+                "cooldown_until_at": _ts_to_utc_iso(next_due_ts)
+                if in_cooldown
+                else None,
                 "status": status,
             }
             entries.append(entry)
@@ -514,26 +534,42 @@ class ObservationCollectorStatusRepository:
                 },
             )
             summary["city_count"] += 1
-            summary["min_interval_sec"] = min(int(summary["min_interval_sec"]), interval)
-            summary["max_interval_sec"] = max(int(summary["max_interval_sec"]), interval)
+            summary["min_interval_sec"] = min(
+                int(summary["min_interval_sec"]), interval
+            )
+            summary["max_interval_sec"] = max(
+                int(summary["max_interval_sec"]), interval
+            )
             summary["failure_count"] += failure_count
             if status == "cooldown":
                 summary["cooldown_count"] += 1
-            summary["status_counts"][status] = summary["status_counts"].get(status, 0) + 1
+            summary["status_counts"][status] = (
+                summary["status_counts"].get(status, 0) + 1
+            )
             if latency is not None:
                 summary["_latencies"].append(latency)
             if last_success_ts is not None:
                 current_success = summary["_last_success_ts"]
                 summary["_last_success_ts"] = (
-                    last_success_ts if current_success is None else max(current_success, last_success_ts)
+                    last_success_ts
+                    if current_success is None
+                    else max(current_success, last_success_ts)
                 )
             if last_failure_ts is not None:
                 current_failure = summary["_last_failure_ts"]
                 summary["_last_failure_ts"] = (
-                    last_failure_ts if current_failure is None else max(current_failure, last_failure_ts)
+                    last_failure_ts
+                    if current_failure is None
+                    else max(current_failure, last_failure_ts)
                 )
 
-        source_priority = {"failed": 5, "cooldown": 4, "never_run": 3, "due": 2, "ok": 1}
+        source_priority = {
+            "failed": 5,
+            "cooldown": 4,
+            "never_run": 3,
+            "due": 2,
+            "ok": 1,
+        }
         sources: List[Dict[str, Any]] = []
         for summary in source_summary.values():
             latencies = summary.pop("_latencies")
@@ -685,7 +721,9 @@ class DailyRecordRepository:
             counts[city] = current_count + 1
         return out
 
-    def upsert_record(self, city: str, target_date: str, record: Dict[str, Any]) -> None:
+    def upsert_record(
+        self, city: str, target_date: str, record: Dict[str, Any]
+    ) -> None:
         payload_json = json.dumps(record, ensure_ascii=False)
         updated_at = time.time()
         with self.db.connect() as conn:
@@ -868,7 +906,9 @@ class TruthRecordRepository:
     ) -> bool:
         updated_at = time.time()
         payload_json = (
-            json.dumps(source_payload, ensure_ascii=False) if source_payload is not None else None
+            json.dumps(source_payload, ensure_ascii=False)
+            if source_payload is not None
+            else None
         )
         with self.db.connect() as conn:
             current = conn.execute(
@@ -887,7 +927,8 @@ class TruthRecordRepository:
                 changed = (
                     abs(prev_actual - float(actual_high)) >= 0.0001
                     or prev_source != next_source
-                    or str(current["source_payload_json"] or "") != str(payload_json or "")
+                    or str(current["source_payload_json"] or "")
+                    != str(payload_json or "")
                 )
                 if changed:
                     conn.execute(
@@ -1061,7 +1102,9 @@ class ProbabilitySnapshotRepository:
             )
             conn.commit()
 
-    def load_recent_rows(self, city: str, target_date: str, limit: int) -> List[Dict[str, Any]]:
+    def load_recent_rows(
+        self, city: str, target_date: str, limit: int
+    ) -> List[Dict[str, Any]]:
         with self.db.connect() as conn:
             rows = conn.execute(
                 """
@@ -1081,7 +1124,9 @@ class ProbabilitySnapshotRepository:
                 continue
         return out
 
-    def load_rows_by_city_date(self, city: str, target_date: str) -> List[Dict[str, Any]]:
+    def load_rows_by_city_date(
+        self, city: str, target_date: str
+    ) -> List[Dict[str, Any]]:
         with self.db.connect() as conn:
             rows = conn.execute(
                 """
@@ -1199,7 +1244,9 @@ class TrainingFeatureRecordRepository:
     def __init__(self, db: Optional[RuntimeStateDB] = None):
         self.db = db or RuntimeStateDB.instance()
 
-    def upsert_record(self, city: str, target_date: str, payload: Dict[str, Any]) -> None:
+    def upsert_record(
+        self, city: str, target_date: str, payload: Dict[str, Any]
+    ) -> None:
         with self.db.connect() as conn:
             conn.execute(
                 """
@@ -1330,7 +1377,9 @@ class OpenMeteoCacheRepository:
                 entry = json.loads(row["payload_json"])
             except Exception:
                 continue
-            payload.setdefault(str(row["source_kind"]), {})[str(row["cache_key"])] = entry
+            payload.setdefault(str(row["source_kind"]), {})[str(row["cache_key"])] = (
+                entry
+            )
         return payload
 
     def latest_updated_at(self) -> float:
@@ -1397,7 +1446,9 @@ class OfficialIntradayObservationRepository:
         value: float,
         payload: Optional[Dict[str, Any]] = None,
     ) -> None:
-        payload_json = json.dumps(payload, ensure_ascii=False) if payload is not None else None
+        payload_json = (
+            json.dumps(payload, ensure_ascii=False) if payload is not None else None
+        )
         with self.db.connect() as conn:
             conn.execute(
                 """
@@ -1488,7 +1539,9 @@ class IntradayPathSnapshotRepository:
             )
             conn.commit()
 
-    def load_rows_by_city_date(self, city: str, target_date: str) -> List[Dict[str, Any]]:
+    def load_rows_by_city_date(
+        self, city: str, target_date: str
+    ) -> List[Dict[str, Any]]:
         with self.db.connect() as conn:
             rows = conn.execute(
                 """
@@ -1551,7 +1604,12 @@ class IntradayPathSnapshotRepository:
         # Batch scan to tolerate malformed pages (like analyze_deb_lead_bias.py).
         try:
             with self.db.connect() as conn:
-                max_id = conn.execute("SELECT MAX(id) FROM intraday_path_snapshots_store").fetchone()[0] or 0
+                max_id = (
+                    conn.execute(
+                        "SELECT MAX(id) FROM intraday_path_snapshots_store"
+                    ).fetchone()[0]
+                    or 0
+                )
         except Exception:
             return {}
         out: Dict[tuple[str, str], float] = {}
@@ -1584,6 +1642,7 @@ class IntradayPathSnapshotRepository:
         except Exception:
             pass
         return out
+
 
 def _top_bucket(snapshot: Optional[List[Dict[str, Any]]]) -> Optional[int]:
     best_value = None
@@ -1761,8 +1820,9 @@ class DebNormalResidualStatsRepository:
                 INSERT INTO deb_normal_residual_stats_store (
                     stats_key, lead_biases_json, lead_sigmas_json,
                     city_biases_json, temp_biases_json, temp_sigmas_json,
-                    samples, window_days, computed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    samples, window_days, computed_at,
+                    trained, train_reason, per_lead_samples_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(stats_key) DO UPDATE SET
                     lead_biases_json = excluded.lead_biases_json,
                     lead_sigmas_json = excluded.lead_sigmas_json,
@@ -1771,7 +1831,10 @@ class DebNormalResidualStatsRepository:
                     temp_sigmas_json = excluded.temp_sigmas_json,
                     samples = excluded.samples,
                     window_days = excluded.window_days,
-                    computed_at = excluded.computed_at
+                    computed_at = excluded.computed_at,
+                    trained = excluded.trained,
+                    train_reason = excluded.train_reason,
+                    per_lead_samples_json = excluded.per_lead_samples_json
                 """,
                 (
                     self.STATS_KEY,
@@ -1783,6 +1846,9 @@ class DebNormalResidualStatsRepository:
                     int(stats.get("samples") or 0),
                     int(stats.get("window_days") or 0),
                     time.time(),
+                    1 if stats.get("trained") else 0,
+                    str(stats.get("reason") or "")[:200],
+                    json.dumps(stats.get("per_lead_samples") or {}, ensure_ascii=False),
                 ),
             )
             conn.commit()
@@ -1793,7 +1859,8 @@ class DebNormalResidualStatsRepository:
                 """
                 SELECT lead_biases_json, lead_sigmas_json,
                        city_biases_json, temp_biases_json, temp_sigmas_json,
-                       samples, window_days, computed_at
+                       samples, window_days, computed_at,
+                       trained, train_reason, per_lead_samples_json
                 FROM deb_normal_residual_stats_store
                 WHERE stats_key = ?
                 """,
@@ -1810,4 +1877,7 @@ class DebNormalResidualStatsRepository:
             "samples": int(row["samples"] or 0),
             "window_days": int(row["window_days"] or 0),
             "computed_at": float(row["computed_at"] or 0),
+            "trained": bool(row["trained"]),
+            "reason": str(row["train_reason"] or ""),
+            "per_lead_samples": json.loads(row["per_lead_samples_json"] or "{}"),
         }
