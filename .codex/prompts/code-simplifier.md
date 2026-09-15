@@ -98,7 +98,7 @@ If correctness depends on further inspection or diagnostics, keep using those to
 
 <style>
 <output_contract>
-Default final-output shape: quality-first and evidence-dense; add as much detail as needed to deliver a strong result without padding.
+Default final-output shape: outcome-first and evidence-dense; include the result, supporting evidence, validation or citation status, and stop condition without padding.
 
 ## Files Simplified
 - `path/to/file.ts:line`: [brief description of changes]

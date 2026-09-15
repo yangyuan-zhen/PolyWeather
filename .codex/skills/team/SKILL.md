@@ -7,7 +7,7 @@ description: "[OMX] N coordinated agents on shared task list using tmux-based or
 
 `$team` is the tmux-based parallel execution mode for OMX. It starts real worker Codex and/or Claude CLI sessions in split panes and coordinates them through `.omx/state/team/...` files plus CLI team interop (`omx team api ...`) and state files.
 
-This skill is operationally sensitive. Treat it as an operator workflow, not a generic prompt pattern.
+This skill is operationally sensitive. Treat it as an operator workflow, not a generic prompt pattern. In Codex App or plain outside-tmux sessions, do not present `$team` / `omx team` as directly available; launch OMX CLI from shell first, or stay on the nearest app-safe surface until the user explicitly wants the tmux runtime.
 
 ## Team vs Native Subagents
 
@@ -17,12 +17,9 @@ This skill is operationally sensitive. Treat it as an operator workflow, not a g
 
 ## What This Skill Must Do
 
-## GPT-5.4 Guidance Alignment
+## GPT-5.6 Guidance Alignment
 
-- Default to concise, evidence-dense progress and completion reporting unless the user or risk level requires more detail.
-- Treat newer user task updates as local overrides for the active workflow branch while preserving earlier non-conflicting constraints.
-- If correctness depends on additional inspection, retrieval, execution, or verification, keep using the relevant tools until the team workflow is grounded.
-- Continue through clear, low-risk, reversible next steps automatically; ask only when the next step is materially branching, destructive, or preference-dependent.
+Use the shared workflow guidance pattern: outcome-first framing, concise visible updates for multi-step work, local overrides for the active workflow branch, validation proportional to risk, explicit stop rules, and automatic continuation for safe reversible steps. Ask only for material, destructive, credentialed, external-production, or preference-dependent branches.
 
 When user triggers `$team`, the agent must:
 
@@ -59,6 +56,28 @@ requiring a separate linked Ralph launch up front.
 - **Verification ownership:** keep one lane focused on tests, regression coverage, and evidence before shutdown.
 - **Escalation:** start a separate `omx ralph ...` / `$ralph ...` only when a later manual follow-up still needs a persistent single-owner fix/verification loop.
 - **Deprecation:** `omx team ralph ...` has been removed. Use plain `omx team ...` for team execution or run `omx ralph ...` separately when you explicitly want a later Ralph loop.
+
+
+### Team Big Five / ATEM coordination gate
+
+`$team` keeps simple independent fan-out lightweight. For isolated tasks (for example per-file sweeps, typo/copy edits, or explicitly independent lanes with no shared files/dependencies), workers use the normal concise protocol: startup ACK, claim-safe task lifecycle, status, verification, and completion evidence.
+
+Activate the lightweight Team Big Five + ATEM-inspired coordination layer when the task or task graph has dependencies, shared files/surfaces/contracts, cross-boundary ownership, handoffs, integration/merge work, blocked lanes, or changed assumptions. The protocol is not a separate ceremony; it is a concise boundary checklist:
+
+- **Shared mental model / single source of truth:** task JSON, inbox, mailbox, approved handoff, and leader updates are canonical.
+- **Closed-loop communication / ACK-readback handoffs:** acknowledge handoffs with understood scope, affected artifact/path, owner, and next action.
+- **Mutual performance monitoring at boundaries:** check upstream/downstream contracts, shared files, and verification evidence before completion.
+- **Backup/reassignment behavior:** blocked workers report the smallest needed help/reassignment request and continue safe unblocked slices.
+- **Adaptability checkpoints:** changed assumptions, dependencies, or verification results trigger a brief leader-facing update before widening scope.
+- **Team orientation:** workers optimize for the integrated team outcome, not local-optimum-only task summaries; report integration risks, missing tests, and peer impacts.
+
+ATEM fit: treat this as agile teamwork support for transition/action/interpersonal moments around boundaries, not as a heavyweight process model. Do not copy provider-specific plugin implementations; keep the protocol in OMX/Codex prompts, inboxes, state, and tests.
+
+### Team + Ultragoal bridge
+
+Use `$ultragoal` for durable leader-owned goal/ledger tracking and `$team` for parallel execution lanes. When Team is launched with an active `.omx/ultragoal/goals.json`, worker inboxes/status may include leader-owned Ultragoal context: `.omx/ultragoal/goals.json`, `.omx/ultragoal/ledger.jsonl`, the active goal id, Codex goal mode, and the `fresh_leader_get_goal_required` checkpoint policy.
+
+Workers provide task status and verification evidence only. They do not own Ultragoal goal state, create worker ledgers, mutate `.omx/ultragoal`, auto-launch Team from Ultragoal, or perform hidden Codex goal mutation. The leader uses terminal Team evidence plus a fresh `get_goal` snapshot to run `omx ultragoal checkpoint --goal-id <id> --status complete --evidence "<team evidence mentioning .omx/ultragoal and <id>>" --codex-goal-json <fresh-get_goal-json-or-path>`.
 
 ### Claude teammates (v0.6.0+)
 
@@ -123,7 +142,7 @@ When `$team` is used as a follow-up mode from ralplan, carry forward the approve
 - state the recommended headcount and role counts
 - state the suggested reasoning level for each lane when available
 - explain why each lane exists (delivery, verification, specialist support)
-- include an explicit launch hint (`omx team N "<task>"` / `$team N "<task>"`) for the coordinated team run; mention a later separate Ralph follow-up only when genuinely needed
+- include an explicit launch hint (`omx team N "<task>"` / `$team N "<task>"`) for the coordinated team run; mention `$ultragoal` as the default durable follow-up/ledger path; mention a later separate Ralph follow-up only when explicitly requested or genuinely needed as a fallback
 - if the ideal role is unavailable, choose the closest role from the roster and say so
 
 ## Current Runtime Behavior (As Implemented)
@@ -159,7 +178,7 @@ Important:
 - Worker panes are independent full Codex/Claude CLI sessions
 - Workers may run in separate git worktrees (`omx team --worktree[=<name>]`) while sharing one team state root
 - Worker ACKs go to `mailbox/leader-fixed.json`
-- Notify hook updates worker heartbeat and nudges leader during active team mode
+- Notify hook updates worker heartbeat and sends lifecycle-driven leader nudges (for example resolved native worker Stop/all-idle or stale-leader evidence) during active team mode; deprecated worker stall/progress heuristics are not operator-facing guidance.
 - Submit routing uses this CLI resolution order per worker trigger:
   1) explicit worker CLI provided by runtime state (persisted on worker identity/config),
   2) `OMX_TEAM_WORKER_CLI_MAP` entry for that worker index,
@@ -184,17 +203,21 @@ Default-model rule:
 - Use `OMX_DEFAULT_SPARK_MODEL` for spark/low-complexity worker-default guidance.
 
 Thinking-level rule (critical):
-- **No model-name heuristic mapping.**
-- Team runtime must **not** infer `model_reasoning_effort` from model-name substrings (e.g., `spark`, `high-capability`, `mini`).
-- When the leader assigns teammate roles/tasks, OMX allocates **per-worker reasoning effort dynamically** from the resolved worker role (`low`, `medium`, `high`).
-- Explicit launch args still win: if `OMX_TEAM_WORKER_LAUNCH_ARGS` already includes `-c model_reasoning_effort=...`, that explicit value overrides dynamic allocation for every worker.
+- **No model-name heuristic mapping.** Team runtime must not infer `model_reasoning_effort` from model-name substrings (for example `spark`, `high-capability`, or `mini`).
+- OMX-owned `agentReasoning` accepts exactly `low`, `medium`, `high`, `xhigh`, and `max`; configured values are case-normalized.
+- Without explicit raw reasoning, Team selects the resolved role default or valid `agentReasoning` override for each worker.
+- `max` is passed to Codex unchanged. Its support is capability-dependent on the selected Codex version, model, and provider; preserve authoritative downstream errors.
+- `ultra` is unsupported in OMX-owned `agentReasoning` and is not an alias for configured `max`. Other invalid configured values retain the built-in role-default fallback.
+- Explicit raw `-c model_reasoning_effort=...` is opaque and wins over configured and built-in role defaults, including `ultra` and future values. Preserve the selected raw token exactly.
+- When both sources provide explicit raw reasoning, inherited Team reasoning wins over environment reasoning. Explicit raw reasoning always wins over the role default.
+- Do not downgrade or retry `max` as `xhigh`; built-in role defaults remain unchanged.
 
 Normalization requirements:
-- Parse both `--model <value>` and `--model=<value>`
-- Remove duplicate/conflicting model flags
-- Emit exactly one final canonical flag: `--model <value>`
-- Preserve unrelated args in worker launch config
-- If explicit reasoning exists, preserve canonical `-c model_reasoning_effort="<level>"`; otherwise inject the worker role's default reasoning level
+- Parse both `--model <value>` and `--model=<value>`.
+- Remove duplicate/conflicting model flags.
+- Emit exactly one final canonical flag: `--model <value>`.
+- Preserve unrelated args in worker launch config.
+- Preserve the selected explicit raw `-c model_reasoning_effort=...` token exactly; otherwise inject the worker role's default or `agentReasoning`-overridden reasoning level.
 
 ## Required Lifecycle (Operator Contract)
 
@@ -224,7 +247,11 @@ sleep 30 && omx team status <team-name>
 
 Repeat that check while the team stays active, or use `omx team await <team-name> --timeout-ms 30000 --json` when event-driven waiting is a better fit.
 
-If the leader gets a stale/team-stalled nudge, immediately run `omx team status <team-name>` before taking any manual intervention.
+If the leader gets a stale, lifecycle, or all-idle nudge, immediately run `omx team status <team-name>` before taking any manual intervention. Deprecated worker stall/progress nudges should not be treated as an active runtime contract.
+
+### Deprecated worker stall/progress knobs
+
+`OMX_TEAM_PROGRESS_STALL_MS` and `OMX_TEAM_WORKER_TURN_STALL_MS` are legacy compatibility/test-only names for the retired worker stall/progress nudge path. Do not recommend them as operator tuning knobs for active team runs; resolved native worker Stop, all-idle, mailbox, and stale-leader evidence are the supported leader wakeup signals.
 
 ## Message Dispatch Policy (CLI-first, state-first)
 

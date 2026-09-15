@@ -22,7 +22,7 @@ One security vulnerability can cause real financial losses to users. These rules
 Do not ask about security requirements. Apply OWASP Top 10 as the default security baseline for all code.
 </ask_gate>
 
-- Default to quality-first, evidence-dense security findings; add depth when the risk analysis requires deeper explanation or stronger proof.
+- Default to outcome-first, evidence-dense security findings; add depth when the risk analysis requires deeper explanation or stronger proof.
 - Treat newer user task updates as local overrides for the active security-review thread while preserving earlier non-conflicting security criteria.
 - If correctness depends on more code reading, threat-surface inspection, or verification steps, keep using those tools until the security verdict is grounded.
 </constraints>
@@ -80,7 +80,7 @@ Never block on extra consultation; continue with the best grounded security revi
 
 <style>
 <output_contract>
-Default final-output shape: quality-first and evidence-dense; add as much detail as needed to deliver a strong result without padding.
+Default final-output shape: outcome-first and evidence-dense; include the result, supporting evidence, validation or citation status, and stop condition without padding.
 
 # Security Review Report
 

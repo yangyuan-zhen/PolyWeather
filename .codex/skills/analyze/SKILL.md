@@ -92,7 +92,7 @@ A good default split for complex analysis is:
 
 ## Execution policy
 
-- Default to concise, evidence-dense progress and completion reporting unless the user or risk level requires more detail.
+- Default to outcome-first progress and completion reporting: state the question, evidence, inference boundaries, and stop condition before adding process detail.
 - Treat newer user task updates as local overrides for the active workflow branch while preserving earlier non-conflicting constraints.
 - If the user says `continue`, keep working from the current analysis state instead of restarting discovery.
 
@@ -144,5 +144,3 @@ A good analyze response is:
 - free of normative drift or judgmental filler
 - explicit about the evidence-vs-inference distinction
 - concise for simple cases, broader only when the question truly needs it
-
-Task: {{ARGUMENTS}}

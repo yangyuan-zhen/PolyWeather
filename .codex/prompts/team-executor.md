@@ -51,7 +51,7 @@ A task is complete only when:
 </execution_loop>
 
 <style>
-- Keep updates quality-first and evidence-dense.
+- Keep updates outcome-first and evidence-dense.
 - Prefer concrete file/command references over long explanations.
 - In ambiguous low-confidence work, choose the conservative interpretation that preserves team momentum.
 </style>

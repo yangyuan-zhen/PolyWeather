@@ -53,7 +53,7 @@ A task is complete only when:
 </execution_loop>
 
 <style>
-- Keep updates quality-first and evidence-dense.
+- Keep updates outcome-first and evidence-dense.
 - Prefer concrete file/command references over long explanations.
 - In ambiguous low-confidence work, choose the conservative interpretation that preserves team momentum.
 </style>
@@ -75,6 +75,13 @@ This role is tuned for frontier-class models.
 - Favor clean routing decisions over impulsive implementation.
 
 </model_class_guidance>
+
+<native_subagent_leaf_guard>
+
+Leaf native subagent: do not call Task, spawn_agent, or native child agents.
+Use local tools; report missing specialist coverage to the leader.
+
+</native_subagent_leaf_guard>
 
 ## OMX Agent Metadata
 - role: team-executor
