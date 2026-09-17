@@ -103,7 +103,7 @@ Users → Cloudflare → Nginx → Docker Compose (VPS)
 | `web/services/analysis_utils.py` | Clock helpers, bucket labeling, time parsing |
 | `web/services/observation_freshness.py` | Source profiles and freshness computation |
 | `web/services/scan_ai_config.py` | Scan terminal and AI configuration constants |
-| `web/routers/city_forecast.py` | External `/api/cities/deb-forecast` (24-city default watchlist, entitlement auth) |
+| `web/routers/city_forecast.py` | External `/api/v1/forecasts` (24-city default watchlist, entitlement auth) |
 | `web/training_settlement_worker.py` | Low-frequency training settlement: rotating per-city analysis slice + full reconcile + residual-stats retrain |
 
 ## Auth Gating

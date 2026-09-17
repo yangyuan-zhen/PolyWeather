@@ -35,18 +35,17 @@ flowchart LR
 | `/api/city/{name}/summary` | GET | 轻量摘要 |
 | `/api/city/{name}/detail` | GET | 聚合详情（含 market_scan） |
 | `/api/history/{name}` | GET | 历史对账 |
-| `/api/v1/forecasts` | GET | PolyWeather API v1 对外预测接口（推荐） |
-| `/api/cities/deb-forecast` | GET | DEB + 多模型预测（旧版兼容入口） |
+| `/api/v1/forecasts` | GET | PolyWeather API v1 对外预测接口 |
 | `/api/events` | GET | SSE 实时观测事件流 |
 | `/api/internal/collector-patch` | POST | 采集器内部写入实时观测 patch |
-
-### `GET /api/cities/deb-forecast`
-
-旧版兼容入口。新项目请使用 `/api/v1/forecasts`。
 
 ### `GET /api/v1/forecasts`
 
 PolyWeather API v1 的标准对外预测接口，提供 DEB 融合预测、多模型日最高温和逐模型逐小时温度曲线。鉴权同 pro 接口（entitlement token），结果缓存 5 分钟。
+
+完整地址（默认监控城市）：`https://polyweather.top/api/v1/forecasts`
+
+也可通过 `cities` 参数筛选城市，例如：`https://polyweather.top/api/v1/forecasts?cities=beijing`
 
 参数：
 
@@ -59,9 +58,14 @@ PolyWeather API v1 的标准对外预测接口，提供 DEB 融合预测、多�
 每城返回：
 
 - `deb.prediction` / `deb.weights` / `deb.quality`
+- `current.temp` / `current.max_so_far` / `current.max_temp_time`：当前实测与今日实测最高温时间；时间为城市本地时间
+- `forecast.today_high` / `forecast.max_temp_time` / `forecast.max_temp_times`：今日预报最高温及其在生产预测曲线中的本地时间；若多个连续小时同值，`max_temp_times` 会返回全部时间
 - `daily`
+- `hourly.source` / `hourly.times` / `hourly.temps`：可直接绘图的生产预测曲线；`times[i]` 与 `temps[i]` 按索引对应，曲线优先使用 DEB 小时路径，并回退到 Open-Meteo 或多模型均值
 - `models.keys` / `models.daily`
 - `models.hourly.times` / `models.hourly.curves`
+
+`hourly.peak_temp` / `hourly.peak_times` 是该曲线的峰值元数据。`hourly` 是今日本地小时曲线；`models.hourly` 仍保留原始逐模型、包含完整时间戳的曲线，供需要逐模型比较的调用方使用。
 
 `models.hourly.curves[model][i]` 与 `models.hourly.times[i]` 按索引一一对应；曲线为原始逐小时温度，不包含分布概率、置信区间或离散度等衍生指标。
 

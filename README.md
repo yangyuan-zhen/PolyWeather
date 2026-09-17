@@ -13,7 +13,7 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 
 ## Product Status (2026-08-22)
 
-- Forecast API live: `/api/cities/deb-forecast` returns per-city DEB prediction + 3-day multi-model daily forecasts for a 24-city default watchlist (entitlement-token auth); results are cached for 5 minutes so repeat calls answer in ~1.4s.
+- Forecast API live: `https://polyweather.top/api/v1/forecasts` returns per-city DEB prediction, peak time, and hourly temperature curves for a 24-city default watchlist (entitlement-token auth); results are cached for 5 minutes.
 - DEB normal probability engine live: integer-degree probability buckets come from the DEB normal engine (`deb_normal`).
 - WeatherNext2 removed: the Google WeatherNext2 GCS Zarr worker was retired; probability and forecasts rely on the DEB blend over the Open-Meteo model suite.
 - Referral/invite pricing removed; points remain redeemable for payment discounts (`500 pts = 1 USDC`, monthly max `3 USDC`, quarterly max `8 USDC`). Useful user feedback can also receive manual point rewards through ops.

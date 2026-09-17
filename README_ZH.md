@@ -15,7 +15,7 @@
 - 已上线支付运行态与审计接口：`/api/payments/runtime`。
 - 已上线轻量运营后台：`/ops`（会员、用户反馈处理、积分、补分、支付异常单）。
 - 轻量可观测性：`/healthz`、`/api/system/status`、`/api/system/cache-status`、`/api/system/priority-warm`、`/metrics`（ops 鉴权）+ `scripts/check_ops_health.py` 巡检（14 个外部服务探测）。
-- 已上线预测 API：`/api/cities/deb-forecast` 输出 DEB 预测 + 多模型 3 天日报，默认 24 城监控清单（entitlement token 鉴权），结果缓存 5 分钟秒回；registry 全量 51 城，深圳结算为宝安机场 ZGSZ METAR。
+- 已上线预测 API：`https://polyweather.top/api/v1/forecasts` 输出 DEB 预测、最高温时间和逐小时温度曲线，默认 24 城监控清单（entitlement token 鉴权），结果缓存 5 分钟；registry 全量 51 城，深圳结算为宝安机场 ZGSZ METAR。
 - 终端图表支持 3 天（72h）窗口：观测 / 模型共识 median-min-max / DEB 锚点；x 轴每 6 小时刻度 + 午夜日期标记。
 - 机场 METAR 报文曲线已全部移除（用户需求）：仅保留结算源、官方增强网络（JMA / HKO）与 TAF 信号曲线；MGM（土耳其）数据源已整套下线，安卡拉/伊斯坦布尔回归 METAR 结算。
 - DEB 校准改进：温度段独立 σ（≥37°C cov90 0.820→0.893）、城市偏差近 14 天加权（模式切换 2 周收敛）、推理校正上限 3→5°C（7 月高估 4-6°C 不再截断）。
@@ -119,7 +119,7 @@ npm run dev
 ## 近期更新
 
 - 概率主引擎为 DEB 正态引擎（`deb_normal`）。
-- 预测 API 已上线（`/api/cities/deb-forecast`，结果缓存 5 分钟）。
+- 预测 API 已上线（`https://polyweather.top/api/v1/forecasts`，结果缓存 5 分钟）。
 - 机场 METAR 报文曲线全部移除；WeatherNext2 已移除；Telegram 群依赖与积分邀请机制已下线。
 - 数据源清理：Wunderground、台北 CWA、AMSC AWOS（中国跑道）、NMC/CMA（中国内地）与流浮山 LFS 结算已移除；深圳结算切换为宝安 ZGSZ METAR；NOAA 结算源切为免费 aviationweather METAR。
 - DEB 校准：温度段独立 σ、近 14 天加权城市偏差、推理校正上限 3→5°C。
