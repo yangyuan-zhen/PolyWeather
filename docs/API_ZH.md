@@ -8,8 +8,8 @@
 
 ## 1. 基础信息
 
-- 后端直连：`http://127.0.0.1:8000`
-- 前端 BFF：`https://polyweather.top/api/*`
+- 后端 API：`https://api.polyweather.top`
+- 前端 BFF：`https://polyweather.top/api/*`（仅适用于已提供对应代理的前端接口）
 - 返回格式：`application/json`
 
 ## 2. 请求链路
@@ -43,9 +43,9 @@ flowchart LR
 
 PolyWeather API v1 的标准对外预测接口，提供 DEB 融合预测、多模型日最高温和逐模型逐小时温度曲线。鉴权同 pro 接口（entitlement token），结果缓存 5 分钟。
 
-完整地址（默认监控城市）：`https://polyweather.top/api/v1/forecasts`
+完整地址（默认监控城市）：`https://api.polyweather.top/api/v1/forecasts`
 
-也可通过 `cities` 参数筛选城市，例如：`https://polyweather.top/api/v1/forecasts?cities=beijing`
+也可通过 `cities` 参数筛选城市，例如：`https://api.polyweather.top/api/v1/forecasts?cities=beijing`
 
 参数：
 
