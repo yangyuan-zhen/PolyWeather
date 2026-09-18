@@ -918,6 +918,9 @@ def _analyze(
     nws_high = _sf(raw.get("nws", {}).get("today_high"))
     if nws_high is not None:
         current_forecasts["NWS"] = nws_high
+    hko_high = _sf(raw.get("hko_forecast"))
+    if hko_high is not None:
+        current_forecasts["HKO"] = hko_high
     # ── 6. DEB fusion ──
     deb_val, deb_weights = None, ""
     deb_raw_val, deb_version = None, None

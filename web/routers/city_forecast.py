@@ -209,6 +209,35 @@ def _build_public_hourly_forecast(
     }
 
 
+def _build_public_models_daily(
+    data: Dict[str, Any], multi_model: Dict[str, Any]
+) -> Dict[str, Dict[str, Any]]:
+    """Expose raw daily models plus derived settlement-source models."""
+    raw_daily = multi_model.get("daily_forecasts")
+    daily: Dict[str, Dict[str, Any]] = {
+        str(date): dict(values)
+        for date, values in (raw_daily.items() if isinstance(raw_daily, dict) else [])
+        if isinstance(values, dict)
+    }
+
+    # The analysis layer adds settlement forecasts such as HKO to the current
+    # day's model set. Merge those values without replacing raw Open-Meteo
+    # model values already present in the public payload.
+    derived_daily = data.get("multi_model_daily")
+    if not isinstance(derived_daily, dict):
+        return daily
+    for date, day_payload in derived_daily.items():
+        if not isinstance(day_payload, dict):
+            continue
+        models = day_payload.get("models")
+        if not isinstance(models, dict):
+            continue
+        target = daily.setdefault(str(date), {})
+        for model, value in models.items():
+            target.setdefault(str(model), value)
+    return daily
+
+
 def _cached_forecasts() -> Dict[str, Dict[str, Any]]:
     """Return the cached per-city payloads if fresh, else {}."""
     with _FORECAST_CACHE_LOCK:
@@ -242,7 +271,7 @@ def _build_city_forecast(city: str) -> Optional[Dict[str, Any]]:
     )
     forecast = data.get("forecast") if isinstance(data.get("forecast"), dict) else {}
     current = data.get("current") if isinstance(data.get("current"), dict) else {}
-    daily_forecasts = multi_model.get("daily_forecasts") or {}
+    daily_forecasts = _build_public_models_daily(data, multi_model)
     hourly_times = multi_model.get("hourly_times") or []
     hourly_forecasts = multi_model.get("hourly_forecasts") or {}
     hourly = _build_public_hourly_forecast(data, deb, multi_model)

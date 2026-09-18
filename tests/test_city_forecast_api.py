@@ -156,8 +156,14 @@ def test_v1_forecasts_returns_normalized_public_shape(monkeypatch):
 
 
 def test_forecasts_resolves_aliases(monkeypatch):
+    analyzed_cities = []
+
+    def _analyze_and_record(city, force_refresh=False, detail_mode="panel"):
+        analyzed_cities.append(city)
+        return _fake_analyze(city, force_refresh, detail_mode)
+
     monkeypatch.setattr(
-        "web.analysis_service._analyze", _fake_analyze, raising=False
+        "web.analysis_service._analyze", _analyze_and_record, raising=False
     )
     monkeypatch.setattr(
         "web.routes._assert_entitlement", lambda request: None
@@ -180,6 +186,37 @@ def test_forecasts_resolves_aliases(monkeypatch):
         "hong kong",
         "tokyo",
     }
+    assert "hong kong" in analyzed_cities
+
+
+def test_hko_alias_returns_hong_kong_models_daily(monkeypatch):
+    def _fake_hong_kong_analyze(city, force_refresh=False, detail_mode="panel"):
+        payload = _fake_analyze(city, force_refresh, detail_mode)
+        payload["multi_model_daily"] = {
+            "2026-08-16": {
+                "models": {"Open-Meteo": 33.1, "HKO": 34.2},
+            }
+        }
+        return payload
+
+    monkeypatch.setattr(
+        "web.analysis_service._analyze",
+        _fake_hong_kong_analyze,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "web.routes._assert_entitlement", lambda request: None
+    )
+    monkeypatch.setattr("web.routers.city_forecast._FORECAST_CACHE", {})
+
+    response = client.get("/api/v1/forecasts", params={"cities": "hko"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert set(payload["forecasts"]) == {"hong kong"}
+    assert payload["forecasts"]["hong kong"]["models"]["daily"][
+        "2026-08-16"
+    ]["HKO"] == 34.2
 
 
 def test_forecasts_unknown_cities_filtered(monkeypatch):
