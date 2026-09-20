@@ -65,6 +65,8 @@ PolyWeather API v1 的标准对外预测接口，提供 DEB 融合预测、多�
 - `models.keys` / `models.daily`：原始多模型日预报；香港请求（包括 `cities=hko`）会在规范城市键 `hong kong` 下保留 HKO 日预报
 - `models.hourly.times` / `models.hourly.curves`
 
+台北松山机场（ICAO `RCSS`）已纳入默认清单；可用 `cities=taipei`、`cities=rcss` 或 `cities=songshan` 请求，响应规范键为 `forecasts["taipei"]`。
+
 `hourly.peak_temp` / `hourly.peak_times` 是该曲线的峰值元数据。`hourly` 是今日本地小时曲线；`models.hourly` 仍保留原始逐模型、包含完整时间戳的曲线，供需要逐模型比较的调用方使用。
 
 `models.hourly.curves[model][i]` 与 `models.hourly.times[i]` 按索引一一对应；曲线为原始逐小时温度，不包含分布概率、置信区间或离散度等衍生指标。

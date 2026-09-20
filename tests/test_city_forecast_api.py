@@ -219,6 +219,28 @@ def test_hko_alias_returns_hong_kong_models_daily(monkeypatch):
     ]["HKO"] == 34.2
 
 
+def test_songshan_airport_is_public_forecast_city(monkeypatch):
+    analyzed_cities = []
+
+    def _analyze_and_record(city, force_refresh=False, detail_mode="panel"):
+        analyzed_cities.append(city)
+        return _fake_analyze(city, force_refresh, detail_mode)
+
+    monkeypatch.setattr(
+        "web.analysis_service._analyze", _analyze_and_record, raising=False
+    )
+    monkeypatch.setattr(
+        "web.routes._assert_entitlement", lambda request: None
+    )
+    monkeypatch.setattr("web.routers.city_forecast._FORECAST_CACHE", {})
+
+    response = client.get("/api/v1/forecasts", params={"cities": "rcss"})
+
+    assert response.status_code == 200
+    assert set(response.json()["forecasts"]) == {"taipei"}
+    assert analyzed_cities == ["taipei"]
+
+
 def test_forecasts_unknown_cities_filtered(monkeypatch):
     monkeypatch.setattr(
         "web.analysis_service._analyze", _fake_analyze, raising=False

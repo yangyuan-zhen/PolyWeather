@@ -44,6 +44,7 @@ DEFAULT_FORECAST_CITIES: List[str] = [
     "jinan",
     "zhengzhou",
     "shenzhen",
+    "taipei",
     "seoul",
     "busan",
     "manila",
