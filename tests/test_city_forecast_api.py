@@ -172,11 +172,11 @@ def test_forecasts_resolves_aliases(monkeypatch):
         "web.routers.city_forecast._FORECAST_CACHE", {}
     )
 
-    # telaviv (no space), saopaulo (no space), hko, haneda must resolve to
+    # telaviv (no space), saopaulo (no space), hko, haneda, efhk must resolve to
     # their canonical registry cities.
     response = client.get(
         "/api/v1/forecasts",
-        params={"cities": "telaviv,saopaulo,hko,haneda"},
+        params={"cities": "telaviv,saopaulo,hko,haneda,efhk"},
     )
     assert response.status_code == 200
     payload = response.json()
@@ -185,8 +185,12 @@ def test_forecasts_resolves_aliases(monkeypatch):
         "sao paulo",
         "hong kong",
         "tokyo",
+        "helsinki",
     }
     assert "hong kong" in analyzed_cities
+    assert payload["forecasts"]["helsinki"]["models"]["daily"][
+        "2026-08-17"
+    ]["gfs"] == 33.1
 
 
 def test_hko_alias_returns_hong_kong_models_daily(monkeypatch):

@@ -49,7 +49,7 @@ PolyWeather API v1 的标准对外预测接口，提供 DEB 融合预测、多�
 
 参数：
 
-- `cities=`：可选，逗号分隔城市名或别名（如 `rjtt`、`klia`）；为空返回默认 24 城监控清单（9 中国大陆 + 香港/深圳 + 东京/首尔/釜山/吉隆坡/马尼拉 + 特拉维夫/马德里/莫斯科/开普敦 + 南美 3 城）。registry 全量 51 城均可查询。
+- `cities=`：可选，逗号分隔城市名或别名（如 `rjtt`、`klia`、`efhk`）；为空返回默认 26 城监控清单（含赫尔辛基 EFHK）；registry 全量 51 城均可查询。
 
 参数：
 
@@ -66,6 +66,8 @@ PolyWeather API v1 的标准对外预测接口，提供 DEB 融合预测、多�
 - `models.hourly.times` / `models.hourly.curves`
 
 台北松山机场（ICAO `RCSS`）已纳入默认清单；可用 `cities=taipei`、`cities=rcss` 或 `cities=songshan` 请求，响应规范键为 `forecasts["taipei"]`。
+
+赫尔辛基机场（ICAO `EFHK`）已纳入默认清单；可用 `cities=helsinki` 或 `cities=efhk` 请求，响应规范键为 `forecasts["helsinki"]`，其中 `models.daily` 返回多模型日预报。
 
 `hourly.peak_temp` / `hourly.peak_times` 是该曲线的峰值元数据。`hourly` 是今日本地小时曲线；`models.hourly` 仍保留原始逐模型、包含完整时间戳的曲线，供需要逐模型比较的调用方使用。
 
