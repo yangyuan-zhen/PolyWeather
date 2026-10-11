@@ -49,6 +49,7 @@ DEFAULT_FORECAST_CITIES: List[str] = [
     "busan",
     "manila",
     "tel aviv",
+    "helsinki",
     "madrid",
     "moscow",
     "sao paulo",
