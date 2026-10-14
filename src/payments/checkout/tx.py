@@ -1089,8 +1089,18 @@ class TxMixin:
             "tx": payload,
         }
 
-    def reconcile_latest_intent(self, user_id: str) -> Dict[str, Any]:
+    def reconcile_latest_intent(
+        self, user_id: str, tx_hash: Optional[str] = None
+    ) -> Dict[str, Any]:
         self._ensure_enabled()
+        tx_hash_text = str(tx_hash or "").strip().lower()
+        if tx_hash_text:
+            if len(tx_hash_text) != 66 or not tx_hash_text.startswith("0x"):
+                raise PaymentCheckoutError(400, "invalid tx_hash")
+            try:
+                int(tx_hash_text[2:], 16)
+            except ValueError as exc:
+                raise PaymentCheckoutError(400, "invalid tx_hash") from exc
         rows = self._rest(
             "GET",
             "payment_intents",
@@ -1103,6 +1113,7 @@ class TxMixin:
                 "status": "in.(created,submitted,confirmed,failed)",
                 "order": "updated_at.desc",
                 "limit": "5",
+                **({"tx_hash": f"eq.{tx_hash_text}"} if tx_hash_text else {}),
             },
             allowed_status=[200],
         )
@@ -1149,6 +1160,8 @@ class TxMixin:
                     }
                 )
 
+        if tx_hash:
+            return {"ok": False, "reason": "transaction_not_reconciled", "attempts": attempts}
         latest_subscription = SUPABASE_ENTITLEMENT.get_latest_active_subscription(
             user_id,
             respect_requirement=False,

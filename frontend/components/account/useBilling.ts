@@ -164,12 +164,13 @@ export function useBilling(params: UseBillingParams) {
   ]);
 
   // ── reconcileLatestPayment ──────────────────────────────
-  const reconcileLatestPayment = useCallback(async () => {
+  const reconcileLatestPayment = useCallback(async (txHash?: string) => {
     if (!authIsAuthenticated || reconcileBusy) return false;
     setReconcileBusy(true);
     try {
       const headers = await buildAuthedHeaders(true, true);
-      const res = await fetch("/api/payments/reconcile-latest", {
+      const query = txHash ? `?tx_hash=${encodeURIComponent(txHash)}` : "";
+      const res = await fetch(`/api/payments/reconcile-latest${query}`, {
         method: "POST", headers,
       });
       if (!res.ok) return false;
@@ -196,8 +197,13 @@ export function useBilling(params: UseBillingParams) {
 
   // ── handleSubmit409 ────────────────────────────────────
   const handleSubmit409 = useCallback(
-    async (intentId: string, txHashNorm: string, raw: string) => {
+    async (intentId: string, txHashNorm: string, raw: string, submitStatus = 409) => {
       const lowerRaw = raw.toLowerCase();
+      if (submitStatus >= 500 || lowerRaw.includes("tx_hash already used by another payment intent")) {
+        const ok = await reconcileLatestPayment(txHashNorm);
+        if (ok) return;
+        throw new Error(copy.submitTxFailed.replace("{raw}", raw));
+      }
       if (lowerRaw.includes("已支付") || lowerRaw.includes("already confirmed") || lowerRaw.includes("already paid")) {
         const ok = await reconcileLatestPayment();
         if (ok) return;

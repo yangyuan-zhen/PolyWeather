@@ -20,7 +20,10 @@ export async function POST(req: NextRequest) {
     const auth = await buildBackendRequestHeaders(req);
     const authError = requireBackendPaymentAuth(auth);
     if (authError) return authError;
-    const res = await fetch(`${API_BASE}/api/payments/reconcile-latest`, {
+    const url = new URL(`${API_BASE}/api/payments/reconcile-latest`);
+    const txHash = req.nextUrl.searchParams.get("tx_hash");
+    if (txHash) url.searchParams.set("tx_hash", txHash);
+    const res = await fetch(url, {
       method: "POST",
       headers: auth.headers,
       cache: "no-store",

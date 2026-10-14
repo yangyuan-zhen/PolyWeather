@@ -45,7 +45,14 @@ class AdminMixin:
         allowed_status: Optional[List[int]] = None,
     ) -> Any:
         url = f"{self.supabase_url}/rest/v1/{table}"
-        status_ok = allowed_status or [200, 201, 204]
+        status_ok = list(allowed_status or [200, 201, 204])
+        # PostgREST returns 204 after a successful write with return=minimal.
+        if (
+            method.upper() in {"POST", "PATCH", "DELETE"}
+            and "return=minimal" in (prefer or "").split(",")
+            and 204 not in status_ok
+        ):
+            status_ok.append(204)
         try:
             response = requests.request(
                 method=method.upper(),

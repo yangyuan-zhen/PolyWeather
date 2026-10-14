@@ -136,7 +136,7 @@ export interface UsePaymentFlowParams {
 
   // Ref-wrapped cross-hook callbacks
   connectAndBindWalletRef: React.MutableRefObject<((mode?: ProviderMode) => Promise<boolean>) | null>;
-  handleSubmit409Ref: React.MutableRefObject<((intentId: string, txHashNorm: string, raw: string) => Promise<void>) | null>;
+  handleSubmit409Ref: React.MutableRefObject<((intentId: string, txHashNorm: string, raw: string, submitStatus?: number) => Promise<void>) | null>;
 
   // Wallet provider helpers
   resolvePaymentProvider: (mode?: ProviderMode, preferredInjectedKey?: string) => Promise<ProviderSelection>;
@@ -711,8 +711,8 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
           isEn ? "Payment submit request failed." : "支付提交请求失败。",
           350,
         );
-        if (submitRes.status === 409) {
-          if (handleSubmit409Ref.current) await handleSubmit409Ref.current(intentId, txHashNorm, raw);
+        if (submitRes.status === 409 || submitRes.status >= 500) {
+          if (handleSubmit409Ref.current) await handleSubmit409Ref.current(intentId, txHashNorm, raw, submitRes.status);
           return;
         }
         throw new Error(copy.submitTxFailed.replace("{raw}", raw));
@@ -887,8 +887,8 @@ export function usePaymentFlow(params: UsePaymentFlowParams) {
           isEn ? "Payment submit request failed." : "支付提交请求失败。",
           350,
         );
-        if (submitRes.status === 409) {
-          if (handleSubmit409Ref.current) await handleSubmit409Ref.current(intentIdVal, txHashNorm, raw);
+        if (submitRes.status === 409 || submitRes.status >= 500) {
+          if (handleSubmit409Ref.current) await handleSubmit409Ref.current(intentIdVal, txHashNorm, raw, submitRes.status);
           return;
         }
         throw new Error(copy.submitTxFailed.replace("{raw}", raw));
