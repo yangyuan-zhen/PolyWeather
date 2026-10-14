@@ -1,5 +1,8 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
+import requests
+
 from src.database.db_manager import DBManager
 from src.payments.contract_checkout import (
     PaymentCheckoutError,
@@ -19,6 +22,153 @@ def _payment_env(monkeypatch, tmp_path):
     )
     monkeypatch.setenv("POLYWEATHER_DB_PATH", str(tmp_path / "payments.db"))
     monkeypatch.delenv("POLYWEATHER_PAYMENT_DIRECT_RECEIVER_ADDRESS", raising=False)
+
+
+@pytest.mark.parametrize("method", ["POST", "PATCH", "DELETE"])
+def test_minimal_payment_write_accepts_204(monkeypatch, tmp_path, method):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    response = requests.Response()
+    response.status_code = 204
+    response._content = b""
+    monkeypatch.setattr(requests, "request", lambda **kwargs: response)
+    statuses = [200]
+    assert service._rest(
+        method, "payment_intents", prefer="resolution=merge-duplicates,return=minimal",
+        allowed_status=statuses,
+    ) is None
+    assert statuses == [200]
+
+
+@pytest.mark.parametrize("status,method,prefer", [
+    (400, "PATCH", "return=minimal"),
+    (500, "PATCH", "return=minimal"),
+    (204, "GET", "return=minimal"),
+    (204, "PATCH", "return=representation"),
+])
+def test_payment_rest_does_not_hide_unexpected_responses(
+    monkeypatch, tmp_path, status, method, prefer
+):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    response = requests.Response()
+    response.status_code = status
+    response._content = b""
+    monkeypatch.setattr(requests, "request", lambda **kwargs: response)
+    with pytest.raises(PaymentCheckoutError) as exc:
+        service._rest(method, "payment_intents", prefer=prefer, allowed_status=[200])
+    assert exc.value.status_code == 502
+
+
+def test_submit_payment_continues_after_real_transport_204(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    tx_hash = "0x" + "2" * 64
+    intent = service._serialize_intent({
+        "id": "intent-1", "plan_code": "pro_monthly", "plan_id": 101,
+        "chain_id": 137, "token_address": service.token_address,
+        "receiver_address": service.receiver_contract, "amount_units": "9900000",
+        "payment_mode": "direct", "order_id_hex": "0x" + "1" * 64,
+        "status": "created", "expires_at": "2099-01-01T00:00:00+00:00",
+    })
+    monkeypatch.setattr(service, "get_intent", lambda *args: intent)
+    monkeypatch.setattr(service, "_validate_loaded_intent_tx", lambda *args: {"valid": True})
+    writes = []
+
+    def transport(**kwargs):
+        response = requests.Response()
+        if kwargs["method"] == "GET":
+            response.status_code = 200
+            response._content = b"[]"
+        else:
+            writes.append(kwargs)
+            response.status_code = 204 if kwargs["method"] == "PATCH" else 201
+            response._content = b""
+        return response
+
+    monkeypatch.setattr(requests, "request", transport)
+    result = service.submit_intent_tx("user-1", intent.intent_id, tx_hash, "")
+    assert result["status"] == "submitted"
+    assert [write["method"] for write in writes] == ["PATCH", "POST"]
+    assert writes[0]["json"]["tx_hash"] == tx_hash
+
+
+@pytest.mark.parametrize("status", ["submitted", "confirmed"])
+def test_reconcile_transaction_finds_original_order_for_current_user(
+    monkeypatch, tmp_path, status
+):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    tx_hash = "0x" + "2" * 64
+
+    def lookup(method, table, **kwargs):
+        assert kwargs["params"]["user_id"] == "eq.user-1"
+        assert kwargs["params"]["tx_hash"] == "eq." + tx_hash
+        return [{"id": "original-intent", "status": status, "tx_hash": tx_hash}]
+
+    monkeypatch.setattr(service, "_rest", lookup)
+    confirmations = []
+    repairs = []
+    monkeypatch.setattr(service, "confirm_intent_tx", lambda *args: (
+        confirmations.append(args) or {"subscription": {"id": 1}}
+    ))
+    monkeypatch.setattr(service, "_ensure_confirm_side_effects", lambda *args: (
+        repairs.append(args) or {"subscription": {"id": 1}}
+    ))
+    result = service.reconcile_latest_intent("user-1", tx_hash=tx_hash.upper())
+    assert result["ok"] is True
+    assert result["subscription"] == {"id": 1}
+    assert len(confirmations) == (1 if status == "submitted" else 0)
+    assert len(repairs) == (1 if status == "confirmed" else 0)
+
+
+def test_targeted_reconcile_does_not_succeed_from_unrelated_subscription(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    monkeypatch.setattr(service, "_rest", lambda *args, **kwargs: [
+        {"id": "intent", "status": "submitted", "tx_hash": "0x" + "2" * 64}
+    ])
+
+    def pending(*args):
+        raise PaymentCheckoutError(409, "confirmations not enough")
+
+    monkeypatch.setattr(service, "confirm_intent_tx", pending)
+    result = service.reconcile_latest_intent("user-1", tx_hash="0x" + "2" * 64)
+    assert result["ok"] is False
+    assert result["reason"] == "transaction_not_reconciled"
+
+
+def test_targeted_reconcile_missing_transaction_does_not_confirm(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    monkeypatch.setattr(service, "_rest", lambda *args, **kwargs: [])
+    result = service.reconcile_latest_intent("user-1", tx_hash="0x" + "2" * 64)
+    assert result == {"ok": False, "reason": "intent_not_found"}
+
+
+@pytest.mark.parametrize("tx_hash", ["bad", "0x" + "z" * 64])
+def test_targeted_reconcile_rejects_invalid_hash(monkeypatch, tmp_path, tx_hash):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    with pytest.raises(PaymentCheckoutError) as exc:
+        service.reconcile_latest_intent("user-1", tx_hash=tx_hash)
+    assert exc.value.status_code == 400
+
+
+def test_payment_reconcile_api_uses_authenticated_user_and_transaction(monkeypatch):
+    from starlette.requests import Request
+    from web.services import payment_api
+
+    tx_hash = "0x" + "2" * 64
+    request = Request({"type": "http", "query_string": ("tx_hash=" + tx_hash).encode()})
+    monkeypatch.setattr(payment_api, "_require_payment_identity", lambda req: {"user_id": "user-1"})
+    calls = []
+    monkeypatch.setattr(
+        payment_api.legacy_routes.PAYMENT_CHECKOUT, "reconcile_latest_intent",
+        lambda user_id, **kwargs: calls.append((user_id, kwargs)) or {"ok": True},
+    )
+    assert payment_api.reconcile_latest_payment(request) == {"ok": True}
+    assert calls == [("user-1", {"tx_hash": tx_hash})]
 
 
 def test_wallet_challenge_insert_uses_minimal_return(monkeypatch, tmp_path):

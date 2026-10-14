@@ -204,6 +204,11 @@ def confirm_payment_tx(
 def reconcile_latest_payment(request: Request) -> Dict[str, Any]:
     identity = _require_payment_identity(request)
     try:
+        tx_hash = request.query_params.get("tx_hash")
+        if tx_hash:
+            return legacy_routes.PAYMENT_CHECKOUT.reconcile_latest_intent(
+                identity["user_id"], tx_hash=tx_hash
+            )
         return legacy_routes.PAYMENT_CHECKOUT.reconcile_latest_intent(identity["user_id"])
     except legacy_routes.PaymentCheckoutError as exc:
         _raise_payment_error(exc)
